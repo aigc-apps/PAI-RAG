@@ -1,0 +1,14 @@
+PAI (Platform of Artificial Intelligence) is Alibaba Cloud's artificial intelligence platform, which provides a one-stop machine learning solution. This article introduces you to what machine learning PAI is.
+
+what is machine learning
+Machine learning refers to the machine learning a large amount of historical data through statistical algorithms, and then using the generated empirical model to guide the business. Currently, machine learning is mainly used in the following scenarios:
+Marketing scenarios: product recommendation, user group portraits, or precise advertising placement.
+Financial scenarios: loan issuance forecast, financial risk control, stock trend forecast or gold price forecast.
+Social network service relationship mining scenario: Weibo fan leader analysis or social relationship chain analysis.
+Text scenarios: news classification, keyword extraction, article summarization or text content analysis.
+Unstructured data processing scenarios: image classification or image text content extraction.
+Various other forecast scenarios: rain forecast or football match result forecast.
+Machine learning includes traditional machine learning and deep learning. Traditional machine learning falls into the following categories:
+Supervised Learning: Each sample has a corresponding expected value. By building a model, the mapping from the input feature vector to the target value is realized. For example solving regression and classification problems.
+Unsupervised Learning (Unsupervised Learning): All samples have no target value, and some potential laws are expected to be discovered from the data itself. For example to solve clustering problems.
+Reinforcement Learning: Relatively complex, the system interacts with the external environment continuously, determines its own behavior based on external feedback, and achieves goal optimization. Examples include AlphaGo and driverless cars.
