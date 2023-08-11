@@ -37,6 +37,7 @@ cd /home/LLM_Solution
 - create_docs: Path of knowledge file and related file configuration, default is `/docs`.
 - query_topk: Number of relevant results returned by the ADB vector retrieval.
 - prompt_template: Prompt customized by user.
+    - default: `"Answer user questions concisely and professionally based on the following known information. If the answer cannot be obtained from it, please say 'Unable to answer the question based on the known information' or 'Insufficient relevant information provided'. Fabricated scores are not allowed to be added in the answer. The answer should be in Chinese. \n=====\nKnown information:\n{context}\n=====\nUser question:\n{question}" `
 
 ## Step 3: Run main.py
 1. Upload Local Knowledge File
