@@ -10,6 +10,8 @@ import time
 import requests
 import sys
 import argparse
+import warnings
+warnings.filterwarnings("ignore")
 
 class LLMService:
     def __init__(self, cfg) -> None:
@@ -77,11 +79,11 @@ class LLMService:
 
     def user_query(self, query):
         user_prompt_template = self.create_user_query_prompt(query)
-        print("Post user query to EAS-ChatGLM2")
+        print("Post user query to EAS-LLM")
         start_time = time.time()
         ans = self.post_to_chatglm2_eas(user_prompt_template)
         end_time = time.time()
-        print("Get response from EAS-ChatGLM2. Cost time: {} s".format(end_time - start_time))
+        print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
         return ans
 
 if __name__ == "__main__":
@@ -104,7 +106,6 @@ if __name__ == "__main__":
                         
                     if args.query:
                         user_prompt_template = solver.create_user_query_prompt(args.query)
-                        print('args.query',args.query)
                         answer = solver.user_query(args.query)
                         print("The answer is: ", answer)
             else:

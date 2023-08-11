@@ -1,9 +1,9 @@
-# 结合LLM、LangChain、ADB的Demo演示
+# 结合PAI-LLM、AnalyticDB、LangChain的解决方案
 
 - 上传用户本地知识库文件，基于SGPT-125M模型生成embedding
 - 生成embedding存储到AnalyticDB，并用于后续向量检索
-- 输入用户问题，输出该问题的prompt，用于后续LLM部分生成答案
-- 将产生的prompt送入eas上部署的chatglm2的服务，实时获取到问题的答案，完成链路
+- 输入用户问题，输出该问题的prompt，用于后续PAI-LLM部分生成答案
+- 将产生的prompt送入EAS部署的LLM模型服务，实时获取到问题的答案
 
 ## Step 1: 开发环境
 
