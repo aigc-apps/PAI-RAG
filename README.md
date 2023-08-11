@@ -19,11 +19,11 @@ cd LLM_Solution
 sh install.sh
 ```
 
-### 方案二：docker
+### 方案二：Docker启动
 
 1. 拉取已有的docker环境，防止因环境安装失败导致的不可用
 ```bash
-docker pull mybigpai-registry.cn-beijing.cr.aliyuncs.com/mybigpai/chatglm_webui_test:4.0
+docker pull registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:1.0
 ```
 
 2. 克隆项目
@@ -34,24 +34,24 @@ cd LLM_Solution
 
 3. 将本地项目挂载到docker并启动
 ```bash
-sudo docker run -t -d --network host  --name llm_docker -v $(pwd):/home/LLM_Solution mybigpai-registry.cn-beijing.cr.aliyuncs.com/mybigpai/chatglm_webui_test:4.0
+sudo docker run -t -d --network host  --name llm_docker -v $(pwd):/root/LLM_Solution registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:1.0
 docker exec -it llm_docker bash
-cd /home/LLM_Solution
+cd /root/LLM_Solution
 ```
 
 ## Step 2: 配置config.json
 
-- embedding: embedding模型路径，可以用户自定义挂载，默认使用docker中的/code/SGPT-125M-weightedmean-nli-bitfit。
-- EASCfg: 配置已部署在EAS上LLM模型服务，可以用户自定义
+- embedding: embedding模型路径，可以用户自定义挂载，默认使用`embedding_model/SGPT-125M-weightedmean-nli-bitfit`。
+- EASCfg: 配置已部署在`PAI-EAS`上LLM模型服务，可以用户自定义
 - ADBCfg: AnalyticDB相关环境配置
-- create_docs: 知识库路径和相关文件配置，默认使用/docs下的所有文件
+- create_docs: 知识库路径和相关文件配置，默认使用`/docs`下的所有文件
 - query_topk: 检索返回的相关结果的数量
-- prompt_template: 用户自定义的prompt
+- prompt_template: 用户自定义的`prompt`
 
 ## Step 3: 运行main.py
 1. 上传用户指定的知识库并建立索引
 ```bash
-python main.py --config config.json --upload true
+python main.py --config config.json --upload True
 ```
 
 2. 用户请求查询
@@ -68,7 +68,7 @@ The answer is:  很抱歉，根据已知信息无法回答该问题。
 ```
 
 ```bash
-python main.py --config myconfig.json --upload true 
+python main.py --config myconfig.json --upload True 
 
 Output:
 Insert into AnalyticDB Success.

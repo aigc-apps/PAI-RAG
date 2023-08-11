@@ -24,7 +24,7 @@ Pulling an existing Docker environment to prevent unavailability caused by faile
 ```bash
 docker pull registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:1.0
 
-sudo docker run -t -d --network host --name llm_docker mybigpai-registry.cn-beijing.cr.aliyuncs.com/mybigpai/chatglm_webui_test:4.0
+sudo docker run -t -d --network host --name llm_docker registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:1.0
 docker exec -it llm_docker bash
 cd /home/LLM_Solution
 ```
@@ -41,7 +41,7 @@ cd /home/LLM_Solution
 ## Step 3: Run main.py
 1. Upload Local Knowledge File
 ```bash
-python main.py --config config.json --upload true
+python main.py --config config.json --upload True
 ```
 
 2. Post User Query
@@ -58,7 +58,7 @@ The answer is:  很抱歉，根据已知信息无法回答该问题。
 ```
 
 ```bash
-python main.py --config myconfig.json --upload true 
+python main.py --config myconfig.json --upload True 
 
 Output:
 Insert into AnalyticDB Success.
