@@ -1,6 +1,6 @@
 # langchain related
 pydantic==1.10.12
-langchain
+langchain==0.0.265
 psycopg2==2.9.3
 psycopg2cffi==2.9.0
 pandas==1.2.4
@@ -13,3 +13,5 @@ accelerate
 tokenizers
 
 unstructured
+elasticsearch
+faiss-cpu
