@@ -16,8 +16,6 @@ unstructured
 elasticsearch
 faiss-cpu
 
-grdio
-fastapi
 python-multipart
 pypdf
 loguru
