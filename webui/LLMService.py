@@ -140,11 +140,10 @@ class LLMService:
         for idx, doc in enumerate(docs):
             context_docs += "-----\n\n"+str(idx+1)+".\n"+doc.page_content
         context_docs += "\n\n-----\n\n"
-        if prompt is not None:
-            user_prompt_template = prompt
-        else:
+        if prompt == '':
             user_prompt_template = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
-        # user_prompt_template = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
+        else:
+            user_prompt_template = prompt
         user_prompt_template = user_prompt_template.format(context=context_docs, question=query)
         source_docs = "\n--------------------\n Reference sources:" 
         for idx, doc in enumerate(docs):
@@ -153,12 +152,12 @@ class LLMService:
 
     def user_query(self, query,topk,prompt):
         user_prompt_template, source_docs = self.create_user_query_prompt(query,topk,prompt)
-        print("Post user query to EAS-LLM", user_prompt_template)
+        print("Post user query to EAS-LLM, user_prompt_template: ", user_prompt_template)
         start_time = time.time()
         ans = self.post_to_chatglm2_eas(user_prompt_template) + source_docs
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-        return ans 
+        return ans['response']
 
     def query_only_llm(self,query):
         print("Post user query to EAS-LLM", query)
@@ -166,7 +165,7 @@ class LLMService:
         ans = self.post_to_chatglm2_eas(query)
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-        return ans
+        return ans['response']
 
     def query_only_vectorestore(self,query,topk):
         print("Post user query to Vectore Store", query)

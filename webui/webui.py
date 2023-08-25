@@ -82,7 +82,7 @@ def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd
         'ADBCfg': {}
     }
     cfg['embedding']['embedding_model'] = emb_model
-    cfg['embedding']['model_dir'] = "/home/embedding_model/"
+    cfg['embedding']['model_dir'] = "/code/embedding_model/"
     cfg['embedding']['embedding_dimension'] = emb_dim
     cfg['EASCfg']['url'] = eas_url
     cfg['EASCfg']['token'] = eas_token
@@ -102,7 +102,7 @@ def connect_holo(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_database, p
         'HOLOCfg': {}
     }
     cfg['embedding']['embedding_model'] = emb_model
-    cfg['embedding']['model_dir'] = "/home/embedding_model/"
+    cfg['embedding']['model_dir'] = "/code/embedding_model/"
     cfg['embedding']['embedding_dimension'] = emb_dim
     cfg['EASCfg']['url'] = eas_url
     cfg['EASCfg']['token'] = eas_token
@@ -121,7 +121,7 @@ def connect_es(emb_model, emb_dim, eas_url, eas_token, es_url, es_index, es_user
         'ElasticSearchCfg': {}
     }
     cfg['embedding']['embedding_model'] = emb_model
-    cfg['embedding']['model_dir'] = "/home/embedding_model/"
+    cfg['embedding']['model_dir'] = "/code/embedding_model/"
     cfg['embedding']['embedding_dimension'] = emb_dim
     cfg['EASCfg']['url'] = eas_url
     cfg['EASCfg']['token'] = eas_token
