@@ -37,7 +37,8 @@ class LLMService:
             headers=headers,
             timeout=10000,
         )
-        return resp.text
+        ans = json.loads(resp.text)
+        return ans['response']
         
     def connect_adb(self):
         embedding_model = self.cfg['embedding']['embedding_model']
@@ -133,13 +134,14 @@ class LLMService:
         
     def create_user_query_prompt(self, query, topk, prompt):
         # docs = self.vector_db.similarity_search(query, k=int(cfg['query_topk']))
-        if topk is None:
-            topk = 1
+        if topk == '':
+            topk = 3
         docs = self.vector_db.similarity_search(query, k=int(topk))
         context_docs = ""
         for idx, doc in enumerate(docs):
             context_docs += "-----\n\n"+str(idx+1)+".\n"+doc.page_content
         context_docs += "\n\n-----\n\n"
+        print('prompt',prompt)
         if prompt == '':
             user_prompt_template = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
         else:
@@ -157,7 +159,7 @@ class LLMService:
         ans = self.post_to_chatglm2_eas(user_prompt_template) + source_docs
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-        return ans['response']
+        return ans
 
     def query_only_llm(self,query):
         print("Post user query to EAS-LLM", query)
@@ -165,13 +167,13 @@ class LLMService:
         ans = self.post_to_chatglm2_eas(query)
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-        return ans['response']
+        return ans
 
     def query_only_vectorestore(self,query,topk):
         print("Post user query to Vectore Store", query)
         start_time = time.time()
-        if topk is None:
-            topk = 1
+        if topk == '':
+            topk = 3
         docs = self.vector_db.similarity_search(query, k=int(topk))
         context_docs = ""
         for idx, doc in enumerate(docs):
