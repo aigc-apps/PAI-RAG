@@ -17,23 +17,23 @@ class Query(BaseModel):
     
 service = LLMService()
 
-app = FastAPI()
+app = FastAPI(host="0.0.0.0")
 @app.post("/chat/llm")
 async def query_by_llm(query: Query):
     ans = service.query_only_llm(query.question) 
-    return {"The answer is ": ans}
+    return {"response": ans}
 
-@app.post("/chat/db")
+@app.post("/chat/vectorstore")
 async def query_by_vectorestore(query: Query):
     ans = service.query_only_vectorestore(query.question,query.topk) 
-    return {"The answer is ": ans}
+    return {"response": ans}
 
 @app.post("/chat/langchain")
 async def query_by_langchain(query: Query):
     ans = service.user_query(query.question,query.topk,query.prompt) 
-    return {"The answer is ": ans}
+    return {"response": ans}
 
-@app.post("/uploadfile/")
+@app.post("/uploadfile")
 async def create_upload_file(file: UploadFile | None = None):
     if not file:
         return {"message": "No upload file sent"}
@@ -50,10 +50,10 @@ async def create_upload_file(file: UploadFile | None = None):
         f.write(data)
         f.close()
         service.upload_custom_knowledge(f.name,200,0)
-        return {"Upload file success! ": f.name}
+        return {"response": "success"}
 
 
-@app.post("/config/")
+@app.post("/config")
 async def create_config_json_file(file: UploadFile | None = None):
     if not file:
         return {"message": "No upload config json file sent"}
@@ -72,8 +72,7 @@ async def create_config_json_file(file: UploadFile | None = None):
         with open(f.name) as c:
             cfg = json.load(c)
         connect_time = service.init_with_cfg(cfg)
-        return {"Connect success! ", cfg['vector_store']}
-
+        return {"response": "success"}
     
 def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del):
     cfg = {
@@ -244,8 +243,8 @@ def create_ui():
                 
         with gr.Tab("Upload"):
             with gr.Row():
-                chunk_size = gr.Textbox(label="chunk size")
-                chunk_overlap = gr.Textbox(label="chunk overlap")
+                chunk_size = gr.Textbox(label="Chunk Size (The size of the chunks into which a document is divided)")
+                chunk_overlap = gr.Textbox(label="Chunk Overlap (The portion of adjacent document chunks that overlap with each other)")
             with gr.Tab("Files"):
                 upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
                                 file_types=['.txt', '.md', '.docx', '.pdf'], file_count="multiple")
@@ -273,18 +272,20 @@ def create_ui():
                 return "Directory: Upload " + str(len(upload_dir)) + " files Success!" 
 
             connect_btn.click(fn=upload_knowledge, inputs=[upload_file,chunk_size,chunk_overlap], outputs=state_hl_file, api_name="upload_knowledge")
-            connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,chunk_size,chunk_overlap], outputs=state_hl_dir, api_name="upload_knowledge")
+            connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,chunk_size,chunk_overlap], outputs=state_hl_dir, api_name="upload_knowledge_dir")
         
         with gr.Tab("Chat"):
             ds_radio = gr.Radio(
                 [ "Vector Store", "LLM", "Vector Store + LLM"], label="Which query do you want to use?"
             )
             with gr.Row():
-                topk = gr.Textbox(label="Retrieval top K answers",placeholder='3')
-                prompt = gr.Textbox(label="Prompt Design", placeholder="基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n已知信息:{context}\n用户问题:{question}", lines=4)
+                topk = gr.Textbox(label="Retrieval top K answers",value='3')
+                prompt = gr.Textbox(label="Prompt Design", value="基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n已知信息:{context}\n用户问题:{question}", lines=4)
             chatbot = gr.Chatbot()
             msg = gr.Textbox(label="Enter your question.")
-            clear = gr.ClearButton([msg, chatbot])
+            with gr.Row():
+                submitBtn = gr.Button("Submit", variant="primary")
+                clear = gr.ClearButton([msg, chatbot])
 
             print('topk.value', topk.value)
             print('prompt.value', prompt.value)
@@ -300,28 +301,9 @@ def create_ui():
                 time.sleep(2)
                 return "", chat_history
 
-            msg.submit(respond, [msg, chatbot, ds_radio, topk, prompt], [msg, chatbot])
+            # msg.submit(respond, [msg, chatbot, ds_radio, topk, prompt], [msg, chatbot])
+            submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prompt], [msg, chatbot])
     return demo
 
 ui = create_ui()
 app = gr.mount_gradio_app(app, ui, path='')
-
-
-# Run this from the terminal as you would normally start a FastAPI app: `uvicorn run:app`
-# uvicorn webui:app --host 0.0.0.0  --port 8012
-# and navigate to http://localhost:port/ in your browser.
-
-# curl -X 'POST' 'http://localhost:8074/uploadfile/' -H 'accept: application/json'  -H 'Content-Type: multipart/form-data'  -F 'file=@docs/PAI.txt;type=text/plain'
-
-# curl -X 'POST'  'http://127.0.0.1:8074/chat/langchain'  -H 'accept: application/json'  -H 'Content-Type: application/json'  -d '{"question": "什么是机器学习PAI?"}'
-
-# curl -X 'POST' 'http://localhost:8074/config/' -H 'accept: application/json'  -H 'Content-Type: multipart/form-data'  -F 'file=@config_holo_384.json'
-
-# 'http://chatbot-langchain-test..cn-hangzhou.pai-eas.aliyuncs.com'
-# ==
-
-# curl -X 'POST' 'http://chatbot-langchain-test..cn-hangzhou.pai-eas.aliyuncs.com/config/' -H 'Authorization: ==' -H 'accept: application/json'  -H 'Content-Type: multipart/form-data'  -F 'file=@config_holo_384.json'
-
-# curl -X 'POST' 'http://chatbot-langchain-test..cn-hangzhou.pai-eas.aliyuncs.com/uploadfile/' -H 'Authorization: ==' -H 'accept: application/json'  -H 'Content-Type: multipart/form-data'  -F 'file=@docs/组件化.txt;type=text/plain'
-
-# curl -X 'POST'  'http://chatbot-langchain-test..cn-hangzhou.pai-eas.aliyuncs.com/chat/langchain' -H 'Authorization: ==' -H 'accept: application/json'  -H 'Content-Type: application/json'  -d '{"question": "为什么需要使用组件化"}'
