@@ -4,7 +4,7 @@ langchain==0.0.265
 psycopg2==2.9.3
 psycopg2cffi==2.9.0
 pandas==1.2.4
-datasets==2.12.0 
+datasets==2.12.0
 sentence-transformers==2.2.2
 
 # huggingface related
@@ -15,7 +15,3 @@ tokenizers
 unstructured
 elasticsearch
 faiss-cpu
-
-python-multipart
-pypdf
-loguru

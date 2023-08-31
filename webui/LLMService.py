@@ -5,6 +5,7 @@ from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings, ElasticsearchStore
 import os
+import nltk
 import logging
 import time
 import requests
@@ -17,6 +18,9 @@ warnings.filterwarnings("ignore")
 class LLMService:
     def __init__(self) -> None:
         self.cfg = None
+        nltk_data_path = "/code/nltk_data"
+        if os.path.exists(nltk_data_path):
+            nltk.data.path = [nltk_data_path] + nltk.data.path
 
     def init_with_cfg(self,cfg):
         self.cfg = cfg
