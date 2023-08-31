@@ -1,6 +1,6 @@
 # langchain related
 pydantic==1.10.12
-langchain==0.0.265
+langchain==0.0.276
 psycopg2==2.9.3
 psycopg2cffi==2.9.0
 pandas==1.2.4

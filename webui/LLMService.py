@@ -4,6 +4,10 @@ from langchain.document_loaders import UnstructuredFileLoader, DirectoryLoader, 
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings, ElasticsearchStore
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+from question_prompt import *
+from chat_glm import ChatGLM
 import os
 import nltk
 import logging
@@ -13,11 +17,16 @@ import sys
 import argparse
 import warnings
 from chinese_text_splitter import ChineseTextSplitter
+from langchain.chat_models import ChatOpenAI
+import openai
+
 warnings.filterwarnings("ignore")
 
 class LLMService:
     def __init__(self) -> None:
         self.cfg = None
+        self.his_llm = ''
+        self.langchain_chat_history = []
         nltk_data_path = "/code/nltk_data"
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
@@ -25,29 +34,16 @@ class LLMService:
     def init_with_cfg(self,cfg):
         self.cfg = cfg
         self.vector_db, conn_time = self.connect_adb()
+        self.llm = ChatGLM()
+        self.llm.url = self.cfg['EASCfg']['url']
+        self.llm.token = self.cfg['EASCfg']['token']
+        self.question_generator_chain = get_standalone_question_ch(self.llm)
         return conn_time
-     
-    def post_to_chatglm2_eas(self, query_prompt):
-        url = self.cfg['EASCfg']['url']
-        token = self.cfg['EASCfg']['token']
-        headers = {
-            "Authorization": token,
-            'Accept': "*/*",
-            "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
-        }
-        resp = requests.post(
-            url=url,
-            data=query_prompt.encode('utf8'),
-            headers=headers,
-            timeout=10000,
-        )
-        ans = json.loads(resp.text)
-        return ans['response']
-        
+            
     def connect_adb(self):
         embedding_model = self.cfg['embedding']['embedding_model']
         model_dir = self.cfg['embedding']['model_dir']
-        embed = HuggingFaceEmbeddings(model_name=os.path.join(model_dir, embedding_model), model_kwargs={'device': 'cpu'})
+        self.embed = HuggingFaceEmbeddings(model_name=os.path.join(model_dir, embedding_model), model_kwargs={'device': 'cpu'})
         emb_dim = self.cfg['embedding']['embedding_dimension']
         
         if 'ADBCfg' in self.cfg:
@@ -63,7 +59,7 @@ class LLMService:
             )
             print('adb config pre_delete',pre_delete)
             vector_db = AnalyticDB(
-                embedding_function=embed,
+                embedding_function=self.embed,
                 embedding_dimension=emb_dim,
                 connection_string=connection_string_adb,
                 pre_delete_collection=int(pre_delete),
@@ -81,7 +77,7 @@ class LLMService:
                 password=self.cfg['HOLOCfg']['PG_PASSWORD']
             )
             vector_db = Hologres(
-                embedding_function=embed,
+                embedding_function=self.embed,
                 ndims=emb_dim,
                 connection_string=connection_string_holo,
             ) 
@@ -95,11 +91,22 @@ class LLMService:
                  index_name=self.cfg['ElasticSearchCfg']['ES_INDEX'],
                  es_user=self.cfg['ElasticSearchCfg']['ES_USER'],
                  es_password=self.cfg['ElasticSearchCfg']['ES_PASSWORD'],
-                 embedding=embed
+                 embedding=self.embed
             )
             end_time = time.time() 
             connect_time = end_time - start_time
             print("Connect ElasticsearchStore success. Cost time: {} s".format(connect_time))
+        elif 'FAISS' in self.cfg:
+            print("Not config any database, use FAISS-cpu default.")
+            start_time = time.time()
+            vector_db = None
+            if not os.path.exists(self.cfg['FAISS']['index_path']):
+                os.makedirs(self.cfg['FAISS']['index_path'])
+                print('已创建目录：', self.cfg['FAISS']['index_path'])
+            else:
+                print('目录已存在：', self.cfg['FAISS']['index_path'])
+            end_time = time.time() 
+            connect_time = end_time - start_time
         return vector_db, connect_time
     
     def load_file(self,filepath,chunk_size,chunk_overlap):  
@@ -125,20 +132,26 @@ class LLMService:
         return docs
     
     def upload_custom_knowledge(self,docs_dir,chunk_size,chunk_overlap):
-        # docs_dir = self.cfg['create_docs']['docs_dir']
+        print('Loading file.')
         docs = self.load_file(docs_dir,chunk_size,chunk_overlap)
-        # docs = DirectoryLoader(docs_dir, glob='**/*', show_progress=True).load()
-        # text_splitter = CharacterTextSplitter(chunk_size=int(200), chunk_overlap=0)
-        # docs = text_splitter.split_documents(docs)
         print('Uploading custom knowledge.')
         start_time = time.time()
-        self.vector_db.add_documents(docs)
+        if 'FAISS' in self.cfg:
+            self.vector_db = FAISS.from_documents(docs,self.embed)
+            faiss_path = os.path.join(self.cfg['FAISS']['index_path'], self.cfg['FAISS']['index_name'])
+            self.vector_db.save_local(faiss_path)
+        else:
+            self.vector_db.add_documents(docs)
+        # self.vector_db.add_documents(docs)
         end_time = time.time()
         print("Insert Success. Cost time: {} s".format(end_time - start_time))
         
     def create_user_query_prompt(self, query, topk, prompt):
         if topk == '' or topk is None:
             topk = 3
+        if 'FAISS' in self.cfg:
+            faiss_path = os.path.join(self.cfg['FAISS']['index_path'], self.cfg['FAISS']['index_name'])
+            self.vector_db = FAISS.load_local(faiss_path, self.embed)
         docs = self.vector_db.similarity_search(query, k=int(topk))
         context_docs = ""
         for idx, doc in enumerate(docs):
@@ -155,19 +168,32 @@ class LLMService:
             source_docs += "[" + str(idx+1)+"] " + doc.metadata['filename'] + ".    "
         return user_prompt_template, source_docs
 
-    def user_query(self, query,topk,prompt):
-        user_prompt_template, source_docs = self.create_user_query_prompt(query,topk,prompt)
+    def get_new_question(self, query):
+        if len(self.langchain_chat_history) == 0:
+            print('result',query)
+            return query
+        else:
+            result = self.question_generator_chain({"question": query, "chat_history": self.langchain_chat_history})
+            print('result',result)
+            return result['text']
+        
+    def user_query(self, query, topk, prompt):
+        new_query = self.get_new_question(query)
+        user_prompt_template, source_docs = self.create_user_query_prompt(new_query,topk,prompt)
         print("Post user query to EAS-LLM, user_prompt_template: ", user_prompt_template)
         start_time = time.time()
-        ans = self.post_to_chatglm2_eas(user_prompt_template) + source_docs
+        ans = self.llm(user_prompt_template)
+        self.langchain_chat_history.append((query, ans))
+        ans = ans + source_docs
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
         return ans
 
+    
     def query_only_llm(self,query):
         print("Post user query to EAS-LLM", query)
         start_time = time.time()
-        ans = self.post_to_chatglm2_eas(query)
+        ans = self.llm(query)
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
         return ans
@@ -177,6 +203,9 @@ class LLMService:
         start_time = time.time()
         if topk == '' or topk is None:
             topk = 3
+        if 'FAISS' in self.cfg:
+            faiss_path = os.path.join(self.cfg['FAISS']['index_path'], self.cfg['FAISS']['index_name'])
+            self.vector_db = FAISS.load_local(faiss_path, self.embed)
         docs = self.vector_db.similarity_search(query, k=int(topk))
         context_docs = ""
         for idx, doc in enumerate(docs):
