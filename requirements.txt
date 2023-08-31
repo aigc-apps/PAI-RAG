@@ -15,3 +15,5 @@ tokenizers
 unstructured
 elasticsearch
 faiss-cpu
+openai
+loguru

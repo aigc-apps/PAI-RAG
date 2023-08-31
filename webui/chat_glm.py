@@ -49,8 +49,9 @@ class ChatGLM(LLM):
         resp = self._post(url=self.url,
             query=query, token = self.token)
         if resp.status_code == 200:
-            resp_json = resp.json()
-            predictions = resp_json["response"]
+            # resp_json = resp.json()
+            # predictions = resp_json["response"]
+            predictions = resp.text
             return predictions
         else:
             return "There may occur some errors." 
