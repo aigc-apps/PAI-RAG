@@ -1,7 +1,12 @@
+# Copyright (c) Alibaba Cloud PAI.
+# SPDX-License-Identifier: Apache-2.0
+# deling.sc
+
 import requests
+import json
 
 class EASAgent:
-    def __init__(self, cfg, args):
+    def __init__(self, cfg):
         self.url = cfg['EASCfg']['url']
         self.token = cfg['EASCfg']['token']
 
@@ -11,12 +16,13 @@ class EASAgent:
             'Accept': "*/*",
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
         }
-        query_json = {"prompt": query}
+        # query_json = {"prompt": query}
         res = requests.post(
             url=self.url,
-            json=query_json,
-            # data=query_prompt.encode('utf8'),
+            # json=query_json,
+            data=query.encode('utf8'),
             headers=headers,
             timeout=10000,
         )
+        # return json.loads(res.text)['response']
         return res.text

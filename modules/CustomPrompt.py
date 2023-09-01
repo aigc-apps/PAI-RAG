@@ -1,35 +1,48 @@
-class PromptTemplate:
-    def __init__(self, args):
-        if args.prompt_engineering == 'Retrieval-Augmented Generation':
-            self.user_prompt_template = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
+# Copyright (c) Alibaba Cloud PAI.
+# SPDX-License-Identifier: Apache-2.0
+# deling.sc
 
-    def general_prompts(contents, question):
+import re
+
+class CustomPrompt:
+    def __init__(self, args):
+        self.prompt_type = args.prompt_engineering
+        # self.prompt_type = prompt_type
+
+    def general_prompts(self, contents, question):
+        context_docs = ""
+        for idx, doc in enumerate(contents):
+            context_docs += "-----\n\n"+str(idx+1)+".\n"+doc.page_content
+        context_docs += "\n\n-----\n\n"
+
         prompt_template = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
-        query_prompt = prompt_template.format(context=contents[0], question=question)
+        query_prompt = prompt_template.format(context=context_docs, question=question)
+
         return query_prompt
 
-    def extract_url(contents, question):
+    def extract_url(self, contents, question):
         prompt = '你是一位智能小助手，请根据下面我所提供的相关知识，对我提出的问题进行回答。回答的内容必须包括其定义、特征、应用领域以及相关网页链接等等内容，同时务必满足下方所提的要求！\n 相关知识如下：\n'
-        for i in range(len(contents)):
-            if 'http' in contents[i]:
-                prompt += str(i + 1) + '、该知识中包含网页链接!' + '\n' + contents[i] +'。'+ '\n' + '知识中包含的链接如下:'
-                pattern = r'([^：]+)：(https?://\S+?)(?=\s|$)'
-                matches = re.findall(pattern, contents[i])
+        for i, doc in enumerate(contents):
+            doc_page = doc.page_content
+            if 'http' in doc_page:
+                prompt += str(i + 1) + '、该知识中包含网页链接!' + '\n' + doc_page +'。'+ '\n' + '知识中包含的链接如下:'
+                pattern = r"([^：]+)：(https?://\S+?)(?=\s|$)"
+                matches = re.findall(pattern, doc_page)
                 # 将链接和对应名称内容存储到列表中
                 links = [(name.strip(), url) for name, url in matches]
                 for name, url in links:
-                    # print("name",name)
-                    # print("url",url)
                     prompt +=  '\n' + name + ':' + url + '；'+'\n'
             else:
-                prompt += str(i + 1) + '、' + contents[i] + '\n'
+                prompt += str(i + 1) + '、' + doc_page + '\n'
         if 'http' in prompt:
             requirement =  '回答的内容要求:若提供的知识中存在“网页链接”，则必须将“网页链接”准确无误的输出。不需要输出知识库以外的网页链接'
             prompt += '\n' + requirement + '\n' + '\n' +'问题是：1.' + question + '？' + '2. 上方提供的知识中可供参考的链接有什么' + '？\n'
         else:
             prompt += '\n' +'问题是：' + question + '\n'
 
-    def acurate_content(contents, question):
+        return prompt
+
+    def accurate_content(self, contents, question):
         prompt = '你是一位知识小助手，请根据下面我提供的知识库中相关知识，对我提出的若干问题进行回答，同时回答的内容需满足我所提的要求!\n 知识库相关知识如下：\n'
         for i in range(len(contents)):
             if 'http' in contents[i]:
@@ -46,11 +59,28 @@ class PromptTemplate:
         else:
             prompt += '\n'  +'请根据上方所提供的知识库内容与要求，回答以下问题:' + '\n' + question + '\n'
 
-    def get_prompt(self, docs, query):
+        return prompt
+
+    def custom_prompts(self, contents, question, prompt):
         context_docs = ""
-        for idx, doc in enumerate(docs):
+        for idx, doc in enumerate(contents):
             context_docs += "-----\n\n"+str(idx+1)+".\n"+doc.page_content
         context_docs += "\n\n-----\n\n"
-        user_prompt = self.user_prompt_template.format(context=context_docs, question=query)
 
-        return user_prompt
+        query_prompt = prompt.format(context=context_docs, question=question)
+
+        return query_prompt
+
+
+    def get_prompt(self, docs, query, prompt=None):
+        if self.prompt_type == 'customize' and prompt is not None and prompt != '':
+            return self.custom_prompts(docs, query, prompt)
+        else:
+            if self.prompt_type == 'general':
+                return self.general_prompts(docs, query)
+            elif self.prompt_type == 'extract_url':
+                return self.extract_url(docs, query)
+            elif self.prompt_type == 'accurate_content':
+                return self.accurate_content(docs, query)
+            else:
+                raise ValueError(f'error: invalid prompt template type of {self.prompt_type}')
