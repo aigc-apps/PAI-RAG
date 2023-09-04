@@ -40,23 +40,23 @@ class LLMService:
         self.llm.token = self.cfg['EASCfg']['token']
         self.question_generator_chain = get_standalone_question_ch(self.llm)
 
-        if args.upload:
-            self.upload_custom_knowledge()
-        if args.user_query:
-            if args.query_type == "retrieval_llm":
-                self.query_func = self.query_retrieval_llm
-                self.query_type = "Retrieval-Augmented Generation"
-            elif args.query_type == "only_llm":
-                self.query_func = self.query_only_llm
-                self.query_type = "Vanilla-LLM Generation"
-            elif args.query_type == "only_vectorstore":
-                self.query_func = self.query_only_vectorstore
-                self.query_type = "Vector-Store Retrieval"
-            else:
-                raise ValueError(f'error: invalid query type of {args.query_type}')
+        # if args.upload:
+        #     self.upload_custom_knowledge()
+        # if args.user_query:
+        #     if args.query_type == "retrieval_llm":
+        #         self.query_func = self.query_retrieval_llm
+        #         self.query_type = "Retrieval-Augmented Generation"
+        #     elif args.query_type == "only_llm":
+        #         self.query_func = self.query_only_llm
+        #         self.query_type = "Vanilla-LLM Generation"
+        #     elif args.query_type == "only_vectorstore":
+        #         self.query_func = self.query_only_vectorstore
+        #         self.query_type = "Vector-Store Retrieval"
+        #     else:
+        #         raise ValueError(f'error: invalid query type of {args.query_type}')
 
-            answer = self.query_func(args.user_query)
-            print('='*20 + f' {self.query_type} ' + '='*20 + '\n', answer)
+        #     answer = self.query_func(args.user_query)
+        #     print('='*20 + f' {self.query_type} ' + '='*20 + '\n', answer)
 
     def upload_custom_knowledge(self, docs_dir=None, chunk_size=200,chunk_overlap=0):
         if docs_dir is None:
@@ -80,7 +80,7 @@ class LLMService:
     def create_user_query_prompt(self, query, topk, prompt_type, prompt=None):
         if topk == '' or topk is None:
             topk = 3
-        docs = self.vector_db.similarity_search(query, topk=int(topk))
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk))
         if prompt_type == "General":
             self.args.prompt_engineering = 'general'
         elif prompt_type == "Extract URL":
@@ -129,7 +129,8 @@ class LLMService:
         if topk == '' or topk is None:
             topk = 3
         start_time = time.time()
-        docs = self.vector_db.similarity_search(query, topk=int(topk))
+        print('query',query)
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk))
 
         page_contents, ref_names = [], []
         for idx, doc in enumerate(docs):

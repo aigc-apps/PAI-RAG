@@ -17,10 +17,10 @@ def init_args(args):
     args.prompt_engineering = 'general'
     args.embed_model = "SGPT-125M-weightedmean-nli-bitfit"
     args.embed_dim = 768
-    args.vectordb_type = 'FAISS'
+    # args.vectordb_type = 'Elasticsearch'
     args.upload = False
-    args.user_query = None
-    args.query_type = "retrieval_llm"
+    # args.user_query = None
+    # args.query_type = "retrieval_llm"
 
 _global_args = parse_args()
 init_args(_global_args)

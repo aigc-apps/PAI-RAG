@@ -5,16 +5,20 @@
 from langchain.vectorstores import FAISS
 from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore
 import time
-from .EmbeddingModel import EmbeddingModel
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 import os
 
 class VectorDB:
     def __init__(self, args, cfg=None):
-        self.embed = EmbeddingModel(model_name=args.embed_model)
+        model_dir = "/code/embedding_model"
+        self.model_name_or_path = os.path.join(model_dir, args.embed_model)
+        self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
+                                           model_kwargs={'device': 'cpu'})
+        # self.embed = EmbeddingModel(model_name=args.embed_model)
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
         emb_dim = cfg['embedding']['embedding_dimension']
-
+        print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
@@ -96,15 +100,19 @@ class VectorDB:
             except:
                 vector_db = None
 
-        self.vector_db = vector_db
+        self.vectordb = vector_db
 
     def add_documents(self, docs):
-        if not self.vector_db:
-            self.vector_db = FAISS.from_documents(docs, self.embed)
-            self.vector_db.save_local(self.faiss_path)
+        if not self.vectordb:
+            print('add_documents faiss')
+            self.vectordb = FAISS.from_documents(docs, self.embed)
+            self.vectordb.save_local(self.faiss_path)
         else:
-            self.vector_db.add_documents(docs)
+            print('add_documents else')
+            self.vectordb.add_documents(docs)
 
-    def similarity_search(self, query, topk):
-        assert self.vector_db is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
-        return self.vector_db.similarity_search(query, k=topk)
+    def similarity_search_db(self, query, topk):
+        assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
+        print('similarity_search',query)
+        print('self.vectordb',self.vectordb.embedding_function)
+        return self.vectordb.similarity_search(query, k=topk)
