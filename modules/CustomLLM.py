@@ -10,6 +10,7 @@ class CustomLLM(LLM):
     # # 模型服务url
     url = ""
     token = ""
+    history = []
         
     @property
     def _llm_type(self) -> str:
@@ -33,25 +34,35 @@ class CustomLLM(LLM):
         }
         with requests.session() as sess:
             resp = sess.post(url, 
-                data=query, 
+                json=query, 
                 headers=_headers, 
                 timeout=10000)
         return resp
  
-    
     def _call(self, prompt: str, 
         stop: Optional[List[str]] = None) -> str:
         """_call
         """
-        # construct query
-        query = self._construct_query(prompt=prompt)
+        query_json = {
+            "prompt": str(prompt),
+            "temperature": 0.1,
+            "history": self.history
+        }
+        
         # post
-        resp = self._post(url=self.url,
-            query=query, token = self.token)
+        _headers = {
+            "Authorization": self.token,
+            'Accept': "*/*",
+            "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
+        }
+        resp = requests.post(self.url, 
+            json=query_json, 
+            headers=_headers, 
+            timeout=10000)
+        
         if resp.status_code == 200:
-            # resp_json = resp.json()
-            # predictions = resp_json["response"]
-            predictions = resp.text
+            resp_json = resp.json()
+            predictions = resp_json["response"]
             return predictions
         else:
             return "There may occur some errors." 
@@ -62,7 +73,7 @@ class CustomLLM(LLM):
         """
         _param_dict = {
             "url": self.url,
-            "token": self.token
+            "token": self.token,
+            "history":self.history
         }
         return _param_dict
-

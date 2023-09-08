@@ -19,6 +19,7 @@ class LLMService:
         # assert args.upload or args.user_query, "error: dose not set any action, please set '--upload' or '--query <user_query>'."
         # assert os.path.exists(args.config), f"error: config path {args.config} does not exist."
         self.langchain_chat_history = []
+        self.llm_chat_history = []
         nltk_data_path = "/code/nltk_data"
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
@@ -108,6 +109,7 @@ class LLMService:
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt)
         print("Post user query to EAS-LLM", user_prompt)
         start_time = time.time()
+        self.llm.history = self.langchain_chat_history
         ans = self.llm(user_prompt)
         self.langchain_chat_history.append((new_query, ans))
         end_time = time.time()
@@ -118,6 +120,7 @@ class LLMService:
     def query_only_llm(self, query):
         print("Post user query to EAS-LLM")
         start_time = time.time()
+        self.llm.history = self.langchain_chat_history
         ans = self.llm(query)
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))

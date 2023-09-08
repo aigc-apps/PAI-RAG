@@ -9,7 +9,7 @@ Standalone question:"""
 CONDENSE_QUESTION_PROMPT_EN = PromptTemplate.from_template(_template_en)
 
 _template_ch = """请根据聊天记录和新问题，将新问题改写为一个独立问题。
-如果无法改写，请返回原始的问题。
+不需要回答问题，一定要返回一个疑问句。
 聊天记录：
 {chat_history}
 新问题：{question}
