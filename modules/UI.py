@@ -135,7 +135,7 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
             
             \N{whale} Referenced API: https://your-service.pai-eas.cn-region.aliyun.com/docs
             
-            - \N{fire} Platform of Artificial Intelligence: https://help.aliyun.com/zh/pai/    \N{fire} PAI-EAS : https://www.aliyun.com/product/bigdata/learn/eas
+            - \N{fire} Platform of Artificial Intelligence: https://help.aliyun.com/zh/pai/    \N{fire} PAI-EAS: https://www.aliyun.com/product/bigdata/learn/eas   \N{fire} DSW: https://pai.console.aliyun.com/notebook
             
             - Supported VectorStore:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [Elasticsearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss) (only used for testing)
                 
