@@ -50,6 +50,7 @@ class CustomLLM(LLM):
         }
         
         # post
+        print('query_json',query_json)
         _headers = {
             "Authorization": self.token,
             'Accept': "*/*",
