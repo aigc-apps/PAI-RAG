@@ -45,7 +45,6 @@ class CustomLLM(LLM):
         """
         query_json = {
             "prompt": str(prompt),
-            "temperature": 0.1,
             "history": self.history
         }
         

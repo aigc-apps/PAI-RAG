@@ -13,13 +13,16 @@ from .TextSplitter import TextSplitter
 import nltk
 from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
+from sentencepiece import SentencePieceProcessor
 
 class LLMService:
     def __init__(self, args):
         # assert args.upload or args.user_query, "error: dose not set any action, please set '--upload' or '--query <user_query>'."
         # assert os.path.exists(args.config), f"error: config path {args.config} does not exist."
         self.langchain_chat_history = []
+        self.input_tokens = []
         self.llm_chat_history = []
+        self.sp = SentencePieceProcessor(model_file='./tokenizer.model')
         nltk_data_path = "/code/nltk_data"
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
@@ -114,18 +117,25 @@ class LLMService:
         self.langchain_chat_history.append((new_query, ans))
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-
-        return ans
+        self.input_tokens.append(new_query)
+        self.input_tokens.append(ans)
+        tokens_len = self.sp.encode(self.input_tokens, out_type=str)
+        lens = sum(len(tl) for tl in tokens_len)
+        return ans, lens
 
     def query_only_llm(self, query):
         print("Post user query to EAS-LLM")
         start_time = time.time()
         self.llm.history = self.langchain_chat_history
         ans = self.llm(query)
+        self.langchain_chat_history.append((query, ans))
         end_time = time.time()
         print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
-
-        return ans
+        self.input_tokens.append(query)
+        self.input_tokens.append(ans)
+        tokens_len = self.sp.encode(self.input_tokens, out_type=str)
+        lens = sum(len(tl) for tl in tokens_len)
+        return ans, lens
 
     def query_only_vectorstore(self, query, topk):
         print("Post user query to Vectore Store")
@@ -139,13 +149,13 @@ class LLMService:
         for idx, doc in enumerate(docs):
             content = doc.page_content if hasattr(doc, "page_content") else "[Doc Content Lost]"
             page_contents.append('='*20 + f' Doc [{idx+1}] ' + '='*20 + f'\n{content}\n')
-
-            ref = doc.metadata['source'] if hasattr(doc, "metadata") and "source" in doc.metadata else "[Doc Name Lost]"
+            ref = doc.metadata['filename'] if hasattr(doc, "metadata") and "filename" in doc.metadata else "[Doc Name Lost]"
             ref_names.append(f'[{idx+1}] {ref}')
 
         ref_title = '='*20 + ' Reference Sources ' + '='*20
         context_docs = '\n'.join(page_contents) + f'{ref_title}\n' + '\n'.join(ref_names)
         end_time = time.time()
         print("Get response from Vectore Store. Cost time: {} s".format(end_time - start_time))
-
-        return context_docs
+        tokens_len = self.sp.encode(context_docs, out_type=str)
+        lens = sum(len(tl) for tl in tokens_len)
+        return context_docs, lens

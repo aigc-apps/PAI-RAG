@@ -4,9 +4,7 @@ import time
 import os
 import json
   
-def create_ui(service,_global_args,_global_cfg, host_, port_):
-    url_str = 'http://' + host_ + ':' + str(port_)
-    api_url = url_str + '/docs'
+def create_ui(service,_global_args,_global_cfg):
     
     def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del):
         cfg = {
@@ -133,7 +131,7 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
 
              <center> \N{rocket} Build your own personalized knowledge base question-answering chatbot. 
             
-            \N{whale} Referenced API: https://your-service.pai-eas.cn-region.aliyun.com/docs
+            \N{whale} Referenced API: https://your-service-url/docs
             
             - \N{fire} Platform of Artificial Intelligence: https://help.aliyun.com/zh/pai/    \N{fire} PAI-EAS: https://www.aliyun.com/product/bigdata/learn/eas   \N{fire} DSW: https://pai.console.aliyun.com/notebook
             
@@ -288,8 +286,8 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
         with gr.Tab("Upload"):
             with gr.Row():
                 with gr.Column(scale=2):
-                    chunk_size = gr.Textbox(label="Chunk Size (The size of the chunks into which a document is divided)",value='200')
-                    chunk_overlap = gr.Textbox(label="Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
+                    chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
+                    chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
                 with gr.Column(scale=8):
                     with gr.Tab("Files"):
                         upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
@@ -304,11 +302,13 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
 
                     
                     def upload_knowledge(upload_file,chunk_size,chunk_overlap):
+                        file_name = ''
                         for file in upload_file:
                             if file.name.lower().endswith(".txt") or file.name.lower().endswith(".md") or file.name.lower().endswith(".docx") or file.name.lower().endswith(".doc") or file.name.lower().endswith(".pdf"):
                                 file_path = file.name
+                                file_name += file.name.rsplit('/', 1)[-1] + ', '
                                 service.upload_custom_knowledge(file_path,int(chunk_size),int(chunk_overlap))
-                        return "File: Upload " + str(len(upload_file)) + " files Success!" 
+                        return "Upload " + str(len(upload_file)) + " files [ " +  file_name + "] Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions." 
                     
                     def upload_knowledge_dir(upload_dir,chunk_size,chunk_overlap):
                         for file in upload_dir:
@@ -324,14 +324,14 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
             with gr.Row():
                 with gr.Column(scale=2):
                     ds_radio = gr.Radio(
-                        [ "Vector Store", "LLM", "Vector Store + LLM"], label="Which query do you want to use?"
+                        [ "Vector Store", "LLM", "Vector Store + LLM"], label="\N{fire} Which query do you want to use?"
                     )
                     topk = gr.Textbox(label="Retrieval top K answers",value='3')
                     with gr.Column():
                         prm_radio = gr.Radio(
-                            [ "General", "Extract URL", "Accurate Content", "Customize"], label="Please choose the prompt template type"
+                            [ "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
                         )
-                        prompt = gr.Textbox(placeholder="Please choose the prompt template", lines=4)
+                        prompt = gr.Textbox(label="prompt template", placeholder="This is a prompt template", lines=4)
                         def change_prompt_template(prm_radio):
                             if prm_radio == "General":
                                 return {prompt: gr.update(value="基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}")}
@@ -342,36 +342,52 @@ def create_ui(service,_global_args,_global_cfg, host_, port_):
                             elif prm_radio == "Customize":
                                 return {prompt: gr.update(value="")}
                         prm_radio.change(fn=change_prompt_template, inputs=prm_radio, outputs=[prompt])
+                        cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
                 with gr.Column(scale=8):
                     chatbot = gr.Chatbot()
                     msg = gr.Textbox(label="Enter your question.")
                     with gr.Row():
                         submitBtn = gr.Button("Submit", variant="primary")
-                        clear_his = gr.Button("Clear History", variant="primary")
+                        summaryBtn = gr.Button("Summary", variant="primary")
+                        clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
 
                     print('topk.value', topk.value)
                     print('prompt.value', prompt.value)
+                    def update_lens(lens):
+                        return {cur_tokens: gr.update(value=str(lens))}
+                    
                     def respond(message, chat_history, ds_radio, topk, prm_radio, prompt):
                         if ds_radio == "Vector Store":
-                            answer = service.query_only_vectorstore(message,topk)
+                            answer, lens = service.query_only_vectorstore(message,topk)
                         elif ds_radio == "LLM":
-                            answer = service.query_only_llm(message)         
+                            answer, lens = service.query_only_llm(message)         
                         else:
-                            answer = service.query_retrieval_llm(message,topk, prm_radio, prompt)
+                            answer, lens = service.query_retrieval_llm(message,topk, prm_radio, prompt)
                         bot_message = answer
                         chat_history.append((message, bot_message))
-                        time.sleep(2)
-                        return "", chat_history
+                        time.sleep(0.05)
+                        return "", chat_history, lens
 
                     def clear_hisoty(chat_history):
                         bot_message = "Cleared successfully!"
                         chat_history = []
                         service.langchain_chat_history = []
+                        service.input_tokens = []
                         chat_history.append(('Clear the chat history', bot_message))
-                        time.sleep(2)
+                        time.sleep(0.05)
                         return chat_history
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot])
+                    def summary_hisoty(chat_history):
+                        service.input_tokens = []
+                        bot_message, lens = service.query_only_llm("请对我们之前的对话内容进行总结。")
+                        service.langchain_chat_history = []
+                        service.langchain_chat_history.append(("请对我们之前的对话内容进行总结。", bot_message))
+                        chat_history.append(('请对我们之前的对话内容进行总结。', bot_message))
+                        time.sleep(0.05)
+                        return chat_history, lens
+                    
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot])
+                    summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     return demo
