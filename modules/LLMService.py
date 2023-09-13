@@ -106,22 +106,36 @@ class LLMService:
             result = self.question_generator_chain({"question": query, "chat_history": self.langchain_chat_history})
             print('result',result)
             return result['text']
-        
+
+    def checkout_history_and_summary(self, summary=False):
+        if summary or len(self.langchain_chat_history) > 10:
+            print("start summary")
+            self.llm.history = self.langchain_chat_history
+            summary_res = self.llm("请对我们之前的对话内容进行总结。")
+            print("请对我们之前的对话内容进行总结: ", summary_res)
+            self.langchain_chat_history = []
+            self.langchain_chat_history.append(("请对我们之前的对话内容进行总结。", summary_res))
+            self.input_tokens = []
+            self.input_tokens.append("请对我们之前的对话内容进行总结。")
+            self.input_tokens.append(summary_res)
+            return summary_res
+        else:
+            return ""
+    
     def query_retrieval_llm(self, query, topk, prompt_type, prompt=None):
         new_query = self.get_new_question(query)
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt)
         print("Post user query to EAS-LLM", user_prompt)
-        start_time = time.time()
         self.llm.history = self.langchain_chat_history
         ans = self.llm(user_prompt)
         self.langchain_chat_history.append((new_query, ans))
-        end_time = time.time()
-        print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
+        print("Get response from EAS-LLM.")
         self.input_tokens.append(new_query)
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
         lens = sum(len(tl) for tl in tokens_len)
-        return ans, lens
+        summary_res = self.checkout_history_and_summary()
+        return ans, lens, summary_res
 
     def query_only_llm(self, query):
         print("Post user query to EAS-LLM")
@@ -135,7 +149,8 @@ class LLMService:
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
         lens = sum(len(tl) for tl in tokens_len)
-        return ans, lens
+        summary_res = self.checkout_history_and_summary()
+        return ans, lens, summary_res
 
     def query_only_vectorstore(self, query, topk):
         print("Post user query to Vectore Store")

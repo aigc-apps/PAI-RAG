@@ -344,30 +344,26 @@ def create_ui(service,_global_args,_global_cfg):
                         prm_radio.change(fn=change_prompt_template, inputs=prm_radio, outputs=[prompt])
                         cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
                 with gr.Column(scale=8):
-                    chatbot = gr.Chatbot()
+                    chatbot = gr.Chatbot(height=500)
                     msg = gr.Textbox(label="Enter your question.")
                     with gr.Row():
                         submitBtn = gr.Button("Submit", variant="primary")
                         summaryBtn = gr.Button("Summary", variant="primary")
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
-
-                    print('topk.value', topk.value)
-                    print('prompt.value', prompt.value)
-                    def update_lens(lens):
-                        return {cur_tokens: gr.update(value=str(lens))}
-                    
+                   
                     def respond(message, chat_history, ds_radio, topk, prm_radio, prompt):
+                        summary_res = ""
                         if ds_radio == "Vector Store":
                             answer, lens = service.query_only_vectorstore(message,topk)
                         elif ds_radio == "LLM":
-                            answer, lens = service.query_only_llm(message)         
+                            answer, lens, summary_res = service.query_only_llm(message)         
                         else:
-                            answer, lens = service.query_retrieval_llm(message,topk, prm_radio, prompt)
+                            answer, lens, summary_res = service.query_retrieval_llm(message,topk, prm_radio, prompt)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
-                        return "", chat_history, lens
+                        return "", chat_history, str(lens) + "\n" + summary_res
 
                     def clear_hisoty(chat_history):
                         bot_message = "Cleared successfully!"
@@ -380,12 +376,12 @@ def create_ui(service,_global_args,_global_cfg):
                     
                     def summary_hisoty(chat_history):
                         service.input_tokens = []
-                        bot_message, lens = service.query_only_llm("请对我们之前的对话内容进行总结。")
-                        service.langchain_chat_history = []
-                        service.langchain_chat_history.append(("请对我们之前的对话内容进行总结。", bot_message))
+                        bot_message = service.checkout_history_and_summary(summary=True)
                         chat_history.append(('请对我们之前的对话内容进行总结。', bot_message))
+                        tokens_len = service.sp.encode(service.input_tokens, out_type=str)
+                        lens = sum(len(tl) for tl in tokens_len)
                         time.sleep(0.05)
-                        return chat_history, lens
+                        return chat_history, str(lens) + "\n" + bot_message
                     
                     submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot])
