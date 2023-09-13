@@ -35,23 +35,22 @@ class Query(BaseModel):
     prompt: str | None = None
 
 host_ = "127.0.0.1"
-port_ = 8098
-app = FastAPI(host=host_,port=port_)
+app = FastAPI(host=host_)
 
 @app.post("/chat/llm")
 async def query_by_llm(query: Query):
-    ans = service.query_only_llm(query.question) 
-    return {"response": ans}
+    ans, lens = service.query_only_llm(query.question) 
+    return {"response": ans, "tokens": lens}
 
 @app.post("/chat/vectorstore")
 async def query_by_vectorstore(query: Query):
-    ans = service.query_only_vectorstore(query.question,query.topk) 
-    return {"response": ans}
+    ans, lens = service.query_only_vectorstore(query.question,query.topk) 
+    return {"response": ans, "tokens": lens}
 
 @app.post("/chat/langchain")
 async def query_by_langchain(query: Query):
-    ans = service.user_query(query.question,query.topk,query.prompt) 
-    return {"response": ans}
+    ans, lens = service.query_retrieval_llm(query.question,query.topk,query.prompt) 
+    return {"response": ans, "tokens": lens}
 
 @app.post("/uploadfile")
 async def create_upload_file(file: UploadFile | None = None):
@@ -95,5 +94,5 @@ async def create_config_json_file(file: UploadFile | None = None):
         return {"response": "success"}
     
 
-ui = create_ui(service,_global_args,_global_cfg, host_, port_)
+ui = create_ui(service,_global_args,_global_cfg)
 app = gr.mount_gradio_app(app, ui, path='')
