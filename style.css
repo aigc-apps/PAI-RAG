@@ -1,0 +1,18 @@
+/* replace original footer with ours */
+
+footer {
+    display: none !important;
+}
+
+#footer{
+    text-align: center;
+}
+
+#footer div{
+    display: inline-block;
+}
+
+#footer .versions{
+    font-size: 85%;
+    opacity: 0.85;
+}

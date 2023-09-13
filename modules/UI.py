@@ -1,8 +1,59 @@
 import gradio as gr
+from modules.LLMService import LLMService
 import time
+import os
 import json
+import sys
+import gradio
 
+def html_path(filename):
+    script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    return os.path.join(script_path, "html", filename)
+
+def html(filename):
+    path = html_path(filename)
+    if os.path.exists(path):
+        with open(path, encoding="utf8") as file:
+            return file.read()
+
+    return ""
+
+def webpath(fn):
+    script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    if fn.startswith(script_path):
+        web_path = os.path.relpath(fn, script_path).replace('\\', '/')
+    else:
+        web_path = os.path.abspath(fn)
+    return f'file={web_path}?{os.path.getmtime(fn)}'
+
+def css_html():
+    head = ""
+    def stylesheet(fn):
+        return f'<link rel="stylesheet" property="stylesheet" href="{webpath(fn)}">'
+    
+    cssfile = "style.css"
+    if not os.path.isfile(cssfile):
+        print("cssfile not exist")
+
+    head += stylesheet(cssfile)
+
+    return head
+
+
+def reload_javascript():
+    css = css_html()
+    GradioTemplateResponseOriginal = gradio.routes.templates.TemplateResponse
+
+    def template_response(*args, **kwargs):
+        res = GradioTemplateResponseOriginal(*args, **kwargs)
+        res.body = res.body.replace(b'</body>', f'{css}</body>'.encode("utf8"))
+        res.init_headers()
+        return res
+
+    gradio.routes.templates.TemplateResponse = template_response
+    
 def create_ui(service,_global_args,_global_cfg):
+    reload_javascript()
     
     def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del):
         cfg = {
@@ -127,24 +178,26 @@ def create_ui(service,_global_args,_global_cfg):
         value_md =  """
             #  <center> \N{fire} Chatbot Langchain with LLM on PAI ! 
 
-             <center> \N{rocket} Build your own personalized knowledge base question-answering chatbot. 
+            ### <center> \N{rocket} Build your own personalized knowledge base question-answering chatbot. 
                         
-            - \N{fire} Platform of Artificial Intelligence: https://help.aliyun.com/zh/pai/    \N{fire} PAI-EAS: https://www.aliyun.com/product/bigdata/learn/eas   \N{fire} DSW: https://pai.console.aliyun.com/notebook
+            <center> 
             
-            - Supported VectorStore:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [Elasticsearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss) (only used for testing)
+            \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook)
+            
+            \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [Elasticsearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
                 
             """
         
         
         gr.Markdown(value=value_md)
-        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a> </div>")
+        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a>  </div>")
         gr.HTML(api_hl,elem_id='api')
                 
-        with gr.Tab("Settings"):
+        with gr.Tab("\N{rocket} Settings"):
             with gr.Row():
                 with gr.Column():
                     with gr.Column():
-                        md_emb = gr.Markdown(value="\N{fire} Please set your embedding model.")
+                        md_emb = gr.Markdown(value="**Please set your embedding model.**")
                         emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2"], label="Emebdding Model", value=_global_args.embed_model)
                         emb_dim = gr.Textbox(label="Emebdding Dimension", value=_global_args.embed_dim)
                         def change_emb_model(model):
@@ -159,17 +212,17 @@ def create_ui(service,_global_args,_global_cfg):
                         emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim])
                     
                     with gr.Column():
-                        md_eas = gr.Markdown(value="\N{rocket} Please set your EAS LLM.")
+                        md_eas = gr.Markdown(value="**Please set your EAS LLM.**")
                         eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'])
                         eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'])
                     
                     with gr.Column():
-                      md_cfg = gr.Markdown(value="\N{whale}(Optional) Please upload your config file.")
+                      md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
                       config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
-                      cfg_btn = gr.Button("Parse config json")
+                      cfg_btn = gr.Button("Parse Config", variant="primary")
                     
                 with gr.Column():
-                    md_vs = gr.Markdown(value="\N{fire} Please set your Vector Store.")
+                    md_vs = gr.Markdown(value="**Please set your Vector Store.**")
                     vs_radio = gr.Dropdown(
                         [ "Hologres", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
                     with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
@@ -183,7 +236,7 @@ def create_ui(service,_global_args,_global_cfg):
                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_del = gr.Textbox(label="Pre_delete", 
                                             value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        connect_btn = gr.Button("Connect AnalyticDB")
+                        connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
                     with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
@@ -195,7 +248,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
                         holo_pwd= gr.Textbox(label="Password",
                                              value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
-                        connect_btn = gr.Button("Connect Hologres")
+                        connect_btn = gr.Button("Connect Hologres", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, eas_url, eas_token, holo_host, holo_database, holo_user, holo_pwd], outputs=con_state, api_name="connect_holo") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="Elasticsearch")) as es_col:
@@ -207,7 +260,7 @@ def create_ui(service,_global_args,_global_cfg):
                                              value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="Elasticsearch" else '')
                         es_pwd= gr.Textbox(label="Password",
                                            value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="Elasticsearch" else '')
-                        connect_btn = gr.Button("Connect ElasticSearch")
+                        connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, eas_url, eas_token, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
@@ -215,7 +268,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                 value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
                         faiss_name = gr.Textbox(label="Index", 
                                                 value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
-                        connect_btn = gr.Button("Connect Faiss")
+                        connect_btn = gr.Button("Connect Faiss", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, eas_url, eas_token, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
                     def change_ds_conn(radio):
@@ -282,7 +335,7 @@ def create_ui(service,_global_args,_global_cfg):
                             }
                 cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
                 
-        with gr.Tab("Upload"):
+        with gr.Tab("\N{whale} Upload"):
             with gr.Row():
                 with gr.Column(scale=2):
                     chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
@@ -291,12 +344,12 @@ def create_ui(service,_global_args,_global_cfg):
                     with gr.Tab("Files"):
                         upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
                                         file_types=['.txt', '.md', '.docx', '.pdf'], file_count="multiple")
-                        connect_btn = gr.Button("Upload")
+                        connect_btn = gr.Button("Upload", variant="primary")
                         state_hl_file = gr.Textbox(label="Upload State")
                         
                     with gr.Tab("Directory"):
                         upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: txt, md, docx, pdf)" , file_count="directory")
-                        connect_dir_btn = gr.Button("Upload")
+                        connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
 
                     
@@ -319,7 +372,7 @@ def create_ui(service,_global_args,_global_cfg):
                     connect_btn.click(fn=upload_knowledge, inputs=[upload_file,chunk_size,chunk_overlap], outputs=state_hl_file, api_name="upload_knowledge")
                     connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,chunk_size,chunk_overlap], outputs=state_hl_dir, api_name="upload_knowledge_dir")
         
-        with gr.Tab("Chat"):
+        with gr.Tab("\N{fire} Chat"):
             with gr.Row():
                 with gr.Column(scale=2):
                     ds_radio = gr.Radio(
@@ -386,7 +439,7 @@ def create_ui(service,_global_args,_global_cfg):
                     clear_his.click(clear_hisoty,[chatbot],[chatbot])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
-        # footer = html("footer.html")
-        # gr.HTML(footer, elem_id="footer")
+        footer = html("footer.html")
+        gr.HTML(footer, elem_id="footer")
         
     return demo
