@@ -1,9 +1,7 @@
 import gradio as gr
-from modules.LLMService import LLMService
 import time
-import os
 import json
-  
+
 def create_ui(service,_global_args,_global_cfg):
     
     def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del):
@@ -130,16 +128,17 @@ def create_ui(service,_global_args,_global_cfg):
             #  <center> \N{fire} Chatbot Langchain with LLM on PAI ! 
 
              <center> \N{rocket} Build your own personalized knowledge base question-answering chatbot. 
-            
-            \N{whale} Referenced API: https://your-service-url/docs
-            
+                        
             - \N{fire} Platform of Artificial Intelligence: https://help.aliyun.com/zh/pai/    \N{fire} PAI-EAS: https://www.aliyun.com/product/bigdata/learn/eas   \N{fire} DSW: https://pai.console.aliyun.com/notebook
             
             - Supported VectorStore:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [Elasticsearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss) (only used for testing)
                 
             """
-            
+        
+        
         gr.Markdown(value=value_md)
+        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a> </div>")
+        gr.HTML(api_hl,elem_id='api')
                 
         with gr.Tab("Settings"):
             with gr.Row():
@@ -386,4 +385,8 @@ def create_ui(service,_global_args,_global_cfg):
                     submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
+    
+        # footer = html("footer.html")
+        # gr.HTML(footer, elem_id="footer")
+        
     return demo
