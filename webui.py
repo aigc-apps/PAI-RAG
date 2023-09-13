@@ -39,7 +39,7 @@ app = FastAPI(host=host_)
 
 @app.post("/chat/llm")
 async def query_by_llm(query: Query):
-    ans, lens = service.query_only_llm(query.question) 
+    ans, lens, _ = service.query_only_llm(query.question) 
     return {"response": ans, "tokens": lens}
 
 @app.post("/chat/vectorstore")
@@ -49,7 +49,7 @@ async def query_by_vectorstore(query: Query):
 
 @app.post("/chat/langchain")
 async def query_by_langchain(query: Query):
-    ans, lens = service.query_retrieval_llm(query.question,query.topk,query.prompt) 
+    ans, lens, _ = service.query_retrieval_llm(query.question,query.topk,query.prompt) 
     return {"response": ans, "tokens": lens}
 
 @app.post("/uploadfile")
