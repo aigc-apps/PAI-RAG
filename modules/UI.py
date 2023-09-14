@@ -39,7 +39,6 @@ def css_html():
 
     return head
 
-
 def reload_javascript():
     css = css_html()
     GradioTemplateResponseOriginal = gradio.routes.templates.TemplateResponse
@@ -418,13 +417,12 @@ def create_ui(service,_global_args,_global_cfg):
                         return "", chat_history, str(lens) + "\n" + summary_res
 
                     def clear_hisoty(chat_history):
-                        bot_message = "Cleared successfully!"
                         chat_history = []
                         service.langchain_chat_history = []
                         service.input_tokens = []
-                        chat_history.append(('Clear the chat history', bot_message))
+                        # chat_history.append(('Clear the chat history', bot_message))
                         time.sleep(0.05)
-                        return chat_history
+                        return chat_history, "0 \n Clear history successfully!"
                     
                     def summary_hisoty(chat_history):
                         service.input_tokens = []
@@ -436,7 +434,7 @@ def create_ui(service,_global_args,_global_cfg):
                         return chat_history, str(lens) + "\n" + bot_message
                     
                     submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot, cur_tokens])
-                    clear_his.click(clear_hisoty,[chatbot],[chatbot])
+                    clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
         footer = html("footer.html")
