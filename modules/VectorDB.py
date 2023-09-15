@@ -23,7 +23,7 @@ class VectorDB:
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
                 host=cfg['ADBCfg']['PG_HOST'],
-                database=['ADBCfg']['PG_DATABASE'],
+                database=cfg['ADBCfg']['PG_DATABASE'],
                 user=cfg['ADBCfg']['PG_USER'],
                 password=cfg['ADBCfg']['PG_PASSWORD'],
                 driver='psycopg2cffi',
