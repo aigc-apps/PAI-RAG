@@ -23,7 +23,7 @@ class VectorDB:
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
                 host=cfg['ADBCfg']['PG_HOST'],
-                database='postgres',
+                database=['ADBCfg']['PG_DATABASE'],
                 user=cfg['ADBCfg']['PG_USER'],
                 password=cfg['ADBCfg']['PG_PASSWORD'],
                 driver='psycopg2cffi',
@@ -33,7 +33,7 @@ class VectorDB:
                 embedding_function=self.embed,
                 embedding_dimension=emb_dim,
                 connection_string=connection_string_adb,
-                # pre_delete_collection=True,
+                pre_delete_collection=cfg['ADBCfg']['PRE_DELETE'],
             )
             end_time = time.time()
             print("Connect AnalyticDB success. Cost time: {} s".format(end_time - start_time))
@@ -63,7 +63,7 @@ class VectorDB:
                  embedding=self.embed
             )
             end_time = time.time()
-            print("Connect ElasticsearchStore success. Cost time: {} s".format(end_time - start_time))
+            print("Connect ElasticSearchStore success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'OpenSearch':
             start_time = time.time()
             print("Start Connect AlibabaCloudOpenSearch ")

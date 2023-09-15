@@ -138,7 +138,7 @@ def create_ui(service,_global_args,_global_cfg):
                 "glob": "**/*"
             }
         }
-        _global_args.vectordb_type = "Elasticsearch"
+        _global_args.vectordb_type = "ElasticSearch"
         _global_cfg.update(cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
@@ -183,7 +183,7 @@ def create_ui(service,_global_args,_global_cfg):
             
             \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook)
             
-            \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [Elasticsearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
+            \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
                 
             """
         
@@ -233,8 +233,9 @@ def create_ui(service,_global_args,_global_cfg):
                                                  value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_pwd= gr.Textbox(label="Password", 
                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_del = gr.Textbox(label="Pre_delete", 
-                                            value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
+                        pg_del = gr.Dropdown(['True','False'], value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                        # pg_del = gr.Textbox(label="Pre_delete", 
+                        #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
@@ -250,15 +251,15 @@ def create_ui(service,_global_args,_global_cfg):
                         connect_btn = gr.Button("Connect Hologres", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, eas_url, eas_token, holo_host, holo_database, holo_user, holo_pwd], outputs=con_state, api_name="connect_holo") 
-                    with gr.Column(visible=(_global_cfg['vector_store']=="Elasticsearch")) as es_col:
+                    with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                         es_url = gr.Textbox(label="URL",
-                                            value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="Elasticsearch" else '')
+                                            value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         es_index = gr.Textbox(label="Index",
-                                              value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="Elasticsearch" else '')
+                                              value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         es_user = gr.Textbox(label="User",
-                                             value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="Elasticsearch" else '')
+                                             value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         es_pwd= gr.Textbox(label="Password",
-                                           value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="Elasticsearch" else '')
+                                           value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, eas_url, eas_token, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
