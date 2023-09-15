@@ -113,6 +113,4 @@ class VectorDB:
 
     def similarity_search_db(self, query, topk):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
-        print('similarity_search',query)
-        print('self.vectordb',self.vectordb.embedding_function)
         return self.vectordb.similarity_search(query, k=topk)
