@@ -90,7 +90,9 @@ async def create_config_json_file(file: UploadFile | None = None):
         f.close()
         with open(f.name) as c:
             cfg = json.load(c)
-        connect_time = service.init_with_cfg(cfg)
+        _global_args.embed_model = cfg['embedding']['embedding_model']
+        _global_args.vectordb_type = cfg['vector_store']
+        connect_time = service.init_with_cfg(cfg,_global_args)
         return {"response": "success"}
     
 
