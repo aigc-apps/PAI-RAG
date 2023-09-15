@@ -233,7 +233,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                  value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_pwd= gr.Textbox(label="Password", 
                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_del = gr.Dropdown(['True','False'], value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                        pg_del = gr.Dropdown(['True','False'], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
                         # pg_del = gr.Textbox(label="Pre_delete", 
                         #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
