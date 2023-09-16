@@ -96,11 +96,12 @@ async def create_config_json_file(file: UploadFile | None = None):
             cfg['query_topk'] = 4
         if 'prompt_template' not in cfg:
             cfg['prompt_template'] = "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
-        if 'create_docs' not in cfg:
-            cfg['create_docs']['chunk_size'] = 200
-            cfg['create_docs']['chunk_overlap'] = 0
-            cfg['create_docs']['docs_dir'] = 'docs/'
-            cfg['create_docs']['glob'] = "**/*"
+        if cfg.get('create_docs') is None:
+            cfg['create_docs'] = {}
+        cfg['create_docs']['chunk_size'] = 200
+        cfg['create_docs']['chunk_overlap'] = 0
+        cfg['create_docs']['docs_dir'] = 'docs/'
+        cfg['create_docs']['glob'] = "**/*"
             
         connect_time = service.init_with_cfg(cfg,_global_args)
         return {"response": "success"}
