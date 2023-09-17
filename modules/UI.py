@@ -233,7 +233,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                  value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_pwd= gr.Textbox(label="Password", 
                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_del = gr.Dropdown(['True','False'], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                        pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
                         # pg_del = gr.Textbox(label="Pre_delete", 
                         #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
@@ -297,7 +297,7 @@ def create_ui(service,_global_args,_global_cfg):
                             pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
                             pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
                             pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
-                            pg_del: gr.update(value=cfg['ADBCfg']['pre_delete'] if ( 'pre_delete' in cfg['ADBCfg']) else 'False'),
+                            pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                             }
                     if cfg['vector_store'] == "Hologres":
                         return {
