@@ -4,13 +4,13 @@
 
 import re
 from typing import List
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
 
 class TextSplitter:
     def __init__(self, cfg):
         chunk_size = int(cfg['create_docs']['chunk_size'])
         chunk_overlap = cfg['create_docs']['chunk_overlap']
-        self.text_splitter = CharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     def split_documents(self, docs):
         return self.text_splitter.split_documents(docs)
