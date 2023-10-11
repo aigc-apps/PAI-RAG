@@ -14,7 +14,7 @@
 conda create --name llm_py310 python=3.10
 conda activate llm_py310
 
-git clone git@gitlab.alibaba-inc.com:pai_biz_arch/LLM_Solution.git
+git clone https://github.com/aigc-apps/LLM_Solution.git
 cd LLM_Solution
 
 sh install.sh
@@ -30,7 +30,7 @@ docker pull registry.cn-beijing.aliyuncs.com/mybigpai/chatbot_langchain:2.3
 
 2. 克隆项目
 ```bash
-git clone git@gitlab.alibaba-inc.com:pai_biz_arch/LLM_Solution.git
+git clone https://github.com/aigc-apps/LLM_Solution.git
 cd LLM_Solution
 ```
 
