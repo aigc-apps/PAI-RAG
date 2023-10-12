@@ -14,6 +14,11 @@ import nltk
 from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
+from langchain.document_loaders import AsyncChromiumLoader
+from langchain.document_transformers import BeautifulSoupTransformer
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_transformers import Html2TextTransformer
+
 
 class LLMService:
     def __init__(self, args):
@@ -68,13 +73,23 @@ class LLMService:
         self.cfg['create_docs']['chunk_size'] = chunk_size
         self.cfg['create_docs']['chunk_overlap'] = chunk_overlap
         self.text_splitter = TextSplitter(self.cfg)
-        if os.path.isdir(docs_dir):
-            docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
-            docs = self.text_splitter.split_documents(docs)
+        if ("https" or "http") in docs_dir:
+            loader = AsyncChromiumLoader([docs_dir])
+            html = loader.load()
+            bs_transformer = BeautifulSoupTransformer()
+            docs_transformed = bs_transformer.transform_documents(html, tags_to_extract=["p", "li", "div", "a"])
+            # html2text = Html2TextTransformer()
+            # docs_transformed = html2text.transform_documents(html)
+            splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=chunk_size, chunk_overlap=chunk_overlap, separators=["。 ", "\n\n", "\n"])
+            docs = splitter.split_documents(docs_transformed)
         else:
-            loader = UnstructuredFileLoader(docs_dir, mode="elements")
-            docs = loader.load_and_split(text_splitter=self.text_splitter)
-
+            if os.path.isdir(docs_dir):
+                docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
+                docs = self.text_splitter.split_documents(docs)
+            else:
+                loader = UnstructuredFileLoader(docs_dir, mode="elements")
+                docs = loader.load_and_split(text_splitter=self.text_splitter)
+        
         print('Uploading custom knowledge.')
         start_time = time.time()
         self.vector_db.add_documents(docs)

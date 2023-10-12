@@ -351,8 +351,11 @@ def create_ui(service,_global_args,_global_cfg):
                         upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: txt, md, docx, pdf)" , file_count="directory")
                         connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
+                    with gr.Tab("HTML URL"):
+                        upload_file_url = gr.Textbox(label="enter your html web url")
+                        connect_url_btn = gr.Button("Upload", variant="primary")
+                        state_hl_url = gr.Textbox(label="Upload State")
 
-                    
                     def upload_knowledge(upload_file,chunk_size,chunk_overlap):
                         file_name = ''
                         for file in upload_file:
@@ -366,11 +369,16 @@ def create_ui(service,_global_args,_global_cfg):
                         for file in upload_dir:
                             if file.name.lower().endswith(".txt") or file.name.lower().endswith(".md") or file.name.lower().endswith(".docx") or file.name.lower().endswith(".doc") or file.name.lower().endswith(".pdf"):
                                 file_path = file.name
-                                service.upload_custom_knowledge(file_path,chunk_size,chunk_overlap)
+                                service.upload_custom_knowledge(file_path,int(chunk_size),int(chunk_overlap))
                         return "Directory: Upload " + str(len(upload_dir)) + " files Success!" 
+                    
+                    def upload_knowledge_html_url(upload_file_url,chunk_size,chunk_overlap):
+                        service.upload_custom_knowledge(upload_file_url,int(chunk_size),int(chunk_overlap))
+                        return "HTML Web: Upload html " + upload_file_url + " Success!" 
 
                     connect_btn.click(fn=upload_knowledge, inputs=[upload_file,chunk_size,chunk_overlap], outputs=state_hl_file, api_name="upload_knowledge")
                     connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,chunk_size,chunk_overlap], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+                    connect_url_btn.click(fn=upload_knowledge_html_url, inputs=[upload_file_url,chunk_size,chunk_overlap], outputs=state_hl_url, api_name="upload_html_url")
         
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
