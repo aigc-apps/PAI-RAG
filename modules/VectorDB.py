@@ -50,6 +50,7 @@ class VectorDB:
                 embedding_function=self.embed,
                 ndims=emb_dim,
                 connection_string=connection_string_holo,
+                table_name=cfg['HOLOCfg']['TABLE']
             )
             end_time = time.time()
             print("Connect Hologres success. Cost time: {} s".format(end_time - start_time))

@@ -84,7 +84,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_database, pg_user, pg_pwd):
+    def connect_holo(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_database, pg_user, pg_pwd, table):
         cfg = {
             'embedding': {
                 "embedding_model": emb_model,
@@ -100,7 +100,8 @@ def create_ui(service,_global_args,_global_cfg):
                 "PG_DATABASE": pg_database,
                 "PG_PORT": 80,
                 "PG_USER": pg_user,
-                "PG_PASSWORD": pg_pwd
+                "PG_PASSWORD": pg_pwd,
+                "TABLE": table
             },
             "create_docs":{
                 "chunk_size": 200,
@@ -248,9 +249,11 @@ def create_ui(service,_global_args,_global_cfg):
                                                value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
                         holo_pwd= gr.Textbox(label="Password",
                                              value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
+                        holo_table= gr.Textbox(label="Table",
+                                             value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
                         connect_btn = gr.Button("Connect Hologres", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, eas_url, eas_token, holo_host, holo_database, holo_user, holo_pwd], outputs=con_state, api_name="connect_holo") 
+                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, eas_url, eas_token, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                         es_url = gr.Textbox(label="URL",
                                             value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
@@ -310,6 +313,7 @@ def create_ui(service,_global_args,_global_cfg):
                             holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
                             holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
                             holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+                            holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
                             }
                     if cfg['vector_store'] == "ElasticSearch":
                         return {
@@ -333,7 +337,7 @@ def create_ui(service,_global_args,_global_cfg):
                             faiss_path: gr.update(value=cfg['FAISS']['index_path']),
                             faiss_name: gr.update(value=cfg['FAISS']['index_name'])
                             }
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():

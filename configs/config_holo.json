@@ -17,7 +17,8 @@
     "PG_PORT": "80",
     "PG_DATABASE": "langchain",
     "PG_USER": "BASIC$langchain",
-    "PG_PASSWORD": "xxx"
+    "PG_PASSWORD": "xxx",
+    "TABLE": "xxx"
   },
 
   "query_topk": 4,

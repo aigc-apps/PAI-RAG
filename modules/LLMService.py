@@ -75,8 +75,8 @@ class LLMService:
             loader = UnstructuredFileLoader(docs_dir, mode="elements")
             docs = loader.load_and_split(text_splitter=self.text_splitter)
 
-        print('Uploading custom knowledge.')
         start_time = time.time()
+        print('Uploading custom knowledge.', start_time)
         self.vector_db.add_documents(docs)
         end_time = time.time()
         print("Insert Success. Cost time: {} s".format(end_time - start_time))
