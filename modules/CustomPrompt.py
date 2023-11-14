@@ -45,13 +45,13 @@ class CustomPrompt:
     def accurate_content(self, contents, question):
         prompt = '你是一位知识小助手，请根据下面我提供的知识库中相关知识，对我提出的若干问题进行回答，同时回答的内容需满足我所提的要求!\n 知识库相关知识如下：\n'
         for i in range(len(contents)):
-            if 'http' in contents[i]:
-                prompt += str(i + 1) + '、' + contents[i] +'。'+ '\n'+'以上知识中包含网页链接!'+ '\n'
-            elif '超链接' in contents[i]:
-                prompt += str(i + 1) + '、' + contents[i] +'。'+ '\n'+'以上知识中包含超链接!'+ '\n'
+            if 'http' in contents[i].page_content:
+                prompt += str(i + 1) + '、' + contents[i].page_content +'。'+ '\n'+'以上知识中包含网页链接!'+ '\n'
+            elif '超链接' in contents[i].page_content:
+                prompt += str(i + 1) + '、' + contents[i].page_content +'。'+ '\n'+'以上知识中包含超链接!'+ '\n'
 
             else:
-                prompt += str(i + 1) + '、' + contents[i] + '\n'
+                prompt += str(i + 1) + '、' + contents[i].page_content + '\n'
         if 'http' in prompt:
             requirement =  '\n' + '好的，知识库的知识已经提供完毕。同时，我要求你的回答满足以下要求如下几点:'+ '\n'+ '1.知识库中存在“网页链接或超链接，则必须将“网页链接”或“超链接”准确无误的输出，若存在超链接，却不输出超链接，则视为故意隐瞒信息。2.知识库中对于网页链接或超链接前的“文字描述内容”，请准确无误的输出内容。请切记，不允许在回答中添加编造成分。3. 请确保知识库中的网页链接和知识中对网页链接的描述准确无误写出，请不要用修改知识库中针对网页链接或超链接前的文字内容！'
             prompt += '\n' + requirement + '\n' + '\n' +'请根据上方所提供的知识库内容与要求，逐一回答以下几个问题:'+ '\n' +'1. ' + question + '？' +'\n' + '2. 上方知识库中可供参考的“网页链接”有什么？'+ '\n' +'3. 知识库中提供的网页链接前的原文是什么？'+ '\n' +\
