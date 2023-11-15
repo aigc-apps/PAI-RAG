@@ -4,10 +4,10 @@
     "embedding_model": "text2vec-large-chinese",
     "embedding_dimension": 1024
   },
-
+  "LLM": "EAS",
   "EASCfg": {
-    "url": "http://chat-llm-api.xx.vpc.cn-hangzhou.pai-eas.aliyuncs.com/",
-    "token": "xxx=="
+    "url": "http://model-service.xxx.cn-beijing.pai-eas.aliyuncs.com/",
+    "token": "xx=="
   },
   
   "vector_store": "Hologres",

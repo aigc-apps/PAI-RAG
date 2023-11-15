@@ -14,6 +14,7 @@ import nltk
 from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
+from langchain.llms import OpenAI
 
 class LLMService:
     def __init__(self, args):
@@ -39,9 +40,14 @@ class LLMService:
         # self.eas_agent = EASAgent(self.cfg)
         self.vector_db = VectorDB(self.args, self.cfg)
         
-        self.llm = CustomLLM()
-        self.llm.url = self.cfg['EASCfg']['url']
-        self.llm.token = self.cfg['EASCfg']['token']
+        print('self.cfg ', self.cfg)
+        self.llm = None
+        if self.cfg['LLM'] == 'EAS':
+            self.llm = CustomLLM()
+            self.llm.url = self.cfg['EASCfg']['url']
+            self.llm.token = self.cfg['EASCfg']['token']
+        elif self.cfg['LLM'] == 'OpenAI':
+            self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
         self.question_generator_chain = get_standalone_question_ch(self.llm)
 
         # if args.upload:
@@ -110,8 +116,11 @@ class LLMService:
     def checkout_history_and_summary(self, summary=False):
         if summary or len(self.langchain_chat_history) > 10:
             print("start summary")
-            self.llm.history = self.langchain_chat_history
-            summary_res = self.llm("请对我们之前的对话内容进行总结。")
+            if self.cfg['LLM'] == 'EAS':
+                self.llm.history = self.langchain_chat_history
+                summary_res = self.llm("请对我们之前的对话内容进行总结。")
+            elif self.cfg['LLM'] == 'OpenAI':
+                summary_res = self.llm(f"question: 请对我们之前的对话内容进行总结。 chat_history: {self.langchain_chat_history}")
             print("请对我们之前的对话内容进行总结: ", summary_res)
             self.langchain_chat_history = []
             self.langchain_chat_history.append(("请对我们之前的对话内容进行总结。", summary_res))
@@ -122,14 +131,32 @@ class LLMService:
         else:
             return ""
     
-    def query_retrieval_llm(self, query, topk, prompt_type, prompt=None):
-        new_query = self.get_new_question(query)
+    def query_retrieval_llm(self, query, topk, prompt_type, prompt=None, history=False):
+        if history:
+            new_query = self.get_new_question(query)
+        else:
+            new_query = query
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt)
-        print("Post user query to EAS-LLM", user_prompt)
-        self.llm.history = self.langchain_chat_history
-        ans = self.llm(user_prompt)
-        self.langchain_chat_history.append((new_query, ans))
-        print("Get response from EAS-LLM.")
+        print(f"Post user query to {self.cfg['LLM']}")
+        if self.cfg['LLM'] == 'EAS':
+            if history:
+                self.llm.history = self.langchain_chat_history
+            else:
+                self.llm.history = []
+            print(f"query: {user_prompt}")
+            print(f"history: {self.llm.history}")
+            ans = self.llm(user_prompt)
+        elif self.cfg['LLM'] == 'OpenAI':
+            print(f"query: {user_prompt}")
+            if history:
+                print(f"history: {self.langchain_chat_history}")
+                ans = self.llm(f"question: {user_prompt}, chat_history: {self.langchain_chat_history}")
+            else:
+                print("history: []")
+                ans = self.llm(query)
+        if history:
+            self.langchain_chat_history.append((new_query, ans))
+        print(f"Get response from {self.cfg['LLM']}")
         self.input_tokens.append(new_query)
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
@@ -137,14 +164,29 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_llm(self, query):
-        print("Post user query to EAS-LLM")
+    def query_only_llm(self, query, history):
+        print(f"Post user query to {self.cfg['LLM']}")
         start_time = time.time()
-        self.llm.history = self.langchain_chat_history
-        ans = self.llm(query)
-        self.langchain_chat_history.append((query, ans))
+        if self.cfg['LLM'] == 'EAS':
+            print(f"query: {query}")
+            if history:
+                self.llm.history = self.langchain_chat_history
+            else:
+                self.llm.history = []
+            print(f"history: {self.llm.history}")
+            ans = self.llm(query)
+        elif self.cfg['LLM'] == 'OpenAI':
+            print(f"query: {query}")
+            if history:
+                print(f"history: {self.langchain_chat_history}")
+                ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}")
+            else:
+                print("history: []")
+                ans = self.llm(query)
+        if history:
+            self.langchain_chat_history.append((query, ans))
         end_time = time.time()
-        print("Get response from EAS-LLM. Cost time: {} s".format(end_time - start_time))
+        print(f"Get response from {self.cfg['LLM']}. Cost time: {end_time - start_time} s")
         self.input_tokens.append(query)
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
