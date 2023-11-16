@@ -204,15 +204,16 @@ def create_ui(service,_global_args,_global_cfg):
                         
             <center> 
             
-            \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook)
-            
-            \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
+            \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
                 
             """
         
         
         gr.Markdown(value=value_md)
-        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a>  </div>")
+        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a> </div>")
+        ding_hl = ("<div style='text-align: center;'> \N{fire}欢迎加入【PAI】Chatbot-langchain答疑群”群的钉钉群号： 27370042974 </div>")
+        
+        gr.HTML(ding_hl,elem_id='ding')
         gr.HTML(api_hl,elem_id='api')
                 
         with gr.Tab("\N{rocket} Settings"):
