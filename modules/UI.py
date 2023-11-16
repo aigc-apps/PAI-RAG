@@ -54,38 +54,55 @@ def reload_javascript():
 def create_ui(service,_global_args,_global_cfg):
     reload_javascript()
     
-    def connect_adb(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del):
-        cfg = {
-            'embedding': {
-                "embedding_model": emb_model,
-                "model_dir": "./embedding_model/",
-                "embedding_dimension": emb_dim
-            },
-            'EASCfg': {
-                "url": eas_url,
-                "token": eas_token
-            },
-            'ADBCfg': {
-                "PG_HOST": pg_host,
-                "PG_DATABASE": pg_database,
-                "PG_USER": pg_user,
-                "PG_PASSWORD": pg_pwd,
-                "PRE_DELETE": pg_del
-            },
-            "create_docs":{
-                "chunk_size": 200,
-                "chunk_overlap": 0,
-                "docs_dir": "docs/",
-                "glob": "**/*"
+    def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
+        if llm_src == "EAS":
+            cfg = {
+                'LLM': 'EAS',
+                'EASCfg': {
+                    "url": eas_url,
+                    "token": eas_token
+                }
             }
-        }
+        elif llm_src == "OpenAI":
+            cfg = {
+                'LLM': 'OpenAI',
+                'OpenAI': {
+                    "key": open_api_key
+                }
+            }
+        return cfg
+    
+    def connect_adb(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+        cfg_db = {
+                'embedding': {
+                    "embedding_model": emb_model,
+                    "model_dir": "./embedding_model/",
+                    "embedding_dimension": emb_dim
+                },
+                'ADBCfg': {
+                    "PG_HOST": pg_host,
+                    "PG_DATABASE": pg_database,
+                    "PG_USER": pg_user,
+                    "PG_PASSWORD": pg_pwd,
+                    "PRE_DELETE": pg_del
+                },
+                "create_docs":{
+                    "chunk_size": 200,
+                    "chunk_overlap": 0,
+                    "docs_dir": "docs/",
+                    "glob": "**/*"
+                }
+            }
+        cfg.update(cfg_db)
         _global_args.vectordb_type = "AnalyticDB"
         _global_cfg.update(cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, eas_url, eas_token, pg_host, pg_database, pg_user, pg_pwd, table):
-        cfg = {
+    def connect_holo(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+        cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
                 "model_dir": "./embedding_model/",
@@ -110,13 +127,15 @@ def create_ui(service,_global_args,_global_cfg):
                 "glob": "**/*"
             }
         }
+        cfg.update(cfg_db)
         _global_args.vectordb_type = "Hologres"
         _global_cfg.update(cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
-    def connect_es(emb_model, emb_dim, eas_url, eas_token, es_url, es_index, es_user, es_pwd):
-        cfg = {
+    def connect_es(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+        cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
                 "model_dir": "./embedding_model/",
@@ -139,13 +158,15 @@ def create_ui(service,_global_args,_global_cfg):
                 "glob": "**/*"
             }
         }
+        cfg.update(cfg_db)
         _global_args.vectordb_type = "ElasticSearch"
         _global_cfg.update(cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
     
-    def connect_faiss(emb_model, emb_dim, eas_url, eas_token, path, name):
-        cfg = {
+    def connect_faiss(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, path, name):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+        cfg_db = {
             "embedding": {
                 "model_dir": "./embedding_model/",
                 "embedding_model": emb_model,
@@ -168,6 +189,7 @@ def create_ui(service,_global_args,_global_cfg):
                 "glob": "**/*"
             }
         }
+        cfg.update(cfg_db)
         _global_args.vectordb_type = "FAISS"
         _global_cfg.update(cfg)
         service.init_with_cfg(_global_cfg, _global_args)
@@ -182,15 +204,16 @@ def create_ui(service,_global_args,_global_cfg):
                         
             <center> 
             
-            \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook)
-            
-            \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
+            \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
                 
             """
         
         
         gr.Markdown(value=value_md)
-        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a>  </div>")
+        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a> </div>")
+        ding_hl = ("<div style='text-align: center;'> \N{fire}欢迎加入【PAI】Chatbot-langchain答疑群”群的钉钉群号： 27370042974 </div>")
+        
+        gr.HTML(ding_hl,elem_id='ding')
         gr.HTML(api_hl,elem_id='api')
                 
         with gr.Tab("\N{rocket} Settings"):
@@ -212,9 +235,19 @@ def create_ui(service,_global_args,_global_cfg):
                         emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim])
                     
                     with gr.Column():
-                        md_eas = gr.Markdown(value="**Please set your EAS LLM.**")
-                        eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'])
-                        eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'])
+                        md_eas = gr.Markdown(value="**Please set your LLM.**")
+                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value="EAS")
+                        with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
+                            eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
+                            eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
+                        with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
+                            open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
+                        def change_llm_src(value):
+                            if value=="EAS":
+                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+                            elif value=="OpenAI":
+                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
+                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
                     
                     with gr.Column():
                       md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
@@ -239,7 +272,7 @@ def create_ui(service,_global_args,_global_cfg):
                         #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, eas_url, eas_token, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
+                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
                     with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
                         holo_host = gr.Textbox(label="Host",
                                                value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
@@ -253,7 +286,7 @@ def create_ui(service,_global_args,_global_cfg):
                                              value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
                         connect_btn = gr.Button("Connect Hologres", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, eas_url, eas_token, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                         es_url = gr.Textbox(label="URL",
                                             value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
@@ -265,7 +298,7 @@ def create_ui(service,_global_args,_global_cfg):
                                            value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, eas_url, eas_token, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                        connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
                         faiss_path = gr.Textbox(label="Path", 
                                                 value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
@@ -273,7 +306,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                 value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
                         connect_btn = gr.Button("Connect Faiss", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, eas_url, eas_token, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                        connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
                     def change_ds_conn(radio):
                         if radio=="AnalyticDB":
                             return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
@@ -383,6 +416,9 @@ def create_ui(service,_global_args,_global_cfg):
                         [ "Vector Store", "LLM", "Vector Store + LLM"], label="\N{fire} Which query do you want to use?"
                     )
                     topk = gr.Textbox(label="Retrieval top K answers",value='3')
+                    history_radio = gr.Radio(
+                            [ "Yes", "No"], value = "No", label="With Chat History"
+                    )
                     with gr.Column():
                         prm_radio = gr.Radio(
                             [ "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
@@ -408,14 +444,17 @@ def create_ui(service,_global_args,_global_cfg):
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
                    
-                    def respond(message, chat_history, ds_radio, topk, prm_radio, prompt):
+                    def respond(message, chat_history, ds_radio, topk, prm_radio, prompt, history_radio):
                         summary_res = ""
+                        history = False
+                        if history_radio == "Yes":
+                            history = True
                         if ds_radio == "Vector Store":
                             answer, lens = service.query_only_vectorstore(message,topk)
                         elif ds_radio == "LLM":
-                            answer, lens, summary_res = service.query_only_llm(message)         
+                            answer, lens, summary_res = service.query_only_llm(message, history)         
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(message,topk, prm_radio, prompt)
+                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, prm_radio, prompt, history)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
@@ -438,7 +477,7 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt], [msg, chatbot, cur_tokens])
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
