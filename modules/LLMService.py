@@ -24,6 +24,9 @@ class LLMService:
         self.input_tokens = []
         self.llm_chat_history = []
         self.sp = SentencePieceProcessor(model_file='./tokenizer.model')
+        self.topk = 3
+        self.prompt_type = 'general'
+        self.prompt =  "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
         nltk_data_path = "/code/nltk_data"
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
@@ -131,11 +134,27 @@ class LLMService:
         else:
             return ""
     
-    def query_retrieval_llm(self, query, topk, prompt_type, prompt=None, history=False):
+    def query_retrieval_llm(self, query, topk='', prompt_type='', prompt=None, history=False):
         if history:
             new_query = self.get_new_question(query)
         else:
             new_query = query
+        
+        if topk == '':
+            topk = self.topk
+        else:
+            self.topk = topk
+            
+        if prompt_type == '':
+            prompt_type = self.prompt_type
+        else:
+            self.prompt_type = prompt_type
+        
+        if prompt is None:
+            prompt = self.prompt
+        else:
+            self.prompt = prompt
+            
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt)
         print(f"Post user query to {self.cfg['LLM']}")
         if self.cfg['LLM'] == 'EAS':
@@ -164,7 +183,7 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_llm(self, query, history):
+    def query_only_llm(self, query, history=False):
         print(f"Post user query to {self.cfg['LLM']}")
         start_time = time.time()
         if self.cfg['LLM'] == 'EAS':
@@ -194,10 +213,16 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_vectorstore(self, query, topk):
+    def query_only_vectorstore(self, query, topk=''):
         print("Post user query to Vectore Store")
-        if topk == '' or topk is None:
+        if topk is None:
             topk = 3
+        
+        if topk == '':
+            topk = self.topk
+        else:
+            self.topk = topk
+            
         start_time = time.time()
         print('query',query)
         docs = self.vector_db.similarity_search_db(query, topk=int(topk))

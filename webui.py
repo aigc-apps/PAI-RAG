@@ -13,7 +13,7 @@ from args import parse_args
 from modules.UI import *
 
 def init_args(args):
-    args.config = 'configs/config_holo.json'
+    args.config = 'configs/config_faiss.json'
     args.prompt_engineering = 'general'
     args.embed_model = "SGPT-125M-weightedmean-nli-bitfit"
     args.embed_dim = 768
@@ -32,6 +32,7 @@ with open(_global_args.config) as f:
 class Query(BaseModel):
     question: str
     topk: int | None = None
+    prompt_type: str | None = None
     prompt: str | None = None
 
 host_ = "127.0.0.1"
@@ -39,17 +40,17 @@ app = FastAPI(host=host_)
 
 @app.post("/chat/llm")
 async def query_by_llm(query: Query):
-    ans, lens, _ = service.query_only_llm(query.question) 
+    ans, lens, _ = service.query_only_llm(query = query.question) 
     return {"response": ans, "tokens": lens}
 
 @app.post("/chat/vectorstore")
 async def query_by_vectorstore(query: Query):
-    ans, lens = service.query_only_vectorstore(query.question,query.topk) 
+    ans, lens = service.query_only_vectorstore(query = query.question) 
     return {"response": ans, "tokens": lens}
 
 @app.post("/chat/langchain")
 async def query_by_langchain(query: Query):
-    ans, lens, _ = service.query_retrieval_llm(query.question,query.topk,query.prompt) 
+    ans, lens, _ = service.query_retrieval_llm(query = query.question) 
     return {"response": ans, "tokens": lens}
 
 @app.post("/uploadfile")

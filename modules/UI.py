@@ -236,7 +236,7 @@ def create_ui(service,_global_args,_global_cfg):
                     
                     with gr.Column():
                         md_eas = gr.Markdown(value="**Please set your LLM.**")
-                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value="EAS")
+                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
                         with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
                             eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
                             eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
