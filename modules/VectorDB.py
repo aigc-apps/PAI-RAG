@@ -10,7 +10,7 @@ import os
 
 class VectorDB:
     def __init__(self, args, cfg=None):
-        model_dir = "embedding_model"
+        model_dir = "/code/embedding_model"
         self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
         self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
                                            model_kwargs={'device': 'cpu'})

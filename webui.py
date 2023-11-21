@@ -13,7 +13,7 @@ from args import parse_args
 from modules.UI import *
 
 def init_args(args):
-    args.config = 'configs/config_faiss.json'
+    args.config = 'configs/config_holo.json'
     args.prompt_engineering = 'general'
     args.embed_model = "SGPT-125M-weightedmean-nli-bitfit"
     args.embed_dim = 768
