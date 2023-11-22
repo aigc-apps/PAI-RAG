@@ -323,54 +323,110 @@ def create_ui(service,_global_args,_global_cfg):
                     with open(filepath) as f:
                         cfg = json.load(f)
                     if cfg['vector_store'] == "AnalyticDB":
-                        return {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
-                            eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                            eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                            vs_radio: gr.update(value=cfg['vector_store']),
-                            pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
-                            pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
-                            pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
-                            pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
-                            pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
-                            }
+                        if cfg['LLM'] == "EAS":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
+                                pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
+                                pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
+                                pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+                                pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
+                                }
+                        elif cfg['LLM'] == "OpenAI":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
+                                pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
+                                pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
+                                pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+                                pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
+                                }
                     if cfg['vector_store'] == "Hologres":
-                        return {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
-                            eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                            eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                            vs_radio: gr.update(value=cfg['vector_store']),
-                            holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
-                            holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
-                            holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
-                            holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
-                            holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
-                            }
+                        if cfg['LLM'] == "EAS":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
+                                holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
+                                holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
+                                holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+                                holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
+                                }
+                        elif cfg['LLM'] == "OpenAI":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
+                                holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
+                                holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
+                                holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+                                holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
+                                }
                     if cfg['vector_store'] == "ElasticSearch":
-                        return {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
-                            eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                            eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                            vs_radio: gr.update(value=cfg['vector_store']),
-                            es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
-                            es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
-                            es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
-                            es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
-                            }
+                        if cfg['LLM'] == "EAS":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
+                                es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
+                                es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
+                                es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
+                                }
+                        elif cfg['LLM'] == "OpenAI":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
+                                es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
+                                es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
+                                es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
+                                }
                     if cfg['vector_store'] == "FAISS":
-                        return {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
-                            eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                            eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                            vs_radio: gr.update(value=cfg['vector_store']),
-                            faiss_path: gr.update(value=cfg['FAISS']['index_path']),
-                            faiss_name: gr.update(value=cfg['FAISS']['index_name'])
-                            }
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                        if cfg['LLM'] == "EAS":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                faiss_path: gr.update(value=cfg['FAISS']['index_path']),
+                                faiss_name: gr.update(value=cfg['FAISS']['index_name'])
+                                }
+                        elif cfg['LLM'] == "OpenAI":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                faiss_path: gr.update(value=cfg['FAISS']['index_path']),
+                                faiss_name: gr.update(value=cfg['FAISS']['index_name'])
+                                }
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
