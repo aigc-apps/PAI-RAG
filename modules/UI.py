@@ -221,7 +221,7 @@ def create_ui(service,_global_args,_global_cfg):
                 with gr.Column():
                     with gr.Column():
                         md_emb = gr.Markdown(value="**Please set your embedding model.**")
-                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2"], label="Emebdding Model", value=_global_args.embed_model)
+                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Emebdding Model", value=_global_args.embed_model)
                         emb_dim = gr.Textbox(label="Emebdding Dimension", value=_global_args.embed_dim)
                         def change_emb_model(model):
                             if model == "SGPT-125M-weightedmean-nli-bitfit":
@@ -232,6 +232,8 @@ def create_ui(service,_global_args,_global_cfg):
                                 return {emb_dim: gr.update(value="768")}
                             if model == "paraphrase-multilingual-MiniLM-L12-v2":
                                 return {emb_dim: gr.update(value="384")}
+                            if model == "OpenAIEmbeddings":
+                                return {emb_dim: gr.update(label="OpenAI API Key",value="")}
                         emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim])
                     
                     with gr.Column():

@@ -6,18 +6,24 @@ from langchain.vectorstores import FAISS
 from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain.embeddings import OpenAIEmbeddings
 import os
 
 class VectorDB:
     def __init__(self, args, cfg=None):
         model_dir = "/code/embedding_model"
-        self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
-        self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
-                                           model_kwargs={'device': 'cpu'})
-        # self.embed = EmbeddingModel(model_name=args.embed_model)
+        print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
+        if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
+            self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['embedding_dimension'])
+            emb_dim = 1536
+        else:
+            self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
+            self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
+                                            model_kwargs={'device': 'cpu'})
+            emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
-        emb_dim = cfg['embedding']['embedding_dimension']
+        
         print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
