@@ -11,7 +11,7 @@ import os
 
 class VectorDB:
     def __init__(self, args, cfg=None):
-        model_dir = "/code/embedding_model"
+        model_dir = "./embedding_model"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['embedding_dimension'])
@@ -77,16 +77,27 @@ class VectorDB:
             settings = AlibabaCloudOpenSearchSettings(
                 endpoint=cfg['OpenSearchCfg']['endpoint'],
                 instance_id=cfg['OpenSearchCfg']['instance_id'],
-                datasource_name=cfg['OpenSearchCfg']['datasource_name'],
                 username=cfg['OpenSearchCfg']['username'],
                 password=cfg['OpenSearchCfg']['password'],
-                embedding_index_name=cfg['OpenSearchCfg']['embedding_index_name'],
+                table_name=cfg['OpenSearchCfg']['table_name'],
+                # instance_id='ha-cn-x0r3hslum02',
+                # username='langchain_opensearch',
+                # password='test1234',
+                # table_name='langchain',
                 field_name_mapping={
-                    "id": cfg['OpenSearchCfg']['field_name_mapping']['id'],
-                    "document": cfg['OpenSearchCfg']['field_name_mapping']['document'],
-                    "embedding": cfg['OpenSearchCfg']['field_name_mapping']['embedding'],
-                    "source": cfg['OpenSearchCfg']['field_name_mapping']['source'],
+                    "id": "pk",
+                    "document": "document",
+                    "embedding": "embedding",
+                    "source": "source",
+                    "filename": "filename"
                 },
+                # embedding_index_name=cfg['OpenSearchCfg']['embedding_index_name'],
+                # field_name_mapping={
+                #     "id": cfg['OpenSearchCfg']['field_name_mapping']['id'],
+                #     "document": cfg['OpenSearchCfg']['field_name_mapping']['document'],
+                #     "embedding": cfg['OpenSearchCfg']['field_name_mapping']['embedding'],
+                #     "source": cfg['OpenSearchCfg']['field_name_mapping']['source'],
+                # },
             )
             vector_db = AlibabaCloudOpenSearch(
                 embedding=self.embed, config=settings
@@ -110,13 +121,22 @@ class VectorDB:
         self.vectordb = vector_db
 
     def add_documents(self, docs):
-        if not self.vectordb:
-            print('add_documents faiss')
-            self.vectordb = FAISS.from_documents(docs, self.embed)
-            self.vectordb.save_local(self.faiss_path)
-        else:
-            print('add_documents else')
+        if self.vectordb_type == 'OpenSearch':
+            for doc in docs:
+                new_md = {}
+                new_md['source'] = doc.metadata['source']
+                new_md['filename'] = doc.metadata['filename']
+                doc.metadata = new_md
+            print('add_documents for OpenSearch')
             self.vectordb.add_documents(docs)
+        else:
+            if not self.vectordb:
+                print('add_documents for faiss')
+                self.vectordb = FAISS.from_documents(docs, self.embed)
+                self.vectordb.save_local(self.faiss_path)
+            else:
+                print('add_documents')
+                self.vectordb.add_documents(docs)
 
     def similarity_search_db(self, query, topk):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'

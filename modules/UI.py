@@ -195,6 +195,41 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect FAISS success."
     
+    def connect_opensearch(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, os_endpoint, os_instance, os_table, os_user, os_password):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+        cfg_db = {
+            "embedding": {
+                "model_dir": "./embedding_model/",
+                "embedding_model": emb_model,
+                "embedding_dimension": emb_dim
+            },
+
+            "EASCfg": {
+                "url": eas_url,
+                "token": eas_token
+            },
+            
+            "OpenSearchCfg": {
+                "endpoint": os_endpoint,
+                "instance_id": os_instance,
+                "table_name": os_table,
+                "username": os_user,
+                "password": os_password
+            },
+            
+            "create_docs":{
+                "chunk_size": 200,
+                "chunk_overlap": 0,
+                "docs_dir": "docs/",
+                "glob": "**/*"
+            }
+        }
+        cfg.update(cfg_db)
+        _global_args.vectordb_type = "OpenSearch"
+        _global_cfg.update(cfg)
+        service.init_with_cfg(_global_cfg, _global_args)
+        return "Connect OpenSearch success."
+        
     with gr.Blocks() as demo:
  
         value_md =  """
@@ -259,7 +294,7 @@ def create_ui(service,_global_args,_global_cfg):
                 with gr.Column():
                     md_vs = gr.Markdown(value="**Please set your Vector Store.**")
                     vs_radio = gr.Dropdown(
-                        [ "Hologres", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
+                        [ "Hologres", "ElasticSearch", "OpenSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
                     with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
                         pg_host = gr.Textbox(label="Host", 
                                              value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
@@ -309,16 +344,33 @@ def create_ui(service,_global_args,_global_cfg):
                         connect_btn = gr.Button("Connect Faiss", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
                         connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                    with gr.Column(visible=(_global_cfg['vector_store']=="OpenSearch")) as opensearch_col:
+                        os_endpoint = gr.Textbox(label="EndPoint", 
+                                                value = _global_cfg['OpenSearchCfg']['endpoint'] if _global_cfg['vector_store']=="OpenSearchCfg" else '')
+                        os_instance = gr.Textbox(label="InstanceId", 
+                                                value = _global_cfg['OpenSearchCfg']['instance_id'] if _global_cfg['vector_store']=="OpenSearchCfg" else '')
+                        os_table = gr.Textbox(label="TableName", 
+                                                value = _global_cfg['OpenSearchCfg']['table_name'] if _global_cfg['vector_store']=="OpenSearchCfg" else '')
+                        os_user = gr.Textbox(label="UserName", 
+                                                value = _global_cfg['OpenSearchCfg']['username'] if _global_cfg['vector_store']=="OpenSearchCfg" else '')
+                        os_password = gr.Textbox(label="Password", 
+                                                value = _global_cfg['OpenSearchCfg']['password'] if _global_cfg['vector_store']=="OpenSearchCfg" else '')
+                        
+                        connect_btn = gr.Button("Connect OpenSearch", variant="primary")
+                        con_state = gr.Textbox(label="Connection Info: ")
+                        connect_btn.click(fn=connect_opensearch, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, os_endpoint, os_instance, os_table, os_user, os_password], outputs=con_state, api_name="connect_opensearch") 
                     def change_ds_conn(radio):
                         if radio=="AnalyticDB":
-                            return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                            return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False),opensearch_col:gr.update(visible=False)}
                         elif radio=="Hologres":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False),opensearch_col:gr.update(visible=False)}
                         elif radio=="ElasticSearch":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False)}
+                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False),opensearch_col:gr.update(visible=False)}
                         elif radio=="FAISS":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True)}
-                    vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col])
+                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True),opensearch_col:gr.update(visible=False)}
+                        elif radio=="OpenSearch":
+                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False),opensearch_col:gr.update(visible=True)}
+                    vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col,opensearch_col])
             with gr.Row():
                 def cfg_analyze(config_file):
                     filepath = config_file.name
@@ -428,7 +480,35 @@ def create_ui(service,_global_args,_global_cfg):
                                 faiss_path: gr.update(value=cfg['FAISS']['index_path']),
                                 faiss_name: gr.update(value=cfg['FAISS']['index_name'])
                                 }
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                    if cfg['vector_store'] == "OpenSearch":
+                        if cfg['LLM'] == "EAS":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                os_endpoint: gr.update(value=cfg['OpenSearchCfg']['endpoint']),
+                                os_instance: gr.update(value=cfg['OpenSearchCfg']['instance_id']),
+                                os_table: gr.update(value=cfg['OpenSearchCfg']['table_name']),
+                                os_user: gr.update(value=cfg['OpenSearchCfg']['username']),
+                                os_password: gr.update(value=cfg['OpenSearchCfg']['password'])
+                                }
+                        elif cfg['LLM'] == "OpenAI":
+                            return {
+                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                os_endpoint: gr.update(value=cfg['OpenSearchCfg']['endpoint']),
+                                os_instance: gr.update(value=cfg['OpenSearchCfg']['instance_id']),
+                                os_table: gr.update(value=cfg['OpenSearchCfg']['table_name']),
+                                os_user: gr.update(value=cfg['OpenSearchCfg']['username']),
+                                os_password: gr.update(value=cfg['OpenSearchCfg']['password'])
+                                }
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, os_endpoint, os_instance, os_table, os_user, os_password], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
