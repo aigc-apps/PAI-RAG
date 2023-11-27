@@ -471,13 +471,27 @@ def create_ui(service,_global_args,_global_cfg):
             with gr.Row():
                 with gr.Column(scale=2):
                     ds_radio = gr.Radio(
-                        [ "Vector Store", "LLM", "Vector Store + LLM"], label="\N{fire} Which query do you want to use?"
+                        [ "Vector Store", "LLM", "Langchain(Vector Store + LLM)"], label="\N{fire} Which query do you want to use?"
                     )
-                    topk = gr.Textbox(label="Retrieval top K answers",value='3')
-                    history_radio = gr.Radio(
-                            [ "Yes", "No"], value = "No", label="With Chat History"
-                    )
-                    with gr.Column():
+                    
+                    with gr.Column(visible=False) as vs_col:
+                        vec_model_argument = gr.Accordion("Parameters of Vector Retrieval")
+                        with vec_model_argument:
+                            # topk = gr.Textbox(label="Retrieval top K answers",value='3')
+                            topk = gr.Slider(minimum=0, maximum=100, step=1, value=3, label="Top K (choose between 0 and 100)")
+                            score_threshold = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1)")
+                        
+                    with gr.Column(visible=False) as llm_col:
+                        model_argument = gr.Accordion("Inference Parameters of LLM")
+                        with model_argument:
+                            llm_topk = gr.Slider(minimum=0, maximum=100, step=1, value=30, label="Top K (choose between 0 and 100)")
+                            llm_topp = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.8, label="Top P (choose between 0 and 1)")
+                            llm_temp = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.7, label="Temperature (choose between 0 and 1)")
+                            history_radio = gr.Radio(
+                                    [ "Yes", "No"], value = "No", label="With Chat History"
+                            )
+
+                    with gr.Column(visible=False) as lc_col:
                         prm_radio = gr.Radio(
                             [ "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
                         )
@@ -492,7 +506,18 @@ def create_ui(service,_global_args,_global_cfg):
                             elif prm_radio == "Customize":
                                 return {prompt: gr.update(value="")}
                         prm_radio.change(fn=change_prompt_template, inputs=prm_radio, outputs=[prompt])
-                        cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
+                    cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
+                    
+                    def change_query_radio(ds_radio):
+                        if ds_radio == "Vector Store":
+                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=False), lc_col: gr.update(visible=False)}
+                        elif ds_radio == "LLM":
+                            return {vs_col: gr.update(visible=False), llm_col: gr.update(visible=True), lc_col: gr.update(visible=False)}
+                        elif ds_radio == "Langchain(Vector Store + LLM)":
+                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=True), lc_col: gr.update(visible=True)}
+                        
+                    ds_radio.change(fn=change_query_radio, inputs=ds_radio, outputs=[vs_col,llm_col,lc_col])
+                    
                 with gr.Column(scale=8):
                     chatbot = gr.Chatbot(height=500)
                     msg = gr.Textbox(label="Enter your question.")
@@ -502,17 +527,17 @@ def create_ui(service,_global_args,_global_cfg):
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
                    
-                    def respond(message, chat_history, ds_radio, topk, prm_radio, prompt, history_radio):
+                    def respond(message, chat_history, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
                         summary_res = ""
                         history = False
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            answer, lens = service.query_only_vectorstore(message,topk)
+                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold)
                         elif ds_radio == "LLM":
-                            answer, lens, summary_res = service.query_only_llm(message, history)         
+                            answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, prm_radio, prompt, history)
+                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
@@ -535,7 +560,7 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     

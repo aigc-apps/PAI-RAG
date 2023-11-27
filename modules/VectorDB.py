@@ -118,6 +118,14 @@ class VectorDB:
             print('add_documents else')
             self.vectordb.add_documents(docs)
 
-    def similarity_search_db(self, query, topk):
+    def similarity_search_db(self, query, topk, score_threshold):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
-        return self.vectordb.similarity_search(query, k=topk)
+        # return self.vectordb.similarity_search(query, k=topk)
+        # self.retriever = self.vectordb.as_retriever(search_type="similarity_score_threshold",  search_kwargs={"score_threshold": score_threshold,  "k": topk})
+        # return self.retriever.get_relevant_documents(query)
+        docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
+        new_docs = []
+        for doc in docs:
+            if float(doc[1]) >= float(score_threshold):
+                new_docs.append(doc)
+        return new_docs

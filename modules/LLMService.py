@@ -53,24 +53,6 @@ class LLMService:
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
         self.question_generator_chain = get_standalone_question_ch(self.llm)
 
-        # if args.upload:
-        #     self.upload_custom_knowledge()
-        # if args.user_query:
-        #     if args.query_type == "retrieval_llm":
-        #         self.query_func = self.query_retrieval_llm
-        #         self.query_type = "Retrieval-Augmented Generation"
-        #     elif args.query_type == "only_llm":
-        #         self.query_func = self.query_only_llm
-        #         self.query_type = "Vanilla-LLM Generation"
-        #     elif args.query_type == "only_vectorstore":
-        #         self.query_func = self.query_only_vectorstore
-        #         self.query_type = "Vector-Store Retrieval"
-        #     else:
-        #         raise ValueError(f'error: invalid query type of {args.query_type}')
-
-        #     answer = self.query_func(args.user_query)
-        #     print('='*20 + f' {self.query_type} ' + '='*20 + '\n', answer)
-
     def upload_custom_knowledge(self, docs_dir=None, chunk_size=200,chunk_overlap=0):
         if docs_dir is None:
             docs_dir = self.cfg['create_docs']['docs_dir']
@@ -90,10 +72,10 @@ class LLMService:
         end_time = time.time()
         print("Insert Success. Cost time: {} s".format(end_time - start_time))
 
-    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None):
+    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5):
         if topk == '' or topk is None:
             topk = 3
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk))
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold))
         if prompt_type == "General":
             self.args.prompt_engineering = 'general'
         elif prompt_type == "Extract URL":
@@ -134,7 +116,7 @@ class LLMService:
         else:
             return ""
     
-    def query_retrieval_llm(self, query, topk='', prompt_type='', prompt=None, history=False):
+    def query_retrieval_llm(self, query, topk='', score_threshold=0.5, prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         if history:
             new_query = self.get_new_question(query)
         else:
@@ -155,7 +137,7 @@ class LLMService:
         else:
             self.prompt = prompt
             
-        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt)
+        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold)
         print(f"Post user query to {self.cfg['LLM']}")
         if self.cfg['LLM'] == 'EAS':
             if history:
@@ -164,6 +146,9 @@ class LLMService:
                 self.llm.history = []
             print(f"query: {user_prompt}")
             print(f"history: {self.llm.history}")
+            self.llm.top_k = int(llm_topK)
+            self.llm.top_p = float(llm_topp)
+            self.llm.temperature = float(llm_temp)
             ans = self.llm(user_prompt)
         elif self.cfg['LLM'] == 'OpenAI':
             print(f"query: {user_prompt}")
@@ -183,7 +168,7 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_llm(self, query, history=False):
+    def query_only_llm(self, query, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         print(f"Post user query to {self.cfg['LLM']}")
         start_time = time.time()
         if self.cfg['LLM'] == 'EAS':
@@ -193,15 +178,18 @@ class LLMService:
             else:
                 self.llm.history = []
             print(f"history: {self.llm.history}")
+            self.llm.top_k = int(llm_topK)
+            self.llm.top_p = float(llm_topp)
+            self.llm.temperature = float(llm_temp)
             ans = self.llm(query)
         elif self.cfg['LLM'] == 'OpenAI':
             print(f"query: {query}")
             if history:
-                print(f"history: {self.langchain_chat_history}")
-                ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}")
+                print(f"question: {query}, chat_history: {self.langchain_chat_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+                ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
             else:
-                print("history: []")
-                ans = self.llm(query)
+                print(f"question: {query}, history: [], top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+                ans = self.llm(f"question: {query}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
         if history:
             self.langchain_chat_history.append((query, ans))
         end_time = time.time()
@@ -213,7 +201,7 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_vectorstore(self, query, topk=''):
+    def query_only_vectorstore(self, query, topk='',score_threshold=0.5):
         print("Post user query to Vectore Store")
         if topk is None:
             topk = 3
@@ -225,17 +213,20 @@ class LLMService:
             
         start_time = time.time()
         print('query',query)
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk))
-
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold))
+        print('docs', docs)
         page_contents, ref_names = [], []
+
         for idx, doc in enumerate(docs):
-            content = doc.page_content if hasattr(doc, "page_content") else "[Doc Content Lost]"
+            content = doc[0].page_content if hasattr(doc[0], "page_content") else "[Doc Content Lost]"
             page_contents.append('='*20 + f' Doc [{idx+1}] ' + '='*20 + f'\n{content}\n')
-            ref = doc.metadata['filename'] if hasattr(doc, "metadata") and "filename" in doc.metadata else "[Doc Name Lost]"
-            ref_names.append(f'[{idx+1}] {ref}')
+            ref = doc[0].metadata['filename'] if hasattr(doc[0], "metadata") and "filename" in doc[0].metadata else "[Doc Name Lost]"
+            ref_names.append(f'[{idx+1}] {ref}  |  Relevance score: {doc[1]}')
 
         ref_title = '='*20 + ' Reference Sources ' + '='*20
         context_docs = '\n'.join(page_contents) + f'{ref_title}\n' + '\n'.join(ref_names)
+        if len(docs) == 0:
+            context_docs = f"No relevant docs were retrieved using the relevance score {score_threshold}."
         end_time = time.time()
         print("Get response from Vectore Store. Cost time: {} s".format(end_time - start_time))
         tokens_len = self.sp.encode(context_docs, out_type=str)

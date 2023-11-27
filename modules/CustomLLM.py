@@ -11,6 +11,9 @@ class CustomLLM(LLM):
     url = ""
     token = ""
     history = []
+    top_k = ""
+    top_p = ""
+    temperature = ""
         
     @property
     def _llm_type(self) -> str:
@@ -39,13 +42,16 @@ class CustomLLM(LLM):
                 timeout=10000)
         return resp
  
-    def _call(self, prompt: str, 
+    def _call(self, prompt: str,
         stop: Optional[List[str]] = None) -> str:
         """_call
-        """
+        """        
         query_json = {
             "prompt": str(prompt),
-            "history": self.history
+            "history": self.history,
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "temperature": self.temperature
         }
         
         # post
@@ -59,13 +65,12 @@ class CustomLLM(LLM):
             json=query_json, 
             headers=_headers, 
             timeout=10000)
-        
         if resp.status_code == 200:
             resp_json = resp.json()
             predictions = resp_json["response"]
             return predictions
         else:
-            return "There may occur some errors." 
+            return resp.text
     
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
