@@ -11,7 +11,7 @@ import os
 
 class VectorDB:
     def __init__(self, args, cfg=None):
-        model_dir = "./embedding_model"
+        model_dir = "/code/embedding_model"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['embedding_dimension'])
