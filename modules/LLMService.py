@@ -136,6 +136,8 @@ class LLMService:
             prompt = self.prompt
         else:
             self.prompt = prompt
+        
+        
             
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold)
         print(f"Post user query to {self.cfg['LLM']}")
@@ -144,19 +146,20 @@ class LLMService:
                 self.llm.history = self.langchain_chat_history
             else:
                 self.llm.history = []
-            print(f"query: {user_prompt}")
-            print(f"history: {self.llm.history}")
-            self.llm.top_k = int(llm_topK)
-            self.llm.top_p = float(llm_topp)
-            self.llm.temperature = float(llm_temp)
+            self.llm.top_k = int(llm_topK) if (llm_topK is not None) else int(30)
+            self.llm.top_p = float(llm_topp) if (llm_topp is not None) else float(0.8)
+            self.llm.temperature = float(llm_temp) if (llm_temp is not None) else float(0.7)
+            print(f"LLM-EAS: query: {user_prompt}, history: {self.llm.history}, top_k:{self.llm.top_k}, top_p:{self.llm.top_p}, temperature:{self.llm.temperature}")
             ans = self.llm(user_prompt)
         elif self.cfg['LLM'] == 'OpenAI':
-            print(f"query: {user_prompt}")
+            llm_topp = float(llm_topp) if llm_topp is not None else 1.0
+            llm_temp = float(llm_temp) if llm_temp is not None else 0.7
+            self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'], temperature=llm_temp, top_p=llm_topp)
             if history:
-                print(f"history: {self.langchain_chat_history}")
+                print(f"LLM-OpenAI: query: {user_prompt}, history: {self.langchain_chat_history}, top_p:{llm_topp}, temperature:{llm_temp}")
                 ans = self.llm(f"question: {user_prompt}, chat_history: {self.langchain_chat_history}")
             else:
-                print("history: []")
+                print(f"LLM-OpenAI: query: {user_prompt}, history: [], top_p:{llm_topp}, temperature:{llm_temp}")
                 ans = self.llm(query)
         if history:
             self.langchain_chat_history.append((new_query, ans))
@@ -172,24 +175,28 @@ class LLMService:
         print(f"Post user query to {self.cfg['LLM']}")
         start_time = time.time()
         if self.cfg['LLM'] == 'EAS':
-            print(f"query: {query}")
             if history:
                 self.llm.history = self.langchain_chat_history
             else:
                 self.llm.history = []
-            print(f"history: {self.llm.history}")
-            self.llm.top_k = int(llm_topK)
-            self.llm.top_p = float(llm_topp)
-            self.llm.temperature = float(llm_temp)
+            
+            self.llm.top_k = int(llm_topK) if (llm_topK is not None) else int(30)
+            self.llm.top_p = float(llm_topp) if (llm_topp is not None) else float(0.8)
+            self.llm.temperature = float(llm_temp) if (llm_temp is not None) else float(0.7)
+            
+            print(f"LLM-EAS:  query: {query}, history: {self.llm.history}, top_k:{self.llm.top_k}, top_p:{self.llm.top_p}, temperature:{self.llm.temperature}")
             ans = self.llm(query)
         elif self.cfg['LLM'] == 'OpenAI':
-            print(f"query: {query}")
+            llm_topp = float(llm_topp) if llm_topp is not None else 1.0
+            llm_temp = float(llm_temp) if llm_temp is not None else 0.7
+
+            self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'], temperature=llm_temp, top_p=llm_topp)
             if history:
-                print(f"question: {query}, chat_history: {self.langchain_chat_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
-                ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+                print(f"LLM-OpenAI:  vquestion: {query}, chat_history: {self.langchain_chat_history}, top_p:{llm_topp}, temperature:{llm_temp}")
+                ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}")
             else:
-                print(f"question: {query}, history: [], top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
-                ans = self.llm(f"question: {query}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+                print(f"LLM-OpenAI: question: {query}, history: [], top_p:{llm_topp}, temperature:{llm_temp}")
+                ans = self.llm(f"question: {query}")
         if history:
             self.langchain_chat_history.append((query, ans))
         end_time = time.time()

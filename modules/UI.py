@@ -72,13 +72,14 @@ def create_ui(service,_global_args,_global_cfg):
             }
         return cfg
     
-    def connect_adb(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del):
+    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
                 'embedding': {
                     "embedding_model": emb_model,
                     "model_dir": "./embedding_model/",
-                    "embedding_dimension": emb_dim
+                    "embedding_dimension": emb_dim,
+                    "openai_key": emb_openai_key
                 },
                 'ADBCfg': {
                     "PG_HOST": pg_host,
@@ -100,13 +101,14 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
+    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
                 "model_dir": "./embedding_model/",
-                "embedding_dimension": emb_dim
+                "embedding_dimension": emb_dim,
+                "openai_key": emb_openai_key
             },
             'EASCfg': {
                 "url": eas_url,
@@ -133,13 +135,14 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
-    def connect_es(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
+    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
                 "model_dir": "./embedding_model/",
-                "embedding_dimension": emb_dim
+                "embedding_dimension": emb_dim,
+                "openai_key": emb_openai_key
             },
             'EASCfg': {
                 "url": eas_url,
@@ -164,13 +167,14 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
     
-    def connect_faiss(emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, path, name):
+    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, path, name):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             "embedding": {
                 "model_dir": "./embedding_model/",
                 "embedding_model": emb_model,
-                "embedding_dimension": emb_dim
+                "embedding_dimension": emb_dim,
+                "openai_key": emb_openai_key
             },
 
             "EASCfg": {
@@ -223,18 +227,19 @@ def create_ui(service,_global_args,_global_cfg):
                         md_emb = gr.Markdown(value="**Please set your embedding model.**")
                         emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Emebdding Model", value=_global_args.embed_model)
                         emb_dim = gr.Textbox(label="Emebdding Dimension", value=_global_args.embed_dim)
+                        emb_openai_key = gr.Textbox(visible=False, label="OpenAI API Key", value="")
                         def change_emb_model(model):
                             if model == "SGPT-125M-weightedmean-nli-bitfit":
-                                return {emb_dim: gr.update(value="768")}
+                                return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
                             if model == "text2vec-large-chinese":
-                                return {emb_dim: gr.update(value="1024")}
+                                return {emb_dim: gr.update(value="1024"), emb_openai_key: gr.update(visible=False)}
                             if model == "text2vec-base-chinese":
-                                return {emb_dim: gr.update(value="768")}
+                                return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
                             if model == "paraphrase-multilingual-MiniLM-L12-v2":
-                                return {emb_dim: gr.update(value="384")}
+                                return {emb_dim: gr.update(value="384"), emb_openai_key: gr.update(visible=False)}
                             if model == "OpenAIEmbeddings":
-                                return {emb_dim: gr.update(label="OpenAI API Key",value="")}
-                        emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim])
+                                return {emb_dim: gr.update(value="1536"), emb_openai_key: gr.update(visible=True)}
+                        emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim, emb_openai_key])
                     
                     with gr.Column():
                         md_eas = gr.Markdown(value="**Please set your LLM.**")
@@ -274,7 +279,7 @@ def create_ui(service,_global_args,_global_cfg):
                         #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
+                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
                     with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
                         holo_host = gr.Textbox(label="Host",
                                                value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
@@ -288,7 +293,7 @@ def create_ui(service,_global_args,_global_cfg):
                                              value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
                         connect_btn = gr.Button("Connect Hologres", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                         es_url = gr.Textbox(label="URL",
                                             value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
@@ -300,7 +305,7 @@ def create_ui(service,_global_args,_global_cfg):
                                            value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                         connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                        connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                     with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
                         faiss_path = gr.Textbox(label="Path", 
                                                 value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
@@ -308,7 +313,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                 value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
                         connect_btn = gr.Button("Connect Faiss", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                        connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
                     def change_ds_conn(radio):
                         if radio=="AnalyticDB":
                             return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
@@ -324,11 +329,24 @@ def create_ui(service,_global_args,_global_cfg):
                     filepath = config_file.name
                     with open(filepath) as f:
                         cfg = json.load(f)
+                    emb_cfg = None
+                    if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
+                        emb_cfg = {
+                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            emb_openai_key: gr.update(value=cfg['embedding']['openai_key'])
+                        }
+                    else:
+                        emb_cfg =  {
+                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension'])
+                        }
+                    
                     if cfg['vector_store'] == "AnalyticDB":
+                        combined_dict = {}
+                        combined_dict.update(emb_cfg)
                         if cfg['LLM'] == "EAS":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 eas_url: gr.update(value=cfg['EASCfg']['url']), 
                                 eas_token:  gr.update(value=cfg['EASCfg']['token']),
@@ -339,10 +357,9 @@ def create_ui(service,_global_args,_global_cfg):
                                 pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
                                 pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                                 }
+                            combined_dict.update(other_cfg)
                         elif cfg['LLM'] == "OpenAI":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
@@ -352,11 +369,13 @@ def create_ui(service,_global_args,_global_cfg):
                                 pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
                                 pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                                 }
+                            combined_dict.update(other_cfg)
+                        return combined_dict
                     if cfg['vector_store'] == "Hologres":
+                        combined_dict = {}
+                        combined_dict.update(emb_cfg)
                         if cfg['LLM'] == "EAS":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 eas_url: gr.update(value=cfg['EASCfg']['url']), 
                                 eas_token:  gr.update(value=cfg['EASCfg']['token']),
@@ -367,10 +386,9 @@ def create_ui(service,_global_args,_global_cfg):
                                 holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
                                 holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
                                 }
+                            combined_dict.update(other_cfg)
                         elif cfg['LLM'] == "OpenAI":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
@@ -380,11 +398,13 @@ def create_ui(service,_global_args,_global_cfg):
                                 holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
                                 holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
                                 }
+                            combined_dict.update(other_cfg)
+                        return combined_dict
                     if cfg['vector_store'] == "ElasticSearch":
+                        combined_dict = {}
+                        combined_dict.update(emb_cfg)
                         if cfg['LLM'] == "EAS":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 eas_url: gr.update(value=cfg['EASCfg']['url']), 
                                 eas_token:  gr.update(value=cfg['EASCfg']['token']),
@@ -394,10 +414,9 @@ def create_ui(service,_global_args,_global_cfg):
                                 es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
                                 es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
                                 }
+                            combined_dict.update(other_cfg)
                         elif cfg['LLM'] == "OpenAI":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg =  {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
@@ -406,11 +425,13 @@ def create_ui(service,_global_args,_global_cfg):
                                 es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
                                 es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
                                 }
+                            combined_dict.update(other_cfg)
+                        return combined_dict
                     if cfg['vector_store'] == "FAISS":
+                        combined_dict = {}
+                        combined_dict.update(emb_cfg)
                         if cfg['LLM'] == "EAS":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 eas_url: gr.update(value=cfg['EASCfg']['url']), 
                                 eas_token:  gr.update(value=cfg['EASCfg']['token']),
@@ -418,17 +439,18 @@ def create_ui(service,_global_args,_global_cfg):
                                 faiss_path: gr.update(value=cfg['FAISS']['index_path']),
                                 faiss_name: gr.update(value=cfg['FAISS']['index_name'])
                                 }
+                            combined_dict.update(other_cfg)
                         elif cfg['LLM'] == "OpenAI":
-                            return {
-                                emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                                emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+                            other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
                                 faiss_path: gr.update(value=cfg['FAISS']['index_path']),
                                 faiss_name: gr.update(value=cfg['FAISS']['index_name'])
                                 }
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                            combined_dict.update(other_cfg)
+                        return combined_dict
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():

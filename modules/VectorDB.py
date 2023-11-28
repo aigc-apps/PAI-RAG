@@ -14,8 +14,8 @@ class VectorDB:
         model_dir = "/code/embedding_model"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
-            self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['embedding_dimension'])
-            emb_dim = 1536
+            self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
+            emb_dim = cfg['embedding']['embedding_dimension']
         else:
             self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
