@@ -80,10 +80,6 @@ class VectorDB:
                 username=cfg['OpenSearchCfg']['username'],
                 password=cfg['OpenSearchCfg']['password'],
                 table_name=cfg['OpenSearchCfg']['table_name'],
-                # instance_id='ha-cn-x0r3hslum02',
-                # username='langchain_opensearch',
-                # password='test1234',
-                # table_name='langchain',
                 field_name_mapping={
                     "id": "pk",
                     "document": "document",
@@ -91,13 +87,6 @@ class VectorDB:
                     "source": "source",
                     "filename": "filename"
                 },
-                # embedding_index_name=cfg['OpenSearchCfg']['embedding_index_name'],
-                # field_name_mapping={
-                #     "id": cfg['OpenSearchCfg']['field_name_mapping']['id'],
-                #     "document": cfg['OpenSearchCfg']['field_name_mapping']['document'],
-                #     "embedding": cfg['OpenSearchCfg']['field_name_mapping']['embedding'],
-                #     "source": cfg['OpenSearchCfg']['field_name_mapping']['source'],
-                # },
             )
             vector_db = AlibabaCloudOpenSearch(
                 embedding=self.embed, config=settings
