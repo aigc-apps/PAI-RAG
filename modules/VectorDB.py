@@ -125,12 +125,11 @@ class VectorDB:
         if self.vectordb_type == 'FAISS':
             docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
         else:
-            holo_docs = self.vectordb.similarity_search_with_score(query, k=topk)
-            docs = []
-            for doc in holo_docs:
-                docs.append((doc[0],1-doc[1]))
+            docs = self.vectordb.similarity_search_with_score(query, k=topk)
+
+        print('docs', docs)
         new_docs = []
         for doc in docs:
-            if float(doc[1]) >= float(score_threshold):
+            if float(doc[1]) <= float(score_threshold):
                 new_docs.append(doc)
         return new_docs
