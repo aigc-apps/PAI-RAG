@@ -72,7 +72,7 @@ def create_ui(service,_global_args,_global_cfg):
             }
         return cfg
     
-    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del):
+    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
                 'embedding': {
@@ -86,6 +86,7 @@ def create_ui(service,_global_args,_global_cfg):
                     "PG_DATABASE": pg_database,
                     "PG_USER": pg_user,
                     "PG_PASSWORD": pg_pwd,
+                    "PG_COLLECTION_NAME": pg_collection,
                     "PRE_DELETE": pg_del
                 },
                 "create_docs":{
@@ -274,12 +275,14 @@ def create_ui(service,_global_args,_global_cfg):
                                                  value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_pwd= gr.Textbox(label="Password", 
                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                        pg_collection= gr.Textbox(label="CollectionName", 
+                                           value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
                         pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
                         # pg_del = gr.Textbox(label="Pre_delete", 
                         #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                         connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                         con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_del], outputs=con_state, api_name="connect_adb")   
+                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
                     with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
                         holo_host = gr.Textbox(label="Host",
                                                value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
