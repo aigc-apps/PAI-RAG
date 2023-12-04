@@ -358,6 +358,7 @@ def create_ui(service,_global_args,_global_cfg):
                                 pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
                                 pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
                                 pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+                                pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
                                 pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                                 }
                             combined_dict.update(other_cfg)
@@ -370,6 +371,7 @@ def create_ui(service,_global_args,_global_cfg):
                                 pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
                                 pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
                                 pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+                                pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
                                 pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                                 }
                             combined_dict.update(other_cfg)
@@ -453,7 +455,7 @@ def create_ui(service,_global_args,_global_cfg):
                                 }
                             combined_dict.update(other_cfg)
                         return combined_dict
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
