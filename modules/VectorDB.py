@@ -14,8 +14,8 @@ class VectorDB:
         model_dir = "/code/embedding_model"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
-            self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['embedding_dimension'])
-            emb_dim = 1536
+            self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
+            emb_dim = cfg['embedding']['embedding_dimension']
         else:
             self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
@@ -35,11 +35,13 @@ class VectorDB:
                 driver='psycopg2cffi',
                 port=5432,
             )
+            PRE_DELETE = True if cfg['ADBCfg']['PRE_DELETE'] == "True" else False
             vector_db = AnalyticDB(
                 embedding_function=self.embed,
                 embedding_dimension=emb_dim,
                 connection_string=connection_string_adb,
-                pre_delete_collection=cfg['ADBCfg']['PRE_DELETE'],
+                collection_name=cfg['ADBCfg']['PG_COLLECTION_NAME'],
+                pre_delete_collection=PRE_DELETE,
             )
             end_time = time.time()
             print("Connect AnalyticDB success. Cost time: {} s".format(end_time - start_time))
@@ -118,6 +120,16 @@ class VectorDB:
             print('add_documents else')
             self.vectordb.add_documents(docs)
 
-    def similarity_search_db(self, query, topk):
+    def similarity_search_db(self, query, topk, score_threshold):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
-        return self.vectordb.similarity_search(query, k=topk)
+        if self.vectordb_type == 'FAISS':
+            docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
+        else:
+            docs = self.vectordb.similarity_search_with_score(query, k=topk)
+
+        print('docs', docs)
+        new_docs = []
+        for doc in docs:
+            if float(doc[1]) <= float(score_threshold):
+                new_docs.append(doc)
+        return new_docs
