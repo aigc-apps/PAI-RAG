@@ -113,17 +113,25 @@ class VectorDB:
 
     def add_documents(self, docs):
         if not self.vectordb:
-            print('add_documents faiss')
+            print('add_documents faiss first')
             self.vectordb = FAISS.from_documents(docs, self.embed)
+            print('add_documents self.faiss_path', self.faiss_path)
             self.vectordb.save_local(self.faiss_path)
         else:
-            print('add_documents else')
-            self.vectordb.add_documents(docs)
+            if self.vectordb_type == 'FAISS':
+                print('add_documents FAISS')
+                self.vectordb.add_documents(docs)
+                self.vectordb.save_local(self.faiss_path)
+            else:
+                print('add_documents else')
+                self.vectordb.add_documents(docs)
 
     def similarity_search_db(self, query, topk, score_threshold):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
         if self.vectordb_type == 'FAISS':
-            docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
+            self.vectordb = FAISS.load_local(self.faiss_path, self.embed)
+            # docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
+            docs = self.vectordb.similarity_search_with_score(query, k=topk)
         else:
             docs = self.vectordb.similarity_search_with_score(query, k=topk)
 

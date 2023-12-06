@@ -517,7 +517,7 @@ def create_ui(service,_global_args,_global_cfg):
                             # topk = gr.Textbox(label="Retrieval top K answers",value='3')
                             topk = gr.Slider(minimum=0, maximum=100, step=1, value=3, label="Top K (choose between 0 and 100)")
                             # score_threshold = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1)")
-                            score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=5, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
+                            score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=200, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
                             emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
                             
                     with gr.Column(visible=False) as llm_col:
