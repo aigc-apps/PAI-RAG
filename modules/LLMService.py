@@ -15,6 +15,11 @@ from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
+import argparse
+import json
+from typing import Iterable, List
+
+import requests
 
 class LLMService:
     def __init__(self, args):
@@ -116,6 +121,11 @@ class LLMService:
         else:
             return ""
     
+    def get_streaming_response(self, response) -> Iterable[List[str]]:
+        delimiter = b'\0'  # selected in [b'\n', b'\0']
+        print(f"response: {response}")
+        yield response
+
     def query_retrieval_llm(self, query, topk='', score_threshold=0.5, prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         if history:
             new_query = self.get_new_question(query)
@@ -206,6 +216,7 @@ class LLMService:
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
         lens = sum(len(tl) for tl in tokens_len)
         summary_res = self.checkout_history_and_summary()
+        # answer = self.get_streaming_response(ans)
         return ans, lens, summary_res
 
     def query_only_vectorstore(self, query, topk='',score_threshold=0.5):

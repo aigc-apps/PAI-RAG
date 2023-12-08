@@ -3,6 +3,8 @@
 # deling.sc
 
 from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import StreamingResponse
+
 import gradio as gr
 from modules.LLMService import LLMService
 import time
@@ -31,17 +33,19 @@ with open(_global_args.config) as f:
     
 class Query(BaseModel):
     question: str
-    topk: int | None = None
+    topk: int | None = 30
     topp: float | None = 0.8
     temperature: float | None = 0.7
     vector_topk: int | None = 3
     score_threshold: float | None = 0.5
+    use_chat_stream: bool | None = False
 
 class LLMQuery(BaseModel):
     question: str
-    topk: int | None = None
+    topk: int | None = 30
     topp: float | None = 0.8
     temperature: float | None = 0.7
+    use_chat_stream: bool | None = False
     
 class VectorQuery(BaseModel):
     question: str
@@ -53,8 +57,16 @@ app = FastAPI(host=host_)
 
 @app.post("/chat/llm")
 async def query_by_llm(query: LLMQuery):
-    ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-    return {"response": ans, "tokens": lens}
+    async def stream_results():
+        ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+        ret = {"response": ans, "tokens": lens}
+        yield (json.dumps(ret,ensure_ascii=False) + '\0')
+    #return {"response": ans, "tokens": lens}
+    if query.use_chat_stream:
+        return StreamingResponse(stream_results())
+    else:
+        ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+        return {"response": ans, "tokens": lens}
 
 @app.post("/chat/vectorstore")
 async def query_by_vectorstore(query: VectorQuery):
@@ -63,8 +75,15 @@ async def query_by_vectorstore(query: VectorQuery):
 
 @app.post("/chat/langchain")
 async def query_by_langchain(query: Query):
-    ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-    return {"response": ans, "tokens": lens}
+    async def stream_results():
+        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature)
+        ret = {"response": ans, "tokens": lens}
+        yield (json.dumps(ret,ensure_ascii=False) + '\0')
+    if query.use_chat_stream:
+        return StreamingResponse(stream_results())
+    else:
+        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature)
+        return {"response": ans, "tokens": lens}
 
 @app.post("/uploadfile")
 async def create_upload_file(file: UploadFile | None = None):
@@ -122,4 +141,5 @@ async def create_upload_file(file: UploadFile | None = None):
     
 
 ui = create_ui(service,_global_args,_global_cfg)
+ui.queue()
 app = gr.mount_gradio_app(app, ui, path='')

@@ -502,7 +502,7 @@ def create_ui(service,_global_args,_global_cfg):
                     )
                     
                     with gr.Column(visible=False) as vs_col:
-                        vec_model_argument = gr.Accordion("Parameters of Vector Retrieval")
+                        vec_model_argument = gr.Accordion("\N{rocket} Parameters of Vector Retrieval")
                         def change_score_threshold(emb_model):
                             if emb_model=="OpenAIEmbeddings":
                                 return{
@@ -521,7 +521,7 @@ def create_ui(service,_global_args,_global_cfg):
                             emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
                             
                     with gr.Column(visible=False) as llm_col:
-                        model_argument = gr.Accordion("Inference Parameters of LLM")
+                        model_argument = gr.Accordion("\N{rocket} Inference Parameters of LLM")
                         with model_argument:
                             llm_topk = gr.Slider(minimum=0, maximum=100, step=1, value=30, label="Top K (choose between 0 and 100)")
                             llm_topp = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.8, label="Top P (choose between 0 and 1)")
@@ -529,6 +529,7 @@ def create_ui(service,_global_args,_global_cfg):
                             history_radio = gr.Radio(
                                     [ "Yes", "No"], value = "No", label="With Chat History"
                             )
+                            use_chat_stream = gr.Radio(["Yes", "No"], value = "No", label="Use Streaming output")
 
                     with gr.Column(visible=False) as lc_col:
                         prm_radio = gr.Radio(
@@ -547,25 +548,26 @@ def create_ui(service,_global_args,_global_cfg):
                         prm_radio.change(fn=change_prompt_template, inputs=prm_radio, outputs=[prompt])
                     cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
                     
-                    def change_query_radio(ds_radio):
-                        if ds_radio == "Vector Store":
-                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=False), lc_col: gr.update(visible=False)}
-                        elif ds_radio == "LLM":
-                            return {vs_col: gr.update(visible=False), llm_col: gr.update(visible=True), lc_col: gr.update(visible=False)}
-                        elif ds_radio == "Langchain(Vector Store + LLM)":
-                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=True), lc_col: gr.update(visible=True)}
-                        
-                    ds_radio.change(fn=change_query_radio, inputs=ds_radio, outputs=[vs_col,llm_col,lc_col])
-                    
                 with gr.Column(scale=8):
                     chatbot = gr.Chatbot(height=500)
                     msg = gr.Textbox(label="Enter your question.")
+                    bot_message = gr.Textbox(visible=False)
                     with gr.Row():
                         submitBtn = gr.Button("Submit", variant="primary")
                         summaryBtn = gr.Button("Summary", variant="primary")
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
-                   
+                    
+                    def change_query_radio(ds_radio):
+                        if ds_radio == "Vector Store":
+                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=False), lc_col: gr.update(visible=False), chatbot:gr.update(height=500)}
+                        elif ds_radio == "LLM":
+                            return {vs_col: gr.update(visible=False), llm_col: gr.update(visible=True), lc_col: gr.update(visible=False), chatbot:gr.update(height=600)}
+                        elif ds_radio == "Langchain(Vector Store + LLM)":
+                            return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=True), lc_col: gr.update(visible=True), chatbot:gr.update(height=700)}
+                        
+                    ds_radio.change(fn=change_query_radio, inputs=ds_radio, outputs=[vs_col,llm_col,lc_col,chatbot])
+                    
                     def respond(message, chat_history, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
                         summary_res = ""
                         history = False
@@ -577,10 +579,11 @@ def create_ui(service,_global_args,_global_cfg):
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
                             answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
+                        print('answer',  answer)
                         bot_message = answer
-                        chat_history.append((message, bot_message))
-                        time.sleep(0.05)
-                        return "", chat_history, str(lens) + "\n" + summary_res
+                        # chat_history.append((message, bot_message))
+                        # time.sleep(0.05)
+                        return "", chat_history + [[message, None]], bot_message, str(lens) + "\n" + summary_res
 
                     def clear_hisoty(chat_history):
                         chat_history = []
@@ -599,7 +602,21 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
+                    def bot(history, bot_message, use_chat_stream, ds_radio):
+                        print('history', history)
+                        print('bot_message', bot_message)
+                        if use_chat_stream == "Yes" and ds_radio != "Vector Store":
+                            history[-1][1] = ""
+                            for cha in bot_message:
+                                history[-1][1] += cha
+                                time.sleep(0.02)
+                                yield history
+                        else:
+                            history[-1][1] = bot_message
+                            print('history',history)
+                            time.sleep(0.05)
+                            yield history
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, bot_message, cur_tokens], queue=False).then(bot, [chatbot,bot_message, use_chat_stream, ds_radio], chatbot)
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
