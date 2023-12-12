@@ -18,6 +18,7 @@ from langchain.llms import OpenAI
 import argparse
 import json
 from typing import Iterable, List
+from .EasLlmClient import EasLlmClient
 
 import requests
 
@@ -51,12 +52,14 @@ class LLMService:
         print('self.cfg ', self.cfg)
         self.llm = None
         if self.cfg['LLM'] == 'EAS':
-            self.llm = CustomLLM()
-            self.llm.url = self.cfg['EASCfg']['url']
-            self.llm.token = self.cfg['EASCfg']['token']
+            self.llm_ = CustomLLM()
+            self.llm_.url = self.cfg['EASCfg']['url']
+            self.llm_.token = self.cfg['EASCfg']['token']
+            
+            self.llm = EasLlmClient(host=self.cfg['EASCfg']['url'], authorization=self.cfg['EASCfg']['token'])
         elif self.cfg['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
-        self.question_generator_chain = get_standalone_question_ch(self.llm)
+        self.question_generator_chain = get_standalone_question_ch(self.llm_)
 
     def upload_custom_knowledge(self, docs_dir=None, chunk_size=200,chunk_overlap=0):
         if docs_dir is None:
@@ -81,6 +84,7 @@ class LLMService:
         if topk == '' or topk is None:
             topk = 3
         docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold))
+        print('create_user_query_prompt docs', docs)
         if prompt_type == "General":
             self.args.prompt_engineering = 'general'
         elif prompt_type == "Extract URL":
@@ -103,12 +107,13 @@ class LLMService:
             print('result',result)
             return result['text']
 
-    def checkout_history_and_summary(self, summary=False):
+    def checkout_history_and_summary(self, summary=False,llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         if summary or len(self.langchain_chat_history) > 10:
             print("start summary")
             if self.cfg['LLM'] == 'EAS':
-                self.llm.history = self.langchain_chat_history
-                summary_res = self.llm("请对我们之前的对话内容进行总结。")
+                llm_history = self.langchain_chat_history
+                response = self.llm.post_http_request(prompt="请对我们之前的对话内容进行总结。",system_prompt="",history=llm_history,temperature=llm_temp,top_k=llm_topK,top_p=llm_topp,use_stream_chat=False)
+                summary_res, _ = self.llm.get_response(response)
             elif self.cfg['LLM'] == 'OpenAI':
                 summary_res = self.llm(f"question: 请对我们之前的对话内容进行总结。 chat_history: {self.langchain_chat_history}")
             print("请对我们之前的对话内容进行总结: ", summary_res)
@@ -121,46 +126,37 @@ class LLMService:
         else:
             return ""
     
+    
+    def get_streaming_response(self, response) -> Iterable[List[str]]:
+        delimiter = b'\0'  # selected in [b'\n', b'\0']
+        print(f"response: {response}")
+        yield response
+
+
     def get_streaming_response(self, response) -> Iterable[List[str]]:
         delimiter = b'\0'  # selected in [b'\n', b'\0']
         print(f"response: {response}")
         yield response
 
     def query_retrieval_llm(self, query, topk='', score_threshold=0.5, prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
-        if history:
-            new_query = self.get_new_question(query)
-        else:
-            new_query = query
         
-        if topk == '':
-            topk = self.topk
-        else:
-            self.topk = topk
-            
-        if prompt_type == '':
-            prompt_type = self.prompt_type
-        else:
-            self.prompt_type = prompt_type
-        
-        if prompt is None:
-            prompt = self.prompt
-        else:
-            self.prompt = prompt
-        
-        
-            
+        new_query=self.get_new_question(query) if (history) else query
+        print('new_query', new_query)
+        topk = self.topk if (topk == '') else topk
+        prompt_type = self.prompt_type if (prompt_type == '') else prompt_type
+        prompt = self.prompt if( prompt is None) else prompt
+    
         user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold)
         print(f"Post user query to {self.cfg['LLM']}")
         if self.cfg['LLM'] == 'EAS':
             if history:
-                self.llm.history = self.langchain_chat_history
+                llm_history = self.langchain_chat_history
             else:
-                self.llm.history = []
-            self.llm.top_k = int(llm_topK) if (llm_topK is not None) else int(30)
-            self.llm.top_p = float(llm_topp) if (llm_topp is not None) else float(0.8)
-            self.llm.temperature = float(llm_temp) if (llm_temp is not None) else float(0.7)
-            print(f"LLM-EAS: query: {user_prompt}, history: {self.llm.history}, top_k:{self.llm.top_k}, top_p:{self.llm.top_p}, temperature:{self.llm.temperature}")
-            ans = self.llm(user_prompt)
+                llm_history = []                
+            print(f"LLM-EAS: query: {user_prompt}, history: {llm_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+            response = self.llm.post_http_request(prompt=user_prompt,system_prompt="",history=llm_history,temperature=llm_temp,top_k=llm_topK,top_p=llm_topp,use_stream_chat=False)
+            ans, _ = self.llm.get_response(response)
+            
         elif self.cfg['LLM'] == 'OpenAI':
             llm_topp = float(llm_topp) if llm_topp is not None else 1.0
             llm_temp = float(llm_temp) if llm_temp is not None else 0.7
@@ -178,7 +174,7 @@ class LLMService:
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
         lens = sum(len(tl) for tl in tokens_len)
-        summary_res = self.checkout_history_and_summary()
+        summary_res = self.checkout_history_and_summary(False,llm_temp,llm_topK,llm_topp)
         return ans, lens, summary_res
 
     def query_only_llm(self, query, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
@@ -186,16 +182,14 @@ class LLMService:
         start_time = time.time()
         if self.cfg['LLM'] == 'EAS':
             if history:
-                self.llm.history = self.langchain_chat_history
+                llm_history = self.langchain_chat_history
             else:
-                self.llm.history = []
+                llm_history = []
             
-            self.llm.top_k = int(llm_topK) if (llm_topK is not None) else int(30)
-            self.llm.top_p = float(llm_topp) if (llm_topp is not None) else float(0.8)
-            self.llm.temperature = float(llm_temp) if (llm_temp is not None) else float(0.7)
-            
-            print(f"LLM-EAS:  query: {query}, history: {self.llm.history}, top_k:{self.llm.top_k}, top_p:{self.llm.top_p}, temperature:{self.llm.temperature}")
-            ans = self.llm(query)
+            print(f"LLM-EAS:  query: {query}, history: {llm_history}, top_k:{llm_topK}, top_p:{llm_topp}, temperature:{llm_temp}")
+            response = self.llm.post_http_request(prompt=query,system_prompt="",history=llm_history,temperature=llm_temp,top_k=llm_topK,top_p=llm_topp,use_stream_chat=False)
+            ans, _ = self.llm.get_response(response)
+                        
         elif self.cfg['LLM'] == 'OpenAI':
             llm_topp = float(llm_topp) if llm_topp is not None else 1.0
             llm_temp = float(llm_temp) if llm_temp is not None else 0.7
@@ -215,8 +209,7 @@ class LLMService:
         self.input_tokens.append(ans)
         tokens_len = self.sp.encode(self.input_tokens, out_type=str)
         lens = sum(len(tl) for tl in tokens_len)
-        summary_res = self.checkout_history_and_summary()
-        # answer = self.get_streaming_response(ans)
+        summary_res = self.checkout_history_and_summary(False,llm_temp,llm_topK,llm_topp)
         return ans, lens, summary_res
 
     def query_only_vectorstore(self, query, topk='',score_threshold=0.5):

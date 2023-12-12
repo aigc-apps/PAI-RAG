@@ -11,9 +11,6 @@ class CustomLLM(LLM):
     url = ""
     token = ""
     history = []
-    top_k = ""
-    top_p = ""
-    temperature = ""
         
     @property
     def _llm_type(self) -> str:
@@ -48,10 +45,7 @@ class CustomLLM(LLM):
         """        
         query_json = {
             "prompt": str(prompt),
-            "history": self.history,
-            "top_k": self.top_k,
-            "top_p": self.top_p,
-            "temperature": self.temperature
+            "history": self.history
         }
         
         # post
