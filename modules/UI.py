@@ -568,22 +568,41 @@ def create_ui(service,_global_args,_global_cfg):
                         
                     ds_radio.change(fn=change_query_radio, inputs=ds_radio, outputs=[vs_col,llm_col,lc_col,chatbot])
                     
-                    def respond(message, chat_history, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
+                    def respond(message, chat_history, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio, use_chat_stream):
                         summary_res = ""
                         history = False
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
                             answer, lens = service.query_only_vectorstore(message,topk,score_threshold)
+                            chat_history.append([message, answer])
+                            yield "", chat_history, chat_history, str(lens) + "\n" + summary_res
                         elif ds_radio == "LLM":
-                            answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
+                            answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)
+                            if use_chat_stream == "Yes":
+                                chat_history.append([message, None])
+                                chat_history[-1][1] =  ""
+                                for cha in answer:
+                                    chat_history[-1][1] += cha
+                                    time.sleep(0.02)
+                                    yield "", chat_history, bot_message, str(lens) + "\n" + summary_res
+                            else:
+                                chat_history.append([message, answer])
+                                yield "", chat_history, bot_message, str(lens) + "\n" + summary_res
                         else:
                             answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
-                        print('answer',  answer)
-                        bot_message = answer
-                        # chat_history.append((message, bot_message))
-                        # time.sleep(0.05)
-                        return "", chat_history + [[message, None]], bot_message, str(lens) + "\n" + summary_res
+                            if use_chat_stream == "Yes":
+                                chat_history.append([message, None])
+                                chat_history[-1][1] =  ""
+                                for cha in answer:
+                                    chat_history[-1][1] += cha
+                                    time.sleep(0.02)
+                                    yield "", chat_history, bot_message, str(lens) + "\n" + summary_res
+                            else:
+                                chat_history.append([message, answer])
+                                yield "", chat_history, bot_message, str(lens) + "\n" + summary_res
+                            # chat_history.append([message, answer])
+                            # yield "", chat_history, chat_history, str(lens) + "\n" + summary_res
 
                     def clear_hisoty(chat_history):
                         chat_history = []
@@ -602,21 +621,22 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    def bot(history, bot_message, use_chat_stream, ds_radio):
-                        print('history', history)
-                        print('bot_message', bot_message)
-                        if use_chat_stream == "Yes" and ds_radio != "Vector Store":
-                            history[-1][1] = ""
-                            for cha in bot_message:
-                                history[-1][1] += cha
-                                time.sleep(0.02)
-                                yield history
-                        else:
-                            history[-1][1] = bot_message
-                            print('history',history)
-                            time.sleep(0.05)
-                            yield history
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, bot_message, cur_tokens], queue=False).then(bot, [chatbot,bot_message, use_chat_stream, ds_radio], chatbot)
+                    # def bot(history, bot_message, use_chat_stream, ds_radio):
+                    #     print('history', history)
+                    #     print('bot_message', bot_message)
+                    #     if use_chat_stream == "Yes" and ds_radio != "Vector Store":
+                    #         history[-1][1] = ""
+                    #         for cha in bot_message:
+                    #             history[-1][1] += cha
+                    #             time.sleep(0.02)
+                    #             yield history
+                    #     else:
+                    #         history[-1][1] = bot_message
+                    #         print('history',history)
+                    #         time.sleep(0.05)
+                    #         yield history
+                    # submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, bot_message, cur_tokens], queue=False).then(bot, [chatbot,bot_message, use_chat_stream, ds_radio], chatbot)
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio, use_chat_stream], [msg, chatbot, bot_message, cur_tokens], queue=True)
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     

@@ -211,7 +211,7 @@ class LLMService:
         lens = sum(len(tl) for tl in tokens_len)
         summary_res = self.checkout_history_and_summary(False,llm_temp,llm_topK,llm_topp)
         return ans, lens, summary_res
-
+    
     def query_only_vectorstore(self, query, topk='',score_threshold=0.5):
         print("Post user query to Vectore Store")
         if topk is None:

@@ -59,9 +59,9 @@ app = FastAPI(host=host_)
 async def query_by_llm(query: LLMQuery):
     async def stream_results():
         ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-        ret = {"response": ans, "tokens": lens}
-        yield (json.dumps(ret,ensure_ascii=False) + '\0')
-    #return {"response": ans, "tokens": lens}
+        for cha in ans:
+            ret = {"response": cha, "tokens": lens}
+            yield (json.dumps(ret,ensure_ascii=False) + '\0')
     if query.use_chat_stream:
         return StreamingResponse(stream_results())
     else:
@@ -77,8 +77,9 @@ async def query_by_vectorstore(query: VectorQuery):
 async def query_by_langchain(query: Query):
     async def stream_results():
         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature)
-        ret = {"response": ans, "tokens": lens}
-        yield (json.dumps(ret,ensure_ascii=False) + '\0')
+        for cha in ans:
+            ret = {"response": cha, "tokens": lens}
+            yield (json.dumps(ret,ensure_ascii=False) + '\0')
     if query.use_chat_stream:
         return StreamingResponse(stream_results())
     else:
