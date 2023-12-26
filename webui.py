@@ -13,6 +13,7 @@ from pydantic import BaseModel
 import json
 from args import parse_args
 from modules.UI import *
+import requests
 
 def init_args(args):
     args.config = 'configs/config_holo.json'
@@ -140,7 +141,40 @@ async def create_upload_file(file: UploadFile | None = None):
 #         connect_time = service.init_with_cfg(cfg,_global_args)
 #         return {"response": "success"}
     
+def check_health(url, authorization="="):
+    while True:
+        try:
+            full_url = url
+            response = requests.get(
+                full_url, 
+                headers={
+                    'Authorization': authorization,
+                    'Content-Type': 'application/json'
+                }, 
+                timeout=3
+            )
+            if response.ok:  # .ok covers all 2xx codes
+                print("Server is up and running, starting app...")
+                return True
+            else:
+                print(f"Server is down, status code: {response.status_code}, retrying in 3 seconds...")
+        except requests.exceptions.RequestException as e:
+            print("Exception occurred: ", e)
+        time.sleep(3)
 
-ui = create_ui(service,_global_args,_global_cfg)
-ui.queue()
-app = gr.mount_gradio_app(app, ui, path='')
+# url_ = "http://127.0.0.1:8000"
+# authorization_ = "="
+ 
+URL_ = os.getenv('URL')
+if URL_ is not None:
+    if check_health(URL_):
+        _global_cfg['EASCfg']['url'] = URL_
+        _global_cfg['EASCfg']['token'] = "NOToken"
+        ui = create_ui(service,_global_args,_global_cfg)
+        ui.queue()
+        app = gr.mount_gradio_app(app, ui, path='')
+else:
+    ui = create_ui(service,_global_args,_global_cfg)
+    ui.queue()
+    app = gr.mount_gradio_app(app, ui, path='')
+    

@@ -247,7 +247,9 @@ def create_ui(service,_global_args,_global_cfg):
                         llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
                         with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
                             eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
+                            # eas_url = gr.Textbox(label="EAS Url", value="http://127.0.0.1:8000")
                             eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
+                            # eas_token = gr.Textbox(label="EAS Token", value="=")
                         with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
                             open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
                         def change_llm_src(value):
