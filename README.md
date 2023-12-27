@@ -1,10 +1,31 @@
-# 结合PAI-EAS、PAI-DSW、LangChain 结合向量检索库（Hologres / AnalyticDB / Elasticsearch / FAISS）的解决方案
+# PAI-Chatbot-Langchain: 基于大语言模型（LLM）和多向量数据库（VectorStore）的知识库问答系统白盒化解决方案
 
-- 上传用户本地知识库文件，基于SGPT-125M模型生成embedding
-- 生成embedding存储到向量数据库，并用于后续向量检索
-- 输入用户问题，输出该问题的prompt，用于后续PAI-EAS-LLM部分生成答案
-- 将产生的prompt送入EAS部署的LLM模型服务，实时获取到问题的答案
-- 支持多种阿里云数据库（如Hologres、AnalyticDB、Elasticsearch）及本地FAISS向量库
+- 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库
+- 支持多种向量化模型(中文、英文、多语言): SGPT-125M, text2vec-large-chinese, text2vec-base-chinese, paraphrase-multilingual, OpenAIEmbeddings
+- 支持任意基于PAI-EAS部署的大模型服务: Qwen, chatglm, llama2, baichuan等系列模型，同时支持ChatGPT调用（需提供OpenAI Key）
+- 部署参考链接：[PAI+向量检索快速搭建大模型知识库对话](https://help.aliyun.com/zh/pai/use-cases/use-pai-and-vector-search-to-implement-intelligent-dialogue-based-on-the-foundation-model?spm=a2c4g.11186623.0.0.4510e3efQRyPdt)
+
+## PAI-Chatbot-Langchain白盒化解决方案系统架构图
+![SystemArchitecture](html/image.png)
+- Step1: 文档处理、切片，针对文本进行不同格式和长度的切分
+- Step2: 文本向量化，导入到向量数据库
+- Step3: 用户Query向量化，并进行向量相似度检索，获取Top-K条相似文本块
+- Step4: 将用户query和Top-K条文本块基于上下文构建Prompt
+- Step5: 大模型推理回答，必要时可以finetune模型
+
+### 白盒化自建方案与一体化方案对比
+
+| 维度 | 一体化方案 | 白盒化自建 |
+| ------- | ------- | ------- |
+| 模型灵活度 | 仅支持内嵌大模型 | 支持多种中英文开源模型，如llama2, baichuan, ChatGLM，Qwen，mistral等系列模型，也支持通过API方式调用的模型，比如OpenAI，Gemini各种API |
+| 模型推理加速 | - | 支持vLLM、 flash-attention等大模型推理加速框架 |
+| 向量数据库 | 仅支持内置 | 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库 |
+| 业务数据Finetune | 一般不支持 | 支持|
+| Embedding模型 | 内置为主，有限的官方和开源模型 | 支持多种中文/英文/多语言向量模型以及不同的向量维度 |
+| 超参数调整 | 有的仅支持temperature和topK | 支持多种超参数调整，如文档召回参数、模型推理参数 |
+| Prompt模板 | 不支持 | 提供多种Prompt Template：General, Exreact URL, Accurate Content, 支持用户自定义Prompt|
+| 知识库文件格式及上传方式 | 文件格式支持txt、doc、pdf、html、json, 只能单个文件上传 | 支持多种文件格式：txt、pdf、doc、markdown等, 支持多个文件同时上传, 支持整个文件夹上传 |
+| 文本处理 | 基于段落拆分模型，仅支持默认中文分词器，不能调整 | 可根据实际文本情况自定义切块方式: 切块大小 chunk size, 重叠大小 overlap size |
 
 ## Step 1: 开发环境
 
@@ -25,45 +46,19 @@ pip install --upgrade -r requirements.txt
 
 1. 拉取已有的docker环境，防止因环境安装失败导致的不可用
 ```bash
-docker pull registry.cn-beijing.aliyuncs.com/mybigpai/chatbot_langchain:2.3
+docker pull registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:env
 ```
 
-2. 克隆项目
+2. 启动docker
 ```bash
-git clone https://github.com/aigc-apps/LLM_Solution.git
-cd LLM_Solution
-```
-
-3. 将本地项目挂载到docker并启动
-```bash
-sudo docker run -t -d --network host  --name llm_docker -v $(pwd):/root/LLM_Solution registry.cn-beijing.aliyuncs.com/mybigpai/chatbot_langchain:2.3
+sudo docker run -t -d --network host  --name llm_docker registry.cn-beijing.aliyuncs.com/mybigpai/aigc_apps:env
 docker exec -it llm_docker bash
-cd /root/LLM_Solution
+cd /code/LLM_Solution
 ```
 
-### 方案三：使用PAI-DSW一键拉起
+3. 最新代码需要挂载本地目录到docker中
 
-1. 进入PAI-DSW官网：https://pai.console.aliyun.com/notebook，新建一个实例
-
-2. 在镜像处选择“镜像URL”：填入 registry.cn-beijing.aliyuncs.com/mybigpai/chatbot_langchain:2.3
-
-3. 确认后等待环境资源准备完毕后启动即可
-
-4. 进入DSW实例，选择“打开”，在IDE处进入"/code/LLM_Solution"文件夹下即可编辑代码
-
-## Step 2: 配置config.json
-
-- embedding: embedding模型路径，可以用户自定义挂载，默认使用`embedding_model/SGPT-125M-weightedmean-nli-bitfit`。
-- EASCfg: 配置已部署在`PAI-EAS`上LLM模型服务，可以用户自定义
-- ADBCfg（可选）: AnalyticDB相关环境配置
-- HOLOCfg（可选）: Hologres相关环境配置
-- ElasticSearchCfg（可选）: ElasticSearch相关环境配置
-- 注：如果不配置以上三种，则默认使用`FAISS`存储在本地根目录`/faiss_index`下（适合数据量很少的情况）
-- create_docs: 知识库路径和相关文件配置，默认使用`/docs`下的所有文件
-- query_topk: 检索返回的相关结果的数量
-- prompt_template: 用户自定义的`prompt`
-
-## Step 3: 运行启动WebUI
+## Step 2: 运行启动WebUI
 
 ```bash
 uvicorn webui:app --host 0.0.0.0 --port 8000
