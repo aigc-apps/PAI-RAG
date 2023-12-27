@@ -1,4 +1,4 @@
-# PAI-Chatbot-Langchain: 基于大语言模型（LLM）和多向量数据库（VectorStore）的知识库问答系统白盒化解决方案
+# PAI-Chatbot-Langchain: 基于大语言模型和多向量数据库的知识库问答系统白盒化解决方案
 
 - 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库
 - 支持多种向量化模型(中文、英文、多语言): SGPT-125M, text2vec-large-chinese, text2vec-base-chinese, paraphrase-multilingual, OpenAIEmbeddings
@@ -15,17 +15,17 @@
 
 ### 白盒化自建方案与一体化方案对比
 
-| 维度 | 一体化方案 | 白盒化自建 |
+| 维度 | 白盒化自建 | 一体化方案 | 
 | ------- | ------- | ------- |
-| 模型灵活度 | 仅支持内嵌大模型 | 支持多种中英文开源模型，如llama2, baichuan, ChatGLM，Qwen，mistral等系列模型，也支持通过API方式调用的模型，比如OpenAI，Gemini各种API |
-| 模型推理加速 | - | 支持vLLM、 flash-attention等大模型推理加速框架 |
-| 向量数据库 | 仅支持内置 | 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库 |
-| 业务数据Finetune | 一般不支持 | 支持|
-| Embedding模型 | 内置为主，有限的官方和开源模型 | 支持多种中文/英文/多语言向量模型以及不同的向量维度 |
-| 超参数调整 | 有的仅支持temperature和topK | 支持多种超参数调整，如文档召回参数、模型推理参数 |
-| Prompt模板 | 不支持 | 提供多种Prompt Template：General, Exreact URL, Accurate Content, 支持用户自定义Prompt|
-| 知识库文件格式及上传方式 | 文件格式支持txt、doc、pdf、html、json, 只能单个文件上传 | 支持多种文件格式：txt、pdf、doc、markdown等, 支持多个文件同时上传, 支持整个文件夹上传 |
-| 文本处理 | 基于段落拆分模型，仅支持默认中文分词器，不能调整 | 可根据实际文本情况自定义切块方式: 切块大小 chunk size, 重叠大小 overlap size |
+| 模型灵活度 | 支持多种中英文开源模型，如llama2, baichuan, ChatGLM，Qwen，mistral等系列模型，也支持通过API方式调用的模型，比如OpenAI，Gemini各种API | 仅支持内嵌大模型 |
+| 模型推理加速 | 支持vLLM、 flash-attention等大模型推理加速框架 | 一般不支持 |
+| 向量数据库 | 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库 | 仅支持内置 | 
+| 业务数据Finetune | 支持 | 一般不支持 |
+| Embedding模型 | 支持多种中文/英文/多语言向量模型以及不同的向量维度 | 内置为主，有限的官方和开源模型 |
+| 超参数调整 | 支持多种超参数调整，如文档召回参数、模型推理参数 | 有的仅支持temperature和topK |
+| Prompt模板 | 提供多种Prompt Template：General, Exreact URL, Accurate Content, 支持用户自定义Prompt| 不支持 |
+| 知识库文件格式及上传方式 | 支持多种文件格式：txt、pdf、doc、markdown等, 支持多个文件同时上传, 支持整个文件夹上传 | 文件格式支持txt、doc、pdf、html、json, 只能单个文件上传 |
+| 文本处理 | 可根据实际文本情况自定义切块方式: 切块大小 chunk size, 重叠大小 overlap size | 基于段落拆分模型，仅支持默认中文分词器，不能调整 |
 
 ## Step 1: 开发环境
 
