@@ -13,13 +13,11 @@ def get_streaming_response(response: requests.Response) -> Iterable[List[str]]:
             data = json.loads(chunk.decode("utf-8"))
             
             output = data["response"]
-            history = data["tokens"]
-            if "usage" in data:
-                print(data["usage"])
-            yield output, history
+            tokens = data["tokens"]
+            yield output, tokens
 
 def post_http_request():
-    host = "http://localhost:8073/chat/llm"
+    host = "http://localhost:8000/chat/llm"
     headers = {
         "Content-Type": "application/json"
     }
@@ -37,7 +35,7 @@ def post_http_request():
 
 response = post_http_request()
 res = ""
-for h, history in get_streaming_response(response):
+for h, tokens in get_streaming_response(response):
     res += h
     print(
-        f" --- stream line: {res} \n --- history: {history}", flush=True)
+        f" --- stream line: {res} \n --- tokens: {tokens}", flush=True)

@@ -237,7 +237,7 @@ class LLMService:
         ref_title = '='*20 + ' Reference Sources ' + '='*20
         context_docs = '\n'.join(page_contents) + f'{ref_title}\n' + '\n'.join(ref_names)
         if len(docs) == 0:
-            context_docs = f"No relevant docs were retrieved using the relevance score {score_threshold}."
+            context_docs = f"No relevant docs were retrieved using the relevance score {score_threshold}. You can try using a larger relevance score."
         end_time = time.time()
         print("Get response from Vectore Store. Cost time: {} s".format(end_time - start_time))
         tokens_len = self.sp.encode(context_docs, out_type=str)
