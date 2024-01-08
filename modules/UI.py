@@ -226,8 +226,8 @@ def create_ui(service,_global_args,_global_cfg):
                 with gr.Column():
                     with gr.Column():
                         md_emb = gr.Markdown(value="**Please set your embedding model.**")
-                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Emebdding Model", value=_global_args.embed_model)
-                        emb_dim = gr.Textbox(label="Emebdding Dimension", value=_global_args.embed_dim)
+                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Embedding Model", value=_global_args.embed_model)
+                        emb_dim = gr.Textbox(label="Embedding Dimension", value=_global_args.embed_dim)
                         emb_openai_key = gr.Textbox(visible=False, label="OpenAI API Key", value="")
                         def change_emb_model(model):
                             if model == "SGPT-125M-weightedmean-nli-bitfit":
@@ -263,70 +263,86 @@ def create_ui(service,_global_args,_global_cfg):
                       cfg_btn = gr.Button("Parse Config", variant="primary")
                     
                 with gr.Column():
-                    md_vs = gr.Markdown(value="**Please set your Vector Store.**")
-                    vs_radio = gr.Dropdown(
-                        [ "Hologres", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
-                    with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
-                        pg_host = gr.Textbox(label="Host", 
-                                             value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_user = gr.Textbox(label="User", 
-                                             value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_database = gr.Textbox(label="Database", 
-                                                 value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_pwd= gr.Textbox(label="Password", 
-                                           value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_collection= gr.Textbox(label="CollectionName", 
-                                           value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        # pg_del = gr.Textbox(label="Pre_delete", 
-                        #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
-                        connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
-                        con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
-                    with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
-                        holo_host = gr.Textbox(label="Host",
-                                               value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
-                        holo_database = gr.Textbox(label="Database",
-                                                   value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '')
-                        holo_user = gr.Textbox(label="User",
-                                               value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
-                        holo_pwd= gr.Textbox(label="Password",
-                                             value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
-                        holo_table= gr.Textbox(label="Table",
-                                             value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
-                        connect_btn = gr.Button("Connect Hologres", variant="primary")
-                        con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
-                    with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
-                        es_url = gr.Textbox(label="URL",
-                                            value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                        es_index = gr.Textbox(label="Index",
-                                              value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                        es_user = gr.Textbox(label="User",
-                                             value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                        es_pwd= gr.Textbox(label="Password",
-                                           value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                        connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
-                        con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
-                    with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
-                        faiss_path = gr.Textbox(label="Path", 
-                                                value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
-                        faiss_name = gr.Textbox(label="Index", 
-                                                value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
-                        connect_btn = gr.Button("Connect Faiss", variant="primary")
-                        con_state = gr.Textbox(label="Connection Info: ")
-                        connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
-                    def change_ds_conn(radio):
-                        if radio=="AnalyticDB":
-                            return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
-                        elif radio=="Hologres":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
-                        elif radio=="ElasticSearch":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False)}
-                        elif radio=="FAISS":
-                            return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True)}
-                    vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col])
+                    with gr.Column():
+                        md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
+                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
+                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as eas_col:
+                            eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+                            eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as openai_col:
+                            open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
+                        def change_llm_src(value):
+                            if value=="EAS":
+                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+                            elif value=="OpenAI":
+                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
+                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
+
+                    with gr.Column():
+                        md_vs = gr.Markdown(value="**Please set your Vector Store.**")
+                        vs_radio = gr.Dropdown(
+                            [ "Hologres", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
+                        with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
+                            pg_host = gr.Textbox(label="Host", 
+                                                value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            pg_user = gr.Textbox(label="User", 
+                                                value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            pg_database = gr.Textbox(label="Database", 
+                                                    value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            pg_pwd= gr.Textbox(label="Password", 
+                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            pg_collection= gr.Textbox(label="CollectionName", 
+                                            value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            # pg_del = gr.Textbox(label="Pre_delete", 
+                            #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
+                            connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
+                            con_state = gr.Textbox(label="Connection Info: ")
+                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
+                        with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
+                            holo_host = gr.Textbox(label="Host",
+                                                value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
+                            holo_database = gr.Textbox(label="Database",
+                                                    value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '')
+                            holo_user = gr.Textbox(label="User",
+                                                value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
+                            holo_pwd= gr.Textbox(label="Password",
+                                                value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
+                            holo_table= gr.Textbox(label="Table",
+                                                value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
+                            connect_btn = gr.Button("Connect Hologres", variant="primary")
+                            con_state = gr.Textbox(label="Connection Info: ")
+                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                        with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
+                            es_url = gr.Textbox(label="URL",
+                                                value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                            es_index = gr.Textbox(label="Index",
+                                                value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                            es_user = gr.Textbox(label="User",
+                                                value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                            es_pwd= gr.Textbox(label="Password",
+                                            value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                            connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
+                            con_state = gr.Textbox(label="Connection Info: ")
+                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                        with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
+                            faiss_path = gr.Textbox(label="Path", 
+                                                    value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
+                            faiss_name = gr.Textbox(label="Index", 
+                                                    value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
+                            connect_btn = gr.Button("Connect Faiss", variant="primary")
+                            con_state = gr.Textbox(label="Connection Info: ")
+                            connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                        def change_ds_conn(radio):
+                            if radio=="AnalyticDB":
+                                return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                            elif radio=="Hologres":
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                            elif radio=="ElasticSearch":
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False)}
+                            elif radio=="FAISS":
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True)}
+                        vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col])
             with gr.Row():
                 def cfg_analyze(config_file):
                     filepath = config_file.name
@@ -460,8 +476,21 @@ def create_ui(service,_global_args,_global_cfg):
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
                 with gr.Column(scale=2):
-                    chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
-                    chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
+                    ft_radio = gr.Dropdown(
+                        ["html", "text"], label="Which type of files do you want to upload?", value = _global_cfg['file_type'])
+                    with gr.Column(visible=(_global_cfg['file_type']=="html")) as html_col:
+                        rank_radio = gr.Dropdown(
+                            [ "h1", "h2", "h3", "h4", "h5"], label="Rank Label", value="h2"
+                        )
+                    with gr.Column(visible=(_global_cfg['file_type']=="text")) as docs_col:
+                        chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
+                        chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
+                    def change_ft_conn(radio):
+                        if radio=="html":
+                            return {html_col: gr.update(visible=True), docs_col: gr.update(visible=False)}
+                        elif radio=="text":
+                            return {html_col: gr.update(visible=False), docs_col: gr.update(visible=True)}
+                    ft_radio.change(fn=change_ft_conn, inputs=ft_radio, outputs=[html_col,docs_col])
                 with gr.Column(scale=8):
                     with gr.Tab("Files"):
                         upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
@@ -474,25 +503,32 @@ def create_ui(service,_global_args,_global_cfg):
                         connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
 
-                    
-                    def upload_knowledge(upload_file,chunk_size,chunk_overlap):
+                    def isFileValid(file_name, types):
+                        for t in types:
+                            if file_name.endswith(t):
+                                return True
+                        return False
+
+                    def upload_knowledge(upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio):
                         file_name = ''
+                        valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
                         for file in upload_file:
-                            if file.name.lower().endswith(".txt") or file.name.lower().endswith(".md") or file.name.lower().endswith(".docx") or file.name.lower().endswith(".doc") or file.name.lower().endswith(".pdf"):
+                            if isFileValid(file.name.lower(), valid_types):
                                 file_path = file.name
                                 file_name += file.name.rsplit('/', 1)[-1] + ', '
-                                service.upload_custom_knowledge(file_path,int(chunk_size),int(chunk_overlap))
+                                service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
                         return "Upload " + str(len(upload_file)) + " files [ " +  file_name + "] Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions." 
                     
-                    def upload_knowledge_dir(upload_dir,chunk_size,chunk_overlap):
+                    def upload_knowledge_dir(upload_dir,ft_radio,chunk_size,chunk_overlap,rank_radio):
+                        valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
                         for file in upload_dir:
-                            if file.name.lower().endswith(".txt") or file.name.lower().endswith(".md") or file.name.lower().endswith(".docx") or file.name.lower().endswith(".doc") or file.name.lower().endswith(".pdf"):
+                            if isFileValid(file.name.lower(), valid_types):
                                 file_path = file.name
-                                service.upload_custom_knowledge(file_path,chunk_size,chunk_overlap)
+                                service.upload_custom_knowledge(file_path,ft_radio,chunk_size,chunk_overlap,rank_radio)
                         return "Directory: Upload " + str(len(upload_dir)) + " files Success!" 
 
-                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,chunk_size,chunk_overlap], outputs=state_hl_file, api_name="upload_knowledge")
-                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,chunk_size,chunk_overlap], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
+                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
         
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
@@ -518,8 +554,13 @@ def create_ui(service,_global_args,_global_cfg):
                             topk = gr.Slider(minimum=0, maximum=100, step=1, value=3, label="Top K (choose between 0 and 100)")
                             # score_threshold = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1)")
                             score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=200, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
+                            rerank_model = gr.Radio(
+                                ['No Re-Rank', 'BGE-Reranker-Base', 'BGE-Reranker-Large'],
+                                label="Re-Rank Model",
+                                value='No Re-Rank'
+                            )
                             emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
-                            
+
                     with gr.Column(visible=False) as llm_col:
                         model_argument = gr.Accordion("Inference Parameters of LLM")
                         with model_argument:
@@ -532,11 +573,13 @@ def create_ui(service,_global_args,_global_cfg):
 
                     with gr.Column(visible=False) as lc_col:
                         prm_radio = gr.Radio(
-                            [ "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
+                            [ "Simple", "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
                         )
                         prompt = gr.Textbox(label="prompt template", placeholder="This is a prompt template", lines=4)
                         def change_prompt_template(prm_radio):
-                            if prm_radio == "General":
+                            if prm_radio == "Simple":
+                                return {prompt: gr.update(value="参考内容如下：\n{context}\n作为个人知识答疑助手，请根据上述参考内容回答下面问题，答案中不允许包含编造内容。\n用户问题:\n{question}")}
+                            elif prm_radio == "General":
                                 return {prompt: gr.update(value="基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}")}
                             elif prm_radio == "Extract URL":
                                 return {prompt: gr.update(value="你是一位智能小助手，请根据下面我所提供的相关知识，对我提出的问题进行回答。回答的内容必须包括其定义、特征、应用领域以及相关网页链接等等内容，同时务必满足下方所提的要求！\n=====\n 知识库相关知识如下:\n{context}\n=====\n 请根据上方所提供的知识库内容与要求，回答以下问题:\n {question}")}
@@ -566,17 +609,17 @@ def create_ui(service,_global_args,_global_cfg):
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
                    
-                    def respond(message, chat_history, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
+                    def respond(message, chat_history, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
                         summary_res = ""
                         history = False
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold)
+                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model)
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
+                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, rerank_model, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
@@ -599,7 +642,7 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     

@@ -7,7 +7,72 @@ from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,Al
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os
+import uuid
+
+
+class myFAISS(FAISS):
+    @classmethod
+    def from_texts(
+            cls,
+            texts,
+            embedding,
+            metadatas=None,
+            ids=None,
+            values=None,
+            **kwargs,
+    ):
+        embeddings = embedding.embed_documents(texts)
+        values = texts if values is None else values
+        return cls._FAISS__from(
+            values,
+            embeddings,
+            embedding,
+            metadatas=metadatas,
+            ids=ids,
+            **kwargs,
+        )
+    
+    def add_texts(
+        self,
+        texts,
+        metadatas=None,
+        ids=None,
+        values=None,
+        **kwargs,
+    ):
+        embeddings = [self.embedding_function(k) for k in texts]
+        values = texts if values is None else values
+        return self._FAISS__add(values, embeddings, metadatas=metadatas, ids=ids)
+
+class myHolo(Hologres):
+    def add_texts(
+        self,
+        texts,
+        metadatas=None,
+        ids=None,
+        values=None,
+        **kwargs,
+    ):
+        if ids is None:
+            ids = [str(uuid.uuid1()) for _ in texts]
+
+        embeddings = self.embedding_function.embed_documents(list(texts))
+
+        if not metadatas:
+            metadatas = [{} for _ in texts]
+
+        values = texts if values is None else values
+        self.add_embeddings(values, embeddings, metadatas, ids, **kwargs)
+
+        return ids
+    
+def getBGEReranker(model_path):
+    print(f'Loading BGE Reranker from {model_path}')
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+    return (model, tokenizer)
 
 class VectorDB:
     def __init__(self, args, cfg=None):
@@ -23,6 +88,9 @@ class VectorDB:
             emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
+
+        self.bge_reranker_base = getBGEReranker(os.path.join(model_dir, "bge_reranker_base"))
+        self.bge_reranker_large = getBGEReranker(os.path.join(model_dir, "bge_reranker_large"))
         
         print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
@@ -47,14 +115,14 @@ class VectorDB:
             print("Connect AnalyticDB success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'Hologres':
             start_time = time.time()
-            connection_string_holo = Hologres.connection_string_from_db_params(
+            connection_string_holo = myHolo.connection_string_from_db_params(
                 host=cfg['HOLOCfg']['PG_HOST'],
                 port=cfg['HOLOCfg']['PG_PORT'],
                 database=cfg['HOLOCfg']['PG_DATABASE'],
                 user=cfg['HOLOCfg']['PG_USER'],
                 password=cfg['HOLOCfg']['PG_PASSWORD']
             )
-            vector_db = Hologres(
+            vector_db = myHolo(
                 embedding_function=self.embed,
                 ndims=emb_dim,
                 connection_string=connection_string_holo,
@@ -105,7 +173,7 @@ class VectorDB:
                 print('目录已存在：', cfg['FAISS']['index_path'])
             self.faiss_path = os.path.join(cfg['FAISS']['index_path'],cfg['FAISS']['index_name'])
             try:
-                vector_db = FAISS.load_local(self.faiss_path, self.embed)
+                vector_db = myFAISS.load_local(self.faiss_path, self.embed)
             except:
                 vector_db = None
 
@@ -114,7 +182,7 @@ class VectorDB:
     def add_documents(self, docs):
         if not self.vectordb:
             print('add_documents faiss first')
-            self.vectordb = FAISS.from_documents(docs, self.embed)
+            self.vectordb = myFAISS.from_documents(docs, self.embed)
             print('add_documents self.faiss_path', self.faiss_path)
             self.vectordb.save_local(self.faiss_path)
         else:
@@ -125,19 +193,50 @@ class VectorDB:
             else:
                 print('add_documents else')
                 self.vectordb.add_documents(docs)
+    
+    def add_qa_pairs(self, qa_dict, docs_dir):
+        if not qa_dict:
+            return
+        queries = [k for k,_ in qa_dict.items()]
+        answers = [v for _,v in qa_dict.items()]
+        metadatas = [{
+            "filename": docs_dir.rsplit('/', 1)[-1],
+            "question": q
+        } for q in queries]
+        if not self.vectordb:
+            self.vectordb = myFAISS.from_texts(queries, self.embed, metadatas=metadatas, values=answers)
+            self.vectordb.save_local(self.faiss_path)
+        else:
+            self.vectordb.add_texts(queries, metadatas=metadatas, values=answers)
+    
+    def filter_docs_by_thresh(self, docs, thresh):
+        return [doc for doc in docs if float(doc[1]) <= float(thresh)]
 
-    def similarity_search_db(self, query, topk, score_threshold):
+    def rerank_docs(self, query, docs, model_name):
+        if model_name == "BGE-Reranker-Base":
+            model, tokenizer = self.bge_reranker_base
+        elif model_name == "BGE-Reranker-Large":
+            model, tokenizer = self.bge_reranker_large
+        
+        pairs = [[query, doc[0].page_content] for doc in docs]
+        inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512)
+        scores = model(**inputs, return_dict=True).logits.view(-1, ).float()
+
+        result = sorted([(doc[0], score) for doc, score in zip(docs, scores.tolist())], key=lambda x: x[1], reverse=True)
+        return result
+
+    def similarity_search_db(self, query, topk, score_threshold, model_name):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
         if self.vectordb_type == 'FAISS':
-            self.vectordb = FAISS.load_local(self.faiss_path, self.embed)
+            self.vectordb = myFAISS.load_local(self.faiss_path, self.embed)
             # docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
             docs = self.vectordb.similarity_search_with_score(query, k=topk)
         else:
             docs = self.vectordb.similarity_search_with_score(query, k=topk)
 
         print('docs', docs)
-        new_docs = []
-        for doc in docs:
-            if float(doc[1]) <= float(score_threshold):
-                new_docs.append(doc)
+        new_docs = self.filter_docs_by_thresh(docs, score_threshold)
+        if model_name != 'No Re-Rank':
+            new_docs = self.rerank_docs(query, new_docs, model_name)
+
         return new_docs

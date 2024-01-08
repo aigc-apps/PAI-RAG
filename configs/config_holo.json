@@ -11,6 +11,7 @@
   },
   
   "vector_store": "Hologres",
+  "file_type": "text",
 
   "HOLOCfg": {
     "PG_HOST": "hgpostcn-cn-xxxxx-cn-hangzhou-vpc-st.hologres.aliyuncs.com",
@@ -19,6 +20,14 @@
     "PG_USER": "BASIC$langchain",
     "PG_PASSWORD": "xxx",
     "TABLE": "xxx"
+  },
+  "HTMLCfg": {
+    "rank_label": "h2",
+    "LLM": "EAS",
+    "EASCfg": {
+      "url": "http://model-service.xxx.cn-beijing.pai-eas.aliyuncs.com/",
+      "token": "xx=="
+    }
   },
 
   "query_topk": 4,

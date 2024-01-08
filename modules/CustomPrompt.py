@@ -9,6 +9,16 @@ class CustomPrompt:
         self.prompt_type = args.prompt_engineering
         # self.prompt_type = prompt_type
 
+    def simple_prompts(self, contents, question):
+        context_docs = ""
+        for idx, doc in enumerate(contents):
+            context_docs += f"{str(idx+1)}.{doc[0].page_content}\n\n"
+
+        prompt_template = "参考内容如下：\n{context}\n作为个人知识答疑助手，请根据上述参考内容回答下面问题，答案中不允许包含编造内容。\n用户问题:\n{question}"
+        query_prompt = prompt_template.format(context=context_docs, question=question)
+
+        return query_prompt
+
     def general_prompts(self, contents, question):
         context_docs = ""
         for idx, doc in enumerate(contents):
@@ -76,7 +86,9 @@ class CustomPrompt:
         if self.prompt_type == 'customize' and prompt is not None and prompt != '':
             return self.custom_prompts(docs, query, prompt)
         else:
-            if self.prompt_type == 'general':
+            if self.prompt_type == "simple":
+                return self.simple_prompts(docs, query)
+            elif self.prompt_type == 'general':
                 return self.general_prompts(docs, query)
             elif self.prompt_type == 'extract_url':
                 return self.extract_url(docs, query)
