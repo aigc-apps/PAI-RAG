@@ -27,6 +27,9 @@
     "EASCfg": {
       "url": "http://model-service.xxx.cn-beijing.pai-eas.aliyuncs.com/",
       "token": "xx=="
+    },
+    "OpenAI": {
+        "key": "xxx"
     }
   },
 
