@@ -10,6 +10,7 @@ from .CustomPrompt import CustomPrompt
 from .EASAgent import EASAgent
 from .VectorDB import VectorDB
 from .TextSplitter import TextSplitter
+from .HTML2QA import HTML2QA
 import nltk
 from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
@@ -53,30 +54,53 @@ class LLMService:
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
         self.question_generator_chain = get_standalone_question_ch(self.llm)
 
-    def upload_custom_knowledge(self, docs_dir=None, chunk_size=200,chunk_overlap=0):
+    def upload_custom_knowledge(self,
+                                docs_dir=None,
+                                ft_radio='text',
+                                chunk_size=200,
+                                chunk_overlap=0,
+                                rank_radio='h2'):
         if docs_dir is None:
             docs_dir = self.cfg['create_docs']['docs_dir']
         self.cfg['create_docs']['chunk_size'] = chunk_size
         self.cfg['create_docs']['chunk_overlap'] = chunk_overlap
-        self.text_splitter = TextSplitter(self.cfg)
-        if os.path.isdir(docs_dir):
-            docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
-            docs = self.text_splitter.split_documents(docs)
+        self.cfg['create_docs']['rank_label'] = rank_radio
+
+        if ft_radio == 'text':
+            self.text_splitter = TextSplitter(self.cfg)
+            if os.path.isdir(docs_dir):
+                docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
+                docs = self.text_splitter.split_documents(docs)
+            else:
+                loader = UnstructuredFileLoader(docs_dir, mode="elements")
+                docs = loader.load_and_split(text_splitter=self.text_splitter)
+
+            start_time = time.time()
+            print('Uploading custom knowledge.', start_time)
+            self.vector_db.add_documents(docs)
+            end_time = time.time()
+            print("Insert Success. Cost time: {} s".format(end_time - start_time))
         else:
-            loader = UnstructuredFileLoader(docs_dir, mode="elements")
-            docs = loader.load_and_split(text_splitter=self.text_splitter)
+            self.html2qa = HTML2QA(self.cfg)
+            if os.path.isdir(docs_dir):
+                html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
+                qa_dict = self.html2qa.run(html_dirs)
+            else:
+                qa_dict = self.html2qa.run([docs_dir])
 
-        start_time = time.time()
-        print('Uploading custom knowledge.', start_time)
-        self.vector_db.add_documents(docs)
-        end_time = time.time()
-        print("Insert Success. Cost time: {} s".format(end_time - start_time))
+            start_time = time.time()
+            print('Uploading custom knowledge.', start_time)
+            self.vector_db.add_qa_pairs(qa_dict, docs_dir)
+            end_time = time.time()
+            print("Insert Success. Cost time: {} s".format(end_time - start_time))
 
-    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5):
+    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank'):
         if topk == '' or topk is None:
             topk = 3
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold))
-        if prompt_type == "General":
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold), model_name=rerank_model)
+        if prompt_type == "Simple":
+            self.args.prompt_engineering = 'simple'
+        elif prompt_type == "General":
             self.args.prompt_engineering = 'general'
         elif prompt_type == "Extract URL":
             self.args.prompt_engineering = 'extract_url'
@@ -116,7 +140,7 @@ class LLMService:
         else:
             return ""
     
-    def query_retrieval_llm(self, query, topk='', score_threshold=0.5, prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
+    def query_retrieval_llm(self, query, topk='', score_threshold=0.5, rerank_model='No Re-Rank', prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         if history:
             new_query = self.get_new_question(query)
         else:
@@ -139,7 +163,7 @@ class LLMService:
         
         
             
-        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold)
+        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold, rerank_model)
         print(f"Post user query to {self.cfg['LLM']}")
         if self.cfg['LLM'] == 'EAS':
             if history:
@@ -208,7 +232,7 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_vectorstore(self, query, topk='',score_threshold=0.5):
+    def query_only_vectorstore(self, query, topk='',score_threshold=0.5, rerank_model='No Re-Rank'):
         print("Post user query to Vectore Store")
         if topk is None:
             topk = 3
@@ -220,7 +244,7 @@ class LLMService:
             
         start_time = time.time()
         print('query',query)
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold))
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold),model_name=rerank_model)
         print('docs', docs)
         page_contents, ref_names = [], []
 
