@@ -10,7 +10,7 @@ from utils.generator import HtmlGenerator
 class HTML2QA:
     def __init__(self, config):
         self.config = config['HTMLCfg']
-        self.genertor = HtmlGenerator(config)
+        self.genertor = HtmlGenerator(self.config)
     
     def deal_Q(self, question, theme, hn, answer, history_QA_dict):
         if not hn in question:
