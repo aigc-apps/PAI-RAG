@@ -72,7 +72,7 @@ def create_ui(service,_global_args,_global_cfg):
             }
         return cfg
     
-    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
+    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
                 'embedding': {
@@ -102,7 +102,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
+    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, pg_host, pg_database, pg_user, pg_pwd, table):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
@@ -136,7 +136,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
-    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
+    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, es_url, es_index, es_user, es_pwd):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
@@ -168,7 +168,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
     
-    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, path, name):
+    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, path, name):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             "embedding": {
@@ -265,18 +265,18 @@ def create_ui(service,_global_args,_global_cfg):
                 with gr.Column():
                     with gr.Column():
                         md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
-                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
+                        llm_qa_extraction = gr.Dropdown(["EAS", "OpenAI", "Local"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
                         with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as eas_col:
                             eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
                             eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
                         with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as openai_col:
                             open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
-                        def change_llm_src(value):
+                        def change_llm_qa_extraction(value):
                             if value=="EAS":
                                 return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
                             elif value=="OpenAI":
                                 return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
-                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
+                        llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[eas_col,openai_col])
 
                     with gr.Column():
                         md_vs = gr.Markdown(value="**Please set your Vector Store.**")
@@ -298,7 +298,7 @@ def create_ui(service,_global_args,_global_cfg):
                             #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                             connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
+                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
                         with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
                             holo_host = gr.Textbox(label="Host",
                                                 value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
@@ -312,7 +312,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                 value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
                             connect_btn = gr.Button("Connect Hologres", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                         with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                             es_url = gr.Textbox(label="URL",
                                                 value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
@@ -324,7 +324,7 @@ def create_ui(service,_global_args,_global_cfg):
                                             value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                             connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, llm_qa_extraction, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                         with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
                             faiss_path = gr.Textbox(label="Path", 
                                                     value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
@@ -332,7 +332,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                     value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
                             connect_btn = gr.Button("Connect Faiss", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                            connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, llm_qa_extraction, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
                         def change_ds_conn(radio):
                             if radio=="AnalyticDB":
                                 return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}

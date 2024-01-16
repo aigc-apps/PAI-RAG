@@ -7,7 +7,6 @@ import time
 import os
 from langchain.document_loaders import DirectoryLoader, UnstructuredFileLoader
 from .CustomPrompt import CustomPrompt
-from .EASAgent import EASAgent
 from .VectorDB import VectorDB
 from .TextSplitter import TextSplitter
 from .HTML2QA import HTML2QA
@@ -40,8 +39,6 @@ class LLMService:
         self.cfg = cfg
         self.args = args
 
-        # self.prompt_template = PromptTemplate(self.args)
-        # self.eas_agent = EASAgent(self.cfg)
         self.vector_db = VectorDB(self.args, self.cfg)
         
         print('self.cfg ', self.cfg)

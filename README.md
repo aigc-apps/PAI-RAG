@@ -31,6 +31,7 @@
 
 ### 方案一：本地conda安装
 
+1. 创建虚拟环境，并安装依赖
 ```bash
 conda create --name llm_py310 python=3.10
 conda activate llm_py310
@@ -40,6 +41,12 @@ cd LLM_Solution
 
 sh install.sh
 pip install --upgrade -r requirements.txt
+```
+
+2. 下载RefGPT模型以供后续对HTML文件进行QA提取
+```bash
+wget http://atp-modelzoo-sh.oss-cn-shanghai.aliyuncs.com/release/langchain/refgpt.tar.gz
+tar -xzvf refgpt.tar.gz && rm -rf refgpt.tar.gz
 ```
 
 ### 方案二：Docker启动
@@ -57,6 +64,12 @@ cd /code/LLM_Solution
 ```
 
 3. 最新代码需要挂载本地目录到docker中
+
+4. 下载RefGPT模型以供后续对HTML文件进行QA提取
+```bash
+wget http://atp-modelzoo-sh.oss-cn-shanghai.aliyuncs.com/release/langchain/refgpt.tar.gz
+tar -xzvf refgpt.tar.gz && rm -rf refgpt.tar.gz
+```
 
 ## Step 2: 运行启动WebUI
 

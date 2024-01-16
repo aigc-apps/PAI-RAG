@@ -5,6 +5,7 @@ import requests
 import json
 from modules.CustomLLM import CustomLLM
 from langchain.llms import OpenAI
+from modules.LocalLLM import LocalLLM
 
 class HtmlGenerator:
     def __init__(self, config) -> None:
@@ -18,6 +19,9 @@ class HtmlGenerator:
             self.llm.temperature = float(0.7)
         elif self.config['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key=self.config['OpenAI']['key'])
+        elif self.config['LLM'] == 'Local':
+            print(f"loading qa extraction model from local: {self.config['local_model_path']}")
+            self.llm = LocalLLM(model_name_or_path=self.config['local_model_path'])
 
     def select_prompt(self, QA_text):
         _, title_start = re.search("<h1>", QA_text).span()
