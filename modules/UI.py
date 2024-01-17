@@ -266,17 +266,17 @@ def create_ui(service,_global_args,_global_cfg):
                     with gr.Column():
                         md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
                         llm_qa_extraction = gr.Dropdown(["EAS", "OpenAI", "Local"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
-                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as eas_col:
-                            eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                            eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as openai_col:
-                            open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
+                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as qa_eas_col:
+                            qa_eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+                            qa_eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+                        with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as qa_openai_col:
+                            qa_open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
                         def change_llm_qa_extraction(value):
                             if value=="EAS":
-                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+                                return {qa_eas_col: gr.update(visible=True), qa_openai_col: gr.update(visible=False)}
                             elif value=="OpenAI":
-                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
-                        llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[eas_col,openai_col])
+                                return {qa_eas_col: gr.update(visible=False), qa_openai_col: gr.update(visible=True)}
+                        llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[qa_eas_col,qa_openai_col])
 
                     with gr.Column():
                         md_vs = gr.Markdown(value="**Please set your Vector Store.**")
