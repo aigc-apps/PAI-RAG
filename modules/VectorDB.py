@@ -7,9 +7,11 @@ from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,Al
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os
 import uuid
+import jieba
 
 
 class myFAISS(FAISS):
@@ -24,7 +26,7 @@ class myFAISS(FAISS):
             **kwargs,
     ):
         embeddings = embedding.embed_documents(texts)
-        values = texts if values is None else values
+        values = values or texts
         return cls._FAISS__from(
             values,
             embeddings,
@@ -43,7 +45,7 @@ class myFAISS(FAISS):
         **kwargs,
     ):
         embeddings = [self.embedding_function(k) for k in texts]
-        values = texts if values is None else values
+        values = values or texts
         return self._FAISS__add(values, embeddings, metadatas=metadatas, ids=ids)
 
 class myHolo(Hologres):
@@ -67,6 +69,9 @@ class myHolo(Hologres):
         self.add_embeddings(values, embeddings, metadatas, ids, **kwargs)
 
         return ids
+
+def chinese_text_preprocess_func(text: str):
+    return [t for t in jieba.cut(text) if t != ' ']
     
 def getBGEReranker(model_path):
     print(f'Loading BGE Reranker from {model_path}')
@@ -75,6 +80,9 @@ def getBGEReranker(model_path):
     return (model, tokenizer)
 
 class VectorDB:
+    weights = [0.5, 0.5]
+    """ Weights of ensembled retrievers for Reciprocal Rank Fusion."""
+
     def __init__(self, args, cfg=None):
         model_dir = "/code/embedding_model"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
@@ -193,12 +201,14 @@ class VectorDB:
             else:
                 print('add_documents else')
                 self.vectordb.add_documents(docs)
+        
+        self.bm25_retriever = BM25Retriever.from_documents(docs, preprocess_func=chinese_text_preprocess_func)
     
     def add_qa_pairs(self, qa_dict, docs_dir):
         if not qa_dict:
             return
-        queries = [k for k,_ in qa_dict.items()]
-        answers = [v for _,v in qa_dict.items()]
+        queries = list(qa_dict.keys())
+        answers = list(qa_dict.values())
         metadatas = [{
             "filename": docs_dir.rsplit('/', 1)[-1],
             "question": q
@@ -208,6 +218,10 @@ class VectorDB:
             self.vectordb.save_local(self.faiss_path)
         else:
             self.vectordb.add_texts(queries, metadatas=metadatas, values=answers)
+            self.vectordb.save_local(self.faiss_path)
+        
+        # qa_texts = [f"{q} {a}" for q,a in zip(queries, answers)]
+        self.bm25_retriever = BM25Retriever.from_texts(answers, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
     
     def filter_docs_by_thresh(self, docs, thresh):
         return [doc for doc in docs if float(doc[1]) <= float(thresh)]
@@ -218,25 +232,37 @@ class VectorDB:
         elif model_name == "BGE-Reranker-Large":
             model, tokenizer = self.bge_reranker_large
         
-        pairs = [[query, doc[0].page_content] for doc in docs]
+        docs_list = [item[0] if isinstance(item, tuple) else item for item in docs]
+        pairs = [[query, doc.page_content] for doc in docs_list]
         inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512)
         scores = model(**inputs, return_dict=True).logits.view(-1, ).float()
 
-        result = sorted([(doc[0], score) for doc, score in zip(docs, scores.tolist())], key=lambda x: x[1], reverse=True)
+        result = sorted([(doc, score) for doc, score in zip(docs_list, scores.tolist())], key=lambda x: x[1], reverse=True)
         return result
 
-    def similarity_search_db(self, query, topk, score_threshold, model_name):
+    def similarity_search_db(self, query, topk, score_threshold, model_name, kw_retrieval):
         assert self.vectordb is not None, f'error: vector db has not been set, please assign a remote type by "--vectordb_type <vectordb>" or create FAISS db by "--upload"'
         if self.vectordb_type == 'FAISS':
             self.vectordb = myFAISS.load_local(self.faiss_path, self.embed)
             # docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
-            docs = self.vectordb.similarity_search_with_score(query, k=topk)
+        if kw_retrieval != 'Embedding Only':
+            print(f"[INFO] Using Both Embedding Retrieval and BM25 Retrieval")
+            self.bm25_retriever.k = topk
+            self.embed_retriever = self.vectordb.as_retriever(search_kwargs={"k": topk})
+            self.ensemble_retriever = EnsembleRetriever(
+                retrievers=[self.bm25_retriever, self.embed_retriever], weights=self.weights
+            )
+            docs = self.ensemble_retriever.get_relevant_documents(query)
         else:
+            print(f"[INFO] Using Embedding Retrieval ONLY")
             docs = self.vectordb.similarity_search_with_score(query, k=topk)
+            docs = self.filter_docs_by_thresh(docs, score_threshold)
 
-        print('docs', docs)
-        new_docs = self.filter_docs_by_thresh(docs, score_threshold)
+        print('[INFO] docs:\n', docs)
         if model_name != 'No Re-Rank':
-            new_docs = self.rerank_docs(query, new_docs, model_name)
+            docs = self.rerank_docs(query, docs, model_name)
 
-        return new_docs
+        if len(docs) > topk:
+            docs = docs[:topk]
+            
+        return docs

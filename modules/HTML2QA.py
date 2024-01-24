@@ -27,7 +27,7 @@ class HTML2QA:
         return False
 
     def check_answer(self, answer):
-        ban_words=("是什么", "正文中没有", "没有在正文部分提及", "访问错误中心", "参考相关文档")
+        ban_words=("是什么", "正文中没有", "没有在正文部分提及", "访问错误中心", "参考相关文档", "抱歉", "无法回答")
         for bw in ban_words:
             if bw in answer:
                 return False
@@ -126,7 +126,7 @@ class HTML2QA:
         theme = self.fliter_html_label_all(flited_header).strip()
         if "：" in theme:
             theme = theme.split("：")[1]
-        print(f"共得到{len(splited_doc)}条知识文档")
+        print(f"[INFO] sub doc num: {len(splited_doc)}")
         for i, sub_doc in enumerate(splited_doc):
             check_message = self.check_sub_doc(i, sub_doc)
             if check_message:
@@ -151,9 +151,9 @@ class HTML2QA:
                     continue
                 if self.deal_Q(Q, theme, hn, sub_QA_dict[Q], QA_dict):
                     sub_Q_text_cnt += 1
-            print("sub doc qusetion num: %d" % sub_Q_text_cnt)
+            print("[INFO] sub doc QA num: %d" % sub_Q_text_cnt)
             Q_text_cnt += sub_Q_text_cnt
-        print("question num: %d" % Q_text_cnt)
+        print("[INFO] total QA num: %d" % Q_text_cnt)
         return QA_dict, have_repeat, ban_sub_doc_message
 
     def deal_with_url(self, url, configs):

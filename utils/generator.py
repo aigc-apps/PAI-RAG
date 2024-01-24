@@ -20,7 +20,7 @@ class HtmlGenerator:
         elif self.config['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key=self.config['OpenAI']['key'])
         elif self.config['LLM'] == 'Local':
-            print(f"loading qa extraction model from local: {self.config['local_model_path']}")
+            print(f"[INFO] loading qa extraction model from local: {self.config['local_model_path']}")
             self.llm = LocalLLM(model_name_or_path=self.config['local_model_path'])
 
     def select_prompt(self, QA_text):
@@ -123,7 +123,7 @@ class HtmlGenerator:
         while try_cnt <= try_lim:
             try:
                 collected_message = self.llm(input_text)
-                print(f"get response from llm: {collected_message}")
+                print(f"[INFO] LLM Response:\n{collected_message}")
                 return collected_message
             except Exception as e:
                 error_message = str(e)
@@ -161,6 +161,7 @@ class HtmlGenerator:
         # 处理最后一个A
         QA_list[1].append(QA_text[A_index[-1][1]:].strip())
         QA_dict = {QA_list[0][i]:QA_list[1][i] for i in range(len(Q_index))}
+
         # {Q1: A1, Q2: A2}
         return QA_dict
 
@@ -172,13 +173,14 @@ class HtmlGenerator:
 
         summary_dict = {}
 
-        print("开始对知识文档提取QA")
+        print("[INFO] Extracting QA from sub doc...")
         try_lim = 10
         try_cnt = 0
         while try_cnt <= try_lim:
             try:
                 QA_text = self.get_QA_for_text(src_text, prompt_prefix, prompt_tail)
                 QA_dict = self.QAtext2QAdict(QA_text)
+                print(f"[INFO] sub doc QA dict:\n{QA_dict}")
                 if QA_dict:
                     summary_dict.update(QA_dict)
                 break

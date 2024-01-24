@@ -562,6 +562,11 @@ def create_ui(service,_global_args,_global_cfg):
                                 label="Re-Rank Model",
                                 value='No Re-Rank'
                             )
+                            kw_retrieval = gr.Radio(
+                                ['Embedding Only', 'Keyword Ensembled'],
+                                label="Keyword Retrieval",
+                                value='Embedding Only'
+                            )
                             emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
 
                     with gr.Column(visible=False) as llm_col:
@@ -576,7 +581,7 @@ def create_ui(service,_global_args,_global_cfg):
 
                     with gr.Column(visible=False) as lc_col:
                         prm_radio = gr.Radio(
-                            [ "Simple", "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
+                            [ "Simple", "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type", value="Simple"
                         )
                         prompt = gr.Textbox(label="prompt template", placeholder="This is a prompt template", lines=4)
                         def change_prompt_template(prm_radio):
@@ -612,17 +617,17 @@ def create_ui(service,_global_args,_global_cfg):
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
                    
-                    def respond(message, chat_history, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
+                    def respond(message, chat_history, ds_radio, topk, score_threshold, rerank_model, kw_retrieval, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
                         summary_res = ""
                         history = False
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model)
+                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model,kw_retrieval)
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, rerank_model, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
+                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, rerank_model, kw_retrieval, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
@@ -645,7 +650,7 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, rerank_model, kw_retrieval, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
