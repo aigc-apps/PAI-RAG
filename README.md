@@ -1,11 +1,11 @@
-# PAI-Chatbot-Langchain: 基于大语言模型和多向量数据库的知识库问答系统白盒化解决方案
+# PAI-RAG: 基于大语言模型和多向量数据库的知识库问答系统白盒化解决方案
 
 - 支持多种向量数据库: Hologres、Elasticsearch、OpenSearch、AnalyticDB、以及本地FAISS向量库
 - 支持多种向量化模型(中文、英文、多语言): SGPT-125M, text2vec-large-chinese, text2vec-base-chinese, paraphrase-multilingual, OpenAIEmbeddings
 - 支持任意基于PAI-EAS部署的大模型服务: Qwen, chatglm, llama2, baichuan等系列模型，同时支持ChatGPT调用（需提供OpenAI Key）
 - 部署参考链接：[PAI+向量检索快速搭建大模型知识库对话](https://help.aliyun.com/zh/pai/use-cases/use-pai-and-vector-search-to-implement-intelligent-dialogue-based-on-the-foundation-model?spm=a2c4g.11186623.0.0.4510e3efQRyPdt)
 
-## PAI-Chatbot-Langchain白盒化解决方案系统架构图
+## PAI-RAG白盒化解决方案系统架构图
 ![SystemArchitecture](html/image.png)
 - Step1: 文档处理、切片，针对文本进行不同格式和长度的切分
 - Step2: 文本向量化，导入到向量数据库
