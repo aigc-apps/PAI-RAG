@@ -91,10 +91,10 @@ class LLMService:
             end_time = time.time()
             print("Insert Success. Cost time: {} s".format(end_time - start_time))
 
-    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank'):
+    def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only'):
         if topk == '' or topk is None:
             topk = 3
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold), model_name=rerank_model)
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold), model_name=rerank_model, kw_retrieval=kw_retrieval)
         if prompt_type == "Simple":
             self.args.prompt_engineering = 'simple'
         elif prompt_type == "General":
@@ -137,7 +137,7 @@ class LLMService:
         else:
             return ""
     
-    def query_retrieval_llm(self, query, topk='', score_threshold=0.5, rerank_model='No Re-Rank', prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
+    def query_retrieval_llm(self, query, topk='', score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only', prompt_type='', prompt=None, history=False, llm_topK=30, llm_topp=0.8, llm_temp=0.7):
         if history:
             new_query = self.get_new_question(query)
         else:
@@ -160,7 +160,7 @@ class LLMService:
         
         
             
-        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold, rerank_model)
+        user_prompt = self.create_user_query_prompt(new_query, topk, prompt_type, prompt, score_threshold, rerank_model, kw_retrieval)
         print(f"Post user query to {self.cfg['LLM']}")
         if self.cfg['LLM'] == 'EAS':
             if history:
@@ -229,7 +229,7 @@ class LLMService:
         summary_res = self.checkout_history_and_summary()
         return ans, lens, summary_res
 
-    def query_only_vectorstore(self, query, topk='',score_threshold=0.5, rerank_model='No Re-Rank'):
+    def query_only_vectorstore(self, query, topk='',score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only'):
         print("Post user query to Vectore Store")
         if topk is None:
             topk = 3
@@ -241,15 +241,25 @@ class LLMService:
             
         start_time = time.time()
         print('query',query)
-        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold),model_name=rerank_model)
+        docs = self.vector_db.similarity_search_db(query, topk=int(topk),score_threshold=float(score_threshold),model_name=rerank_model,kw_retrieval=kw_retrieval)
         print('docs', docs)
         page_contents, ref_names = [], []
 
-        for idx, doc in enumerate(docs):
-            content = doc[0].page_content if hasattr(doc[0], "page_content") else "[Doc Content Lost]"
+        for idx, item in enumerate(docs):
+            if isinstance(item, tuple):
+                doc, score = item
+            else:
+                doc = item
+                score = None
+
+            if not hasattr(doc, "page_content"):
+                content = "[Doc Content Lost]"
+            else:
+                content = f"Q: {doc.metadata['question']}\nA: {doc.page_content}" if hasattr(doc.metadata, 'question') else doc.page_content
+            # content = f"Q: {doc[0].metadata['question']}\nA: {doc[0].page_content}" if hasattr(doc[0], "page_content") else "[Doc Content Lost]"
             page_contents.append('='*20 + f' Doc [{idx+1}] ' + '='*20 + f'\n{content}\n')
-            ref = doc[0].metadata['filename'] if hasattr(doc[0], "metadata") and "filename" in doc[0].metadata else "[Doc Name Lost]"
-            ref_names.append(f'[{idx+1}] {ref}  |  Relevance score: {doc[1]}')
+            ref = doc.metadata['filename'] if hasattr(doc, "metadata") and "filename" in doc.metadata else "[Doc Name Lost]"
+            ref_names.append(f'[{idx+1}] {ref}' + (f'  |  Relevance score: {score}' if score else ''))
 
         ref_title = '='*20 + ' Reference Sources ' + '='*20
         context_docs = '\n'.join(page_contents) + f'{ref_title}\n' + '\n'.join(ref_names)
