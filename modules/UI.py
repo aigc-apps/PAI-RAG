@@ -6,6 +6,11 @@ import json
 import sys
 import gradio
 
+CACHE_DIR = 'cache/'
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
+CACHE_CONFIG_NAME = 'config.json'
+
 def html_path(filename):
     script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     return os.path.join(script_path, "html", filename)
@@ -72,6 +77,26 @@ def create_ui(service,_global_args,_global_cfg):
             }
         return cfg
     
+    def check_db_cache(keys, new_config):
+        cache_path = os.path.join(CACHE_DIR, CACHE_CONFIG_NAME)
+        # Check if there is local cache for bm25
+        if not os.path.exists(cache_path):
+            with open(cache_path, 'w+') as f:
+                json.dump(new_config, f)
+            return False
+
+        # Read cached config file
+        with open(cache_path, 'r') as f:
+            cache_config = json.load(f)
+        # Check if new_config is consistent with cache_config
+        res = all([cache_config[k]==new_config[k] for k in keys])
+
+        # Update cached config file
+        with open(cache_path, 'w+') as f:
+            json.dump(new_config, f)
+
+        return res
+    
     def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
@@ -99,6 +124,7 @@ def create_ui(service,_global_args,_global_cfg):
         cfg.update(cfg_db)
         _global_args.vectordb_type = "AnalyticDB"
         _global_cfg.update(cfg)
+        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'ADBCfg'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
@@ -133,6 +159,7 @@ def create_ui(service,_global_args,_global_cfg):
         cfg.update(cfg_db)
         _global_args.vectordb_type = "Hologres"
         _global_cfg.update(cfg)
+        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'HOLOCfg'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
@@ -165,6 +192,7 @@ def create_ui(service,_global_args,_global_cfg):
         cfg.update(cfg_db)
         _global_args.vectordb_type = "ElasticSearch"
         _global_cfg.update(cfg)
+        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'ElasticSearchCfg'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
     
@@ -197,6 +225,7 @@ def create_ui(service,_global_args,_global_cfg):
         cfg.update(cfg_db)
         _global_args.vectordb_type = "FAISS"
         _global_cfg.update(cfg)
+        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'FAISS'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect FAISS success."
     
@@ -488,50 +517,70 @@ def create_ui(service,_global_args,_global_cfg):
                     with gr.Column(visible=(_global_cfg['file_type']=="text")) as docs_col:
                         chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
                         chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
-                    def change_ft_conn(radio):
-                        if radio=="html":
-                            return {html_col: gr.update(visible=True), docs_col: gr.update(visible=False)}
-                        elif radio=="text":
-                            return {html_col: gr.update(visible=False), docs_col: gr.update(visible=True)}
-                    ft_radio.change(fn=change_ft_conn, inputs=ft_radio, outputs=[html_col,docs_col])
-                with gr.Column(scale=8):
+
+                def isFileValid(file_name, types):
+                    for t in types:
+                        if file_name.endswith(t):
+                            return True
+                    return False
+
+                def upload_knowledge(upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio):
+                    file_name = ''
+                    valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
+                    for file in upload_file:
+                        if isFileValid(file.name.lower(), valid_types):
+                            file_path = file.name
+                            file_name += file.name.rsplit('/', 1)[-1] + ', '
+                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
+                    return "Upload " + str(len(upload_file)) + " files [ " +  file_name + "] Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions." 
+                
+                def upload_knowledge_dir(upload_dir,ft_radio,chunk_size,chunk_overlap,rank_radio):
+                    valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
+                    for file in upload_dir:
+                        if isFileValid(file.name.lower(), valid_types):
+                            file_path = file.name
+                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
+                    return "Directory: Upload " + str(len(upload_dir)) + " files Success!"
+
+                with gr.Column(scale=8, visible=(_global_cfg['file_type']=="html")) as html_upload_col:
                     with gr.Tab("Files"):
-                        upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
-                                        file_types=['.txt', '.md', '.docx', '.pdf', '.html'], file_count="multiple")
+                        upload_file = gr.File(label="Upload a knowledge file (supported type: html)",
+                                        file_types=['.html'], file_count="multiple")
                         connect_btn = gr.Button("Upload", variant="primary")
                         state_hl_file = gr.Textbox(label="Upload State")
-                        
                     with gr.Tab("Directory"):
-                        upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: txt, md, docx, pdf, html)" , file_count="directory")
+                        upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: html)" , file_count="directory")
                         connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
-
-                    def isFileValid(file_name, types):
-                        for t in types:
-                            if file_name.endswith(t):
-                                return True
-                        return False
-
-                    def upload_knowledge(upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio):
-                        file_name = ''
-                        valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
-                        for file in upload_file:
-                            if isFileValid(file.name.lower(), valid_types):
-                                file_path = file.name
-                                file_name += file.name.rsplit('/', 1)[-1] + ', '
-                                service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
-                        return "Upload " + str(len(upload_file)) + " files [ " +  file_name + "] Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions." 
-                    
-                    def upload_knowledge_dir(upload_dir,ft_radio,chunk_size,chunk_overlap,rank_radio):
-                        valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
-                        for file in upload_dir:
-                            if isFileValid(file.name.lower(), valid_types):
-                                file_path = file.name
-                                service.upload_custom_knowledge(file_path,ft_radio,chunk_size,chunk_overlap,rank_radio)
-                        return "Directory: Upload " + str(len(upload_dir)) + " files Success!" 
-
                     connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
                     connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+                with gr.Column(scale=8, visible=(_global_cfg['file_type']=="text")) as docs_upload_col:
+                    with gr.Tab("Files"):
+                        upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
+                                        file_types=['.txt', '.md', '.docx', '.pdf', 'doc'], file_count="multiple")
+                        connect_btn = gr.Button("Upload", variant="primary")
+                        state_hl_file = gr.Textbox(label="Upload State")
+                    with gr.Tab("Directory"):
+                        upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: txt, md, docx, pdf)" , file_count="directory")
+                        connect_dir_btn = gr.Button("Upload", variant="primary")
+                        state_hl_dir = gr.Textbox(label="Upload State")
+                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
+                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+
+                def change_ft_conn(radio):
+                    if radio=="html":
+                        return {
+                            html_col: gr.update(visible=True),
+                            docs_col: gr.update(visible=False),
+                            html_upload_col: gr.update(visible=True),
+                            docs_upload_col: gr.update(visible=False)}
+                    elif radio=="text":
+                        return {
+                            html_col: gr.update(visible=False),
+                            docs_col: gr.update(visible=True),
+                            html_upload_col: gr.update(visible=False),
+                            docs_upload_col: gr.update(visible=True)}
+                ft_radio.change(fn=change_ft_conn, inputs=ft_radio, outputs=[html_col,docs_col,html_upload_col,docs_upload_col])
         
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
@@ -562,6 +611,11 @@ def create_ui(service,_global_args,_global_cfg):
                                 label="Re-Rank Model",
                                 value='No Re-Rank'
                             )
+                            kw_retrieval = gr.Radio(
+                                ['Embedding Only', 'Keyword Ensembled'],
+                                label="Keyword Retrieval",
+                                value='Embedding Only'
+                            )
                             emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
 
                     with gr.Column(visible=False) as llm_col:
@@ -576,7 +630,7 @@ def create_ui(service,_global_args,_global_cfg):
 
                     with gr.Column(visible=False) as lc_col:
                         prm_radio = gr.Radio(
-                            [ "Simple", "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type"
+                            [ "Simple", "General", "Extract URL", "Accurate Content", "Customize"], label="\N{rocket} Please choose the prompt template type", value="Simple"
                         )
                         prompt = gr.Textbox(label="prompt template", placeholder="This is a prompt template", lines=4)
                         def change_prompt_template(prm_radio):
@@ -612,17 +666,17 @@ def create_ui(service,_global_args,_global_cfg):
                         clear_his = gr.Button("Clear History", variant="secondary")
                         clear = gr.ClearButton([msg, chatbot])
                    
-                    def respond(message, chat_history, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
+                    def respond(message, chat_history, ds_radio, topk, score_threshold, rerank_model, kw_retrieval, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio):
                         summary_res = ""
                         history = False
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model)
+                            answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model,kw_retrieval)
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, rerank_model, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
+                            answer, lens, summary_res = service.query_retrieval_llm(message, topk, score_threshold, rerank_model, kw_retrieval, prm_radio, prompt, history, llm_topk, llm_topp, llm_temp)
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
@@ -645,7 +699,7 @@ def create_ui(service,_global_args,_global_cfg):
                         time.sleep(0.05)
                         return chat_history, str(lens) + "\n" + bot_message
                     
-                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, rerank_model, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
+                    submitBtn.click(respond, [msg, chatbot, ds_radio, topk, score_threshold, rerank_model, kw_retrieval, llm_topk, llm_topp, llm_temp, prm_radio, prompt, history_radio], [msg, chatbot, cur_tokens])
                     clear_his.click(clear_hisoty,[chatbot],[chatbot, cur_tokens])
                     summaryBtn.click(summary_hisoty,[chatbot],[chatbot, cur_tokens])
     
