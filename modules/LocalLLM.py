@@ -6,7 +6,7 @@ from transformers import AutoModel, AutoTokenizer
 
 class LocalLLM:
     model_path = ""
-    max_length = 2048
+    max_length = 4096
     top_p = 0.8
     temperature = 0.7
 
@@ -18,7 +18,13 @@ class LocalLLM:
     def __call__(self, prompt: str):
 
         if hasattr(self.model, "chat"):
-            response, _ = self.model.chat(self.tokenizer, prompt, history=[])
+            response, _ = self.model.chat(self.tokenizer,
+                                          prompt,
+                                          history=[],
+                                          max_length=self.max_length,
+                                          temperature=self.temperature,
+                                          top_p=self.top_p,
+                                          do_sample=True)
         else:
             input_ids = self.tokenizer(prompt, return_tensors='pt').to(self.model.device)
             input_len = input_ids['input_ids'].size(1)
