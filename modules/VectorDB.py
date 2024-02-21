@@ -178,7 +178,7 @@ class VectorDB:
     """ Weights of ensembled retrievers for Reciprocal Rank Fusion."""
 
     def __init__(self, args, cfg=None):
-        model_dir = "/code/embedding_model"
+        model_dir = "/huggingface/sentence_transformers"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
@@ -192,8 +192,8 @@ class VectorDB:
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
 
-        self.bge_reranker_base = getBGEReranker(os.path.join(model_dir, "bge_reranker_base"))
-        self.bge_reranker_large = getBGEReranker(os.path.join(model_dir, "bge_reranker_large"))
+        self.bge_reranker_base = getBGEReranker(os.path.join(model_dir, "bge-reranker-base"))
+        self.bge_reranker_large = getBGEReranker(os.path.join(model_dir, "bge-reranker-large"))
         
         print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
