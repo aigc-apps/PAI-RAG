@@ -1,4 +1,9 @@
 # langchain related
+numpy
+cmake
+wheel
+pillow
+
 pydantic==1.10.12
 langchain==0.0.323
 psycopg2==2.9.3
