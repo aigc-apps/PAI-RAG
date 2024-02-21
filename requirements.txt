@@ -20,4 +20,4 @@ loguru
 zhon
 uvicorn
 fastapi
-gradio
+gradio==3.44.2
