@@ -34,3 +34,6 @@ oss2
 javascript
 tiktoken
 alibabacloud-ha3engine-vector
+
+jieba
+rank_bm25
