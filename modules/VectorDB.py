@@ -3,7 +3,7 @@
 # deling.sc
 
 from langchain.vectorstores import FAISS
-from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore
+from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore,Milvus
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
@@ -279,6 +279,24 @@ class VectorDB:
                 vector_db = myFAISS.load_local(self.faiss_path, self.embed)
             except:
                 vector_db = None
+        elif self.vectordb_type == 'Milvus':
+            print("Start connect Milvus")
+            start_time = time.time()
+            DROP_OLD = True if cfg['MilvusCfg']['DROP'] == "True" else False
+            vector_db = Milvus(
+                embedding_function=self.embed,
+                collection_name=cfg['MilvusCfg']['COLLECTION'],
+                metadata_field="meta",
+                connection_args={
+                    "host": cfg['MilvusCfg']['HOST'],
+                    "port": cfg['MilvusCfg']['PORT'],
+                    "user": cfg['MilvusCfg']['USER'],
+                    "password": cfg['MilvusCfg']['PASSWORD'],
+                },
+                drop_old=DROP_OLD
+            )
+            end_time = time.time()
+            print("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 
         self.vectordb = vector_db
 
