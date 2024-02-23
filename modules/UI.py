@@ -229,6 +229,36 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect FAISS success."
     
+    def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key,)
+        cfg_db = {
+                'embedding': {
+                    "embedding_model": emb_model,
+                    "model_dir": "./embedding_model/",
+                    "embedding_dimension": emb_dim,
+                    "openai_key": emb_openai_key
+                },
+                'MilvusCfg': {
+                    "COLLECTION": milvus_collection,
+                    "HOST": milvus_host,
+                    "PORT": milvus_port,
+                    "USER": milvus_user,
+                    "PASSWORD": milvus_pwd,
+                    "DROP": milvus_drop
+                },
+                "create_docs":{
+                    "chunk_size": 200,
+                    "chunk_overlap": 0,
+                    "docs_dir": "docs/",
+                    "glob": "**/*"
+                }
+            }
+        cfg.update(cfg_db)
+        _global_args.vectordb_type = "Milvus"
+        _global_cfg.update(cfg)
+        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'MilvusCfg'], _global_cfg)
+        service.init_with_cfg(_global_cfg, _global_args)
+        return "Connect Milvus success."
     with gr.Blocks() as demo:
  
         value_md =  """
@@ -310,7 +340,7 @@ def create_ui(service,_global_args,_global_cfg):
                     with gr.Column():
                         md_vs = gr.Markdown(value="**Please set your Vector Store.**")
                         vs_radio = gr.Dropdown(
-                            [ "Hologres", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
+                            [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
                         with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
                             pg_host = gr.Textbox(label="Host", 
                                                 value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
@@ -362,16 +392,33 @@ def create_ui(service,_global_args,_global_cfg):
                             connect_btn = gr.Button("Connect Faiss", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
                             connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                        with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
+                            milvus_collection = gr.Textbox(label="CollectionName", 
+                                                value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
+                            milvus_host = gr.Textbox(label="Host", 
+                                                value=_global_cfg['MilvusCfg']['HOST'] if _global_cfg['vector_store']=="Milvus" else '')
+                            milvus_port = gr.Textbox(label="Port", 
+                                                value=_global_cfg['MilvusCfg']['PORT'] if _global_cfg['vector_store']=="Milvus" else '')
+                            milvus_user = gr.Textbox(label="User", 
+                                                value=_global_cfg['MilvusCfg']['USER'] if _global_cfg['vector_store']=="Milvus" else '')
+                            milvus_pwd= gr.Textbox(label="Password", 
+                                            value=_global_cfg['MilvusCfg']['PASSWORD'] if _global_cfg['vector_store']=="Milvus" else '')
+                            milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '')
+                            connect_btn = gr.Button("Connect Milvus", variant="primary")
+                            con_state = gr.Textbox(label="Connection Info: ")
+                            connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
                         def change_ds_conn(radio):
                             if radio=="AnalyticDB":
-                                return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                                return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
                             elif radio=="Hologres":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False)}
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
                             elif radio=="ElasticSearch":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False)}
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
                             elif radio=="FAISS":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True)}
-                        vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col])
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True), milvus_col:gr.update(visible=False)}
+                            elif radio=="Milvus":
+                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=True)}
+                        vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col, milvus_col])
             with gr.Row():
                 def cfg_analyze(config_file):
                     filepath = config_file.name
@@ -500,7 +547,38 @@ def create_ui(service,_global_args,_global_cfg):
                                 }
                             combined_dict.update(other_cfg)
                         return combined_dict
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name], api_name="cfg_analyze")   
+                    if cfg['vector_store'] == "Milvus":
+                        combined_dict = {}
+                        combined_dict.update(emb_cfg)
+                        if cfg['LLM'] == "EAS":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
+                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
+                                milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
+                                milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
+                                milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
+                                milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
+                                milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
+                                }
+                            combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "OpenAI":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
+                                milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
+                                milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
+                                milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
+                                milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
+                                milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
+                                }
+                            combined_dict.update(other_cfg)
+                        return combined_dict
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():

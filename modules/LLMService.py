@@ -257,12 +257,12 @@ class LLMService:
             else:
                 content = f"Q: {doc.metadata['question']}\nA: {doc.page_content}" if hasattr(doc.metadata, 'question') else doc.page_content
             # content = f"Q: {doc[0].metadata['question']}\nA: {doc[0].page_content}" if hasattr(doc[0], "page_content") else "[Doc Content Lost]"
-            page_contents.append('='*20 + f' Doc [{idx+1}] ' + '='*20 + f'\n{content}\n')
+            page_contents.append(f'Doc [{idx+1}]: ' + f'{content} \n')
             ref = doc.metadata['filename'] if hasattr(doc, "metadata") and "filename" in doc.metadata else "[Doc Name Lost]"
-            ref_names.append(f'[{idx+1}] {ref}' + (f'  |  Relevance score: {score}' if score else ''))
+            ref_names.append(f'[{idx+1}] {ref}' + (f'  |  Relevance score: {score}\n' if score else ''))
 
-        ref_title = '='*20 + ' Reference Sources ' + '='*20
-        context_docs = '\n'.join(page_contents) + f'{ref_title}\n' + '\n'.join(ref_names)
+        ref_title = '\n Reference Sources:\n'
+        context_docs = '\n'.join(page_contents) + f'\n{ref_title}\n' + '\n'.join(ref_names)
         if len(docs) == 0:
             context_docs = f"No relevant docs were retrieved using the relevance score {score_threshold}."
         end_time = time.time()
