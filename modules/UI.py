@@ -232,33 +232,38 @@ def create_ui(service,_global_args,_global_cfg):
     def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key,)
         cfg_db = {
-                'embedding': {
-                    "embedding_model": emb_model,
-                    "model_dir": "./embedding_model/",
-                    "embedding_dimension": emb_dim,
-                    "openai_key": emb_openai_key
-                },
-                'MilvusCfg': {
-                    "COLLECTION": milvus_collection,
-                    "HOST": milvus_host,
-                    "PORT": milvus_port,
-                    "USER": milvus_user,
-                    "PASSWORD": milvus_pwd,
-                    "DROP": milvus_drop
-                },
-                "create_docs":{
-                    "chunk_size": 200,
-                    "chunk_overlap": 0,
-                    "docs_dir": "docs/",
-                    "glob": "**/*"
-                }
+            'embedding': {
+                "embedding_model": emb_model,
+                "model_dir": "./embedding_model/",
+                "embedding_dimension": emb_dim,
+                "openai_key": emb_openai_key
+            },
+            'MilvusCfg': {
+                "COLLECTION": milvus_collection,
+                "HOST": milvus_host,
+                "PORT": milvus_port,
+                "USER": milvus_user,
+                "PASSWORD": milvus_pwd,
+                "DROP": milvus_drop
+            },
+            "create_docs":{
+                "chunk_size": 200,
+                "chunk_overlap": 0,
+                "docs_dir": "docs/",
+                "glob": "**/*"
             }
+        }
         cfg.update(cfg_db)
+        print('cfg.update(cfg_db) done')
         _global_args.vectordb_type = "Milvus"
         _global_cfg.update(cfg)
+        print('_global_cfg.update(cfg) done')
         _global_args.bm25_load_cache = check_db_cache(['vector_store', 'MilvusCfg'], _global_cfg)
+        print('_global_args.bm25_load_cache done')
         service.init_with_cfg(_global_cfg, _global_args)
+        print('service.init_with_cfg')
         return "Connect Milvus success."
+    
     with gr.Blocks() as demo:
  
         value_md =  """
