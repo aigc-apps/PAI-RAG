@@ -283,6 +283,7 @@ class VectorDB:
             print("Start connect Milvus")
             start_time = time.time()
             DROP_OLD = True if cfg['MilvusCfg']['DROP'] == "True" else False
+            print("DROP_OLD", DROP_OLD)
             vector_db = Milvus(
                 embedding_function=self.embed,
                 collection_name=cfg['MilvusCfg']['COLLECTION'],
@@ -291,10 +292,11 @@ class VectorDB:
                     "host": cfg['MilvusCfg']['HOST'],
                     "port": cfg['MilvusCfg']['PORT'],
                     "user": cfg['MilvusCfg']['USER'],
-                    "password": cfg['MilvusCfg']['PASSWORD'],
+                    "password": cfg['MilvusCfg']['PASSWORD']
                 },
                 drop_old=DROP_OLD
             )
+            print("vector_db = Milvus done")
             end_time = time.time()
             print("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 
