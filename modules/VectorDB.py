@@ -287,7 +287,7 @@ class VectorDB:
             vector_db = Milvus(
                 embedding_function=self.embed,
                 collection_name=cfg['MilvusCfg']['COLLECTION'],
-                # metadata_field="meta",
+                metadata_field="meta",
                 connection_args={
                     "host": cfg['MilvusCfg']['HOST'],
                     "port": cfg['MilvusCfg']['PORT'],
