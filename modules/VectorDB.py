@@ -199,7 +199,6 @@ class VectorDB:
         if len(cache_contents)>0:
             self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
     
-        print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
@@ -287,7 +286,6 @@ class VectorDB:
             print("Start connect Milvus")
             start_time = time.time()
             DROP_OLD = True if cfg['MilvusCfg']['DROP'] == "True" else False
-            print("DROP_OLD", DROP_OLD)
             vector_db = Milvus(
                 embedding_function=self.embed,
                 collection_name=cfg['MilvusCfg']['COLLECTION'],
@@ -300,7 +298,6 @@ class VectorDB:
                 },
                 drop_old=DROP_OLD
             )
-            print("vector_db = Milvus done")
             end_time = time.time()
             print("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 

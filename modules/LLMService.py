@@ -59,7 +59,6 @@ class LLMService:
         elif self.cfg['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
         self.question_generator_chain = get_standalone_question_ch(self.llm)
-        print('LLM service init_with_cfg done', self.vector_db)
 
     def upload_custom_knowledge(self,
                                 docs_dir=None,
