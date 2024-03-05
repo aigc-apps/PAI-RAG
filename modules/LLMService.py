@@ -15,6 +15,13 @@ from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+def getBGEReranker(model_path):
+    print(f'Loading BGE Reranker from {model_path}')
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+    return (model, tokenizer)
 
 class LLMService:
     def __init__(self, args):
@@ -30,7 +37,10 @@ class LLMService:
         nltk_data_path = "/code/nltk_data"
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
-            
+        self.model_dir = "/huggingface/sentence_transformers"
+        
+        self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
+        self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
         # with open(args.config) as f:
         #     cfg = json.load(f)
         # self.init_with_cfg(cfg, args)
@@ -39,7 +49,7 @@ class LLMService:
         self.cfg = cfg
         self.args = args
 
-        self.vector_db = VectorDB(self.args, self.cfg)
+        self.vector_db = VectorDB(self.args, self.cfg, self.bge_reranker_base, self.bge_reranker_large)
         
         self.llm = None
         if self.cfg['LLM'] == 'EAS':
@@ -49,6 +59,7 @@ class LLMService:
         elif self.cfg['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
         self.question_generator_chain = get_standalone_question_ch(self.llm)
+        print('LLM service init_with_cfg done', self.vector_db)
 
     def upload_custom_knowledge(self,
                                 docs_dir=None,

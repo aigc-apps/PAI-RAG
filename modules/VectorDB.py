@@ -177,24 +177,28 @@ class VectorDB:
     weights = [0.5, 0.5]
     """ Weights of ensembled retrievers for Reciprocal Rank Fusion."""
 
-    def __init__(self, args, cfg=None):
+    def __init__(self, args, cfg=None, bge_reranker_base=None, bge_reranker_large=None):
         model_dir = "/huggingface/sentence_transformers"
         print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
-            emb_dim = cfg['embedding']['embedding_dimension']
+            self.emb_dim = cfg['embedding']['embedding_dimension']
         else:
             self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
                                             model_kwargs={'device': 'cpu'})
-            emb_dim = cfg['embedding']['embedding_dimension']
+            self.emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
 
-        self.bge_reranker_base = getBGEReranker(os.path.join(model_dir, "bge-reranker-base"))
-        self.bge_reranker_large = getBGEReranker(os.path.join(model_dir, "bge-reranker-large"))
+        self.bge_reranker_base = bge_reranker_base
+        self.bge_reranker_large = bge_reranker_large
         
+        cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
+        if len(cache_contents)>0:
+            self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
+    
         print('self.vectordb_type',self.vectordb_type)
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
@@ -209,7 +213,7 @@ class VectorDB:
             PRE_DELETE = True if cfg['ADBCfg']['PRE_DELETE'] == "True" else False
             vector_db = AnalyticDB(
                 embedding_function=self.embed,
-                embedding_dimension=emb_dim,
+                embedding_dimension=self.emb_dim,
                 connection_string=connection_string_adb,
                 collection_name=cfg['ADBCfg']['PG_COLLECTION_NAME'],
                 pre_delete_collection=PRE_DELETE,
@@ -227,7 +231,7 @@ class VectorDB:
             )
             vector_db = myHolo(
                 embedding_function=self.embed,
-                ndims=emb_dim,
+                ndims=self.emb_dim,
                 connection_string=connection_string_holo,
                 table_name=cfg['HOLOCfg']['TABLE']
             )
@@ -301,11 +305,7 @@ class VectorDB:
             print("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 
         self.vectordb = vector_db
-
-        cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
-        if len(cache_contents)>0:
-            self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
-    
+        
     def update_cache(self, contents, metadatas):
         with open(CACHE_DB_FILE, 'a+') as f:
             for c, m in zip(contents, metadatas):
