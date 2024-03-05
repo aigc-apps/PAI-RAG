@@ -258,7 +258,7 @@ def create_ui(service,_global_args,_global_cfg):
         _global_args.vectordb_type = "Milvus"
         _global_cfg.update(cfg)
         print('_global_cfg.update(cfg) done')
-        _global_args.bm25_load_cache = check_db_cache(['vector_store', 'MilvusCfg'], _global_cfg)
+        # _global_args.bm25_load_cache = check_db_cache(['vector_store', 'MilvusCfg'], _global_cfg)
         print('_global_args.bm25_load_cache done')
         service.init_with_cfg(_global_cfg, _global_args)
         print('service.init_with_cfg')
