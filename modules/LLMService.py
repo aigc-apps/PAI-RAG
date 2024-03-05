@@ -41,7 +41,6 @@ class LLMService:
 
         self.vector_db = VectorDB(self.args, self.cfg)
         
-        print('self.cfg ', self.cfg)
         self.llm = None
         if self.cfg['LLM'] == 'EAS':
             self.llm = CustomLLM()
