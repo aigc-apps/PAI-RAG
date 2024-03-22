@@ -12,6 +12,8 @@ import json
 from args import parse_args
 from modules.UI import *
 import uvicorn
+from utils import options
+
 def init_args(args):
     args.config = 'configs/config_holo.json'
     args.prompt_engineering = 'simple'
@@ -166,7 +168,7 @@ def start_webui():
         concurrency_count=1, max_size=64
     ).launch(
         server_name="0.0.0.0",
-        server_port=8000,
+        server_port=options.cmd_opts.port,
         prevent_thread_lock=True)
     
     add_general_url(app)
