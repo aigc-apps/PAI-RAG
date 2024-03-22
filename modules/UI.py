@@ -260,7 +260,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Milvus success."
     
-    with gr.Blocks() as demo:
+    with gr.Blocks(server_settings={"timeout_keep_alive": 100}) as demo:
  
         value_md =  """
             #  <center> \N{fire} Chatbot Langchain with LLM on PAI ! 
