@@ -233,11 +233,10 @@ def create_ui(service,_global_args,_global_cfg):
         _global_cfg.update(cfg)
         _global_args.bm25_load_cache = check_db_cache(['vector_store', 'FAISS'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
-        time.sleep(50)
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(long_running_function)
             try:
-                # 设置函数执行的超时时间为40秒
+                # 设置函数执行的超时时间为70秒
                 return future.result(timeout=70)
             except concurrent.futures.TimeoutError:
                 return "Function timed out after 70 seconds."
@@ -403,9 +402,9 @@ def create_ui(service,_global_args,_global_cfg):
                                                     value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
                             faiss_name = gr.Textbox(label="Index", 
                                                     value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
-                            connect_btn = gr.Button("Connect Faiss", variant="primary")
-                            con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state, api_name="connect_faiss") 
+                            connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
+                            con_state_faiss = gr.Textbox(label="Connection Info: ")
+                            connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
                         with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
                             milvus_collection = gr.Textbox(label="CollectionName", 
                                                 value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
