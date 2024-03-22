@@ -23,8 +23,10 @@ class LocalLLM:
         if torch.cuda.device_count() > 1:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             self.model = torch.nn.DataParallel(self.model)
-
+        else:
+            print("Only use", torch.cuda.device_count(), "GPUs!")
         # 将模型发送到GPU（DataParallel将自动处理设备分配）
+        
         self.model.cuda()
     
     def __call__(self, prompt: str):
