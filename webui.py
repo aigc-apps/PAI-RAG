@@ -166,7 +166,7 @@ def start_webui():
         concurrency_count=1, max_size=64
     ).launch(
         server_name="0.0.0.0",
-        server_port=8079,
+        server_port=8000,
         prevent_thread_lock=True)
     
     add_general_url(app)
