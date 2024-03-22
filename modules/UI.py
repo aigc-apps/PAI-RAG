@@ -5,7 +5,6 @@ import os
 import json
 import sys
 import gradio
-import concurrent.futures
 
 CACHE_DIR = 'cache/'
 if not os.path.exists(CACHE_DIR):
@@ -196,11 +195,6 @@ def create_ui(service,_global_args,_global_cfg):
         _global_args.bm25_load_cache = check_db_cache(['vector_store', 'ElasticSearchCfg'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
-    
-    def long_running_function():
-         time.sleep(50)
-         print('50s passed')
-         return "Connect FAISS success."
    
     def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, path, name):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
@@ -233,13 +227,7 @@ def create_ui(service,_global_args,_global_cfg):
         _global_cfg.update(cfg)
         _global_args.bm25_load_cache = check_db_cache(['vector_store', 'FAISS'], _global_cfg)
         service.init_with_cfg(_global_cfg, _global_args)
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(long_running_function)
-            try:
-                # 设置函数执行的超时时间为70秒
-                return future.result(timeout=70)
-            except concurrent.futures.TimeoutError:
-                return "Function timed out after 70 seconds."
+        return "Connect FAISS success."
     
     def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key,)
