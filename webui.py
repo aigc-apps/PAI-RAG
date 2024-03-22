@@ -175,6 +175,6 @@ async def query_by_langchain(query: Query):
 # if __name__ == "__main__":
 #     start_webui()
 
-ui = create_ui()
-ui.queue(concurrency_count=1, max_size=64)
+ui = create_ui(service,_global_args,_global_cfg)
+# ui.queue(concurrency_count=1, max_size=64)
 app = gr.mount_gradio_app(app, ui, path='')
