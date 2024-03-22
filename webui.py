@@ -158,13 +158,15 @@ def add_general_url(
         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
         return {"response": ans, "tokens": lens}
 
-add_general_url(app)
+if __name__ == "__main__":
 
-ui = create_ui(service,_global_args,_global_cfg)
-# app = gr.mount_gradio_app(app, ui, path='')
-app, local_url, share_url = ui.queue(
-    concurrency_count=1, max_size=64
-).launch(
-    server_name="0.0.0.0",
-    server_port=8079,
-    prevent_thread_lock=True)
+    ui = create_ui(service,_global_args,_global_cfg)
+    # app = gr.mount_gradio_app(app, ui, path='')
+    app, local_url, share_url = ui.queue(
+        concurrency_count=1, max_size=64
+    ).launch(
+        server_name="0.0.0.0",
+        server_port=8079,
+        prevent_thread_lock=True)
+    
+    add_general_url(app)
