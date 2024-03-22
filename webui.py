@@ -11,7 +11,7 @@ from pydantic import BaseModel
 import json
 from args import parse_args
 from modules.UI import *
-
+import uvicorn
 def init_args(args):
     args.config = 'configs/config_holo.json'
     args.prompt_engineering = 'simple'
@@ -137,25 +137,23 @@ async def query_by_langchain(query: Query):
 
 #     app.add_middleware(CORSMiddleware, **cors_options)
     
-# def add_general_url(
-#     app
-# ):
-#     setup_middleware(app)
-    
-#     @app.post("/chat/llm")
-#     async def query_by_llm(query: LLMQuery):
-#         ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-#         return {"response": ans, "tokens": lens}
+def add_general_url(
+    app
+):    
+    @app.post("/chat/llm")
+    async def query_by_llm(query: LLMQuery):
+        ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+        return {"response": ans, "tokens": lens}
 
-#     @app.post("/chat/vectorstore")
-#     async def query_by_vectorstore(query: VectorQuery):
-#         ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
-#         return {"response": ans, "tokens": lens}
+    @app.post("/chat/vectorstore")
+    async def query_by_vectorstore(query: VectorQuery):
+        ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+        return {"response": ans, "tokens": lens}
 
-#     @app.post("/chat/langchain")
-#     async def query_by_langchain(query: Query):
-#         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-#         return {"response": ans, "tokens": lens}
+    @app.post("/chat/langchain")
+    async def query_by_langchain(query: Query):
+        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+        return {"response": ans, "tokens": lens}
 
 # def start_webui():
 #     global app
@@ -176,5 +174,13 @@ async def query_by_langchain(query: Query):
 #     start_webui()
 
 ui = create_ui(service,_global_args,_global_cfg)
-# ui.queue(concurrency_count=1, max_size=64)
+ui.queue(concurrency_count=1, max_size=64)
 app = gr.mount_gradio_app(app, ui, path='')
+add_general_url(app)
+uvicorn.run(
+    app,
+    host="0.0.0.0",
+    port=8077,
+    timeout_keep_alive=120,
+    root_path="/",
+)
