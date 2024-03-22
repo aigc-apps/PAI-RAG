@@ -51,20 +51,20 @@ class VectorQuery(BaseModel):
 
 app = FastAPI()
 
-# @app.post("/chat/llm")
-# async def query_by_llm(query: LLMQuery):
-#     ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-#     return {"response": ans, "tokens": lens}
+@app.post("/chat/llm")
+async def query_by_llm(query: LLMQuery):
+    ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+    return {"response": ans, "tokens": lens}
 
-# @app.post("/chat/vectorstore")
-# async def query_by_vectorstore(query: VectorQuery):
-#     ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
-#     return {"response": ans, "tokens": lens}
+@app.post("/chat/vectorstore")
+async def query_by_vectorstore(query: VectorQuery):
+    ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+    return {"response": ans, "tokens": lens}
 
-# @app.post("/chat/langchain")
-# async def query_by_langchain(query: Query):
-#     ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-#     return {"response": ans, "tokens": lens}
+@app.post("/chat/langchain")
+async def query_by_langchain(query: Query):
+    ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+    return {"response": ans, "tokens": lens}
 
 # @app.post("/uploadfile")
 # async def create_upload_file(file: UploadFile | None = None):
@@ -120,57 +120,61 @@ app = FastAPI()
 #         connect_time = service.init_with_cfg(cfg,_global_args)
 #         return {"response": "success"}
 
-def setup_middleware(app):
-    # reset current middleware to allow modifying user provided list
-    app.middleware_stack = None
-    configure_cors_middleware(app)
-    app.build_middleware_stack()  # rebuild middleware stack on-the-fly
+# def setup_middleware(app):
+#     # reset current middleware to allow modifying user provided list
+#     app.middleware_stack = None
+#     configure_cors_middleware(app)
+#     app.build_middleware_stack()  # rebuild middleware stack on-the-fly
 
-def configure_cors_middleware(app):
-    from fastapi.middleware.cors import CORSMiddleware
+# def configure_cors_middleware(app):
+#     from fastapi.middleware.cors import CORSMiddleware
 
-    cors_options = {
-        "allow_methods": ["*"],
-        "allow_headers": ["*"],
-        "allow_credentials": True,
-    }
+#     cors_options = {
+#         "allow_methods": ["*"],
+#         "allow_headers": ["*"],
+#         "allow_credentials": True,
+#     }
 
-    app.add_middleware(CORSMiddleware, **cors_options)
+#     app.add_middleware(CORSMiddleware, **cors_options)
     
-def add_general_url(
-    app
-):
-    setup_middleware(app)
+# def add_general_url(
+#     app
+# ):
+#     setup_middleware(app)
     
-    @app.post("/chat/llm")
-    async def query_by_llm(query: LLMQuery):
-        ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-        return {"response": ans, "tokens": lens}
+#     @app.post("/chat/llm")
+#     async def query_by_llm(query: LLMQuery):
+#         ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/vectorstore")
-    async def query_by_vectorstore(query: VectorQuery):
-        ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
-        return {"response": ans, "tokens": lens}
+#     @app.post("/chat/vectorstore")
+#     async def query_by_vectorstore(query: VectorQuery):
+#         ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+#         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/langchain")
-    async def query_by_langchain(query: Query):
-        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-        return {"response": ans, "tokens": lens}
+#     @app.post("/chat/langchain")
+#     async def query_by_langchain(query: Query):
+#         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#         return {"response": ans, "tokens": lens}
 
-def start_webui():
-    global app
+# def start_webui():
+#     global app
 
-    print("Starting Webui server...")
-    ui = create_ui(service,_global_args,_global_cfg)
-    # app = gr.mount_gradio_app(app, ui, path='')
-    app, local_url, share_url = ui.queue(
-        concurrency_count=1, max_size=64
-    ).launch(
-        server_name="0.0.0.0",
-        server_port=8079,
-        prevent_thread_lock=True)
+#     print("Starting Webui server...")
+#     ui = create_ui(service,_global_args,_global_cfg)
+#     # app = gr.mount_gradio_app(app, ui, path='')
+#     app, local_url, share_url = ui.queue(
+#         concurrency_count=1, max_size=64
+#     ).launch(
+#         server_name="0.0.0.0",
+#         server_port=8079,
+#         prevent_thread_lock=True)
     
-    add_general_url(app)
+#     add_general_url(app)
     
-if __name__ == "__main__":
-    start_webui()
+# if __name__ == "__main__":
+#     start_webui()
+
+ui = create_ui()
+ui.queue(concurrency_count=1, max_size=64)
+app = gr.mount_gradio_app(app, ui, path='')
