@@ -167,6 +167,4 @@ app, local_url, share_url = ui.queue(
 ).launch(
     server_name="0.0.0.0",
     server_port=8079,
-    prevent_thread_lock=True,
-    timeout=36000000
-)
+    prevent_thread_lock=True)
