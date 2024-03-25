@@ -5,6 +5,7 @@ import os
 import json
 import sys
 import gradio
+from loguru import logger
 
 CACHE_DIR = 'cache/'
 if not os.path.exists(CACHE_DIR):
@@ -38,7 +39,7 @@ def css_html():
     
     cssfile = "style.css"
     if not os.path.isfile(cssfile):
-        print("cssfile not exist")
+        logger.error("cssfile not exist")
 
     head += stylesheet(cssfile)
 

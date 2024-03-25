@@ -13,6 +13,7 @@ from args import parse_args
 from modules.UI import *
 import uvicorn
 from utils import options
+from loguru import logger
 
 def init_args(args):
     args.config = 'configs/config_holo.json'
@@ -161,7 +162,7 @@ def add_general_url(
 def start_webui():
     global app
 
-    print("Starting Webui server...")
+    logger.info("Starting Webui server...")
     ui = create_ui(service,_global_args,_global_cfg)
     # app = gr.mount_gradio_app(app, ui, path='')
     app, local_url, share_url = ui.queue(
@@ -171,9 +172,12 @@ def start_webui():
         server_port=options.cmd_opts.port,
         prevent_thread_lock=True)
     
+    logger.info("Adding fast api url...")
     add_general_url(app)
     
 if __name__ == "__main__":
+    logger.remove()
+    logger.add(sys.stderr, level=options.cmd_opts.log_level)
     start_webui()
     while 1:
         time.sleep(0.01)

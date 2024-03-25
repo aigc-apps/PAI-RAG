@@ -4,6 +4,7 @@
 
 from transformers import AutoModel, AutoTokenizer
 import torch
+from loguru import logger
 
 class LocalLLM:
     model_path = ""
@@ -21,10 +22,10 @@ class LocalLLM:
         
         # 如果有多个GPU可用，使用DataParallel来包装模型
         if torch.cuda.device_count() > 1:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            logger.info("Let's use", torch.cuda.device_count(), "GPUs!")
             self.model = torch.nn.DataParallel(self.model)
         else:
-            print("Only use", torch.cuda.device_count(), "GPUs!")
+            logger.info("Only use", torch.cuda.device_count(), "GPUs!")
         # 将模型发送到GPU（DataParallel将自动处理设备分配）
         
         self.model.cuda()
