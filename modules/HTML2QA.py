@@ -6,7 +6,7 @@ from requests.exceptions import SSLError
 from utils.filter import fliter
 from utils.splitter import spliter
 from utils.generator import HtmlGenerator
-
+from loguru import logger
 class HTML2QA:
     def __init__(self, config):
         self.config = config['HTMLCfg']
@@ -126,7 +126,7 @@ class HTML2QA:
         theme = self.fliter_html_label_all(flited_header).strip()
         if "：" in theme:
             theme = theme.split("：")[1]
-        print(f"[INFO] sub doc num: {len(splited_doc)}")
+        logger.info(f"[INFO] sub doc num: {len(splited_doc)}")
         for i, sub_doc in enumerate(splited_doc):
             check_message = self.check_sub_doc(i, sub_doc)
             if check_message:
@@ -151,9 +151,9 @@ class HTML2QA:
                     continue
                 if self.deal_Q(Q, theme, hn, sub_QA_dict[Q], QA_dict):
                     sub_Q_text_cnt += 1
-            print("[INFO] sub doc QA num: %d" % sub_Q_text_cnt)
+            logger.info("[INFO] sub doc QA num: %d" % sub_Q_text_cnt)
             Q_text_cnt += sub_Q_text_cnt
-        print("[INFO] total QA num: %d" % Q_text_cnt)
+        logger.info("[INFO] total QA num: %d" % Q_text_cnt)
         return QA_dict, have_repeat, ban_sub_doc_message
 
     def deal_with_url(self, url, configs):
@@ -175,7 +175,7 @@ class HTML2QA:
                     if q not in result or len(result[q])<a:
                         result[q] = a
             except Exception as e:
-                print(e)
+                logger.error(e)
         return result
 
 if __name__ == "__main__":
