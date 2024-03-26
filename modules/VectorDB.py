@@ -170,83 +170,11 @@ class myElasticSearch(ElasticsearchStore):
 def chinese_text_preprocess_func(text: str):
     return [t for t in jieba.cut(text) if t != ' ']
 
-def getBGEReranker(model_path, device_map=None):
-    # logger.info(f'Loading BGE Reranker from {model_path}')
-    # tokenizer = AutoTokenizer.from_pretrained(model_path)
-    # model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
-    # return (model, tokenizer)
-    
-    if torch.cuda.is_available():
-        logger.info(f"getBGEReranker torch.cuda.is_available")
-        num_gpus = torch.cuda.device_count()
-        if num_gpus < 2 and device_map is None:
-            logger.info(f"[BGE Rerank Model from {model_path}] using {num_gpus} GPUs!")
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path, trust_remote_code=True
-            )
-            model = (
-                AutoModelForSequenceClassification.from_pretrained(
-                    model_path, trust_remote_code=True
-                )
-                .half()
-                .cuda()
-            )
-
-            if model and tokenizer:
-                _model = model
-                _tokenizer = tokenizer
-            else:
-                raise Exception(
-                    "faild to load " + model_path + " please try again."
-                )
-                return
-        else:
-            from accelerate import dispatch_model
-            logger.info(f"[BGE Rerank Model from {model_path}][dispatch_model] using {num_gpus} GPUs!")
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path, trust_remote_code=True
-            )
-            model = (
-                AutoModelForSequenceClassification.from_pretrained(
-                    model_path,
-                    trust_remote_code=True,
-                )
-                .half()
-                .cuda()
-            )
-            if model:
-                if device_map is None:
-                    device_map = auto_configure_chatglm_device_map(num_gpus)
-                _model = dispatch_model(model, device_map=device_map)
-                _tokenizer = tokenizer
-            else:
-                raise Exception(
-                    "faild to load " + model_path + " please try again."
-                )
-                return
-    else:
-        logger.info(f"getBGEReranker not torch.cuda.is_available")
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_path, trust_remote_code=True
-        )
-        model = (
-            AutoModelForSequenceClassification.from_pretrained(
-                model_path,
-                trust_remote_code=True
-            )
-            .half()
-            .cuda()
-        )
-        if model:
-            _model = model
-            _tokenizer = tokenizer
-        else:
-            raise Exception(
-                "faild to load " + model_path + " please try again."
-            )
-            return
-
-    return (_model, _tokenizer)
+def getBGEReranker(model_path):
+    logger.info(f'Loading BGE Reranker from {model_path}')
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+    return (model, tokenizer)
 
 class VectorDB:
     weights = [0.5, 0.5]
