@@ -53,9 +53,9 @@ class LocalLLM:
         return response
 
     def del_model_cache(self):
-        if isinstance(model, torch.nn.DataParallel) or isinstance(model, torch.nn.parallel.DistributedDataParallel):
-            del model.module  # 删除模型的实际内容
-        del model  # 删除模型的包装
-        model = None
+        if isinstance(self.model, torch.nn.DataParallel) or isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+            del self.model.module  # 删除模型的实际内容
+        del self.model  # 删除模型的包装
+        self.model = None
         torch.cuda.empty_cache()
         gc.collect()
