@@ -14,7 +14,7 @@ class LocalLLM:
     top_p = 0.8
     temperature = 0.7
 
-    def __init__(self, model_name_or_path):
+    def __init__(self, model_name_or_path, device_map=None):
         self.model_path = model_name_or_path
         if torch.cuda.is_available():
             num_gpus = torch.cuda.device_count()
