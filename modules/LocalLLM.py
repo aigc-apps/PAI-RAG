@@ -6,6 +6,7 @@ from transformers import AutoModel, AutoTokenizer
 import torch
 from loguru import logger
 import gc
+from utils.load_utils import *
 
 class LocalLLM:
     model_path = ""
@@ -15,20 +16,75 @@ class LocalLLM:
 
     def __init__(self, model_name_or_path):
         self.model_path = model_name_or_path
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
-        # self.model = AutoModel.from_pretrained(self.model_path, trust_remote_code=True).eval().cuda()
-        
-        # 创建模型实例
-        self.model = AutoModel.from_pretrained(self.model_path, trust_remote_code=True).eval()
-        
-        # 如果有多个GPU可用，使用DataParallel来包装模型
-        if torch.cuda.device_count() > 1:
-            logger.info(f"[RefGPT from {self.model_path}] Let's use multiple {torch.cuda.device_count()} GPUs!")
-            self.model = torch.nn.DataParallel(self.model)
+        if torch.cuda.is_available():
+            num_gpus = torch.cuda.device_count()
+            if num_gpus < 2 and device_map is None:
+                logger.info(f"[RefGPT from {self.model_path}] using {num_gpus} GPUs!")
+                tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_path, trust_remote_code=True
+                )
+                model = (
+                    AutoModel.from_pretrained(
+                        self.model_path, trust_remote_code=True
+                    )
+                    .half()
+                    .cuda()
+                )
+
+                if model and tokenizer:
+                    self.model = model
+                    self.tokenizer = tokenizer
+                else:
+                    raise Exception(
+                        "faild to load " + self.model_path + " please try again."
+                    )
+                    return
+            else:
+                logger.info(f"[RefGPT from {self.model_path}][dispatch_model] using {num_gpus} GPUs!")
+                from accelerate import dispatch_model
+                logger.info(f'Using {num_gpus} GPUs!')
+                tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_path, trust_remote_code=True
+                )
+                model = (
+                    AutoModel.from_pretrained(
+                        self.model_path,
+                        trust_remote_code=True,
+                    )
+                    .half()
+                    .cuda()
+                )
+                if model:
+                    if device_map is None:
+                        device_map = auto_configure_chatglm_device_map(num_gpus)
+                    self.model = dispatch_model(model, device_map=device_map)
+                    self.tokenizer = tokenizer
+                else:
+                    raise Exception(
+                        "faild to load " + self.model_path + " please try again."
+                    )
+                    return
         else:
-            logger.info(f"[RefGPT from {self.model_path}] Only use one {torch.cuda.device_count()} GPUs!")
-        # 将模型发送到GPU（DataParallel将自动处理设备分配）
-        
+            tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path, trust_remote_code=True
+            )
+            model = (
+                AutoModel.from_pretrained(
+                    self.model_path,
+                    trust_remote_code=True
+                )
+                .half()
+                .cuda()
+            )
+            if model:
+                self.model = model
+                self.tokenizer = tokenizer
+            else:
+                raise Exception(
+                    "faild to load " + self.model_path + " please try again."
+                )
+                return
+
         self.model.cuda()
     
     def __call__(self, prompt: str):

@@ -16,6 +16,7 @@ import logging
 import json
 import torch
 from loguru import logger
+from utils.load_utils import *
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
 
@@ -175,29 +176,75 @@ def getBGEReranker(model_path):
     # model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
     # return (model, tokenizer)
 
-    logger.info(f'Loading BGE Reranker from {model_path}')
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-    # 确保已经启用CUDA
     if torch.cuda.is_available():
-        device = torch.device("cuda")
+        num_gpus = torch.cuda.device_count()
+        if num_gpus < 2 and device_map is None:
+            logger.info(f"[BGE Rerank Model from {model_path}] using {num_gpus} GPUs!")
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=True
+            )
+            model = (
+                AutoModelForSequenceClassification.from_pretrained(
+                    model_path, trust_remote_code=True
+                )
+                .half()
+                .cuda()
+            )
+
+            if model and tokenizer:
+                _model = model
+                _tokenizer = tokenizer
+            else:
+                raise Exception(
+                    "faild to load " + model_path + " please try again."
+                )
+                return
+        else:
+            from accelerate import dispatch_model
+            logger.info(f"[BGE Rerank Model from {model_path}][dispatch_model] using {num_gpus} GPUs!")
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=True
+            )
+            model = (
+                AutoModelForSequenceClassification.from_pretrained(
+                    model_path,
+                    trust_remote_code=True,
+                )
+                .half()
+                .cuda()
+            )
+            if model:
+                if device_map is None:
+                    device_map = auto_configure_chatglm_device_map(num_gpus)
+                _model = dispatch_model(model, device_map=device_map)
+                _tokenizer = tokenizer
+            else:
+                raise Exception(
+                    "faild to load " + model_path + " please try again."
+                )
+                return
     else:
-        raise ValueError("CUDA is not available. Multi-GPU training requires GPUs.")
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=True
+        )
+        model = (
+            AutoModelForSequenceClassification.from_pretrained(
+                model_path,
+                trust_remote_code=True
+            )
+            .half()
+            .cuda()
+        )
+        if model:
+            _model = model
+            _tokenizer = tokenizer
+        else:
+            raise Exception(
+                "faild to load " + model_path + " please try again."
+            )
+            return
 
-    # 加载模型，发送到默认的设备
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    model.to(device)
-
-    # 如果有多个GPU，使用DataParallel包装模型
-    if torch.cuda.device_count() > 1:
-        logger.info(f"[BGE-Rerank from {model_path}] Let's use multiple {torch.cuda.device_count()} GPUs!")
-        # 使用所有可用的GPU
-        model = torch.nn.DataParallel(model)
-
-    # 将模型设置为评估模式
-    model.eval()
-
-    return (model, tokenizer)
+    return (_model, _tokenizer)
 
 class VectorDB:
     weights = [0.5, 0.5]
