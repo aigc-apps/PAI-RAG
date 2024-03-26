@@ -14,6 +14,7 @@ import uuid
 import jieba
 import logging
 import json
+import torch
 from loguru import logger
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
@@ -167,34 +168,55 @@ class myElasticSearch(ElasticsearchStore):
 
 def chinese_text_preprocess_func(text: str):
     return [t for t in jieba.cut(text) if t != ' ']
-    
+
 def getBGEReranker(model_path):
+    # logger.info(f'Loading BGE Reranker from {model_path}')
+    # tokenizer = AutoTokenizer.from_pretrained(model_path)
+    # model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+    # return (model, tokenizer)
+
     logger.info(f'Loading BGE Reranker from {model_path}')
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+
+    # 确保已经启用CUDA
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        raise ValueError("CUDA is not available. Multi-GPU training requires GPUs.")
+
+    # 加载模型，发送到默认的设备
+    model = AutoModelForSequenceClassification.from_pretrained(model_path)
+    model.to(device)
+
+    # 如果有多个GPU，使用DataParallel包装模型
+    if torch.cuda.device_count() > 1:
+        logger.info(f"[BGE-Rerank from {model_path}] Let's use multiple {torch.cuda.device_count()} GPUs!")
+        # 使用所有可用的GPU
+        model = torch.nn.DataParallel(model)
+
+    # 将模型设置为评估模式
+    model.eval()
+
     return (model, tokenizer)
 
 class VectorDB:
     weights = [0.5, 0.5]
     """ Weights of ensembled retrievers for Reciprocal Rank Fusion."""
 
-    def __init__(self, args, cfg=None, bge_reranker_base=None, bge_reranker_large=None):
-        model_dir = "/huggingface/sentence_transformers"
+    def __init__(self, args, cfg=None):
+        self.model_dir = "/huggingface/sentence_transformers"
         logger.info(f"Using embedding_model: {cfg['embedding']['embedding_model']}")
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
             self.emb_dim = cfg['embedding']['embedding_dimension']
         else:
-            self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
+            self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
                                             model_kwargs={'device': 'cpu'})
             self.emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
-
-        self.bge_reranker_base = bge_reranker_base
-        self.bge_reranker_large = bge_reranker_large
         
         cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
         if len(cache_contents)>0:
@@ -380,8 +402,10 @@ class VectorDB:
 
     def rerank_docs(self, query, docs, model_name):
         if model_name == "BGE-Reranker-Base":
+            self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
             model, tokenizer = self.bge_reranker_base
         elif model_name == "BGE-Reranker-Large":
+            self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
             model, tokenizer = self.bge_reranker_large
         
         docs_list = [item[0] if isinstance(item, tuple) else item for item in docs]
