@@ -178,6 +178,12 @@ class HTML2QA:
                 logger.error(e)
         return result
 
+    def del_model_cache(self):
+        if self.config['LLM'] == 'Local':
+            logger.info("Removing local llm cache from gpu memory.")
+            self.genertor.llm.del_model_cache()
+            logger.info("Clear finished.")
+
 if __name__ == "__main__":
     x = HTML2QA()
     x.run()

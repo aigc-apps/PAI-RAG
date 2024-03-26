@@ -18,12 +18,6 @@ from langchain.llms import OpenAI
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from loguru import logger
 
-def getBGEReranker(model_path):
-    logger.info(f'Loading BGE Reranker from {model_path}')
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
-    return (model, tokenizer)
-
 class LLMService:
     def __init__(self, args):
         # assert args.upload or args.user_query, "error: dose not set any action, please set '--upload' or '--query <user_query>'."
@@ -40,8 +34,6 @@ class LLMService:
             nltk.data.path = [nltk_data_path] + nltk.data.path
         self.model_dir = "/huggingface/sentence_transformers"
         
-        self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
-        self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
         # with open(args.config) as f:
         #     cfg = json.load(f)
         # self.init_with_cfg(cfg, args)
@@ -50,7 +42,7 @@ class LLMService:
         self.cfg = cfg
         self.args = args
 
-        self.vector_db = VectorDB(self.args, self.cfg, self.bge_reranker_base, self.bge_reranker_large)
+        self.vector_db = VectorDB(self.args, self.cfg)
         
         self.llm = None
         if self.cfg['LLM'] == 'EAS':
@@ -100,6 +92,7 @@ class LLMService:
             self.vector_db.add_qa_pairs(qa_dict, docs_dir)
             end_time = time.time()
             logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
+            self.html2qa.del_model_cache()
 
     def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only'):
         if topk == '' or topk is None:
