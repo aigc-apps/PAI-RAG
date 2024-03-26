@@ -688,7 +688,7 @@ def create_ui(service,_global_args,_global_cfg):
                             score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=200, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
                             rerank_model = gr.Radio(
                                 ['No Re-Rank', 'BGE-Reranker-Base', 'BGE-Reranker-Large'],
-                                label="Re-Rank Model",
+                                label="Re-Rank Model (Note: It will take a long time to load the model when using it for the first time.)",
                                 value='No Re-Rank'
                             )
                             kw_retrieval = gr.Radio(
