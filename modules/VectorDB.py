@@ -170,7 +170,7 @@ class myElasticSearch(ElasticsearchStore):
 def chinese_text_preprocess_func(text: str):
     return [t for t in jieba.cut(text) if t != ' ']
 
-def getBGEReranker(model_path):
+def getBGEReranker(model_path, device_map=None):
     # logger.info(f'Loading BGE Reranker from {model_path}')
     # tokenizer = AutoTokenizer.from_pretrained(model_path)
     # model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
