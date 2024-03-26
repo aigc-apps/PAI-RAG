@@ -217,6 +217,7 @@ class VectorDB:
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
+        self.is_rerank = False
         
         cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
         if len(cache_contents)>0:
@@ -401,11 +402,15 @@ class VectorDB:
         return [doc for doc in docs if float(doc[1]) <= float(thresh)]
 
     def rerank_docs(self, query, docs, model_name):
-        if model_name == "BGE-Reranker-Base":
+        if not self.is_rerank:
+            logger.info("Loading bge-reranker-base and bge-reranker-large for the first time.")
             self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
+            self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
+            self.is_rerank = True
+        
+        if model_name == "BGE-Reranker-Base":    
             model, tokenizer = self.bge_reranker_base
         elif model_name == "BGE-Reranker-Large":
-            self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
             model, tokenizer = self.bge_reranker_large
         
         docs_list = [item[0] if isinstance(item, tuple) else item for item in docs]
