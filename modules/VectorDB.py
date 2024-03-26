@@ -175,8 +175,9 @@ def getBGEReranker(model_path, device_map=None):
     # tokenizer = AutoTokenizer.from_pretrained(model_path)
     # model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
     # return (model, tokenizer)
-
+    
     if torch.cuda.is_available():
+        logger.info(f"getBGEReranker torch.cuda.is_available")
         num_gpus = torch.cuda.device_count()
         if num_gpus < 2 and device_map is None:
             logger.info(f"[BGE Rerank Model from {model_path}] using {num_gpus} GPUs!")
@@ -224,6 +225,7 @@ def getBGEReranker(model_path, device_map=None):
                 )
                 return
     else:
+        logger.info(f"getBGEReranker not torch.cuda.is_available")
         tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True
         )
