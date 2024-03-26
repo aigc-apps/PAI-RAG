@@ -20,8 +20,6 @@ from utils.load_utils import *
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
 
-logger = logging.getLogger(__name__)
-
 class myFAISS(FAISS):
     @classmethod
     def from_texts(
