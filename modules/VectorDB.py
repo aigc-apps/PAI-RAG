@@ -259,7 +259,7 @@ class VectorDB:
         else:
             self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
-                                            model_kwargs={'device': 'cpu'})
+                                            model_kwargs={'device': 'cuda:0'})
             self.emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
