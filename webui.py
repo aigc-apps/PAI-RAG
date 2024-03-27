@@ -196,6 +196,7 @@ def get_environment_params(_global_cfg):
         _global_cfg['FAISS']['index_path'] = os_env_params['FAISS_PATH']
         _global_cfg['FAISS']['index_name'] = os_env_params['FAISS_INDEX']
     elif _global_cfg['vector_store'] == "AnalyticDB":
+        _global_cfg['ADBCfg'] = {}
         _global_cfg['ADBCfg']['PG_HOST'] = os_env_params['ADB_PG_HOST']
         _global_cfg['ADBCfg']['PG_DATABASE'] = os_env_params['ADB_PG_DATABASE']
         _global_cfg['ADBCfg']['PG_USER'] = os_env_params['ADB_PG_USER']
@@ -209,11 +210,13 @@ def get_environment_params(_global_cfg):
         _global_cfg['HOLOCfg']['PG_PASSWORD'] = os_env_params['HOLO_PASSWORD']
         _global_cfg['HOLOCfg']['TABLE'] = os_env_params['HOLO_TABLE']
     elif _global_cfg['vector_store'] == "ElasticSearch":
+        _global_cfg['ElasticSearchCfg'] = {}
         _global_cfg['ElasticSearchCfg']['ES_URL'] = os_env_params['ES_URL']
         _global_cfg['ElasticSearchCfg']['ES_INDEX'] = os_env_params['ES_INDEX']
         _global_cfg['ElasticSearchCfg']['ES_USER'] = os_env_params['ES_USER']
         _global_cfg['ElasticSearchCfg']['ES_PASSWORD'] = os_env_params['ES_PASSWORD']
     elif _global_cfg['vector_store'] == "Milvus":
+        _global_cfg['MilvusCfg'] = {}
         _global_cfg['MilvusCfg']['COLLECTION'] = os_env_params['MILVUS_COLLECTION']
         _global_cfg['MilvusCfg']['HOST'] = os_env_params['MILVUS_HOST']
         _global_cfg['MilvusCfg']['PORT'] = os_env_params['MILVUS_PORT']
