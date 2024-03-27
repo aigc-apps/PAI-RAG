@@ -671,15 +671,15 @@ def create_ui(service,_global_args,_global_cfg, env_params):
                     
                     with gr.Column(visible=False) as vs_col:
                         vec_model_argument = gr.Accordion("Parameters of Vector Retrieval")
-                        def change_score_threshold(emb_model):
-                            if emb_model=="OpenAIEmbeddings":
-                                return{
-                                    score_threshold: gr.update(maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1, the more similar the vectors, the smaller the value.)")
-                                }
-                            else:
-                                return{
-                                    score_threshold: gr.update(maximum=1000, step=0.1, value=5, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
-                                }
+                        # def change_score_threshold(emb_model):
+                        #     if emb_model=="OpenAIEmbeddings":
+                        #         return{
+                        #             score_threshold: gr.update(maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1, the more similar the vectors, the smaller the value.)")
+                        #         }
+                        #     else:
+                        #         return{
+                        #             score_threshold: gr.update(maximum=1000, step=0.1, value=5, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
+                        #         }
                             
                         with vec_model_argument:
                             # topk = gr.Textbox(label="Retrieval top K answers",value='3')
@@ -696,7 +696,7 @@ def create_ui(service,_global_args,_global_cfg, env_params):
                                 label="Keyword Retrieval",
                                 value='Embedding Only'
                             )
-                            emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
+                            # emb_model.change(fn=change_score_threshold, inputs=emb_model, outputs=[score_threshold])
 
                     with gr.Column(visible=False) as llm_col:
                         model_argument = gr.Accordion("Inference Parameters of LLM")
