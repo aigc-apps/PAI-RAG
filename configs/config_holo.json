@@ -36,7 +36,7 @@
     "OpenAI": {
       "key": "xxx"
     },
-    "local_model_path": "refgpt"
+    "local_model_path": "/huggingface/sentence_transformers/refgpt"
   },
 
   "query_topk": 4,
