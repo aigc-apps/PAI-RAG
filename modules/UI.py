@@ -57,7 +57,7 @@ def reload_javascript():
 
     gradio.routes.templates.TemplateResponse = template_response
     
-def create_ui(service,_global_args,_global_cfg):
+def create_ui(service,_global_args,_global_cfg, env_params):
     reload_javascript()
     
     def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
@@ -282,306 +282,306 @@ def create_ui(service,_global_args,_global_cfg):
         gr.HTML(ding_hl,elem_id='ding')
         gr.HTML(api_hl,elem_id='api')
                 
-        with gr.Tab("\N{rocket} Settings"):
-            with gr.Row():
-                with gr.Column():
-                    with gr.Column():
-                        md_emb = gr.Markdown(value="**Please set your embedding model.**")
-                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Embedding Model", value=_global_args.embed_model)
-                        emb_dim = gr.Textbox(label="Embedding Dimension", value=_global_args.embed_dim)
-                        emb_openai_key = gr.Textbox(visible=False, label="OpenAI API Key", value="")
-                        def change_emb_model(model):
-                            if model == "SGPT-125M-weightedmean-nli-bitfit":
-                                return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
-                            if model == "text2vec-large-chinese":
-                                return {emb_dim: gr.update(value="1024"), emb_openai_key: gr.update(visible=False)}
-                            if model == "text2vec-base-chinese":
-                                return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
-                            if model == "paraphrase-multilingual-MiniLM-L12-v2":
-                                return {emb_dim: gr.update(value="384"), emb_openai_key: gr.update(visible=False)}
-                            if model == "OpenAIEmbeddings":
-                                return {emb_dim: gr.update(value="1536"), emb_openai_key: gr.update(visible=True)}
-                        emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim, emb_openai_key])
+        # with gr.Tab("\N{rocket} Settings"):
+        #     with gr.Row():
+        #         with gr.Column():
+        #             with gr.Column():
+        #                 md_emb = gr.Markdown(value="**Please set your embedding model.**")
+        #                 emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Embedding Model", value=_global_args.embed_model)
+        #                 emb_dim = gr.Textbox(label="Embedding Dimension", value=_global_args.embed_dim)
+        #                 emb_openai_key = gr.Textbox(visible=False, label="OpenAI API Key", value="")
+        #                 def change_emb_model(model):
+        #                     if model == "SGPT-125M-weightedmean-nli-bitfit":
+        #                         return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
+        #                     if model == "text2vec-large-chinese":
+        #                         return {emb_dim: gr.update(value="1024"), emb_openai_key: gr.update(visible=False)}
+        #                     if model == "text2vec-base-chinese":
+        #                         return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
+        #                     if model == "paraphrase-multilingual-MiniLM-L12-v2":
+        #                         return {emb_dim: gr.update(value="384"), emb_openai_key: gr.update(visible=False)}
+        #                     if model == "OpenAIEmbeddings":
+        #                         return {emb_dim: gr.update(value="1536"), emb_openai_key: gr.update(visible=True)}
+        #                 emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim, emb_openai_key])
                     
-                    with gr.Column():
-                        md_eas = gr.Markdown(value="**Please set your LLM.**")
-                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
-                        with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
-                            eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
-                            eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
-                        with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
-                            open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
-                        def change_llm_src(value):
-                            if value=="EAS":
-                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
-                            elif value=="OpenAI":
-                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
-                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
+        #             with gr.Column():
+        #                 md_eas = gr.Markdown(value="**Please set your LLM.**")
+        #                 llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
+        #                 with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
+        #                     eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
+        #                     eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
+        #                 with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
+        #                     open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
+        #                 def change_llm_src(value):
+        #                     if value=="EAS":
+        #                         return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+        #                     elif value=="OpenAI":
+        #                         return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
+        #                 llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
                     
-                    with gr.Column():
-                      md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
-                      config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
-                      cfg_btn = gr.Button("Parse Config", variant="primary")
+        #             with gr.Column():
+        #               md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
+        #               config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
+        #               cfg_btn = gr.Button("Parse Config", variant="primary")
                     
-                with gr.Column():
-                    # with gr.Column():
-                    #     md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
-                    #     llm_qa_extraction = gr.Dropdown(["EAS", "OpenAI", "Local"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
-                    #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as qa_eas_col:
-                    #         qa_eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                    #         qa_eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                    #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as qa_openai_col:
-                    #         qa_open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
-                    #     def change_llm_qa_extraction(value):
-                    #         if value=="EAS":
-                    #             return {qa_eas_col: gr.update(visible=True), qa_openai_col: gr.update(visible=False)}
-                    #         elif value=="OpenAI":
-                    #             return {qa_eas_col: gr.update(visible=False), qa_openai_col: gr.update(visible=True)}
-                    #     llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[qa_eas_col,qa_openai_col])
+        #         with gr.Column():
+        #             # with gr.Column():
+        #             #     md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
+        #             #     llm_qa_extraction = gr.Dropdown(["EAS", "OpenAI", "Local"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
+        #             #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as qa_eas_col:
+        #             #         qa_eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+        #             #         qa_eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
+        #             #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as qa_openai_col:
+        #             #         qa_open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
+        #             #     def change_llm_qa_extraction(value):
+        #             #         if value=="EAS":
+        #             #             return {qa_eas_col: gr.update(visible=True), qa_openai_col: gr.update(visible=False)}
+        #             #         elif value=="OpenAI":
+        #             #             return {qa_eas_col: gr.update(visible=False), qa_openai_col: gr.update(visible=True)}
+        #             #     llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[qa_eas_col,qa_openai_col])
 
-                    with gr.Column():
-                        md_vs = gr.Markdown(value="**Please set your Vector Store.**")
-                        vs_radio = gr.Dropdown(
-                            [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
-                        with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
-                            pg_host = gr.Textbox(label="Host", 
-                                                value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            pg_user = gr.Textbox(label="User", 
-                                                value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            pg_database = gr.Textbox(label="Database", 
-                                                    value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            pg_pwd= gr.Textbox(label="Password", 
-                                            value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            pg_collection= gr.Textbox(label="CollectionName", 
-                                            value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            # pg_del = gr.Textbox(label="Pre_delete", 
-                            #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
-                            connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
-                            con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
-                        with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
-                            holo_host = gr.Textbox(label="Host",
-                                                value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
-                            holo_database = gr.Textbox(label="Database",
-                                                    value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '')
-                            holo_user = gr.Textbox(label="User",
-                                                value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
-                            holo_pwd= gr.Textbox(label="Password",
-                                                value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
-                            holo_table= gr.Textbox(label="Table",
-                                                value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
-                            connect_btn = gr.Button("Connect Hologres", variant="primary")
-                            con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
-                        with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
-                            es_url = gr.Textbox(label="URL",
-                                                value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                            es_index = gr.Textbox(label="Index",
-                                                value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                            es_user = gr.Textbox(label="User",
-                                                value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                            es_pwd= gr.Textbox(label="Password",
-                                            value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
-                            connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
-                            con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
-                        with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
-                            faiss_path = gr.Textbox(label="Path", 
-                                                    value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
-                            faiss_name = gr.Textbox(label="Index", 
-                                                    value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
-                            connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
-                            con_state_faiss = gr.Textbox(label="Connection Info: ")
-                            connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
-                        with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
-                            milvus_collection = gr.Textbox(label="CollectionName", 
-                                                value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
-                            milvus_host = gr.Textbox(label="Host", 
-                                                value=_global_cfg['MilvusCfg']['HOST'] if _global_cfg['vector_store']=="Milvus" else '')
-                            milvus_port = gr.Textbox(label="Port", 
-                                                value=_global_cfg['MilvusCfg']['PORT'] if _global_cfg['vector_store']=="Milvus" else '')
-                            milvus_user = gr.Textbox(label="User", 
-                                                value=_global_cfg['MilvusCfg']['USER'] if _global_cfg['vector_store']=="Milvus" else '')
-                            milvus_pwd= gr.Textbox(label="Password", 
-                                            value=_global_cfg['MilvusCfg']['PASSWORD'] if _global_cfg['vector_store']=="Milvus" else '')
-                            milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '')
-                            connect_btn = gr.Button("Connect Milvus", variant="primary")
-                            con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
-                        def change_ds_conn(radio):
-                            if radio=="AnalyticDB":
-                                return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="Hologres":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="ElasticSearch":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="FAISS":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True), milvus_col:gr.update(visible=False)}
-                            elif radio=="Milvus":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=True)}
-                        vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col, milvus_col])
-            with gr.Row():
-                def cfg_analyze(config_file):
-                    filepath = config_file.name
-                    with open(filepath) as f:
-                        cfg = json.load(f)
-                    emb_cfg = None
-                    if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
-                        emb_cfg = {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
-                            emb_openai_key: gr.update(value=cfg['embedding']['openai_key'])
-                        }
-                    else:
-                        emb_cfg =  {
-                            emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
-                            emb_dim: gr.update(value=cfg['embedding']['embedding_dimension'])
-                        }
+        #             with gr.Column():
+        #                 md_vs = gr.Markdown(value="**Please set your Vector Store.**")
+        #                 vs_radio = gr.Dropdown(
+        #                     [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
+        #                 with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
+        #                     pg_host = gr.Textbox(label="Host", 
+        #                                         value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     pg_user = gr.Textbox(label="User", 
+        #                                         value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     pg_database = gr.Textbox(label="Database", 
+        #                                             value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     pg_pwd= gr.Textbox(label="Password", 
+        #                                     value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     pg_collection= gr.Textbox(label="CollectionName", 
+        #                                     value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     # pg_del = gr.Textbox(label="Pre_delete", 
+        #                     #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
+        #                     connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
+        #                     con_state = gr.Textbox(label="Connection Info: ")
+        #                     connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
+        #                 with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
+        #                     holo_host = gr.Textbox(label="Host",
+        #                                         value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
+        #                     holo_database = gr.Textbox(label="Database",
+        #                                             value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '')
+        #                     holo_user = gr.Textbox(label="User",
+        #                                         value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
+        #                     holo_pwd= gr.Textbox(label="Password",
+        #                                         value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
+        #                     holo_table= gr.Textbox(label="Table",
+        #                                         value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
+        #                     connect_btn = gr.Button("Connect Hologres", variant="primary")
+        #                     con_state = gr.Textbox(label="Connection Info: ")
+        #                     connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+        #                 with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
+        #                     es_url = gr.Textbox(label="URL",
+        #                                         value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+        #                     es_index = gr.Textbox(label="Index",
+        #                                         value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+        #                     es_user = gr.Textbox(label="User",
+        #                                         value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+        #                     es_pwd= gr.Textbox(label="Password",
+        #                                     value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+        #                     connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
+        #                     con_state = gr.Textbox(label="Connection Info: ")
+        #                     connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+        #                 with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
+        #                     faiss_path = gr.Textbox(label="Path", 
+        #                                             value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
+        #                     faiss_name = gr.Textbox(label="Index", 
+        #                                             value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
+        #                     connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
+        #                     con_state_faiss = gr.Textbox(label="Connection Info: ")
+        #                     connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
+        #                 with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
+        #                     milvus_collection = gr.Textbox(label="CollectionName", 
+        #                                         value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     milvus_host = gr.Textbox(label="Host", 
+        #                                         value=_global_cfg['MilvusCfg']['HOST'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     milvus_port = gr.Textbox(label="Port", 
+        #                                         value=_global_cfg['MilvusCfg']['PORT'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     milvus_user = gr.Textbox(label="User", 
+        #                                         value=_global_cfg['MilvusCfg']['USER'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     milvus_pwd= gr.Textbox(label="Password", 
+        #                                     value=_global_cfg['MilvusCfg']['PASSWORD'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '')
+        #                     connect_btn = gr.Button("Connect Milvus", variant="primary")
+        #                     con_state = gr.Textbox(label="Connection Info: ")
+        #                     connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
+        #                 def change_ds_conn(radio):
+        #                     if radio=="AnalyticDB":
+        #                         return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+        #                     elif radio=="Hologres":
+        #                         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+        #                     elif radio=="ElasticSearch":
+        #                         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+        #                     elif radio=="FAISS":
+        #                         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True), milvus_col:gr.update(visible=False)}
+        #                     elif radio=="Milvus":
+        #                         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=True)}
+        #                 vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col, milvus_col])
+        #     with gr.Row():
+        #         def cfg_analyze(config_file):
+        #             filepath = config_file.name
+        #             with open(filepath) as f:
+        #                 cfg = json.load(f)
+        #             emb_cfg = None
+        #             if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
+        #                 emb_cfg = {
+        #                     emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+        #                     emb_dim: gr.update(value=cfg['embedding']['embedding_dimension']),
+        #                     emb_openai_key: gr.update(value=cfg['embedding']['openai_key'])
+        #                 }
+        #             else:
+        #                 emb_cfg =  {
+        #                     emb_model: gr.update(value=cfg['embedding']['embedding_model']), 
+        #                     emb_dim: gr.update(value=cfg['embedding']['embedding_dimension'])
+        #                 }
                     
-                    if cfg['vector_store'] == "AnalyticDB":
-                        combined_dict = {}
-                        combined_dict.update(emb_cfg)
-                        if cfg['LLM'] == "EAS":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
-                                pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
-                                pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
-                                pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
-                                pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
-                                pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
-                                }
-                            combined_dict.update(other_cfg)
-                        elif cfg['LLM'] == "OpenAI":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
-                                pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
-                                pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
-                                pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
-                                pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
-                                pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
-                                }
-                            combined_dict.update(other_cfg)
-                        return combined_dict
-                    if cfg['vector_store'] == "Hologres":
-                        combined_dict = {}
-                        combined_dict.update(emb_cfg)
-                        if cfg['LLM'] == "EAS":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
-                                holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
-                                holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
-                                holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
-                                holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
-                                }
-                            combined_dict.update(other_cfg)
-                        elif cfg['LLM'] == "OpenAI":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
-                                holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
-                                holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
-                                holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
-                                holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
-                                }
-                            combined_dict.update(other_cfg)
-                        return combined_dict
-                    if cfg['vector_store'] == "ElasticSearch":
-                        combined_dict = {}
-                        combined_dict.update(emb_cfg)
-                        if cfg['LLM'] == "EAS":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
-                                es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
-                                es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
-                                es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
-                                }
-                            combined_dict.update(other_cfg)
-                        elif cfg['LLM'] == "OpenAI":
-                            other_cfg =  {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
-                                es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
-                                es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
-                                es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
-                                }
-                            combined_dict.update(other_cfg)
-                        return combined_dict
-                    if cfg['vector_store'] == "FAISS":
-                        combined_dict = {}
-                        combined_dict.update(emb_cfg)
-                        if cfg['LLM'] == "EAS":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                faiss_path: gr.update(value=cfg['FAISS']['index_path']),
-                                faiss_name: gr.update(value=cfg['FAISS']['index_name'])
-                                }
-                            combined_dict.update(other_cfg)
-                        elif cfg['LLM'] == "OpenAI":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                faiss_path: gr.update(value=cfg['FAISS']['index_path']),
-                                faiss_name: gr.update(value=cfg['FAISS']['index_name'])
-                                }
-                            combined_dict.update(other_cfg)
-                        return combined_dict
-                    if cfg['vector_store'] == "Milvus":
-                        combined_dict = {}
-                        combined_dict.update(emb_cfg)
-                        if cfg['LLM'] == "EAS":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                eas_url: gr.update(value=cfg['EASCfg']['url']), 
-                                eas_token:  gr.update(value=cfg['EASCfg']['token']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
-                                milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
-                                milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
-                                milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
-                                milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
-                                milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
-                                }
-                            combined_dict.update(other_cfg)
-                        elif cfg['LLM'] == "OpenAI":
-                            other_cfg = {
-                                llm_src: gr.update(value=cfg['LLM']),
-                                open_api_key: gr.update(value=cfg['OpenAI']['key']),
-                                vs_radio: gr.update(value=cfg['vector_store']),
-                                milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
-                                milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
-                                milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
-                                milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
-                                milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
-                                milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
-                                }
-                            combined_dict.update(other_cfg)
-                        return combined_dict
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], api_name="cfg_analyze")   
-                
+        #             if cfg['vector_store'] == "AnalyticDB":
+        #                 combined_dict = {}
+        #                 combined_dict.update(emb_cfg)
+        #                 if cfg['LLM'] == "EAS":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         eas_url: gr.update(value=cfg['EASCfg']['url']), 
+        #                         eas_token:  gr.update(value=cfg['EASCfg']['token']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
+        #                         pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
+        #                         pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
+        #                         pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+        #                         pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
+        #                         pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 elif cfg['LLM'] == "OpenAI":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         open_api_key: gr.update(value=cfg['OpenAI']['key']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
+        #                         pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
+        #                         pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
+        #                         pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+        #                         pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
+        #                         pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 return combined_dict
+        #             if cfg['vector_store'] == "Hologres":
+        #                 combined_dict = {}
+        #                 combined_dict.update(emb_cfg)
+        #                 if cfg['LLM'] == "EAS":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         eas_url: gr.update(value=cfg['EASCfg']['url']), 
+        #                         eas_token:  gr.update(value=cfg['EASCfg']['token']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
+        #                         holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
+        #                         holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
+        #                         holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+        #                         holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 elif cfg['LLM'] == "OpenAI":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         open_api_key: gr.update(value=cfg['OpenAI']['key']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
+        #                         holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
+        #                         holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
+        #                         holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+        #                         holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 return combined_dict
+        #             if cfg['vector_store'] == "ElasticSearch":
+        #                 combined_dict = {}
+        #                 combined_dict.update(emb_cfg)
+        #                 if cfg['LLM'] == "EAS":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         eas_url: gr.update(value=cfg['EASCfg']['url']), 
+        #                         eas_token:  gr.update(value=cfg['EASCfg']['token']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
+        #                         es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
+        #                         es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
+        #                         es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 elif cfg['LLM'] == "OpenAI":
+        #                     other_cfg =  {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         open_api_key: gr.update(value=cfg['OpenAI']['key']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
+        #                         es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
+        #                         es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
+        #                         es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 return combined_dict
+        #             if cfg['vector_store'] == "FAISS":
+        #                 combined_dict = {}
+        #                 combined_dict.update(emb_cfg)
+        #                 if cfg['LLM'] == "EAS":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         eas_url: gr.update(value=cfg['EASCfg']['url']), 
+        #                         eas_token:  gr.update(value=cfg['EASCfg']['token']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         faiss_path: gr.update(value=cfg['FAISS']['index_path']),
+        #                         faiss_name: gr.update(value=cfg['FAISS']['index_name'])
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 elif cfg['LLM'] == "OpenAI":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         open_api_key: gr.update(value=cfg['OpenAI']['key']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         faiss_path: gr.update(value=cfg['FAISS']['index_path']),
+        #                         faiss_name: gr.update(value=cfg['FAISS']['index_name'])
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 return combined_dict
+        #             if cfg['vector_store'] == "Milvus":
+        #                 combined_dict = {}
+        #                 combined_dict.update(emb_cfg)
+        #                 if cfg['LLM'] == "EAS":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         eas_url: gr.update(value=cfg['EASCfg']['url']), 
+        #                         eas_token:  gr.update(value=cfg['EASCfg']['token']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
+        #                         milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
+        #                         milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
+        #                         milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
+        #                         milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
+        #                         milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 elif cfg['LLM'] == "OpenAI":
+        #                     other_cfg = {
+        #                         llm_src: gr.update(value=cfg['LLM']),
+        #                         open_api_key: gr.update(value=cfg['OpenAI']['key']),
+        #                         vs_radio: gr.update(value=cfg['vector_store']),
+        #                         milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
+        #                         milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
+        #                         milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
+        #                         milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
+        #                         milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
+        #                         milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
+        #                         }
+        #                     combined_dict.update(other_cfg)
+        #                 return combined_dict
+        #         cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], api_name="cfg_analyze")
+
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
                 with gr.Column(scale=2):

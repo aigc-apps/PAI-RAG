@@ -13,6 +13,7 @@ from args import parse_args
 from modules.UI import *
 import uvicorn
 from utils import options
+from utils.db_conn_utils import *
 from loguru import logger
 
 def init_args(args):
@@ -54,20 +55,20 @@ class VectorQuery(BaseModel):
 
 app = FastAPI()
 
-@app.post("/chat/llm")
-async def query_by_llm(query: LLMQuery):
-    ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-    return {"response": ans, "tokens": lens}
+# @app.post("/chat/llm")
+# async def query_by_llm(query: LLMQuery):
+#     ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#     return {"response": ans, "tokens": lens}
 
-@app.post("/chat/vectorstore")
-async def query_by_vectorstore(query: VectorQuery):
-    ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
-    return {"response": ans, "tokens": lens}
+# @app.post("/chat/vectorstore")
+# async def query_by_vectorstore(query: VectorQuery):
+#     ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+#     return {"response": ans, "tokens": lens}
 
-@app.post("/chat/langchain")
-async def query_by_langchain(query: Query):
-    ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-    return {"response": ans, "tokens": lens}
+# @app.post("/chat/langchain")
+# async def query_by_langchain(query: Query):
+#     ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#     return {"response": ans, "tokens": lens}
 
 # @app.post("/uploadfile")
 # async def create_upload_file(file: UploadFile | None = None):
@@ -159,11 +160,20 @@ def add_general_url(
         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
         return {"response": ans, "tokens": lens}
 
+env_params = {}
+def get_environment_settings():
+    env_params['EAS_URL'] = "http://127.0.0.1:8000"
+    env_params['EMB_MODEL_NAME'] = os.getenv('EMB_MODEL_NAME', 'SGPT-125M-weightedmean-nli-bitfit')
+    env_params['FAISS_PATH'] = os.getenv('FAISS_PATH', '/code')
+    env_params['FAISS_INDEX'] = os.getenv('FAISS_INDEX','faiss')
+
 def start_webui():
     global app
-
+    logger.info("Adding configuration...")
+    connect_faiss(service, _global_args, _global_cfg, env_params)
+    
     logger.info("Starting Webui server...")
-    ui = create_ui(service,_global_args,_global_cfg)
+    ui = create_ui(service,_global_args,_global_cfg, env_params)
     # app = gr.mount_gradio_app(app, ui, path='')
     app, local_url, share_url = ui.queue(
         concurrency_count=1, max_size=64
