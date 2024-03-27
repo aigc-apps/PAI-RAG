@@ -58,6 +58,11 @@ def reload_javascript():
     gradio.routes.templates.TemplateResponse = template_response
     
 def create_ui(service,_global_args,_global_cfg,os_env_params):
+    eas_url = os_env_params['EAS_URL']
+    eas_token = ''
+    llm_src = 'EAS'
+    open_api_key = ''
+    
     reload_javascript()
     
     def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
@@ -197,7 +202,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
    
-    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, path, name):
+    def connect_faiss(emb_model, emb_dim, emb_openai_key, path, name):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             "embedding": {
@@ -317,10 +322,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                     #         elif value=="OpenAI":
                     #             return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
                     #     llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
-                    eas_url = os_env_params['EAS_URL']
-                    eas_token = ''
-                    llm_src = 'EAS'
-                    open_api_key = ''
+                    
                     # with gr.Column():
                     #   md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
                     #   config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
@@ -403,7 +405,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                                                         value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '', interactive=False)
                                 connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
                                 con_state_faiss = gr.Textbox(label="Connection Info: ", interactive=False)
-                                connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
+                                connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, faiss_path, faiss_name], outputs=con_state_faiss) 
                         elif _global_cfg['vector_store']=="Milvus":
                             with gr.Column() as milvus_col:
                                 milvus_collection = gr.Textbox(label="CollectionName", 
