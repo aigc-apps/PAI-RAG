@@ -165,9 +165,61 @@ def get_environment_params(_global_cfg):
     os_env_params['VECTOR_STORE'] = os.getenv('VECTOR_STORE', 'FAISS')
     os_env_params['FAISS_PATH'] = os.getenv('FAISS_PATH', '/code')
     os_env_params['FAISS_INDEX'] = os.getenv('FAISS_INDEX', 'faiss')
+    
+    os_env_params['ADB_PG_HOST'] = os.getenv('ADB_PG_HOST', '')
+    os_env_params['ADB_PG_DATABASE'] = os.getenv('ADB_PG_DATABASE', 'postgres')
+    os_env_params['ADB_PG_USER'] = os.getenv('ADB_PG_USER', '')
+    os_env_params['ADB_PG_PASSWORD'] = os.getenv('ADB_PG_PASSWORD', '')
+    os_env_params['ADB_PG_COLLECTION_NAME'] = os.getenv('ADB_PG_COLLECTION_NAME', '')
+    os_env_params['ADB_PRE_DELETE'] = os.getenv('ADB_PRE_DELETE', "False")
+    
+    os_env_params['HOLO_HOST'] = os.getenv('HOLO_HOST', '')
+    os_env_params['HOLO_DATABASE'] = os.getenv('HOLO_DATABASE', '')
+    os_env_params['HOLO_USER'] = os.getenv('HOLO_USER', '')
+    os_env_params['HOLO_PASSWORD'] = os.getenv('HOLO_PASSWORD', '')
+    os_env_params['HOLO_TABLE'] = os.getenv('HOLO_TABLE', '')
+    
+    os_env_params['ES_URL'] = os.getenv('ES_URL', '')
+    os_env_params['ES_INDEX'] = os.getenv('ES_INDEX', '')
+    os_env_params['ES_USER'] = os.getenv('ES_USER', '')
+    os_env_params['ES_PASSWORD'] = os.getenv('ES_PASSWORD', '')
+    
+    os_env_params['MILVUS_COLLECTION'] = os.getenv('MILVUS_COLLECTION', '')
+    os_env_params['MILVUS_HOST'] = os.getenv('MILVUS_HOST', '')
+    os_env_params['MILVUS_PORT'] = os.getenv('MILVUS_PORT', '')
+    os_env_params['MILVUS_USER'] = os.getenv('MILVUS_USER', '')
+    os_env_params['MILVUS_PASSWORD'] = os.getenv('MILVUS_PASSWORD', '')
+    os_env_params['MILVUS_DROP'] = os.getenv('MILVUS_DROP', "False")
+    
     _global_cfg['vector_store'] = os_env_params['VECTOR_STORE']
-    _global_cfg['FAISS']['index_path'] = os_env_params['FAISS_PATH']
-    _global_cfg['FAISS']['index_name'] = os_env_params['FAISS_INDEX']
+    if _global_cfg['vector_store'] == "FAISS":
+        _global_cfg['FAISS']['index_path'] = os_env_params['FAISS_PATH']
+        _global_cfg['FAISS']['index_name'] = os_env_params['FAISS_INDEX']
+    elif _global_cfg['vector_store'] == "AnalyticDB":
+        _global_cfg['ADBCfg']['PG_HOST'] = os_env_params['ADB_PG_HOST']
+        _global_cfg['ADBCfg']['PG_DATABASE'] = os_env_params['ADB_PG_DATABASE']
+        _global_cfg['ADBCfg']['PG_USER'] = os_env_params['ADB_PG_USER']
+        _global_cfg['ADBCfg']['PG_PASSWORD'] = os_env_params['ADB_PG_PASSWORD']
+        _global_cfg['ADBCfg']['PG_COLLECTION_NAME'] = os_env_params['ADB_PG_COLLECTION_NAME']
+        _global_cfg['ADBCfg']['PRE_DELETE'] = os_env_params['ADB_PRE_DELETE']
+    elif _global_cfg['vector_store'] == "Hologres":
+        _global_cfg['HOLOCfg']['PG_HOST'] = os_env_params['HOLO_HOST']
+        _global_cfg['HOLOCfg']['PG_DATABASE'] = os_env_params['HOLO_DATABASE']
+        _global_cfg['HOLOCfg']['PG_USER'] = os_env_params['HOLO_USER']
+        _global_cfg['HOLOCfg']['PG_PASSWORD'] = os_env_params['HOLO_PASSWORD']
+        _global_cfg['HOLOCfg']['TABLE'] = os_env_params['HOLO_TABLE']
+    elif _global_cfg['vector_store'] == "ElasticSearch":
+        _global_cfg['ElasticSearchCfg']['ES_URL'] = os_env_params['ES_URL']
+        _global_cfg['ElasticSearchCfg']['ES_INDEX'] = os_env_params['ES_INDEX']
+        _global_cfg['ElasticSearchCfg']['ES_USER'] = os_env_params['ES_USER']
+        _global_cfg['ElasticSearchCfg']['ES_PASSWORD'] = os_env_params['ES_PASSWORD']
+    elif _global_cfg['vector_store'] == "Milvus":
+        _global_cfg['MilvusCfg']['COLLECTION'] = os_env_params['MILVUS_COLLECTION']
+        _global_cfg['MilvusCfg']['HOST'] = os_env_params['MILVUS_HOST']
+        _global_cfg['MilvusCfg']['PORT'] = os_env_params['MILVUS_PORT']
+        _global_cfg['MilvusCfg']['USER'] = os_env_params['MILVUS_USER']
+        _global_cfg['MilvusCfg']['PASSWORD'] = os_env_params['MILVUS_PASSWORD']
+        _global_cfg['MilvusCfg']['DROP'] = os_env_params['MILVUS_DROP']
     
 def start_webui():
     global app

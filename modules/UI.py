@@ -103,7 +103,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
 
         return res
     
-    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
+    def connect_adb(emb_model, emb_dim, emb_openai_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
                 'embedding': {
@@ -134,7 +134,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
+    def connect_holo(emb_model, emb_dim, emb_openai_key, pg_host, pg_database, pg_user, pg_pwd, table):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
@@ -169,7 +169,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
-    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
+    def connect_es(emb_model, emb_dim, emb_openai_key, es_url, es_index, es_user, es_pwd):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
         cfg_db = {
             'embedding': {
@@ -235,7 +235,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect FAISS success."
     
-    def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
+    def connect_milvus(emb_model, emb_dim, emb_openai_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
         cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key,)
         cfg_db = {
             'embedding': {
@@ -266,7 +266,7 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Milvus success."
     
-    with gr.Blocks(server_settings={"timeout_keep_alive": 100}) as demo:
+    with gr.Blocks() as demo:
  
         value_md =  """
             #  <center> \N{fire} Chatbot Langchain with LLM on PAI ! 
@@ -349,54 +349,53 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                             
                         # vs_radio = gr.Dropdown(
                         #     [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
-                        print('_global_cfg', _global_cfg)
                         logger.info(f"_global_cfg vector_store {_global_cfg['vector_store']}")
                         if _global_cfg['vector_store']=="AnalyticDB":
                             with gr.Column() as adb_col:
                                 pg_host = gr.Textbox(label="Host", 
-                                                    value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                                                    value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
                                 pg_user = gr.Textbox(label="User", 
-                                                    value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                                                    value=_global_cfg['ADBCfg']['PG_USER'] if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
                                 pg_database = gr.Textbox(label="Database", 
-                                                        value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '')
+                                                        value='postgres' if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
                                 pg_pwd= gr.Textbox(label="Password", 
-                                                value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                                                value=_global_cfg['ADBCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
                                 pg_collection= gr.Textbox(label="CollectionName", 
-                                                value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '')
-                                pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '')
+                                                value=_global_cfg['ADBCfg']['PG_COLLECTION_NAME'] if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
+                                pg_del = gr.Dropdown(["True","False"], label="Pre Delete", value=_global_cfg['ADBCfg']['PRE_DELETE'] if _global_cfg['vector_store']=="AnalyticDB" else '', interactive=False)
                                 # pg_del = gr.Textbox(label="Pre_delete", 
                                 #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                                 connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
-                                con_state = gr.Textbox(label="Connection Info: ")
-                                connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
+                                con_state = gr.Textbox(label="Connection Info: ", interactive=False)
+                                connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
                         elif _global_cfg['vector_store']=="Hologres":
                             with gr.Column() as holo_col:
                                 holo_host = gr.Textbox(label="Host",
-                                                    value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
+                                                    value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '', interactive=False)
                                 holo_database = gr.Textbox(label="Database",
-                                                        value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '')
+                                                        value=_global_cfg['HOLOCfg']['PG_DATABASE'] if _global_cfg['vector_store']=="Hologres" else '', interactive=False)
                                 holo_user = gr.Textbox(label="User",
-                                                    value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '')
+                                                    value=_global_cfg['HOLOCfg']['PG_USER'] if _global_cfg['vector_store']=="Hologres" else '', interactive=False)
                                 holo_pwd= gr.Textbox(label="Password",
-                                                    value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '')
+                                                    value=_global_cfg['HOLOCfg']['PG_PASSWORD'] if _global_cfg['vector_store']=="Hologres" else '', interactive=False)
                                 holo_table= gr.Textbox(label="Table",
-                                                    value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
+                                                    value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '', interactive=False)
                                 connect_btn = gr.Button("Connect Hologres", variant="primary")
-                                con_state = gr.Textbox(label="Connection Info: ")
-                                connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                                con_state = gr.Textbox(label="Connection Info: ", interactive=False)
+                                connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                         elif _global_cfg['vector_store']=="ElasticSearch":
                             with gr.Column() as es_col:
                                 es_url = gr.Textbox(label="URL",
-                                                    value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                                                    value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '', interactive=False)
                                 es_index = gr.Textbox(label="Index",
-                                                    value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                                                    value=_global_cfg['ElasticSearchCfg']['ES_INDEX'] if _global_cfg['vector_store']=="ElasticSearch" else '', interactive=False)
                                 es_user = gr.Textbox(label="User",
-                                                    value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                                                    value=_global_cfg['ElasticSearchCfg']['ES_USER'] if _global_cfg['vector_store']=="ElasticSearch" else '', interactive=False)
                                 es_pwd= gr.Textbox(label="Password",
-                                                value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
+                                                value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '', interactive=False)
                                 connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
-                                con_state = gr.Textbox(label="Connection Info: ")
-                                connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                                con_state = gr.Textbox(label="Connection Info: ", interactive=False)
+                                connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                         elif _global_cfg['vector_store']=="FAISS":
                             with gr.Column() as faiss_col:
                                 faiss_path = gr.Textbox(label="Path", 
@@ -409,19 +408,19 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                         elif _global_cfg['vector_store']=="Milvus":
                             with gr.Column() as milvus_col:
                                 milvus_collection = gr.Textbox(label="CollectionName", 
-                                                    value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
+                                                    value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
                                 milvus_host = gr.Textbox(label="Host", 
-                                                    value=_global_cfg['MilvusCfg']['HOST'] if _global_cfg['vector_store']=="Milvus" else '')
+                                                    value=_global_cfg['MilvusCfg']['HOST'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
                                 milvus_port = gr.Textbox(label="Port", 
-                                                    value=_global_cfg['MilvusCfg']['PORT'] if _global_cfg['vector_store']=="Milvus" else '')
+                                                    value=_global_cfg['MilvusCfg']['PORT'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
                                 milvus_user = gr.Textbox(label="User", 
-                                                    value=_global_cfg['MilvusCfg']['USER'] if _global_cfg['vector_store']=="Milvus" else '')
+                                                    value=_global_cfg['MilvusCfg']['USER'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
                                 milvus_pwd= gr.Textbox(label="Password", 
-                                                value=_global_cfg['MilvusCfg']['PASSWORD'] if _global_cfg['vector_store']=="Milvus" else '')
-                                milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '')
+                                                value=_global_cfg['MilvusCfg']['PASSWORD'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
+                                milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '', interactive=False)
                                 connect_btn = gr.Button("Connect Milvus", variant="primary")
-                                con_state = gr.Textbox(label="Connection Info: ")
-                                connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
+                                con_state = gr.Textbox(label="Connection Info: ", interactive=False)
+                                connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
                         # def change_ds_conn(radio):
                         #     if radio=="AnalyticDB":
                         #         return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
@@ -599,15 +598,15 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
             with gr.Row():
                 with gr.Column(scale=2):
                     ft_radio = gr.Dropdown(
-                        ["html", "text"], label="Which type of files do you want to upload?", value = _global_cfg['file_type'])
-                    with gr.Column(visible=(_global_cfg['file_type']=="html")) as html_col:
+                        ["text"], label="Which type of files do you want to upload?", value = _global_cfg['file_type'])
+                    with gr.Column(visible=False) as html_col:
                         rank_radio = gr.Dropdown(
                             [ "h1", "h2", "h3", "h4", "h5"], label="Rank Label", value="h2"
                         )
                         qa_model = gr.Radio(
                             [ "Yes"], label="With QA Extraction Model", value="Yes"
                         )
-                    with gr.Column(visible=(_global_cfg['file_type']=="text")) as docs_col:
+                    with gr.Column() as docs_col:
                         chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
                         chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
 
@@ -660,20 +659,20 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                     connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
                     connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
 
-                def change_ft_conn(radio):
-                    if radio=="html":
-                        return {
-                            html_col: gr.update(visible=True),
-                            docs_col: gr.update(visible=False),
-                            html_upload_col: gr.update(visible=True),
-                            docs_upload_col: gr.update(visible=False)}
-                    elif radio=="text":
-                        return {
-                            html_col: gr.update(visible=False),
-                            docs_col: gr.update(visible=True),
-                            html_upload_col: gr.update(visible=False),
-                            docs_upload_col: gr.update(visible=True)}
-                ft_radio.change(fn=change_ft_conn, inputs=ft_radio, outputs=[html_col,docs_col,html_upload_col,docs_upload_col])
+                # def change_ft_conn(radio):
+                #     if radio=="html":
+                #         return {
+                #             html_col: gr.update(visible=True),
+                #             docs_col: gr.update(visible=False),
+                #             html_upload_col: gr.update(visible=True),
+                #             docs_upload_col: gr.update(visible=False)}
+                #     elif radio=="text":
+                #         return {
+                #             html_col: gr.update(visible=False),
+                #             docs_col: gr.update(visible=True),
+                #             html_upload_col: gr.update(visible=False),
+                #             docs_upload_col: gr.update(visible=True)}
+                # ft_radio.change(fn=change_ft_conn, inputs=ft_radio, outputs=[html_col,docs_col,html_upload_col,docs_upload_col])
         
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
