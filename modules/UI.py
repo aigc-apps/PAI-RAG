@@ -57,7 +57,7 @@ def reload_javascript():
 
     gradio.routes.templates.TemplateResponse = template_response
     
-def create_ui(service,_global_args,_global_cfg):
+def create_ui(service,_global_args,_global_cfg,os_env_params):
     reload_javascript()
     
     def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
@@ -303,25 +303,28 @@ def create_ui(service,_global_args,_global_cfg):
                                 return {emb_dim: gr.update(value="1536"), emb_openai_key: gr.update(visible=True)}
                         emb_model.change(fn=change_emb_model, inputs=emb_model, outputs=[emb_dim, emb_openai_key])
                     
-                    with gr.Column():
-                        md_eas = gr.Markdown(value="**Please set your LLM.**")
-                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
-                        with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
-                            eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
-                            eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
-                        with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
-                            open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
-                        def change_llm_src(value):
-                            if value=="EAS":
-                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
-                            elif value=="OpenAI":
-                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
-                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
-                    
-                    with gr.Column():
-                      md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
-                      config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
-                      cfg_btn = gr.Button("Parse Config", variant="primary")
+                    # with gr.Column():
+                    #     md_eas = gr.Markdown(value="**Please set your LLM.**")
+                    #     llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
+                    #     with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
+                    #         eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
+                    #         eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
+                    #     with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
+                    #         open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
+                    #     def change_llm_src(value):
+                    #         if value=="EAS":
+                    #             return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+                    #         elif value=="OpenAI":
+                    #             return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
+                    #     llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
+                    eas_url = os_env_params['EAS_URL']
+                    eas_token = ''
+                    llm_src = 'EAS'
+                    open_api_key = ''
+                    # with gr.Column():
+                    #   md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
+                    #   config_file = gr.File(value=_global_args.config,label="Upload a local config json file",file_types=['.json'], file_count="single", interactive=True)
+                    #   cfg_btn = gr.Button("Parse Config", variant="primary")
                     
                 with gr.Column():
                     # with gr.Column():
@@ -340,9 +343,11 @@ def create_ui(service,_global_args,_global_cfg):
                     #     llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[qa_eas_col,qa_openai_col])
 
                     with gr.Column():
-                        md_vs = gr.Markdown(value="**Please set your Vector Store.**")
-                        vs_radio = gr.Dropdown(
-                            [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
+                        md_vs = gr.Markdown(value=f"**Please check your Vector Store for {_global_cfg['vector_store']}.**")
+                        # if _global_cfg['vector_store'] == "FAISS":
+                            
+                        # vs_radio = gr.Dropdown(
+                        #     [ "Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"], label="Which VectorStore do you want to use?", value = _global_cfg['vector_store'])
                         with gr.Column(visible=(_global_cfg['vector_store']=="AnalyticDB")) as adb_col:
                             pg_host = gr.Textbox(label="Host", 
                                                 value=_global_cfg['ADBCfg']['PG_HOST'] if _global_cfg['vector_store']=="AnalyticDB" else '')
@@ -388,11 +393,11 @@ def create_ui(service,_global_args,_global_cfg):
                             connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                         with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
                             faiss_path = gr.Textbox(label="Path", 
-                                                    value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
+                                                    value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '', interactive=False)
                             faiss_name = gr.Textbox(label="Index", 
-                                                    value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
+                                                    value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '', interactive=False)
                             connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
-                            con_state_faiss = gr.Textbox(label="Connection Info: ")
+                            con_state_faiss = gr.Textbox(label="Connection Info: ", interactive=False)
                             connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
                         with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
                             milvus_collection = gr.Textbox(label="CollectionName", 
@@ -409,18 +414,18 @@ def create_ui(service,_global_args,_global_cfg):
                             connect_btn = gr.Button("Connect Milvus", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
                             connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
-                        def change_ds_conn(radio):
-                            if radio=="AnalyticDB":
-                                return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="Hologres":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="ElasticSearch":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
-                            elif radio=="FAISS":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True), milvus_col:gr.update(visible=False)}
-                            elif radio=="Milvus":
-                                return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=True)}
-                        vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col, milvus_col])
+                        # def change_ds_conn(radio):
+                        #     if radio=="AnalyticDB":
+                        #         return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+                        #     elif radio=="Hologres":
+                        #         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=True), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+                        #     elif radio=="ElasticSearch":
+                        #         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=True), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
+                        #     elif radio=="FAISS":
+                        #         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=True), milvus_col:gr.update(visible=False)}
+                        #     elif radio=="Milvus":
+                        #         return {adb_col: gr.update(visible=False), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=True)}
+                        # vs_radio.change(fn=change_ds_conn, inputs=vs_radio, outputs=[adb_col,holo_col,es_col,faiss_col, milvus_col])
             with gr.Row():
                 def cfg_analyze(config_file):
                     filepath = config_file.name
