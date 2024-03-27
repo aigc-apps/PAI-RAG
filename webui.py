@@ -170,6 +170,7 @@ def get_environment_settings():
 def start_webui():
     global app
     logger.info("Adding configuration...")
+    get_environment_settings()
     connect_faiss(service, _global_args, _global_cfg, env_params)
     
     logger.info("Starting Webui server...")
