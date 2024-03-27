@@ -139,6 +139,12 @@ def connect_faiss(service, _global_args, _global_cfg, env_params):
         "FAISS": {
             "index_path": env_params['FAISS_PATH'],
             "index_name": env_params['FAISS_INDEX'],
+        },
+        "create_docs":{
+            "chunk_size": 200,
+            "chunk_overlap": 0,
+            "docs_dir": "docs/",
+            "glob": "**/*"
         }
     }
     _global_args.vectordb_type = "FAISS"
