@@ -3,7 +3,7 @@
 # deling.sc
 
 from langchain.vectorstores import FAISS
-from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore
+from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore,Milvus
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
@@ -14,10 +14,11 @@ import uuid
 import jieba
 import logging
 import json
+import torch
+from loguru import logger
+from utils.load_utils import *
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
-
-logger = logging.getLogger(__name__)
 
 class myFAISS(FAISS):
     @classmethod
@@ -166,9 +167,9 @@ class myElasticSearch(ElasticsearchStore):
 
 def chinese_text_preprocess_func(text: str):
     return [t for t in jieba.cut(text) if t != ' ']
-    
+
 def getBGEReranker(model_path):
-    print(f'Loading BGE Reranker from {model_path}')
+    logger.info(f'Loading BGE Reranker from {model_path}')
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
     return (model, tokenizer)
@@ -178,24 +179,25 @@ class VectorDB:
     """ Weights of ensembled retrievers for Reciprocal Rank Fusion."""
 
     def __init__(self, args, cfg=None):
-        model_dir = "/code/embedding_model"
-        print('cfg[embedding][embedding_model]', cfg['embedding']['embedding_model'])
+        self.model_dir = "/huggingface/sentence_transformers"
+        logger.info(f"Using embedding_model: {cfg['embedding']['embedding_model']}")
         if cfg['embedding']['embedding_model'] == "OpenAIEmbeddings":
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
-            emb_dim = cfg['embedding']['embedding_dimension']
+            self.emb_dim = cfg['embedding']['embedding_dimension']
         else:
-            self.model_name_or_path = os.path.join(model_dir, cfg['embedding']['embedding_model'])
+            self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
-                                            model_kwargs={'device': 'cpu'})
-            emb_dim = cfg['embedding']['embedding_dimension']
+                                            model_kwargs={'device': 'cuda:0'})
+            self.emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
-
-        self.bge_reranker_base = getBGEReranker(os.path.join(model_dir, "bge_reranker_base"))
-        self.bge_reranker_large = getBGEReranker(os.path.join(model_dir, "bge_reranker_large"))
+        self.is_rerank = False
         
-        print('self.vectordb_type',self.vectordb_type)
+        cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
+        if len(cache_contents)>0:
+            self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
+    
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
@@ -209,13 +211,13 @@ class VectorDB:
             PRE_DELETE = True if cfg['ADBCfg']['PRE_DELETE'] == "True" else False
             vector_db = AnalyticDB(
                 embedding_function=self.embed,
-                embedding_dimension=emb_dim,
+                embedding_dimension=self.emb_dim,
                 connection_string=connection_string_adb,
                 collection_name=cfg['ADBCfg']['PG_COLLECTION_NAME'],
                 pre_delete_collection=PRE_DELETE,
             )
             end_time = time.time()
-            print("Connect AnalyticDB success. Cost time: {} s".format(end_time - start_time))
+            logger.info("Connect AnalyticDB success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'Hologres':
             start_time = time.time()
             connection_string_holo = myHolo.connection_string_from_db_params(
@@ -227,12 +229,12 @@ class VectorDB:
             )
             vector_db = myHolo(
                 embedding_function=self.embed,
-                ndims=emb_dim,
+                ndims=self.emb_dim,
                 connection_string=connection_string_holo,
                 table_name=cfg['HOLOCfg']['TABLE']
             )
             end_time = time.time()
-            print("Connect Hologres success. Cost time: {} s".format(end_time - start_time))
+            logger.info("Connect Hologres success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'ElasticSearch':
             start_time = time.time()
             vector_db = myElasticSearch(
@@ -243,10 +245,10 @@ class VectorDB:
                  embedding=self.embed
             )
             end_time = time.time()
-            print("Connect ElasticSearchStore success. Cost time: {} s".format(end_time - start_time))
+            logger.info("Connect ElasticSearchStore success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'OpenSearch':
             start_time = time.time()
-            print("Start Connect AlibabaCloudOpenSearch ")
+            logger.info("Start Connect AlibabaCloudOpenSearch ")
             settings = AlibabaCloudOpenSearchSettings(
                 endpoint=cfg['OpenSearchCfg']['endpoint'],
                 instance_id=cfg['OpenSearchCfg']['instance_id'],
@@ -265,27 +267,41 @@ class VectorDB:
                 embedding=self.embed, config=settings
             )
             end_time = time.time()
-            print("Connect AlibabaCloudOpenSearch success. Cost time: {} s".format(end_time - start_time))
+            logger.info("Connect AlibabaCloudOpenSearch success. Cost time: {} s".format(end_time - start_time))
         elif self.vectordb_type == 'FAISS':
-            print("Not config any database, use FAISS-cpu default.")
+            logger.info("Not config any database, use FAISS-cpu default.")
             vector_db = None
             if not os.path.exists(cfg['FAISS']['index_path']):
                 os.makedirs(cfg['FAISS']['index_path'])
-                print('已创建目录：', cfg['FAISS']['index_path'])
+                logger.info('已创建目录：', cfg['FAISS']['index_path'])
             else:
-                print('目录已存在：', cfg['FAISS']['index_path'])
+                logger.info('目录已存在：', cfg['FAISS']['index_path'])
             self.faiss_path = os.path.join(cfg['FAISS']['index_path'],cfg['FAISS']['index_name'])
             try:
                 vector_db = myFAISS.load_local(self.faiss_path, self.embed)
             except:
                 vector_db = None
+        elif self.vectordb_type == 'Milvus':
+            logger.info("Start connect Milvus")
+            start_time = time.time()
+            DROP_OLD = True if cfg['MilvusCfg']['DROP'] == "True" else False
+            vector_db = Milvus(
+                embedding_function=self.embed,
+                collection_name=cfg['MilvusCfg']['COLLECTION'],
+                metadata_field="meta",
+                connection_args={
+                    "host": cfg['MilvusCfg']['HOST'],
+                    "port": cfg['MilvusCfg']['PORT'],
+                    "user": cfg['MilvusCfg']['USER'],
+                    "password": cfg['MilvusCfg']['PASSWORD']
+                },
+                drop_old=DROP_OLD
+            )
+            end_time = time.time()
+            logger.info("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 
         self.vectordb = vector_db
-
-        cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
-        if len(cache_contents)>0:
-            self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
-    
+        
     def update_cache(self, contents, metadatas):
         with open(CACHE_DB_FILE, 'a+') as f:
             for c, m in zip(contents, metadatas):
@@ -305,7 +321,7 @@ class VectorDB:
                     cache_data = [json.loads(line) for line in f.readlines()]
         cache_contents = [line['page_content'] for line in cache_data]
         cache_metadatas = [line['metadata'] for line in cache_data]
-        print(f"[INFO] cache doc num: {len(cache_contents)}")
+        logger.info(f"[INFO] cache doc num: {len(cache_contents)}")
 
         # save new data
         self.update_cache(contents, metadatas)
@@ -315,24 +331,24 @@ class VectorDB:
 
     def add_documents(self, docs):
         if not self.vectordb:
-            print('add_documents faiss first')
+            logger.info('add_documents faiss first')
             self.vectordb = myFAISS.from_documents(docs, self.embed)
-            print('add_documents self.faiss_path', self.faiss_path)
+            logger.info('add_documents self.faiss_path', self.faiss_path)
             self.vectordb.save_local(self.faiss_path)
         else:
             if self.vectordb_type == 'FAISS':
-                print('add_documents to FAISS')
+                logger.info('add_documents to FAISS')
                 self.vectordb.add_documents(docs)
                 self.vectordb.save_local(self.faiss_path)
             else:
-                print('add_documents other vectordb')
+                logger.info('add_documents other vectordb')
                 self.vectordb.add_documents(docs)
         
         new_contents = [doc.page_content for doc in docs]
         new_metadatas = [doc.metadata for doc in docs]
-        print(f"[INFO] new doc num: {len(new_contents)}")
+        logger.info(f"[INFO] new doc num: {len(new_contents)}")
         contents, metadatas = self.load_cache(new_contents, new_metadatas)
-        print(f"[INFO] final doc num: {len(contents)}")
+        logger.info(f"[INFO] final doc num: {len(contents)}")
 
         # self.bm25_retriever = BM25Retriever.from_documents(docs, preprocess_func=chinese_text_preprocess_func)
         self.bm25_retriever = BM25Retriever.from_texts(contents, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
@@ -361,7 +377,13 @@ class VectorDB:
         return [doc for doc in docs if float(doc[1]) <= float(thresh)]
 
     def rerank_docs(self, query, docs, model_name):
-        if model_name == "BGE-Reranker-Base":
+        if not self.is_rerank:
+            logger.info("Loading bge-reranker-base and bge-reranker-large for the first time.")
+            self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
+            self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
+            self.is_rerank = True
+        
+        if model_name == "BGE-Reranker-Base":    
             model, tokenizer = self.bge_reranker_base
         elif model_name == "BGE-Reranker-Large":
             model, tokenizer = self.bge_reranker_large
@@ -380,7 +402,7 @@ class VectorDB:
             self.vectordb = myFAISS.load_local(self.faiss_path, self.embed)
             # docs = self.vectordb.similarity_search_with_relevance_scores(query, k=topk,kwargs={"score_threshold": score_threshold})
         if kw_retrieval != 'Embedding Only':
-            print(f"[INFO] Using Both Embedding Retrieval and BM25 Retrieval")
+            logger.info(f"[INFO] Using Both Embedding Retrieval and BM25 Retrieval")
             self.bm25_retriever.k = topk
             self.embed_retriever = self.vectordb.as_retriever(search_kwargs={"k": topk})
             self.ensemble_retriever = EnsembleRetriever(
@@ -388,11 +410,11 @@ class VectorDB:
             )
             docs = self.ensemble_retriever.get_relevant_documents(query)
         else:
-            print(f"[INFO] Using Embedding Retrieval ONLY")
+            logger.info(f"[INFO] Using Embedding Retrieval ONLY")
             docs = self.vectordb.similarity_search_with_score(query, k=topk)
             docs = self.filter_docs_by_thresh(docs, score_threshold)
 
-        print('[INFO] docs:\n', docs)
+        logger.info('[INFO] docs:\n', docs)
         if model_name != 'No Re-Rank':
             docs = self.rerank_docs(query, docs, model_name)
 

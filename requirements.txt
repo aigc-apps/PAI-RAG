@@ -1,4 +1,9 @@
 # langchain related
+numpy
+cmake
+wheel
+pillow
+
 pydantic==1.10.12
 langchain==0.0.323
 psycopg2==2.9.3
@@ -12,12 +17,23 @@ transformers==4.33.0
 accelerate
 tokenizers
 
-unstructured
 elasticsearch
 faiss-cpu
-openai
+openai==0.28.1
 loguru
 zhon
 uvicorn
 fastapi
-gradio
+gradio==3.44.2
+
+unstructured
+unstructured[pdf]
+unstructured[md]
+unstructured[all-docs]
+oss2
+javascript
+tiktoken
+alibabacloud-ha3engine-vector
+
+jieba
+rank_bm25

@@ -3,7 +3,7 @@ import time
 import logging
 import requests
 from typing import Optional, List, Mapping, Any
- 
+from loguru import logger
 
 class CustomLLM(LLM):
     
@@ -55,7 +55,7 @@ class CustomLLM(LLM):
         }
         
         # post
-        print('query_json',query_json)
+        logger.info('query_json',query_json)
         _headers = {
             "Authorization": self.token,
             'Accept': "*/*",
