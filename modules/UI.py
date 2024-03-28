@@ -276,11 +276,11 @@ def create_ui(service,_global_args,_global_cfg):
         
         
         gr.Markdown(value=value_md)
-        api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a> </div>")
+        # api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a> </div>")
         ding_hl = ("<div style='text-align: center;'> \N{fire}欢迎加入【PAI】Chatbot-langchain答疑群”群的钉钉群号： 27370042974 </div>")
         
         gr.HTML(ding_hl,elem_id='ding')
-        gr.HTML(api_hl,elem_id='api')
+        # gr.HTML(api_hl,elem_id='api')
                 
         with gr.Tab("\N{rocket} Settings"):
             with gr.Row():
