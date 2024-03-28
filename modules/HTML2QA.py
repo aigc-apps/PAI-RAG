@@ -5,12 +5,12 @@ import hashlib
 from requests.exceptions import SSLError
 from utils.filter import fliter
 from utils.splitter import spliter
-from utils.generator import HtmlGenerator
 from loguru import logger
 class HTML2QA:
-    def __init__(self, config):
+    def __init__(self, config, genertor):
         self.config = config['HTMLCfg']
-        self.genertor = HtmlGenerator(self.config)
+        self.genertor = genertor
+        # self.genertor = HtmlGenerator(self.config)
     
     def deal_Q(self, question, theme, hn, answer, history_QA_dict):
         if not hn in question:
@@ -178,11 +178,11 @@ class HTML2QA:
                 logger.error(e)
         return result
 
-    def del_model_cache(self):
-        if self.config['LLM'] == 'Local':
-            logger.info("Removing local llm cache from gpu memory.")
-            self.genertor.llm.del_model_cache()
-            logger.info("Clear finished.")
+    # def del_model_cache(self):
+    #     if self.config['LLM'] == 'Local':
+    #         logger.info("Removing local llm cache from gpu memory.")
+    #         self.genertor.llm.del_model_cache()
+    #         logger.info("Clear finished.")
 
 if __name__ == "__main__":
     x = HTML2QA()

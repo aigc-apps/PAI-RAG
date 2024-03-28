@@ -17,6 +17,7 @@ from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from loguru import logger
+from utils.generator import HtmlGenerator
 
 class LLMService:
     def __init__(self, args):
@@ -33,6 +34,9 @@ class LLMService:
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
         self.model_dir = "/huggingface/sentence_transformers"
+        logger.info("Loading RefGPT on LLMService initializing.")
+        self.genertor = HtmlGenerator(self.cfg['HTMLCfg'])
+        logger.info("RefGPT Loaded.")
         
         # with open(args.config) as f:
         #     cfg = json.load(f)
@@ -80,7 +84,7 @@ class LLMService:
             end_time = time.time()
             logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
         else:
-            self.html2qa = HTML2QA(self.cfg)
+            self.html2qa = HTML2QA(self.cfg, self.genertor)
             if os.path.isdir(docs_dir):
                 html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
                 qa_dict = self.html2qa.run(html_dirs)
@@ -92,7 +96,7 @@ class LLMService:
             self.vector_db.add_qa_pairs(qa_dict, docs_dir)
             end_time = time.time()
             logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
-            self.html2qa.del_model_cache()
+            # self.html2qa.del_model_cache()
 
     def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only'):
         if topk == '' or topk is None:
