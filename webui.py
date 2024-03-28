@@ -140,28 +140,27 @@ def configure_cors_middleware(app):
 
     app.add_middleware(CORSMiddleware, **cors_options)
     
-def add_general_url(
-    app
-):    
-    setup_middleware(app)
-    @app.post("/chat/llm")
-    async def query_by_llm(query: LLMQuery):
-        ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-        return {"response": ans, "tokens": lens}
+# def add_general_url(
+#     app
+# ):    
+#     setup_middleware(app)
+#     @app.post("/chat/llm")
+#     async def query_by_llm(query: LLMQuery):
+#         ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/vectorstore")
-    async def query_by_vectorstore(query: VectorQuery):
-        ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
-        return {"response": ans, "tokens": lens}
+#     @app.post("/chat/vectorstore")
+#     async def query_by_vectorstore(query: VectorQuery):
+#         ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+#         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/langchain")
-    async def query_by_langchain(query: Query):
-        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
-        return {"response": ans, "tokens": lens}
+#     @app.post("/chat/langchain")
+#     async def query_by_langchain(query: Query):
+#         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+#         return {"response": ans, "tokens": lens}
 
 os_env_params = {}
 def get_environment_params(_global_cfg):
-    os_env_params['EAS_URL'] = os.getenv('EAS_URL', 'http://127.0.0.1:8000')
     os_env_params['VECTOR_STORE'] = os.getenv('VECTOR_STORE', 'FAISS')
     os_env_params['FAISS_PATH'] = os.getenv('FAISS_PATH', '/code')
     os_env_params['FAISS_INDEX'] = os.getenv('FAISS_INDEX', 'faiss')
@@ -238,8 +237,8 @@ def start_webui():
         server_port=options.cmd_opts.port,
         prevent_thread_lock=True)
     
-    logger.info("Adding fast api url...")
-    add_general_url(app)
+    # logger.info("Adding fast api url...")
+    # add_general_url(app)
     
 if __name__ == "__main__":
     logger.remove()
