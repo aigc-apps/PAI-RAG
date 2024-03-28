@@ -10,6 +10,7 @@ from .CustomPrompt import CustomPrompt
 from .VectorDB import VectorDB
 from .TextSplitter import TextSplitter
 from .HTML2QA import HTML2QA
+from .TXT2QA import TXT2QA
 import nltk
 from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
@@ -67,29 +68,34 @@ class LLMService:
 
         if ft_radio == 'text':
             self.text_splitter = TextSplitter(self.cfg)
+            self.txt2qa = TXT2QA(self.cfg)
             if os.path.isdir(docs_dir):
                 docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
                 docs = self.text_splitter.split_documents(docs)
             else:
                 loader = UnstructuredFileLoader(docs_dir, mode="elements")
                 docs = loader.load_and_split(text_splitter=self.text_splitter)
+            
+            qa_dict_list = self.txt2qa.run(docs)
+            docs_dir = [doc.metadata['filename'] for doc in docs]
 
             start_time = time.time()
             logger.info('Uploading custom knowledge.', start_time)
-            self.vector_db.add_documents(docs)
+            self.vector_db.add_qa_pairs(qa_dict_list, docs_dir)
             end_time = time.time()
             logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
+            self.txt2qa.del_model_cache()
         else:
             self.html2qa = HTML2QA(self.cfg)
             if os.path.isdir(docs_dir):
                 html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
-                qa_dict = self.html2qa.run(html_dirs)
+                qa_dict_list = self.html2qa.run(html_dirs)
             else:
-                qa_dict = self.html2qa.run([docs_dir])
+                qa_dict_list = self.html2qa.run([docs_dir])
 
             start_time = time.time()
             logger.info('Uploading custom knowledge.', start_time)
-            self.vector_db.add_qa_pairs(qa_dict, docs_dir)
+            self.vector_db.add_qa_pairs(qa_dict_list, [docs_dir])
             end_time = time.time()
             logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
             self.html2qa.del_model_cache()

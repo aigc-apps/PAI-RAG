@@ -135,7 +135,7 @@ class HTML2QA:
                 elif "[Multi Task]" in check_message:
                     ban_sub_doc_message[1].append(check_message)
                 continue
-            sub_QA_dict = self.genertor.generateQA(sub_doc)
+            sub_QA_dict = self.genertor.generate_qa(sub_doc)
             hn_search = None
             for h_i in range(1, int(configs['rank_label'][1]) + 1, 1):
                 search = re.search("<h{}>((?:.|\n)+)</h{}>".format(h_i, h_i), sub_doc)
@@ -165,15 +165,16 @@ class HTML2QA:
         return QA_dict, have_repeat, additonal_message, title
     
     def run(self, html_dirs):
-        result = {}
+        result = []
         for dir in html_dirs:
             try:
                 with open(dir, 'r') as f:
                     html = f.read()
                 QA_dict, have_repeat, additonal_message = self.deal_with_html(html, self.config)
-                for q, a in QA_dict.items():
-                    if q not in result or len(result[q])<a:
-                        result[q] = a
+                # for q, a in QA_dict.items():
+                #     if q not in result or len(result[q])<a:
+                #         result[q] = a
+                result.append(QA_dict)
             except Exception as e:
                 logger.error(e)
         return result
