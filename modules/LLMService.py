@@ -34,10 +34,10 @@ class LLMService:
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
         self.model_dir = "/huggingface/sentence_transformers"
-        logger.info("Loading RefGPT on LLMService initializing.")
-        self.genertor = HtmlGenerator(self.cfg['HTMLCfg'])
-        logger.info("RefGPT Loaded.")
         
+        logger.info("Loading RefGPT on LLMService initializing.")
+        self.genertor = HtmlGenerator(args['HTMLCfg'])
+        logger.info("RefGPT Loaded.")
         # with open(args.config) as f:
         #     cfg = json.load(f)
         # self.init_with_cfg(cfg, args)
@@ -48,15 +48,15 @@ class LLMService:
 
         self.vector_db = VectorDB(self.args, self.cfg)
         
-        self.llm = None
-        if self.cfg['LLM'] == 'EAS':
-            self.llm = CustomLLM()
-            self.llm.url = self.cfg['EASCfg']['url']
-            self.llm.token = self.cfg['EASCfg']['token']
-        elif self.cfg['LLM'] == 'OpenAI':
-            self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
-        self.question_generator_chain = get_standalone_question_ch(self.llm)
-
+        # self.llm = None
+        # if self.cfg['LLM'] == 'EAS':
+        #     self.llm = CustomLLM()
+        #     self.llm.url = self.cfg['EASCfg']['url']
+        #     self.llm.token = self.cfg['EASCfg']['token']
+        # elif self.cfg['LLM'] == 'OpenAI':
+        #     self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
+        # self.question_generator_chain = get_standalone_question_ch(self.llm)
+        
     def upload_custom_knowledge(self,
                                 docs_dir=None,
                                 ft_radio='text',

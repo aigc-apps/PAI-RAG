@@ -28,11 +28,11 @@ def init_args(args):
 _global_args = parse_args()
 init_args(_global_args)
 
-service = LLMService(_global_args)
-
 with open(_global_args.config) as f:
     _global_cfg = json.load(f)
     
+service = LLMService(_global_args)
+
 class Query(BaseModel):
     question: str
     topk: int | None = None
