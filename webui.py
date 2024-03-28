@@ -30,8 +30,9 @@ init_args(_global_args)
 
 with open(_global_args.config) as f:
     _global_cfg = json.load(f)
-    
-service = LLMService(_global_args)
+
+logger.info('LLMService _global_cfg', _global_cfg)
+service = LLMService(_global_cfg)
 
 class Query(BaseModel):
     question: str
