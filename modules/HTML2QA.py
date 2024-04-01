@@ -179,6 +179,24 @@ class HTML2QA:
                 logger.error(e)
         return result
 
+    def get_sub_docs(self, html_dirs):
+        result = []
+        for dir in html_dirs:
+            try:
+                with open(dir, 'r') as f:
+                    html_code = f.read()
+
+                flited_header, flited_context = fliter(html_code)
+                flited_context_with_h1 = [flited_header+"\n"] + flited_context
+                splited_doc = spliter(flited_context_with_h1, self.config["rank_label"])
+                sub_doc_dict = {
+                    x: x for x in splited_doc
+                }
+                result.append(sub_doc_dict)
+            except Exception as e:
+                logger.info(e)
+        return result
+
     def del_model_cache(self):
         if self.config['LLM'] == 'Local':
             logger.info("Removing local llm cache from gpu memory.")
