@@ -18,8 +18,8 @@ from loguru import logger
 def init_args(args):
     args.config = 'configs/config_holo.json'
     args.prompt_engineering = 'simple'
-    args.embed_model = "SGPT-125M-weightedmean-nli-bitfit"
-    args.embed_dim = 768
+    args.embed_model = "BGE-Large"
+    args.embed_dim = 1024
     # args.vectordb_type = 'Elasticsearch'
     args.upload = False
     # args.user_query = None

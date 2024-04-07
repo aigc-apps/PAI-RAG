@@ -278,10 +278,12 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                 with gr.Column():
                     with gr.Column():
                         md_emb = gr.Markdown(value="**Please set your embedding model.**")
-                        emb_model = gr.Dropdown(["SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Embedding Model", value=_global_args.embed_model)
-                        emb_dim = gr.Textbox(label="Embedding Dimension", value=_global_args.embed_dim)
+                        emb_model = gr.Dropdown(["BGE-Large", "SGPT-125M-weightedmean-nli-bitfit", "text2vec-large-chinese","text2vec-base-chinese", "paraphrase-multilingual-MiniLM-L12-v2", "OpenAIEmbeddings"], label="Embedding Model", value=_global_args.embed_model)
+                        emb_dim = gr.Textbox(label="Embedding Dimension", value=_global_args.embed_dim, interactive=False)
                         emb_openai_key = gr.Textbox(visible=False, label="OpenAI API Key", value="")
                         def change_emb_model(model):
+                            if model == "BGE-Large":
+                                return {emb_dim: gr.update(value="1024"), emb_openai_key: gr.update(visible=False)}
                             if model == "SGPT-125M-weightedmean-nli-bitfit":
                                 return {emb_dim: gr.update(value="768"), emb_openai_key: gr.update(visible=False)}
                             if model == "text2vec-large-chinese":
@@ -589,12 +591,15 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                         rank_radio = gr.Dropdown(
                             [ "h1", "h2", "h3", "h4", "h5"], label="Rank Label", value="h2"
                         )
-                        qa_model = gr.Radio(
-                            [ "Yes"], label="With QA Extraction Model", value="Yes"
+                        html_qa_model = gr.Checkbox(
+                            label="Yes", info="With QA Extraction Model", value=True
                         )
                     with gr.Column() as docs_col:
                         chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
                         chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
+                        txt_qa_model = gr.Checkbox(
+                            label="Yes", info="With QA Extraction Model", value=True
+                        )
 
                 def isFileValid(file_name, types):
                     for t in types:
@@ -602,22 +607,22 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                             return True
                     return False
 
-                def upload_knowledge(upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio):
+                def upload_knowledge(upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio,qa_model):
                     file_name = ''
                     valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
                     for file in upload_file:
                         if isFileValid(file.name.lower(), valid_types):
                             file_path = file.name
                             file_name += file.name.rsplit('/', 1)[-1] + ', '
-                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
+                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio,qa_model)
                     return "Upload " + str(len(upload_file)) + " files [ " +  file_name + "] Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions." 
                 
-                def upload_knowledge_dir(upload_dir,ft_radio,chunk_size,chunk_overlap,rank_radio):
+                def upload_knowledge_dir(upload_dir,ft_radio,chunk_size,chunk_overlap,rank_radio,qa_model):
                     valid_types = ['.txt','.md','.docx','.doc','.pdf'] if ft_radio=='text' else ['.html']
                     for file in upload_dir:
                         if isFileValid(file.name.lower(), valid_types):
                             file_path = file.name
-                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio)
+                            service.upload_custom_knowledge(file_path,ft_radio,int(chunk_size),int(chunk_overlap),rank_radio,qa_model)
                     return "Directory: Upload " + str(len(upload_dir)) + " files Success!"
 
                 with gr.Column(scale=8, visible=(_global_cfg['file_type']=="html")) as html_upload_col:
@@ -630,8 +635,8 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                         upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: html)" , file_count="directory")
                         connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
-                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
-                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio,html_qa_model], outputs=state_hl_file, api_name="upload_knowledge")
+                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio,html_qa_model], outputs=state_hl_dir, api_name="upload_knowledge_dir")
                 with gr.Column(scale=8, visible=(_global_cfg['file_type']=="text")) as docs_upload_col:
                     with gr.Tab("Files"):
                         upload_file = gr.File(label="Upload a knowledge file (supported type: txt, md, doc, docx, pdf)",
@@ -642,8 +647,8 @@ def create_ui(service,_global_args,_global_cfg,os_env_params):
                         upload_file_dir = gr.File(label="Upload a knowledge directory (supported type: txt, md, docx, pdf)" , file_count="directory")
                         connect_dir_btn = gr.Button("Upload", variant="primary")
                         state_hl_dir = gr.Textbox(label="Upload State")
-                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_file, api_name="upload_knowledge")
-                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio], outputs=state_hl_dir, api_name="upload_knowledge_dir")
+                    connect_btn.click(fn=upload_knowledge, inputs=[upload_file,ft_radio,chunk_size,chunk_overlap,rank_radio,txt_qa_model], outputs=state_hl_file, api_name="upload_knowledge")
+                    connect_dir_btn.click(fn=upload_knowledge_dir, inputs=[upload_file_dir,ft_radio,chunk_size,chunk_overlap,rank_radio,txt_qa_model], outputs=state_hl_dir, api_name="upload_knowledge_dir")
 
                 def change_ft_conn(radio):
                     if radio=="html":
