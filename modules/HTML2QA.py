@@ -5,12 +5,12 @@ import hashlib
 from requests.exceptions import SSLError
 from utils.filter import fliter
 from utils.splitter import spliter
-from utils.generator import HtmlGenerator
 from loguru import logger
 class HTML2QA:
-    def __init__(self, config):
+    def __init__(self, config, genertor):
         self.config = config['HTMLCfg']
-        self.genertor = HtmlGenerator(self.config)
+        self.genertor = genertor
+        # self.genertor = HtmlGenerator(self.config)
     
     def deal_Q(self, question, theme, hn, answer, history_QA_dict):
         if not hn in question:

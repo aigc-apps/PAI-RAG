@@ -111,10 +111,10 @@ class LocalLLM:
             response = response.split(self.tokenizer.eos_token)[0]
         return response
 
-    def del_model_cache(self):
-        if isinstance(self.model, torch.nn.DataParallel) or isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
-            del self.model.module  # 删除模型的实际内容
-        del self.model  # 删除模型的包装
-        self.model = None
-        torch.cuda.empty_cache()
-        gc.collect()
+    # def del_model_cache(self):
+    #     if isinstance(self.model, torch.nn.DataParallel) or isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+    #         del self.model.module  # 删除模型的实际内容
+    #     del self.model  # 删除模型的包装
+    #     self.model = None
+    #     torch.cuda.empty_cache()
+    #     gc.collect()
