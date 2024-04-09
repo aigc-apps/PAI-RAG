@@ -59,7 +59,7 @@ def reload_javascript():
     
 def create_ui(service,_global_args,_global_cfg,os_env_params):
     eas_url = os_env_params['EAS_URL']
-    eas_token = ''
+    eas_token = os_env_params['EAS_TOKEN']
     llm_src = 'EAS'
     open_api_key = ''
     
