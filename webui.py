@@ -162,6 +162,7 @@ def add_general_url(
 os_env_params = {}
 def get_environment_params(_global_cfg):
     os_env_params['EAS_URL'] = os.getenv('EAS_URL', 'http://127.0.0.1:8000')
+    os_env_params['EAS_TOKEN'] = os.getenv('EAS_TOKEN', '')
     os_env_params['VECTOR_STORE'] = os.getenv('VECTOR_STORE', 'FAISS')
     os_env_params['FAISS_PATH'] = os.getenv('FAISS_PATH', '/code')
     os_env_params['FAISS_INDEX'] = os.getenv('FAISS_INDEX', 'faiss')
@@ -236,7 +237,10 @@ def start_webui():
     ).launch(
         server_name="0.0.0.0",
         server_port=options.cmd_opts.port,
-        prevent_thread_lock=True)
+        prevent_thread_lock=True,
+        # required in local env
+        # share=True
+        )
     
     logger.info("Adding fast api url...")
     add_general_url(app)
