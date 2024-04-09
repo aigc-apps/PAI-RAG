@@ -106,6 +106,9 @@ class LocalLLM:
                                          max_length=self.max_length,
                                          do_sample=True)
             response = self.tokenizer.decode(output[0, input_len:])
+
+        if self.tokenizer.eos_token in response:
+            response = response.split(self.tokenizer.eos_token)[0]
         return response
 
     def del_model_cache(self):
