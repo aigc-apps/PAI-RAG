@@ -1023,31 +1023,39 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            answer, lens = service.query_only_vectorstore(
-                                message,
-                                topk,
-                                score_threshold,
-                                rerank_model,
-                                kw_retrieval,
-                            )
+                            if message == "":
+                                answer = "Please enter your question, the question cannot be empty."
+                                lens = 0
+                            else:
+                                answer, lens = service.query_only_vectorstore(
+                                    message,
+                                    topk,
+                                    score_threshold,
+                                    rerank_model,
+                                    kw_retrieval,
+                                )
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(
                                 message, history, llm_topk, llm_topp, llm_temp
                             )
                         else:
-                            answer, lens, summary_res = service.query_retrieval_llm(
-                                message,
-                                topk,
-                                score_threshold,
-                                rerank_model,
-                                kw_retrieval,
-                                prm_radio,
-                                prompt,
-                                history,
-                                llm_topk,
-                                llm_topp,
-                                llm_temp,
-                            )
+                            if message == "":
+                                answer = "Please enter your question, the question cannot be empty."
+                                lens = 0
+                            else:
+                                answer, lens, summary_res = service.query_retrieval_llm(
+                                    message,
+                                    topk,
+                                    score_threshold,
+                                    rerank_model,
+                                    kw_retrieval,
+                                    prm_radio,
+                                    prompt,
+                                    history,
+                                    llm_topk,
+                                    llm_topp,
+                                    llm_temp,
+                                )
                         bot_message = answer
                         chat_history.append((message, bot_message))
                         time.sleep(0.05)
