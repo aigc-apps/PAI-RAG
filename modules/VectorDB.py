@@ -353,15 +353,28 @@ class VectorDB:
         # self.bm25_retriever = BM25Retriever.from_documents(docs, preprocess_func=chinese_text_preprocess_func)
         self.bm25_retriever = BM25Retriever.from_texts(contents, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
     
-    def add_qa_pairs(self, qa_dict, docs_dir):
-        if not qa_dict:
+    def add_qa_pairs(self, qa_dict_list, filename_list):
+        if not qa_dict_list:
             return
+        # combine qa_dict
+        qa_dict = {}
+        for qa_d, fn in zip(qa_dict_list, filename_list):
+            fn = fn.rsplit('/', 1)[-1]
+            for q,a in qa_d.items():
+                if q not in qa_dict or len(qa_dict[q])<len(a):
+                    qa_dict[q] = {
+                        "answer": a,
+                        "filename": fn
+                    }
+
+        # upload qa pairs to database
         queries = list(qa_dict.keys())
-        answers = list(qa_dict.values())
+        answers = [v['answer'] for v in qa_dict.values()]
+        filenames = [v['filename'] for v in qa_dict.values()]
         metadatas = [{
-            "filename": docs_dir.rsplit('/', 1)[-1],
+            "filename": fn,
             "question": q
-        } for q in queries]
+        } for fn, q in zip(filenames, queries)]
         if not self.vectordb:
             self.vectordb = myFAISS.from_texts(queries, self.embed, metadatas=metadatas, values=answers)
         else:
