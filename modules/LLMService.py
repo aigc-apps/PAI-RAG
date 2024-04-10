@@ -15,17 +15,14 @@ from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from loguru import logger
 
 class LLMService:
-    def __init__(self, args):
-        # assert args.upload or args.user_query, "error: dose not set any action, please set '--upload' or '--query <user_query>'."
-        # assert os.path.exists(args.config), f"error: config path {args.config} does not exist."
+    def __init__(self):
         self.langchain_chat_history = []
         self.input_tokens = []
         self.llm_chat_history = []
-        self.sp = SentencePieceProcessor(model_file='./tokenizer.model')
+        self.sp = SentencePieceProcessor(model_file='./utils/tokenizer.model')
         self.topk = 3
         self.prompt_type = 'general'
         self.prompt =  "基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 \"根据已知信息无法回答该问题\" 或 \"没有提供足够的相关信息\"，不允许在答案中添加编造成分，答案请使用中文。\n=====\n已知信息:\n{context}\n=====\n用户问题:\n{question}"
@@ -33,10 +30,6 @@ class LLMService:
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
         self.model_dir = "/huggingface/sentence_transformers"
-        
-        # with open(args.config) as f:
-        #     cfg = json.load(f)
-        # self.init_with_cfg(cfg, args)
 
     def init_with_cfg(self, cfg, args):
         self.cfg = cfg
@@ -257,7 +250,6 @@ class LLMService:
                 content = "[Doc Content Lost]"
             else:
                 content = f"Q: {doc.metadata['question']}\nA: {doc.page_content}" if hasattr(doc.metadata, 'question') else doc.page_content
-            # content = f"Q: {doc[0].metadata['question']}\nA: {doc[0].page_content}" if hasattr(doc[0], "page_content") else "[Doc Content Lost]"
             page_contents.append(f'Doc [{idx+1}]: ' + f'{content} \n')
             ref = doc.metadata['filename'] if hasattr(doc, "metadata") and "filename" in doc.metadata else "[Doc Name Lost]"
             ref_names.append(f'[{idx+1}] {ref}' + (f'  |  Relevance score: {score}\n' if score else ''))
