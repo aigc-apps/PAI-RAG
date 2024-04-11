@@ -18,7 +18,7 @@ from loguru import logger
 def init_args(args):
     args.config = 'configs/config_holo.json'
     args.prompt_engineering = 'simple'
-    args.embed_model = "BGE-Large"
+    args.embed_model = "bge-large-zh-v1.5"
     args.embed_dim = 1024
     # args.vectordb_type = 'Elasticsearch'
     args.upload = False

@@ -2,8 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # deling.sc
 
-from langchain.vectorstores import FAISS
-from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore,Milvus
+from langchain_community.vectorstores.faiss import FAISS
+from langchain_community.vectorstores.analyticdb import AnalyticDB
+from langchain_community.vectorstores.hologres import Hologres
+from langchain_community.vectorstores.alibabacloud_opensearch import AlibabaCloudOpenSearch, AlibabaCloudOpenSearchSettings
+from langchain_community.vectorstores.elasticsearch import ElasticsearchStore
+from langchain_community.vectorstores.milvus import Milvus
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
@@ -12,9 +16,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import os
 import uuid
 import jieba
-import logging
 import json
-import torch
 from loguru import logger
 from utils.load_utils import *
 
