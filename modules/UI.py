@@ -1023,7 +1023,7 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Vector Store":
-                            if message == "":
+                            if message.strip() == "":
                                 answer = "Please enter your question, the question cannot be empty."
                                 lens = 0
                             else:
@@ -1039,7 +1039,7 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                                 message, history, llm_topk, llm_topp, llm_temp
                             )
                         else:
-                            if message == "":
+                            if message.strip() == "":
                                 answer = "Please enter your question, the question cannot be empty."
                                 lens = 0
                             else:
