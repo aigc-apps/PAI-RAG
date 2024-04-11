@@ -5,7 +5,8 @@
 import json
 import time
 import os
-from langchain.document_loaders import DirectoryLoader, UnstructuredFileLoader
+from langchain_community.document_loaders import UnstructuredFileLoader
+from langchain_community.document_loaders import DirectoryLoader
 from .CustomPrompt import CustomPrompt
 from .VectorDB import VectorDB
 from .TextSplitter import TextSplitter
@@ -16,7 +17,6 @@ from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from loguru import logger
 
 class LLMService:
@@ -34,10 +34,6 @@ class LLMService:
         if os.path.exists(nltk_data_path):
             nltk.data.path = [nltk_data_path] + nltk.data.path
         self.model_dir = "/huggingface/sentence_transformers"
-        
-        # with open(args.config) as f:
-        #     cfg = json.load(f)
-        # self.init_with_cfg(cfg, args)
 
     def init_with_cfg(self, cfg, args):
         self.cfg = cfg
