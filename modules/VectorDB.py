@@ -187,10 +187,7 @@ class VectorDB:
             self.embed = OpenAIEmbeddings(openai_api_key = cfg['embedding']['openai_key'])
             self.emb_dim = cfg['embedding']['embedding_dimension']
         else:
-            if cfg['embedding']['embedding_model'] == 'bge-large-zh-v1.5':
-                self.model_name_or_path = os.path.join(self.model_dir, 'models--BAAI--bge-large-zh-v1.5')
-            else:
-                self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
+            self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
                                             model_kwargs={'device': 'cuda:0'})
             self.emb_dim = cfg['embedding']['embedding_dimension']
