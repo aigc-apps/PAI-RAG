@@ -757,7 +757,7 @@ def create_ui(service,_global_args,_global_cfg):
                         if history_radio == "Yes":
                             history = True
                         if ds_radio == "Retrieval":
-                            if message == "":
+                            if message.strip() == "":
                                 answer = "Please enter your question, the question cannot be empty."
                                 lens = 0
                             else:
@@ -771,7 +771,7 @@ def create_ui(service,_global_args,_global_cfg):
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
                         else:
-                            if message == "":
+                            if message.strip() == "":
                                 answer = "Please enter your question, the question cannot be empty."
                                 lens = 0
                             else:
