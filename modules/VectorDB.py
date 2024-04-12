@@ -2,12 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # deling.sc
 
-from langchain_community.vectorstores.faiss import FAISS
-from langchain_community.vectorstores.analyticdb import AnalyticDB
-from langchain_community.vectorstores.hologres import Hologres
-from langchain_community.vectorstores.alibabacloud_opensearch import AlibabaCloudOpenSearch, AlibabaCloudOpenSearchSettings
-from langchain_community.vectorstores.elasticsearch import ElasticsearchStore
-from langchain_community.vectorstores.milvus import Milvus
+from langchain.vectorstores import FAISS
+from langchain.vectorstores import AnalyticDB,Hologres,AlibabaCloudOpenSearch,AlibabaCloudOpenSearchSettings,ElasticsearchStore,Milvus
 import time
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
@@ -373,10 +369,7 @@ class VectorDB:
         queries = list(qa_dict.keys())
         answers = [v['answer'] for v in qa_dict.values()]
         filenames = [v['filename'] for v in qa_dict.values()]
-        metadatas = [{
-            "filename": fn,
-            "question": q
-        } for fn, q in zip(filenames, queries)]
+        metadatas = [{"filename": v["filename"], "question": k} for k, v in qa_dict.items()]
         if not self.vectordb:
             self.vectordb = myFAISS.from_texts(queries, self.embed, metadatas=metadatas, values=answers)
         else:

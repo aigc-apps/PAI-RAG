@@ -5,8 +5,7 @@
 import json
 import time
 import os
-from langchain_community.document_loaders import UnstructuredFileLoader
-from langchain_community.document_loaders import DirectoryLoader
+from langchain.document_loaders import DirectoryLoader, UnstructuredFileLoader
 from .CustomPrompt import CustomPrompt
 from .VectorDB import VectorDB
 from .TextSplitter import TextSplitter
