@@ -264,7 +264,7 @@ def create_ui(service,_global_args,_global_cfg):
     with gr.Blocks(server_settings={"timeout_keep_alive": 100}) as demo:
  
         value_md =  """
-            #  <center> \N{fire} Chatbot Langchain with LLM on PAI ! 
+            #  <center> \N{fire} RAG Chatbot with Retrieval and LLM on PAI ! 
 
             ### <center> \N{rocket} Build your own personalized knowledge base question-answering chatbot. 
                         
@@ -671,7 +671,7 @@ def create_ui(service,_global_args,_global_cfg):
             with gr.Row():
                 with gr.Column(scale=2):
                     ds_radio = gr.Radio(
-                        [ "Vector Store", "LLM", "Langchain(Vector Store + LLM)"], label="\N{fire} Which query do you want to use?"
+                        [ "Retrieval", "LLM", "RAG (Retrieval + LLM)"], label="\N{fire} Which query do you want to use?"
                     )
                     
                     with gr.Column(visible=False) as vs_col:
@@ -733,11 +733,11 @@ def create_ui(service,_global_args,_global_cfg):
                     cur_tokens = gr.Textbox(label="\N{fire} Current total count of tokens")
                     
                     def change_query_radio(ds_radio):
-                        if ds_radio == "Vector Store":
+                        if ds_radio == "Retrieval":
                             return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=False), lc_col: gr.update(visible=False)}
                         elif ds_radio == "LLM":
                             return {vs_col: gr.update(visible=False), llm_col: gr.update(visible=True), lc_col: gr.update(visible=False)}
-                        elif ds_radio == "Langchain(Vector Store + LLM)":
+                        elif ds_radio == "RAG (Retrieval + LLM)":
                             return {vs_col: gr.update(visible=True), llm_col: gr.update(visible=True), lc_col: gr.update(visible=True)}
                         
                     ds_radio.change(fn=change_query_radio, inputs=ds_radio, outputs=[vs_col,llm_col,lc_col])
