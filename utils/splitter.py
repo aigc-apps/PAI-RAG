@@ -87,5 +87,5 @@ def collecte_rank(doc_lines, rank_label="h2"):
         sub_contexts.append("".join(stack_text))    # 最后一个chunk
     return sub_contexts
 
-def spliter(filted_context,rank_label):
-    return collecte_rank(filted_context,rank_label)
+def spliter(filtered_context,rank_label):
+    return collecte_rank(filtered_context,rank_label)
