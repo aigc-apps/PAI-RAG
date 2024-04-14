@@ -101,9 +101,9 @@ def cut_context(html_code):
 # 传入：
 #    html_context:str 切分后的html源码
 # 返回：
-#    flited_html_lines:list[str] 按行分开的过滤后的html源码（分割不严谨）
-def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","&amp;","&lt;","&gt;")):
-    def fliter_param(text):
+#    filtered_html_lines:list[str] 按行分开的过滤后的html源码（分割不严谨）
+def filter_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","&amp;","&lt;","&gt;")):
+    def filter_param(text):
         pattern = re.compile("<[^/>]* [^>]+>")
         f_it = list(pattern.finditer(text))
         for f_i in range(len(f_it)-1,-1,-1):
@@ -117,7 +117,7 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
             text = text[:l_p] + text[r_p-1:]
         return text
 
-    def fliter_image(text):
+    def filter_image(text):
         img_pattern = re.compile("<img [^>]*src=\"")
         f_it = list(img_pattern.finditer(text))
         for f_i in range(len(f_it)-1,-1,-1):
@@ -132,7 +132,7 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
             text = "{} {} {}".format(text[:l_p], img_link, text[r_p+1:])
         return text
 
-    def fliter_a(text):
+    def filter_a(text):
         img_pattern = re.compile("<a [^>]*href=\"")
         f_it = list(img_pattern.finditer(text))
         for f_i in range(len(f_it)-1,-1,-1):
@@ -151,11 +151,11 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
         return text
 
     html_lines = html_code.split("\n")
-    flited_html_lines = []
+    filtered_html_lines = []
     for line in html_lines:
-        line = fliter_param(line)   # 清除标签属性和参数
-        line = fliter_image(line)   # 清除img标签
-        line = fliter_a(line)   # 清除超链接
+        line = filter_param(line)   # 清除标签属性和参数
+        line = filter_image(line)   # 清除img标签
+        line = filter_a(line)   # 清除超链接
         # 替换空格的替换词（替换HTML转义字符）
         for space_block in space_blocks:
             line = line.replace(space_block, " ")
@@ -172,7 +172,7 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
         hn_items = [f_it.span() for f_it in re.finditer("<h\d>", line)]
         l_point = 0
         if hn_items:
-            flited_html_lines.append(line[l_point:hn_items[0][0]]+"\n") # 第一个h标签之前的内容，拼上\n
+            filtered_html_lines.append(line[l_point:hn_items[0][0]]+"\n") # 第一个h标签之前的内容，拼上\n
             l_point = hn_items[0][0]
             hn_items_i = 1
             while hn_items_i < len(hn_items):
@@ -187,7 +187,7 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
                         h2_search.group(1).strip(),
                         temp_line[h2_search.span()[1]-5:]
                     )
-                flited_html_lines.append(temp_line + "\n")
+                filtered_html_lines.append(temp_line + "\n")
                 l_point = hn_item[0]
                 hn_items_i += 1
         # 如果行内没有<h\d>且最后一个字符不是换行符就在其后加入一个换行符
@@ -203,11 +203,11 @@ def flite_html_code(html_code,space_blocks=("&rsquo;","&#39;","&#34;","&nbsp;","
                     h2_search.group(1),
                     temp_line[h2_search.span()[1]-5:]
                 )
-            flited_html_lines.append(temp_line + "\n")
-    return flited_html_lines
+            filtered_html_lines.append(temp_line + "\n")
+    return filtered_html_lines
 
-def fliter(html_code):
+def filter(html_code):
     header, context = cut_context(html_code)
-    flited_header = "".join(flite_html_code(header))
-    flited_context = flite_html_code(context)
-    return flited_header, flited_context
+    filtered_header = "".join(filter_html_code(header))
+    filtered_context = filter_html_code(context)
+    return filtered_header, filtered_context

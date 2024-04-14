@@ -3,14 +3,14 @@ import re
 import time
 import hashlib
 from requests.exceptions import SSLError
-from utils.filter import fliter
+from utils.filter import filter
 from utils.splitter import spliter
 from utils.generator import HtmlGenerator
 from loguru import logger
 class HTML2QA:
     def __init__(self, config):
         self.config = config['HTMLCfg']
-        self.genertor = HtmlGenerator(self.config)
+        self.generator = HtmlGenerator(self.config)
     
     def deal_Q(self, question, theme, hn, answer, history_QA_dict):
         if not hn in question:
@@ -40,7 +40,7 @@ class HTML2QA:
                 return False
         return True
 
-    def fliter_html_label_all(self, text):
+    def filter_html_label_all(self, text):
         max_len = 999
         code_start = [obj.span()[0] for obj in re.finditer("<code", text)]
         code_end = [obj.span()[1] for obj in re.finditer("</code>", text)]
@@ -118,12 +118,12 @@ class HTML2QA:
     def deal_with_html(self, html_code, configs):
         have_repeat = 0
         ban_sub_doc_message = [[], []]
-        flited_header, flited_context = fliter(html_code)
-        flited_context_with_h1 = [flited_header+"\n"] + flited_context
-        splited_doc = spliter(flited_context_with_h1, configs["rank_label"])
+        filtered_header, filtered_context = filter(html_code)
+        filtered_context_with_h1 = [filtered_header+"\n"] + filtered_context
+        splited_doc = spliter(filtered_context_with_h1, configs["rank_label"])
         QA_dict = {}
         Q_text_cnt = 0
-        theme = self.fliter_html_label_all(flited_header).strip()
+        theme = self.filter_html_label_all(filtered_header).strip()
         if "：" in theme:
             theme = theme.split("：")[1]
         logger.info(f"[INFO] sub doc num: {len(splited_doc)}")
@@ -135,7 +135,7 @@ class HTML2QA:
                 elif "[Multi Task]" in check_message:
                     ban_sub_doc_message[1].append(check_message)
                 continue
-            sub_QA_dict = self.genertor.generate_qa(sub_doc)
+            sub_QA_dict = self.generator.generate_qa(sub_doc)
             hn_search = None
             for h_i in range(1, int(configs['rank_label'][1]) + 1, 1):
                 search = re.search("<h{}>((?:.|\n)+)</h{}>".format(h_i, h_i), sub_doc)
@@ -144,7 +144,7 @@ class HTML2QA:
                 hn_search = search
             hn = ""
             if hn_search:
-                hn = self.fliter_html_label_all(hn_search.group(1)).strip()
+                hn = self.filter_html_label_all(hn_search.group(1)).strip()
             sub_Q_text_cnt = 0
             for Q in sub_QA_dict.keys():
                 if not self.check_question(Q) or not self.check_answer(sub_QA_dict[Q]):
@@ -186,9 +186,9 @@ class HTML2QA:
                 with open(dir, 'r') as f:
                     html_code = f.read()
 
-                flited_header, flited_context = fliter(html_code)
-                flited_context_with_h1 = [flited_header+"\n"] + flited_context
-                splited_doc = spliter(flited_context_with_h1, self.config["rank_label"])
+                filtered_header, filtered_context = filter(html_code)
+                filtered_context_with_h1 = [filtered_header+"\n"] + filtered_context
+                splited_doc = spliter(filtered_context_with_h1, self.config["rank_label"])
                 sub_doc_dict = {
                     x: x for x in splited_doc
                 }
@@ -200,7 +200,7 @@ class HTML2QA:
     def del_model_cache(self):
         if self.config['LLM'] == 'Local':
             logger.info("Removing local llm cache from gpu memory.")
-            self.genertor.llm.del_model_cache()
+            self.generator.llm.del_model_cache()
             logger.info("Clear finished.")
 
 if __name__ == "__main__":
