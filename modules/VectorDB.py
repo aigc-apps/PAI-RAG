@@ -415,7 +415,7 @@ class VectorDB:
             docs = self.filter_docs_by_thresh(docs, score_threshold)
 
         logger.info('[INFO] docs:\n', docs)
-        if model_name != 'No Re-Rank' and len(docs) > 0:
+        if model_name != 'No Re-Rank' and len(docs) > 1:
             docs = self.rerank_docs(query, docs, model_name)
 
         if len(docs) > topk:
