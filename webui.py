@@ -13,12 +13,20 @@ from modules.UI import *
 import sys
 from loguru import logger
 
+# Disable unstructured analytics tracking to mitigate timeout issues during PAI-EAS service.
+# This is achieved by setting an environment variable that the unstructured library recognizes.
+# By doing this, we prevent the library's internal function `scarf_analytics()` from making
+# network requests to "https://packages.unstructured.io", which was causing timeouts.
+
+os.environ["SCARF_NO_ANALYTICS"] = "true"
+
+
 _global_args = parse_args()
 service = LLMService()
 
 with open(_global_args.config) as f:
     _global_cfg = json.load(f)
-    
+
 class Query(BaseModel):
     question: str
     topk: int | None = None
@@ -32,7 +40,7 @@ class LLMQuery(BaseModel):
     topk: int | None = None
     topp: float | None = 0.8
     temperature: float | None = 0.7
-    
+
 class VectorQuery(BaseModel):
     question: str
     vector_topk: int | None = 3
@@ -56,7 +64,7 @@ def configure_cors_middleware(app):
     }
 
     app.add_middleware(CORSMiddleware, **cors_options)
-    
+
 def add_general_url(
     app
 ):    
@@ -141,7 +149,7 @@ def get_environment_params(_global_cfg):
         _global_cfg['MilvusCfg']['USER'] = os_env_params['MILVUS_USER']
         _global_cfg['MilvusCfg']['PASSWORD'] = os_env_params['MILVUS_PASSWORD']
         _global_cfg['MilvusCfg']['DROP'] = os_env_params['MILVUS_DROP']
-    
+
 def start_webui():
     global app
     get_environment_params(_global_cfg)
@@ -160,7 +168,7 @@ def start_webui():
     
     logger.info("Adding fast api url...")
     add_general_url(app)
-    
+
 if __name__ == "__main__":
     logger.remove()
     logger.add(sys.stderr, level=_global_args.log_level)
