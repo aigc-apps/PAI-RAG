@@ -12,6 +12,7 @@ from args import parse_args
 from modules.UI import *
 import sys
 from loguru import logger
+os.environ['SCARF_NO_ANALYTICS'] = 'true'
 
 _global_args = parse_args()
 service = LLMService()

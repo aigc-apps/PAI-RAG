@@ -64,11 +64,8 @@ class LLMService:
                 docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
                 docs = self.text_splitter.split_documents(docs)
             else:
-                logger.info('Uploading single file.')
-                docs = UnstructuredFileLoader(docs_dir, mode="elements", strategy="fast").load()
-                logger.info('Uploading single file. load')
-                docs = self.text_splitter.split_documents(docs)
-                logger.info('Uploading single file. text_splitter')
+                loader = UnstructuredFileLoader(docs_dir, mode="elements")
+                docs = loader.load_and_split(text_splitter=self.text_splitter)
 
             start_time = time.time()
             logger.info('Uploading custom knowledge.', start_time)
