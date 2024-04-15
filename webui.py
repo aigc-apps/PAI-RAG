@@ -14,6 +14,7 @@ from modules.UI import *
 import uvicorn
 from utils import options
 from loguru import logger
+os.environ['SCARF_NO_ANALYTICS'] = 'true'
 
 def init_args(args):
     args.config = 'configs/config_holo.json'
