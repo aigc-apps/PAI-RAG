@@ -18,6 +18,15 @@ from utils.load_utils import *
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
 
+def upload_timer_decorator(func):
+    def wrapper(*args):
+        start_time = time.time()
+        logger.info('Uploading custom knowledge.', start_time)
+        func(*args)
+        end_time = time.time()
+        logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
+    return wrapper
+
 class myFAISS(FAISS):
     @classmethod
     def from_texts(
@@ -327,6 +336,7 @@ class VectorDB:
         # merge cache data and new data
         return contents+cache_contents, metadatas+cache_metadatas
 
+    @upload_timer_decorator
     def add_documents(self, docs):
         if not self.vectordb:
             logger.info('add_documents faiss first')
@@ -351,6 +361,7 @@ class VectorDB:
         # self.bm25_retriever = BM25Retriever.from_documents(docs, preprocess_func=chinese_text_preprocess_func)
         self.bm25_retriever = BM25Retriever.from_texts(contents, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
     
+    @upload_timer_decorator
     def add_qa_pairs(self, qa_dict_list, filename_list):
         if not qa_dict_list:
             return
@@ -368,7 +379,6 @@ class VectorDB:
         # upload qa pairs to database
         queries = list(qa_dict.keys())
         answers = [v['answer'] for v in qa_dict.values()]
-        filenames = [v['filename'] for v in qa_dict.values()]
         metadatas = [{"filename": v["filename"], "question": k} for k, v in qa_dict.items()]
         if not self.vectordb:
             self.vectordb = myFAISS.from_texts(queries, self.embed, metadatas=metadatas, values=answers)
@@ -423,7 +433,7 @@ class VectorDB:
             docs = self.filter_docs_by_thresh(docs, score_threshold)
 
         logger.info('[INFO] docs:\n', docs)
-        if model_name != 'No Re-Rank':
+        if model_name != 'No Re-Rank' and len(docs) > 1:
             docs = self.rerank_docs(query, docs, model_name)
 
         if len(docs) > topk:

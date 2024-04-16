@@ -6,7 +6,10 @@ from requests.exceptions import SSLError
 from utils.filter import filter
 from utils.splitter import spliter
 from utils.generator import HtmlGenerator
+from langchain_core.documents import Document
 from loguru import logger
+import os
+
 class HTML2QA:
     def __init__(self, config):
         self.config = config['HTMLCfg']
@@ -99,7 +102,7 @@ class HTML2QA:
         else:
             raise RuntimeError("[Bad Url]当前url不是正确的url")
     
-    def check_sub_doc(self, i, sub_doc):
+    def check_sub_doc(self, sub_doc):
         ban_patterns = (
             "<h2>[^<]*附录[^<]*</h2>",
             "<h2>[^<]*联系我们[^<]*</h2>",
@@ -111,7 +114,7 @@ class HTML2QA:
                 message = "[Bad Context]html的Context中存在需要过滤的内容 ban:%s \nsub_doc:%s" % (bp, sub_doc)
                 return message
         if re.finditer("示例", sub_doc) and len(list(re.finditer("示例", sub_doc))) >= 5:
-            message = "[Multi Task]Context中存在多个示例需要手工处理 index:%d \nsub_doc:%s" % (i, sub_doc)
+            message = "[Multi Task]Context中存在多个示例需要手工处理\nsub_doc:%s" % (sub_doc)
             return message
         return None
 
@@ -163,20 +166,46 @@ class HTML2QA:
         _, title_r = re.search("</h1>", html_code).span()
         title = html_code[title_l:title_r-5]
         return QA_dict, have_repeat, additonal_message, title
-    
-    def run(self, html_dirs):
+
+    def sub_doc_to_qa(self, sub_doc, header):
+        QA_dict = {}
+        theme = self.filter_html_label_all(header).strip()
+        if "：" in theme:
+            theme = theme.split("：")[1]
+
+        # Check if the sub doc contains ban words
+        check_message = self.check_sub_doc(sub_doc)
+        if check_message:
+            return None
+
+        sub_QA_dict = self.generator.generate_qa(sub_doc)
+        hn_search = None
+        for h_i in range(1, int(self.config['rank_label'][1]) + 1, 1):
+            search = re.search("<h{}>((?:.|\n)+)</h{}>".format(h_i, h_i), sub_doc)
+            if not search:
+                break
+            hn_search = search
+        hn = ""
+        if hn_search:
+            hn = self.filter_html_label_all(hn_search.group(1)).strip()
+        sub_Q_text_cnt = 0
+        for Q in sub_QA_dict.keys():
+            if not self.check_question(Q) or not self.check_answer(sub_QA_dict[Q]):
+                continue
+            if self.deal_Q(Q, theme, hn, sub_QA_dict[Q], QA_dict):
+                sub_Q_text_cnt += 1
+        logger.info("[INFO] sub doc QA num: %d" % sub_Q_text_cnt)
+
+        return QA_dict
+
+    def run(self, docs):
         result = []
-        for dir in html_dirs:
-            try:
-                with open(dir, 'r') as f:
-                    html = f.read()
-                QA_dict, have_repeat, additonal_message = self.deal_with_html(html, self.config)
-                # for q, a in QA_dict.items():
-                #     if q not in result or len(result[q])<a:
-                #         result[q] = a
-                result.append(QA_dict)
-            except Exception as e:
-                logger.error(e)
+        for doc in docs:
+            html_code = doc.page_content
+            html_header = doc.metadata['header']
+            QA_dict = self.sub_doc_to_qa(html_code, html_header)
+            result.append(QA_dict)
+        
         return result
 
     def get_sub_docs(self, html_dirs):
@@ -189,12 +218,18 @@ class HTML2QA:
                 filtered_header, filtered_context = filter(html_code)
                 filtered_context_with_h1 = [filtered_header+"\n"] + filtered_context
                 splited_doc = spliter(filtered_context_with_h1, self.config["rank_label"])
-                sub_doc_dict = {
-                    x: x for x in splited_doc
-                }
-                result.append(sub_doc_dict)
+                logger.info(f"[INFO] sub doc num: {len(splited_doc)}")
+                html_filename = os.path.basename(dir)
+
+                docs = [
+                    Document(page_content=doc, metadata={"filename": html_filename, "header": filtered_header})
+                    for doc in splited_doc
+                ]
+                result = result + docs
             except Exception as e:
                 logger.info(e)
+
+        # result: sub doc列表 [Doc1, Doc2, ...]
         return result
 
     def del_model_cache(self):
