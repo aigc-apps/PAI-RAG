@@ -74,49 +74,29 @@ class LLMService:
             if qa_model:
                 self.txt2qa = TXT2QA(self.cfg)
                 qa_dict_list = self.txt2qa.run(docs)
-                docs_dir = [doc.metadata['filename'] for doc in docs]
+                filename_list = [doc.metadata['filename'] for doc in docs]
 
-                start_time = time.time()
-                logger.info('Uploading custom knowledge.', start_time)
-                self.vector_db.add_qa_pairs(qa_dict_list, docs_dir)
-                end_time = time.time()
-                logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
+                self.vector_db.add_qa_pairs(qa_dict_list, filename_list)
                 self.txt2qa.del_model_cache()
             else:
-                start_time = time.time()
-                logger.info('Uploading custom knowledge.', start_time)
                 self.vector_db.add_documents(docs)
-                end_time = time.time()
-                logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
 
         else:
             self.html2qa = HTML2QA(self.cfg)
-            if qa_model:
-                if os.path.isdir(docs_dir):
-                    html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
-                    qa_dict_list = self.html2qa.run(html_dirs)
-                else:
-                    qa_dict_list = self.html2qa.run([docs_dir])
-
-                start_time = time.time()
-                logger.info('Uploading custom knowledge.', start_time)
-                self.vector_db.add_qa_pairs(qa_dict_list, [docs_dir])
-                end_time = time.time()
-                logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
-                self.html2qa.del_model_cache()
+            if os.path.isdir(docs_dir):
+                html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
             else:
-                if os.path.isdir(docs_dir):
-                    html_dirs = [os.path.join(docs_dir, fn) for fn in os.listdir(docs_dir) if fn.endswith(".html")]
-                    qa_dict_list = self.html2qa.get_sub_docs(html_dirs)
-                else:
-                    qa_dict_list = self.html2qa.get_sub_docs([docs_dir])
+                html_dirs = [docs_dir]
+            docs = self.html2qa.get_sub_docs(html_dirs)
 
-                start_time = time.time()
-                logger.info('Uploading custom knowledge.', start_time)
-                self.vector_db.add_qa_pairs(qa_dict_list, [docs_dir])
-                end_time = time.time()
-                logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
-                self.html2qa.del_model_cache()
+            if qa_model:
+                qa_dict_list = self.html2qa.run(docs)
+                filename_list = [doc.metadata['filename'] for doc in docs]
+
+                self.vector_db.add_qa_pairs(qa_dict_list, filename_list)
+            else:
+                self.vector_db.add_documents(docs)  
+            self.html2qa.del_model_cache()
 
     def create_user_query_prompt(self, query, topk, prompt_type, prompt=None, score_threshold=0.5, rerank_model='No Re-Rank', kw_retrieval='Embedding Only'):
         if topk == '' or topk is None:
