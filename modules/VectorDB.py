@@ -178,7 +178,8 @@ def chinese_text_preprocess_func(text: str):
 def getBGEReranker(model_path):
     logger.info(f'Loading BGE Reranker from {model_path}')
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path).eval()
+    model = AutoModelForSequenceClassification.from_pretrained(model_path)
+    model.to('cpu').eval()
     return (model, tokenizer)
 
 class VectorDB:
@@ -194,7 +195,7 @@ class VectorDB:
         else:
             self.model_name_or_path = os.path.join(self.model_dir, cfg['embedding']['embedding_model'])
             self.embed = HuggingFaceEmbeddings(model_name=self.model_name_or_path,
-                                            model_kwargs={'device': 'cuda:0'})
+                                            model_kwargs={'device': 'cpu'})
             self.emb_dim = cfg['embedding']['embedding_dimension']
         self.query_topk = cfg['query_topk']
         self.vectordb_type = args.vectordb_type
