@@ -1,65 +1,24 @@
 import gradio as gr
-from modules.LLMService import LLMService
 import time
 import os
 import json
-import sys
-import gradio
 from loguru import logger
 
-CACHE_DIR = 'cache/'
+CACHE_DIR = "cache/"
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
-CACHE_CONFIG_NAME = 'config.json'
-
-def html_path(filename):
-    script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    return os.path.join(script_path, "html", filename)
+CACHE_CONFIG_NAME = "config.json"
 
 def html(filename):
-    path = html_path(filename)
+    script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    path = os.path.join(script_path, "html", filename)
     if os.path.exists(path):
         with open(path, encoding="utf8") as file:
             return file.read()
 
     return ""
 
-def webpath(fn):
-    script_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    if fn.startswith(script_path):
-        web_path = os.path.relpath(fn, script_path).replace('\\', '/')
-    else:
-        web_path = os.path.abspath(fn)
-    return f'file={web_path}?{os.path.getmtime(fn)}'
-
-def css_html():
-    head = ""
-    def stylesheet(fn):
-        return f'<link rel="stylesheet" property="stylesheet" href="{webpath(fn)}">'
-    
-    cssfile = "style.css"
-    if not os.path.isfile(cssfile):
-        logger.error("cssfile not exist")
-
-    head += stylesheet(cssfile)
-
-    return head
-
-def reload_javascript():
-    css = css_html()
-    GradioTemplateResponseOriginal = gradio.routes.templates.TemplateResponse
-
-    def template_response(*args, **kwargs):
-        res = GradioTemplateResponseOriginal(*args, **kwargs)
-        res.body = res.body.replace(b'</body>', f'{css}</body>'.encode("utf8"))
-        res.init_headers()
-        return res
-
-    gradio.routes.templates.TemplateResponse = template_response
-    
 def create_ui(service,_global_args,_global_cfg):
-    reload_javascript()
-    
     def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
         if llm_src == "EAS":
             cfg = {
@@ -82,18 +41,18 @@ def create_ui(service,_global_args,_global_cfg):
         cache_path = os.path.join(CACHE_DIR, CACHE_CONFIG_NAME)
         # Check if there is local cache for bm25
         if not os.path.exists(cache_path):
-            with open(cache_path, 'w+') as f:
+            with open(cache_path, "w+") as f:
                 json.dump(new_config, f)
             return False
 
         # Read cached config file
-        with open(cache_path, 'r') as f:
+        with open(cache_path, "r") as f:
             cache_config = json.load(f)
         # Check if new_config is consistent with cache_config
-        res = all([cache_config[k]==new_config[k] for k in keys])
+        res = all([cache_config[k] == new_config[k] for k in keys])
 
         # Update cached config file
-        with open(cache_path, 'w+') as f:
+        with open(cache_path, "w+") as f:
             json.dump(new_config, f)
 
         return res
@@ -261,7 +220,7 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Milvus success."
     
-    with gr.Blocks(server_settings={"timeout_keep_alive": 100}) as demo:
+    with gr.Blocks() as demo:
  
         value_md =  """
             #  <center> \N{fire} RAG Chatbot with Retrieval and LLM on PAI ! 
@@ -276,11 +235,9 @@ def create_ui(service,_global_args,_global_cfg):
         
         
         gr.Markdown(value=value_md)
-        # api_hl = ("<div style='text-align: center;'> \N{whale} <a href='/docs'>Referenced API</a>    \N{rocket} <a href='https://github.com/aigc-apps/LLM_Solution.git'> Github Code</a> </div>")
         ding_hl = ("<div style='text-align: center;'> \N{fire}欢迎加入【PAI】Chatbot-langchain答疑群”群的钉钉群号： 27370042974 </div>")
         
         gr.HTML(ding_hl,elem_id='ding')
-        # gr.HTML(api_hl,elem_id='api')
                 
         with gr.Tab("\N{rocket} Settings"):
             with gr.Row():
@@ -326,21 +283,6 @@ def create_ui(service,_global_args,_global_cfg):
                       cfg_btn = gr.Button("Parse Config", variant="primary")
                     
                 with gr.Column():
-                    # with gr.Column():
-                    #     md_eas = gr.Markdown(value="**Please set your QA Extraction Model.**")
-                    #     llm_qa_extraction = gr.Dropdown(["EAS", "OpenAI", "Local"], label="QA Extraction Model", value=_global_cfg['HTMLCfg']['LLM'])
-                    #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="EAS")) as qa_eas_col:
-                    #         qa_eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['HTMLCfg']['EASCfg']['url'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                    #         qa_eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['HTMLCfg']['EASCfg']['token'] if _global_cfg['HTMLCfg']['LLM']=="EAS" else '')
-                    #     with gr.Column(visible=(_global_cfg['HTMLCfg']['LLM']=="OpenAI")) as qa_openai_col:
-                    #         qa_open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['HTMLCfg']['LLM']=="OpenAI" else '')
-                    #     def change_llm_qa_extraction(value):
-                    #         if value=="EAS":
-                    #             return {qa_eas_col: gr.update(visible=True), qa_openai_col: gr.update(visible=False)}
-                    #         elif value=="OpenAI":
-                    #             return {qa_eas_col: gr.update(visible=False), qa_openai_col: gr.update(visible=True)}
-                    #     llm_qa_extraction.change(fn=change_llm_qa_extraction, inputs=llm_qa_extraction, outputs=[qa_eas_col,qa_openai_col])
-
                     with gr.Column():
                         md_vs = gr.Markdown(value="**Please set your Vector Store.**")
                         vs_radio = gr.Dropdown(
