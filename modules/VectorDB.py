@@ -19,6 +19,15 @@ from utils.load_utils import *
 
 CACHE_DB_FILE = 'cache/db_file.jsonl'
 
+def upload_timer_decorator(func):
+    def wrapper(*args):
+        start_time = time.time()
+        logger.info('Uploading custom knowledge.', start_time)
+        func(*args)
+        end_time = time.time()
+        logger.info("Insert Success. Cost time: {} s".format(end_time - start_time))
+    return wrapper
+
 class myFAISS(FAISS):
     @classmethod
     def from_texts(
@@ -193,11 +202,11 @@ class VectorDB:
         self.vectordb_type = args.vectordb_type
         self.bm25_load_cache = args.bm25_load_cache
         self.is_rerank = False
-        
+
         cache_contents, cache_metadatas = self.load_cache(contents=[], metadatas=[])
         if len(cache_contents)>0:
             self.bm25_retriever = BM25Retriever.from_texts(cache_contents, metadatas=cache_metadatas, preprocess_func=chinese_text_preprocess_func)
-    
+
         if self.vectordb_type == 'AnalyticDB':
             start_time = time.time()
             connection_string_adb = AnalyticDB.connection_string_from_db_params(
@@ -301,7 +310,7 @@ class VectorDB:
             logger.info("Connect Milvus success. Cost time: {} s".format(end_time - start_time))
 
         self.vectordb = vector_db
-        
+
     def update_cache(self, contents, metadatas):
         with open(CACHE_DB_FILE, 'a+') as f:
             for c, m in zip(contents, metadatas):
@@ -309,7 +318,7 @@ class VectorDB:
                     "page_content": c,
                     "metadata": m
                 }) + '\n')
-    
+
     def load_cache(self, contents, metadatas):
         # load cache data
         cache_data = []
@@ -329,6 +338,7 @@ class VectorDB:
         # merge cache data and new data
         return contents+cache_contents, metadatas+cache_metadatas
 
+    @upload_timer_decorator
     def add_documents(self, docs):
         if not self.vectordb:
             logger.info('add_documents faiss first')
@@ -343,7 +353,7 @@ class VectorDB:
             else:
                 logger.info('add_documents other vectordb')
                 self.vectordb.add_documents(docs)
-        
+
         new_contents = [doc.page_content for doc in docs]
         new_metadatas = [doc.metadata for doc in docs]
         logger.info(f"[INFO] new doc num: {len(new_contents)}")
@@ -352,27 +362,27 @@ class VectorDB:
 
         # self.bm25_retriever = BM25Retriever.from_documents(docs, preprocess_func=chinese_text_preprocess_func)
         self.bm25_retriever = BM25Retriever.from_texts(contents, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
-    
+
+    @upload_timer_decorator
     def add_qa_pairs(self, qa_dict, docs_dir):
         if not qa_dict:
             return
         queries = list(qa_dict.keys())
         answers = list(qa_dict.values())
-        metadatas = [{
-            "filename": docs_dir.rsplit('/', 1)[-1],
-            "question": q
-        } for q in queries]
+        metadatas = [
+            {"filename": docs_dir.rsplit("/", 1)[-1], "question": q} for q in queries
+        ]
         if not self.vectordb:
             self.vectordb = myFAISS.from_texts(queries, self.embed, metadatas=metadatas, values=answers)
         else:
             self.vectordb.add_texts(queries, metadatas=metadatas, values=answers)
         if self.vectordb_type == 'FAISS':
             self.vectordb.save_local(self.faiss_path)
-        
+
         contents, metadatas = self.load_cache(answers, metadatas)
         # qa_texts = [f"{q} {a}" for q,a in zip(queries, answers)]
         self.bm25_retriever = BM25Retriever.from_texts(contents, metadatas=metadatas, preprocess_func=chinese_text_preprocess_func)
-    
+
     def filter_docs_by_thresh(self, docs, thresh):
         return [doc for doc in docs if float(doc[1]) <= float(thresh)]
 
@@ -382,12 +392,12 @@ class VectorDB:
             self.bge_reranker_base = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-base"))
             self.bge_reranker_large = getBGEReranker(os.path.join(self.model_dir, "bge-reranker-large"))
             self.is_rerank = True
-        
+
         if model_name == "BGE-Reranker-Base":    
             model, tokenizer = self.bge_reranker_base
         elif model_name == "BGE-Reranker-Large":
             model, tokenizer = self.bge_reranker_large
-        
+
         docs_list = [item[0] if isinstance(item, tuple) else item for item in docs]
         pairs = [[query, doc.page_content] for doc in docs_list]
         inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt', max_length=512)
@@ -420,5 +430,5 @@ class VectorDB:
 
         if len(docs) > topk:
             docs = docs[:topk]
-            
+
         return docs
