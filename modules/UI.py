@@ -756,7 +756,7 @@ def create_ui(service,_global_args,_global_cfg):
                         history = False
                         if history_radio == "Yes":
                             history = True
-                        if ds_radio == "Vector Store":
+                        if ds_radio == "Retrieval":
                             answer, lens = service.query_only_vectorstore(message,topk,score_threshold,rerank_model,kw_retrieval)
                         elif ds_radio == "LLM":
                             answer, lens, summary_res = service.query_only_llm(message, history, llm_topk, llm_topp, llm_temp)         
