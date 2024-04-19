@@ -542,7 +542,7 @@ def create_ui(service,_global_args,_global_cfg):
                         chunk_size = gr.Textbox(label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",value='200')
                         chunk_overlap = gr.Textbox(label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",value='0')
                         txt_qa_model = gr.Checkbox(
-                            label="Yes", info="With QA Extraction Model", value=True
+                            label="Yes", info="With QA Extraction Model", value=False
                         )
 
                 def isFileValid(file_name, types):
@@ -632,7 +632,7 @@ def create_ui(service,_global_args,_global_cfg):
                             # topk = gr.Textbox(label="Retrieval top K answers",value='3')
                             topk = gr.Slider(minimum=0, maximum=100, step=1, value=3, label="Top K (choose between 0 and 100)")
                             # score_threshold = gr.Slider(minimum=0, maximum=1, step=0.01, value=0.5, label="Score Threshold (choose between 0 and 1)")
-                            score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=200, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
+                            score_threshold = gr.Slider(minimum=0, maximum=1000, step=0.1, value=600, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
                             rerank_model = gr.Radio(
                                 ['No Re-Rank', 'BGE-Reranker-Base', 'BGE-Reranker-Large'],
                                 label="Re-Rank Model (Note: It will take a long time to load the model when using it for the first time.)",
