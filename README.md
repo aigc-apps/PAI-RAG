@@ -107,7 +107,7 @@ uvicorn webui:app --host 0.0.0.0 --port 8000
 
 ### 2.3 聊天问答
 
-- 支持不同问答方式: VectorStore, LLM, Langchain(VectorStore+LLM)
+- 支持不同问答方式: Retrieval, LLM, RAG(Retrieval+LLM)
 - 支持多种不同的推理参数调优：
   - 文档召回参数: 
     - Top-K: 根据相似度分数召回K条最相关的文本块
