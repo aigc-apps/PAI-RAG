@@ -37,7 +37,7 @@ def parse_args():
         choices=["AnalyticDB", "Hologres", "ElasticSearch", "OpenSearch", "FAISS"],
         default="FAISS",
     )
-    parser.add_argument("--embed_dim", type=int, help="embedding向量维度", default=768)
+    parser.add_argument("--embed_dim", type=int, help="embedding向量维度", default=1024)
     parser.add_argument(
         "--upload", action="store_true", help="上传知识库", default=False
     )
