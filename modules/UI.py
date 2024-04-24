@@ -266,6 +266,7 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                         )
                         emb_model = gr.Dropdown(
                             [
+                                "bge-large-zh-v1.5",
                                 "SGPT-125M-weightedmean-nli-bitfit",
                                 "text2vec-large-chinese",
                                 "text2vec-base-chinese",
@@ -283,6 +284,11 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                         )
 
                         def change_emb_model(model):
+                            if model == "bge-large-zh-v1.5":
+                                return {
+                                    emb_dim: gr.update(value="1024"),
+                                    emb_openai_key: gr.update(visible=False),
+                                }
                             if model == "SGPT-125M-weightedmean-nli-bitfit":
                                 return {
                                     emb_dim: gr.update(value="768"),
@@ -862,7 +868,7 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                                 minimum=0,
                                 maximum=1000,
                                 step=0.1,
-                                value=200,
+                                value=600,
                                 label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)",
                             )
                             rerank_model = gr.Radio(

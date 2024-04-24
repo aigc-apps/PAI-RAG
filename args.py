@@ -22,12 +22,13 @@ def parse_args():
         type=str,
         help="embedding模型名称",
         choices=[
+            "bge-large-zh-v1.5",
             "SGPT-125M-weightedmean-nli-bitfit",
             "text2vec-large-chinese",
             "text2vec-base-chinese",
             "paraphrase-multilingual-MiniLM-L12-v2",
         ],
-        default="SGPT-125M-weightedmean-nli-bitfit",
+        default="bge-large-zh-v1.5",
     )
     parser.add_argument(
         "--vectordb_type",
@@ -36,7 +37,7 @@ def parse_args():
         choices=["AnalyticDB", "Hologres", "ElasticSearch", "OpenSearch", "FAISS"],
         default="FAISS",
     )
-    parser.add_argument("--embed_dim", type=int, help="embedding向量维度", default=768)
+    parser.add_argument("--embed_dim", type=int, help="embedding向量维度", default=1024)
     parser.add_argument(
         "--upload", action="store_true", help="上传知识库", default=False
     )

@@ -33,7 +33,7 @@ class Query(BaseModel):
     topp: float | None = 0.8
     temperature: float | None = 0.7
     vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
+    score_threshold: float | None = 600
 
 class LLMQuery(BaseModel):
     question: str
@@ -44,7 +44,7 @@ class LLMQuery(BaseModel):
 class VectorQuery(BaseModel):
     question: str
     vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
+    score_threshold: float | None = 600
 
 app = FastAPI()
 
@@ -74,12 +74,12 @@ def add_general_url(
         ans, lens, _ = service.query_only_llm(query = query.question, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/vectorstore")
+    @app.post("/chat/retrieval")
     async def query_by_vectorstore(query: VectorQuery):
         ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
         return {"response": ans, "tokens": lens}
 
-    @app.post("/chat/langchain")
+    @app.post("/chat/rag")
     async def query_by_langchain(query: Query):
         ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
         return {"response": ans, "tokens": lens}
