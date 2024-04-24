@@ -868,7 +868,7 @@ def create_ui(service, _global_args, _global_cfg, os_env_params):
                                 minimum=0,
                                 maximum=1000,
                                 step=0.1,
-                                value=200,
+                                value=600,
                                 label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)",
                             )
                             rerank_model = gr.Radio(

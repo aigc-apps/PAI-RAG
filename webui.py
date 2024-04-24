@@ -33,7 +33,7 @@ class Query(BaseModel):
     topp: float | None = 0.8
     temperature: float | None = 0.7
     vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
+    score_threshold: float | None = 600
 
 class LLMQuery(BaseModel):
     question: str
@@ -44,7 +44,7 @@ class LLMQuery(BaseModel):
 class VectorQuery(BaseModel):
     question: str
     vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
+    score_threshold: float | None = 600
 
 app = FastAPI()
 
