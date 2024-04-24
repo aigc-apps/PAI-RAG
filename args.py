@@ -22,12 +22,13 @@ def parse_args():
         type=str,
         help="embedding模型名称",
         choices=[
+            "bge-large-zh-v1.5",
             "SGPT-125M-weightedmean-nli-bitfit",
             "text2vec-large-chinese",
             "text2vec-base-chinese",
             "paraphrase-multilingual-MiniLM-L12-v2",
         ],
-        default="SGPT-125M-weightedmean-nli-bitfit",
+        default="bge-large-zh-v1.5",
     )
     parser.add_argument(
         "--vectordb_type",
