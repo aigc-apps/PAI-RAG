@@ -36,7 +36,7 @@
     "OpenAI": {
       "key": "xxx"
     },
-    "local_model_path": "/huggingface/sentence_transformers/refgpt"
+    "local_model_path": "/huggingface/sentence_transformers/refgpt_qwen_1.8b"
   },
   "TXTCfg": {
     "LLM": "Local",
@@ -47,7 +47,7 @@
     "OpenAI": {
       "key": "xxx"
     },
-    "local_model_path": "/huggingface/sentence_transformers/refgpt"
+    "local_model_path": "/huggingface/sentence_transformers/refgpt_qwen_1.8b"
   },
 
   "query_topk": 4,

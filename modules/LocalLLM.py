@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # deling.sc
 
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from loguru import logger
 import gc
@@ -24,7 +24,7 @@ class LocalLLM:
                     self.model_path, trust_remote_code=True
                 )
                 model = (
-                    AutoModel.from_pretrained(
+                    AutoModelForCausalLM.from_pretrained(
                         self.model_path, trust_remote_code=True
                     )
                     .half()
@@ -47,7 +47,7 @@ class LocalLLM:
                     self.model_path, trust_remote_code=True
                 )
                 model = (
-                    AutoModel.from_pretrained(
+                    AutoModelForCausalLM.from_pretrained(
                         self.model_path,
                         trust_remote_code=True,
                     )
@@ -69,7 +69,7 @@ class LocalLLM:
                 self.model_path, trust_remote_code=True
             )
             model = (
-                AutoModel.from_pretrained(
+                AutoModelForCausalLM.from_pretrained(
                     self.model_path,
                     trust_remote_code=True
                 )
