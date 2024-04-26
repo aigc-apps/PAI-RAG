@@ -66,8 +66,10 @@ class LLMService:
                 docs = DirectoryLoader(docs_dir, glob=self.cfg['create_docs']['glob'], show_progress=True).load()
                 docs = self.text_splitter.split_documents(docs)
             else:
-                loader = UnstructuredFileLoader(docs_dir, mode="elements")
+                loader = UnstructuredFileLoader(docs_dir, mode="single")
                 docs = loader.load_and_split(text_splitter=self.text_splitter)
+                for doc in docs:
+                    doc.metadata.update({"filename": os.path.basename(doc.metadata['source'])})
             
             if qa_model:
                 self.txt2qa = TXT2QA(self.cfg)
