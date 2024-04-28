@@ -16,6 +16,7 @@ from .CustomLLM import CustomLLM
 from .QuestionPrompt import *
 from sentencepiece import SentencePieceProcessor
 from langchain.llms import OpenAI
+from langchain_community.llms.tongyi import Tongyi
 from loguru import logger
 
 class LLMService:
@@ -45,6 +46,9 @@ class LLMService:
             self.llm.token = self.cfg['EASCfg']['token']
         elif self.cfg['LLM'] == 'OpenAI':
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'])
+        elif self.cfg['LLM'] == 'DashScope':
+            self.llm = Tongyi(model_name=self.cfg['DashScope']['model'], dashscope_api_key=self.cfg['DashScope']['key'])
+            
         self.question_generator_chain = get_standalone_question_ch(self.llm)
 
     def upload_custom_knowledge(self,
@@ -132,8 +136,8 @@ class LLMService:
             if self.cfg['LLM'] == 'EAS':
                 self.llm.history = self.langchain_chat_history
                 summary_res = self.llm("请对我们之前的对话内容进行总结。")
-            elif self.cfg['LLM'] == 'OpenAI':
-                summary_res = self.llm(f"question: 请对我们之前的对话内容进行总结。 chat_history: {self.langchain_chat_history}")
+            elif self.cfg['LLM'] in ['OpenAI', 'DashScope']:
+                summary_res = self.llm.invoke(f"question: 请对我们之前的对话内容进行总结。 chat_history: {self.langchain_chat_history}")
             logger.debug("请对我们之前的对话内容进行总结: ", summary_res)
             self.langchain_chat_history = []
             self.langchain_chat_history.append(("请对我们之前的对话内容进行总结。", summary_res))
@@ -187,6 +191,15 @@ class LLMService:
             else:
                 logger.info(f"LLM-OpenAI: query: {user_prompt}, history: [], top_p:{llm_topp}, temperature:{llm_temp}")
                 ans = self.llm(query)
+        elif self.cfg['LLM'] == 'DashScope':
+            llm_topp = float(llm_topp) if llm_topp is not None else 1.0
+            self.llm = Tongyi(model_name=self.cfg['DashScope']['model'], dashscope_api_key = self.cfg['DashScope']['key'], top_p=llm_topp)
+            if history:
+                logger.info(f"LLM-DashScope-{self.cfg['DashScope']['model']}: query: {user_prompt}, history: {self.langchain_chat_history}, top_p:{llm_topp}")
+                ans = self.llm.invoke(f"question: {user_prompt}, chat_history: {self.langchain_chat_history}")
+            else:
+                logger.info(f"LLM-DashScope-{self.cfg['DashScope']['model']}: query: {user_prompt}, history: [], top_p:{llm_topp}")
+                ans = self.llm.invoke(query)
         if history:
             self.langchain_chat_history.append((new_query, ans))
         logger.info(f"Get response from {self.cfg['LLM']} {ans}")
@@ -218,11 +231,20 @@ class LLMService:
 
             self.llm = OpenAI(model_name='gpt-3.5-turbo', openai_api_key = self.cfg['OpenAI']['key'], temperature=llm_temp, top_p=llm_topp)
             if history:
-                logger.info(f"LLM-OpenAI:  vquestion: {query}, chat_history: {self.langchain_chat_history}, top_p:{llm_topp}, temperature:{llm_temp}")
+                logger.info(f"LLM-OpenAI:  question: {query}, chat_history: {self.langchain_chat_history}, top_p:{llm_topp}, temperature:{llm_temp}")
                 ans = self.llm(f"question: {query}, chat_history: {self.langchain_chat_history}")
             else:
                 logger.info(f"LLM-OpenAI: question: {query}, history: [], top_p:{llm_topp}, temperature:{llm_temp}")
                 ans = self.llm(f"question: {query}")
+        elif self.cfg['LLM'] == 'DashScope':
+            llm_topp = float(llm_topp) if llm_topp is not None else 1.0
+            self.llm = Tongyi(model_name=self.cfg['DashScope']['model'], dashscope_api_key = self.cfg['DashScope']['key'], top_p=llm_topp)
+            if history:
+                logger.info(f"LLM-DashScope-{self.cfg['DashScope']['model']}: question: {query}, chat_history: {self.langchain_chat_history},top_p:{llm_topp}")
+                ans = self.llm.invoke(f"question: {query}, chat_history: {self.langchain_chat_history}")
+            else:
+                logger.info(f"LLM-DashScope-{self.cfg['DashScope']['model']}: question: {query}, history: [], top_p:{llm_topp}")
+                ans = self.llm.invoke(query)
         if history:
             self.langchain_chat_history.append((query, ans))
         end_time = time.time()
