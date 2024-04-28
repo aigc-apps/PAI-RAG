@@ -19,7 +19,7 @@ def html(filename):
     return ""
 
 def create_ui(service,_global_args,_global_cfg):
-    def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key):
+    def get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key):
         if llm_src == "EAS":
             cfg = {
                 'LLM': 'EAS',
@@ -33,6 +33,14 @@ def create_ui(service,_global_args,_global_cfg):
                 'LLM': 'OpenAI',
                 'OpenAI': {
                     "key": open_api_key
+                }
+            }
+        elif llm_src == "DashScope":
+            cfg = {
+                'LLM': 'DashScope',
+                'DashScope': {
+                    "model": dash_model_name,
+                    "key": dash_api_key
                 }
             }
         return cfg
@@ -57,8 +65,8 @@ def create_ui(service,_global_args,_global_cfg):
 
         return res
     
-    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
-        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+    def connect_adb(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key)
         cfg_db = {
                 'embedding': {
                     "embedding_model": emb_model,
@@ -88,8 +96,8 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect AnalyticDB success."
 
-    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
-        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+    def connect_holo(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, pg_host, pg_database, pg_user, pg_pwd, table):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key)
         cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
@@ -123,8 +131,8 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect Hologres success."
 
-    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, es_url, es_index, es_user, es_pwd):
-        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+    def connect_es(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, es_url, es_index, es_user, es_pwd):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key)
         cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
@@ -156,8 +164,8 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect ElasticSearch success."
    
-    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, path, name):
-        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key)
+    def connect_faiss(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, path, name):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key)
         cfg_db = {
             "embedding": {
                 "model_dir": "./embedding_model/",
@@ -189,8 +197,8 @@ def create_ui(service,_global_args,_global_cfg):
         service.init_with_cfg(_global_cfg, _global_args)
         return "Connect FAISS success."
     
-    def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
-        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key,)
+    def connect_milvus(emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop):
+        cfg = get_llm_cfg(llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key)
         cfg_db = {
             'embedding': {
                 "embedding_model": emb_model,
@@ -264,18 +272,23 @@ def create_ui(service,_global_args,_global_cfg):
                     
                     with gr.Column():
                         md_eas = gr.Markdown(value="**Please set your LLM.**")
-                        llm_src = gr.Dropdown(["EAS", "OpenAI"], label="LLM Model", value=_global_cfg['LLM'])
+                        llm_src = gr.Dropdown(["EAS", "OpenAI", "DashScope"], label="LLM Model", value=_global_cfg['LLM'])
                         with gr.Column(visible=(_global_cfg['LLM']=="EAS")) as eas_col:
                             eas_url = gr.Textbox(label="EAS Url", value=_global_cfg['EASCfg']['url'] if _global_cfg['LLM']=="EAS" else '')
                             eas_token = gr.Textbox(label="EAS Token", value=_global_cfg['EASCfg']['token'] if _global_cfg['LLM']=="EAS" else '')
                         with gr.Column(visible=(_global_cfg['LLM']=="OpenAI")) as openai_col:
                             open_api_key = gr.Textbox(label="OpenAI API Key", value=_global_cfg['OpenAI']['key'] if _global_cfg['LLM']=="OpenAI" else '')
+                        with gr.Column(visible=(_global_cfg['LLM']=="DashScope")) as dash_col:
+                            dash_model_name = gr.Dropdown(["qwen-turbo", "qwen-plus", "qwen-max"], label="DashScope LLM Model", value=_global_cfg['DashScope']['model'] if _global_cfg['LLM']=="DashScope" else "qwen-turbo")
+                            dash_api_key = gr.Textbox(label="DashScope API Key", value=_global_cfg['DashScope']['key'] if _global_cfg['LLM']=="DashScope" else '')
                         def change_llm_src(value):
                             if value=="EAS":
-                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False)}
+                                return {eas_col: gr.update(visible=True), openai_col: gr.update(visible=False), dash_col: gr.update(visible=False)}
                             elif value=="OpenAI":
-                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True)}
-                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col])
+                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=True), dash_col: gr.update(visible=False)}
+                            elif value=="DashScope":
+                                return {eas_col: gr.update(visible=False), openai_col: gr.update(visible=False), dash_col: gr.update(visible=True)}
+                        llm_src.change(fn=change_llm_src, inputs=llm_src, outputs=[eas_col,openai_col, dash_col])
                     
                     with gr.Column():
                       md_cfg = gr.Markdown(value="**(Optional) Please upload your config file.**")
@@ -303,7 +316,7 @@ def create_ui(service,_global_args,_global_cfg):
                             #                     value="False" if _global_cfg['vector_store']=="AnalyticDB" else '')
                             connect_btn = gr.Button("Connect AnalyticDB", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
+                            connect_btn.click(fn=connect_adb, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, pg_host, pg_user, pg_pwd, pg_database, pg_collection, pg_del], outputs=con_state, api_name="connect_adb")   
                         with gr.Column(visible=(_global_cfg['vector_store']=="Hologres")) as holo_col:
                             holo_host = gr.Textbox(label="Host",
                                                 value=_global_cfg['HOLOCfg']['PG_HOST'] if _global_cfg['vector_store']=="Hologres" else '')
@@ -317,7 +330,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                 value=_global_cfg['HOLOCfg']['TABLE'] if _global_cfg['vector_store']=="Hologres" else '')
                             connect_btn = gr.Button("Connect Hologres", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
+                            connect_btn.click(fn=connect_holo, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, holo_host, holo_database, holo_user, holo_pwd, holo_table], outputs=con_state, api_name="connect_holo") 
                         with gr.Column(visible=(_global_cfg['vector_store']=="ElasticSearch")) as es_col:
                             es_url = gr.Textbox(label="URL",
                                                 value=_global_cfg['ElasticSearchCfg']['ES_URL'] if _global_cfg['vector_store']=="ElasticSearch" else '')
@@ -329,7 +342,7 @@ def create_ui(service,_global_args,_global_cfg):
                                             value=_global_cfg['ElasticSearchCfg']['ES_PASSWORD'] if _global_cfg['vector_store']=="ElasticSearch" else '')
                             connect_btn = gr.Button("Connect ElasticSearch", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
+                            connect_btn.click(fn=connect_es, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token,open_api_key, dash_model_name, dash_api_key, es_url, es_index, es_user, es_pwd], outputs=con_state, api_name="connect_es") 
                         with gr.Column(visible=(_global_cfg['vector_store']=="FAISS")) as faiss_col:
                             faiss_path = gr.Textbox(label="Path", 
                                                     value = _global_cfg['FAISS']['index_path'] if _global_cfg['vector_store']=="FAISS" else '')
@@ -337,7 +350,7 @@ def create_ui(service,_global_args,_global_cfg):
                                                     value=_global_cfg['FAISS']['index_name'] if _global_cfg['vector_store']=="FAISS" else '')
                             connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
                             con_state_faiss = gr.Textbox(label="Connection Info: ")
-                            connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
+                            connect_btn_faiss.click(fn=connect_faiss, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, faiss_path, faiss_name], outputs=con_state_faiss) 
                         with gr.Column(visible=(_global_cfg['vector_store']=="Milvus")) as milvus_col:
                             milvus_collection = gr.Textbox(label="CollectionName", 
                                                 value=_global_cfg['MilvusCfg']['COLLECTION'] if _global_cfg['vector_store']=="Milvus" else '')
@@ -352,7 +365,7 @@ def create_ui(service,_global_args,_global_cfg):
                             milvus_drop = gr.Dropdown(["True","False"], label="Drop Old", value=_global_cfg['MilvusCfg']['DROP'] if _global_cfg['vector_store']=="Milvus" else '')
                             connect_btn = gr.Button("Connect Milvus", variant="primary")
                             con_state = gr.Textbox(label="Connection Info: ")
-                            connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
+                            connect_btn.click(fn=connect_milvus, inputs=[emb_model, emb_dim, emb_openai_key, llm_src, eas_url, eas_token, open_api_key, dash_model_name, dash_api_key, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], outputs=con_state, api_name="connect_milvus")
                         def change_ds_conn(radio):
                             if radio=="AnalyticDB":
                                 return {adb_col: gr.update(visible=True), holo_col: gr.update(visible=False), es_col: gr.update(visible=False), faiss_col: gr.update(visible=False), milvus_col:gr.update(visible=False)}
@@ -413,6 +426,20 @@ def create_ui(service,_global_args,_global_cfg):
                                 pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
                                 }
                             combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "DashScope":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                dash_model_name: gr.update(value=cfg['DashScope']['model']),
+                                dash_api_key: gr.update(value=cfg['DashScope']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                pg_host: gr.update(value=cfg['ADBCfg']['PG_HOST']),
+                                pg_user: gr.update(value=cfg['ADBCfg']['PG_USER']),
+                                pg_pwd: gr.update(value=cfg['ADBCfg']['PG_PASSWORD']),
+                                pg_database: gr.update(value=cfg['ADBCfg']['PG_DATABASE'] if ( 'PG_DATABASE' in cfg['ADBCfg']) else 'postgres'),
+                                pg_collection: gr.update(value=cfg['ADBCfg']['PG_COLLECTION_NAME'] if ( 'PG_COLLECTION_NAME' in cfg['ADBCfg']) else 'test'),
+                                pg_del: gr.update(value=cfg['ADBCfg']['PRE_DELETE'] if ( 'PRE_DELETE' in cfg['ADBCfg']) else 'False'),
+                                }
+                            combined_dict.update(other_cfg)
                         return combined_dict
                     if cfg['vector_store'] == "Hologres":
                         combined_dict = {}
@@ -434,6 +461,19 @@ def create_ui(service,_global_args,_global_cfg):
                             other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
+                                holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
+                                holo_user: gr.update(value=cfg['HOLOCfg']['PG_USER']),
+                                holo_pwd: gr.update(value=cfg['HOLOCfg']['PG_PASSWORD']),
+                                holo_table: gr.update(value=cfg['HOLOCfg']['TABLE']),
+                                }
+                            combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "DashScope":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                dash_model_name: gr.update(value=cfg['DashScope']['model']),
+                                dash_api_key: gr.update(value=cfg['DashScope']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
                                 holo_host: gr.update(value=cfg['HOLOCfg']['PG_HOST']),
                                 holo_database: gr.update(value=cfg['HOLOCfg']['PG_DATABASE']),
@@ -469,6 +509,18 @@ def create_ui(service,_global_args,_global_cfg):
                                 es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
                                 }
                             combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "DashScope":
+                            other_cfg =  {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                dash_model_name: gr.update(value=cfg['DashScope']['model']),
+                                dash_api_key: gr.update(value=cfg['DashScope']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                es_url: gr.update(value=cfg['ElasticSearchCfg']['ES_URL']),
+                                es_index: gr.update(value=cfg['ElasticSearchCfg']['ES_INDEX']),
+                                es_user: gr.update(value=cfg['ElasticSearchCfg']['ES_USER']),
+                                es_pwd: gr.update(value=cfg['ElasticSearchCfg']['ES_PASSWORD']),
+                                }
+                            combined_dict.update(other_cfg)
                         return combined_dict
                     if cfg['vector_store'] == "FAISS":
                         combined_dict = {}
@@ -487,6 +539,16 @@ def create_ui(service,_global_args,_global_cfg):
                             other_cfg = {
                                 llm_src: gr.update(value=cfg['LLM']),
                                 open_api_key: gr.update(value=cfg['OpenAI']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                faiss_path: gr.update(value=cfg['FAISS']['index_path']),
+                                faiss_name: gr.update(value=cfg['FAISS']['index_name'])
+                                }
+                            combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "DashScope":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                dash_model_name: gr.update(value=cfg['DashScope']['model']),
+                                dash_api_key: gr.update(value=cfg['DashScope']['key']),
                                 vs_radio: gr.update(value=cfg['vector_store']),
                                 faiss_path: gr.update(value=cfg['FAISS']['index_path']),
                                 faiss_name: gr.update(value=cfg['FAISS']['index_name'])
@@ -523,8 +585,22 @@ def create_ui(service,_global_args,_global_cfg):
                                 milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
                                 }
                             combined_dict.update(other_cfg)
+                        elif cfg['LLM'] == "DashScope":
+                            other_cfg = {
+                                llm_src: gr.update(value=cfg['LLM']),
+                                dash_model_name: gr.update(value=cfg['DashScope']['model']),
+                                dash_api_key: gr.update(value=cfg['DashScope']['key']),
+                                vs_radio: gr.update(value=cfg['vector_store']),
+                                milvus_collection: gr.update(value=cfg['MilvusCfg']['COLLECTION']),
+                                milvus_host: gr.update(value=cfg['MilvusCfg']['HOST']),
+                                milvus_port: gr.update(value=cfg['MilvusCfg']['PORT']),
+                                milvus_user: gr.update(value=cfg['MilvusCfg']['USER']),
+                                milvus_pwd: gr.update(value=cfg['MilvusCfg']['PASSWORD']),
+                                milvus_drop: gr.update(value=cfg['MilvusCfg']['DROP']),
+                                }
+                            combined_dict.update(other_cfg)
                         return combined_dict
-                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], api_name="cfg_analyze")   
+                cfg_btn.click(fn=cfg_analyze, inputs=config_file, outputs=[emb_model,emb_dim,emb_openai_key,eas_url,eas_token,llm_src, open_api_key,dash_model_name,dash_api_key,vs_radio,pg_host,pg_user,pg_pwd,pg_database, pg_collection, pg_del, holo_host, holo_database, holo_user, holo_pwd, holo_table, es_url, es_index, es_user, es_pwd, faiss_path, faiss_name, milvus_collection, milvus_host, milvus_port, milvus_user, milvus_pwd, milvus_drop], api_name="cfg_analyze")   
                 
         with gr.Tab("\N{whale} Upload"):
             with gr.Row():
