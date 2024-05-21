@@ -190,7 +190,7 @@ class LLMService:
                 ans = self.llm(f"question: {user_prompt}, chat_history: {self.langchain_chat_history}")
             else:
                 logger.info(f"LLM-OpenAI: query: {user_prompt}, history: [], top_p:{llm_topp}, temperature:{llm_temp}")
-                ans = self.llm(query)
+                ans = self.llm(user_prompt)
         elif self.cfg['LLM'] == 'DashScope':
             llm_topp = float(llm_topp) if llm_topp is not None else 1.0
             self.llm = Tongyi(model_name=self.cfg['DashScope']['model'], dashscope_api_key = self.cfg['DashScope']['key'], top_p=llm_topp)
@@ -199,7 +199,7 @@ class LLMService:
                 ans = self.llm.invoke(f"question: {user_prompt}, chat_history: {self.langchain_chat_history}")
             else:
                 logger.info(f"LLM-DashScope-{self.cfg['DashScope']['model']}: query: {user_prompt}, history: [], top_p:{llm_topp}")
-                ans = self.llm.invoke(query)
+                ans = self.llm.invoke(user_prompt)
         if history:
             self.langchain_chat_history.append((new_query, ans))
         logger.info(f"Get response from {self.cfg['LLM']} {ans}")
