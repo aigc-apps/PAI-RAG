@@ -1,14 +1,16 @@
-# EasyRAG: An easy-to-use framework for modular RAG.
+# PAI-RAG: An easy-to-use framework for modular RAG.
 
-## Step1: 代码拉到开发机
 
+## Get Started
+
+### Step1: Clone Repo
 ```bash
-git clone git@gitlab.alibaba-inc.com:pai_biz_arch/EasyRAG.git
+git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
 
 注：如果需要调用Open AI，需要使用新加坡开发机器，不能连通弹内Gitlab环境，需要手动将代码上传到新加坡机器
 
-## Step2: 配置环境
+### Step2: 配置环境
 
 本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
 
@@ -24,42 +26,7 @@ pip install poetry
 poetry install
 ```
 
-如果是本地运行, 需要先从oss上下载easy模型到本地localdata文件夹下
-
-- access_key_id(id): oss access id，必填
-- access_key_secret(s): oss access key，必填
-- bucket(b): oss easyocr model所在bucket，可选，默认为'pai-rag'
-- endpoint(e): oss 连接endpoint，可选，默认为'oss-cn-hangzhou.aliyuncs.com'
-- easyocr_model_path(mp): oss上easy ocr model所在路径，可选， 默认为'model/easyocr'
-
-```bash
-load_easyocr_model -id <id> -s <secret>
-```
-
-并在src/pai_rag/config/settings.local.yaml文件中的reader模块下，设置enable_image_ocr为True，且添加本地easyocr路径
-
-```bash
-data_reader:
-  enable_image_ocr: True
-  easyocr_model_dir: ./localdata/easyocr_models/
-```
-
-## Optional: 启动本地phoenix进程进行trace
-
-命令行
-
-```bash
-python3 -m phoenix.server.main --port 6006 serve
-```
-
-或者docker
-
-```bash
-docker pull arizephoenix/phoenix
-docker run -p 6006:6006 -i -t arizephoenix/phoenix:latest
-```
-
-## Step3: 启动程序
+### Step3: 启动程序
 
 使用OpenAI API，需要在命令行引入环境变量 export OPENAI_API_KEY=""
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
@@ -69,9 +36,7 @@ docker run -p 6006:6006 -i -t arizephoenix/phoenix:latest
 pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
 ```
 
-### API请求服务
-
-向服务侧发送请求示例：
+现在你可以使用命令行向服务侧发送API请求，或者直接打开http://HOST:PORT。
 
 1.
 
@@ -167,7 +132,3 @@ load_data -d directory_path
 ```bash
 evaluation -t retrieval -o True -f results_output_path
 ```
-
-## Step4: 代码开发
-
-直接在开发机上修改代码，基于挂载目录可以同步更新，直接在docker里运行即可。
