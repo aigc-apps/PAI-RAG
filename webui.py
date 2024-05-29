@@ -34,6 +34,8 @@ class Query(BaseModel):
     temperature: float | None = 0.7
     vector_topk: int | None = 3
     score_threshold: float | None = 600
+    rerank_model: str | None = 'No Re-Rank'
+    kw_retrieval: str | None = 'Embedding Only'
 
 class LLMQuery(BaseModel):
     question: str
@@ -45,6 +47,8 @@ class VectorQuery(BaseModel):
     question: str
     vector_topk: int | None = 3
     score_threshold: float | None = 600
+    rerank_model: str | None = 'No Re-Rank'
+    kw_retrieval: str | None = 'Embedding Only'
 
 app = FastAPI()
 
@@ -76,12 +80,12 @@ def add_general_url(
 
     @app.post("/chat/retrieval")
     async def query_by_vectorstore(query: VectorQuery):
-        ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold) 
+        ans, lens = service.query_only_vectorstore(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, rerank_model=query.rerank_model, kw_retrieval=query.kw_retrieval) 
         return {"response": ans, "tokens": lens}
 
     @app.post("/chat/rag")
     async def query_by_langchain(query: Query):
-        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature) 
+        ans, lens, _ = service.query_retrieval_llm(query = query.question, topk=query.vector_topk, score_threshold=query.score_threshold, llm_topK=query.topk, llm_topp=query.topp, llm_temp=query.temperature, rerank_model=query.rerank_model, kw_retrieval=query.kw_retrieval) 
         return {"response": ans, "tokens": lens}
 
 os_env_params = {}
