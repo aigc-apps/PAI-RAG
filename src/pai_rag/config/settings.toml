@@ -4,6 +4,9 @@ dynaconf_merge = true
 name = "pai_rag"
 version = "0.1.1"
 
+[rag.agent]
+type = "react"
+
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
 
@@ -59,9 +62,6 @@ query_rewrite_n = 1 # set to 1 to disable query generation
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
-
-[rag.agent]
-type = "react"
 
 [rag.tool]
 type = ["calculator"]
