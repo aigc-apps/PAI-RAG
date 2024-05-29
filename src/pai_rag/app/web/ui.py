@@ -12,7 +12,6 @@ from pai_rag.app.web.prompts import (
     ACCURATE_CONTENT_PROMPTS,
     PROMPT_MAP,
 )
-from os import environ
 
 import logging
 import traceback

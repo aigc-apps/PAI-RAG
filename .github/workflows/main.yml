@@ -31,8 +31,24 @@ jobs:
         env:
           POETRY_VIRTUALENVS_CREATE: false
 
+      - name: Install pre-commit
+        shell: bash
+        run: poetry run pip install pre-commit
+
+      - name: Run Linter
+        shell: bash
+        run: poetry run make lint
+
       - name: Run Tests
         run: |
           make test
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
+
+      - name: Python Linter
+        uses: sunnysid3up/python-linter@master
+        with:
+          source: "src"
+          mypy-options: "--ignore-missing-imports --show-error-codes"
+          pylint-options: "--rcfile=setup.cfg"
+          isort-options: "-w 100"
