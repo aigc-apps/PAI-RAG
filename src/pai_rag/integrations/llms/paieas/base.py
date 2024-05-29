@@ -79,7 +79,7 @@ class PaiEAS(CustomLLM):
 
     @classmethod
     def class_name(cls) -> str:
-        return "PaiEasLLM"
+        return "PaiEAS"
 
     @property
     def metadata(self) -> LLMMetadata:

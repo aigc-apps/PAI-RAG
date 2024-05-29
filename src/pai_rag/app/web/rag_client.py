@@ -76,7 +76,8 @@ class RagWebClient:
         session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
         response.session_id = session_id
-
+        formatted_text = "\n\n".join([f"""[Doc {i+1}] [score: {doc["score"]}]\n{doc["text"]}""" for i,doc in enumerate(response["docs"])])
+        response["answer"] = formatted_text
         return response
 
     def add_knowledge(self, file_dir: str, enable_qa_extraction: bool):

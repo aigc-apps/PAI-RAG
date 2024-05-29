@@ -25,7 +25,7 @@ welcome_message_markdown = """
 
             #### \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
 
-            #### \N{fire} <a href='/docs'>API Docs</a> &emsp; \N{rocket} <a href={EAS_TRACE_ENDPOINT}>View Tracing</a> &emsp; \N{fire}  欢迎加入【PAI】RAG答疑群 27370042974
+            #### \N{fire} <a href='/docs'>API Docs</a> &emsp; \N{rocket} \N{fire}  欢迎加入【PAI】RAG答疑群 27370042974
             """
 
 css_style = """
@@ -145,11 +145,7 @@ def respond(input_elements: List[Any]):
 
 def create_ui():
     with gr.Blocks(css=css_style) as homepage:
-        gr.Markdown(
-            value=welcome_message_markdown.format(
-                EAS_TRACE_ENDPOINT=environ.get("EAS_ARIZE_PHOENIX_URL", "")
-            )
-        )
+        gr.Markdown(value=welcome_message_markdown)
 
         with gr.Tab("\N{rocket} Settings"):
             with gr.Row():

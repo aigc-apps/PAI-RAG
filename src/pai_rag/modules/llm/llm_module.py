@@ -4,7 +4,7 @@ from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.azure_openai import AzureOpenAI
 from llama_index.llms.dashscope import DashScope
-from pai_rag.integrations.llms.paieas import PaiEAS
+from pai_rag.integrations.llms.paieas.base import PaiEAS
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 
