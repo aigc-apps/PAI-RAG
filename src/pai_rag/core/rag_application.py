@@ -1,4 +1,5 @@
 from asgi_correlation_id import correlation_id
+from pai_rag.core.rag_trace import RagTrace
 from pai_rag.data.rag_dataloader import RagDataLoader
 from pai_rag.utils.oss_cache import OssCache
 from pai_rag.modules.module_registry import module_registry
@@ -26,6 +27,8 @@ class RagApplication:
 
     def initialize(self, config):
         self.config = config
+        print(self.config.trace)
+        RagTrace.initialize(self.config.trace)
 
         module_registry.init_modules(self.config)
         self.index = module_registry.get_module("IndexModule")
