@@ -1,0 +1,21 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.llamahub]
+contains_example = false
+import_path = "llama_index.llms.paieas"
+
+[tool.llamahub.class_authors]
+PaiEas = "llama-index"
+
+[tool.poetry]
+name = "llama-index-llms-paieas"
+version = "0.1.0"
+description = ""
+authors = ["陆逊 <luxun.fy@alibaba-inc.com>"]
+readme = "README.md"
+packages = [{include = "llama_index/"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"

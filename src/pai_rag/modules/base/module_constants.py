@@ -1,0 +1,1 @@
+MODULE_PARAM_CONFIG = "config"
