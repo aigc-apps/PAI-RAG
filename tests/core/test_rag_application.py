@@ -36,4 +36,4 @@ async def test_add_knowledge_file(rag_app: RagApplication):
 async def test_query(rag_app: RagApplication):
     query = RagQuery(question="What did he do to learn computer science?")
     response = await rag_app.aquery(query)
-    print(response.answer)
+    assert len(response.answer) > 10
