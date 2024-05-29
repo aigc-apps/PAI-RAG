@@ -17,6 +17,7 @@ from llama_index.core.tools.utils import create_schema_from_function
 from datetime import datetime
 import hashlib
 
+
 class LoadAndSearchToolSpec(BaseToolSpec):
     """Load and Search Tool.
 
@@ -143,11 +144,10 @@ class LoadAndSearchToolSpec(BaseToolSpec):
         # else:
         #     self._index = self._index_cls.from_documents(docs, **self._index_kwargs)
         self._index = self._index_cls.from_documents(docs, **self._index_kwargs)
-        
 
         encoded_raw_text = datetime.now().time().isoformat().encode()
         folder_name = hashlib.sha256(encoded_raw_text).hexdigest()
-        tmp_persist_path = f'experiments/websearch/{folder_name}'
+        tmp_persist_path = f"experiments/websearch/{folder_name}"
         self._index.storage_context.persist(persist_dir=tmp_persist_path)
         return (
             "Content loaded! You can now search the information using read_{}".format(

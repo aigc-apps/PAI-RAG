@@ -18,20 +18,20 @@ DEFAULT_GOOGLE_SEARCH_TOOL_DESP = """
 
 DEFAULT_CALCULATE_MULTIPLY = """"
     This tool is designed to assist with a variety of numerical calculations where multiplication is required. It is particularly useful for scenarios such as age computation, financial calculations involving money, quantifying items, and any situation where the product of two integers is sought. The `multiply` function provided by this tool performs integer multiplication and is essential when accuracy and integer results are crucial.
-        
+
     multiply(a: int, b: int) -> int
     Multiply two integers and returns the result as an integer. This function is ideal for tasks that need to calculate products of numerical values in an accurate and efficient manner.
-    
+
     Args:
         a (int): The first integer factor in the multiplication.
         b (int): The second integer factor in the multiplication.
-    
+
     Returns:
         int: The product of multiplying the two integers, suitable for numerical computations that rely on integer values.
-    
+
     Raises:
         ValueError: If either 'a' or 'b' is not an integer, as non-integer inputs cannot be processed by the multiply function.
-    
+
     Examples of use include multiplying quantities of items in inventory management, calculating the total cost from unit price and quantity in financial transactions, computing square footage, and many other practical applications where multiplication of integers is necessary.
 """
 

@@ -66,7 +66,7 @@ class RagService:
     @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
-    
+
     @trace_correlation_id
     async def batch_evaluate_retrieval_and_response(self, type):
         return await self.rag.batch_evaluate_retrieval_and_response(type)

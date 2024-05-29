@@ -27,9 +27,11 @@ async def aquery_llm(query: LlmQuery) -> LlmResponse:
 async def aquery_retrieval(query: RetrievalQuery):
     return await rag_service.aquery_vectordb(query)
 
+
 @router.post("/query/agent")
 async def aquery_agent(query: LlmQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
+
 
 @router.patch("/config")
 async def aupdate(new_config: Any = Body(None)):

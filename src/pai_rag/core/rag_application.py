@@ -66,7 +66,12 @@ class RagApplication:
         self.logger.info(f"Get session ID: {session_id}.")
         node_results = await self.retriever.aretrieve(query.question)
 
-        docs = [ContextDoc(text = score_node.node.get_content(), metadata=score_node.node.metadata, score=score_node.score)
+        docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
             for score_node in node_results
         ]
         return RetrievalResponse(docs=docs)
@@ -116,7 +121,7 @@ class RagApplication:
         response = await llm_chat_engine.achat(query.question)
         self.chat_store.persist()
         return LlmResponse(answer=response.response)
-    
+
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.
 
@@ -129,9 +134,7 @@ class RagApplication:
             LlmResponse
         """
         session_id = correlation_id.get()
-        self.logger.info(
-            f"Get session ID: {session_id}."
-        )
+        self.logger.info(f"Get session ID: {session_id}.")
         response = await self.agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
