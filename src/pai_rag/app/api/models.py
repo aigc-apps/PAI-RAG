@@ -35,9 +35,13 @@ class RagResponse(BaseModel):
 class LlmResponse(BaseModel):
     answer: str
 
+class ContextDoc(BaseModel):
+    text: str
+    score: float
+    metadata: Dict
 
 class RetrievalResponse(BaseModel):
-    answer: str
+    docs: List[ContextDoc]
 
 
 class KnowledgeInput(BaseModel):

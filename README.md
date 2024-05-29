@@ -8,8 +8,6 @@
 git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
 
-注：如果需要调用Open AI，需要使用新加坡开发机器，不能连通弹内Gitlab环境，需要手动将代码上传到新加坡机器
-
 ### Step2: 配置环境
 
 本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
@@ -36,7 +34,7 @@ poetry install
 pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
 ```
 
-现在你可以使用命令行向服务侧发送API请求，或者直接打开http://HOST:PORT。
+现在你可以使用命令行向服务侧发送API请求，或者直接打开http://localhost:8000
 
 1.
 
