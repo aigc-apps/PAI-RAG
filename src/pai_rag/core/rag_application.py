@@ -9,6 +9,7 @@ from pai_rag.app.api.models import (
     RetrievalQuery,
     RagResponse,
     LlmResponse,
+    ContextDoc,
     RetrievalResponse,
 )
 
@@ -64,15 +65,11 @@ class RagApplication:
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
         node_results = await self.retriever.aretrieve(query.question)
-        text_results = [
-            score_node.node.get_content().replace("\n", " ")
+
+        docs = [ContextDoc(text = score_node.node.get_content(), metadata=score_node.node.metadata, score=score_node.score)
             for score_node in node_results
         ]
-        formatted_results = [
-            f"**Doc [{i}]**: {text} \n" for i, text in enumerate(text_results)
-        ]
-        result = "\n".join(formatted_results)
-        return RetrievalResponse(answer=result)
+        return RetrievalResponse(docs=docs)
 
     async def aquery(self, query: RagQuery) -> RagResponse:
         """Query answer from RAG App asynchronously.
