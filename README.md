@@ -1,9 +1,11 @@
 # PAI-RAG: An easy-to-use framework for modular RAG.
 
+[![PAI-RAG CI](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml)
 
 ## Get Started
 
 ### Step1: Clone Repo
+
 ```bash
 git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
@@ -45,6 +47,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 ```
 
 - **多轮对话请求**
+
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"一键助眠是什么？"}'
 
@@ -59,10 +62,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 ```
 
 - **Agent简单对话**
+
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"最近互联网公司有发生什么大新闻吗？"}'
 ```
-
 
 2. Retrieval Batch评估
 

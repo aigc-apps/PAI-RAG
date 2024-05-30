@@ -1,12 +1,17 @@
 import logging
-import os
 from typing import Dict, List, Any
 from llama_index.tools.google import GoogleSearchToolSpec
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.modules.tool.load_and_search_tool_spec import LoadAndSearchToolSpec
 from llama_index.core.tools import FunctionTool
-from pai_rag.modules.tool.default_tool_description_template import *
+from pai_rag.modules.tool.default_tool_description_template import (
+    DEFAULT_GOOGLE_SEARCH_TOOL_DESP,
+    DEFAULT_CALCULATE_MULTIPLY,
+    DEFAULT_CALCULATE_ADD,
+    DEFAULT_CALCULATE_DIVIDE,
+    DEFAULT_CALCULATE_SUBTRACT,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -38,8 +38,8 @@ class RagWebClient:
         return f"{self.endpoint}service/config"
 
     @property
-    def load_knowledge_url(self):
-        return f"{self.endpoint}service/knowledge"
+    def load_data_url(self):
+        return f"{self.endpoint}service/data"
 
     def query(self, text: str, session_id: str = None):
         q = dict(question=text)
@@ -76,13 +76,18 @@ class RagWebClient:
         session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
         response.session_id = session_id
-        formatted_text = "\n\n".join([f"""[Doc {i+1}] [score: {doc["score"]}]\n{doc["text"]}""" for i,doc in enumerate(response["docs"])])
+        formatted_text = "\n\n".join(
+            [
+                f"""[Doc {i+1}] [score: {doc["score"]}]\n{doc["text"]}"""
+                for i, doc in enumerate(response["docs"])
+            ]
+        )
         response["answer"] = formatted_text
         return response
 
     def add_knowledge(self, file_dir: str, enable_qa_extraction: bool):
         q = dict(file_path=file_dir, enable_qa_extraction=enable_qa_extraction)
-        r = requests.post(self.load_knowledge_url, json=q)
+        r = requests.post(self.load_data_url, json=q)
         r.raise_for_status()
         return
 

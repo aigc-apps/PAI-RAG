@@ -35,15 +35,17 @@ class RagResponse(BaseModel):
 class LlmResponse(BaseModel):
     answer: str
 
+
 class ContextDoc(BaseModel):
     text: str
     score: float
     metadata: Dict
 
+
 class RetrievalResponse(BaseModel):
     docs: List[ContextDoc]
 
 
-class KnowledgeInput(BaseModel):
+class DataInput(BaseModel):
     file_path: str
     enable_qa_extraction: bool = False

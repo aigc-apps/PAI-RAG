@@ -27,7 +27,7 @@ ALL_MODULES = [
     "ChatEngineFactoryModule",
     "LlmChatEngineFactoryModule",
     "AgentModule",
-    "ToolModule"
+    "ToolModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

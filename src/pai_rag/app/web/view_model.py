@@ -89,7 +89,7 @@ class ViewModel(BaseModel):
     fusion_mode: str = "reciprocal_rerank"  # [simple, reciprocal_rerank, dist_based_score, relative_score]
     query_rewrite_n: int = 1
 
-    synthesizer_type:str = None
+    synthesizer_type: str = None
 
     text_qa_template: str = None
 
@@ -161,9 +161,7 @@ class ViewModel(BaseModel):
         self.chunk_size = config["node_parser"]["chunk_size"]
         self.chunk_overlap = config["node_parser"]["chunk_overlap"]
 
-        self.reader_type = config["data_reader"].get(
-            "type", self.reader_type
-        )
+        self.reader_type = config["data_reader"].get("type", self.reader_type)
         self.enable_qa_extraction = config["data_reader"].get(
             "enable_qa_extraction", self.enable_qa_extraction
         )
@@ -221,7 +219,7 @@ class ViewModel(BaseModel):
         config["node_parser"]["type"] = self.parser_type
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
-        
+
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["type"] = self.reader_type
 
