@@ -46,6 +46,6 @@ class RetrievalResponse(BaseModel):
     docs: List[ContextDoc]
 
 
-class KnowledgeInput(BaseModel):
+class DataInput(BaseModel):
     file_path: str
     enable_qa_extraction: bool = False

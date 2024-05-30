@@ -7,7 +7,7 @@ from pai_rag.app.api.models import (
     RetrievalQuery,
     RagResponse,
     LlmResponse,
-    KnowledgeInput,
+    DataInput,
 )
 
 router = APIRouter()
@@ -39,8 +39,8 @@ async def aupdate(new_config: Any = Body(None)):
     return {"msg": "Update RAG configuration successfully."}
 
 
-@router.post("/knowledge")
-async def load_knowledge(input: KnowledgeInput):
+@router.post("/data")
+async def load_data(input: DataInput):
     await rag_service.add_knowledge(
         file_dir=input.file_path, enable_qa_extraction=input.enable_qa_extraction
     )
