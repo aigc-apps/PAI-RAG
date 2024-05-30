@@ -25,6 +25,7 @@ def rag_app():
     return rag_app
 
 
+# Test load knowledge file
 async def test_add_knowledge_file(rag_app: RagApplication):
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
     print(len(rag_app.index.docstore.docs))
@@ -44,7 +45,7 @@ async def test_query(rag_app: RagApplication):
 async def test_llm(rag_app: RagApplication):
     query = RagQuery(question="What is the result of 15+22?")
     response = await rag_app.aquery_llm(query)
-    assert "37" in len(response.answer)
+    assert "37" in response.answer
 
 
 # Test retrieval query
@@ -58,4 +59,4 @@ async def test_retrieval(rag_app: RagApplication):
 async def test_agent(rag_app: RagApplication):
     query = RagQuery(question="What is the result of 15+22?")
     response = await rag_app.aquery_agent(query)
-    assert "37" in len(response.answer)
+    assert "37" in response.answer
