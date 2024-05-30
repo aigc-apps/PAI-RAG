@@ -25,7 +25,7 @@ async def aquery_llm(query: LlmQuery) -> LlmResponse:
 
 @router.post("/query/retrieval")
 async def aquery_retrieval(query: RetrievalQuery):
-    return await rag_service.aquery_vectordb(query)
+    return await rag_service.aquery_retrieval(query)
 
 
 @router.post("/query/agent")

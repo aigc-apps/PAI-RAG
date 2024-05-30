@@ -60,8 +60,8 @@ class RagService:
         return await self.rag.aquery_llm(query)
 
     @trace_correlation_id
-    async def aquery_vectordb(self, query: RetrievalQuery):
-        return await self.rag.aquery_vectordb(query)
+    async def aquery_retrieval(self, query: RetrievalQuery):
+        return await self.rag.aquery_retrieval(query)
 
     @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:

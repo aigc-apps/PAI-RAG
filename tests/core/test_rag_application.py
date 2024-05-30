@@ -33,7 +33,29 @@ async def test_add_knowledge_file(rag_app: RagApplication):
     assert len(rag_app.index.docstore.docs) > 0
 
 
+# Test rag query
 async def test_query(rag_app: RagApplication):
-    query = RagQuery(question="What did he do to learn computer science?")
+    query = RagQuery(question="Why did he decide to learn AI?")
     response = await rag_app.aquery(query)
     assert len(response.answer) > 10
+
+
+# Test llm query
+async def test_llm(rag_app: RagApplication):
+    query = RagQuery(question="What is the result of 15+22?")
+    response = await rag_app.aquery_llm(query)
+    assert "37" in len(response.answer)
+
+
+# Test retrieval query
+async def test_retrieval(rag_app: RagApplication):
+    retrieval_query = RagQuery(question="Why did he decide to learn AI?")
+    response = await rag_app.aquery_retrieval(retrieval_query)
+    assert len(response.docs) > 0
+
+
+# Test agent query
+async def test_agent(rag_app: RagApplication):
+    query = RagQuery(question="What is the result of 15+22?")
+    response = await rag_app.aquery_agent(query)
+    assert "37" in len(response.answer)

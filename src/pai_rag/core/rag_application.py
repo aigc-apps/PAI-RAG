@@ -58,7 +58,7 @@ class RagApplication:
     async def load_knowledge(self, file_dir, enable_qa_extraction=False):
         await self.data_loader.load(file_dir, enable_qa_extraction)
 
-    async def aquery_vectordb(self, query: RetrievalQuery) -> RetrievalResponse:
+    async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RagResponse(answer="Empty query. Please input your question.")
 
