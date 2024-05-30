@@ -13,6 +13,9 @@ lint:	## Run linters: pre-commit (black, ruff, codespell) and mypy
 test:	## Run tests via pytest.
 	pytest tests
 
+coveragetest:       ## Tests with coverage report
+	pytest --cov-report xml:localdata/test_output/coverage_report.xml --cov=pai_rag tests
+
 watch-docs:	## Build and watch documentation.
 	sphinx-autobuild docs/ docs/_build/html --open-browser --watch $(GIT_ROOT)/llama_index/
 

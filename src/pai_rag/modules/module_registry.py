@@ -15,7 +15,7 @@ MODULE_CONFIG_KEY_MAP = {
     "LlmChatEngineFactoryModule": "llm_chat_engine",
     "DataReaderFactoryModule": "data_reader",
     "AgentModule": "agent",
-    "ToolModule": "tool"
+    "ToolModule": "tool",
 }
 
 
