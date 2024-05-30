@@ -45,3 +45,9 @@ jobs:
           make test
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
+
+      - name: Get Cover
+        uses: orgoro/coverage@v3.1
+        with:
+          coverageFile: output/coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
