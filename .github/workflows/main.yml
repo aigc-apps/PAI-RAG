@@ -49,5 +49,5 @@ jobs:
       - name: Get Cover
         uses: orgoro/coverage@v3.1
         with:
-          coverageFile: localdata/test_output/coverage.xml
+          coverageFile: localdata/test_output/coverage_report.xml
           token: ${{ secrets.GITHUB_TOKEN }}
