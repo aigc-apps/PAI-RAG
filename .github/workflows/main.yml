@@ -8,6 +8,10 @@ on:
       - feature
       - "releases/**"
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build:
     name: Build and Test
