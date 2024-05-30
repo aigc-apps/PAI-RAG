@@ -1,5 +1,7 @@
 # PAI-RAG: An easy-to-use framework for modular RAG.
 
+[![PAI-RAG CI](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml)
+
 ## Get Started
 
 ### Step1: Clone Repo
