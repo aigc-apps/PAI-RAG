@@ -60,7 +60,7 @@ class RagApplication:
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
+            return RetrievalResponse(docs=[])
 
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
@@ -111,7 +111,7 @@ class RagApplication:
             LlmResponse
         """
         if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
+            return LlmResponse(answer="Empty query. Please input your question.")
 
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
@@ -133,6 +133,9 @@ class RagApplication:
         Returns:
             LlmResponse
         """
+        if not query.question:
+            return LlmResponse(answer="Empty query. Please input your question.")
+
         session_id = correlation_id.get()
         self.logger.info(f"Get session ID: {session_id}.")
         response = await self.agent.achat(query.question)

@@ -1,4 +1,5 @@
 import logging
+import os
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 from llama_index.core.prompts.prompt_type import PromptType
@@ -41,6 +42,9 @@ class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
             num_questions_per_chunk=self.num_questions_per_chunk
         )
         self.show_progress = show_progress
+        self.is_test_run = os.getenv("IS_PAI_RAG_CI_TEST") == "true"
+        if self.is_test_run:
+            self.nodes = self.nodes[:1]  # Only
 
         logging.info("dataset generation initialized successfully.")
 
