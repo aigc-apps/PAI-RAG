@@ -1532,7 +1532,7 @@ transformers = ">=4.33.0"
 type = "git"
 url = "https://github.com/FlagOpen/FlagEmbedding.git"
 reference = "HEAD"
-resolved_reference = "9d4ec44dc8982b648b58a807c68d9820f86f08dd"
+resolved_reference = "ba3d2c2bc6b4b9d01ac5eb7655eeae1e30c70c31"
 
 [[package]]
 name = "flatbuffers"
@@ -3030,17 +3030,18 @@ llama-index-core = ">=0.10.1,<0.11.0"
 
 [[package]]
 name = "llama-index-vector-stores-elasticsearch"
-version = "0.1.7"
+version = "0.2.0"
 description = "llama-index vector_stores elasticsearch integration"
 optional = false
 python-versions = "<4.0,>=3.8.1"
 files = [
-    {file = "llama_index_vector_stores_elasticsearch-0.1.7-py3-none-any.whl", hash = "sha256:99eda589e57cc1877b55686f03d810f53e91a6891872214972d1af4fac5dc440"},
-    {file = "llama_index_vector_stores_elasticsearch-0.1.7.tar.gz", hash = "sha256:7e5435be500ee0d8852efefb4b7891693310a459350bb2aeaea6f0d5d3a23975"},
+    {file = "llama_index_vector_stores_elasticsearch-0.2.0-py3-none-any.whl", hash = "sha256:098c98db48dfa513c7f4c33431251aeb0e432cd1617bb4186d23823c87f2a72c"},
+    {file = "llama_index_vector_stores_elasticsearch-0.2.0.tar.gz", hash = "sha256:9897f7d195f08ee8752bce8e774519ab02a1897fe30dd5d40e53556f9b798186"},
 ]
 
 [package.dependencies]
-elasticsearch = ">=8.12.0,<9.0.0"
+aiohttp = ">=3.9.5,<4.0.0"
+elasticsearch = ">=8.13.1,<9.0.0"
 llama-index-core = ">=0.10.1,<0.11.0"
 
 [[package]]
@@ -3924,13 +3925,13 @@ sympy = "*"
 
 [[package]]
 name = "openai"
-version = "1.30.4"
+version = "1.30.5"
 description = "The official Python library for the openai API"
 optional = false
 python-versions = ">=3.7.1"
 files = [
-    {file = "openai-1.30.4-py3-none-any.whl", hash = "sha256:fb2635efd270efaf9fac2e07558d7948373b940637d3ae3ab624c1a983d4f03f"},
-    {file = "openai-1.30.4.tar.gz", hash = "sha256:f3488d9a1c4e0d332b019377d27d7cb4b3d6103fd5d0a416c7ceac780d1d9b88"},
+    {file = "openai-1.30.5-py3-none-any.whl", hash = "sha256:2ad95e926de0d2e09cde632a9204b0a6dca4a03c2cdcc84329b01f355784355a"},
+    {file = "openai-1.30.5.tar.gz", hash = "sha256:5366562eb2c5917e6116ae0391b7ae6e3acd62b0ae3f565ada32b35d8fcfa106"},
 ]
 
 [package.dependencies]
@@ -4046,13 +4047,13 @@ files = [
 
 [[package]]
 name = "openpyxl"
-version = "3.1.2"
+version = "3.1.3"
 description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "openpyxl-3.1.2-py2.py3-none-any.whl", hash = "sha256:f91456ead12ab3c6c2e9491cf33ba6d08357d802192379bb482f1033ade496f5"},
-    {file = "openpyxl-3.1.2.tar.gz", hash = "sha256:a6f5977418eff3b2d5500d54d9db50c8277a368436f4e4f8ddb1be3422870184"},
+    {file = "openpyxl-3.1.3-py2.py3-none-any.whl", hash = "sha256:25071b558db709de9e8782c3d3e058af3b23ffb2fc6f40c8f0c45a154eced2c3"},
+    {file = "openpyxl-3.1.3.tar.gz", hash = "sha256:8dd482e5350125b2388070bb2477927be2e8ebc27df61178709bc8c8751da2f9"},
 ]
 
 [package.dependencies]
@@ -5570,13 +5571,13 @@ files = [
 
 [[package]]
 name = "requests"
-version = "2.32.2"
+version = "2.32.3"
 description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "requests-2.32.2-py3-none-any.whl", hash = "sha256:fc06670dd0ed212426dfeb94fc1b983d917c4f9847c863f313c9dfaaffb7c23c"},
-    {file = "requests-2.32.2.tar.gz", hash = "sha256:dd951ff5ecf3e3b3aa26b40703ba77495dab41da839ae72ef3c8e5d8e2433289"},
+    {file = "requests-2.32.3-py3-none-any.whl", hash = "sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"},
+    {file = "requests-2.32.3.tar.gz", hash = "sha256:55365417734eb18255590a9ff9eb97e9e1da868d4ccd6402399eaf68af20a760"},
 ]
 
 [package.dependencies]
@@ -6333,17 +6334,17 @@ files = [
 
 [[package]]
 name = "sympy"
-version = "1.12"
+version = "1.12.1"
 description = "Computer algebra system (CAS) in Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "sympy-1.12-py3-none-any.whl", hash = "sha256:c3588cd4295d0c0f603d0f2ae780587e64e2efeedb3521e46b9bb1d08d184fa5"},
-    {file = "sympy-1.12.tar.gz", hash = "sha256:ebf595c8dac3e0fdc4152c51878b498396ec7f30e7a914d6071e674d49420fb8"},
+    {file = "sympy-1.12.1-py3-none-any.whl", hash = "sha256:9b2cbc7f1a640289430e13d2a56f02f867a1da0190f2f99d8968c2f74da0e515"},
+    {file = "sympy-1.12.1.tar.gz", hash = "sha256:2877b03f998cd8c08f07cd0de5b767119cd3ef40d09f41c30d722f6686b0fb88"},
 ]
 
 [package.dependencies]
-mpmath = ">=0.19"
+mpmath = ">=1.1.0,<1.4.0"
 
 [[package]]
 name = "tenacity"
@@ -7564,4 +7565,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "b5658c7dd0504c29f60c856dc5993223a59a4c74ce1cd009faac91848456a71f"
+content-hash = "6ab5f69acfd6cf7bd5ea1aaee27e6f2fe5b96c97828340f495e7b3d43cc64f8a"
