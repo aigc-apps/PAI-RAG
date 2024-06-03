@@ -133,7 +133,6 @@ def respond(input_elements: List[Any]):
         response = rag_client.query_vector(msg)
     else:
         response = rag_client.query(msg, session_id=current_session_id)
-    print("history======:", update_dict["include_history"])
     if update_dict["include_history"]:
         current_session_id = response.session_id
     else:
@@ -384,7 +383,12 @@ def create_ui():
                             )
                             # similarity_cutoff = gr.Slider(minimum=0, maximum=1, step=0.01,elem_id="similarity_cutoff",value=view_model.similarity_cutoff, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
                             rerank_model = gr.Radio(
-                                ["No Rerank", "bge-reranker-base", "LLMRerank"],
+                                [
+                                    "no-reranker",
+                                    "bge-reranker-base",
+                                    "bge-reranker-large",
+                                    "llm-reranker",
+                                ],
                                 label="Re-Rank Model (Note: It will take a long time to load the model when using it for the first time.)",
                                 elem_id="rerank_model",
                                 value=view_model.rerank_model,

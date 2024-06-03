@@ -12,6 +12,7 @@ from pai_rag.app.api.models import (
     ContextDoc,
     RetrievalResponse,
 )
+from llama_index.core.schema import QueryBundle
 
 import logging
 
@@ -64,7 +65,8 @@ class RagApplication:
 
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
-        node_results = await self.retriever.aretrieve(query.question)
+        query_bundle = QueryBundle(query.question)
+        node_results = await self.query_engine.aretrieve(query_bundle)
 
         docs = [
             ContextDoc(

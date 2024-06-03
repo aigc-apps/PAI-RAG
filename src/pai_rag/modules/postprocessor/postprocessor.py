@@ -40,22 +40,24 @@ class PostprocessorModule(ConfigurableModule):
             )
 
         rerank_model = config.get("rerank_model", "")
-        if rerank_model == "llm":
+        if rerank_model == "llm-reranker":
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
-            logger.info(f"[PostProcessor]: LLMRerank used with top_n {top_n}.")
+            logger.info(f"[PostProcessor]: Llm reranker used with top_n {top_n}.")
             post_processors.append(LLMRerank(top_n=top_n, llm=llm))
 
-        elif rerank_model == "bge_reranker_base":
+        elif (
+            rerank_model == "bge-reranker-base" or rerank_model == "bge-reranker-large"
+        ):
             model_dir = config.get("rerank_model_dir", DEFAULT_MODEL_DIR)
-            model_name = config.get("rerank_model_name", DEFAULT_RANK_MODEL)
+            model_name = config.get("rerank_model_name", rerank_model)
             model = os.path.join(model_dir, model_name)
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
             logger.info(
-                f"[PostProcessor]: Rerank used with top_n {top_n}, model {model_name}."
+                f"[PostProcessor]: Reranker model used with top_n {top_n}, model {model_name}."
             )
             post_processors.append(FlagEmbeddingReranker(model=model, top_n=top_n))
 
         else:
-            logger.info("[PostProcessor]: No Rerank used.")
+            logger.info("[PostProcessor]: No Reranker used.")
 
         return post_processors
