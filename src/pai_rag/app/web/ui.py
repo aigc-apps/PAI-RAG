@@ -384,7 +384,7 @@ def create_ui():
                             )
                             # similarity_cutoff = gr.Slider(minimum=0, maximum=1, step=0.01,elem_id="similarity_cutoff",value=view_model.similarity_cutoff, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
                             rerank_model = gr.Radio(
-                                ["No Rerank", "bge-reranker-base", "LLMRerank"],
+                                ["No Rerank", "bge-reranker-base", "bge-reranker-large", "LLMRerank"],
                                 label="Re-Rank Model (Note: It will take a long time to load the model when using it for the first time.)",
                                 elem_id="rerank_model",
                                 value=view_model.rerank_model,

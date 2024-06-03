@@ -184,8 +184,10 @@ class ViewModel(BaseModel):
         rerank_model = config["postprocessor"].get("rerank_model", "No Rerank")
         if rerank_model == "llm":
             self.rerank_model = "LLMRerank"
-        elif rerank_model == "bge_reranker_base":
+        elif rerank_model == "bge-reranker-base":
             self.rerank_model = "bge-reranker-base"
+        elif rerank_model == "bge-reranker-large":
+            self.rerank_model = "bge-reranker-large"
         else:
             self.rerank_model = "No Rerank"
 
@@ -280,11 +282,13 @@ class ViewModel(BaseModel):
         # config["postprocessor"]["similarity_cutoff"] = self.similarity_cutoff
         if self.rerank_model == "LLMRerank":
             config["postprocessor"]["rerank_model"] = "llm"
-            config["postprocessor"]["top_n"] = 3
         elif self.rerank_model == "bge-reranker-base":
             config["postprocessor"]["rerank_model"] = "bge-reranker-base"
+        elif self.rerank_model == "bge-reranker-large":
+            config["postprocessor"]["rerank_model"] = "bge-reranker-large"
         else:
             config["postprocessor"]["rerank_model"] = "no rerank"
+        config["postprocessor"]["top_n"] = 3
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template

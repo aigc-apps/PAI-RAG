@@ -45,7 +45,7 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.postprocessor]
-rerank_model = "no rerank" # [no rerank, llm, bge_reranker_base]
+rerank_model = "no rerank" # [no rerank, llm, bge-reranker-base, bge-reranker-large]
 top_n = 2
 
 [rag.query_engine]
