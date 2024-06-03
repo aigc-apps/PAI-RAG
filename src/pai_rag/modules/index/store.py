@@ -8,6 +8,7 @@ from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.vector_stores.elasticsearch import ElasticsearchStore
 from llama_index.vector_stores.milvus import MilvusVectorStore
+from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 
 from pai_rag.integrations.vector_stores.vector_stores_hologres.hologres import (
     HologresVectorStore,
@@ -128,6 +129,7 @@ class RagStore:
             es_url=es_config["es_url"],
             es_user=es_config["es_user"],
             es_password=es_config["es_password"],
+            retrieval_strategy=AsyncDenseVectorStrategy(hybrid=True),
         )
 
     def _get_or_create_milvus(self):
