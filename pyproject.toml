@@ -13,7 +13,7 @@ readme = "README.md"
 python = ">=3.10.0,<3.12"
 fastapi = "^0.110.1"
 uvicorn = "^0.29.0"
-llama-index-core = "^0.10.29"
+llama-index-core = ">=0.10.29,<=0.10.39"
 llama-index-embeddings-openai = "^0.1.7"
 llama-index-embeddings-azure-openai = "^0.1.7"
 llama-index-embeddings-dashscope = "^0.1.3"
@@ -24,7 +24,7 @@ llama-index-readers-database = "^0.1.3"
 llama-index-vector-stores-chroma = "^0.1.6"
 llama-index-vector-stores-faiss = "^0.1.2"
 llama-index-vector-stores-analyticdb = "^0.1.1"
-llama-index-vector-stores-elasticsearch = "^0.1.7"
+llama-index-vector-stores-elasticsearch = "^0.2.0"
 llama-index-vector-stores-milvus = "^0.1.10"
 gradio = "3.41.0"
 faiss-cpu = "^1.8.0"
@@ -37,13 +37,22 @@ pytest = "^8.1.1"
 llama-index-retrievers-bm25 = "^0.1.3"
 jieba = "^0.42.1"
 llama-index-embeddings-huggingface = "^0.2.0"
-llama-index-postprocessor-flag-embedding-reranker = "^0.1.2"
-flagembedding = {git = "https://github.com/FlagOpen/FlagEmbedding.git"}
+llama-index-postprocessor-flag-embedding-reranker = "^0.1.3"
+flagembedding = "^1.2.10"
 sentencepiece = "^0.2.0"
 oss2 = "^2.18.5"
 asgi-correlation-id = "^4.3.1"
 openinference-instrumentation-llama-index = "1.3.0"
-torch = "2.2.2"
+torch = [
+  {version = "2.3.0+cpu", source = "pytorch_cpu", platform = "linux"},
+  {version = "2.3.0+cpu", source = "pytorch_cpu", platform = "win32"},
+  {version = "2.2.2", platform = "darwin"}
+]
+torchvision = [
+  {version = "0.18.0+cpu", source = "pytorch_cpu", platform = "linux"},
+  {version = "0.18.0+cpu", source = "pytorch_cpu", platform = "win32"},
+  {version = "0.17.2", platform = "darwin"}
+]
 openpyxl = "^3.1.2"
 pdf2image = "^1.17.0"
 llama-index-storage-chat-store-redis = "^0.1.3"
@@ -66,6 +75,11 @@ pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.data.rag_datapipeline:run"
 load_easyocr_model = "pai_rag.utils.download_easyocr_models:download_easyocr_models"
 evaluation = "pai_rag.evaluations.batch_evaluator:run"
+
+[[tool.poetry.source]]
+name = "pytorch_cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
