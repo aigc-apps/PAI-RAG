@@ -4,9 +4,10 @@ from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 from llama_index.core import SimpleDirectoryReader
-import pytest
 
 BASE_DIR = Path(__file__).parent.parent.parent
+
+
 def test_pai_pdf_reader():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
@@ -23,5 +24,3 @@ def test_pai_pdf_reader():
     )
     documents = directory_reader.load_data()
     assert len(documents) > 0
-
-

@@ -14,7 +14,6 @@ import easyocr
 from llama_index.core import Settings
 from pai_rag.utils.constants import DEFAULT_EASYOCR_MODEL_DIR
 import json
-import sys
 import unicodedata
 import logging
 import tempfile
@@ -40,7 +39,7 @@ class PaiPDFReader(BaseReader):
     """
 
     def __init__(
-            self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_EASYOCR_MODEL_DIR
+        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_EASYOCR_MODEL_DIR
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
         if self.enable_image_ocr:
@@ -57,15 +56,15 @@ class PaiPDFReader(BaseReader):
 
     def process_pdf_image(self, element: LTFigure, page_object: PageObject) -> str:
         """
-            Processes an image element from a PDF, crops it out, and performs OCR on the result.
+        Processes an image element from a PDF, crops it out, and performs OCR on the result.
 
-            Args:
-                element (LTFigure): An LTFigure object representing the image in the PDF, containing its coordinates.
-                page_object (PageObject): A PageObject representing the page in the PDF to be cropped.
+        Args:
+            element (LTFigure): An LTFigure object representing the image in the PDF, containing its coordinates.
+            page_object (PageObject): A PageObject representing the page in the PDF to be cropped.
 
-            Returns:
-                str: The OCR-processed text from the cropped image.
-            """
+        Returns:
+            str: The OCR-processed text from the cropped image.
+        """
         # Retrieve the image's coordinates
         [image_left, image_top, image_right, image_bottom] = [
             element.x0,
@@ -79,7 +78,7 @@ class PaiPDFReader(BaseReader):
         # Save the cropped page as a new PDF file and perform OCR
         cropped_pdf_writer = PyPDF2.PdfWriter()
         with tempfile.NamedTemporaryFile(
-                delete=True, suffix=".pdf"
+            delete=True, suffix=".pdf"
         ) as cropped_pdf_file:
             cropped_pdf_writer.add_page(page_object)
             cropped_pdf_writer.write(cropped_pdf_file)
@@ -89,18 +88,18 @@ class PaiPDFReader(BaseReader):
 
     def ocr_pdf(self, input_file: str) -> str:
         """
-           Function to convert PDF content into an image and then perform OCR (Optical Character Recognition)
+        Function to convert PDF content into an image and then perform OCR (Optical Character Recognition)
 
-           Args:
-               input_file (str): input file path.
+        Args:
+            input_file (str): input file path.
 
-           Returns:
-                str: text from ocr.
-           """
+        Returns:
+             str: text from ocr.
+        """
         images = convert_from_path(input_file)
         image = images[0]
         with tempfile.NamedTemporaryFile(
-                delete=True, suffix=".png"
+            delete=True, suffix=".png"
         ) as output_image_file:
             image.save(output_image_file, "PNG")
             output_image_file.flush()
@@ -108,29 +107,30 @@ class PaiPDFReader(BaseReader):
 
     def image_to_text(self, image_path: str) -> str:
         """
-            Function to perform OCR to extract text from image
+        Function to perform OCR to extract text from image
 
-            Args:
-                image_path (str): input image path.
+        Args:
+            image_path (str): input image path.
 
-            Returns:
-                str: text from ocr.
-            """
+        Returns:
+            str: text from ocr.
+        """
         result = self.image_reader.readtext(image_path)
-        predictions = ''.join([item[1] for item in result])
+        predictions = "".join([item[1] for item in result])
         return predictions
 
     """Function to extract content from table
     """
+
     @staticmethod
-    def extract_table(pdf: pdfplumber.PDF,
-                      page_num: int, table_num: int) -> List[Any]:
+    def extract_table(pdf: pdfplumber.PDF, page_num: int, table_num: int) -> List[Any]:
         table_page = pdf.pages[page_num]
         table = table_page.extract_tables()[table_num]
         return table
 
     """Function to merge paginated tables
     """
+
     @staticmethod
     def merge_page_tables(total_tables: List[PageItem]) -> List[PageItem]:
         i = len(total_tables) - 1
@@ -142,9 +142,9 @@ class PaiPDFReader(BaseReader):
             if table["page_number"] - pre_table["page_number"] > 1:
                 continue
             if (
-                    table["index_id"] <= 1
-                    and abs(table["element"].bbox[0] - pre_table["element"].bbox[0]) < 1
-                    and abs(table["element"].bbox[2] - pre_table["element"].bbox[2]) < 1
+                table["index_id"] <= 1
+                and abs(table["element"].bbox[0] - pre_table["element"].bbox[0]) < 1
+                and abs(table["element"].bbox[2] - pre_table["element"].bbox[2]) < 1
             ):
                 total_tables[i - 1]["text"].extend(total_tables[i]["text"])
                 del total_tables[i]
@@ -153,6 +153,7 @@ class PaiPDFReader(BaseReader):
 
     """Function to parse table
     """
+
     @staticmethod
     def parse_table(table: List[List]) -> str:
         table_string = ""
@@ -175,7 +176,6 @@ class PaiPDFReader(BaseReader):
 
     @staticmethod
     def tables_summarize(table: List[List]) -> str:
-
         prompt_text = f"请为以下表格生成一个摘要: {table}"
         response = Settings.llm.complete(
             prompt_text,
@@ -203,6 +203,7 @@ class PaiPDFReader(BaseReader):
 
     """Function to process text in pdf
     """
+
     @staticmethod
     def text_extraction(elements: List[LTTextBoxHorizontal]) -> List[str]:
         """
@@ -213,11 +214,11 @@ class PaiPDFReader(BaseReader):
 
         Returns:
             A list containing the extracted text lines with line breaks removed as per defined conditions.
-            """
+        """
         boxes, texts = [], []
         # Initialize the start and end coordinates of the page text
         max_x1 = 0
-        min_x0 = float('inf')
+        min_x0 = float("inf")
         for text_box_h in elements:
             if isinstance(text_box_h, LTTextBoxHorizontal):
                 for text_box_h_l in text_box_h:
@@ -227,9 +228,9 @@ class PaiPDFReader(BaseReader):
                         text = text_box_h_l.get_text()
                         # Check if the line ends with punctuation and requires special handling
                         if not (
-                                text[-1] == "\n"
-                                and len(text) >= 2
-                                and unicodedata.category(text[-2]).startswith("P")
+                            text[-1] == "\n"
+                            and len(text) >= 2
+                            and unicodedata.category(text[-2]).startswith("P")
                         ):
                             max_x1 = max(max_x1, x1)
                         min_x0 = min(min_x0, x0)
@@ -277,7 +278,7 @@ class PaiPDFReader(BaseReader):
             raise TypeError("file_path must be a string or Path.")
         # open PDF file
 
-        pdfFileObj = open(file_path, 'rb')
+        pdfFileObj = open(file_path, "rb")
         # Create a PDF reader object
         pdf_read = PyPDF2.PdfReader(pdfFileObj)
 
@@ -286,7 +287,6 @@ class PaiPDFReader(BaseReader):
         # Open the PDF and extract pages
         pdf = pdfplumber.open(file_path)
         for pagenum, page in enumerate(extract_pages(file_path)):
-
             # Initialize variables for extracting text from the page
             page_object = pdf_read.pages[pagenum]
             text_elements = []
@@ -321,7 +321,7 @@ class PaiPDFReader(BaseReader):
 
                 # Check for table elements
                 elif isinstance(element, LTRect):
-                    lower_side = float('inf')
+                    lower_side = float("inf")
                     upper_side = 0
 
                     # If it's the first rectangle element
@@ -347,7 +347,9 @@ class PaiPDFReader(BaseReader):
                     # Check if we've extracted a table from the page
                     if element.y0 >= lower_side and element.y1 <= upper_side:
                         pass
-                    elif i + 1 < len(page_elements) and not isinstance(page_elements[i + 1][1], LTRect):
+                    elif i + 1 < len(page_elements) and not isinstance(
+                        page_elements[i + 1][1], LTRect
+                    ):
                         first_element = True
                         table_num += 1
 
@@ -405,18 +407,18 @@ class PaiPDFReader(BaseReader):
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
                 extra_info["file_path"] = str(file_path)
-                extra_info['table_summary'] = page_table_summary
-                extra_info['table_json'] = page_table_json
+                extra_info["table_summary"] = page_table_summary
+                extra_info["table_json"] = page_table_json
 
                 doc = Document(
-                        text=page_info_text,
-                        extra_info=dict(
-                            extra_info,
-                            **{
-                                "source": f"{pagenum + 1}",
-                            },
-                        ),
-                    )
+                    text=page_info_text,
+                    extra_info=dict(
+                        extra_info,
+                        **{
+                            "source": f"{pagenum + 1}",
+                        },
+                    ),
+                )
 
                 doc.excluded_embed_metadata_keys.append("table_json")
                 doc.excluded_llm_metadata_keys.append("table_json")
@@ -435,4 +437,3 @@ class PaiPDFReader(BaseReader):
                 docs.append(doc)
         # return list of documents
         return docs
-
