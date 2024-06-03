@@ -81,7 +81,7 @@ class ViewModel(BaseModel):
 
     similarity_top_k: int = 5
     # similarity_cutoff: float = 0.3
-    rerank_model: str = "No Rerank"
+    rerank_model: str = "no-reranker"
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_engine_type: str = "RetrieverQueryEngine"
     BM25_weight: float = 0.5
@@ -181,15 +181,15 @@ class ViewModel(BaseModel):
         # if "Similarity" in config["postprocessor"]:
         #     self.similarity_cutoff = config["postprocessor"].get("similarity_cutoff", 0.1)
 
-        rerank_model = config["postprocessor"].get("rerank_model", "No Rerank")
-        if rerank_model == "llm":
-            self.rerank_model = "LLMRerank"
+        rerank_model = config["postprocessor"].get("rerank_model", "no-reranker")
+        if rerank_model == "llm-reranker":
+            self.rerank_model = "llm-reranker"
         elif rerank_model == "bge-reranker-base":
             self.rerank_model = "bge-reranker-base"
         elif rerank_model == "bge-reranker-large":
             self.rerank_model = "bge-reranker-large"
         else:
-            self.rerank_model = "No Rerank"
+            self.rerank_model = "no-reranker"
 
         self.synthesizer_type = config["synthesizer"].get("type", "SimpleSummarize")
         self.text_qa_template = config["synthesizer"].get("text_qa_template", None)
@@ -280,14 +280,14 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "keyword"
 
         # config["postprocessor"]["similarity_cutoff"] = self.similarity_cutoff
-        if self.rerank_model == "LLMRerank":
-            config["postprocessor"]["rerank_model"] = "llm"
+        if self.rerank_model == "llm-reranker":
+            config["postprocessor"]["rerank_model"] = "llm-reranker"
         elif self.rerank_model == "bge-reranker-base":
             config["postprocessor"]["rerank_model"] = "bge-reranker-base"
         elif self.rerank_model == "bge-reranker-large":
             config["postprocessor"]["rerank_model"] = "bge-reranker-large"
         else:
-            config["postprocessor"]["rerank_model"] = "no rerank"
+            config["postprocessor"]["rerank_model"] = "no-reranker"
         config["postprocessor"]["top_n"] = 3
 
         config["synthesizer"]["type"] = self.synthesizer_type
