@@ -4,7 +4,7 @@ name: Create and publish a Docker image
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
   push:
-    branches: ['feature']
+    branches: ["feature"]
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -20,7 +20,7 @@ jobs:
       # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
       - uses: aliyun/acr-login@v1
         with:
-          login-server: 'https://${{ env.REGISTRY }}' 
+          login-server: "https://${{ env.REGISTRY }}"
           username: ${{ secrets.ACR_USER }}
           password: ${{ secrets.ACR_PASSWORD }}
 
@@ -29,4 +29,4 @@ jobs:
           IMAGE_TAG: pairag_0.0.1
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/aigc_apps:$IMAGE_TAG .
-          docker push ${{ env.REGISTRY }}/mybigpai/aigc_apps:$IMAGE_TAG      
+          docker push ${{ env.REGISTRY }}/mybigpai/aigc_apps:$IMAGE_TAG
