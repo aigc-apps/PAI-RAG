@@ -10,6 +10,8 @@ from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.service_context import ServiceContext
 from llama_index.core.service_context_elements.llm_predictor import LLMPredictorType
 from llama_index.core.types import RESPONSE_TEXT_TYPE
+
+
 class MySimpleSummarize(BaseSynthesizer):
     def __init__(
         self,
@@ -31,13 +33,16 @@ class MySimpleSummarize(BaseSynthesizer):
             streaming=streaming,
         )
         self._text_qa_template = text_qa_template or DEFAULT_TEXT_QA_PROMPT_SEL
+
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
         return {"text_qa_template": self._text_qa_template}
+
     def _update_prompts(self, prompts: PromptDictType) -> None:
         """Update prompts."""
         if "text_qa_template" in prompts:
             self._text_qa_template = prompts["text_qa_template"]
+
     async def aget_response(
         self,
         query_str: str,
@@ -69,6 +74,7 @@ class MySimpleSummarize(BaseSynthesizer):
         else:
             response = cast(Generator, response)
         return response
+
     def get_response(
         self,
         query_str: str,

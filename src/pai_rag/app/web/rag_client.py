@@ -41,7 +41,12 @@ class RagWebClient:
     def load_data_url(self):
         return f"{self.endpoint}service/data"
 
-    def query(self, text: str, session_id: str = None, stream: bool = False,):
+    def query(
+        self,
+        text: str,
+        session_id: str = None,
+        stream: bool = False,
+    ):
         q = dict(question=text, stream=stream)
         r = requests.post(self.query_url, headers={"X-Session-ID": session_id}, json=q)
         r.raise_for_status()
@@ -61,7 +66,13 @@ class RagWebClient:
         eas_llm_top_k: float = 30,
         stream: bool = False,
     ):
-        q = dict(question=text, topp=top_p, topk=eas_llm_top_k, temperature=temperature, stream=stream)
+        q = dict(
+            question=text,
+            topp=top_p,
+            topk=eas_llm_top_k,
+            temperature=temperature,
+            stream=stream,
+        )
 
         r = requests.post(self.llm_url, headers={"X-Session-ID": session_id}, json=q)
         r.raise_for_status()

@@ -7,7 +7,6 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
     ContextDoc,
     RetrievalResponse,

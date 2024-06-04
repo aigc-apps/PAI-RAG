@@ -5,18 +5,11 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
     DataInput,
 )
 from fastapi.responses import StreamingResponse
-from typing import Generator, AsyncGenerator
-from fastapi import APIRouter, Security, Response
-from fastapi.responses import StreamingResponse
-from llama_index.core.base.llms.types import (
-    ChatResponse,
-)
-import json
+
 router = APIRouter()
 
 
@@ -26,11 +19,13 @@ async def aquery(query: RagQuery):
     if not query.stream:
         return response
     else:
+
         async def event_generator():
             full_response = ""
             async for token in response.async_response_gen():
                 full_response = full_response + token
                 yield token
+
         return StreamingResponse(
             event_generator(),
             media_type="text/event-stream",
@@ -43,15 +38,18 @@ async def aquery_llm(query: LlmQuery):
     if not query.stream:
         return response
     else:
+
         async def event_generator():
             full_response = ""
             async for token in response.async_response_gen():
                 full_response = full_response + token
                 yield token
+
         return StreamingResponse(
             event_generator(),
             media_type="text/event-stream",
         )
+
 
 @router.post("/query/retrieval")
 async def aquery_retrieval(query: RetrievalQuery):

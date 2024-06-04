@@ -6,7 +6,6 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
 )
 from pai_rag.app.web.view_model import view_model

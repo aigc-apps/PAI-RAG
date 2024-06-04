@@ -21,7 +21,6 @@ from llama_index.core.response_synthesizers import (
     Refine,
     CompactAndRefine,
     TreeSummarize,
-    SimpleSummarize,
 )
 
 # from llama_index.core.response_synthesizers.type import ResponseMode

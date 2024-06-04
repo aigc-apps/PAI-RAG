@@ -126,17 +126,17 @@ def respond(input_elements: List[Any]):
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
-    
+
     if query_type == "LLM":
         response = rag_client.query_llm(
-            text=msg,
-            session_id=current_session_id,
-            stream=is_streaming
+            text=msg, session_id=current_session_id, stream=is_streaming
         )
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
-        response = rag_client.query(text=msg, session_id=current_session_id,stream=is_streaming)
+        response = rag_client.query(
+            text=msg, session_id=current_session_id, stream=is_streaming
+        )
     if update_dict["include_history"]:
         current_session_id = response.session_id
     else:
