@@ -1,14 +1,15 @@
 import gradio as gr
-from typing import Any, Set, Callable
-from pai_rag.app.web.view_model import ViewModel
+from typing import Any, Set, Callable, Dict
+from pai_rag.app.web.view_model import view_model
+from pai_rag.app.web.utils import components_to_dict
 
 
 def create_vector_db_panel(
-    view_model: ViewModel,
     input_elements: Set[Any],
     connect_vector_func: Callable[[Any], str],
-):
-    with gr.Column() as panel:
+) -> Dict[str, Any]:
+    components = []
+    with gr.Column():
         with gr.Column():
             _ = gr.Markdown(
                 value=f"**Please check your Vector Store for {view_model.vectordb_type}.**"
@@ -16,7 +17,6 @@ def create_vector_db_panel(
             vectordb_type = gr.Dropdown(
                 ["Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"],
                 label="Which VectorStore do you want to use?",
-                value=view_model.vectordb_type,
                 elem_id="vectordb_type",
             )
             # Adb
@@ -26,13 +26,11 @@ def create_vector_db_panel(
                 adb_ak = gr.Textbox(
                     label="access-key-id",
                     type="password",
-                    value=view_model.adb_ak,
                     elem_id="adb_ak",
                 )
                 adb_sk = gr.Textbox(
                     label="access-key-secret",
                     type="password",
-                    value=view_model.adb_sk,
                     elem_id="adb_sk",
                 )
                 adb_region_id = gr.Dropdown(
@@ -42,35 +40,28 @@ def create_vector_db_panel(
                         "cn-zhangjiakou",
                         "cn-huhehaote",
                         "cn-shanghai",
-                        "	cn-shenzhen",
+                        "cn-shenzhen",
                         "cn-chengdu",
                     ],
                     label="RegionId",
-                    value=view_model.adb_region_id,
                     elem_id="adb_region_id",
                 )
                 adb_instance_id = gr.Textbox(
                     label="InstanceId",
-                    value=view_model.adb_instance_id,
                     elem_id="adb_instance_id",
                 )
-                adb_account = gr.Textbox(
-                    label="Account", value=view_model.adb_account, elem_id="adb_account"
-                )
+                adb_account = gr.Textbox(label="Account", elem_id="adb_account")
                 adb_account_password = gr.Textbox(
                     label="Password",
                     type="password",
-                    value=view_model.adb_account_password,
                     elem_id="adb_account_password",
                 )
                 adb_namespace = gr.Textbox(
                     label="Namespace",
-                    value=view_model.adb_namespace,
                     elem_id="adb_namespace",
                 )
                 adb_collection = gr.Textbox(
                     label="CollectionName",
-                    value=view_model.adb_collection,
                     elem_id="adb_collection",
                 )
 
@@ -101,36 +92,35 @@ def create_vector_db_panel(
             ) as holo_col:
                 hologres_host = gr.Textbox(
                     label="Host",
-                    value=view_model.hologres_host,
                     elem_id="hologres_host",
                 )
-                hologres_user = gr.Textbox(
-                    label="User",
-                    value=view_model.hologres_user,
-                    elem_id="hologres_user",
+                hologres_port = gr.Textbox(
+                    label="Port",
+                    elem_id="hologres_port",
                 )
                 hologres_database = gr.Textbox(
                     label="Database",
-                    value=view_model.hologres_database,
                     elem_id="hologres_database",
+                )
+                hologres_user = gr.Textbox(
+                    label="User",
+                    elem_id="hologres_user",
                 )
                 hologres_password = gr.Textbox(
                     label="Password",
                     type="password",
-                    value=view_model.hologres_password,
                     elem_id="hologres_password",
                 )
                 hologres_table = gr.Textbox(
                     label="Table",
-                    value=view_model.hologres_table,
                     elem_id="hologres_table",
                 )
                 hologres_pre_delete = gr.Dropdown(
                     ["True", "False"],
                     label="Pre Delete",
-                    value=view_model.hologres_pre_delete,
                     elem_id="hologres_pre_delete",
                 )
+
                 connect_btn_hologres = gr.Button("Connect Hologres", variant="primary")
                 con_state_hologres = gr.Textbox(label="Connection Info: ")
                 inputs_hologres = input_elements.union(
@@ -154,21 +144,15 @@ def create_vector_db_panel(
             with gr.Column(
                 visible=(view_model.vectordb_type == "ElasticSearch")
             ) as es_col:
-                es_url = gr.Textbox(
-                    label="ElasticSearch Url", value=view_model.es_url, elem_id="es_url"
-                )
-                es_index = gr.Textbox(
-                    label="Index Name", value=view_model.es_index, elem_id="es_index"
-                )
-                es_user = gr.Textbox(
-                    label="ES User", value=view_model.es_user, elem_id="es_user"
-                )
+                es_url = gr.Textbox(label="ElasticSearch Url", elem_id="es_url")
+                es_index = gr.Textbox(label="Index Name", elem_id="es_index")
+                es_user = gr.Textbox(label="ES User", elem_id="es_user")
                 es_password = gr.Textbox(
                     label="ES password",
                     type="password",
-                    value=view_model.es_password,
                     elem_id="es_password",
                 )
+
                 inputs_es = input_elements.union(
                     {vectordb_type, es_url, es_index, es_user, es_password}
                 )
@@ -184,29 +168,21 @@ def create_vector_db_panel(
             with gr.Column(
                 visible=(view_model.vectordb_type == "Milvus")
             ) as milvus_col:
-                milvus_host = gr.Textbox(
-                    label="Host", value=view_model.milvus_host, elem_id="milvus_host"
-                )
-                milvus_port = gr.Textbox(
-                    label="Port", value=view_model.milvus_port, elem_id="milvus_port"
-                )
-                milvus_user = gr.Textbox(
-                    label="User", value=view_model.milvus_user, elem_id="milvus_user"
-                )
+                milvus_host = gr.Textbox(label="Host", elem_id="milvus_host")
+                milvus_port = gr.Textbox(label="Port", elem_id="milvus_port")
+
+                milvus_user = gr.Textbox(label="User", elem_id="milvus_user")
                 milvus_password = gr.Textbox(
                     label="Password",
                     type="password",
-                    value=view_model.milvus_password,
                     elem_id="milvus_password",
                 )
                 milvus_database = gr.Textbox(
                     label="Database",
-                    value=view_model.milvus_database,
                     elem_id="milvus_database",
                 )
                 milvus_collection_name = gr.Textbox(
                     label="Collection name",
-                    value=view_model.milvus_collection_name,
                     elem_id="milvus_collection_name",
                 )
 
@@ -231,9 +207,7 @@ def create_vector_db_panel(
                 )
 
             with gr.Column(visible=(view_model.vectordb_type == "FAISS")) as faiss_col:
-                faiss_path = gr.Textbox(
-                    label="Path", value=view_model.faiss_path, elem_id="faiss_path"
-                )
+                faiss_path = gr.Textbox(label="Path", elem_id="faiss_path")
                 connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
                 con_state_faiss = gr.Textbox(label="Connection Info: ")
                 inputs_faiss = input_elements.union({vectordb_type, faiss_path})
@@ -275,4 +249,36 @@ def create_vector_db_panel(
                 outputs=[adb_col, holo_col, faiss_col, es_col, milvus_col],
             )
 
-    return panel
+            components.extend(
+                [
+                    vectordb_type,
+                    adb_ak,
+                    adb_sk,
+                    adb_region_id,
+                    adb_instance_id,
+                    adb_collection,
+                    adb_account,
+                    adb_account_password,
+                    adb_namespace,
+                    hologres_host,
+                    hologres_port,
+                    hologres_database,
+                    hologres_user,
+                    hologres_password,
+                    hologres_table,
+                    hologres_pre_delete,
+                    milvus_host,
+                    milvus_port,
+                    milvus_database,
+                    milvus_collection_name,
+                    milvus_user,
+                    milvus_password,
+                    faiss_path,
+                    es_url,
+                    es_index,
+                    es_user,
+                    es_password,
+                ]
+            )
+
+    return components_to_dict(components)
