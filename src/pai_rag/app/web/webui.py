@@ -36,17 +36,13 @@ def create_ui():
         with gr.Tab("\N{rocket} Settings"):
             setting_elements = create_setting_tab()
             elem_manager.add_elems(setting_elements)
-            print("load settings complete ===")
         with gr.Tab("\N{whale} Upload"):
             upload_elements = create_upload_tab()
             elem_manager.add_elems(upload_elements)
-            print("load upload complete ===")
-
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None
         )
-        print("load web ui complete ===")
     return homepage
