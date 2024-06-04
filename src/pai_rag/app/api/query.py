@@ -23,6 +23,11 @@ async def aquery_llm(query: LlmQuery) -> LlmResponse:
     return await rag_service.aquery_llm(query)
 
 
+@router.post("/query/stream/llm")
+def stream_query_llm(query: LlmQuery):
+    return rag_service.stream_query_llm(query)
+
+
 @router.post("/query/retrieval")
 async def aquery_retrieval(query: RetrievalQuery):
     return await rag_service.aquery_retrieval(query)

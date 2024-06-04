@@ -64,6 +64,10 @@ class RagService:
         return await self.rag.aquery_retrieval(query)
 
     @trace_correlation_id
+    def stream_query_llm(self, query: LlmQuery):
+        return self.rag.stream_query_llm(query)
+
+    @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
 
