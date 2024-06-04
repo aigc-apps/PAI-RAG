@@ -36,6 +36,8 @@ EMBEDDING_DIM_DICT = {
     "paraphrase-multilingual-MiniLM-L12-v2": 384,
 }
 
+DEFAULT_HF_EMBED_MODEL = "bge-small-zh-v1.5"
+
 EMBEDDING_API_KEY_DICT = {"HuggingFace": False, "OpenAI": True, "DashScope": True}
 
 LLM_MODEL_KEY_DICT = {

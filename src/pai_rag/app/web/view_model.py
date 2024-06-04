@@ -4,6 +4,7 @@ from collections import defaultdict
 from pai_rag.app.web.ui_constants import (
     EMBEDDING_DIM_DICT,
     DEFAULT_EMBED_SIZE,
+    DEFAULT_HF_EMBED_MODEL,
     LLM_MODEL_KEY_DICT,
     PROMPT_MAP,
 )
@@ -23,7 +24,7 @@ def _transform_to_dict(config):
 class ViewModel(BaseModel):
     # embedding
     embed_source: str = "HuggingFace"
-    embed_model: str = "bge-large-zh-v1.5"
+    embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
     embed_api_key: str = None
 
