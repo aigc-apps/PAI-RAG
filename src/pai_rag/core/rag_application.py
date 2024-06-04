@@ -79,7 +79,7 @@ class RagApplication:
         ]
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.
@@ -91,18 +91,21 @@ class RagApplication:
             RagResponse
         """
         if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
+            return "Empty query. Please input your question."
 
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
         query_chat_engine = self.chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await query_chat_engine.achat(query.question)
+        if query.stream:
+            response = await query_chat_engine.astream_chat(query.question)
+        else:
+            response = await query_chat_engine.achat(query.question)
         self.chat_store.persist()
-        return RagResponse(answer=response.response)
+        return response
 
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
 
         Generate answer from LLM's or LLM Chat Engine's achat interface.
@@ -114,39 +117,19 @@ class RagApplication:
             LlmResponse
         """
         if not query.question:
-            return LlmResponse(answer="Empty query. Please input your question.")
+            return "Empty query. Please input your question."
 
         session_id = correlation_id.get() or DEFAULT_SESSION_ID
         self.logger.info(f"Get session ID: {session_id}.")
         llm_chat_engine = self.llm_chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await llm_chat_engine.achat(query.question)
+        if query.stream:
+            response = await llm_chat_engine.astream_chat(query.question)
+        else:
+            response = await llm_chat_engine.achat(query.question)
         self.chat_store.persist()
-        return LlmResponse(answer=response.response)
-
-    def stream_query_llm(self, query: LlmQuery):
-        """Query answer from LLM response asynchronously.
-
-        Generate answer from LLM's or LLM Chat Engine's achat interface.
-
-        Args:
-            query: LlmQuery
-
-        Returns:
-            LlmResponse
-        """
-        if not query.question:
-            return LlmResponse(answer="Empty query. Please input your question.")
-
-        session_id = correlation_id.get() or DEFAULT_SESSION_ID
-        self.logger.info(f"Get session ID: {session_id}.")
-        llm_chat_engine = self.llm_chat_engine_factory.get_chat_engine(
-            session_id, query.chat_history
-        )
-        stream_response = llm_chat_engine.stream_chat(query.question)
-        self.chat_store.persist()
-        return stream_response.chat_stream
+        return response
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.

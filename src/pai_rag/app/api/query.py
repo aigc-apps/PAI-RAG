@@ -9,24 +9,49 @@ from pai_rag.app.api.models import (
     LlmResponse,
     DataInput,
 )
-
+from fastapi.responses import StreamingResponse
+from typing import Generator, AsyncGenerator
+from fastapi import APIRouter, Security, Response
+from fastapi.responses import StreamingResponse
+from llama_index.core.base.llms.types import (
+    ChatResponse,
+)
+import json
 router = APIRouter()
 
 
 @router.post("/query")
-async def aquery(query: RagQuery) -> RagResponse:
-    return await rag_service.aquery(query)
+async def aquery(query: RagQuery):
+    response = await rag_service.aquery(query)
+    if not query.stream:
+        return response
+    else:
+        async def event_generator():
+            full_response = ""
+            async for token in response.async_response_gen():
+                full_response = full_response + token
+                yield token
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery) -> LlmResponse:
-    return await rag_service.aquery_llm(query)
-
-
-@router.post("/query/stream/llm")
-def stream_query_llm(query: LlmQuery):
-    return rag_service.stream_query_llm(query)
-
+async def aquery_llm(query: LlmQuery):
+    response = await rag_service.aquery_llm(query)
+    if not query.stream:
+        return response
+    else:
+        async def event_generator():
+            full_response = ""
+            async for token in response.async_response_gen():
+                full_response = full_response + token
+                yield token
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+        )
 
 @router.post("/query/retrieval")
 async def aquery_retrieval(query: RetrievalQuery):

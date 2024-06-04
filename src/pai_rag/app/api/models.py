@@ -10,6 +10,7 @@ class RagQuery(BaseModel):
     vector_topk: int | None = 3
     score_threshold: float | None = 0.5
     chat_history: List[Dict[str, str]] | None = None
+    stream: bool | None = False
 
 
 class LlmQuery(BaseModel):
@@ -18,6 +19,7 @@ class LlmQuery(BaseModel):
     topp: float | None = 0.8
     temperature: float | None = 0.7
     chat_history: List[Dict[str, str]] | None = None
+    stream: bool | None = False
 
 
 class RetrievalQuery(BaseModel):

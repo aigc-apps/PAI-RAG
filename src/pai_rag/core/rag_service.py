@@ -52,20 +52,16 @@ class RagService:
         await self.rag.load_knowledge(file_dir, enable_qa_extraction)
 
     @trace_correlation_id
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         return await self.rag.aquery(query)
 
     @trace_correlation_id
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_llm(self, query: LlmQuery):
         return await self.rag.aquery_llm(query)
 
     @trace_correlation_id
     async def aquery_retrieval(self, query: RetrievalQuery):
         return await self.rag.aquery_retrieval(query)
-
-    @trace_correlation_id
-    def stream_query_llm(self, query: LlmQuery):
-        return self.rag.stream_query_llm(query)
 
     @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:

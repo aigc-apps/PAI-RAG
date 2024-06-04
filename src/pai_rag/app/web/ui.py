@@ -1,6 +1,8 @@
 import datetime
 import gradio as gr
 import os
+import time
+import json
 from typing import List, Any
 from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.rag_client import rag_client
@@ -123,23 +125,35 @@ def respond(input_elements: List[Any]):
     query_type = update_dict["query_type"]
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
-
+    is_streaming = update_dict["is_streaming"]
+    
     if query_type == "LLM":
         response = rag_client.query_llm(
-            msg,
+            text=msg,
             session_id=current_session_id,
+            stream=is_streaming
         )
-
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
-        response = rag_client.query(msg, session_id=current_session_id)
+        response = rag_client.query(text=msg, session_id=current_session_id,stream=is_streaming)
     if update_dict["include_history"]:
         current_session_id = response.session_id
     else:
         current_session_id = None
-    chatbot.append((msg, response.answer))
-    return "", chatbot, 0
+    if query_type == "Retrieval":
+        chatbot.append((msg, response.answer))
+        yield "", chatbot, 0
+    elif is_streaming:
+        chatbot.append([msg, None])
+        chatbot[-1][1] = ""
+        for token in response.text:
+            chatbot[-1][1] += token
+            time.sleep(0.001)
+            yield "", chatbot, 0
+    else:
+        chatbot.append((msg, json.loads(response.text)["response"]))
+        yield "", chatbot, 0
 
 
 def create_ui():
@@ -352,6 +366,12 @@ def create_ui():
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
                 with gr.Column(scale=2):
+                    is_streaming = gr.Checkbox(
+                        label="Streaming Output",
+                        info="Streaming Output",
+                        elem_id="is_streaming",
+                        value=True,
+                    )
                     query_type = gr.Radio(
                         ["Retrieval", "LLM", "RAG (Retrieval + LLM)"],
                         label="\N{fire} Which query do you want to use?",
@@ -430,7 +450,6 @@ def create_ui():
                                 label="Temperature (choose between 0 and 1)",
                             )
                         llm_args = {llm_topk, llm_topp, llm_temp, include_history}
-
                     with gr.Column(visible=True) as lc_col:
                         prm_type = PROMPT_MAP.get(view_model.text_qa_template, "Custom")
                         prm_radio = gr.Radio(
@@ -533,7 +552,7 @@ def create_ui():
                         clearBtn = gr.Button("Clear History", variant="secondary")
 
                 chat_args = (
-                    {text_qa_template, question, query_type, chatbot}
+                    {text_qa_template, question, query_type, chatbot, is_streaming}
                     .union(vec_args)
                     .union(llm_args)
                 )
