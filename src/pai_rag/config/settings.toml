@@ -21,7 +21,6 @@ type = "SimpleDirectoryReader"
 
 [rag.embedding]
 source = "DashScope"
-model_name = "qwen-turbo"
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]

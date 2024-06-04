@@ -35,6 +35,7 @@ css_style = """
         """
 
 DEFAULT_EMBED_SIZE = 1536
+DEFAULT_HF_EMBED_MODEL = "bge-small-zh-v1.5"
 
 embedding_dim_dict = {
     "bge-small-zh-v1.5": 1024,
@@ -163,14 +164,6 @@ def create_ui():
                             elem_id="embed_model",
                             visible=(view_model.embed_source == "HuggingFace"),
                         )
-                        embed_api_key = gr.Textbox(
-                            visible=view_model.embed_source != "HuggingFace",
-                            label="Embedding API Key",
-                            value=view_model.embed_api_key,
-                            type="password",
-                            interactive=True,
-                            elem_id="embed_api_key",
-                        )
                         embed_dim = gr.Textbox(
                             label="Embedding Dimension",
                             value=embedding_dim_dict.get(
@@ -181,16 +174,24 @@ def create_ui():
 
                         def change_emb_source(source):
                             view_model.embed_source = source
+                            view_model.embed_model = (
+                                DEFAULT_HF_EMBED_MODEL
+                                if source == "HuggingFace"
+                                else source
+                            )
+                            _embed_dim = (
+                                embedding_dim_dict.get(
+                                    view_model.embed_model, DEFAULT_EMBED_SIZE
+                                )
+                                if source == "HuggingFace"
+                                else DEFAULT_EMBED_SIZE
+                            )
                             return {
                                 embed_model: gr.update(
-                                    visible=(source == "HuggingFace")
+                                    visible=(source == "HuggingFace"),
+                                    value=view_model.embed_model,
                                 ),
-                                embed_dim: embedding_dim_dict.get(
-                                    view_model.embed_model, DEFAULT_EMBED_SIZE
-                                ),
-                                embed_api_key: gr.update(
-                                    visible=(source != "HuggingFace")
-                                ),
+                                embed_dim: _embed_dim,
                             }
 
                         def change_emb_model(model):
@@ -199,20 +200,17 @@ def create_ui():
                                 embed_dim: embedding_dim_dict.get(
                                     view_model.embed_model, DEFAULT_EMBED_SIZE
                                 ),
-                                embed_api_key: gr.update(
-                                    visible=(view_model.embed_source != "HuggingFace")
-                                ),
                             }
 
                         embed_source.change(
                             fn=change_emb_source,
                             inputs=embed_source,
-                            outputs=[embed_model, embed_dim, embed_api_key],
+                            outputs=[embed_model, embed_dim],
                         )
                         embed_model.change(
                             fn=change_emb_model,
                             inputs=embed_model,
-                            outputs=[embed_dim, embed_api_key],
+                            outputs=[embed_dim],
                         )
 
                     with gr.Column():
@@ -242,11 +240,6 @@ def create_ui():
                         with gr.Column(
                             visible=(view_model.llm != "PaiEas")
                         ) as api_llm_col:
-                            llm_api_key = gr.Textbox(
-                                label="API Key",
-                                value=view_model.llm_api_key,
-                                elem_id="llm_api_key",
-                            )
                             llm_api_model_name = gr.Dropdown(
                                 llm_model_key_dict.get(view_model.llm, []),
                                 label="LLM Model Name",
@@ -297,7 +290,6 @@ def create_ui():
                         embed_source,
                         embed_model,
                         embed_dim,
-                        llm_api_key,
                         llm_api_model_name,
                     },
                     connect_vector_func=connect_vector_db,
