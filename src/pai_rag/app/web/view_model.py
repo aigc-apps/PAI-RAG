@@ -313,9 +313,12 @@ class ViewModel(BaseModel):
             "value": self.embed_model,
             "visible": self.embed_source == "HuggingFace",
         }
-        settings["embed_dim"] = {
-            "value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)
-        }
+        settings["embed_dim"] = (
+            {"value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)}
+            if self.embed_source == "HuggingFace"
+            else DEFAULT_EMBED_SIZE
+        )
+
         settings["llm"] = {"value": self.llm}
         settings["llm_eas_url"] = {"value": self.llm_eas_url}
         settings["llm_eas_token"] = {"value": self.llm_eas_token}

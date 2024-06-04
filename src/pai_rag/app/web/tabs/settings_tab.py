@@ -60,7 +60,9 @@ def create_setting_tab() -> Dict[str, Any]:
                         embed_model: gr.update(visible=(source == "HuggingFace")),
                         embed_dim: EMBEDDING_DIM_DICT.get(
                             view_model.embed_model, DEFAULT_EMBED_SIZE
-                        ),
+                        )
+                        if source == "HuggingFace"
+                        else DEFAULT_EMBED_SIZE,
                     }
 
                 def change_emb_model(model):
@@ -69,6 +71,8 @@ def create_setting_tab() -> Dict[str, Any]:
                         embed_dim: EMBEDDING_DIM_DICT.get(
                             view_model.embed_model, DEFAULT_EMBED_SIZE
                         )
+                        if view_model.embed_source == "HuggingFace"
+                        else DEFAULT_EMBED_SIZE,
                     }
 
                 embed_source.change(
