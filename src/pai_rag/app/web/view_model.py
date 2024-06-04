@@ -17,7 +17,7 @@ def _transform_to_dict(config):
 class ViewModel(BaseModel):
     # embedding
     embed_source: str = "HuggingFace"
-    embed_model: str = "bge-large-zh-v1.5"
+    embed_model: str = "bge-small-zh-v1.5"
     embed_dim: int = 1024
     embed_api_key: str = None
 
