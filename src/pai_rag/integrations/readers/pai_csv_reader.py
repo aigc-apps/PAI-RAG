@@ -20,9 +20,11 @@ class PaiCSVReader(BaseReader):
         concat_rows (bool): whether to concatenate all rows into one document.
             If set to False, a Document will be created for each row.
             True by default.
-        csv_config （dict）: Options for the reader.Set to empty dict by default,
-          this means reader will try to figure
-            out the separators, table head, etc. on its own.
+        csv_config （dict）: Options for the reader.Set to empty dict by default.
+        one important parameter:
+            "header": None or int, list of int, default 0.
+            Row (0-indexed) to use for the column labels of the parsed DataFrame. If a list of integers is passed those row
+            positions will be combined into a MultiIndex. Use None if there is no header.
 
     """
 
