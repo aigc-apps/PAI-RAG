@@ -175,7 +175,7 @@ class ViewModel(BaseModel):
 
         self.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
-            self.retrieval_mode = "Keyword Ensembled"
+            self.retrieval_mode = "Hybird"
             self.BM25_weight = config["retriever"]["BM25_weight"]
             self.vector_weight = config["retriever"]["vector_weight"]
             self.fusion_mode = config["retriever"]["fusion_mode"]
@@ -275,7 +275,7 @@ class ViewModel(BaseModel):
             ] = self.milvus_collection_name
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
-        if self.retrieval_mode == "Keyword Ensembled":
+        if self.retrieval_mode == "Hybird":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["vector_weight"] = self.vector_weight
             config["retriever"]["BM25_weight"] = self.BM25_weight
