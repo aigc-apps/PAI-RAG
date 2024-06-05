@@ -4,6 +4,8 @@ from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 from pai_rag.integrations.readers.llama_parse_reader import LlamaParseDirectoryReader
 from pai_rag.integrations.readers.html.html_reader import HtmlReader
+from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
+from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from llama_index.readers.database import DatabaseReader
 from llama_index.core import SimpleDirectoryReader
 import logging
@@ -24,6 +26,15 @@ class DataReaderFactoryModule(ConfigurableModule):
             ".pdf": PaiPDFReader(
                 enable_image_ocr=self.reader_config.get("enable_image_ocr", False),
                 model_dir=self.reader_config.get("easyocr_model_dir", None),
+            ),
+            ".csv": PaiPandasCSVReader(
+                concat_rows=self.reader_config.get("concat_rows", False),
+            ),
+            ".xlsx": PaiPandasExcelReader(
+                concat_rows=self.reader_config.get("concat_rows", False),
+            ),
+            ".xls": PaiPandasExcelReader(
+                concat_rows=self.reader_config.get("concat_rows", False),
             ),
         }
         return self
