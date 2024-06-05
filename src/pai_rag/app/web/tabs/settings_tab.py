@@ -102,6 +102,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_eas_token = gr.Textbox(
                         label="EAS Token",
                         elem_id="llm_eas_token",
+                        type="password",
                     )
                     llm_eas_model_name = gr.Textbox(
                         label="EAS Model name",

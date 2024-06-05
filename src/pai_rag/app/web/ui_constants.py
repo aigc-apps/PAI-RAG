@@ -32,7 +32,6 @@ EMBEDDING_DIM_DICT = {
     "bge-small-zh-v1.5": 1024,
     "SGPT-125M-weightedmean-nli-bitfit": 768,
     "text2vec-large-chinese": 1024,
-    "text2vec-base-chinese": 768,
     "paraphrase-multilingual-MiniLM-L12-v2": 384,
 }
 
