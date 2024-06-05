@@ -38,44 +38,58 @@ async def test_add_knowledge_file(rag_app: RagApplication):
 
 # Test rag query
 async def test_query(rag_app: RagApplication):
-    query = RagQuery(question="Why did he decide to learn AI?")
+    query = RagQuery(question="Why did he decide to learn AI?", stream=False)
     response = await rag_app.aquery(query)
-    assert len(response.answer) > 10
+    assert len(response.__str__()) > 10
 
-    query = RagQuery(question="")
+    query = RagQuery(question="", stream=False)
     response = await rag_app.aquery(query)
-    assert response.answer == EXPECTED_EMPTY_RESPONSE
+    assert response.__str__() == EXPECTED_EMPTY_RESPONSE
+
+    query = RagQuery(question="Why did he decide to learn AI?", stream=True)
+    response = await rag_app.aquery_llm(query)
+    full_response = ""
+    async for token in response.async_response_gen():
+        full_response += token
+    assert len(full_response) > 10
 
 
 # Test llm query
 async def test_llm(rag_app: RagApplication):
-    query = RagQuery(question="What is the result of 15+22?")
+    query = RagQuery(question="What is the result of 15+22?", stream=False)
     response = await rag_app.aquery_llm(query)
-    assert "37" in response.answer
+    assert "37" in response.__str__()
 
-    query = RagQuery(question="")
+    query = RagQuery(question="", stream=False)
     response = await rag_app.aquery_llm(query)
-    assert response.answer == EXPECTED_EMPTY_RESPONSE
+    assert response.__str__() == EXPECTED_EMPTY_RESPONSE
+
+    query = RagQuery(question="What is the result of 15+22?", stream=True)
+    response = await rag_app.aquery_llm(query)
+    full_response = ""
+    async for token in response.async_response_gen():
+        full_response += token
+    assert "37" in full_response
 
 
 # Test retrieval query
 async def test_retrieval(rag_app: RagApplication):
-    retrieval_query = RagQuery(question="Why did he decide to learn AI?")
+    retrieval_query = RagQuery(question="Why did he decide to learn AI?", stream=False)
     response = await rag_app.aquery_retrieval(retrieval_query)
     assert len(response.docs) > 0
 
-    query = RagQuery(question="")
+    query = RagQuery(question="", stream=False)
     response = await rag_app.aquery_retrieval(query)
     assert len(response.docs) == 0
 
 
 # Test agent query
 async def test_agent(rag_app: RagApplication):
-    query = RagQuery(question="What is the result of 15+22?")
+    query = RagQuery(question="What is the result of 15+22?", stream=False)
     response = await rag_app.aquery_agent(query)
     assert "37" in response.answer
 
-    query = RagQuery(question="")
+    query = RagQuery(question="", stream=False)
     response = await rag_app.aquery_agent(query)
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
