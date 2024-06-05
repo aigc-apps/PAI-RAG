@@ -5,14 +5,12 @@ import logging
 from typing import Dict, List, Any
 
 # from modules.query.postprocessor.base import BaseNodePostprocessor
-from llama_index.core.postprocessor import (
-    SimilarityPostprocessor,
-    LLMRerank,
-)
+from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
+from pai_rag.modules.postprocessor.my_llm_rerank import MyLLMRerank
 
 DEFAULT_RANK_MODEL = "bge-reranker-base"
 DEFAULT_RANK_TOP_N = 2
@@ -43,7 +41,7 @@ class PostprocessorModule(ConfigurableModule):
         if rerank_model == "llm-reranker":
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
             logger.info(f"[PostProcessor]: Llm reranker used with top_n {top_n}.")
-            post_processors.append(LLMRerank(top_n=top_n, llm=llm))
+            post_processors.append(MyLLMRerank(top_n=top_n, llm=llm))
 
         elif (
             rerank_model == "bge-reranker-base" or rerank_model == "bge-reranker-large"

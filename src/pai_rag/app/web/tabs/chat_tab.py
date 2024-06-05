@@ -90,7 +90,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="rerank_model",
                     )
                     retrieval_mode = gr.Radio(
-                        ["Embedding Only", "Keyword Ensembled", "Keyword Only"],
+                        ["Embedding Only", "Keyword Only", "Hybrid"],
                         label="Retrieval Mode",
                         elem_id="retrieval_mode",
                     )
