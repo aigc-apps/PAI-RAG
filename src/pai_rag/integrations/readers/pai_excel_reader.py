@@ -7,6 +7,7 @@ Contains parsers for tabular data files.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fsspec import AbstractFileSystem
+from openpyxl import load_workbook
 
 import pandas as pd
 from llama_index.core.readers.base import BaseReader
@@ -48,6 +49,52 @@ class PaiPandasExcelReader(BaseReader):
         self._row_joiner = row_joiner
         self._pandas_config = pandas_config
 
+    def read_xlsx(
+        self,
+        file: Path,
+        fs: Optional[AbstractFileSystem] = None,
+    ):
+        """Parse Excel file。"""
+        if fs:
+            with fs.open(file) as f:
+                excel = pd.ExcelFile(load_workbook(f), engine="openpyxl")
+        else:
+            excel = pd.ExcelFile(load_workbook(file), engine="openpyxl")
+        sheet_name = excel.sheet_names[0]
+        sheet = excel.book[sheet_name]
+        df = excel.parse(sheet_name, **self._pandas_config)
+
+        header_max = 0
+        if (
+            "header" in self._pandas_config
+            and self._pandas_config["header"] is not None
+            and isinstance(self._pandas_config["header"], list)
+        ):
+            header_max = max(self._pandas_config["header"])
+        elif (
+            "header" in self._pandas_config
+            and self._pandas_config["header"] is not None
+            and isinstance(self._pandas_config["header"], int)
+        ):
+            header_max = self._pandas_config["header"]
+
+        for item in sheet.merged_cells:
+            top_col, top_row, bottom_col, bottom_row = item.bounds
+            base_value = item.start_cell.value
+            # Convert 1-based index to 0-based index
+            top_row -= 1
+            top_col -= 1
+            # Since the previous lines are set as headers, the coordinates need to be adjusted here.
+            if (
+                "header" in self._pandas_config
+                and self._pandas_config["header"] is not None
+            ) or "header" not in self._pandas_config:
+                top_row -= header_max + 1
+                bottom_row -= header_max + 1
+
+            df.iloc[top_row:bottom_row, top_col:bottom_col] = base_value
+        return df
+
     def load_data(
         self,
         file: Path,
@@ -55,11 +102,8 @@ class PaiPandasExcelReader(BaseReader):
         fs: Optional[AbstractFileSystem] = None,
     ) -> List[Document]:
         """Parse Excel file. only process the first sheet"""
-        if fs:
-            with fs.open(file) as f:
-                df = pd.read_excel(f, sheet_name=0, **self._pandas_config)
-        else:
-            df = pd.read_excel(file, sheet_name=0, **self._pandas_config)
+
+        df = self.read_xlsx(file, fs)
 
         text_list = df.apply(
             lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
