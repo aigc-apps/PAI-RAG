@@ -1,7 +1,6 @@
 import datetime
 import gradio as gr
 import os
-import time
 import json
 from typing import List, Any
 from pai_rag.app.web.view_model import view_model
@@ -116,7 +115,7 @@ def respond(input_elements: List[Any]):
 
     # empty input.
     if not update_dict["question"]:
-        return "", update_dict["chatbot"], 0
+        yield "", update_dict["chatbot"], 0
 
     view_model.update(update_dict)
     new_config = view_model.to_app_config()
@@ -147,9 +146,11 @@ def respond(input_elements: List[Any]):
     elif is_streaming:
         chatbot.append([msg, None])
         chatbot[-1][1] = ""
-        for token in response.text:
+        for token in response.iter_lines(
+            chunk_size=16, decode_unicode=True, delimiter="\0"
+        ):
+            print("is_streaming token ", token)
             chatbot[-1][1] += token
-            time.sleep(0.001)
             yield "", chatbot, 0
     else:
         chatbot.append((msg, json.loads(response.text)["response"]))
@@ -366,17 +367,17 @@ def create_ui():
         with gr.Tab("\N{fire} Chat"):
             with gr.Row():
                 with gr.Column(scale=2):
-                    is_streaming = gr.Checkbox(
-                        label="Streaming Output",
-                        info="Streaming Output",
-                        elem_id="is_streaming",
-                        value=True,
-                    )
                     query_type = gr.Radio(
                         ["Retrieval", "LLM", "RAG (Retrieval + LLM)"],
                         label="\N{fire} Which query do you want to use?",
                         elem_id="query_type",
                         value="RAG (Retrieval + LLM)",
+                    )
+                    is_streaming = gr.Checkbox(
+                        label="Streaming Output",
+                        info="Streaming Output",
+                        elem_id="is_streaming",
+                        value=True,
                     )
 
                     with gr.Column(visible=True) as vs_col:

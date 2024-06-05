@@ -13,21 +13,20 @@ from fastapi.responses import StreamingResponse
 router = APIRouter()
 
 
+async def event_generator(response):
+    delimiter = "\0"
+    async for token in response.async_response_gen():
+        yield token + delimiter
+
+
 @router.post("/query")
 async def aquery(query: RagQuery):
     response = await rag_service.aquery(query)
     if not query.stream:
         return response
     else:
-
-        async def event_generator():
-            full_response = ""
-            async for token in response.async_response_gen():
-                full_response = full_response + token
-                yield token
-
         return StreamingResponse(
-            event_generator(),
+            event_generator(response),
             media_type="text/event-stream",
         )
 
@@ -38,15 +37,8 @@ async def aquery_llm(query: LlmQuery):
     if not query.stream:
         return response
     else:
-
-        async def event_generator():
-            full_response = ""
-            async for token in response.async_response_gen():
-                full_response = full_response + token
-                yield token
-
         return StreamingResponse(
-            event_generator(),
+            event_generator(response),
             media_type="text/event-stream",
         )
 

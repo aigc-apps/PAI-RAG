@@ -48,7 +48,9 @@ class RagWebClient:
         stream: bool = False,
     ):
         q = dict(question=text, stream=stream)
-        r = requests.post(self.query_url, headers={"X-Session-ID": session_id}, json=q)
+        r = requests.post(
+            self.query_url, headers={"X-Session-ID": session_id}, json=q, stream=True
+        )
         r.raise_for_status()
         session_id = r.headers["x-session-id"]
         # response = dotdict(json.loads(r.text))
