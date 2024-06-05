@@ -12,14 +12,8 @@ Whether to concatenate rows into one document.
 **row_joiner:** _str, default="\n"._
 The separator used to join rows.
 
-**csv_config:** _dict, default={}._
-The configuration of csv reader
-Set to empty dict by default, this means pandas will try to figure out the separators, table head, etc. on its own.
-
-#### one important parameter:
-
 **header:** _None or int, list of int, default 0._
-Row (0-indexed) to use for the column labels of the parsed DataFrame. If a list of integers is passed those row
+row (0-indexed) to use for the column labels of the parsed DataFrame. If a list of integers is passed those row
 positions will be combined into a MultiIndex. Use None if there is no header.
 
 ### Functions:

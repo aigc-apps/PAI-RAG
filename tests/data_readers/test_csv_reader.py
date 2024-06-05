@@ -18,7 +18,7 @@ def test_csv_reader():
         file_extractor={
             ".csv": PaiCSVReader(
                 concat_rows=reader_config.get("concat_rows", False),
-                csv_config={"header": [0, 1]},
+                header=[0, 1],
             )
         },
     )

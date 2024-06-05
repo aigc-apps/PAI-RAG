@@ -20,21 +20,19 @@ class PaiCSVReader(BaseReader):
         concat_rows (bool): whether to concatenate all rows into one document.
             If set to False, a Document will be created for each row.
             True by default.
-        csv_config （dict）: Options for the reader.Set to empty dict by default.
-        one important parameter:
-            "header": None or int, list of int, default 0.
+        header （object）: None or int, list of int, default 0.
             Row (0-indexed) to use for the column labels of the parsed DataFrame. If a list of integers is passed those row
             positions will be combined into a MultiIndex. Use None if there is no header.
 
     """
 
     def __init__(
-        self, *args: Any, concat_rows: bool = True, csv_config: dict = {}, **kwargs: Any
+        self, *args: Any, concat_rows: bool = True, header: object = 0, **kwargs: Any
     ) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
         self._concat_rows = concat_rows
-        self._csv_config = csv_config
+        self._header = header
 
     def load_data(
         self, file: Path, extra_info: Optional[Dict] = None
@@ -53,37 +51,21 @@ class PaiCSVReader(BaseReader):
         headers = []
         data_lines = []
         data_line_start_index = 1
-        if (
-            "header" in self._csv_config
-            and self._csv_config["header"] is not None
-            and isinstance(self._csv_config["header"], list)
-        ):
-            data_line_start_index = max(self._csv_config["header"]) + 1
-        elif (
-            "header" in self._csv_config
-            and self._csv_config["header"] is not None
-            and isinstance(self._csv_config["header"], int)
-        ):
-            data_line_start_index = self._csv_config["header"] + 1
-            self._csv_config["header"] = [self._csv_config["header"]]
+        if isinstance(self._header, list):
+            data_line_start_index = max(self._header) + 1
+        elif isinstance(self._header, int):
+            data_line_start_index = self._header + 1
+            self._header = [self._header]
 
         with open(file) as fp:
-            has_header = csv.Sniffer().has_header(fp.read(2048))
-            fp.seek(0)
-
-            if "header" not in self._csv_config and has_header:
-                self._csv_config["header"] = [0]
-            elif "header" not in self._csv_config and not has_header:
-                self._csv_config["header"] = None
-
             csv_reader = csv.reader(fp)
 
-            if self._csv_config["header"] is None:
+            if self._header is None:
                 for row in csv_reader:
                     text_list.append(", ".join(row))
             else:
                 for i, row in enumerate(csv_reader):
-                    if i in self._csv_config["header"]:
+                    if i in self._header:
                         headers.append(row)
                     elif i >= data_line_start_index:
                         data_lines.append(row)
