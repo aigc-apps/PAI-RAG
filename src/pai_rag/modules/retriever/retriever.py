@@ -6,9 +6,6 @@ from typing import Dict, List, Any
 import jieba
 from nltk.corpus import stopwords
 from llama_index.core.indices.list.base import SummaryIndex
-from llama_index.core.retrievers import (
-    VectorIndexRetriever,
-)
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.selectors import LLMSingleSelector
@@ -19,7 +16,7 @@ from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT
-
+from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +38,7 @@ class RetrieverModule(ConfigurableModule):
 
         similarity_top_k = config.get("similarity_top_k", 5)
         # vector
-        vector_retriever = VectorIndexRetriever(
+        vector_retriever = MyVectorIndexRetriever(
             index=vector_index, similarity_top_k=similarity_top_k
         )
 
@@ -53,7 +50,7 @@ class RetrieverModule(ConfigurableModule):
         )
 
         if config["retrieval_mode"] == "embedding":
-            logger.info(f"VectorIndexRetriever used with top_k {similarity_top_k}.")
+            logger.info(f"MyVectorIndexRetriever used with top_k {similarity_top_k}.")
             return vector_retriever
 
         elif config["retrieval_mode"] == "keyword":
