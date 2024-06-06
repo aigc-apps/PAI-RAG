@@ -29,12 +29,21 @@ class DataReaderFactoryModule(ConfigurableModule):
             ),
             ".csv": PaiPandasCSVReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
+                pandas_config={
+                    "encoding": self.reader_config.get("encoding", "GB18030")
+                },
             ),
             ".xlsx": PaiPandasExcelReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
+                pandas_config={
+                    "encoding": self.reader_config.get("encoding", "GB18030")
+                },
             ),
             ".xls": PaiPandasExcelReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
+                pandas_config={
+                    "encoding": self.reader_config.get("encoding", "GB18030")
+                },
             ),
         }
         return self
