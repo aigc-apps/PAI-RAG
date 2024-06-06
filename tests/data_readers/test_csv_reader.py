@@ -38,7 +38,7 @@ def test_pandas_csv_reader():
         file_extractor={
             ".csv": PaiPandasCSVReader(
                 concat_rows=reader_config.get("concat_rows", False),
-                header=[0, 1],
+                pandas_config={"header": [0, 1]},
             )
         },
     )

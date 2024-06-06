@@ -12,6 +12,9 @@ import pandas as pd
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 import chardet
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PaiCSVReader(BaseReader):
@@ -83,10 +86,11 @@ class PaiCSVReader(BaseReader):
         if self._concat_rows:
             return [Document(text="\n".join(text_list), metadata=metadata)]
         else:
-            return [
-                Document(text=text, metadata={**metadata, **{"row_number": i}})
-                for i, text in enumerate(text_list)
-            ]
+            docs = []
+            for i, text in enumerate(text_list):
+                metadata["row_number"] = i + 1
+                docs.append(Document(text=text, metadata=metadata))
+            return docs
 
 
 class PaiPandasCSVReader(BaseReader):
@@ -142,7 +146,10 @@ class PaiPandasCSVReader(BaseReader):
                 try:
                     df = pd.read_csv(f, **self._pandas_config)
                 except UnicodeDecodeError:
-                    print(f"Error: The file {file} encoding could not be decoded.")
+                    logger.info(
+                        f"Error: The file {file} encoding could not be decoded."
+                    )
+                    raise
 
         else:
             with open(file, "rb") as f:
@@ -153,7 +160,10 @@ class PaiPandasCSVReader(BaseReader):
                 try:
                     df = pd.read_csv(file, **self._pandas_config)
                 except UnicodeDecodeError:
-                    print(f"Error: The file {file} encoding could not be decoded.")
+                    logger.info(
+                        f"Error: The file {file} encoding could not be decoded."
+                    )
+                    raise
 
         text_list = df.apply(
             lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
@@ -166,7 +176,8 @@ class PaiPandasCSVReader(BaseReader):
                 )
             ]
         else:
-            return [
-                Document(text=text, metadata={**extra_info, **{"row_number": i}})
-                for i, text in enumerate(text_list)
-            ]
+            docs = []
+            for i, text in enumerate(text_list):
+                extra_info["row_number"] = i + 1
+                docs.append(Document(text=text, metadata=extra_info))
+            return docs

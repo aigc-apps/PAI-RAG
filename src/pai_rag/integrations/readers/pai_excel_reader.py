@@ -116,7 +116,8 @@ class PaiPandasExcelReader(BaseReader):
                 )
             ]
         else:
-            return [
-                Document(text=text, metadata={**extra_info, **{"row_number": i}})
-                for i, text in enumerate(text_list)
-            ]
+            docs = []
+            for i, text in enumerate(text_list):
+                extra_info["row_number"] = i + 1
+                docs.append(Document(text=text, metadata=extra_info))
+            return docs
