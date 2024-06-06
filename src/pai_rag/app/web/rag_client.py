@@ -2,6 +2,8 @@ import json
 
 from typing import Any
 import requests
+import html
+import markdown
 
 cache_config = None
 
@@ -76,8 +78,10 @@ class RagWebClient:
         response.session_id = session_id
         formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
         for i, doc in enumerate(response["docs"]):
+            html_content = markdown.markdown(doc["text"])
+            safe_html_content = html.escape(html_content).replace("\n", "<br>")
             formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                i + 1, doc["score"], doc["text"].replace("\n", "<br>")
+                i + 1, doc["score"], safe_html_content
             )
         formatted_text = "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
         response["answer"] = formatted_text
