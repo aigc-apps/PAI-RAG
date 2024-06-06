@@ -231,6 +231,12 @@ def create_chat_tab() -> Dict[str, Any]:
             [question, chatbot, cur_tokens],
             api_name="respond",
         )
+        question.submit(
+            respond,
+            chat_args,
+            [question, chatbot, cur_tokens],
+            api_name="respond",
+        )
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,
