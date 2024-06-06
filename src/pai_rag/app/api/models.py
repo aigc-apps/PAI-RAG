@@ -4,9 +4,7 @@ from typing import List, Dict
 
 class RagQuery(BaseModel):
     question: str
-    topk: int | None = 3
-    topp: float | None = 0.8
-    temperature: float | None = 0.7
+    temperature: float | None = 0.1
     vector_topk: int | None = 3
     score_threshold: float | None = 0.5
     chat_history: List[Dict[str, str]] | None = None
@@ -14,9 +12,7 @@ class RagQuery(BaseModel):
 
 class LlmQuery(BaseModel):
     question: str
-    topk: int | None = 3
-    topp: float | None = 0.8
-    temperature: float | None = 0.7
+    temperature: float | None = 0.1
     chat_history: List[Dict[str, str]] | None = None
 
 

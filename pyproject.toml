@@ -71,6 +71,8 @@ pytest-asyncio = "^0.23.7"
 pytest-cov = "^5.0.0"
 xlrd = "^2.0.1"
 
+markdown = "^3.6"
+
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.data.rag_datapipeline:run"
