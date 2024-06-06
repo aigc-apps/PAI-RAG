@@ -47,27 +47,21 @@ class RagService:
         self.rag.reload(self.rag_configuration.get_value())
         self.rag_configuration.persist()
 
-    @trace_correlation_id
     async def add_knowledge(self, file_dir: str, enable_qa_extraction: bool = False):
         await self.rag.load_knowledge(file_dir, enable_qa_extraction)
 
-    @trace_correlation_id
     async def aquery(self, query: RagQuery) -> RagResponse:
         return await self.rag.aquery(query)
 
-    @trace_correlation_id
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_llm(query)
 
-    @trace_correlation_id
     async def aquery_retrieval(self, query: RetrievalQuery):
         return await self.rag.aquery_retrieval(query)
 
-    @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
 
-    @trace_correlation_id
     async def batch_evaluate_retrieval_and_response(self, type):
         return await self.rag.batch_evaluate_retrieval_and_response(type)
 
