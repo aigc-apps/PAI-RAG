@@ -11,6 +11,10 @@ from fsspec import AbstractFileSystem
 import pandas as pd
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+import chardet
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PaiCSVReader(BaseReader):
@@ -82,7 +86,11 @@ class PaiCSVReader(BaseReader):
         if self._concat_rows:
             return [Document(text="\n".join(text_list), metadata=metadata)]
         else:
-            return [Document(text=text, metadata=metadata) for text in text_list]
+            docs = []
+            for i, text in enumerate(text_list):
+                metadata["row_number"] = i + 1
+                docs.append(Document(text=text, metadata=metadata))
+            return docs
 
 
 class PaiPandasCSVReader(BaseReader):
@@ -114,7 +122,7 @@ class PaiPandasCSVReader(BaseReader):
         concat_rows: bool = True,
         row_joiner: str = "\n",
         pandas_config: dict = {},
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
@@ -131,9 +139,31 @@ class PaiPandasCSVReader(BaseReader):
         """Parse csv file."""
         if fs:
             with fs.open(file) as f:
-                df = pd.read_csv(f, **self._pandas_config)
+                encoding = chardet.detect(f.read(100000))["encoding"]
+                f.seek(0)
+                if encoding.upper() in ["GB18030", "GBK"]:
+                    self._pandas_config["encoding"] = "GB18030"
+                try:
+                    df = pd.read_csv(f, **self._pandas_config)
+                except UnicodeDecodeError:
+                    logger.info(
+                        f"Error: The file {file} encoding could not be decoded."
+                    )
+                    raise
+
         else:
-            df = pd.read_csv(file, **self._pandas_config)
+            with open(file, "rb") as f:
+                encoding = chardet.detect(f.read(100000))["encoding"]
+                f.seek(0)
+                if "GB" in encoding.upper():
+                    self._pandas_config["encoding"] = "GB18030"
+                try:
+                    df = pd.read_csv(file, **self._pandas_config)
+                except UnicodeDecodeError:
+                    logger.info(
+                        f"Error: The file {file} encoding could not be decoded."
+                    )
+                    raise
 
         text_list = df.apply(
             lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
@@ -146,6 +176,8 @@ class PaiPandasCSVReader(BaseReader):
                 )
             ]
         else:
-            return [
-                Document(text=text, metadata=extra_info or {}) for text in text_list
-            ]
+            docs = []
+            for i, text in enumerate(text_list):
+                extra_info["row_number"] = i + 1
+                docs.append(Document(text=text, metadata=extra_info))
+            return docs
