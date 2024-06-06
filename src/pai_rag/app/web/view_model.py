@@ -1,6 +1,13 @@
 from pydantic import BaseModel
 from typing import Any, Dict
 from collections import defaultdict
+from pai_rag.app.web.ui_constants import (
+    EMBEDDING_DIM_DICT,
+    DEFAULT_EMBED_SIZE,
+    DEFAULT_HF_EMBED_MODEL,
+    LLM_MODEL_KEY_DICT,
+    PROMPT_MAP,
+)
 
 
 def recursive_dict():
@@ -17,7 +24,7 @@ def _transform_to_dict(config):
 class ViewModel(BaseModel):
     # embedding
     embed_source: str = "HuggingFace"
-    embed_model: str = "bge-large-zh-v1.5"
+    embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
     embed_api_key: str = None
 
@@ -168,7 +175,7 @@ class ViewModel(BaseModel):
 
         self.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
-            self.retrieval_mode = "Keyword Ensembled"
+            self.retrieval_mode = "Hybrid"
             self.BM25_weight = config["retriever"]["BM25_weight"]
             self.vector_weight = config["retriever"]["vector_weight"]
             self.fusion_mode = config["retriever"]["fusion_mode"]
@@ -268,7 +275,7 @@ class ViewModel(BaseModel):
             ] = self.milvus_collection_name
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
-        if self.retrieval_mode == "Keyword Ensembled":
+        if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["vector_weight"] = self.vector_weight
             config["retriever"]["BM25_weight"] = self.BM25_weight
@@ -298,6 +305,78 @@ class ViewModel(BaseModel):
             config["query_engine"]["type"] = "RetrieverQueryEngine"
 
         return _transform_to_dict(config)
+
+    def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
+        settings = {}
+        settings["embed_source"] = {"value": self.embed_source}
+        settings["embed_model"] = {
+            "value": self.embed_model,
+            "visible": self.embed_source == "HuggingFace",
+        }
+        settings["embed_dim"] = {
+            "value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)
+            if self.embed_source == "HuggingFace"
+            else DEFAULT_EMBED_SIZE
+        }
+
+        settings["llm"] = {"value": self.llm}
+        settings["llm_eas_url"] = {"value": self.llm_eas_url}
+        settings["llm_eas_token"] = {"value": self.llm_eas_token}
+        settings["llm_eas_model_name"] = {"value": self.llm_eas_model_name}
+        settings["llm_api_model_name"] = {
+            "value": self.llm_api_model_name,
+            "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
+        }
+        settings["chunk_size"] = {"value": self.chunk_size}
+        settings["chunk_overlap"] = {"value": self.chunk_overlap}
+        settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
+        settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["rerank_model"] = {"value": self.rerank_model}
+        settings["retrieval_mode"] = {"value": self.retrieval_mode}
+
+        prm_type = PROMPT_MAP.get(view_model.text_qa_template, "Custom")
+        settings["prm_type"] = {"value": prm_type}
+        settings["text_qa_template"] = {"value": self.text_qa_template}
+
+        settings["vectordb_type"] = {"value": self.vectordb_type}
+
+        # adb
+        settings["adb_ak"] = {"value": self.adb_ak}
+        settings["adb_sk"] = {"value": self.adb_sk}
+        settings["adb_region_id"] = {"value": self.adb_region_id}
+        settings["adb_account"] = {"value": self.adb_account}
+        settings["adb_account_password"] = {"value": self.adb_account_password}
+        settings["adb_namespace"] = {"value": self.adb_namespace}
+        settings["adb_instance_id"] = {"value": self.adb_instance_id}
+        settings["adb_collection"] = {"value": self.adb_collection}
+
+        # hologres
+        settings["hologres_host"] = {"value": self.hologres_host}
+        settings["hologres_database"] = {"value": self.hologres_database}
+        settings["hologres_port"] = {"value": self.hologres_port}
+        settings["hologres_user"] = {"value": self.hologres_user}
+        settings["hologres_password"] = {"value": self.hologres_password}
+        settings["hologres_table"] = {"value": self.hologres_table}
+        settings["hologres_pre_delete"] = {"value": self.hologres_pre_delete}
+
+        # elasticsearch
+        settings["es_url"] = {"value": self.es_url}
+        settings["es_index"] = {"value": self.es_index}
+        settings["es_user"] = {"value": self.es_user}
+        settings["es_password"] = {"value": self.es_password}
+
+        # milvus
+        settings["milvus_host"] = {"value": self.milvus_host}
+        settings["milvus_port"] = {"value": self.milvus_port}
+        settings["milvus_database"] = {"value": self.milvus_database}
+        settings["milvus_user"] = {"value": self.milvus_user}
+        settings["milvus_password"] = {"value": self.milvus_password}
+        settings["milvus_collection_name"] = {"value": self.milvus_collection_name}
+
+        # faiss
+        settings["faiss_path"] = {"value": self.faiss_path}
+
+        return settings
 
 
 view_model = ViewModel()

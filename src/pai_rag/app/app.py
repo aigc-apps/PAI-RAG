@@ -3,10 +3,9 @@ import gradio as gr
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api import query
 from pai_rag.app.api.middleware import init_middleware
-from pai_rag.app.web.ui import create_ui
+from pai_rag.app.web.webui import create_ui
 from pai_rag.app.web.rag_client import rag_client
 
-# UI_PATH = "/ui"
 UI_PATH = ""
 
 
