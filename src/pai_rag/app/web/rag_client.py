@@ -2,6 +2,8 @@ import json
 
 from typing import Any
 import requests
+import html
+import markdown
 
 cache_config = None
 
@@ -55,11 +57,9 @@ class RagWebClient:
         self,
         text: str,
         session_id: str = None,
-        temperature: float = 0.7,
-        top_p: float = 0.8,
-        eas_llm_top_k: float = 30,
+        temperature: float = 0.1,
     ):
-        q = dict(question=text, topp=top_p, topk=eas_llm_top_k, temperature=temperature)
+        q = dict(question=text, temperature=temperature)
 
         r = requests.post(self.llm_url, headers={"X-Session-ID": session_id}, json=q)
         r.raise_for_status()
@@ -76,12 +76,14 @@ class RagWebClient:
         session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
         response.session_id = session_id
-        formatted_text = "\n\n".join(
-            [
-                f"""[Doc {i+1}] [score: {doc["score"]}]\n{doc["text"]}"""
-                for i, doc in enumerate(response["docs"])
-            ]
-        )
+        formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
+        for i, doc in enumerate(response["docs"]):
+            html_content = markdown.markdown(doc["text"])
+            safe_html_content = html.escape(html_content).replace("\n", "<br>")
+            formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                i + 1, doc["score"], safe_html_content
+            )
+        formatted_text = "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
         response["answer"] = formatted_text
         return response
 

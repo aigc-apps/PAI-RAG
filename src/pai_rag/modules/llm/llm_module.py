@@ -24,13 +24,13 @@ class LlmModule(ConfigurableModule):
                 f"""
                 [Parameters][LLM:OpenAI]
                     model = {config.get("name", "gpt-3.5-turbo")},
-                    temperature = {config.get("temperature", 0.5)},
+                    temperature = {config.get("temperature", 0.1)},
                     system_prompt = {config.get("system_prompt", "Please answer in Chinese.")}
                 """
             )
             llm = OpenAI(
                 model=config.get("name", "gpt-3.5-turbo"),
-                temperature=config.get("temperature", 0.5),
+                temperature=config.get("temperature", 0.1),
                 system_prompt=config.get("system_prompt", "Please answer in Chinese."),
                 api_key=config.get("api_key", None),
             )
@@ -39,13 +39,13 @@ class LlmModule(ConfigurableModule):
                 f"""
                 [Parameters][LLM:AzureOpenAI]
                     model = {config.get("name", "gpt-35-turbo")},
-                    temperature = {config.get("temperature", 0.5)},
+                    temperature = {config.get("temperature", 0.1)},
                     system_prompt = {config.get("system_prompt", "Please answer in Chinese.")}
                 """
             )
             llm = AzureOpenAI(
                 model=config.get("name", "gpt-35-turbo"),
-                temperature=config.get("temperature", 0.5),
+                temperature=config.get("temperature", 0.1),
                 system_prompt=config.get("system_prompt", "Please answer in Chinese."),
             )
         elif source == "dashscope":
@@ -56,7 +56,9 @@ class LlmModule(ConfigurableModule):
                     model = {model_name}
                 """
             )
-            llm = DashScope(model_name=model_name)
+            llm = DashScope(
+                model_name=model_name, temperature=config.get("temperature", 0.1)
+            )
         elif source == "paieas":
             model_name = config["name"]
             endpoint = config["endpoint"]
@@ -69,7 +71,12 @@ class LlmModule(ConfigurableModule):
                     token = {token}
                 """
             )
-            llm = PaiEAS(endpoint=endpoint, token=token, model_name=model_name)
+            llm = PaiEAS(
+                endpoint=endpoint,
+                token=token,
+                model_name=model_name,
+                temperature=config.get("temperature", 0.1),
+            )
         else:
             raise ValueError(f"Unknown LLM source: '{config['llm']['source']}'")
 

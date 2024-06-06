@@ -68,7 +68,9 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
             with gr.Column(visible=True) as vs_col:
-                vec_model_argument = gr.Accordion("Parameters of Vector Retrieval")
+                vec_model_argument = gr.Accordion(
+                    "Parameters of Vector Retrieval", open=False
+                )
 
                 with vec_model_argument:
                     similarity_top_k = gr.Slider(
@@ -101,38 +103,22 @@ def create_chat_tab() -> Dict[str, Any]:
                     retrieval_mode,
                 }
             with gr.Column(visible=True) as llm_col:
-                model_argument = gr.Accordion("Inference Parameters of LLM")
+                model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
                     include_history = gr.Checkbox(
                         label="Chat history",
                         info="Query with chat history.",
                         elem_id="include_history",
                     )
-                    llm_topk = gr.Slider(
-                        minimum=0,
-                        maximum=100,
-                        step=1,
-                        value=30,
-                        elem_id="llm_topk",
-                        label="Top K (choose between 0 and 100)",
-                    )
-                    llm_topp = gr.Slider(
-                        minimum=0,
-                        maximum=1,
-                        step=0.01,
-                        value=0.8,
-                        elem_id="llm_topp",
-                        label="Top P (choose between 0 and 1)",
-                    )
                     llm_temp = gr.Slider(
                         minimum=0,
                         maximum=1,
-                        step=0.01,
-                        value=0.7,
-                        elem_id="llm_temp",
+                        step=0.001,
+                        value=0.1,
+                        elem_id="llm_temperature",
                         label="Temperature (choose between 0 and 1)",
                     )
-                llm_args = {llm_topk, llm_topp, llm_temp, include_history}
+                llm_args = {llm_temp, include_history}
 
             with gr.Column(visible=True) as lc_col:
                 prm_type = gr.Radio(
@@ -198,26 +184,32 @@ def create_chat_tab() -> Dict[str, Any]:
                 if query_type == "Retrieval":
                     return {
                         vs_col: gr.update(visible=True),
+                        vec_model_argument: gr.update(open=True),
                         llm_col: gr.update(visible=False),
+                        model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
                     }
                 elif query_type == "LLM":
                     return {
                         vs_col: gr.update(visible=False),
+                        vec_model_argument: gr.update(open=False),
                         llm_col: gr.update(visible=True),
+                        model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=False),
                     }
                 elif query_type == "RAG (Retrieval + LLM)":
                     return {
                         vs_col: gr.update(visible=True),
+                        vec_model_argument: gr.update(open=False),
                         llm_col: gr.update(visible=True),
+                        model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                     }
 
             query_type.change(
                 fn=change_query_radio,
                 inputs=query_type,
-                outputs=[vs_col, llm_col, lc_col],
+                outputs=[vs_col, vec_model_argument, llm_col, model_argument, lc_col],
             )
 
         with gr.Column(scale=8):
@@ -234,6 +226,12 @@ def create_chat_tab() -> Dict[str, Any]:
         )
 
         submitBtn.click(
+            respond,
+            chat_args,
+            [question, chatbot, cur_tokens],
+            api_name="respond",
+        )
+        question.submit(
             respond,
             chat_args,
             [question, chatbot, cur_tokens],

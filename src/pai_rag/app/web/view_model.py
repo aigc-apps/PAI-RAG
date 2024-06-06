@@ -35,6 +35,7 @@ class ViewModel(BaseModel):
     llm_eas_model_name: str = None
     llm_api_key: str = None
     llm_api_model_name: str = None
+    llm_temperature: float = 0.1
 
     # chunking
     parser_type: str = "Sentence"
@@ -115,6 +116,7 @@ class ViewModel(BaseModel):
         self.llm_eas_url = config["llm"].get("endpoint", self.llm_eas_url)
         self.llm_eas_token = config["llm"].get("token", self.llm_eas_token)
         self.llm_api_key = config["llm"].get("api_key", self.llm_api_key)
+        self.llm_temperature = config["llm"].get("temperature", self.llm_temperature)
         if self.llm == "PaiEAS":
             self.llm_eas_model_name = config["llm"].get("name", self.llm_eas_model_name)
         else:
@@ -217,6 +219,7 @@ class ViewModel(BaseModel):
         config["llm"]["endpoint"] = self.llm_eas_url
         config["llm"]["token"] = self.llm_eas_token
         config["llm"]["api_key"] = self.llm_api_key
+        config["llm"]["temperature"] = self.llm_temperature
         if self.llm == "PaiEas":
             config["llm"]["name"] = self.llm_eas_model_name
         else:
