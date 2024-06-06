@@ -55,11 +55,9 @@ class RagWebClient:
         self,
         text: str,
         session_id: str = None,
-        temperature: float = 0.7,
-        top_p: float = 0.8,
-        eas_llm_top_k: float = 30,
+        temperature: float = 0.1,
     ):
-        q = dict(question=text, topp=top_p, topk=eas_llm_top_k, temperature=temperature)
+        q = dict(question=text, temperature=temperature)
 
         r = requests.post(self.llm_url, headers={"X-Session-ID": session_id}, json=q)
         r.raise_for_status()
