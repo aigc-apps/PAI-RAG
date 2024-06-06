@@ -1,3 +1,5 @@
+import os
+from typing import Any, Dict
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -13,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "/huggingface/transformers/qwen_1.8b"
+
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".md", ".xls", ".htm", ".html"])
 
 
 class RagDataLoader:
@@ -49,13 +53,26 @@ class RagDataLoader:
 
         logger.info("RagDataLoader initialized.")
 
+    def _extract_file_type(self, metadata: Dict[str, Any]):
+        file_name = metadata.get("file_name", "dummy.txt")
+        return os.path.splitext(file_name)[1]
+
     async def load(self, file_directory: str, enable_qa_extraction: bool):
         data_reader = self.datareader_factory.get_reader(file_directory)
         docs = data_reader.load_data()
         nodes = []
+
+        doc_cnt_map = {}
         for doc in docs:
-            if doc.metadata.get("file_type", "Unknown") == "HTML":
-                node_id = node_id_hash(0, doc)
+            doc_type = self._extract_file_type(doc.metadata)
+
+            if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
+                doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
+                print(doc_key)
+                if doc_key not in doc_cnt_map:
+                    doc_cnt_map[doc_key] = 0
+                doc_cnt_map[doc_key] += 1
+                node_id = node_id_hash(doc_cnt_map[doc_key], doc)
                 nodes.append(
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
