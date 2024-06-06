@@ -117,5 +117,6 @@ class PaiPandasExcelReader(BaseReader):
             ]
         else:
             return [
-                Document(text=text, metadata=extra_info or {}) for text in text_list
+                Document(text=text, metadata={**extra_info, **{"row_number": i}})
+                for i, text in enumerate(text_list)
             ]
