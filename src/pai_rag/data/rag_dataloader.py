@@ -68,7 +68,6 @@ class RagDataLoader:
 
             if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
-                print(doc_key)
                 if doc_key not in doc_cnt_map:
                     doc_cnt_map[doc_key] = 0
                 doc_cnt_map[doc_key] += 1
