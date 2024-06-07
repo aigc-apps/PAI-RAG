@@ -141,7 +141,7 @@ class PaiPandasCSVReader(BaseReader):
             with fs.open(file) as f:
                 encoding = chardet.detect(f.read(100000))["encoding"]
                 f.seek(0)
-                if encoding.upper() in ["GB18030", "GBK"]:
+                if "GB" in encoding.upper():
                     self._pandas_config["encoding"] = "GB18030"
                 try:
                     df = pd.read_csv(f, **self._pandas_config)
