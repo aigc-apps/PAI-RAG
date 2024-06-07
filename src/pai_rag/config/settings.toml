@@ -21,6 +21,7 @@ type = "SimpleDirectoryReader"
 
 [rag.embedding]
 source = "DashScope"
+embed_batch_size = 10
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]

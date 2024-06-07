@@ -27,6 +27,7 @@ class ViewModel(BaseModel):
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
     embed_api_key: str = None
+    embed_batch_size: int = 10
 
     # llm
     llm: str = "PaiEas"
@@ -111,6 +112,9 @@ class ViewModel(BaseModel):
         self.embed_source = config["embedding"].get("source", self.embed_source)
         self.embed_model = config["embedding"].get("model_name", self.embed_model)
         self.embed_api_key = config["embedding"].get("api_key", self.embed_api_key)
+        self.embed_batch_size = config["embedding"].get(
+            "embed_batch_size", self.embed_batch_size
+        )
 
         self.llm = config["llm"].get("source", self.llm)
         self.llm_eas_url = config["llm"].get("endpoint", self.llm_eas_url)
@@ -214,6 +218,7 @@ class ViewModel(BaseModel):
         config["embedding"]["source"] = self.embed_source
         config["embedding"]["model_name"] = self.embed_model
         config["embedding"]["api_key"] = self.embed_api_key
+        config["embedding"]["embed_batch_size"] = self.embed_batch_size
 
         config["llm"]["source"] = self.llm
         config["llm"]["endpoint"] = self.llm_eas_url
@@ -321,6 +326,7 @@ class ViewModel(BaseModel):
             if self.embed_source == "HuggingFace"
             else DEFAULT_EMBED_SIZE
         }
+        settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
         settings["llm"] = {"value": self.llm}
         settings["llm_eas_url"] = {"value": self.llm_eas_url}
