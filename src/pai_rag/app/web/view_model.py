@@ -218,7 +218,7 @@ class ViewModel(BaseModel):
         config["embedding"]["source"] = self.embed_source
         config["embedding"]["model_name"] = self.embed_model
         config["embedding"]["api_key"] = self.embed_api_key
-        config["embedding"]["embed_batch_size"] = self.embed_batch_size
+        config["embedding"]["embed_batch_size"] = int(self.embed_batch_size)
 
         config["llm"]["source"] = self.llm
         config["llm"]["endpoint"] = self.llm_eas_url

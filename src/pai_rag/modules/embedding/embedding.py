@@ -26,6 +26,9 @@ class EmbeddingModule(ConfigurableModule):
         source = config["source"].lower()
         embed_batch_size = config.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE)
 
+        if not isinstance(embed_batch_size, int):
+            raise TypeError("embed_batch_size must be of type int")
+
         if source == "openai":
             embed_model = OpenAIEmbedding(
                 api_key=config.get("api_key", None),
@@ -52,6 +55,7 @@ class EmbeddingModule(ConfigurableModule):
             embed_model = HuggingFaceEmbedding(
                 model_name=model_path, embed_batch_size=embed_batch_size
             )
+
             logger.info(
                 f"Initialized HuggingFace embedding model {model_name} with {embed_batch_size} batch size."
             )
