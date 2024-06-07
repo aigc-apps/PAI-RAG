@@ -34,11 +34,20 @@ jobs:
           username: ${{ secrets.ACR_USER }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and push image
+      - name: Build and push base image
         env:
           IMAGE_TAG: 0.0.1
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG .
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+
+      - name: Build and push GPU image
+        env:
+          IMAGE_TAG: 0.0.1_gpu
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_gpu .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
           docker push ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG

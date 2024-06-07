@@ -60,6 +60,8 @@ class RagDataLoader:
     async def load(self, file_directory: str, enable_qa_extraction: bool):
         data_reader = self.datareader_factory.get_reader(file_directory)
         docs = data_reader.load_data()
+        logger.info(f"[DataReader] Loaded {len(docs)} docs.")
+
         nodes = []
 
         doc_cnt_map = {}
@@ -77,6 +79,8 @@ class RagDataLoader:
                 )
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
+
+        logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
 
         # QA metadata extraction
         if enable_qa_extraction:
@@ -102,6 +106,8 @@ class RagDataLoader:
                 node.excluded_embed_metadata_keys.append("answer")
                 node.excluded_llm_metadata_keys.append("question")
             nodes.extend(qa_nodes)
+
+        logger.info("[DataReader] Start inserting to index.")
 
         self.index.insert_nodes(nodes)
         self.index.storage_context.persist(persist_dir=store_path.persist_path)
