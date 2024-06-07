@@ -22,6 +22,7 @@ type = "SimpleDirectoryReader"
 [rag.embedding]
 source = "HuggingFace"
 model_name = "bge-small-zh-v1.5"
+embed_batch_size = 10
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
