@@ -36,7 +36,7 @@ jobs:
 
       - name: Build and push base image
         env:
-          IMAGE_TAG: 0.0.1
+          IMAGE_TAG: 0.0.2
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
@@ -45,7 +45,7 @@ jobs:
 
       - name: Build and push GPU image
         env:
-          IMAGE_TAG: 0.0.1_gpu
+          IMAGE_TAG: 0.0.2_gpu
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_gpu .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG

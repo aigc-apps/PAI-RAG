@@ -50,6 +50,9 @@ jobs:
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
           IS_PAI_RAG_CI_TEST: true
+          PAIRAG_RAG__embedding__source: "DashScope"
+          PAIRAG_RAG__llm__source: "DashScope"
+          PAIRAG_RAG__llm__name: "qwen-turbo"
 
       - name: Get Cover
         uses: orgoro/coverage@v3.1
