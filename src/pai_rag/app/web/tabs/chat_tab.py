@@ -39,20 +39,20 @@ def respond(input_elements: List[Any]):
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
 
+    if not update_dict["include_history"]:
+        current_session_id = None
+
     if query_type == "LLM":
         response = rag_client.query_llm(
             msg,
             session_id=current_session_id,
         )
-
+        current_session_id = response.session_id
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
         response = rag_client.query(msg, session_id=current_session_id)
-    if update_dict["include_history"]:
         current_session_id = response.session_id
-    else:
-        current_session_id = None
     chatbot.append((msg, response.answer))
     return "", chatbot, 0
 
