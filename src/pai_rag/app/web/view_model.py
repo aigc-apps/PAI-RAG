@@ -298,7 +298,7 @@ class ViewModel(BaseModel):
             config["postprocessor"]["rerank_model"] = "bge-reranker-large"
         else:
             config["postprocessor"]["rerank_model"] = "no-reranker"
-        config["postprocessor"]["top_n"] = 3
+        config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
