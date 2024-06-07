@@ -24,33 +24,38 @@ class EmbeddingModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         source = config["source"].lower()
+        embed_batch_size = config.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE)
+
+        if not isinstance(embed_batch_size, int):
+            raise TypeError("embed_batch_size must be of type int")
+
         if source == "openai":
             embed_model = OpenAIEmbedding(
                 api_key=config.get("api_key", None),
-                embed_batch_size=config.get(
-                    "embed_batch_size", DEFAULT_EMBED_BATCH_SIZE
-                ),
+                embed_batch_size=embed_batch_size,
             )
-            logger.info("Initialized Open AI embedding model.")
+            logger.info(
+                f"Initialized Open AI embedding model with {embed_batch_size} batch size."
+            )
 
         elif source == "azureopenai":
             embed_model = AzureOpenAIEmbedding(
                 api_key=config.get("api_key", None),
-                embed_batch_size=config.get(
-                    "embed_batch_size", DEFAULT_EMBED_BATCH_SIZE
-                ),
+                embed_batch_size=embed_batch_size,
             )
-            logger.info("Initialized Azure Open AI embedding model.")
+            logger.info(
+                f"Initialized Azure Open AI embedding model with {embed_batch_size} batch size."
+            )
 
         elif source == "huggingface":
             model_dir = config.get("model_dir", DEFAULT_MODEL_DIR)
             model_name = config.get("model_name", DEFAULT_HUGGINGFACE_EMBEDDING_MODEL)
-            embed_batch_size = config.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE)
 
             model_path = os.path.join(model_dir, model_name)
             embed_model = HuggingFaceEmbedding(
                 model_name=model_path, embed_batch_size=embed_batch_size
             )
+
             logger.info(
                 f"Initialized HuggingFace embedding model {model_name} with {embed_batch_size} batch size."
             )
@@ -58,11 +63,11 @@ class EmbeddingModule(ConfigurableModule):
         elif source == "dashscope":
             embed_model = DashScopeEmbedding(
                 api_key=config.get("api_key", None),
-                embed_batch_size=config.get(
-                    "embed_batch_size", DEFAULT_EMBED_BATCH_SIZE
-                ),
+                embed_batch_size=embed_batch_size,
             )
-            logger.info("Initialized DashScope embedding model.")
+            logger.info(
+                f"Initialized DashScope embedding model with {embed_batch_size} batch size."
+            )
 
         else:
             raise ValueError(f"Unknown LLM source: {config['source']}")
