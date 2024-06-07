@@ -44,13 +44,10 @@ class RagWebClient:
         return f"{self.endpoint}service/data"
 
     def query(self, text: str, session_id: str = None):
-        q = dict(question=text)
-        r = requests.post(self.query_url, headers={"X-Session-ID": session_id}, json=q)
+        q = dict(question=text, session_id=session_id)
+        r = requests.post(self.query_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
-        response.session_id = session_id
-
         return response
 
     def query_llm(
@@ -59,13 +56,15 @@ class RagWebClient:
         session_id: str = None,
         temperature: float = 0.1,
     ):
-        q = dict(question=text, temperature=temperature)
+        q = dict(
+            question=text,
+            temperature=temperature,
+            session_id=session_id,
+        )
 
-        r = requests.post(self.llm_url, headers={"X-Session-ID": session_id}, json=q)
+        r = requests.post(self.llm_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
-        response.session_id = session_id
 
         return response
 
@@ -73,9 +72,7 @@ class RagWebClient:
         q = dict(question=text)
         r = requests.post(self.retrieval_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
-        response.session_id = session_id
         formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
         for i, doc in enumerate(response["docs"]):
             html_content = markdown.markdown(doc["text"])

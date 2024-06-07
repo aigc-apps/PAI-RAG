@@ -1,4 +1,3 @@
-from asgi_correlation_id import correlation_id
 from pai_rag.data.rag_dataloader import RagDataLoader
 from pai_rag.utils.oss_cache import OssCache
 from pai_rag.modules.module_registry import module_registry
@@ -15,8 +14,11 @@ from pai_rag.app.api.models import (
 from llama_index.core.schema import QueryBundle
 
 import logging
+from uuid import uuid4
 
-DEFAULT_SESSION_ID = "default"  # For test-only
+
+def uuid_generator() -> str:
+    return uuid4().hex
 
 
 class RagApplication:
@@ -63,8 +65,6 @@ class RagApplication:
         if not query.question:
             return RetrievalResponse(docs=[])
 
-        session_id = correlation_id.get() or DEFAULT_SESSION_ID
-        self.logger.info(f"Get session ID: {session_id}.")
         query_bundle = QueryBundle(query.question)
         node_results = await self.query_engine.aretrieve(query_bundle)
 
@@ -89,17 +89,19 @@ class RagApplication:
         Returns:
             RagResponse
         """
-        if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
-
-        session_id = correlation_id.get() or DEFAULT_SESSION_ID
+        session_id = query.session_id or uuid_generator()
         self.logger.info(f"Get session ID: {session_id}.")
+        if not query.question:
+            return RagResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
         query_chat_engine = self.chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
         response = await query_chat_engine.achat(query.question)
         self.chat_store.persist()
-        return RagResponse(answer=response.response)
+        return RagResponse(answer=response.response, session_id=session_id)
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
         """Query answer from LLM response asynchronously.
@@ -112,17 +114,20 @@ class RagApplication:
         Returns:
             LlmResponse
         """
-        if not query.question:
-            return LlmResponse(answer="Empty query. Please input your question.")
-
-        session_id = correlation_id.get() or DEFAULT_SESSION_ID
+        session_id = query.session_id or uuid_generator()
         self.logger.info(f"Get session ID: {session_id}.")
+
+        if not query.question:
+            return LlmResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
         llm_chat_engine = self.llm_chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
         response = await llm_chat_engine.achat(query.question)
         self.chat_store.persist()
-        return LlmResponse(answer=response.response)
+        return LlmResponse(answer=response.response, session_id=session_id)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.
@@ -138,8 +143,6 @@ class RagApplication:
         if not query.question:
             return LlmResponse(answer="Empty query. Please input your question.")
 
-        session_id = correlation_id.get()
-        self.logger.info(f"Get session ID: {session_id}.")
         response = await self.agent.achat(query.question)
         return LlmResponse(answer=response.response)
 

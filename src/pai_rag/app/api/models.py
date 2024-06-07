@@ -8,12 +8,14 @@ class RagQuery(BaseModel):
     vector_topk: int | None = 3
     score_threshold: float | None = 0.5
     chat_history: List[Dict[str, str]] | None = None
+    session_id: str | None = None
 
 
 class LlmQuery(BaseModel):
     question: str
     temperature: float | None = 0.1
     chat_history: List[Dict[str, str]] | None = None
+    session_id: str | None = None
 
 
 class RetrievalQuery(BaseModel):
@@ -24,12 +26,14 @@ class RetrievalQuery(BaseModel):
 
 class RagResponse(BaseModel):
     answer: str
+    session_id: str | None = None
     # TODO
     # context: List[str] | None = None
 
 
 class LlmResponse(BaseModel):
     answer: str
+    session_id: str | None = None
 
 
 class ContextDoc(BaseModel):

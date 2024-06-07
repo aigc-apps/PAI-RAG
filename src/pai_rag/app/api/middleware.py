@@ -31,7 +31,7 @@ def init_middleware(app: FastAPI):
 def _configure_session_middleware(app):
     app.add_middleware(
         CorrelationIdMiddleware,
-        header_name="X-Session-ID",
+        header_name="X-Request-ID",
     )
 
 
