@@ -113,9 +113,9 @@ def create_vector_db_panel(
                     label="Table",
                     elem_id="hologres_table",
                 )
-                hologres_pre_delete = gr.Dropdown(
-                    ["True", "False"],
-                    label="Pre Delete",
+                hologres_pre_delete = gr.Checkbox(
+                    label="Yes",
+                    info="Clear hologres table on connection.",
                     elem_id="hologres_pre_delete",
                 )
 

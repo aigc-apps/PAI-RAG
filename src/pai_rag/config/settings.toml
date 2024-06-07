@@ -20,7 +20,8 @@ persist_path = "localdata/storage"
 type = "SimpleDirectoryReader"
 
 [rag.embedding]
-source = "DashScope"
+source = "HuggingFace"
+model_name = "bge-small-zh-v1.5"
 embed_batch_size = 10
 
 [rag.evaluation]
@@ -33,8 +34,9 @@ persist_path = "localdata/storage"
 vector_store.type = "FAISS"
 
 [rag.llm]
-source = "DashScope"
-name = "qwen-turbo"
+source = "PaiEas"
+endpoint = ""
+token = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
