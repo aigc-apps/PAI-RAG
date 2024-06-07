@@ -32,7 +32,7 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = None
+    llm_eas_model_name: str = "PAI-EAS-LLM"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1

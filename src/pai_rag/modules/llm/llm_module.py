@@ -60,7 +60,7 @@ class LlmModule(ConfigurableModule):
                 model_name=model_name, temperature=config.get("temperature", 0.1)
             )
         elif source == "paieas":
-            model_name = config["name"]
+            model_name = config.get("name", "PAI-EAS-LLM")
             endpoint = config["endpoint"]
             token = config["token"]
             logger.info(
