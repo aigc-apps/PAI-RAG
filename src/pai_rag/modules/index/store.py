@@ -132,6 +132,7 @@ class RagStore:
             es_url=es_config["es_url"],
             es_user=es_config["es_user"],
             es_password=es_config["es_password"],
+            embedding_dimension=self.embed_dims,
             retrieval_strategy=AsyncDenseVectorStrategy(
                 hybrid=True, rrf={"window_size": 50}
             ),

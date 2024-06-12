@@ -212,6 +212,7 @@ class MyElasticsearchStore(BasePydanticVectorStore):
         es_password: Optional[str] = None,
         text_field: str = "content",
         vector_field: str = "embedding",
+        embedding_dimension: int = 1536,
         batch_size: int = 200,
         distance_strategy: Optional[DISTANCE_STRATEGIES] = "COSINE",
         retrieval_strategy: Optional[AsyncRetrievalStrategy] = None,
@@ -246,8 +247,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             text_field=text_field,
             vector_field=vector_field,
             metadata_mappings=metadata_mappings,
+            num_dimensions=embedding_dimension,
         )
-        self._store._create_index_if_not_exists()
+        asyncio.get_event_loop().run_until_complete(
+            self._store._create_index_if_not_exists()
+        )
 
         super().__init__(
             index_name=index_name,
