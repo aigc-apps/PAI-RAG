@@ -133,7 +133,7 @@ class MyVectorStoreIndex(VectorStoreIndex):
         work_thread.start()
 
         i = 0
-        for nodes_batch in iter_batch(nodes, 100):
+        for nodes_batch in iter_batch(nodes, 500):
             nodes_batch = self._get_node_with_embedding(nodes_batch, show_progress)
             q.put(nodes_batch)
             i += 1
