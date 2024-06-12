@@ -11,8 +11,6 @@ from pai_rag.app.api.models import (
     DataInput,
 )
 
-TASK_RESULT_EXPIRATION_TIME = 600  # 10分钟
-
 router = APIRouter()
 
 upload_tasks = {}
@@ -51,7 +49,6 @@ tasks_status = {}
 async def load_data(input: DataInput, background_tasks: BackgroundTasks):
     task_id = uuid.uuid4().hex  # 生成唯一任务ID
     tasks_status[task_id] = "processing"
-
     # 添加后台任务并立即返回任务ID
     background_tasks.add_task(process_knowledge, task_id, input)
     return {"task_id": task_id}

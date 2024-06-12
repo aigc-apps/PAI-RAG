@@ -2,8 +2,12 @@ import os
 from typing import Dict, Any
 import gradio as gr
 import time
+from datetime import datetime
+import pytz
 from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.view_model import view_model
+
+beijing_tz = pytz.timezone("Asia/Shanghai")
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
@@ -23,24 +27,25 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
         file_taskid_map[response["task_id"]] = os.path.basename(file.name)
         task_ids[response["task_id"]] = False
 
+    result = ""
     while not all(task_ids.values()):
-        result = ""
+        result = f"Current Beijing Time: {datetime.now(beijing_tz)} \n"
         for id in task_ids.keys():
             response = rag_client.get_knowledge_state(id)
             if response["status"] in ["completed", "failed"]:
                 task_ids[id] = True
 
             result += (
-                f"Upload file: {file_taskid_map[id]}  State:{response['status']} \n"
+                f"Upload file: {file_taskid_map[id]}  State: {response['status']} \n"
             )
         yield gr.Textbox.update(value=result)
         time.sleep(2)
 
     yield gr.Textbox.update(
-        "Upload "
+        result
+        + "\n Uploaded "
         + str(len(upload_files))
-        + " files Success! \n"
-        + ", ".join(str(value) for value in file_taskid_map.values())
+        + " files! \n"
         + "\n Relevant content has been added to the vector store, you can now start chatting and asking questions."
     )
 
