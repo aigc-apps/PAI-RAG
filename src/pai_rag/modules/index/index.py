@@ -3,8 +3,7 @@ import os
 import sys
 from typing import Dict, List, Any
 
-from llama_index.core import VectorStoreIndex
-
+from pai_rag.modules.index.my_vector_store_index import MyVectorStoreIndex
 from llama_index.core import load_index_from_storage
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -59,7 +58,7 @@ class IndexModule(ConfigurableModule):
     def create_indices(self):
         logging.info("Empty index, need to create indices.")
 
-        vector_index = VectorStoreIndex(
+        vector_index = MyVectorStoreIndex(
             nodes=[], storage_context=self.storage_context, embed_model=self.embed_model
         )
         logging.info("Created vector_index.")
@@ -70,7 +69,7 @@ class IndexModule(ConfigurableModule):
         if isinstance(self.storage_context.vector_store, FaissVectorStore):
             vector_index = load_index_from_storage(storage_context=self.storage_context)
         else:
-            vector_index = VectorStoreIndex(
+            vector_index = MyVectorStoreIndex(
                 nodes=[],
                 storage_context=self.storage_context,
                 embed_model=self.embed_model,
