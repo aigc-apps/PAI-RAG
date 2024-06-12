@@ -1,5 +1,6 @@
 from typing import Any
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, BackgroundTasks
+import uuid
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
@@ -10,7 +11,11 @@ from pai_rag.app.api.models import (
     DataInput,
 )
 
+TASK_RESULT_EXPIRATION_TIME = 600  # 10分钟
+
 router = APIRouter()
+
+upload_tasks = {}
 
 
 @router.post("/query")
@@ -39,12 +44,33 @@ async def aupdate(new_config: Any = Body(None)):
     return {"msg": "Update RAG configuration successfully."}
 
 
-@router.post("/data")
-async def load_data(input: DataInput):
-    await rag_service.add_knowledge(
-        file_dir=input.file_path, enable_qa_extraction=input.enable_qa_extraction
-    )
-    return {"msg": "Update RAG configuration successfully."}
+tasks_status = {}
+
+
+@router.post("/upload_data")
+async def load_data(input: DataInput, background_tasks: BackgroundTasks):
+    task_id = uuid.uuid4().hex  # 生成唯一任务ID
+    tasks_status[task_id] = "processing"
+
+    # 添加后台任务并立即返回任务ID
+    background_tasks.add_task(process_knowledge, task_id, input)
+    return {"task_id": task_id}
+
+
+def process_knowledge(task_id: str, input: DataInput):
+    try:
+        rag_service.add_knowledge(
+            file_dir=input.file_path, enable_qa_extraction=input.enable_qa_extraction
+        )
+        tasks_status[task_id] = "completed"
+    except Exception:
+        tasks_status[task_id] = "failed"
+
+
+@router.get("/get_upload_state")
+def task_status(task_id: str):
+    status = tasks_status.get(task_id, "unknown")
+    return {"task_id": task_id, "status": status}
 
 
 @router.post("/evaluate/response")

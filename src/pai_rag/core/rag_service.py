@@ -47,8 +47,8 @@ class RagService:
         self.rag.reload(self.rag_configuration.get_value())
         self.rag_configuration.persist()
 
-    async def add_knowledge(self, file_dir: str, enable_qa_extraction: bool = False):
-        await self.rag.load_knowledge(file_dir, enable_qa_extraction)
+    def add_knowledge(self, file_dir: str, enable_qa_extraction: bool = False):
+        self.rag.load_knowledge(file_dir, enable_qa_extraction)
 
     async def aquery(self, query: RagQuery) -> RagResponse:
         return await self.rag.aquery(query)

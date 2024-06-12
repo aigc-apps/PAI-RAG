@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Any
 import gradio as gr
+import time
 from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.view_model import view_model
 
@@ -14,13 +15,33 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
     if not upload_files:
         return "No file selected. Please choose at least one file."
 
+    task_ids = {}
+    file_taskid_map = {}
     for file in upload_files:
         file_dir = os.path.dirname(file.name)
-        rag_client.add_knowledge(file_dir, enable_qa_extraction)
-    return (
+        response = rag_client.add_knowledge(file_dir, enable_qa_extraction)
+        file_taskid_map[response["task_id"]] = os.path.basename(file.name)
+        task_ids[response["task_id"]] = False
+
+    while not all(task_ids.values()):
+        result = ""
+        for id in task_ids.keys():
+            response = rag_client.get_knowledge_state(id)
+            if response["status"] in ["completed", "failed"]:
+                task_ids[id] = True
+
+            result += (
+                f"Upload file: {file_taskid_map[id]}  State:{response['status']} \n"
+            )
+        yield gr.Textbox.update(value=result)
+        time.sleep(2)
+
+    yield gr.Textbox.update(
         "Upload "
         + str(len(upload_files))
-        + " files Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions."
+        + " files Success! \n"
+        + ", ".join(str(value) for value in file_taskid_map.values())
+        + "\n Relevant content has been added to the vector store, you can now start chatting and asking questions."
     )
 
 
