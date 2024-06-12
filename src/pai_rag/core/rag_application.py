@@ -146,8 +146,12 @@ class RagApplication:
         return LlmResponse(answer=response.response)
 
     async def batch_evaluate_retrieval_and_response(self, type):
-        retriever = module_registry.get_module_with_config("RetrieverModule")
-        query_engine = module_registry.get_module_with_config("QueryEngineModule")
+        retriever = module_registry.get_module_with_config(
+            "RetrieverModule", self.config
+        )
+        query_engine = module_registry.get_module_with_config(
+            "QueryEngineModule", self.config
+        )
         batch_eval = BatchEvaluator(self.config, retriever, query_engine)
         df, eval_res_avg = await batch_eval.batch_retrieval_response_aevaluation(
             type=type, workers=2, save_to_file=True
