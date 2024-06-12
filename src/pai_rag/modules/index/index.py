@@ -9,6 +9,7 @@ from llama_index.core import load_index_from_storage
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.modules.index.store import RagStore
+from llama_index.vector_stores.faiss import FaissVectorStore
 from pai_rag.utils.store_utils import get_store_persist_directory_name, store_path
 
 logging.basicConfig(
@@ -18,7 +19,6 @@ logging.basicConfig(
 )
 
 DEFAULT_PERSIST_DIR = "./storage"
-INDEX_STATE_FILE = "index.state.json"
 
 
 class IndexModule(ConfigurableModule):
@@ -60,16 +60,19 @@ class IndexModule(ConfigurableModule):
         logging.info("Empty index, need to create indices.")
 
         vector_index = VectorStoreIndex(
-            nodes=[],
-            storage_context=self.storage_context,
-            embed_model=self.embed_model,
-            store_nodes_override=True,
+            nodes=[], storage_context=self.storage_context, embed_model=self.embed_model
         )
         logging.info("Created vector_index.")
 
         return vector_index
 
     def load_indices(self):
-        vector_index = load_index_from_storage(storage_context=self.storage_context)
-
+        if isinstance(self.storage_context.vector_store, FaissVectorStore):
+            vector_index = load_index_from_storage(storage_context=self.storage_context)
+        else:
+            vector_index = VectorStoreIndex(
+                nodes=[],
+                storage_context=self.storage_context,
+                embed_model=self.embed_model,
+            )
         return vector_index

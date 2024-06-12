@@ -1,5 +1,3 @@
-from pai_rag.data.rag_dataloader import RagDataLoader
-from pai_rag.utils.oss_cache import OssCache
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.evaluations.batch_evaluator import BatchEvaluator
 from pai_rag.app.api.models import (
@@ -29,28 +27,7 @@ class RagApplication:
 
     def initialize(self, config):
         self.config = config
-
         module_registry.init_modules(self.config)
-        self.index = module_registry.get_module("IndexModule")
-        self.llm = module_registry.get_module("LlmModule")
-        self.retriever = module_registry.get_module("RetrieverModule")
-        self.chat_store = module_registry.get_module("ChatStoreModule")
-        self.query_engine = module_registry.get_module("QueryEngineModule")
-        self.chat_engine_factory = module_registry.get_module("ChatEngineFactoryModule")
-        self.llm_chat_engine_factory = module_registry.get_module(
-            "LlmChatEngineFactoryModule"
-        )
-        self.data_reader_factory = module_registry.get_module("DataReaderFactoryModule")
-        self.agent = module_registry.get_module("AgentModule")
-
-        oss_cache = None
-        if config.get("oss_cache", None):
-            oss_cache = OssCache(config.oss_cache)
-        node_parser = module_registry.get_module("NodeParserModule")
-
-        self.data_loader = RagDataLoader(
-            self.data_reader_factory, node_parser, self.index, oss_cache
-        )
         self.logger.info("RagApplication initialized successfully.")
 
     def reload(self, config):
@@ -59,14 +36,21 @@ class RagApplication:
 
     # TODO: 大量文件上传实现异步添加
     async def load_knowledge(self, file_dir, enable_qa_extraction=False):
-        await self.data_loader.load(file_dir, enable_qa_extraction)
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", self.config
+        )
+        await data_loader.load(file_dir, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RetrievalResponse(docs=[])
 
         query_bundle = QueryBundle(query.question)
-        node_results = await self.query_engine.aretrieve(query_bundle)
+
+        query_engine = module_registry.get_module_with_config(
+            "QueryEngineModule", self.config
+        )
+        node_results = await query_engine.aretrieve(query_bundle)
 
         docs = [
             ContextDoc(
@@ -96,11 +80,18 @@ class RagApplication:
                 answer="Empty query. Please input your question.", session_id=session_id
             )
 
-        query_chat_engine = self.chat_engine_factory.get_chat_engine(
+        chat_engine_factory = module_registry.get_module_with_config(
+            "ChatEngineFactoryModule", self.config
+        )
+        query_chat_engine = chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
         response = await query_chat_engine.achat(query.question)
-        self.chat_store.persist()
+
+        chat_store = module_registry.get_module_with_config(
+            "ChatStoreModule", self.config
+        )
+        chat_store.persist()
         return RagResponse(answer=response.response, session_id=session_id)
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
@@ -122,11 +113,18 @@ class RagApplication:
                 answer="Empty query. Please input your question.", session_id=session_id
             )
 
-        llm_chat_engine = self.llm_chat_engine_factory.get_chat_engine(
+        llm_chat_engine_factory = module_registry.get_module_with_config(
+            "LlmChatEngineFactoryModule", self.config
+        )
+        llm_chat_engine = llm_chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
         response = await llm_chat_engine.achat(query.question)
-        self.chat_store.persist()
+
+        chat_store = module_registry.get_module_with_config(
+            "ChatStoreModule", self.config
+        )
+        chat_store.persist()
         return LlmResponse(answer=response.response, session_id=session_id)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
@@ -143,11 +141,14 @@ class RagApplication:
         if not query.question:
             return LlmResponse(answer="Empty query. Please input your question.")
 
-        response = await self.agent.achat(query.question)
+        agent = module_registry.get_module_with_config("AgentModule", self.config)
+        response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
     async def batch_evaluate_retrieval_and_response(self, type):
-        batch_eval = BatchEvaluator(self.config, self.retriever, self.query_engine)
+        retriever = module_registry.get_module_with_config("RetrieverModule")
+        query_engine = module_registry.get_module_with_config("QueryEngineModule")
+        batch_eval = BatchEvaluator(self.config, retriever, query_engine)
         df, eval_res_avg = await batch_eval.batch_retrieval_response_aevaluation(
             type=type, workers=2, save_to_file=True
         )
