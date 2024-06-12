@@ -68,6 +68,11 @@ class IndexModule(ConfigurableModule):
     def load_indices(self):
         if isinstance(self.storage_context.vector_store, FaissVectorStore):
             vector_index = load_index_from_storage(storage_context=self.storage_context)
+            return MyVectorStoreIndex(
+                nodes=list(vector_index.docstore.docs.values()),
+                storage_context=self.storage_context,
+                embed_model=self.embed_model,
+            )
         else:
             vector_index = MyVectorStoreIndex(
                 nodes=[],

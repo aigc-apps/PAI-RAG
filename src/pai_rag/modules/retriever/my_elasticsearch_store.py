@@ -247,6 +247,7 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             vector_field=vector_field,
             metadata_mappings=metadata_mappings,
         )
+        self._store._create_index_if_not_exists()
 
         super().__init__(
             index_name=index_name,
