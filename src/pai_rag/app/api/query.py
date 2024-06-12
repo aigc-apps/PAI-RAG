@@ -44,7 +44,7 @@ async def load_data(input: DataInput):
     await rag_service.add_knowledge(
         file_dir=input.file_path, enable_qa_extraction=input.enable_qa_extraction
     )
-    return {"msg": "Update RAG configuration successfully."}
+    return {"msg": "Upload data successfully."}
 
 
 @router.post("/evaluate/response")

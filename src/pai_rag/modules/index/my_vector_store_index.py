@@ -28,26 +28,44 @@ def call_async(coro):
 
 
 class MyVectorStoreIndex(VectorStoreIndex):
-    async def _postprocess_batch(
+    async def _process_one_batch(
         self,
+        nodes_batch: Sequence[Sequence[BaseNode]],
         index_struct: IndexDict,
-        nodes_batch: Sequence[BaseNode],
+        semaphore: asyncio.Semaphore,
         **insert_kwargs: Any,
     ):
-        new_ids = await self._vector_store.async_add(nodes_batch, **insert_kwargs)
+        async with semaphore:
+            new_ids = await self._vector_store.async_add(nodes_batch, **insert_kwargs)
 
-        # if the vector store doesn't store text, we need to add the nodes to the
-        # index struct and document store
-        if not self._vector_store.stores_text or self._store_nodes_override:
-            for node, new_id in zip(nodes_batch, new_ids):
-                # NOTE: remove embedding from node to avoid duplication
-                node_without_embedding = node.copy()
-                node_without_embedding.embedding = None
+            # if the vector store doesn't store text, we need to add the nodes to the
+            # index struct and document store
+            if not self._vector_store.stores_text or self._store_nodes_override:
+                for node, new_id in zip(nodes_batch, new_ids):
+                    # NOTE: remove embedding from node to avoid duplication
+                    node_without_embedding = node.copy()
+                    node_without_embedding.embedding = None
 
-                index_struct.add_node(node_without_embedding, text_id=new_id)
-                self._docstore.add_documents(
-                    [node_without_embedding], allow_update=True
+                    index_struct.add_node(node_without_embedding, text_id=new_id)
+                    self._docstore.add_documents(
+                        [node_without_embedding], allow_update=True
+                    )
+
+    async def _postprocess_all_batch(
+        self,
+        nodes_batch_list: Sequence[Sequence[BaseNode]],
+        index_struct: IndexDict,
+        **insert_kwargs: Any,
+    ):
+        asyncio_semaphore = asyncio.Semaphore(10)
+        batch_process_coroutines = []
+        for nodes_batch in nodes_batch_list:
+            batch_process_coroutines.append(
+                self._process_one_batch(
+                    nodes_batch, index_struct, asyncio_semaphore, **insert_kwargs
                 )
+            )
+        await asyncio.gather(*batch_process_coroutines)
 
     async def _async_add_nodes_to_index(
         self,
@@ -60,17 +78,16 @@ class MyVectorStoreIndex(VectorStoreIndex):
         if not nodes:
             return
 
-        batch_process_coroutines = []
-
-        for nodes_batch in iter_batch(nodes, self._insert_batch_size):
+        node_batch_list = []
+        for nodes_batch in iter_batch(nodes, 500):
             nodes_batch = await self._aget_node_with_embedding(
                 nodes_batch, show_progress
             )
+            node_batch_list.append(nodes_batch)
 
-            batch_process_coroutines.append(
-                self._postprocess_batch(index_struct, nodes_batch, **insert_kwargs)
-            )
-        await asyncio.gather(*batch_process_coroutines)
+        await self._postprocess_all_batch(
+            node_batch_list, index_struct, **insert_kwargs
+        )
 
     async def _insert_async(
         self, nodes: Sequence[BaseNode], **insert_kwargs: Any

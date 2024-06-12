@@ -3,8 +3,6 @@
 import logging
 from typing import Dict, List, Any
 
-import jieba
-from nltk.corpus import stopwords
 from llama_index.core.indices.list.base import SummaryIndex
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.tools import RetrieverTool
@@ -12,7 +10,7 @@ from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
-# from llama_index.retrievers.bm25 import BM25Retriever
+from pai_rag.utils.tokenizer import jieba_tokenizer
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -21,19 +19,6 @@ from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStor
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 
 logger = logging.getLogger(__name__)
-
-stopword_list = stopwords.words("chinese") + stopwords.words("english")
-
-
-## PUT in utils file and add stopword in TRIE structure.
-def jieba_tokenize(text: str) -> List[str]:
-    tokens = []
-    for w in jieba.lcut(text):
-        token = w.lower()
-        if token not in stopword_list:
-            tokens.append(token)
-
-    return tokens
 
 
 class RetrieverModule(ConfigurableModule):
@@ -71,7 +56,7 @@ class RetrieverModule(ConfigurableModule):
         bm25_retriever = BM25Retriever.from_defaults(
             index=vector_index,
             similarity_top_k=similarity_top_k,
-            tokenizer=jieba_tokenize,
+            tokenizer=jieba_tokenizer,
         )
 
         if retrieval_mode == "embedding":

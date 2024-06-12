@@ -22,7 +22,6 @@ def uuid_generator() -> str:
 class RagApplication:
     def __init__(self):
         self.name = "RagApplication"
-        logging.basicConfig(level=logging.INFO)  # 将日志级别设置为INFO
         self.logger = logging.getLogger(__name__)
 
     def initialize(self, config):
@@ -80,8 +79,14 @@ class RagApplication:
                 answer="Empty query. Please input your question.", session_id=session_id
             )
 
+        sessioned_config = self.config
+        if query.vector_db and query.vector_db.faiss_path:
+            sessioned_config = self.config.copy()
+            sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
+            print(sessioned_config)
+
         chat_engine_factory = module_registry.get_module_with_config(
-            "ChatEngineFactoryModule", self.config
+            "ChatEngineFactoryModule", sessioned_config
         )
         query_chat_engine = chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
@@ -89,7 +94,7 @@ class RagApplication:
         response = await query_chat_engine.achat(query.question)
 
         chat_store = module_registry.get_module_with_config(
-            "ChatStoreModule", self.config
+            "ChatStoreModule", sessioned_config
         )
         chat_store.persist()
         return RagResponse(answer=response.response, session_id=session_id)
