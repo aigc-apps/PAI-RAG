@@ -189,8 +189,8 @@ def __init_evaluator_pipeline():
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
 
-    retriever = module_registry.get_module("RetrieverModule")
-    query_engine = module_registry.get_module("QueryEngineModule")
+    retriever = module_registry.get_module_with_config("RetrieverModule", config)
+    query_engine = module_registry.get_module_with_config("QueryEngineModule", config)
 
     return BatchEvaluator(config, retriever, query_engine)
 

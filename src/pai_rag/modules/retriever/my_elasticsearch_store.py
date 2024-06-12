@@ -442,7 +442,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             Exception: If AsyncElasticsearch query fails.
 
         """
-        print("================: ", query.mode)
         if query.mode == VectorStoreQueryMode.HYBRID:
             retrieval_strategy = AsyncDenseVectorStrategy(
                 hybrid=True, rrf={"window_size": 50}

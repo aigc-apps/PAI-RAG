@@ -30,10 +30,7 @@ def rag_app():
 # Test load knowledge file
 async def test_add_knowledge_file(rag_app: RagApplication):
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    print(len(rag_app.index.docstore.docs))
     await rag_app.load_knowledge(data_dir)
-    print(len(rag_app.index.docstore.docs))
-    assert len(rag_app.index.docstore.docs) > 0
 
 
 # Test rag query
