@@ -11,9 +11,7 @@ def create_vector_db_panel(
     components = []
     with gr.Column():
         with gr.Column():
-            _ = gr.Markdown(
-                value=f"**Please check your Vector Store for {view_model.vectordb_type}.**"
-            )
+            _ = gr.Markdown(value="**Please check your Vector Store.**")
             vectordb_type = gr.Dropdown(
                 ["Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"],
                 label="Which VectorStore do you want to use?",
@@ -115,9 +113,9 @@ def create_vector_db_panel(
                     label="Table",
                     elem_id="hologres_table",
                 )
-                hologres_pre_delete = gr.Dropdown(
-                    ["True", "False"],
-                    label="Pre Delete",
+                hologres_pre_delete = gr.Checkbox(
+                    label="Yes",
+                    info="Clear hologres table on connection.",
                     elem_id="hologres_pre_delete",
                 )
 

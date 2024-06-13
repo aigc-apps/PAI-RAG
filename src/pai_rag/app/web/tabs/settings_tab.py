@@ -53,6 +53,10 @@ def create_setting_tab() -> Dict[str, Any]:
                     label="Embedding Dimension",
                     elem_id="embed_dim",
                 )
+                embed_batch_size = gr.Textbox(
+                    label="Embedding Batch Size",
+                    elem_id="embed_batch_size",
+                )
 
                 def change_emb_source(source):
                     view_model.embed_source = source
@@ -85,7 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     inputs=embed_model,
                     outputs=[embed_dim],
                 )
-            components.extend([embed_source, embed_dim, embed_model])
+            components.extend([embed_source, embed_dim, embed_model, embed_batch_size])
 
             with gr.Column():
                 _ = gr.Markdown(value="**Please set your LLM.**")
@@ -102,6 +106,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_eas_token = gr.Textbox(
                         label="EAS Token",
                         elem_id="llm_eas_token",
+                        type="password",
                     )
                     llm_eas_model_name = gr.Textbox(
                         label="EAS Model name",
@@ -165,6 +170,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 embed_source,
                 embed_model,
                 embed_dim,
+                embed_batch_size,
                 llm_api_model_name,
             },
             connect_vector_func=connect_vector_db,

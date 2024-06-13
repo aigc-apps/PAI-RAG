@@ -1,5 +1,4 @@
 from typing import Dict, Any, List
-import json
 import gradio as gr
 from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.view_model import view_model
@@ -41,37 +40,21 @@ def respond(input_elements: List[Any]):
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
 
+    if not update_dict["include_history"]:
+        current_session_id = None
+
     if query_type == "LLM":
         response = rag_client.query_llm(
             text=msg, session_id=current_session_id, stream=is_streaming
         )
+        current_session_id = response.session_id
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
-        response = rag_client.query(
-            text=msg, session_id=current_session_id, stream=is_streaming
-        )
-
-    if update_dict["include_history"]:
+        response = rag_client.query(msg, session_id=current_session_id)
         current_session_id = response.session_id
-    else:
-        current_session_id = None
-
-    if query_type == "Retrieval":
-        chatbot.append((msg, response.answer))
-        yield "", chatbot, 0
-    elif is_streaming:
-        chatbot.append([msg, None])
-        chatbot[-1][1] = ""
-        for token in response.iter_lines(
-            chunk_size=16, decode_unicode=True, delimiter="\0"
-        ):
-            print("is_streaming token ", token)
-            chatbot[-1][1] += token
-            yield "", chatbot, 0
-    else:
-        chatbot.append((msg, json.loads(response.text)["response"]))
-        yield "", chatbot, 0
+    chatbot.append((msg, response.answer))
+    return "", chatbot, 0
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -91,7 +74,9 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
             with gr.Column(visible=True) as vs_col:
-                vec_model_argument = gr.Accordion("Parameters of Vector Retrieval")
+                vec_model_argument = gr.Accordion(
+                    "Parameters of Vector Retrieval", open=False
+                )
 
                 with vec_model_argument:
                     similarity_top_k = gr.Slider(
@@ -113,7 +98,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="rerank_model",
                     )
                     retrieval_mode = gr.Radio(
-                        ["Embedding Only", "Keyword Ensembled", "Keyword Only"],
+                        ["Embedding Only", "Keyword Only", "Hybrid"],
                         label="Retrieval Mode",
                         elem_id="retrieval_mode",
                     )
@@ -124,38 +109,22 @@ def create_chat_tab() -> Dict[str, Any]:
                     retrieval_mode,
                 }
             with gr.Column(visible=True) as llm_col:
-                model_argument = gr.Accordion("Inference Parameters of LLM")
+                model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
                     include_history = gr.Checkbox(
                         label="Chat history",
                         info="Query with chat history.",
                         elem_id="include_history",
                     )
-                    llm_topk = gr.Slider(
-                        minimum=0,
-                        maximum=100,
-                        step=1,
-                        value=30,
-                        elem_id="llm_topk",
-                        label="Top K (choose between 0 and 100)",
-                    )
-                    llm_topp = gr.Slider(
-                        minimum=0,
-                        maximum=1,
-                        step=0.01,
-                        value=0.8,
-                        elem_id="llm_topp",
-                        label="Top P (choose between 0 and 1)",
-                    )
                     llm_temp = gr.Slider(
                         minimum=0,
                         maximum=1,
-                        step=0.01,
-                        value=0.7,
-                        elem_id="llm_temp",
+                        step=0.001,
+                        value=0.1,
+                        elem_id="llm_temperature",
                         label="Temperature (choose between 0 and 1)",
                     )
-                llm_args = {llm_topk, llm_topp, llm_temp, include_history}
+                llm_args = {llm_temp, include_history}
 
             with gr.Column(visible=True) as lc_col:
                 prm_type = gr.Radio(
@@ -221,26 +190,32 @@ def create_chat_tab() -> Dict[str, Any]:
                 if query_type == "Retrieval":
                     return {
                         vs_col: gr.update(visible=True),
+                        vec_model_argument: gr.update(open=True),
                         llm_col: gr.update(visible=False),
+                        model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
                     }
                 elif query_type == "LLM":
                     return {
                         vs_col: gr.update(visible=False),
+                        vec_model_argument: gr.update(open=False),
                         llm_col: gr.update(visible=True),
+                        model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=False),
                     }
                 elif query_type == "RAG (Retrieval + LLM)":
                     return {
                         vs_col: gr.update(visible=True),
+                        vec_model_argument: gr.update(open=False),
                         llm_col: gr.update(visible=True),
+                        model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                     }
 
             query_type.change(
                 fn=change_query_radio,
                 inputs=query_type,
-                outputs=[vs_col, llm_col, lc_col],
+                outputs=[vs_col, vec_model_argument, llm_col, model_argument, lc_col],
             )
 
         with gr.Column(scale=8):
@@ -257,6 +232,12 @@ def create_chat_tab() -> Dict[str, Any]:
         )
 
         submitBtn.click(
+            respond,
+            chat_args,
+            [question, chatbot, cur_tokens],
+            api_name="respond",
+        )
+        question.submit(
             respond,
             chat_args,
             [question, chatbot, cur_tokens],

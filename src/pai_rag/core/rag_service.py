@@ -10,7 +10,7 @@ from pai_rag.app.api.models import (
 )
 from pai_rag.app.web.view_model import view_model
 from openinference.instrumentation import using_attributes
-from typing import Any
+from typing import Any, Dict
 
 
 def trace_correlation_id(function):
@@ -40,15 +40,25 @@ class RagService:
         view_model.sync_app_config(self.rag_configuration.get_value())
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())
+        self.tasks_status: Dict[str, str] = {}
 
     def reload(self, new_config: Any):
         self.rag_configuration.update(new_config)
         self.rag.reload(self.rag_configuration.get_value())
         self.rag_configuration.persist()
 
-    @trace_correlation_id
-    async def add_knowledge(self, file_dir: str, enable_qa_extraction: bool = False):
-        await self.rag.load_knowledge(file_dir, enable_qa_extraction)
+    def add_knowledge_async(
+        self, task_id: str, file_dir: str, enable_qa_extraction: bool = False
+    ):
+        self.tasks_status[task_id] = "processing"
+        try:
+            self.rag.load_knowledge(file_dir, enable_qa_extraction)
+            self.tasks_status[task_id] = "completed"
+        except Exception:
+            self.tasks_status[task_id] = "failed"
+
+    def get_task_status(self, task_id: str) -> str:
+        return self.tasks_status.get(task_id, "unknown")
 
     @trace_correlation_id
     async def aquery(self, query: RagQuery):
@@ -58,15 +68,12 @@ class RagService:
     async def aquery_llm(self, query: LlmQuery):
         return await self.rag.aquery_llm(query)
 
-    @trace_correlation_id
     async def aquery_retrieval(self, query: RetrievalQuery):
         return await self.rag.aquery_retrieval(query)
 
-    @trace_correlation_id
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
 
-    @trace_correlation_id
     async def batch_evaluate_retrieval_and_response(self, type):
         return await self.rag.batch_evaluate_retrieval_and_response(type)
 

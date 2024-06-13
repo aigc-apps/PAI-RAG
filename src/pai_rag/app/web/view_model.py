@@ -27,14 +27,16 @@ class ViewModel(BaseModel):
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
     embed_api_key: str = None
+    embed_batch_size: int = 10
 
     # llm
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = None
+    llm_eas_model_name: str = "PAI-EAS-LLM"
     llm_api_key: str = None
     llm_api_model_name: str = None
+    llm_temperature: float = 0.1
 
     # chunking
     parser_type: str = "Sentence"
@@ -110,11 +112,15 @@ class ViewModel(BaseModel):
         self.embed_source = config["embedding"].get("source", self.embed_source)
         self.embed_model = config["embedding"].get("model_name", self.embed_model)
         self.embed_api_key = config["embedding"].get("api_key", self.embed_api_key)
+        self.embed_batch_size = config["embedding"].get(
+            "embed_batch_size", self.embed_batch_size
+        )
 
         self.llm = config["llm"].get("source", self.llm)
         self.llm_eas_url = config["llm"].get("endpoint", self.llm_eas_url)
         self.llm_eas_token = config["llm"].get("token", self.llm_eas_token)
         self.llm_api_key = config["llm"].get("api_key", self.llm_api_key)
+        self.llm_temperature = config["llm"].get("temperature", self.llm_temperature)
         if self.llm == "PaiEAS":
             self.llm_eas_model_name = config["llm"].get("name", self.llm_eas_model_name)
         else:
@@ -175,7 +181,7 @@ class ViewModel(BaseModel):
 
         self.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
-            self.retrieval_mode = "Keyword Ensembled"
+            self.retrieval_mode = "Hybrid"
             self.BM25_weight = config["retriever"]["BM25_weight"]
             self.vector_weight = config["retriever"]["vector_weight"]
             self.fusion_mode = config["retriever"]["fusion_mode"]
@@ -212,11 +218,13 @@ class ViewModel(BaseModel):
         config["embedding"]["source"] = self.embed_source
         config["embedding"]["model_name"] = self.embed_model
         config["embedding"]["api_key"] = self.embed_api_key
+        config["embedding"]["embed_batch_size"] = int(self.embed_batch_size)
 
         config["llm"]["source"] = self.llm
         config["llm"]["endpoint"] = self.llm_eas_url
         config["llm"]["token"] = self.llm_eas_token
         config["llm"]["api_key"] = self.llm_api_key
+        config["llm"]["temperature"] = self.llm_temperature
         if self.llm == "PaiEas":
             config["llm"]["name"] = self.llm_eas_model_name
         else:
@@ -275,7 +283,7 @@ class ViewModel(BaseModel):
             ] = self.milvus_collection_name
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
-        if self.retrieval_mode == "Keyword Ensembled":
+        if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["vector_weight"] = self.vector_weight
             config["retriever"]["BM25_weight"] = self.BM25_weight
@@ -295,7 +303,7 @@ class ViewModel(BaseModel):
             config["postprocessor"]["rerank_model"] = "bge-reranker-large"
         else:
             config["postprocessor"]["rerank_model"] = "no-reranker"
-        config["postprocessor"]["top_n"] = 3
+        config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
@@ -318,6 +326,7 @@ class ViewModel(BaseModel):
             if self.embed_source == "HuggingFace"
             else DEFAULT_EMBED_SIZE
         }
+        settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
         settings["llm"] = {"value": self.llm}
         settings["llm_eas_url"] = {"value": self.llm_eas_url}

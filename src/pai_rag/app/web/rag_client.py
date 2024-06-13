@@ -2,6 +2,8 @@ import json
 
 from typing import Any
 import requests
+import html
+import markdown
 
 cache_config = None
 
@@ -39,49 +41,34 @@ class RagWebClient:
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/data"
+        return f"{self.endpoint}service/upload_data"
 
-    def query(
-        self,
-        text: str,
-        session_id: str = None,
-        stream: bool = False,
-    ):
-        q = dict(question=text, stream=stream)
-        r = requests.post(
-            self.query_url, headers={"X-Session-ID": session_id}, json=q, stream=True
-        )
+    @property
+    def get_load_state_url(self):
+        return f"{self.endpoint}service/get_upload_state"
+
+    def query(self, text: str, session_id: str = None):
+        q = dict(question=text, session_id=session_id)
+        r = requests.post(self.query_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
-        # response = dotdict(json.loads(r.text))
-        response = r
-        response.session_id = session_id
-
+        response = dotdict(json.loads(r.text))
         return response
 
     def query_llm(
         self,
         text: str,
         session_id: str = None,
-        temperature: float = 0.7,
-        top_p: float = 0.8,
-        eas_llm_top_k: float = 30,
-        stream: bool = False,
+        temperature: float = 0.1,
     ):
         q = dict(
             question=text,
-            topp=top_p,
-            topk=eas_llm_top_k,
             temperature=temperature,
-            stream=stream,
+            session_id=session_id,
         )
 
-        r = requests.post(self.llm_url, headers={"X-Session-ID": session_id}, json=q)
+        r = requests.post(self.llm_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
-        # response = dotdict(json.loads(r.text))
-        response = r
-        response.session_id = session_id
+        response = dotdict(json.loads(r.text))
 
         return response
 
@@ -89,15 +76,15 @@ class RagWebClient:
         q = dict(question=text)
         r = requests.post(self.retrieval_url, json=q)
         r.raise_for_status()
-        session_id = r.headers["x-session-id"]
         response = dotdict(json.loads(r.text))
-        response.session_id = session_id
-        formatted_text = "\n\n".join(
-            [
-                f"""[Doc {i+1}] [score: {doc["score"]}]\n{doc["text"]}"""
-                for i, doc in enumerate(response["docs"])
-            ]
-        )
+        formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
+        for i, doc in enumerate(response["docs"]):
+            html_content = markdown.markdown(doc["text"])
+            safe_html_content = html.escape(html_content).replace("\n", "<br>")
+            formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                i + 1, doc["score"], safe_html_content
+            )
+        formatted_text = "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
         response["answer"] = formatted_text
         return response
 
@@ -105,7 +92,14 @@ class RagWebClient:
         q = dict(file_path=file_dir, enable_qa_extraction=enable_qa_extraction)
         r = requests.post(self.load_data_url, json=q)
         r.raise_for_status()
-        return
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def get_knowledge_state(self, task_id: str):
+        r = requests.get(self.get_load_state_url, params={"task_id": task_id})
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
 
     def reload_config(self, config: Any):
         global cache_config
