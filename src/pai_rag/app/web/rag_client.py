@@ -41,7 +41,11 @@ class RagWebClient:
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/data"
+        return f"{self.endpoint}service/upload_data"
+
+    @property
+    def get_load_state_url(self):
+        return f"{self.endpoint}service/get_upload_state"
 
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
@@ -88,7 +92,14 @@ class RagWebClient:
         q = dict(file_path=file_dir, enable_qa_extraction=enable_qa_extraction)
         r = requests.post(self.load_data_url, json=q)
         r.raise_for_status()
-        return
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def get_knowledge_state(self, task_id: str):
+        r = requests.get(self.get_load_state_url, params={"task_id": task_id})
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
 
     def reload_config(self, config: Any):
         global cache_config

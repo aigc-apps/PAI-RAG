@@ -58,8 +58,8 @@ class RagApplication:
         self.logger.info("RagApplication reloaded successfully.")
 
     # TODO: 大量文件上传实现异步添加
-    async def load_knowledge(self, file_dir, enable_qa_extraction=False):
-        await self.data_loader.load(file_dir, enable_qa_extraction)
+    def load_knowledge(self, file_dir, enable_qa_extraction=False):
+        self.data_loader.load(file_dir, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
