@@ -37,8 +37,8 @@ class RagDataLoader:
     ):
         self.datareader_factory = datareader_factory
         self.node_parser = node_parser
-        self.index = index
         self.oss_cache = oss_cache
+        self.index = index
 
         if use_local_qa_model:
             # API暂不支持此选项
@@ -111,7 +111,7 @@ class RagDataLoader:
 
         logger.info("[DataReader] Start inserting to index.")
 
-        self.index.insert_nodes(nodes)
+        await self.index.insert_nodes_async(nodes)
         self.index.storage_context.persist(persist_dir=store_path.persist_path)
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
