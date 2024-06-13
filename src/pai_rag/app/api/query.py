@@ -1,5 +1,6 @@
 from typing import Any
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, BackgroundTasks
+import uuid
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
@@ -39,12 +40,22 @@ async def aupdate(new_config: Any = Body(None)):
     return {"msg": "Update RAG configuration successfully."}
 
 
-@router.post("/data")
-async def load_data(input: DataInput):
-    await rag_service.add_knowledge(
-        file_dir=input.file_path, enable_qa_extraction=input.enable_qa_extraction
+@router.post("/upload_data")
+async def load_data(input: DataInput, background_tasks: BackgroundTasks):
+    task_id = uuid.uuid4().hex
+    background_tasks.add_task(
+        rag_service.add_knowledge_async,
+        task_id=task_id,
+        file_dir=input.file_path,
+        enable_qa_extraction=input.enable_qa_extraction,
     )
-    return {"msg": "Update RAG configuration successfully."}
+    return {"task_id": task_id}
+
+
+@router.get("/get_upload_state")
+def task_status(task_id: str):
+    status = rag_service.get_task_status(task_id)
+    return {"task_id": task_id, "status": status}
 
 
 @router.post("/evaluate/response")

@@ -1,8 +1,11 @@
 import os
 from typing import Dict, Any
 import gradio as gr
+import time
 from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.view_model import view_model
+from pai_rag.utils.file_utils import MyUploadFile
+import pandas as pd
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
@@ -14,14 +17,36 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
     if not upload_files:
         return "No file selected. Please choose at least one file."
 
+    my_upload_files = []
     for file in upload_files:
         file_dir = os.path.dirname(file.name)
-        rag_client.add_knowledge(file_dir, enable_qa_extraction)
-    return (
-        "Upload "
-        + str(len(upload_files))
-        + " files Success! \n \n Relevant content has been added to the vector store, you can now start chatting and asking questions."
-    )
+        response = rag_client.add_knowledge(file_dir, enable_qa_extraction)
+        my_upload_files.append(
+            MyUploadFile(os.path.basename(file.name), response["task_id"])
+        )
+
+    result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
+    while not all(file.finished is True for file in my_upload_files):
+        for file in my_upload_files:
+            response = rag_client.get_knowledge_state(str(file.task_id))
+            file.update_state(response["status"])
+            file.update_process_duration()
+            result[file.file_name] = file.__info__()
+            if response["status"] in ["completed", "failed"]:
+                file.is_finished()
+        yield [
+            gr.update(visible=True, value=pd.DataFrame(result)),
+            gr.update(visible=False),
+        ]
+        time.sleep(2)
+
+    yield [
+        gr.update(visible=True, value=pd.DataFrame(result)),
+        gr.update(
+            visible=True,
+            value="Uploaded all files successfully!  \n Relevant content has been added to the vector store, you can now start chatting and asking questions.",
+        ),
+    ]
 
 
 def create_upload_tab() -> Dict[str, Any]:
@@ -47,14 +72,20 @@ def create_upload_tab() -> Dict[str, Any]:
                     label="Upload a knowledge file.", file_count="multiple"
                 )
                 upload_file_btn = gr.Button("Upload", variant="primary")
-                upload_file_state = gr.Textbox(label="Upload State")
+                upload_file_state_df = gr.DataFrame(
+                    label="Upload Status Info", visible=False
+                )
+                upload_file_state = gr.Textbox(label="Upload Status", visible=False)
             with gr.Tab("Directory"):
                 upload_file_dir = gr.File(
                     label="Upload a knowledge directory.",
                     file_count="directory",
                 )
                 upload_dir_btn = gr.Button("Upload", variant="primary")
-                upload_dir_state = gr.Textbox(label="Upload State")
+                upload_dir_state_df = gr.DataFrame(
+                    label="Upload Status Info", visible=False
+                )
+                upload_dir_state = gr.Textbox(label="Upload Status", visible=False)
             upload_file_btn.click(
                 fn=upload_knowledge,
                 inputs=[
@@ -63,7 +94,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                 ],
-                outputs=upload_file_state,
+                outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
             )
             upload_dir_btn.click(
@@ -74,7 +105,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                 ],
-                outputs=upload_dir_state,
+                outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
             )
             return {
