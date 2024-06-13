@@ -51,19 +51,15 @@ class EmbeddingModule(ConfigurableModule):
         elif source == "huggingface":
             model_dir = config.get("model_dir", DEFAULT_MODEL_DIR)
             model_name = config.get("model_name", DEFAULT_HUGGINGFACE_EMBEDDING_MODEL)
-            num_workers = config.get(
-                "num_workers", DEFAULT_HUGGINGFACE_EMBEDDING_NUM_WORKERS
-            )
 
             model_path = os.path.join(model_dir, model_name)
             embed_model = HuggingFaceEmbedding(
                 model_name=model_path,
                 embed_batch_size=embed_batch_size,
-                num_workers=num_workers,
             )
 
             logger.info(
-                f"Initialized HuggingFace embedding model {model_name} with {embed_batch_size} batch size and {num_workers} workers."
+                f"Initialized HuggingFace embedding model {model_name} with {embed_batch_size} batch size."
             )
 
         elif source == "dashscope":
