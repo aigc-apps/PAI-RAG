@@ -13,8 +13,6 @@ from pai_rag.app.api.models import (
 
 router = APIRouter()
 
-upload_tasks = {}
-
 
 @router.post("/query")
 async def aquery(query: RagQuery) -> RagResponse:
