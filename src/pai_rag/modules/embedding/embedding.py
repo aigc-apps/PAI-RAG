@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBED_BATCH_SIZE = 10
 DEFAULT_HUGGINGFACE_EMBEDDING_MODEL = "bge-small-zh-v1.5"
-DEFAULT_HUGGINGFACE_EMBEDDING_NUM_WORKERS = 4
 
 
 class EmbeddingModule(ConfigurableModule):
