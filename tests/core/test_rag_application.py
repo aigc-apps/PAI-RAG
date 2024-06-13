@@ -28,9 +28,9 @@ def rag_app():
 
 
 # Test load knowledge file
-def test_add_knowledge_file(rag_app: RagApplication):
+async def test_add_knowledge_file(rag_app: RagApplication):
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    rag_app.load_knowledge(data_dir)
+    await rag_app.load_knowledge(data_dir)
 
 
 # Test rag query

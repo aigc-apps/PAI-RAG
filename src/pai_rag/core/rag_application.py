@@ -38,7 +38,7 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", self.config
         )
-        await data_loader.load(file_dir, enable_qa_extraction)
+        await data_loader.aload(file_dir, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:

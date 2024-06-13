@@ -12,6 +12,9 @@ from pai_rag.app.api.models import (
 from pai_rag.app.web.view_model import view_model
 from openinference.instrumentation import using_attributes
 from typing import Any, Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def trace_correlation_id(function):
@@ -55,7 +58,8 @@ class RagService:
         try:
             await self.rag.load_knowledge(file_dir, enable_qa_extraction)
             self.tasks_status[task_id] = "completed"
-        except Exception:
+        except Exception as ex:
+            logger.error(f"Upload failed: {ex}")
             self.tasks_status[task_id] = "failed"
 
     def get_task_status(self, task_id: str) -> str:
