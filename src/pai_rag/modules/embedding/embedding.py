@@ -53,7 +53,8 @@ class EmbeddingModule(ConfigurableModule):
 
             model_path = os.path.join(model_dir, model_name)
             embed_model = MyHuggingFaceEmbedding(
-                model_name=model_path, embed_batch_size=embed_batch_size
+                model_name=model_path,
+                embed_batch_size=embed_batch_size,
             )
 
             logger.info(
