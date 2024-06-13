@@ -1,5 +1,8 @@
+import hashlib
+from typing import Dict, Any
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 import pai_rag.modules as modules
+import logging
 
 MODULE_CONFIG_KEY_MAP = {
     "IndexModule": "index",
@@ -16,17 +19,25 @@ MODULE_CONFIG_KEY_MAP = {
     "DataReaderFactoryModule": "data_reader",
     "AgentModule": "agent",
     "ToolModule": "tool",
+    "DataLoaderModule": "data_loader",
+    "OssCacheModule": "cache",
 }
+
+
+logger = logging.getLogger(__name__)
 
 
 class ModuleRegistry:
     def __init__(self):
-        self._mod_instance_map = {}
         self._mod_cls_map = {}
         self._mod_deps_map = {}
         self._mod_deps_map_inverted = {}
 
+        self._mod_instance_map = {}
+
         for m_name in modules.ALL_MODULES:
+            self._mod_instance_map[m_name] = {}
+
             m_cls = getattr(modules, m_name)
             self._mod_cls_map[m_name] = m_cls()
 
@@ -38,12 +49,16 @@ class ModuleRegistry:
                     self._mod_deps_map_inverted[dep] = []
                 self._mod_deps_map_inverted[dep].append(m_name)
 
-    def get_module(self, module_key: str):
-        return self._mod_instance_map[module_key]
+    def _get_param_hash(self, params: Dict[str, Any]):
+        repr_str = repr(sorted(params.items())).encode("utf-8")
+        return hashlib.sha256(repr_str).hexdigest()
+
+    def get_module_with_config(self, module_key, config):
+        return self._create_mod_lazily(module_key, config)
 
     def init_modules(self, config):
+        mod_cache = {}
         mod_stack = []
-        mods_inited = []
         mod_ref_count = {}
         for mod, deps in self._mod_deps_map.items():
             ref_count = len(deps)
@@ -53,9 +68,8 @@ class ModuleRegistry:
 
         while mod_stack:
             mod = mod_stack.pop()
-            mod_obj = self._init_mod(mod, config)
-            mods_inited.append(mod)
-            self._mod_instance_map[mod] = mod_obj
+            mod_obj = self._create_mod_lazily(mod, config, mod_cache)
+            mod_cache[mod] = mod_obj
 
             # update module ref count that depends on on
             ref_mods = self._mod_deps_map_inverted.get(mod, [])
@@ -64,23 +78,35 @@ class ModuleRegistry:
                 if mod_ref_count[ref_mod] == 0:
                     mod_stack.append(ref_mod)
 
-        if len(mods_inited) != len(modules.ALL_MODULES):
+        if len(mod_cache) != len(modules.ALL_MODULES):
             # dependency circular error!
             raise ValueError(
-                f"Circular dependency detected. Please check module dependency configuration. Module initialized: {mods_inited}. Module ref count: {mod_ref_count}"
+                f"Circular dependency detected. Please check module dependency configuration. Module initialized: {mod_cache}. Module ref count: {mod_ref_count}"
             )
-        print(f"RAG modules init successfully. {mods_inited}")
+        logger.info(f"RAG modules init successfully. {mod_cache.keys()}")
         return
 
-    def _init_mod(self, mod_name, config):
+    def _create_mod_lazily(self, mod_name, config, mod_cache=None):
+        if mod_cache and mod_name in mod_cache:
+            return mod_cache[mod_name]
+
+        logger.info(f"Get module {mod_name}.")
+
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
         mod_cls = self._mod_cls_map[mod_name]
 
-        params = {MODULE_PARAM_CONFIG: config[mod_config_key]}
+        params = {MODULE_PARAM_CONFIG: config.get(mod_config_key, None)}
         for dep in mod_deps:
-            params[dep] = self.get_module(dep)
-        return mod_cls.get_or_create(params)
+            params[dep] = self._create_mod_lazily(dep, config, mod_cache)
+
+        instance_key = self._get_param_hash(params)
+        if instance_key not in self._mod_instance_map[mod_name]:
+            logger.info(f"Creating new instance for module {mod_name} {instance_key}.")
+            self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
+                params
+            )
+        return self._mod_instance_map[mod_name][instance_key]
 
 
 module_registry = ModuleRegistry()

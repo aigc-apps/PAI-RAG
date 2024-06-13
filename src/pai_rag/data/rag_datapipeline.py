@@ -2,14 +2,12 @@ import asyncio
 import click
 import os
 from pathlib import Path
-from pai_rag.data.rag_dataloader import RagDataLoader
 from pai_rag.core.rag_configuration import RagConfiguration
-from pai_rag.utils.oss_cache import OssCache
 from pai_rag.modules.module_registry import module_registry
 
 
 class RagDataPipeline:
-    def __init__(self, data_loader: RagDataLoader):
+    def __init__(self, data_loader):
         self.data_loader = data_loader
 
     async def ingest_from_folder(self, folder_path: str, enable_qa_extraction: bool):
@@ -23,16 +21,7 @@ def __init_data_pipeline(use_local_qa_model):
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
 
-    oss_cache = None
-    if config.get("oss_cache", None):
-        oss_cache = OssCache(config.oss_cache)
-    node_parser = module_registry.get_module("NodeParserModule")
-    index = module_registry.get_module("IndexModule")
-    data_reader_factory = module_registry.get_module("DataReaderFactoryModule")
-
-    data_loader = RagDataLoader(
-        data_reader_factory, node_parser, index, oss_cache, use_local_qa_model
-    )
+    data_loader = module_registry.get_module_with_config("DataLoaderModule", config)
     return RagDataPipeline(data_loader)
 
 

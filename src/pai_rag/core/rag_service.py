@@ -12,6 +12,9 @@ from pai_rag.app.api.models import (
 from pai_rag.app.web.view_model import view_model
 from openinference.instrumentation import using_attributes
 from typing import Any, Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def trace_correlation_id(function):
@@ -48,14 +51,15 @@ class RagService:
         self.rag.reload(self.rag_configuration.get_value())
         self.rag_configuration.persist()
 
-    def add_knowledge_async(
+    async def add_knowledge_async(
         self, task_id: str, file_dir: str, enable_qa_extraction: bool = False
     ):
         self.tasks_status[task_id] = "processing"
         try:
-            self.rag.load_knowledge(file_dir, enable_qa_extraction)
+            await self.rag.load_knowledge(file_dir, enable_qa_extraction)
             self.tasks_status[task_id] = "completed"
-        except Exception:
+        except Exception as ex:
+            logger.error(f"Upload failed: {ex}")
             self.tasks_status[task_id] = "failed"
 
     def get_task_status(self, task_id: str) -> str:

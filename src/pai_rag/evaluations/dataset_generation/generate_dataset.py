@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 from llama_index.core.prompts.prompt_type import PromptType
@@ -16,7 +17,12 @@ from pai_rag.utils.prompt_template import (
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_QUESTION_GENERATION_QUERY,
 )
+
 import json
+
+_BASE_DIR = Path(__file__).parent.parent.parent
+DEFAULT_EVAL_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
+DEFAULT_EVAL_DATA_FOLDER = "tests/testdata/paul_graham"
 
 
 class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
@@ -29,11 +35,22 @@ class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
         show_progress: Optional[bool] = True,
     ) -> None:
         self.name = "GenerateDatasetPipeline"
-        self.nodes = list(
-            module_registry.get_module("IndexModule").docstore.docs.values()
+        self.config = RagConfiguration.from_file(DEFAULT_EVAL_CONFIG_FILE).get_value()
+
+        # load nodes
+        module_registry.init_modules(self.config)
+        datareader_factory = module_registry.get_module_with_config(
+            "DataReaderFactoryModule", self.config
         )
+        self.node_parser = module_registry.get_module_with_config(
+            "NodeParserModule", self.config
+        )
+        reader = datareader_factory.get_reader(DEFAULT_EVAL_DATA_FOLDER)
+        docs = reader.load_data()
+        self.nodes = self.node_parser.get_nodes_from_documents(docs)
+
         self.num_questions_per_chunk = num_questions_per_chunk
-        self.llm = module_registry.get_module("LlmModule")
+        self.llm = module_registry.get_module_with_config("LlmModule", self.config)
         self.text_question_template = PromptTemplate(text_question_template_str)
         self.text_qa_template = PromptTemplate(
             text_qa_template_str, prompt_type=PromptType.QUESTION_ANSWER

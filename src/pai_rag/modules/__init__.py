@@ -1,5 +1,6 @@
 from pai_rag.modules.embedding.embedding import EmbeddingModule
 from pai_rag.modules.llm.llm_module import LlmModule
+from pai_rag.modules.datareader.data_loader import DataLoaderModule
 from pai_rag.modules.datareader.datareader_factory import DataReaderFactoryModule
 from pai_rag.modules.index.index import IndexModule
 from pai_rag.modules.nodeparser.node_parser import NodeParserModule
@@ -12,10 +13,13 @@ from pai_rag.modules.chat.llm_chat_engine_factory import LlmChatEngineFactoryMod
 from pai_rag.modules.chat.chat_store import ChatStoreModule
 from pai_rag.modules.agent.agent import AgentModule
 from pai_rag.modules.tool.tool import ToolModule
+from pai_rag.modules.cache.oss_cache import OssCacheModule
+
 
 ALL_MODULES = [
     "EmbeddingModule",
     "LlmModule",
+    "DataLoaderModule",
     "DataReaderFactoryModule",
     "IndexModule",
     "NodeParserModule",
@@ -28,6 +32,7 @@ ALL_MODULES = [
     "LlmChatEngineFactoryModule",
     "AgentModule",
     "ToolModule",
+    "OssCacheModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

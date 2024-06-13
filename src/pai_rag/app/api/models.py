@@ -2,13 +2,16 @@ from pydantic import BaseModel
 from typing import List, Dict
 
 
+class VectorDbConfig(BaseModel):
+    faiss_path: str | None = None
+
+
 class RagQuery(BaseModel):
     question: str
     temperature: float | None = 0.1
-    vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
+    vector_db: VectorDbConfig | None = None
 
 
 class LlmQuery(BaseModel):
@@ -20,8 +23,7 @@ class LlmQuery(BaseModel):
 
 class RetrievalQuery(BaseModel):
     question: str
-    topk: int | None = 3
-    score_threshold: float | None = 0.5
+    vector_db: VectorDbConfig | None = None
 
 
 class RagResponse(BaseModel):
