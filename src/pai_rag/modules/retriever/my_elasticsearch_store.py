@@ -331,6 +331,8 @@ class MyElasticsearchStore(BasePydanticVectorStore):
         if len(nodes) == 0:
             return []
 
+        add_kwargs.update({"max_retries": 3})
+
         embeddings: List[List[float]] = []
         texts: List[str] = []
         metadatas: List[dict] = []

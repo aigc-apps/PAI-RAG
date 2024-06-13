@@ -79,7 +79,7 @@ class MyVectorStoreIndex(VectorStoreIndex):
             return
 
         node_batch_list = []
-        for nodes_batch in iter_batch(nodes, 500):
+        for nodes_batch in iter_batch(nodes, 100):
             nodes_batch = await self._aget_node_with_embedding(
                 nodes_batch, show_progress
             )
