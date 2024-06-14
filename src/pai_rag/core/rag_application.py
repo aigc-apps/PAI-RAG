@@ -34,11 +34,17 @@ class RagApplication:
         self.logger.info("RagApplication reloaded successfully.")
 
     # TODO: 大量文件上传实现异步添加
-    async def load_knowledge(self, file_dir, enable_qa_extraction=False):
+    async def aload_knowledge(self, file_dir, enable_qa_extraction=False):
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", self.config
         )
         await data_loader.aload(file_dir, enable_qa_extraction)
+
+    def load_knowledge(self, file_dir, enable_qa_extraction=False):
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", self.config
+        )
+        data_loader.load(file_dir, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
