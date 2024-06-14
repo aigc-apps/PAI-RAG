@@ -64,7 +64,7 @@ class RagService:
     async def aquery(self, query: RagQuery) -> RagResponse:
         return await self.rag.aquery(query)
 
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_llm(self, query: LlmQuery):
         return await self.rag.aquery_llm(query)
 
     async def aquery_retrieval(self, query: RetrievalQuery):

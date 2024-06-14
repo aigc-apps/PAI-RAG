@@ -103,7 +103,7 @@ class RagApplication:
         self.chat_store.persist()
         return RagResponse(answer=response.response, session_id=session_id)
 
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
 
         Generate answer from LLM's or LLM Chat Engine's achat interface.
@@ -125,7 +125,10 @@ class RagApplication:
         llm_chat_engine = self.llm_chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await llm_chat_engine.achat(query.question)
+        if not query.stream:
+            response = await llm_chat_engine.achat(query.question)
+        else:
+            response = await llm_chat_engine.astream_chat(query.question)
         self.chat_store.persist()
         return LlmResponse(answer=response.response, session_id=session_id)
 

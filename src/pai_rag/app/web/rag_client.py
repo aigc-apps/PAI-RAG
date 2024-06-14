@@ -59,15 +59,16 @@ class RagWebClient:
         text: str,
         session_id: str = None,
         temperature: float = 0.1,
+        stream: bool = False,
     ):
         q = dict(
-            question=text,
-            temperature=temperature,
-            session_id=session_id,
+            question=text, temperature=temperature, session_id=session_id, stream=stream
         )
 
         r = requests.post(self.llm_url, json=q)
         r.raise_for_status()
+        print("r", r)
+        print("r.text", r.text)
         response = dotdict(json.loads(r.text))
 
         return response

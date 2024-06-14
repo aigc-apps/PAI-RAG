@@ -10,8 +10,15 @@ from pai_rag.app.api.models import (
     LlmResponse,
     DataInput,
 )
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
+
+
+async def event_generator(response):
+    delimiter = "\0"
+    async for token in response.async_response_gen():
+        yield token + delimiter
 
 
 @router.post("/query")
@@ -20,8 +27,15 @@ async def aquery(query: RagQuery) -> RagResponse:
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery) -> LlmResponse:
-    return await rag_service.aquery_llm(query)
+async def aquery_llm(query: LlmQuery):
+    response = await rag_service.aquery_llm(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            event_generator(response),
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/query/retrieval")

@@ -16,6 +16,7 @@ class LlmQuery(BaseModel):
     temperature: float | None = 0.1
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
+    stream: bool | None = False
 
 
 class RetrievalQuery(BaseModel):
@@ -25,7 +26,7 @@ class RetrievalQuery(BaseModel):
 
 
 class RagResponse(BaseModel):
-    answer: str
+    answer: str | None = None
     session_id: str | None = None
     # TODO
     # context: List[str] | None = None
