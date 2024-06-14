@@ -6,6 +6,7 @@ from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.view_model import view_model
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
+import asyncio
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
@@ -15,7 +16,13 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
     rag_client.reload_config(new_config)
 
     if not upload_files:
-        return "No file selected. Please choose at least one file."
+        yield [
+            gr.update(visible=False),
+            gr.update(
+                visible=True,
+                value="No file selected. Please choose at least one file.",
+            ),
+        ]
 
     my_upload_files = []
     for file in upload_files:
@@ -28,7 +35,7 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     while not all(file.finished is True for file in my_upload_files):
         for file in my_upload_files:
-            response = rag_client.get_knowledge_state(str(file.task_id))
+            response = asyncio.run(rag_client.get_knowledge_state(str(file.task_id)))
             file.update_state(response["status"])
             file.update_process_duration()
             result[file.file_name] = file.__info__()
