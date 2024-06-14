@@ -41,7 +41,7 @@ async def aupdate(new_config: Any = Body(None)):
 
 
 @router.post("/upload_data")
-async def load_data(input: DataInput, background_tasks: BackgroundTasks):
+def load_data(input: DataInput, background_tasks: BackgroundTasks):
     task_id = uuid.uuid4().hex
     background_tasks.add_task(
         rag_service.add_knowledge_async,
