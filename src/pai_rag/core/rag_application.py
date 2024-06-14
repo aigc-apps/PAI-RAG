@@ -50,10 +50,15 @@ class RagApplication:
         if not query.question:
             return RetrievalResponse(docs=[])
 
+        sessioned_config = self.config
+        if query.vector_db and query.vector_db.faiss_path:
+            sessioned_config = self.config.copy()
+            sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
+
         query_bundle = QueryBundle(query.question)
 
         query_engine = module_registry.get_module_with_config(
-            "QueryEngineModule", self.config
+            "QueryEngineModule", sessioned_config
         )
         node_results = await query_engine.aretrieve(query_bundle)
 
