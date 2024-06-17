@@ -67,11 +67,7 @@ class RagWebClient:
 
         r = requests.post(self.llm_url, json=q)
         r.raise_for_status()
-        print("r", r)
-        print("r.text", r.text)
-        response = dotdict(json.loads(r.text))
-
-        return response
+        return r
 
     def query_vector(self, text: str):
         q = dict(question=text)

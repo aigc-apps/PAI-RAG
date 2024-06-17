@@ -132,7 +132,10 @@ class RagApplication:
             "ChatStoreModule", self.config
         )
         chat_store.persist()
-        return LlmResponse(answer=response.response, session_id=session_id)
+        if not query.stream:
+            return LlmResponse(answer=response.response, session_id=session_id)
+        else:
+            return [response, session_id]
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.

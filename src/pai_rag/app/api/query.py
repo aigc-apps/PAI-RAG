@@ -11,6 +11,7 @@ from pai_rag.app.api.models import (
     DataInput,
 )
 from fastapi.responses import StreamingResponse
+from datetime import datetime
 
 router = APIRouter()
 
@@ -18,6 +19,8 @@ router = APIRouter()
 async def event_generator(response):
     delimiter = "\0"
     async for token in response.async_response_gen():
+        print(datetime.now())
+        print("FastAPI ===== ", token)
         yield token + delimiter
 
 
@@ -29,11 +32,20 @@ async def aquery(query: RagQuery) -> RagResponse:
 @router.post("/query/llm")
 async def aquery_llm(query: LlmQuery):
     response = await rag_service.aquery_llm(query)
+    print("response", response)
     if not query.stream:
+        print("not /query/llm StreamingResponse")
         return response
     else:
+        print(
+            "/query/llm StreamingResponse",
+            type(response[0].achat_stream),
+            response[0].achat_stream,
+        )
+        print("response[1]", response[1])
         return StreamingResponse(
-            event_generator(response),
+            response[0].achat_stream,
+            headers={"x-session-id": response[1]},
             media_type="text/event-stream",
         )
 

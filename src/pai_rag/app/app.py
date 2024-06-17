@@ -24,7 +24,7 @@ def create_app(config_file: str, app_url: str):
 
     rag_client.set_endpoint(app_url)
     ui = create_ui()
-    ui.queue(concurrency_count=1, max_size=64)
+    ui.queue(concurrency_count=10, max_size=64)
     ui._queue.set_url(app_url)
     app = gr.mount_gradio_app(app, ui, path=UI_PATH)
     return app

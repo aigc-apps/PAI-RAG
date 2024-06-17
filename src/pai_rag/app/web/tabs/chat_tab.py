@@ -8,7 +8,8 @@ from pai_rag.app.web.ui_constants import (
     EXTRACT_URL_PROMPTS,
     ACCURATE_CONTENT_PROMPTS,
 )
-
+import json
+import asyncio
 
 current_session_id = None
 
@@ -20,7 +21,7 @@ def clear_history(chatbot):
     return chatbot, 0
 
 
-def respond(input_elements: List[Any]):
+async def respond(input_elements: List[Any]):
     global current_session_id
 
     update_dict = {}
@@ -29,7 +30,7 @@ def respond(input_elements: List[Any]):
 
     # empty input.
     if not update_dict["question"]:
-        return "", update_dict["chatbot"], 0
+        yield "", update_dict["chatbot"], 0
 
     view_model.update(update_dict)
     new_config = view_model.to_app_config()
@@ -38,23 +39,45 @@ def respond(input_elements: List[Any]):
     query_type = update_dict["query_type"]
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
+    is_streaming = update_dict["is_streaming"]
 
     if not update_dict["include_history"]:
         current_session_id = None
 
     if query_type == "LLM":
         response = rag_client.query_llm(
-            msg,
-            session_id=current_session_id,
+            text=msg, session_id=current_session_id, stream=is_streaming
         )
-        current_session_id = response.session_id
+        #
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
         response = rag_client.query(msg, session_id=current_session_id)
         current_session_id = response.session_id
-    chatbot.append((msg, response.answer))
-    return "", chatbot, 0
+
+    if is_streaming and query_type != "Retrieval":
+        current_session_id = response.headers["x-session-id"]
+        chatbot.append([msg, None])
+        chatbot[-1][1] = ""
+        from datetime import datetime
+
+        # for chunk in response.iter_lines(chunk_size=8192,
+        #                             decode_unicode=False,
+        #                             delimiter=b'\0'):
+        async for chunk in response:
+            print(datetime.now())
+            print(chunk.delta, end="")
+            print("Gradio UI ===== ", chunk.delta)
+            if chunk:
+                # chatbot[-1][1] += chunk.decode("utf-8")
+                chatbot[-1][1] += chunk.delta
+                yield "", chatbot, 0
+                await asyncio.sleep(0.1)
+    else:
+        response = json.loads(response.text)
+        current_session_id = response["session_id"]
+        chatbot.append((msg, response["answer"]))
+        yield "", chatbot, 0
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -66,7 +89,12 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="query_type",
                 value="RAG (Retrieval + LLM)",
             )
-
+            is_streaming = gr.Checkbox(
+                label="Streaming Output",
+                info="Streaming Output",
+                elem_id="is_streaming",
+                value=True,
+            )
             with gr.Column(visible=True) as vs_col:
                 vec_model_argument = gr.Accordion(
                     "Parameters of Vector Retrieval", open=False
@@ -220,7 +248,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
         chat_args = (
-            {text_qa_template, question, query_type, chatbot}
+            {text_qa_template, question, query_type, chatbot, is_streaming}
             .union(vec_args)
             .union(llm_args)
         )
