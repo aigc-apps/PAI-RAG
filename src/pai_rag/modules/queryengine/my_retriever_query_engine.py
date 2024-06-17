@@ -7,6 +7,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 import llama_index.core.instrumentation as instrument
 import logging
+import datetime
 
 dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
@@ -24,31 +25,21 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = self._retriever.retrieve(query_bundle)
-        try:
-            result = self._retriever._selector.select(
-                self._retriever._metadatas, query_bundle
-            )
-            if result.ind == 0:
-                return nodes
-            else:
-                return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
-        except Exception as ex:
-            logger.warn(f"{ex}")
-            return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
 
+    # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        print(f"{datetime.datetime.now()} start retrieving ====")
         nodes = await self._retriever.aretrieve(query_bundle)
-        try:
-            result = await self._retriever._selector.aselect(
-                self._retriever._metadatas, query_bundle
+        print(f"{datetime.datetime.now()} finish retrieving ====")
+
+        for node_postprocessor in self._node_postprocessors:
+            nodes = await node_postprocessor.postprocess_nodes_async(
+                # nodes = node_postprocessor.postprocess_nodes(
+                nodes,
+                query_bundle=query_bundle,
             )
-            if result.ind == 0:
-                return nodes
-            else:
-                return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
-        except Exception as ex:
-            logger.warn(f"{ex}")
-            return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        return nodes
 
     @dispatcher.span
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
@@ -71,12 +62,21 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
+            start = datetime.datetime.now()
+            print(f"{start} start retriever ====")
+
             nodes = await self.aretrieve(query_bundle)
+            print(f"Finished retriever ====, costed: {datetime.datetime.now()-start}")
+
+            start = datetime.datetime.now()
+            print(f"{start} start synthesize ====")
 
             response = await self._response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
             )
+
+            print(f"Finished synthesize ====, costed: {datetime.datetime.now()-start}")
 
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
