@@ -72,7 +72,7 @@ class RagApplication:
         ]
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.
@@ -102,15 +102,22 @@ class RagApplication:
         query_chat_engine = chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await query_chat_engine.achat(query.question)
+
+        if not query.stream:
+            response = await query_chat_engine.achat(query.question)
+        else:
+            response = await query_chat_engine.astream_chat(query.question)
 
         chat_store = module_registry.get_module_with_config(
             "ChatStoreModule", sessioned_config
         )
         chat_store.persist()
-        return RagResponse(answer=response.response, session_id=session_id)
+        if not query.stream:
+            return RagResponse(answer=response.response, session_id=session_id)
+        else:
+            return [response, session_id]
 
-    def aquery_llm(self, query: LlmQuery):
+    def query_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
 
         Generate answer from LLM's or LLM Chat Engine's achat interface.
@@ -139,6 +146,44 @@ class RagApplication:
             response = llm_chat_engine.chat(query.question)
         else:
             response = llm_chat_engine.stream_chat(query.question)
+        chat_store = module_registry.get_module_with_config(
+            "ChatStoreModule", self.config
+        )
+        chat_store.persist()
+        if not query.stream:
+            return LlmResponse(answer=response.response, session_id=session_id)
+        else:
+            return [response, session_id]
+
+    async def aquery_llm(self, query: LlmQuery):
+        """Query answer from LLM response asynchronously.
+
+        Generate answer from LLM's or LLM Chat Engine's achat interface.
+
+        Args:
+            query: LlmQuery
+
+        Returns:
+            LlmResponse
+        """
+        session_id = query.session_id or uuid_generator()
+        self.logger.info(f"Get session ID: {session_id}.")
+
+        if not query.question:
+            return LlmResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
+        llm_chat_engine_factory = module_registry.get_module_with_config(
+            "LlmChatEngineFactoryModule", self.config
+        )
+        llm_chat_engine = llm_chat_engine_factory.get_chat_engine(
+            session_id, query.chat_history
+        )
+        if not query.stream:
+            response = await llm_chat_engine.achat(query.question)
+        else:
+            response = await llm_chat_engine.astream_chat(query.question)
         chat_store = module_registry.get_module_with_config(
             "ChatStoreModule", self.config
         )

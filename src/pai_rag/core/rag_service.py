@@ -6,7 +6,6 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
 )
 from pai_rag.app.web.view_model import view_model
@@ -65,11 +64,11 @@ class RagService:
     def get_task_status(self, task_id: str) -> str:
         return self.tasks_status.get(task_id, "unknown")
 
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         return await self.rag.aquery(query)
 
-    def aquery_llm(self, query: LlmQuery):
-        return self.rag.aquery_llm(query)
+    async def aquery_llm(self, query: LlmQuery):
+        return await self.rag.aquery_llm(query)
 
     async def aquery_retrieval(self, query: RetrievalQuery):
         return await self.rag.aquery_retrieval(query)

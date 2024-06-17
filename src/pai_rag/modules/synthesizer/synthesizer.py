@@ -21,8 +21,9 @@ from llama_index.core.response_synthesizers import (
     Refine,
     CompactAndRefine,
     TreeSummarize,
-    SimpleSummarize,
+    # SimpleSummarize,
 )
+from pai_rag.modules.synthesizer.my_synthesizer import MySimpleSummarize
 
 # from llama_index.core.response_synthesizers.type import ResponseMode
 from llama_index.core.service_context import ServiceContext
@@ -147,7 +148,7 @@ class SynthesizerModule(ConfigurableModule):
             )
         elif response_mode == "SimpleSummarize":
             logger.info("SimpleSummarize synthesizer used")
-            return SimpleSummarize(
+            return MySimpleSummarize(
                 llm=llm,
                 callback_manager=callback_manager,
                 prompt_helper=prompt_helper,

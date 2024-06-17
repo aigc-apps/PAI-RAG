@@ -12,6 +12,7 @@ class RagQuery(BaseModel):
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
     vector_db: VectorDbConfig | None = None
+    stream: bool | None = False
 
 
 class LlmQuery(BaseModel):

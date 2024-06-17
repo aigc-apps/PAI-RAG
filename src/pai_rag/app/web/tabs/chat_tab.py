@@ -51,10 +51,14 @@ def respond(input_elements: List[Any]):
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
-        response = rag_client.query(msg, session_id=current_session_id)
-        current_session_id = response.session_id
+        response = rag_client.query(
+            msg, session_id=current_session_id, stream=is_streaming
+        )
 
-    if is_streaming and query_type != "Retrieval":
+    if query_type == "Retrieval":
+        chatbot.append((msg, response.answer))
+        yield "", chatbot, 0
+    elif is_streaming:
         current_session_id = response.headers["x-session-id"]
         chatbot.append([msg, None])
         chatbot[-1][1] = ""
@@ -65,7 +69,6 @@ def respond(input_elements: List[Any]):
                 chatbot[-1][1] += chunk.decode("utf-8")
                 yield "", chatbot, 0
                 time.sleep(0.1)
-
     else:
         response = json.loads(response.text)
         current_session_id = response["session_id"]

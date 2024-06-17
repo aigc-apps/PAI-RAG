@@ -48,27 +48,11 @@ class RagWebClient:
     def get_load_state_url(self):
         return f"{self.endpoint}service/get_upload_state"
 
-    def query(self, text: str, session_id: str = None):
-        q = dict(question=text, session_id=session_id)
-        r = requests.post(self.query_url, json=q)
+    def query(self, text: str, session_id: str = None, stream: bool = False):
+        q = dict(question=text, session_id=session_id, stream=stream)
+        r = requests.post(self.query_url, json=q, stream=True)
         r.raise_for_status()
-        response = dotdict(json.loads(r.text))
-        return response
-
-    # def query_llm(
-    #     self,
-    #     text: str,
-    #     session_id: str = None,
-    #     temperature: float = 0.1,
-    #     stream: bool = False,
-    # ):
-    #     q = dict(
-    #         question=text, temperature=temperature, session_id=session_id, stream=stream
-    #     )
-
-    #     r = requests.post(self.llm_url, json=q)
-    #     r.raise_for_status()
-    #     return r
+        return r
 
     def query_llm(
         self,
