@@ -4,6 +4,7 @@ from typing import Any
 import requests
 import html
 import markdown
+import httpx
 
 cache_config = None
 
@@ -92,11 +93,12 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
-    def get_knowledge_state(self, task_id: str):
-        r = requests.get(self.get_load_state_url, params={"task_id": task_id})
-        r.raise_for_status()
-        response = dotdict(json.loads(r.text))
-        return response
+    async def get_knowledge_state(self, task_id: str):
+        async with httpx.AsyncClient() as client:
+            r = await client.get(self.get_load_state_url, params={"task_id": task_id})
+            r.raise_for_status()
+            response = dotdict(json.loads(r.text))
+            return response
 
     def reload_config(self, config: Any):
         global cache_config

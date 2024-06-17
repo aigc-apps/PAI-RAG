@@ -51,12 +51,12 @@ class RagService:
         self.rag.reload(self.rag_configuration.get_value())
         self.rag_configuration.persist()
 
-    async def add_knowledge_async(
+    def add_knowledge_async(
         self, task_id: str, file_dir: str, enable_qa_extraction: bool = False
     ):
         self.tasks_status[task_id] = "processing"
         try:
-            await self.rag.load_knowledge(file_dir, enable_qa_extraction)
+            self.rag.load_knowledge(file_dir, enable_qa_extraction)
             self.tasks_status[task_id] = "completed"
         except Exception as ex:
             logger.error(f"Upload failed: {ex}")
