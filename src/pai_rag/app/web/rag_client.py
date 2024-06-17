@@ -55,6 +55,21 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
+    # def query_llm(
+    #     self,
+    #     text: str,
+    #     session_id: str = None,
+    #     temperature: float = 0.1,
+    #     stream: bool = False,
+    # ):
+    #     q = dict(
+    #         question=text, temperature=temperature, session_id=session_id, stream=stream
+    #     )
+
+    #     r = requests.post(self.llm_url, json=q)
+    #     r.raise_for_status()
+    #     return r
+
     def query_llm(
         self,
         text: str,
@@ -65,8 +80,7 @@ class RagWebClient:
         q = dict(
             question=text, temperature=temperature, session_id=session_id, stream=stream
         )
-
-        r = requests.post(self.llm_url, json=q)
+        r = requests.post(self.llm_url, json=q, stream=True)
         r.raise_for_status()
         return r
 

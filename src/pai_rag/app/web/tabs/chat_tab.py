@@ -9,7 +9,8 @@ from pai_rag.app.web.ui_constants import (
     ACCURATE_CONTENT_PROMPTS,
 )
 import json
-import asyncio
+import time
+from datetime import datetime
 
 current_session_id = None
 
@@ -21,7 +22,7 @@ def clear_history(chatbot):
     return chatbot, 0
 
 
-async def respond(input_elements: List[Any]):
+def respond(input_elements: List[Any]):
     global current_session_id
 
     update_dict = {}
@@ -48,7 +49,7 @@ async def respond(input_elements: List[Any]):
         response = rag_client.query_llm(
             text=msg, session_id=current_session_id, stream=is_streaming
         )
-        #
+        print("query llm response", response)
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
@@ -56,23 +57,23 @@ async def respond(input_elements: List[Any]):
         current_session_id = response.session_id
 
     if is_streaming and query_type != "Retrieval":
-        current_session_id = response.headers["x-session-id"]
+        # current_session_id = response.headers["x-session-id"]
+        current_session_id = ""
         chatbot.append([msg, None])
         chatbot[-1][1] = ""
-        from datetime import datetime
-
-        # for chunk in response.iter_lines(chunk_size=8192,
-        #                             decode_unicode=False,
-        #                             delimiter=b'\0'):
-        async for chunk in response:
+        print("Gradio response ===== ", type(response), response)
+        for chunk in response.iter_lines(
+            chunk_size=8192, decode_unicode=False, delimiter=b"\0"
+        ):
+            # for chunk in response:
             print(datetime.now())
-            print(chunk.delta, end="")
-            print("Gradio UI ===== ", chunk.delta)
+            print("Gradio UI ===== ", chunk.decode("utf-8"))
             if chunk:
                 # chatbot[-1][1] += chunk.decode("utf-8")
-                chatbot[-1][1] += chunk.delta
+                chatbot[-1][1] += chunk.decode("utf-8")
                 yield "", chatbot, 0
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
+
     else:
         response = json.loads(response.text)
         current_session_id = response["session_id"]
