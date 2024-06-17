@@ -32,7 +32,6 @@ async def aquery(query: RagQuery) -> RagResponse:
 @router.post("/query/llm")
 def aquery_llm(query: LlmQuery):
     response = rag_service.aquery_llm(query)
-    print("response", response)
     if not query.stream:
         return response
     else:

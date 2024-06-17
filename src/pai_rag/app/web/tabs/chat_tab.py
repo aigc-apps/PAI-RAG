@@ -10,7 +10,6 @@ from pai_rag.app.web.ui_constants import (
 )
 import json
 import time
-from datetime import datetime
 
 current_session_id = None
 
@@ -49,7 +48,6 @@ def respond(input_elements: List[Any]):
         response = rag_client.query_llm(
             text=msg, session_id=current_session_id, stream=is_streaming
         )
-        print("query llm response", response)
     elif query_type == "Retrieval":
         response = rag_client.query_vector(msg)
     else:
@@ -57,19 +55,13 @@ def respond(input_elements: List[Any]):
         current_session_id = response.session_id
 
     if is_streaming and query_type != "Retrieval":
-        # current_session_id = response.headers["x-session-id"]
-        current_session_id = ""
+        current_session_id = response.headers["x-session-id"]
         chatbot.append([msg, None])
         chatbot[-1][1] = ""
-        print("Gradio response ===== ", type(response), response)
         for chunk in response.iter_lines(
             chunk_size=8192, decode_unicode=False, delimiter=b"\0"
         ):
-            # for chunk in response:
-            print(datetime.now())
-            print("Gradio UI ===== ", chunk.decode("utf-8"))
             if chunk:
-                # chatbot[-1][1] += chunk.decode("utf-8")
                 chatbot[-1][1] += chunk.decode("utf-8")
                 yield "", chatbot, 0
                 time.sleep(0.1)
