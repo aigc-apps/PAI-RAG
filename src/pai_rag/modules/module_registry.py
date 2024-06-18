@@ -1,4 +1,5 @@
 import hashlib
+import json
 from typing import Dict, Any
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 import pai_rag.modules as modules
@@ -51,7 +52,7 @@ class ModuleRegistry:
                 self._mod_deps_map_inverted[dep].append(m_name)
 
     def _get_param_hash(self, params: Dict[str, Any]):
-        repr_str = repr(sorted(params.items())).encode("utf-8")
+        repr_str = json.dumps(params, default=repr, sort_keys=True).encode("utf-8")
         return hashlib.sha256(repr_str).hexdigest()
 
     def get_module_with_config(self, module_key, config):
@@ -117,6 +118,9 @@ class ModuleRegistry:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)
 
         instance_key = self._get_param_hash(params)
+        if mod_name == "IndexModule":
+            print(instance_key, params)
+
         if instance_key not in self._mod_instance_map[mod_name]:
             logger.info(f"Creating new instance for module {mod_name} {instance_key}.")
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(

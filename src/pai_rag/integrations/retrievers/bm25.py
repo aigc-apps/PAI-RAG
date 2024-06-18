@@ -34,8 +34,8 @@ class BM25Retriever(BaseRetriever):
         object_map: Optional[dict] = None,
         verbose: bool = False,
     ) -> None:
-        self._nodes = nodes
         self._index = index
+        self._nodes = cast(List[BaseNode], list(self._index.docstore.docs.values()))
         self._tokenizer = tokenizer or tokenize_remove_stopwords
         self._similarity_top_k = similarity_top_k
         self._corpus = [self._tokenizer(node.get_content()) for node in self._nodes]
