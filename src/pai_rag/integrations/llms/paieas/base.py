@@ -2,8 +2,10 @@ from llama_index.core.base.llms.types import (
     ChatMessage,
     ChatResponse,
     ChatResponseGen,
+    ChatResponseAsyncGen,
     CompletionResponse,
     CompletionResponseGen,
+    CompletionResponseAsyncGen,
     LLMMetadata,
 )
 from llama_index.core.llms.callbacks import (
@@ -14,11 +16,14 @@ from llama_index.core.llms.custom import CustomLLM
 from llama_index.core.base.llms.generic_utils import (
     completion_to_chat_decorator,
     stream_completion_to_chat_decorator,
+    acompletion_to_chat_decorator,
+    astream_completion_to_chat_decorator,
 )
 from typing import Any, Dict, Optional, Sequence
 from llama_index.core.bridge.pydantic import Field
 import json
 import requests
+import httpx
 
 DEFAULT_EAS_MODEL_NAME = "pai-eas-custom-llm"
 DEFAULT_EAS_MAX_NEW_TOKENS = 512
@@ -103,13 +108,28 @@ class PaiEAS(CustomLLM):
         return CompletionResponse(text=text)
 
     @llm_completion_callback()
-    def stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
-        return self._stream(prompt=prompt, kwargs=kwargs)
+    async def acomplete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
+        params = self._default_params()
+        params.update(kwargs)
+        response = await self._call_eas_async(prompt, params=params)
+        text = self._process_eas_response(response)
+        return CompletionResponse(text=text)
 
     @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
         chat_fn = completion_to_chat_decorator(self.complete)
         return chat_fn(messages, **kwargs)
+
+    @llm_chat_callback()
+    async def achat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponse:
+        chat_fn = acompletion_to_chat_decorator(self.acomplete)
+        return await chat_fn(messages, **kwargs)
+
+    @llm_completion_callback()
+    def stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
+        return self._stream(prompt=prompt, kwargs=kwargs)
 
     @llm_chat_callback()
     def stream_chat(
@@ -158,6 +178,42 @@ class PaiEAS(CustomLLM):
         except Exception as e:
             raise e
 
+    async def _call_eas_async(self, prompt: str = "", params: Dict = {}) -> Any:
+        """Generate text from the eas service."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"{self.token}",
+        }
+        if self.version == "1.0":
+            body = {
+                "input_ids": f"{prompt}",
+            }
+        else:
+            body = {
+                "prompt": f"{prompt}",
+            }
+
+        # add params to body
+        for key, value in params.items():
+            body[key] = value
+
+        # make request
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                url=self.endpoint, headers=headers, json=body, timeout=60
+            )
+
+        if response.status_code != 200:
+            raise Exception(
+                f"Request failed with status code {response.status_code}"
+                f" and message {response.text}"
+            )
+
+        try:
+            return json.loads(response.text)
+        except Exception as e:
+            raise e
+
     def _stream(
         self,
         prompt: str,
@@ -165,7 +221,7 @@ class PaiEAS(CustomLLM):
     ) -> CompletionResponseGen:
         params = self._default_params()
         headers = {"User-Agent": "PAI Rag Client", "Authorization": f"{self.token}"}
-
+        print("_stream self.version", self.version)
         if self.version == "1.0":
             pload = {"input_ids": prompt, **params}
             response = requests.post(
@@ -194,3 +250,92 @@ class PaiEAS(CustomLLM):
                     if text:
                         res = CompletionResponse(text=text)
                         yield res
+
+    async def send_http_request(
+        self,
+        pload,
+        method,
+        url,
+        data=None,
+        files=None,
+        params={},
+        headers={},
+        is_stream=False,
+    ) -> httpx.Response:
+        """
+        Sends a HTTP request.
+        """
+        client = httpx.AsyncClient(verify=False, timeout=None)
+        req = client.build_request(
+            method,
+            url,
+            headers=headers,
+            files=files,
+            data=data,
+            json=pload,
+            params=params,
+        )
+        response = await client.send(req, stream=is_stream)
+        return response
+
+    async def _astream(
+        self,
+        prompt: str,
+        **kwargs: Any,
+    ) -> CompletionResponseAsyncGen:
+        params = self._default_params()
+        headers = {"User-Agent": "PAI Rag Client", "Authorization": f"{self.token}"}
+
+        if self.version == "1.0":
+            pload = {"input_ids": prompt, **params}
+            # make request
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.post(
+                    url=self.endpoint, headers=headers, json=pload, timeout=60
+                )
+
+            if response.status_code != 200:
+                raise Exception(
+                    f"Request failed with status code {response.status_code}"
+                    f" and message {response.text}"
+                )
+            res = CompletionResponse(text=response.text)
+
+            # yield text, if any
+            yield res
+        else:
+            pload = {"prompt": prompt, "use_stream_chat": "True", **params}
+
+            async with httpx.AsyncClient() as http_client:
+                # response = await http_client.post(
+                #     url=self.endpoint, headers=headers, json=pload
+                # )
+                async with http_client.stream(
+                    "POST", url=self.endpoint, headers=headers, json=pload
+                ) as response:
+                    async for chunk in response.aiter_lines():
+                        print("chunk", type(chunk), chunk)
+                        yield CompletionResponse(text="None")
+                        # if chunk:
+                        #     data = json.loads(chunk)
+                        #     print('yield data ', data)
+                        #     text = data["response"]
+                        #     print('yield text ', text)
+
+                        #     # yield text, if any
+                        #     if text:
+                        #         res = CompletionResponse(text=text)
+                        #         yield res
+
+    @llm_completion_callback()
+    async def astream_complete(
+        self, prompt: str, **kwargs: Any
+    ) -> CompletionResponseAsyncGen:
+        return self._astream(prompt=prompt, kwargs=kwargs)
+
+    @llm_chat_callback()
+    async def astream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
+        stream_chat_fn = astream_completion_to_chat_decorator(self.astream_complete)
+        return await stream_chat_fn(messages, **kwargs)
