@@ -1,6 +1,7 @@
 from typing import Any
-from fastapi import APIRouter, Body, BackgroundTasks
+from fastapi import APIRouter, Body, BackgroundTasks, File, UploadFile, Form
 import uuid
+import os
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
@@ -10,6 +11,7 @@ from pai_rag.app.api.models import (
     LlmResponse,
     DataInput,
 )
+from pai_rag.app.web.view_model import _transform_to_dict
 
 router = APIRouter()
 
@@ -86,3 +88,38 @@ async def batch_evaluate():
         type="all"
     )
     return {"status": 200, "result": eval_results}
+
+
+@router.post("/upload_local_data")
+async def upload_local_data(
+    file: UploadFile = File(),
+    faiss_path: str = Form(),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    task_id = uuid.uuid4().hex
+    if not file:
+        return {"message": "No upload file sent"}
+    else:
+        fn = file.filename
+        save_path = f"./localdata/upload_files/{task_id}/"
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
+
+        save_file = os.path.join(save_path, fn)
+
+        f = open(save_file, "wb")
+        data = await file.read()
+        f.write(data)
+        f.close()
+    sessioned_config = rag_service.rag_configuration.get_value()
+    if faiss_path:
+        sessioned_config = rag_service.rag_configuration.get_value().copy()
+        sessioned_config.index.update({"persist_path": faiss_path})
+    rag_service.reload(_transform_to_dict(sessioned_config))
+    background_tasks.add_task(
+        rag_service.add_knowledge_async,
+        task_id=task_id,
+        file_dir=save_path,
+        enable_qa_extraction=False,
+    )
+    return {"task_id": task_id}
