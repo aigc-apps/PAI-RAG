@@ -11,7 +11,7 @@ class RagDataPipeline:
         self.data_loader = data_loader
 
     async def ingest_from_folder(self, folder_path: str, enable_qa_extraction: bool):
-        await self.data_loader.load(folder_path, enable_qa_extraction)
+        await self.data_loader.aload(folder_path, enable_qa_extraction)
 
 
 def __init_data_pipeline(use_local_qa_model):

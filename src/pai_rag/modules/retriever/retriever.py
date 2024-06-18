@@ -10,12 +10,10 @@ from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
-from pai_rag.utils.tokenizer import jieba_tokenizer
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT
-from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStore
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 
 logger = logging.getLogger(__name__)
@@ -24,18 +22,19 @@ logger = logging.getLogger(__name__)
 class RetrieverModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["IndexModule"]
+        return ["IndexModule", "BM25IndexModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        vector_index = new_params["IndexModule"]
+        index = new_params["IndexModule"]
+        bm25_index = new_params["BM25IndexModule"]
 
         similarity_top_k = config.get("similarity_top_k", 5)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
 
         # Special handle elastic search
-        if isinstance(vector_index.storage_context.vector_store, MyElasticsearchStore):
+        if index.vectordb_type == "elasticsearch":
             if retrieval_mode == "embedding":
                 query_mode = VectorStoreQueryMode.DEFAULT
             elif retrieval_mode == "keyword":
@@ -44,19 +43,19 @@ class RetrieverModule(ConfigurableModule):
                 query_mode = VectorStoreQueryMode.HYBRID
 
             return MyVectorIndexRetriever(
-                index=vector_index,
+                index=index.vector_index,
                 similarity_top_k=similarity_top_k,
                 vector_store_query_mode=query_mode,
             )
 
         vector_retriever = MyVectorIndexRetriever(
-            index=vector_index, similarity_top_k=similarity_top_k
+            index=index.vector_index, similarity_top_k=similarity_top_k
         )
+
         # keyword
         bm25_retriever = BM25Retriever.from_defaults(
-            index=vector_index,
+            bm25_index=bm25_index,
             similarity_top_k=similarity_top_k,
-            tokenizer=jieba_tokenizer,
         )
 
         if retrieval_mode == "embedding":
@@ -89,7 +88,7 @@ class RetrieverModule(ConfigurableModule):
                 return fusion_retriever
 
             elif config["retrieval_mode"] == "router":
-                nodes = list(vector_index.docstore.docs.values())
+                nodes = list(index.vector_index.docstore.docs.values())
                 summary_index = SummaryIndex(nodes)
                 list_retriever = summary_index.as_retriever(
                     retriever_mode="embedding", similarity_top_k=10

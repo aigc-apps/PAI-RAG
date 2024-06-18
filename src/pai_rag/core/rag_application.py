@@ -34,20 +34,31 @@ class RagApplication:
         self.logger.info("RagApplication reloaded successfully.")
 
     # TODO: 大量文件上传实现异步添加
-    async def load_knowledge(self, file_dir, enable_qa_extraction=False):
+    async def aload_knowledge(self, file_dir, enable_qa_extraction=False):
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", self.config
         )
         await data_loader.aload(file_dir, enable_qa_extraction)
 
+    def load_knowledge(self, file_dir, enable_qa_extraction=False):
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", self.config
+        )
+        data_loader.load(file_dir, enable_qa_extraction)
+
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RetrievalResponse(docs=[])
 
+        sessioned_config = self.config
+        if query.vector_db and query.vector_db.faiss_path:
+            sessioned_config = self.config.copy()
+            sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
+
         query_bundle = QueryBundle(query.question)
 
         query_engine = module_registry.get_module_with_config(
-            "QueryEngineModule", self.config
+            "QueryEngineModule", sessioned_config
         )
         node_results = await query_engine.aretrieve(query_bundle)
 
