@@ -1,5 +1,7 @@
 import os
 from typing import Any, Dict
+import asyncio
+import nest_asyncio
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -120,3 +122,9 @@ class RagDataLoader:
             self.bm25_index.add_docs(nodes)
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
+
+    nest_asyncio.apply()  # 应用嵌套补丁到事件循环
+
+    def load(self, file_directory: str, enable_qa_extraction: bool):
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.aload(file_directory, enable_qa_extraction))
