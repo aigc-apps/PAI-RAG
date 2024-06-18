@@ -1,10 +1,8 @@
 import logging
 import os
 import pickle
-import datetime
 import json
 import numpy as np
-import pandas as pd
 from typing import Callable, List, cast, Dict
 from llama_index.core.schema import BaseNode, TextNode, NodeWithScore
 from pai_rag.utils.tokenizer import jieba_tokenizer
@@ -97,9 +95,7 @@ class PaiBm25Index:
         logger.info(f"Finished {len(text_list)} docs.")
         return tokens_list
 
-    def persist(self, doc_list):
-        print(f"{datetime.datetime.now()} start persisting!")
-
+    def persist(self, doc_index_list, doc_list):
         os.makedirs(self.parts_path, exist_ok=True)
 
         with open(self.index_file, "wb") as wf:
@@ -108,18 +104,40 @@ class PaiBm25Index:
         with open(self.index_matrix_file, "wb") as wf:
             pickle.dump(self.index_matrix, wf)
 
-        start_pos = 0
-        part_i = 1
+        doc_idx_map = dict(zip(doc_index_list, doc_list))
+        bucket_size = DEFAULT_PART_SIZE
+        pre_bucket = -1
+        current_batch = []
+        part_file_name = "default.part"
+        for i in sorted(doc_idx_map):
+            bucket = int(i / bucket_size)
+            if bucket != pre_bucket:
+                if current_batch:
+                    part_file_name = os.path.join(
+                        self.parts_path, f"{pre_bucket+1:06}.part"
+                    )
+                    with open(part_file_name, "w") as wf:
+                        wf.write("\n".join(current_batch))
+                        current_batch = []
 
-        logger.info(f"Write to index with {len(doc_list)} docs")
-        while start_pos < len(doc_list):
-            part_file_name = os.path.join(self.parts_path, f"{part_i:06}.part")
-            # TODO write with bucket
+                part_file_name = os.path.join(self.parts_path, f"{bucket+1:06}.part")
+                if os.path.exists(part_file_name):
+                    current_batch = open(part_file_name, "r").readlines()
+                    current_batch = [line.strip() for line in current_batch]
+
+                pre_bucket = bucket
+            doc_i = i % bucket_size
+
+            if doc_i < len(current_batch):
+                current_batch[i % bucket_size] == doc_idx_map[i]
+            else:
+                current_batch.append(doc_idx_map[i])
+
+        if current_batch:
+            part_file_name = os.path.join(self.parts_path, f"{pre_bucket+1:06}.part")
             with open(part_file_name, "w") as wf:
-                wf.write("\n".join(doc_list[start_pos : start_pos + DEFAULT_PART_SIZE]))
-                start_pos += DEFAULT_PART_SIZE
-                part_i += 1
-        logger.info("write index succeeded!")
+                wf.write("\n".join(current_batch))
+        logger.info("Write index succeed!")
 
     def add_docs(self, nodes: List[BaseNode]):
         node_index_list = []
@@ -144,13 +162,11 @@ class PaiBm25Index:
             else:
                 # don't handle image or graph node
                 pass
-
         pad_size = self.index.doc_count - len(self.index.doc_lens)
         self.index.doc_lens = np.lib.pad(
             self.index.doc_lens, (0, pad_size), "constant", constant_values=(0)
         )
 
-        logger.info(f"Start splitting {len(text_list)}")
         chunk_size = 100000
         start_pos = 0
         if len(text_list) < 2 * chunk_size:
@@ -176,7 +192,6 @@ class PaiBm25Index:
                 for fut in concurrent.futures.as_completed(futures):
                     start_pos = future2startpos[fut]
                     i += 1
-                    logger.info(f"Finished future {i}, {start_pos}")
                     tokens_list = fut.result()
                     batch_id_list = id_list[start_pos : start_pos + chunk_size]
                     self.process_token_list(tokens_list, batch_id_list)
@@ -190,14 +205,12 @@ class PaiBm25Index:
             )
             for i in range(len(text_list))
         ]
-        self.persist(doc_list)
+        self.persist(node_index_list, doc_list)
 
         logger.info("Successfully write to BM25 index.")
         return
 
     def construct_index_matrix(self):
-        logger.info("Constructing index matrix...")
-
         # m * n matrix
         m = self.index.doc_count
         n = self.index.token_count
@@ -247,7 +260,7 @@ class PaiBm25Index:
         index2nodes = {}
         node_indexes = doc_indexes.copy()
         node_indexes.sort()
-        bucket_size = 10000
+        bucket_size = DEFAULT_PART_SIZE
         batch_ids = []
         pre_bucket = -1
         for i in doc_indexes:
@@ -264,7 +277,7 @@ class PaiBm25Index:
             batch_nodes = self.load_batch_from_part_file(batch_ids, bucket)
             index2nodes.update(zip(batch_ids, batch_nodes))
 
-        return [index2nodes[i] for i in node_indexes]
+        return [index2nodes[i] for i in doc_indexes]
 
     def query(self, query_str: str, top_n: int = 5) -> List[NodeWithScore]:
         results = []
@@ -315,31 +328,3 @@ class PaiBm25Index:
 
             for token_i in token_index_set:
                 self.index.inverted_index[token_i].add(doc_i)
-
-
-if __name__ == "__main__":
-    start = datetime.datetime.now()
-    print(f"{datetime.datetime.now()} Starting..")
-    file = "/Users/feiyue/Documents/df_multi_col_data_media.csv"
-
-    def load_file(file_name, store):
-        node_list = []
-        df = pd.read_csv(file_name, encoding="gb18030")
-        for i, record in enumerate(df.to_dict(orient="records")):
-            extra_info = {"row": i, "file_path": file}
-            node_list.append(
-                TextNode(id_=f"{i}", text=f"{record}", metadata=extra_info)
-            )
-        print(f"{datetime.datetime.now()} Load complete, start building index...")
-        store.add_docs(node_list)
-
-    store = PaiBm25Index("tmp/")
-
-    load_file(file, store)
-
-    print((datetime.datetime.now() - start))
-    start2 = datetime.datetime.now()
-    nodes = store.query("下雪的电影")
-    print((datetime.datetime.now() - start2))
-    for n in nodes:
-        print(n.score, n.get_content())
