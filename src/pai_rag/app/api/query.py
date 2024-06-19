@@ -1,6 +1,8 @@
 from typing import Any
-from fastapi import APIRouter, Body, BackgroundTasks
+from fastapi import APIRouter, Body, BackgroundTasks, File, UploadFile, Form
 import uuid
+import os
+import tempfile
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
@@ -86,3 +88,32 @@ async def batch_evaluate():
         type="all"
     )
     return {"status": 200, "result": eval_results}
+
+
+@router.post("/upload_local_data")
+async def upload_local_data(
+    file: UploadFile = File(),
+    faiss_path: str = Form(),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    task_id = uuid.uuid4().hex
+    if not file:
+        return {"message": "No upload file sent"}
+    else:
+        fn = file.filename
+        tmpdir = tempfile.mkdtemp()
+        save_file = os.path.join(tmpdir, f"{task_id}_{fn}")
+        with open(save_file, "wb") as f:
+            data = await file.read()
+            f.write(data)
+            f.close()
+
+        background_tasks.add_task(
+            rag_service.add_knowledge_async,
+            task_id=task_id,
+            file_dir=tmpdir,
+            faiss_path=faiss_path,
+            enable_qa_extraction=False,
+        )
+
+    return {"task_id": task_id}
