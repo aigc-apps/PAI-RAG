@@ -9,7 +9,7 @@ from pai_rag.app.api.models import (
     RagResponse,
     LlmResponse,
 )
-from pai_rag.app.web.view_model import view_model
+from pai_rag.app.web.view_model import view_model, _transform_to_dict
 from openinference.instrumentation import using_attributes
 from typing import Any, Dict
 import logging
@@ -52,8 +52,20 @@ class RagService:
         self.rag_configuration.persist()
 
     def add_knowledge_async(
-        self, task_id: str, file_dir: str, enable_qa_extraction: bool = False
+        self,
+        task_id: str,
+        file_dir: str,
+        faiss_path: str = None,
+        enable_qa_extraction: bool = False,
     ):
+        if faiss_path:
+            sessioned_config = self.rag_configuration.get_value().copy()
+            sessioned_config.index.update({"persist_path": faiss_path})
+            self.rag.reload(_transform_to_dict(sessioned_config))
+            logger.info(
+                f"Reload rag_configuration with faiss_persist_path: {faiss_path}"
+            )
+
         self.tasks_status[task_id] = "processing"
         try:
             self.rag.load_knowledge(file_dir, enable_qa_extraction)
