@@ -57,7 +57,6 @@ class PostprocessorModule(ConfigurableModule):
                 #MyBGEReranker(model=model, top_n=top_n, use_fp16=True),
                 FlagEmbeddingReranker(model=model, top_n=top_n, use_fp16=True),
             )
-            # post_processors.append(FlagEmbeddingReranker(model=model, top_n=top_n, use_fp16=True))
 
         else:
             logger.info("[PostProcessor]: No Reranker used.")

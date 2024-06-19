@@ -1,3 +1,5 @@
+import datetime
+from asgi_correlation_id import correlation_id
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.evaluations.batch_evaluator import BatchEvaluator
 from pai_rag.app.api.models import (
@@ -47,6 +49,7 @@ class RagApplication:
         data_loader.load(file_dir, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
+        start = datetime.datetime.now()
         if not query.question:
             return RetrievalResponse(docs=[])
 
@@ -55,6 +58,8 @@ class RagApplication:
             sessioned_config = self.config.copy()
             sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
 
+        request_id = correlation_id.get()
+        print(f"{start} {request_id} start ^^^^")
         query_bundle = QueryBundle(query.question)
 
         query_engine = module_registry.get_module_with_config(
@@ -70,6 +75,9 @@ class RagApplication:
             )
             for score_node in node_results
         ]
+        end = datetime.datetime.now()
+        print(f"{end} {request_id} end $$$$$ Elapsed: {end-start}")
+
         return RetrievalResponse(docs=docs)
 
     async def aquery(self, query: RagQuery) -> RagResponse:

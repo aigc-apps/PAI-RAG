@@ -4,6 +4,7 @@ from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.core.query_engine import RetrieverQueryEngine
+from asgi_correlation_id import correlation_id
 
 import llama_index.core.instrumentation as instrument
 import logging
@@ -29,9 +30,10 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        print(f"{datetime.datetime.now()} start retrieving ====")
+        request_id = correlation_id.get()
+        print(f"{datetime.datetime.now()} {request_id} start retrieving ====")
         nodes = await self._retriever.aretrieve(query_bundle)
-        print(f"{datetime.datetime.now()} finish retrieving ====")
+        print(f"{datetime.datetime.now()} {request_id} finish retrieving ====")
 
         for node_postprocessor in self._node_postprocessors:
             # nodes = await node_postprocessor.postprocess_nodes_async(
@@ -39,6 +41,8 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
                 nodes,
                 query_bundle=query_bundle,
             )
+
+        print(f"{datetime.datetime.now()} {request_id} finish postprocessing ====")
         return nodes
 
     @dispatcher.span
