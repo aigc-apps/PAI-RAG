@@ -14,7 +14,6 @@ from pai_rag.app.api.models import (
 )
 
 router = APIRouter()
-TEMP_DIR = tempfile.gettempdir()
 
 
 @router.post("/query")
@@ -102,20 +101,19 @@ async def upload_local_data(
         return {"message": "No upload file sent"}
     else:
         fn = file.filename
-        save_path = os.path.join(TEMP_DIR, "upload_files", task_id)
-        os.makedirs(save_path, exist_ok=True)
-        save_file = os.path.join(save_path, fn)
+        tmpdir = tempfile.mkdtemp()
+        save_file = os.path.join(tmpdir, f"{task_id}_{fn}")
+        with open(save_file, "wb") as f:
+            data = await file.read()
+            f.write(data)
+            f.close()
 
-        f = open(save_file, "wb")
-        data = await file.read()
-        f.write(data)
-        f.close()
+        background_tasks.add_task(
+            rag_service.add_knowledge_async,
+            task_id=task_id,
+            file_dir=tmpdir,
+            faiss_path=faiss_path,
+            enable_qa_extraction=False,
+        )
 
-    background_tasks.add_task(
-        rag_service.add_knowledge_async,
-        task_id=task_id,
-        file_dir=save_path,
-        faiss_path=faiss_path,
-        enable_qa_extraction=False,
-    )
     return {"task_id": task_id}
