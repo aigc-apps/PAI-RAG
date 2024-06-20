@@ -48,6 +48,10 @@ class RagWebClient:
     def get_load_state_url(self):
         return f"{self.endpoint}service/get_upload_state"
 
+    @property
+    def get_evaluate_generate_url(self):
+        return f"{self.endpoint}service/evaluate/generate"
+
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
         r = requests.post(self.query_url, json=q)
@@ -115,6 +119,12 @@ class RagWebClient:
         cache_config = config
 
         return
+
+    def evaluate_for_generate_qa(self):
+        r = requests.post(self.get_evaluate_generate_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
 
 
 rag_client = RagWebClient()

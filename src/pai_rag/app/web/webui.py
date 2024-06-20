@@ -3,6 +3,7 @@ from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
+from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager
 from pai_rag.app.web.ui_constants import (
     DEFAULT_CSS_STYPE,
@@ -42,6 +43,9 @@ def create_ui():
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
+        with gr.Tab("\N{rocket} Evaluation"):
+            _ = create_evaluation_tab()
+
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None
         )
