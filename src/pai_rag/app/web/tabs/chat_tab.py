@@ -229,13 +229,13 @@ def create_chat_tab() -> Dict[str, Any]:
             respond,
             chat_args,
             [question, chatbot, cur_tokens],
-            api_name="respond",
+            api_name="respond_clk",
         )
         question.submit(
             respond,
             chat_args,
             [question, chatbot, cur_tokens],
-            api_name="respond",
+            api_name="respond_sub",
         )
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {

@@ -60,34 +60,32 @@ def task_status(task_id: str):
     return {"task_id": task_id, "status": status}
 
 
-@router.post("/evaluate/response")
-def evaluate_reponse():
-    eval_results = rag_service.evaluate_reponse()
+@router.post("/evaluate")
+async def batch_evaluate():
+    df, eval_results = await rag_service.aevaluate_retrieval_and_response(type="all")
     return {"status": 200, "result": eval_results}
 
 
-@router.post("/batch_evaluate/retrieval")
+@router.post("/evaluate/retrieval")
 async def batch_retrieval_evaluate():
-    df, eval_results = await rag_service.batch_evaluate_retrieval_and_response(
+    df, eval_results = await rag_service.aevaluate_retrieval_and_response(
         type="retrieval"
     )
     return {"status": 200, "result": eval_results}
 
 
-@router.post("/batch_evaluate/response")
+@router.post("/evaluate/response")
 async def batch_response_evaluate():
-    df, eval_results = await rag_service.batch_evaluate_retrieval_and_response(
+    df, eval_results = await rag_service.aevaluate_retrieval_and_response(
         type="response"
     )
     return {"status": 200, "result": eval_results}
 
 
-@router.post("/batch_evaluate")
-async def batch_evaluate():
-    df, eval_results = await rag_service.batch_evaluate_retrieval_and_response(
-        type="all"
-    )
-    return {"status": 200, "result": eval_results}
+@router.post("/evaluate/generate")
+async def generate_qa_dataset():
+    qa_datase = await rag_service.aload_evaluation_qa_dataset()
+    return {"status": 200, "result": qa_datase}
 
 
 @router.post("/upload_local_data")

@@ -81,8 +81,11 @@ class RagService:
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        return await self.rag.batch_evaluate_retrieval_and_response(type)
+    async def aload_evaluation_qa_dataset(self):
+        return await self.rag.aload_evaluation_qa_dataset()
+
+    async def aevaluate_retrieval_and_response(self, type):
+        return await self.rag.aevaluate_retrieval_and_response(type)
 
 
 rag_service = RagService()

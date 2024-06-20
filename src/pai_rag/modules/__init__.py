@@ -14,6 +14,7 @@ from pai_rag.modules.chat.chat_store import ChatStoreModule
 from pai_rag.modules.agent.agent import AgentModule
 from pai_rag.modules.tool.tool import ToolModule
 from pai_rag.modules.cache.oss_cache import OssCacheModule
+from pai_rag.modules.evaluation.evaluation import EvaluationModule
 
 
 ALL_MODULES = [
@@ -33,6 +34,7 @@ ALL_MODULES = [
     "AgentModule",
     "ToolModule",
     "OssCacheModule",
+    "EvaluationModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

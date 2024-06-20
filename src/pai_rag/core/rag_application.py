@@ -1,5 +1,4 @@
 from pai_rag.modules.module_registry import module_registry
-from pai_rag.evaluations.batch_evaluator import BatchEvaluator
 from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
@@ -102,7 +101,6 @@ class RagApplication:
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = self.config.copy()
             sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
-            print(sessioned_config)
 
         chat_engine_factory = module_registry.get_module_with_config(
             "ChatEngineFactoryModule", sessioned_config
@@ -169,16 +167,31 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        retriever = module_registry.get_module_with_config(
-            "RetrieverModule", self.config
+    async def aload_evaluation_qa_dataset(self):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
         )
-        query_engine = module_registry.get_module_with_config(
-            "QueryEngineModule", self.config
-        )
-        batch_eval = BatchEvaluator(self.config, retriever, query_engine)
-        df, eval_res_avg = await batch_eval.batch_retrieval_response_aevaluation(
-            type=type, workers=2, save_to_file=True
-        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            qa_dataset = await evaluation.aload_question_answer_pairs_json()
+            return qa_dataset
+        else:
+            return f"Not support for vector store —— {vector_store_type}"
 
-        return df, eval_res_avg
+    async def aevaluate_retrieval_and_response(self, type):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
+        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
+                type=type, workers=4
+            )
+
+            return df, eval_res_avg
+        else:
+            return None, f"Not support for vector store —— {vector_store_type}"

@@ -71,12 +71,12 @@ curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: appli
 
 支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
 
-初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。
+初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。也可以通过API接口手动生成QA数据集。
 
 - **（1）全链路效果评估（All）**
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate
 ```
 
 返回示例：
@@ -98,7 +98,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate
 - **（2）检索效果评估（Retrieval）**
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/retrieval
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 ```
 
 返回示例：
@@ -117,7 +117,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/retrieval
 - **（3）生成效果评估（Response）**
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
 返回示例：
@@ -130,6 +130,28 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
     "faithfulness_mean": 0.8333334,
     "correctness_mean": 4.58333333,
     "similarity_mean": 0.88153079
+  }
+}
+```
+
+- **（4）手动生成评估的QA数据集（Generate）**
+
+```bash
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/generate
+```
+
+返回示例：
+
+```json
+{
+  "status": 200,
+  "result": {
+    {
+      "examples":[
+        {"query":"如何通过\"三原则两注意\"中的方法帮助孩子建立更好的日常生活习惯？","query_by":{"model_name":"qwen-turbo","type":"ai"},"reference_contexts":["\n\n三原则两注意\n\r\n1.想结果:处理问题前，先思考自己想要达成的结果\r\n\r\n2.找重点:不对孩子做过多过细的要求，只要求重点的事情\r\n\r\n3.爱自己:留出时间和空间关爱自己，自己有能量，才能更好地关爱孩子\r\n\r\n1.规律生活:规律生活，可以减少孩子的日常混乱，建议从父母做起\r\n\r\n2.整理房间:房间保持简约、结构化，能增加孩子的专注力和条理性\r\n\r\n\r\n\r"],"reference_node_id":["dacdb33e68b8a60b15044524cfdd710d92b42a1d8c87583bfe8473b2793efc09"],"reference_answer":"通过\"三原则两注意\"中的方法，可以帮助孩子建立更好的日常生活习惯如下：\n\n1. **想结果**：在对孩子提出要求或安排活动时，先考虑这个行为或任务对孩子长期目标的影响。明确你希望他们培养的习惯（如规律作息）对他们的益处，这样孩子会更愿意接受并坚持。\n\n2. **找重点**：避免过度细致的指导，让孩子专注于一两个关键的生活习惯，比如定时睡觉、按时吃饭。这样可以减少他们的压力，让他们更容易理解和执行。\n\n3. **爱自己**：作为父母，要以身作则，展示良好的生活习惯。同时，确保自己有足够的休息和自我照顾，这样你的积极态度和充沛精力会对孩子产生积极影响。\n\n4. **规律生活**：父母自身要保持规律的生活作息，例如设定固定的起床和睡觉时间，这样可以为孩子树立榜样。同时，教导孩子理解规律性对于效率和稳定的重要性。\n\n5. **整理房间**：鼓励孩子参与整理自己的物品，保持环境整洁。一个有序的环境有助于提高孩子的专注力和责任感，也能培养他们的条理性。\n\n通过这些方法，孩子不仅能学会良好的生活习惯，还能在过程中感受到父母的支持和引导，从而更容易形成稳定的日常行为","reference_answer_by":{"model_name":"qwen-turbo","type":"ai"}},
+        {"query":"\"如何通过情绪管控三步法来改善家庭教育中的亲子沟通？\"","query_by":{"model_name":"qwen-turbo","type":"ai"},"reference_contexts":["\n\n情绪管控三步一法\n\r\n1.[觉]:觉察并接纳自己第一时间的情绪\r\n2.[停]: 控制自己发泄情绪的行为，比如控制自己不要向孩子吼叫、不要对孩子动手等等\r\n3.[静]:通过离开现场等方式，让自己慢慢冷静\r\n\r\n通过CBT(认知行为疗法)缓解长期的负面情绪\r\n1.让我们有不良情绪的往往不是这件事，而是我们对这件事的认知\r\n\r\n2.运用[自我狡辩法]改变对事情的认知，缓解不良情绪\r\n\r\n\r\n\r"],"reference_node_id":["14f8ea5c9087d2c8821ce2afdbe2065b02c793355aaab907d639d23480e3d9bc"],"reference_answer":"情绪管控三步法（觉、停、静）在家庭教育中的亲子沟通中可以有效地帮助改善和提升沟通质量：\n\n1. **觉** (觉察): 当你发现自己或孩子的情绪开始升温，第一步是觉察到这种情绪的存在。这包括意识到自己的情绪反应以及它可能对孩子产生的影响。了解自己的情绪状态是沟通的第一步。\n\n2. **停** (控制): 在情绪即将失控时，暂停一下，不要立即做出反应。这意味着当你想要吼叫或者对孩子发脾气时，先停下来，避免伤害对方。这一步旨在给双方冷静的时间，避免冲动行为。\n\n3. **静** (冷静): 这个阶段可以通过暂时离开现场、深呼吸、短暂的独处或者进行简单的冷静活动来实现。给自己一些时间让情绪平复下来，这样在重新进入对话时会更加理智和冷静。\n\n通过这个三步法，家长可以更好地管理自己的情绪，以更成熟、理解的态度与孩子交流，从而促进更有效的亲子沟通。同时，CBT（认知行为疗法）的理念也能帮助家长识别并挑战负面思维，调整对孩子的行为和情况的看法，进一步改善家庭氛围。","reference_answer_by":{"model_name":"qwen-turbo","type":"ai"}}
+      ]
+    }
   }
 }
 ```
