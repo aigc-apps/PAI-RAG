@@ -69,7 +69,9 @@ class RagIndex:
             self.vector_index = load_index_from_storage(
                 storage_context=self.storage_context
             )
-            logger.info(f"FaissIndex {self.persist_path} reloaded with {len(self.vector_index.docstore.docs)} nodes.")
+            logger.info(
+                f"FaissIndex {self.persist_path} reloaded with {len(self.vector_index.docstore.docs)} nodes."
+            )
         return
 
 

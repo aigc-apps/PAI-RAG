@@ -66,9 +66,7 @@ class PaiBm25Index:
         self.data_path = os.path.join(persist_path, DEFAULT_STORE_DIR)
         self.parts_path = os.path.join(self.data_path, DEFAULT_FILE_PART_DIR)
         self.index_file = os.path.join(self.data_path, DEFAULT_INDEX_FILE)
-        self.index_matrix_file = os.path.join(
-            self.data_path, DEFAULT_INDEX_MATRIX_FILE
-        )
+        self.index_matrix_file = os.path.join(self.data_path, DEFAULT_INDEX_MATRIX_FILE)
 
         self.workers = workers
         self.tokenizer = tokenizer or jieba_tokenizer
