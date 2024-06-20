@@ -24,13 +24,10 @@ def rag_app():
     rag_app = RagApplication()
     rag_app.initialize(config)
 
-    return rag_app
-
-
-# Test load knowledge file
-def test_add_knowledge_file(rag_app: RagApplication):
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
     rag_app.load_knowledge(data_dir)
+
+    return rag_app
 
 
 # Test rag query
