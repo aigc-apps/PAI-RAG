@@ -19,9 +19,14 @@ persist_path = "localdata/storage"
 [rag.data_reader]
 type = "SimpleDirectoryReader"
 
+# embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# eg.
+# source = "HuggingFace"
+# model_name = "bge-small-zh-v1.5"
+# embed_batch_size = 10
 [rag.embedding]
-source = "HuggingFace"
-model_name = "bge-small-zh-v1.5"
+source = "DashScope"
 embed_batch_size = 10
 
 [rag.evaluation]

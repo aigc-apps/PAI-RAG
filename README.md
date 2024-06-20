@@ -32,7 +32,7 @@ poetry install
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8000), config(默认config/demo.yaml)
+# 启动，支持自定义host(默认0.0.0.0), port(默认8000), config(默认config/settings.yaml)
 pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
 ```
 
