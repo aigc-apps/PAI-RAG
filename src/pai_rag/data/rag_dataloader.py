@@ -135,4 +135,3 @@ class RagDataLoader:
     def load(self, file_directory: str, enable_qa_extraction: bool):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.aload(file_directory, enable_qa_extraction))
-        return

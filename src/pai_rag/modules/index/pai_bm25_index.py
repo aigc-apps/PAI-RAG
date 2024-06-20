@@ -293,7 +293,6 @@ class PaiBm25Index:
 
         doc_scores = self.index_matrix.multiply(query_vec).sum(axis=1).getA1()
         doc_indexes = doc_scores.argsort()[::-1][:top_n]
-
         text_nodes = self.load_docs_with_index(doc_indexes)
         for i, node in enumerate(text_nodes):
             results.append(NodeWithScore(node=node, score=doc_scores[doc_indexes[i]]))
