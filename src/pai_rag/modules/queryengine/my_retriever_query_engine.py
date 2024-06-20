@@ -4,11 +4,8 @@ from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.core.query_engine import RetrieverQueryEngine
-from asgi_correlation_id import correlation_id
-
 import llama_index.core.instrumentation as instrument
 import logging
-import datetime
 
 dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
@@ -30,10 +27,7 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        request_id = correlation_id.get()
-        print(f"{datetime.datetime.now()} {request_id} start retrieving ====")
         nodes = await self._retriever.aretrieve(query_bundle)
-        print(f"{datetime.datetime.now()} {request_id} finish retrieving ====")
 
         for node_postprocessor in self._node_postprocessors:
             nodes = node_postprocessor.postprocess_nodes(
@@ -41,7 +35,6 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
                 query_bundle=query_bundle,
             )
 
-        print(f"{datetime.datetime.now()} {request_id} finish postprocessing ====")
         return nodes
 
     @dispatcher.span
@@ -65,22 +58,11 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
-            start = datetime.datetime.now()
-            print(f"{start} start retriever ====")
-
             nodes = await self.aretrieve(query_bundle)
-            print(f"Finished retriever ====, costed: {datetime.datetime.now()-start}")
-
-            start = datetime.datetime.now()
-            print(f"{start} start synthesize ====")
-
             response = await self._response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
             )
-
-            print(f"Finished synthesize ====, costed: {datetime.datetime.now()-start}")
-
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
         return response
