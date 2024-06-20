@@ -24,4 +24,4 @@ RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
 WORKDIR /app
 COPY . .
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-CMD ["pai_rag"]
+CMD ["pai_rag", "run"]
