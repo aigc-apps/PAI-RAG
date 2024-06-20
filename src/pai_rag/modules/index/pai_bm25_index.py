@@ -62,19 +62,20 @@ class PaiBm25Index:
         self.k1 = k1
         self.b = b
 
-        self.persist_path = os.path.join(persist_path, DEFAULT_STORE_DIR)
-        self.parts_path = os.path.join(self.persist_path, DEFAULT_FILE_PART_DIR)
-        self.index_file = os.path.join(self.persist_path, DEFAULT_INDEX_FILE)
+        self.persist_path = persist_path
+        self.data_path = os.path.join(persist_path, DEFAULT_STORE_DIR)
+        self.parts_path = os.path.join(self.data_path, DEFAULT_FILE_PART_DIR)
+        self.index_file = os.path.join(self.data_path, DEFAULT_INDEX_FILE)
         self.index_matrix_file = os.path.join(
-            self.persist_path, DEFAULT_INDEX_MATRIX_FILE
+            self.data_path, DEFAULT_INDEX_MATRIX_FILE
         )
 
         self.workers = workers
         self.tokenizer = tokenizer or jieba_tokenizer
 
-        logger.info(f"Start loading local BM25 index @ {self.persist_path}!")
+        logger.info(f"Start loading local BM25 index @ {self.data_path}!")
         self.reload()
-        logger.info(f"Finished loading BM25 index @ {self.persist_path}!")
+        logger.info(f"Finished loading BM25 index @ {self.data_path}!")
 
     def reload(self):
         if os.path.exists(self.parts_path):

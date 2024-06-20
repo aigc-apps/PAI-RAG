@@ -44,5 +44,6 @@ class RagConfiguration:
     def get_config_mtime(self):
         try:
             return os.path.getmtime(GENERATED_CONFIG_FILE_NAME)
-        except:
+        except Exception as ex:
+            print(f"Fail to read config mtime {ex}")
             return -1

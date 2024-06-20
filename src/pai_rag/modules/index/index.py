@@ -63,10 +63,13 @@ class RagIndex:
 
     def reload(self):
         if isinstance(self.storage_context.vector_store, FaissVectorStore):
+            rag_store = RagStore(self.config, self.persist_path, False, self.embed_dims)
+            self.storage_context = rag_store.get_storage_context()
+
             self.vector_index = load_index_from_storage(
                 storage_context=self.storage_context
             )
-            logger.info(f"FaissIndex {self.persist_path} reloaded.")
+            logger.info(f"FaissIndex {self.persist_path} reloaded with {len(self.vector_index.docstore.docs)} nodes.")
         return
 
 

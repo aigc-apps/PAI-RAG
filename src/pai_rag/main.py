@@ -114,9 +114,6 @@ def run(host, port, config, workers):
     os.environ["PAI_RAG_URL"] = endpoint
     os.environ["PAI_RAG_CONFIG_FILE"] = config
 
-    # Configure parent process
-    configure_app(app, config, endpoint)
-
     uvicorn.run(
         app="pai_rag.main:app", host=host, port=port, loop="asyncio", workers=workers
     )

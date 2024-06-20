@@ -42,16 +42,21 @@ class IndexDaemon:
                     f"Comparing {lastUpdated} <---> {index_entry.index_entries[index_path]}"
                 )
                 if lastUpdated != index_entry.index_entries[index_path]:
+                    logger.info(f"{datetime.datetime.now()} Reloading index.")
+
                     index.reload()
 
                     for bm25_index in bm25_indexes:
                         if bm25_index.persist_path == index_path:
+                            logger.info(f"{datetime.datetime.now()} Reloading bm25 index.")
                             bm25_index.reload()
 
                     index_entry.index_entries[index_path] = lastUpdated
+                    logger.info(f"{datetime.datetime.now()} Reloaded index.")
+                    module_registry.destroy_config_cache()
 
             logger.info(f"{datetime.datetime.now()} Index scan complete.")
-            await asyncio.sleep(30)
+            await asyncio.sleep(10)
 
 
 index_daemon = IndexDaemon()

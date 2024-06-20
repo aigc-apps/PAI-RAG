@@ -131,6 +131,9 @@ class ModuleRegistry:
 
     def get_mod_instances(self, mod_name: str):
         return self._mod_instance_map[mod_name]
+    
+    def destroy_config_cache(self):
+        self._cache_by_config = {}
 
 
 module_registry = ModuleRegistry()
