@@ -36,7 +36,6 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
         print(f"{datetime.datetime.now()} {request_id} finish retrieving ====")
 
         for node_postprocessor in self._node_postprocessors:
-            # nodes = await node_postprocessor.postprocess_nodes_async(
             nodes = node_postprocessor.postprocess_nodes(
                 nodes,
                 query_bundle=query_bundle,

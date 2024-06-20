@@ -70,10 +70,13 @@ class PaiBm25Index:
         )
 
         self.workers = workers
-
         self.tokenizer = tokenizer or jieba_tokenizer
 
-        logger.info("Start loading local BM25 index!")
+        logger.info(f"Start loading local BM25 index @ {self.persist_path}!")
+        self.reload()
+        logger.info(f"Finished loading BM25 index @ {self.persist_path}!")
+
+    def reload(self):
         if os.path.exists(self.parts_path):
             with open(self.index_file, "rb") as f:
                 self.index: LocalBm25Index = pickle.load(f)
@@ -83,8 +86,7 @@ class PaiBm25Index:
             self.index = LocalBm25Index()
             self.index_matrix = None
             self.token_map = {}
-
-        logger.info("Finished loading BM25 index!")
+        self.doc_cache = {}
 
     def split_doc(self, text_list: List[str], tokenizer: Callable):
         tokens_list = []
@@ -158,7 +160,7 @@ class PaiBm25Index:
                     self.index.doc_count += 1
                     self.index.node_id_map[node_id] = node_index
                 node_index_list.append(self.index.node_id_map[node_id])
-
+                self.doc_cache[self.index.node_id_map[node_id]] = node
             else:
                 # don't handle image or graph node
                 pass
@@ -253,31 +255,30 @@ class PaiBm25Index:
         return nodes
 
     def load_docs_with_index(self, doc_indexes):
-        results = []
-        if len(doc_indexes) == 0:
-            return results
+        filtered_doc_indexes = [idx for idx in doc_indexes if idx not in self.doc_cache]
+        if len(filtered_doc_indexes) == 0:
+            return [self.doc_cache[idx] for idx in doc_indexes]
 
-        index2nodes = {}
-        node_indexes = doc_indexes.copy()
+        node_indexes = filtered_doc_indexes.copy()
         node_indexes.sort()
         bucket_size = DEFAULT_PART_SIZE
         batch_ids = []
         pre_bucket = -1
-        for i in doc_indexes:
+        for i in node_indexes:
             bucket = int(i / bucket_size)
             if bucket != pre_bucket:
                 if batch_ids:
                     batch_nodes = self.load_batch_from_part_file(batch_ids, bucket)
-                    index2nodes.update(zip(batch_ids, batch_nodes))
+                    self.doc_cache.update(zip(batch_ids, batch_nodes))
                     batch_ids = []
                 pre_bucket = bucket
             batch_ids.append(i)
 
         if batch_ids:
             batch_nodes = self.load_batch_from_part_file(batch_ids, bucket)
-            index2nodes.update(zip(batch_ids, batch_nodes))
+            self.doc_cache.update(zip(batch_ids, batch_nodes))
 
-        return [index2nodes[i] for i in doc_indexes]
+        return [self.doc_cache[i] for i in doc_indexes]
 
     def query(self, query_str: str, top_n: int = 5) -> List[NodeWithScore]:
         results = []
@@ -292,6 +293,7 @@ class PaiBm25Index:
 
         doc_scores = self.index_matrix.multiply(query_vec).sum(axis=1).getA1()
         doc_indexes = doc_scores.argsort()[::-1][:top_n]
+
         text_nodes = self.load_docs_with_index(doc_indexes)
         for i, node in enumerate(text_nodes):
             results.append(NodeWithScore(node=node, score=doc_scores[doc_indexes[i]]))

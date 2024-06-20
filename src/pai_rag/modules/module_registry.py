@@ -129,5 +129,8 @@ class ModuleRegistry:
             )
         return self._mod_instance_map[mod_name][instance_key]
 
+    def get_mod_instances(self, mod_name: str):
+        return self._mod_instance_map[mod_name]
+
 
 module_registry = ModuleRegistry()

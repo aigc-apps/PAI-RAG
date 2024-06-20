@@ -1,9 +1,12 @@
+import asyncio
 import click
 import uvicorn
-from pai_rag.app.app import create_app
+from fastapi import FastAPI
+from pai_rag.app.app import configure_app
 from logging.config import dictConfig
 import os
 from pathlib import Path
+from pai_rag.modules.index.index_daemon import index_daemon
 
 _BASE_DIR = Path(__file__).parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
@@ -49,17 +52,23 @@ def init_log():
     dictConfig(log_config)
 
 
-@click.group(invoke_without_command=True)
-@click.pass_context
-@click.option("-V", "--version", is_flag=True, help="Show version and exit.")
-def main(ctx, version):
-    if version:
-        click.echo(version)
-    elif ctx.invoked_subcommand is None:
-        click.echo(ctx.get_help())
+init_log()
+
+app = FastAPI()
+endpoint = os.getenv("PAI_RAG_URL", None)
+config_file = os.getenv("PAI_RAG_CONFIG_FILE", None) or DEFAULT_APPLICATION_CONFIG_FILE
+if endpoint:
+    # it's worker process
+    app = configure_app(app, config_file, endpoint)
 
 
-@main.command()
+@app.on_event("startup")
+async def service_tasks_startup():
+    """Start all the non-blocking service tasks, which run in the background."""
+    asyncio.create_task(index_daemon.refresh_async())
+
+
+@click.command()
 @click.option(
     "-h",
     "--host",
@@ -82,9 +91,22 @@ def main(ctx, version):
     help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
-def run(host, port, config):
-    init_log()
-
+@click.option(
+    "-w",
+    "--workers",
+    show_default=True,
+    help="Worker Number. Default: 1",
+    type=int,
+    default=1,
+)
+def run(host, port, config, workers):
     endpoint = f"http://{host}:{port}/"
-    app = create_app(config, endpoint)
-    uvicorn.run(app=app, host=host, port=port, loop="asyncio")
+    os.environ["PAI_RAG_URL"] = endpoint
+    os.environ["PAI_RAG_CONFIG_FILE"] = config
+
+    # Configure parent process
+    configure_app(app, config, endpoint)
+
+    uvicorn.run(
+        app="pai_rag.main:app", host=host, port=port, loop="asyncio", workers=workers
+    )

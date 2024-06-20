@@ -36,7 +36,7 @@ async def aquery_agent(query: LlmQuery) -> LlmResponse:
 
 @router.patch("/config")
 async def aupdate(new_config: Any = Body(None)):
-    rag_service.reload(new_config)
+    rag_service.reload(new_config, merge=True)
     return {"msg": "Update RAG configuration successfully."}
 
 

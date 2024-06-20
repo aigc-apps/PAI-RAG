@@ -15,10 +15,9 @@ def init_router(app: FastAPI):
     app.include_router(api_router, prefix="/service")
 
 
-def create_app(config_file: str, app_url: str):
+def configure_app(app: FastAPI, config_file: str, app_url: str):
     rag_service.initialize(config_file)
 
-    app = FastAPI()
     init_middleware(app)
     init_router(app)
 

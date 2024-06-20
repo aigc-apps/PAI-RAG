@@ -1,3 +1,5 @@
+import datetime
+import json
 import os
 from typing import Any, Dict
 import asyncio
@@ -118,11 +120,15 @@ class RagDataLoader:
             persist_dir=self.index.persist_path
         )
 
+        index_metadata_file = os.path.join(self.index.persist_path, "index.metadata")
         if self.bm25_index:
             self.bm25_index.add_docs(nodes)
+            metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+            with open(index_metadata_file, "w") as wf:
+                wf.write(metadata_str)
+
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
-
 
     nest_asyncio.apply()  # 应用嵌套补丁到事件循环
 

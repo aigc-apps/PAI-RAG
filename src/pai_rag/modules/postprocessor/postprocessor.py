@@ -54,7 +54,6 @@ class PostprocessorModule(ConfigurableModule):
                 f"[PostProcessor]: Reranker model used with top_n {top_n}, model {model_name}."
             )
             post_processors.append(
-                #MyBGEReranker(model=model, top_n=top_n, use_fp16=True),
                 FlagEmbeddingReranker(model=model, top_n=top_n, use_fp16=True),
             )
 

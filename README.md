@@ -32,8 +32,8 @@ poetry install
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8000), config(默认config/demo.yaml)
-pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
+# 启动，支持自定义host(默认0.0.0.0), port(默认8000), workers(worker number, default 1)，config(默认src/pai_rag/config/settings.toml)
+pai_rag [--host HOST] [--port PORT] [--workers 1] [--config CONFIG_FILE]
 ```
 
 现在你可以使用命令行向服务侧发送API请求，或者直接打开http://localhost:8000
