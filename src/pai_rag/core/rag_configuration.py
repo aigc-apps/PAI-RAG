@@ -42,4 +42,7 @@ class RagConfiguration:
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict(), merge=True)
 
     def get_config_mtime(self):
-        return os.path.getmtime(GENERATED_CONFIG_FILE_NAME)
+        try:
+            return os.path.getmtime(GENERATED_CONFIG_FILE_NAME)
+        except:
+            return -1
