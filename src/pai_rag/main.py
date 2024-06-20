@@ -68,7 +68,17 @@ async def service_tasks_startup():
     asyncio.create_task(index_daemon.refresh_async())
 
 
-@click.command()
+@click.group(invoke_without_command=True)
+@click.pass_context
+@click.option("-V", "--version", is_flag=True, help="Show version and exit.")
+def main(ctx, version):
+    if version:
+        click.echo(version)
+    elif ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@main.command()
 @click.option(
     "-h",
     "--host",

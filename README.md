@@ -33,7 +33,7 @@ poetry install
 
 ```bash
 # 启动，支持自定义host(默认0.0.0.0), port(默认8000), workers(worker number, default 1)，config(默认src/pai_rag/config/settings.toml)
-pai_rag [--host HOST] [--port PORT] [--workers 1] [--config CONFIG_FILE]
+pai_rag run [--host HOST] [--port PORT] [--workers 1] [--config CONFIG_FILE]
 ```
 
 现在你可以使用命令行向服务侧发送API请求，或者直接打开http://localhost:8000
