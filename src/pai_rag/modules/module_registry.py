@@ -22,6 +22,7 @@ MODULE_CONFIG_KEY_MAP = {
     "DataLoaderModule": "data_loader",
     "OssCacheModule": "cache",
     "EvaluationModule": "evaluation",
+    "BM25IndexModule": "bm25",
 }
 
 
