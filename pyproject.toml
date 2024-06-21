@@ -73,6 +73,7 @@ xlrd = "^2.0.1"
 markdown = "^3.6"
 chardet = "^5.2.0"
 locust = "^2.29.0"
+gunicorn = "^22.0.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
