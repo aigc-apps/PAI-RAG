@@ -1,6 +1,7 @@
 
 import os 
 import pytest
+from typing import List
 from llama_index.core.schema import TextNode
 from elasticsearch import Elasticsearch 
 from llama_index.core.vector_stores.types import (
@@ -108,14 +109,14 @@ def test_es_store_add_query(es_store: MyElasticsearchStore):
     nodes = [node1, node2]
 
     res_add = es_cloud.add(nodes)
-    assert type(res_add) == list
+    assert isinstance(res_add, List) == True
 
     vsq = VectorStoreQuery(query_embedding=[0.15]*1536, query_str='健康码是什么')
     res_query = es_cloud.query(vsq)
 
     es_cloud.close()
     
-    assert type(res_query) == VectorStoreQueryResult
+    assert isinstance(res_query, VectorStoreQueryResult) == True
     assert res_query.nodes[0].text == text1
 
 
