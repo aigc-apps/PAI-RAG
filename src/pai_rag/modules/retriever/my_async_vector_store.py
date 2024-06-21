@@ -66,7 +66,7 @@ class AsyncVectorStore:
             Used for usage tracking in Elastic Cloud.
         :param index: The name of the index to query.
         :param retrieval_strategy: how to index and search the data. See the strategies
-            module for availble strategies.
+            module for available strategies.
         :param text_field: Name of the field with the textual data.
         :param vector_field: For strategies that perform embedding inference in Python,
             the embedding vector goes in this field.
