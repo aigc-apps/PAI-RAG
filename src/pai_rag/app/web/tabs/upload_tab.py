@@ -3,17 +3,13 @@ from typing import Dict, Any
 import gradio as gr
 import time
 from pai_rag.app.web.rag_client import rag_client
-from pai_rag.app.web.view_model import view_model
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 import asyncio
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
-    view_model.chunk_size = chunk_size
-    view_model.chunk_overlap = chunk_overlap
-    new_config = view_model.to_app_config()
-    rag_client.reload_config(new_config)
+    rag_client.patch_config({"chunk_size": chunk_size, "chunk_overlap": chunk_overlap})
 
     if not upload_files:
         yield [

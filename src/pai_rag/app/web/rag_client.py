@@ -1,12 +1,10 @@
 import json
-
 from typing import Any
 import requests
 import html
 import markdown
 import httpx
-
-cache_config = None
+from pai_rag.app.web.view_model import ViewModel
 
 
 class dotdict(dict):
@@ -103,18 +101,22 @@ class RagWebClient:
             response = dotdict(json.loads(r.text))
             return response
 
-    def reload_config(self, config: Any):
-        global cache_config
+    def patch_config(self, update_dict: Any):
+        config = self.get_config()
+        view_model: ViewModel = ViewModel.from_app_config(config)
+        view_model.update(update_dict)
+        new_config = view_model.to_app_config()
 
-        if cache_config == config:
-            return
-
-        r = requests.patch(self.config_url, json=config)
+        r = requests.patch(self.config_url, json=new_config)
         r.raise_for_status()
-        print(r.text)
-        cache_config = config
-
         return
+
+    def get_config(self):
+        r = requests.get(self.config_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        print(response)
+        return response
 
 
 rag_client = RagWebClient()

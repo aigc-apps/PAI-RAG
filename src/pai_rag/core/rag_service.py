@@ -10,7 +10,6 @@ from pai_rag.app.api.models import (
     RagResponse,
     LlmResponse,
 )
-from pai_rag.app.web.view_model import view_model
 from openinference.instrumentation import using_attributes
 from typing import Any
 import logging
@@ -47,32 +46,40 @@ class RagService:
         self.config_dict_value = self.rag_configuration.get_value().to_dict()
         self.config_modified_time = self.rag_configuration.get_config_mtime()
 
-        view_model.sync_app_config(self.rag_configuration.get_value())
+        self.rag_configuration.persist()
+
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())
 
         if os.path.exists(TASK_STATUS_FILE):
             open(TASK_STATUS_FILE, "w").close()
 
-    def reload(self, new_config: Any, merge=False):
-        if merge:
-            self.rag_configuration.update(new_config)
-        new_dict_value = self.rag_configuration.get_value().to_dict()
+    def get_config(self):
+        self.check_updates()
+        return self.config_dict_value
+
+    def reload(self, new_config: Any = None):
+        rag_snapshot = RagConfiguration.from_snapshot()
+        if new_config:
+            # 多worker模式，读取最新的setting
+            rag_snapshot.update(new_config)
+        config_snapshot = rag_snapshot.get_value()
+
+        new_dict_value = config_snapshot.to_dict()
         if self.config_dict_value != new_dict_value:
-            print("Config changed, reload")
-            self.rag.reload(self.rag_configuration.get_value())
+            logger.debug("Config changed, reload")
+            self.rag.reload(config_snapshot)
             self.config_dict_value = new_dict_value
+            self.rag_configuration = rag_snapshot
             self.rag_configuration.persist()
         else:
-            print("Config not changed, not reload")
+            logger.debug("Config not changed, not reload")
 
     def check_updates(self):
         logger.info("Checking updates")
         new_modified_time = self.rag_configuration.get_config_mtime()
         if self.config_modified_time != new_modified_time:
-            self.rag_configuration = RagConfiguration.from_file(self.config_file)
-            self.reload(self.rag_configuration.get_value())
-            view_model.sync_app_config(self.rag_configuration.get_value())
+            self.reload()
             self.config_modified_time = new_modified_time
         else:
             logger.info("No updates")

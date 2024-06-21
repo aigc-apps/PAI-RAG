@@ -1,17 +1,20 @@
 import asyncio
+from contextlib import asynccontextmanager
 import click
 import uvicorn
 from fastapi import FastAPI
-from pai_rag.app.app import configure_app
+from pai_rag.app.api.service import configure_app
+from pai_rag.app.web.webui import configure_webapp
 from logging.config import dictConfig
 import os
 from pathlib import Path
-from pai_rag.modules.index.index_daemon import index_daemon
 
 _BASE_DIR = Path(__file__).parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
+DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
+DEFAULT_GRADIO_PORT = 8066
 
 
 def init_log():
@@ -52,18 +55,29 @@ def init_log():
     dictConfig(log_config)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the ML model
+    from pai_rag.modules.index.index_daemon import index_daemon
+
+    """Start all the non-blocking service tasks, which run in the background."""
+    asyncio.create_task(index_daemon.refresh_async())
+    yield
+
+
 init_log()
 
 app = FastAPI()
-endpoint = os.getenv("PAI_RAG_URL", None)
-config_file = os.getenv("PAI_RAG_CONFIG_FILE", None) or DEFAULT_APPLICATION_CONFIG_FILE
-if endpoint:
-    # it's worker process
-    app = configure_app(app, config_file, endpoint)
+
+is_gunicorn = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
+if is_gunicorn:
+    app = FastAPI(lifespan=lifespan)
+    configure_app(app, DEFAULT_APPLICATION_CONFIG_FILE)
 
 
-@app.on_event("startup")
 async def service_tasks_startup():
+    from pai_rag.modules.index.index_daemon import index_daemon
+
     """Start all the non-blocking service tasks, which run in the background."""
     asyncio.create_task(index_daemon.refresh_async())
 
@@ -76,6 +90,34 @@ def main(ctx, version):
         click.echo(version)
     elif ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+
+
+@main.command()
+@click.option(
+    "-h",
+    "--host",
+    show_default=True,
+    help=f"WebApp Host IP. Default: {DEFAULT_HOST}",
+    default=DEFAULT_HOST,
+)
+@click.option(
+    "-p",
+    "--port",
+    show_default=True,
+    type=int,
+    help=f"WebApp Port. Default: {DEFAULT_GRADIO_PORT}",
+    default=DEFAULT_GRADIO_PORT,
+)
+@click.option(
+    "-c",
+    "--rag-url",
+    show_default=True,
+    help=f"PAI-RAG service endpoint. Default: {DEFAULT_RAG_URL}",
+    default=DEFAULT_RAG_URL,
+)
+def ui(host, port, rag_url):
+    configure_webapp(app=app, web_url=f"http://{host}:{port}/", rag_url=rag_url)
+    uvicorn.run(app, host=host, port=port, loop="asyncio")
 
 
 @main.command()
@@ -96,7 +138,7 @@ def main(ctx, version):
 )
 @click.option(
     "-c",
-    "--config",
+    "--config-file",
     show_default=True,
     help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
     default=DEFAULT_APPLICATION_CONFIG_FILE,
@@ -109,11 +151,7 @@ def main(ctx, version):
     type=int,
     default=1,
 )
-def run(host, port, config, workers):
-    endpoint = f"http://{host}:{port}/"
-    os.environ["PAI_RAG_URL"] = endpoint
-    os.environ["PAI_RAG_CONFIG_FILE"] = config
-
-    uvicorn.run(
-        app="pai_rag.main:app", host=host, port=port, loop="asyncio", workers=workers
-    )
+def serve(host, port, config_file, workers):
+    app = FastAPI(lifespan=lifespan)
+    configure_app(app, config_file=config_file)
+    uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
