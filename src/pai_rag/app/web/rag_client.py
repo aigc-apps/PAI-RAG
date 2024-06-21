@@ -52,6 +52,14 @@ class RagWebClient:
     def get_evaluate_generate_url(self):
         return f"{self.endpoint}service/evaluate/generate"
 
+    @property
+    def get_evaluate_retrieval_url(self):
+        return f"{self.endpoint}service/evaluate/retrieval"
+
+    @property
+    def get_evaluate_response_url(self):
+        return f"{self.endpoint}service/evaluate/response"
+
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
         r = requests.post(self.query_url, json=q)
@@ -120,10 +128,25 @@ class RagWebClient:
 
         return
 
-    def evaluate_for_generate_qa(self):
-        r = requests.post(self.get_evaluate_generate_url)
+    def evaluate_for_generate_qa(self, overwrite):
+        r = requests.post(
+            self.get_evaluate_generate_url, params={"overwrite": overwrite}
+        )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        return response
+
+    def evaluate_for_retrieval_stage(self):
+        r = requests.post(self.get_evaluate_retrieval_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def evaluate_for_response_stage(self):
+        r = requests.post(self.get_evaluate_response_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        print("evaluate_for_response_stage response", response)
         return response
 
 

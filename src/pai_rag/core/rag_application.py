@@ -167,7 +167,7 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def aload_evaluation_qa_dataset(self):
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         vector_store_type = (
             self.config.get("index").get("vector_store").get("type", None)
         )
@@ -175,12 +175,12 @@ class RagApplication:
             evaluation = module_registry.get_module_with_config(
                 "EvaluationModule", self.config
             )
-            qa_dataset = await evaluation.aload_question_answer_pairs_json()
+            qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
             return qa_dataset
         else:
             return f"Not support for vector store —— {vector_store_type}"
 
-    async def aevaluate_retrieval_and_response(self, type):
+    async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
         vector_store_type = (
             self.config.get("index").get("vector_store").get("type", None)
         )
@@ -189,7 +189,7 @@ class RagApplication:
                 "EvaluationModule", self.config
             )
             df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
-                type=type, workers=4
+                type=type, workers=4, overwrite=overwrite
             )
 
             return df, eval_res_avg

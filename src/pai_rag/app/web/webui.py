@@ -44,7 +44,8 @@ def create_ui():
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
         with gr.Tab("\N{rocket} Evaluation"):
-            _ = create_evaluation_tab()
+            eval_elements = create_evaluation_tab()
+            elem_manager.add_elems(eval_elements)
 
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None

@@ -48,18 +48,21 @@ class PaiEvaluator:
 
         logger.info("PaiEvaluator initialized.")
 
-    async def aload_question_answer_pairs_json(self):
+    async def aload_question_answer_pairs_json(self, overwrite: bool = False):
         file_exists = os.path.exists(self.dataset_path)
-        if file_exists:
+        if file_exists and not overwrite:
             logging.info(
-                f"[Evaluation] qa_dataset '{self.dataset_path}' already exists."
+                f"[Evaluation] qa_dataset '{self.dataset_path}' already exists, do not need to regenerate and overwrite."
             )
         else:
-            logging.info(f"[Evaluation] qa_dataset '{self.dataset_path}' generating...")
+            logging.info(
+                f"[Evaluation] qa_dataset '{self.dataset_path}' (re)generating and overwriting..."
+            )
             directory = os.path.dirname(self.dataset_path)
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
             await self.acustomized_generate_qas()
+
         logging.info(
             f"[Evaluation] loading generated qa_dataset from path {self.dataset_path}. "
         )
@@ -68,7 +71,7 @@ class PaiEvaluator:
         return qa_dataset
 
     async def acustomized_generate_qas(self):
-        docs = self.index._docstore.docs
+        docs = self.index.vector_index._docstore.docs
         nodes = list(docs.values())
         pipeline = GenerateDatasetPipeline(llm=self.llm, nodes=nodes)
         qas = await pipeline.agenerate_dataset()
@@ -79,9 +82,10 @@ class PaiEvaluator:
         type: Optional[str] = "all",
         workers: Optional[int] = 2,
         output_path: Optional[str] = None,
+        overwrite: bool = False,
     ):
         # generate or load qa_dataset
-        qas = await self.aload_question_answer_pairs_json()
+        qas = await self.aload_question_answer_pairs_json(overwrite)
         data = {
             "query": [t["query"] for t in qas["examples"]],
             "reference_contexts": [t["reference_contexts"] for t in qas["examples"]],

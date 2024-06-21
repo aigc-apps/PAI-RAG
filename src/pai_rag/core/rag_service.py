@@ -81,11 +81,13 @@ class RagService:
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         return await self.rag.aquery_agent(query)
 
-    async def aload_evaluation_qa_dataset(self):
-        return await self.rag.aload_evaluation_qa_dataset()
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        return await self.rag.aload_evaluation_qa_dataset(overwrite)
 
-    async def aevaluate_retrieval_and_response(self, type):
-        return await self.rag.aevaluate_retrieval_and_response(type)
+    async def aevaluate_retrieval_and_response(
+        self, type: str = "all", overwrite: bool = False
+    ):
+        return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
 
 
 rag_service = RagService()

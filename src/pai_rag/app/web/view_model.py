@@ -8,6 +8,9 @@ from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
     PROMPT_MAP,
 )
+import pandas as pd
+import os
+from datetime import datetime
 
 
 def recursive_dict():
@@ -314,6 +317,61 @@ class ViewModel(BaseModel):
 
         return _transform_to_dict(config)
 
+    def get_local_evaluation_result_file(self, type):
+        DEFALUT_EVAL_PATH = "localdata/evaluation"
+        output_path = os.path.join(DEFALUT_EVAL_PATH, f"batch_eval_results_{type}.xlsx")
+        if type == "retrieval":
+            if os.path.exists(output_path):
+                modification_time = os.path.getmtime(output_path)
+                formatted_time = datetime.fromtimestamp(modification_time).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                df = pd.read_excel(output_path)
+                retrieval_pd_results = {
+                    "Metrics": ["HitRate", "MRR", "LastModified"],
+                    "Value": [df["hit_rate"].mean(), df["mrr"].mean(), formatted_time],
+                }
+            else:
+                retrieval_pd_results = {
+                    "Metrics": ["HitRate", "MRR", "LastModified"],
+                    "Value": [None, None, None],
+                }
+            return pd.DataFrame(retrieval_pd_results)
+        elif type == "response":
+            if os.path.exists(output_path):
+                modification_time = os.path.getmtime(output_path)
+                formatted_time = datetime.fromtimestamp(modification_time).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                df = pd.read_excel(output_path)
+                response_pd_results = {
+                    "Metrics": [
+                        "Faithfulness",
+                        "Correctness",
+                        "SemanticSimilarity",
+                        "LastModified",
+                    ],
+                    "Value": [
+                        df["faithfulness_score"].mean(),
+                        df["correctness_score"].mean(),
+                        df["semantic_similarity_score"].mean(),
+                        formatted_time,
+                    ],
+                }
+            else:
+                response_pd_results = {
+                    "Metrics": [
+                        "Faithfulness",
+                        "Correctness",
+                        "SemanticSimilarity",
+                        "LastModified",
+                    ],
+                    "Value": [None, None, None, None],
+                }
+            return pd.DataFrame(response_pd_results)
+        else:
+            raise ValueError(f"Not supported the evaluation type {type}")
+
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
         settings["embed_source"] = {"value": self.embed_source}
@@ -384,6 +442,14 @@ class ViewModel(BaseModel):
 
         # faiss
         settings["faiss_path"] = {"value": self.faiss_path}
+
+        # evaluation
+        settings["eval_retrieval_res"] = {
+            "value": self.get_local_evaluation_result_file(type="retrieval")
+        }
+        settings["eval_response_res"] = {
+            "value": self.get_local_evaluation_result_file(type="response")
+        }
 
         return settings
 
