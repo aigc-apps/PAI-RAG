@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-from dataclasses import dataclass
 
 
 def get_store_persist_directory_name(storage_config, ndims):
@@ -61,11 +60,3 @@ def read_chat_store_state(persist_dir, file_path):
             return json.load(file)
     except Exception:
         return None  # 如果文件不存在/json不合法，则返回None
-
-
-@dataclass
-class StorePath:
-    persist_path: str = "./store"  # 知识库数据保存地址
-
-
-store_path = StorePath()
