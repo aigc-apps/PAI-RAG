@@ -21,6 +21,7 @@ MODULE_CONFIG_KEY_MAP = {
     "ToolModule": "tool",
     "DataLoaderModule": "data_loader",
     "OssCacheModule": "cache",
+    "BM25IndexModule": "bm25",
 }
 
 
