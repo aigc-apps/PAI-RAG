@@ -4,13 +4,15 @@
 
 ## Get Started
 
-### Step1: Clone Repo
+### 本地启动
+
+#### Step1: Clone Repo
 
 ```bash
 git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
 
-### Step2: 配置环境
+#### Step2: 配置环境
 
 本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
 
@@ -26,14 +28,22 @@ pip install poetry
 poetry install
 ```
 
-### Step3: 启动程序
+#### Step3：加载数据
+
+向当前索引存储中插入directory_path目录下的新文件
+
+```bash
+load_data -c src/pai_rag/config/settings.yaml -d directory_path
+```
+
+#### Step4: 启动程序
 
 使用OpenAI API，需要在命令行引入环境变量 export OPENAI_API_KEY=""
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8000), workers(worker number, default 1)，config(默认src/pai_rag/config/settings.toml)
-pai_rag run [--host HOST] [--port PORT] [--workers 1] [--config CONFIG_FILE]
+# 启动，支持自定义host(默认0.0.0.0), port(默认8000), config(默认src/pai_rag/config/settings.yaml)
+pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
 ```
 
 现在你可以使用命令行向服务侧发送API请求，或者直接打开http://localhost:8000
