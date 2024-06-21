@@ -38,10 +38,14 @@ response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctn
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
 
+# llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
+# eg.
+# source = "PaiEas"
+# endpoint = ""
+# token = ""
 [rag.llm]
-source = "PaiEas"
-endpoint = ""
-token = ""
+source = "DashScope"
+name = "qwen-turbo"
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
