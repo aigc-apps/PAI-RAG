@@ -102,19 +102,22 @@ def es_store():
 
 def test_es_store_add_query(es_store: MyElasticsearchStore):
     es_cloud = es_store
-    text = '健康码是疫情期间的一种发明'
-    nodes = [TextNode(text=text, embedding=[0.1]*1536)]
-    
+    text1 = '健康码是疫情期间的一种发明'
+    text2 = '健康非常重要'
+    node1 = TextNode(text=text1, embedding=[0.1]*1536, id_='n1')
+    node2 = TextNode(text=text2, embedding=[0.2]*1536, id_='n2')
+    nodes = [node1, node2]
+
     res_add = es_cloud.add(nodes)
     assert type(res_add) == list
 
-    vsq = VectorStoreQuery(query_embedding=[0.2]*1536, query_str='健康码')
+    vsq = VectorStoreQuery(query_embedding=[0.15]*1536, query_str='健康码是什么')
     res_query = es_cloud.query(vsq)
 
     es_cloud.close()
     
     assert type(res_query) == VectorStoreQueryResult
-    assert res_query.nodes[0].text == text
+    assert res_query.nodes[0].text == text1
 
 
     
