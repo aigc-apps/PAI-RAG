@@ -11,6 +11,9 @@ from llama_index.core.vector_stores.types import (
 from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStore
 
 
+
+
+
 @pytest.fixture()
 def es_connection():
     es = None
@@ -29,7 +32,7 @@ def es_connection():
         print('es_server not connected')
     return es
 
-
+@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
 def test_es_analyzer(es_connection: Elasticsearch):
     """
     index: es_test1 uses the default tokenizer (standard)
@@ -55,6 +58,7 @@ def test_es_analyzer(es_connection: Elasticsearch):
     assert len(res2['tokens']) ==4
 
 
+@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
 def test_es_search(es_connection: Elasticsearch):
     es = es_connection
     query_match_text = "一键助眠"
@@ -99,7 +103,7 @@ def es_store():
 
     return es_cloud
 
-
+@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
 def test_es_store_add_query(es_store: MyElasticsearchStore):
     es_cloud = es_store
     text1 = '健康码是疫情期间的一种发明'
