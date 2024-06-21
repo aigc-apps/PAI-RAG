@@ -99,6 +99,7 @@ def es_store():
 
     return es_cloud
 
+
 def test_es_store_add_query(es_store: MyElasticsearchStore):
     es_cloud = es_store
     text = '健康码是疫情期间的一种发明'
