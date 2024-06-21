@@ -1,7 +1,6 @@
 
 import os 
 import pytest
-
 from llama_index.core.schema import TextNode
 from elasticsearch import Elasticsearch 
 from llama_index.core.vector_stores.types import (
