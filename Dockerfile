@@ -13,6 +13,9 @@ COPY . .
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.10-slim AS prod
+
+RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
+
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
 
