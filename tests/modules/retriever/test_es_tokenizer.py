@@ -32,7 +32,7 @@ def es_connection():
         print('es_server not connected')
     return es
 
-@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
+@pytest.mark.skipif(os.getenv('es_username') is None, reason='no username')
 def test_es_analyzer(es_connection: Elasticsearch):
     """
     index: es_test1 uses the default tokenizer (standard)
@@ -58,7 +58,7 @@ def test_es_analyzer(es_connection: Elasticsearch):
     assert len(res2['tokens']) ==4
 
 
-@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
+@pytest.mark.skipif(os.getenv('es_username') is None, reason='no username')
 def test_es_search(es_connection: Elasticsearch):
     es = es_connection
     query_match_text = "一键助眠"
@@ -103,7 +103,7 @@ def es_store():
 
     return es_cloud
 
-@pytest.mark.skipif(os.getenv('es_username')==None, reason='no username')
+@pytest.mark.skipif(os.getenv('es_username') is None, reason='no username')
 def test_es_store_add_query(es_store: MyElasticsearchStore):
     es_cloud = es_store
     text1 = '健康码是疫情期间的一种发明'
@@ -113,14 +113,14 @@ def test_es_store_add_query(es_store: MyElasticsearchStore):
     nodes = [node1, node2]
 
     res_add = es_cloud.add(nodes)
-    assert isinstance(res_add, List) == True
+    assert isinstance(res_add, List) is True
 
     vsq = VectorStoreQuery(query_embedding=[0.15]*1536, query_str='健康码是什么')
     res_query = es_cloud.query(vsq)
 
     es_cloud.close()
     
-    assert isinstance(res_query, VectorStoreQueryResult) == True
+    assert isinstance(res_query, VectorStoreQueryResult) is True
     assert res_query.nodes[0].text == text1
 
 
