@@ -19,7 +19,6 @@ from llama_index.core.vector_stores.utils import (
     metadata_dict_to_node,
     node_to_metadata_dict,
 )
-# from elasticsearch.helpers.vectorstore import AsyncVectorStore
 from pai_rag.modules.retriever.my_async_vector_store import AsyncVectorStore
 from elasticsearch.helpers.vectorstore import (
     AsyncBM25Strategy,
