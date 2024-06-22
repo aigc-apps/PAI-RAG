@@ -12,9 +12,9 @@ from pathlib import Path
 _BASE_DIR = Path(__file__).parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
 DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
-DEFAULT_GRADIO_PORT = 8066
+DEFAULT_GRADIO_PORT = 8002
 
 
 def init_log():

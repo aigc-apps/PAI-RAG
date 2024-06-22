@@ -13,7 +13,7 @@ from pai_rag.app.web.ui_constants import (
 
 import logging
 
-DEFAULT_LOCAL_URL = "http://localhost:8000/"
+DEFAULT_LOCAL_URL = "http://localhost:8001/"
 logger = logging.getLogger("WebUILogger")
 
 
@@ -57,6 +57,7 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
     rag_client.set_endpoint(rag_url)
     home = make_homepage()
     home.queue(concurrency_count=1, max_size=64)
-    # home._queue.set_url(rag_app_url)
-    gr.mount_gradio_app(app, home, "", gradio_api_url=web_url)
+    home._queue.set_url(web_url)
+    print(web_url)
+    gr.mount_gradio_app(app, home, path="")
     return home
