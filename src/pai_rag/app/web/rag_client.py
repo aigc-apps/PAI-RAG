@@ -40,7 +40,7 @@ class RagWebClient:
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/upload_data"
+        return f"{self.endpoint}service/upload_local_data"
 
     @property
     def get_load_state_url(self):
@@ -87,9 +87,17 @@ class RagWebClient:
         response["answer"] = formatted_text
         return response
 
-    def add_knowledge(self, file_dir: str, enable_qa_extraction: bool):
-        q = dict(file_path=file_dir, enable_qa_extraction=enable_qa_extraction)
-        r = requests.post(self.load_data_url, json=q)
+    def add_knowledge(self, file_name: str, enable_qa_extraction: bool):
+        with open(file_name, "rb") as f:
+            # maybe we can upload multiple files in the future
+            files = {"file": f}
+            headers = {"content-type": "multipart/form-data"}
+
+            r = requests.post(
+                self.load_data_url,
+                files=files,
+                headers=headers,
+            )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         return response
