@@ -98,7 +98,7 @@ async def batch_evaluate():
 @router.post("/upload_local_data")
 async def upload_local_data(
     file: UploadFile = File(),
-    faiss_path: str = Form(),
+    faiss_path: str = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex

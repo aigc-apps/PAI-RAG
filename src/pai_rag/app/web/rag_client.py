@@ -4,6 +4,8 @@ import requests
 import html
 import markdown
 import httpx
+import os
+import mimetypes
 from pai_rag.app.web.view_model import ViewModel
 
 
@@ -88,15 +90,17 @@ class RagWebClient:
         return response
 
     def add_knowledge(self, file_name: str, enable_qa_extraction: bool):
-        with open(file_name, "rb") as f:
+        with open(file_name, "rb") as file_obj:
+            mimetype = mimetypes.guess_type(file_name)[0]
             # maybe we can upload multiple files in the future
-            files = {"file": f}
-            headers = {"content-type": "multipart/form-data"}
+            files = {"file": (os.path.basename(file_name), file_obj, mimetype)}
+            print(files)
+            # headers = {"content-type": "multipart/form-data"}
 
             r = requests.post(
                 self.load_data_url,
                 files=files,
-                headers=headers,
+                # headers=headers,
             )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
