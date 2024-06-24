@@ -38,10 +38,12 @@ def test_es_analyzer(es_connection: Elasticsearch):
     text = "健康码和一键助眠的功能"
 
     res1 = es.indices.analyze(index="es_test1", body={"text": text})
-    assert len(res1["tokens"]) == len(text)
+    res1_token = [i["token"] for i in res1["tokens"]]
+    assert res1_token == ["健", "康", "码", "和", "一", "键", "助", "眠", "的", "功", "能"]
 
     res2 = es.indices.analyze(index="es_test2", body={"text": text})
-    assert len(res2["tokens"]) == 4
+    res2_token = [i["token"] for i in res2["tokens"]]
+    assert res2_token == ["健康码", "和", "一键助眠", "功能"]
 
 
 @pytest.mark.skipif(os.getenv("es_username") is None, reason="no username")
@@ -63,12 +65,14 @@ def test_es_search(es_connection: Elasticsearch):
 @pytest.fixture()
 def es_store():
     index_name = "py_test"
+    es_host = os.getenv("es_host")
+    es_port = "9200"
     es_user = os.getenv("es_username")
     es_password = os.getenv("es_password")
 
     es_cloud = MyElasticsearchStore(
         index_name=index_name,
-        es_url="http://es-cn-lsk3ru2kt000314iw.public.elasticsearch.aliyuncs.com:9200",
+        es_url=f"http://{es_host}:{es_port}",
         es_user=es_user,
         es_password=es_password,
     )
