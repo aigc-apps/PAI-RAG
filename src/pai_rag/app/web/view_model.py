@@ -11,6 +11,8 @@ from pai_rag.app.web.ui_constants import (
 import pandas as pd
 import os
 from datetime import datetime
+import tempfile
+import json
 
 
 def recursive_dict():
@@ -317,6 +319,20 @@ class ViewModel(BaseModel):
 
         return _transform_to_dict(config)
 
+    def get_local_generated_qa_file(self):
+        DEFALUT_EVAL_PATH = "localdata/evaluation"
+        qa_dataset_path = os.path.join(DEFALUT_EVAL_PATH, "qa_dataset.json")
+        if os.path.exists(qa_dataset_path):
+            tmpdir = tempfile.mkdtemp()
+            with open(qa_dataset_path, "r", encoding="utf-8") as file:
+                qa_content = json.load(file)
+            outputPath = os.path.join(tmpdir, "qa_dataset.json")
+            with open(outputPath, "w", encoding="utf-8") as f:
+                json.dump(qa_content, f, ensure_ascii=False, indent=4)
+            return outputPath, qa_content["examples"][0:5]
+        else:
+            return None, None
+
     def get_local_evaluation_result_file(self, type):
         DEFALUT_EVAL_PATH = "localdata/evaluation"
         output_path = os.path.join(DEFALUT_EVAL_PATH, f"batch_eval_results_{type}.xlsx")
@@ -444,12 +460,16 @@ class ViewModel(BaseModel):
         settings["faiss_path"] = {"value": self.faiss_path}
 
         # evaluation
-        settings["eval_retrieval_res"] = {
-            "value": self.get_local_evaluation_result_file(type="retrieval")
-        }
-        settings["eval_response_res"] = {
-            "value": self.get_local_evaluation_result_file(type="response")
-        }
+        if self.vectordb_type == "FAISS":
+            qa_dataset_path, qa_dataset_res = self.get_local_generated_qa_file()
+            settings["qa_dataset_file"] = {"value": qa_dataset_path}
+            settings["qa_dataset_json_text"] = {"value": qa_dataset_res}
+            settings["eval_retrieval_res"] = {
+                "value": self.get_local_evaluation_result_file(type="retrieval")
+            }
+            settings["eval_response_res"] = {
+                "value": self.get_local_evaluation_result_file(type="response")
+            }
 
         return settings
 

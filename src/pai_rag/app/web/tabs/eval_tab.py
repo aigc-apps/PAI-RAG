@@ -14,8 +14,7 @@ def generate_and_download_qa_file(overwrite):
     outputPath = os.path.join(tmpdir, "qa_dataset_output.json")
     with open(outputPath, "w", encoding="utf-8") as f:
         json.dump(qa_content, f, ensure_ascii=False, indent=4)
-
-    return outputPath
+    return outputPath, qa_content["result"]["examples"][0:5]
 
 
 def eval_retrieval_stage():
@@ -50,25 +49,35 @@ def eval_response_stage():
 def create_evaluation_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
-            generate_btn = gr.Button("Generate QA Dataset", variant="primary")
+            generate_btn = gr.Button(
+                "Generate QA Dataset", variant="primary", elem_id="generate_btn"
+            )
             overwrite_qa = gr.Checkbox(
                 label="Overwrite QA (If the index has changed, regenerate and overwrite the existing QA dataset.)",
                 elem_id="overwrite_qa",
                 value=False,
             )
             qa_dataset_file = gr.components.File(
-                label="\N{rocket} QA Dadaset Results",
+                label="QA Dadaset Results",
                 elem_id="qa_dataset_file",
             )
+            qa_dataset_json_text = gr.JSON(
+                label="Displaying QA Dataset Results: Only the first 5 records are shown here. For a complete view, please download the file.",
+                scale=1,
+                elem_id="qa_dataset_json_text",
+            )
+
             generate_btn.click(
                 fn=generate_and_download_qa_file,
                 inputs=overwrite_qa,
-                outputs=qa_dataset_file,
+                outputs=[qa_dataset_file, qa_dataset_json_text],
             )
 
         with gr.Column(scale=2):
             eval_retrieval_btn = gr.Button(
-                "Evaluate Retrieval Stage", variant="primary"
+                "Evaluate Retrieval Stage",
+                variant="primary",
+                elem_id="eval_retrieval_btn",
             )
             eval_retrieval_res = gr.DataFrame(
                 label="\N{rocket} Evaluation Resultes for Retrieval ",
@@ -78,7 +87,11 @@ def create_evaluation_tab() -> Dict[str, Any]:
                 fn=eval_retrieval_stage, outputs=eval_retrieval_res
             )
 
-            eval_response_btn = gr.Button("Evaluate Response Stage", variant="primary")
+            eval_response_btn = gr.Button(
+                "Evaluate Response Stage",
+                variant="primary",
+                elem_id="eval_response_btn",
+            )
             eval_response_res = gr.DataFrame(
                 label="\N{rocket} Evaluation Resultes for Response ",
                 elem_id="eval_response_res",
@@ -86,7 +99,8 @@ def create_evaluation_tab() -> Dict[str, Any]:
             eval_response_btn.click(fn=eval_response_stage, outputs=eval_response_res)
 
         return {
-            # qa_dataset_file.elem_id: qa_dataset_file,
+            qa_dataset_file.elem_id: qa_dataset_file,
+            qa_dataset_json_text.elem_id: qa_dataset_json_text,
             eval_retrieval_res.elem_id: eval_retrieval_res,
             eval_response_res.elem_id: eval_response_res,
         }
