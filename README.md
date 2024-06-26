@@ -42,8 +42,8 @@ load_data -c src/pai_rag/config/settings.yaml -d directory_path
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml)
-pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+# 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable_example（默认False)
+pai_rag serve [--host HOST] [--port PORT] [--config-file CONFIG_FILE] [--enable-example ENABLE_EXAMPLE]
 ```
 
 你可以使用命令行向服务侧发送API请求。比如调用[Upload API](#upload-api)上传知识库文件。
@@ -178,7 +178,9 @@ pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
 1. 向当前索引存储中插入新文件
 
 ```bash
-load_data -d directory_path
+# -t(Required): Type flag to indicate the input is a directory (d) or a file (f)
+# -p(Required): 文件夹或者文件路径。当-t为d时，paths填单个文件夹路径; 当-t为f时: 1. paths支持单个file_path. 2. 支持多个files_path，中间用','隔开 3. 支持指定目录下，某些后缀的文件(例如*.md)
+load_data -t d/f -p paths
 ```
 
 2. 生成QA评估测试集和效果评估
