@@ -12,7 +12,7 @@
 git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
 
-#### Step2: 配置环境
+#### Step2: Develop Environment Settings
 
 本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
 
@@ -21,10 +21,41 @@ conda create -n rag_env python==3.10
 conda activate rag_env
 ```
 
-使用poetry安装项目依赖包
+##### (1) CPU环境
+
+直接使用poetry安装项目依赖包：
 
 ```bash
 pip install poetry
+poetry install
+```
+
+##### (2) GPU环境
+
+首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
+
+```bash
+mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+pip install poetry
+poetry install
+```
+
+##### 注意：网络超时问题
+
+注：在安装过程中，若遇到网络连接超时的情况，可以添加阿里云或清华的镜像源，在 pyprojetc.toml 文件末尾追加以下几行：
+
+```bash
+[[tool.poetry.source]]
+name = "mirrors"
+url = "http://mirrors.aliyun.com/pypi/simple/" # 阿里云
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple/" # 清华
+priority = "default"
+```
+
+之后，再依次执行以下命令：
+
+```bash
+poetry lock
 poetry install
 ```
 

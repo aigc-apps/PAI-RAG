@@ -73,5 +73,10 @@ load_data = "pai_rag.data.rag_datapipeline:run"
 load_easyocr_model = "pai_rag.utils.download_easyocr_models:download_easyocr_models"
 evaluation = "pai_rag.evaluations.batch_evaluator:run"
 
+[[tool.poetry.source]]
+name = "torch_cuda121"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
