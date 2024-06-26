@@ -24,7 +24,6 @@ import json
 import requests
 import httpx
 
-
 DEFAULT_EAS_MODEL_NAME = "pai-eas-custom-llm"
 DEFAULT_EAS_MAX_NEW_TOKENS = 512
 
@@ -124,7 +123,7 @@ class PaiEAS(CustomLLM):
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
-        chat_fn = acompletion_to_chat_decorator(self.acomplete)
+        chat_fn = acompletion_to_chat_decorator(self.complete)
         return await chat_fn(messages, **kwargs)
 
     @llm_completion_callback()

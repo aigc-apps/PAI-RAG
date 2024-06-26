@@ -40,9 +40,17 @@ class RagApplication:
         )
         await data_loader.aload(file_dir, enable_qa_extraction)
 
-    def load_knowledge(self, file_dir, enable_qa_extraction=False):
+    def load_knowledge(self, file_dir, faiss_path=None, enable_qa_extraction=False):
+        sessioned_config = self.config
+        if faiss_path:
+            sessioned_config = self.config.copy()
+            sessioned_config.index.update({"persist_path": faiss_path})
+            self.logger.info(
+                f"Update rag_application config with faiss_persist_path: {faiss_path}"
+            )
+
         data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", self.config
+            "DataLoaderModule", sessioned_config
         )
         data_loader.load(file_dir, enable_qa_extraction)
 
@@ -70,6 +78,7 @@ class RagApplication:
             )
             for score_node in node_results
         ]
+
         return RetrievalResponse(docs=docs)
 
     async def aquery(self, query: RagQuery):
@@ -94,7 +103,6 @@ class RagApplication:
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = self.config.copy()
             sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
-            print(sessioned_config)
 
         chat_engine_factory = module_registry.get_module_with_config(
             "ChatEngineFactoryModule", sessioned_config

@@ -1,3 +1,5 @@
+import datetime
+import json
 import os
 from typing import Any, Dict
 import asyncio
@@ -6,7 +8,6 @@ from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
 
-from pai_rag.utils.store_utils import store_path
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
@@ -32,6 +33,7 @@ class RagDataLoader:
         datareader_factory,
         node_parser,
         index,
+        bm25_index,
         oss_cache,
         use_local_qa_model=False,
     ):
@@ -39,6 +41,7 @@ class RagDataLoader:
         self.node_parser = node_parser
         self.oss_cache = oss_cache
         self.index = index
+        self.bm25_index = bm25_index
 
         if use_local_qa_model:
             # API暂不支持此选项
@@ -48,6 +51,7 @@ class RagDataLoader:
             )
         else:
             self.qa_llm = Settings.llm
+
         html_extractor = HtmlQAExtractor(llm=self.qa_llm)
         txt_extractor = TextQAExtractor(llm=self.qa_llm)
 
@@ -111,8 +115,18 @@ class RagDataLoader:
 
         logger.info("[DataReader] Start inserting to index.")
 
-        await self.index.insert_nodes_async(nodes)
-        self.index.storage_context.persist(persist_dir=store_path.persist_path)
+        await self.index.vector_index.insert_nodes_async(nodes)
+        self.index.vector_index.storage_context.persist(
+            persist_dir=self.index.persist_path
+        )
+
+        index_metadata_file = os.path.join(self.index.persist_path, "index.metadata")
+        if self.bm25_index:
+            self.bm25_index.add_docs(nodes)
+            metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+            with open(index_metadata_file, "w") as wf:
+                wf.write(metadata_str)
+
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
@@ -121,4 +135,3 @@ class RagDataLoader:
     def load(self, file_directory: str, enable_qa_extraction: bool):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.aload(file_directory, enable_qa_extraction))
-        return

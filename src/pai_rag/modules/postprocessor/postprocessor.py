@@ -53,7 +53,9 @@ class PostprocessorModule(ConfigurableModule):
             logger.info(
                 f"[PostProcessor]: Reranker model used with top_n {top_n}, model {model_name}."
             )
-            post_processors.append(FlagEmbeddingReranker(model=model, top_n=top_n))
+            post_processors.append(
+                FlagEmbeddingReranker(model=model, top_n=top_n, use_fp16=True),
+            )
 
         else:
             logger.info("[PostProcessor]: No Reranker used.")

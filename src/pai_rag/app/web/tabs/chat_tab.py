@@ -1,7 +1,6 @@
 from typing import Dict, Any, List
 import gradio as gr
 from pai_rag.app.web.rag_client import rag_client
-from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.ui_constants import (
     SIMPLE_PROMPTS,
     GENERAL_PROMPTS,
@@ -32,9 +31,7 @@ def respond(input_elements: List[Any]):
     if not update_dict["question"]:
         yield "", update_dict["chatbot"], 0
 
-    view_model.update(update_dict)
-    new_config = view_model.to_app_config()
-    rag_client.reload_config(new_config)
+    rag_client.patch_config(update_dict)
 
     query_type = update_dict["query_type"]
     msg = update_dict["question"]
@@ -259,7 +256,7 @@ def create_chat_tab() -> Dict[str, Any]:
             respond,
             chat_args,
             [question, chatbot, cur_tokens],
-            api_name="respond",
+            api_name="respond_q",
         )
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {

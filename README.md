@@ -4,13 +4,15 @@
 
 ## Get Started
 
-### Step1: Clone Repo
+### 本地启动
+
+#### Step1: Clone Repo
 
 ```bash
 git clone git@github.com:aigc-apps/PAI-RAG.git
 ```
 
-### Step2: 配置环境
+#### Step2: 配置环境
 
 本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
 
@@ -26,19 +28,27 @@ pip install poetry
 poetry install
 ```
 
-### Step3: 启动程序
+#### Step3：加载数据
+
+向当前索引存储中插入directory_path目录下的新文件
+
+```bash
+load_data -c src/pai_rag/config/settings.yaml -d directory_path
+```
+
+#### Step4: 启动RAG服务
 
 使用OpenAI API，需要在命令行引入环境变量 export OPENAI_API_KEY=""
 使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8000), config(默认config/demo.yaml)
-pai_rag run [--host HOST] [--port PORT] [--config CONFIG_FILE]
+# 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml)
+pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
 ```
 
-现在你可以使用命令行向服务侧发送API请求，或者直接打开http://localhost:8000
+你可以使用命令行向服务侧发送API请求。比如调用[Upload API](#upload-api)上传知识库文件。
 
-1. 对话
+##### Query API
 
 - **Rag Query请求**
 
@@ -67,7 +77,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
 ```
 
-2. 评估
+##### Evaluation API
 
 支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
 
@@ -133,6 +143,35 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
   }
 }
 ```
+
+##### Upload API
+
+支持通过API的方式上传本地文件，并支持指定不同的faiss_path，每次发送API请求会返回一个task_id，之后可以通过task_id来查看文件上传状态（processing、completed、failed）。
+
+- **（1）上传（upload_local_data）**
+
+```bash
+curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+
+# Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
+```
+
+- **（2）查看上传状态（upload_local_data）**
+
+```bash
+curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
+
+# Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
+```
+
+### RAG WEB UI
+
+```bash
+# 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8001)
+pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
+```
+
+你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
 
 ### 独立脚本文件：不依赖于整体服务的启动，可独立运行
 
