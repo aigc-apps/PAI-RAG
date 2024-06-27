@@ -284,3 +284,9 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
   }
 }
 ``` -->
+
+# 参数配置
+
+如需实现更多个性化配置，请参考文档：
+
+[参数配置说明](./docs/config_guide_cn.md)
