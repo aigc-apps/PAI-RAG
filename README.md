@@ -1,154 +1,178 @@
-# PAI-RAG: An easy-to-use framework for modular RAG.
+<p align="center">
+    <h1>PAI-RAG: An easy-to-use framework for modular RAG </h1>
+</p>
 
 [![PAI-RAG CI](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml)
 
-## Get Started
+<p align="center">
+  <a href="./README.md">English</a> |
+  <a href="./README_zh.md">简体中文</a> |
+</p>
 
-### 本地启动
+<details open>
+<summary></b>📕 Contents</b></summary>
 
-#### Step1: Clone Repo
+- 💡 [What is PAI-RAG?](#what-is-pai-rag)
+- 🌟 [Key Features](#key-features)
+- 🔎 [Get Started](#get-started)
+  - [Local](#run-in-local-environment)
+  - [Docker](#run-in-docker)
+- 🔧 [API Service](#api-service)
+
+</details>
+
+# 💡 What is PAI-RAG?
+
+PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmented Generation). It combines LLM (Large Language Model) to provide truthful question-answering capabilities, supports flexible configuration and custom development of each module of the RAG system. It offers a production-level RAG workflow for businesses of any scale based on Alibaba Cloud's Platform of Artificial Intelligence (PAI).
+
+# 🌟 Key Features
+
+![framework](docs/figures/framework.jpg)
+
+- Modular design, flexible and configurable
+- Built on community open source components, low customization threshold
+- Multi-dimensional automatic evaluation system, easy to grasp the performance quality of each module
+- Integrated llm-based-application tracing and evaluation visualization tools
+- Interactive UI/API calls, convenient iterative tuning experience
+- Alibaba Cloud fast scenario deployment/image custom deployment/open source private deployment
+
+# 🔎 Get Started
+
+## Run in Local Environment
+
+1. Clone Repo
+
+   ```bash
+   git clone git@github.com:aigc-apps/PAI-RAG.git
+   ```
+
+2. Development Environment Settings
+
+   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.10.
+
+   ```bash
+   conda create -n rag_env python==3.10
+   conda activate rag_env
+   ```
+
+- (1) CPU
+
+  Use poetry to install project dependency packages directly:
+
+  ```bash
+  pip install poetry
+  poetry install
+  ```
+
+- (2) GPU
+
+  First replace the default pyproject.toml with the GPU version, and then use poetry to install the project dependency package:
+
+  ```bash
+  mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+  pip install poetry
+  poetry install
+  ```
+
+- Common network timeout issues
+
+  Note: During the installation, if you encounter a network connection timeout, you can add the Alibaba Cloud or Tsinghua mirror source and append the following lines to the end of the pyproject.toml file:
+
+  ```bash
+  [[tool.poetry.source]]
+  name = "mirrors"
+  url = "http://mirrors.aliyun.com/pypi/simple/" # Aliyun
+  # url = "https://pypi.tuna.tsinghua.edu.cn/simple/" # Qsinghua
+  priority = "default"
+  ```
+
+  After that, execute the following commands:
+
+  ```bash
+  poetry lock
+  poetry install
+  ```
+
+3. Load Data
+
+   Insert new files in the directory directory_path into the current index storage:
+
+   ```bash
+   load_data -c src/pai_rag/config/settings.yaml -d directory_path
+   ```
+
+4. Run RAG Service
+
+   To use the OpenAI or DashScope API, you need to introduce environment variables:
+
+   ```bash
+   export OPENAI_API_KEY=""
+   export DASHSCOPE_API_KEY=""
+   ```
+
+   ```bash
+   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml)
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   ```
+
+5. Run RAG WebUI
+
+   ```bash
+   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
+   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
+   ```
+
+   You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
+
+## Run in Docker
+
+To make it easier to use and save time on environment installation, we also provide a method to start directly based on the image.
+
+### Use public images directly
+
+1. RAG Service
+
+- CPU
+
+  ```bash
+  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2
+
+  # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, need to be introduced) -w (number of workers, can be specified as the approximate number of CPU cores)
+  docker run -p 8001:8001 -v /huggingface:/huggingface -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+  ```
+
+- GPU
+
+  ```bash
+  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu
+
+  # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, you need to introduce it) -w (number of workers, which can be specified as the approximate number of CPU cores)
+  docker run -p 8001:8001 -v /huggingface:/huggingface --gpus all -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+  ```
+
+2. RAG UI
 
 ```bash
-git clone git@github.com:aigc-apps/PAI-RAG.git
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+
+docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 ```
 
-#### Step2: 配置环境
+### Build your own image based on Dockerfile
 
-本项目使用poetry进行管理，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
+You can refer to [How to Build Docker](docs/docker_build.md) to build the image yourself.
 
-```bash
-conda create -n rag_env python==3.10
-conda activate rag_env
-```
+After the image is built, you can refer to the above steps to start the Rag service and WebUI.
 
-使用poetry安装项目依赖包
+# 🔧 API Service
 
-```bash
-pip install poetry
-poetry install
-```
+You can use the command line to send API requests to the server, for example, calling the [Upload API](#upload-api) to upload a knowledge base file.
 
-#### Step3：加载数据
+## Upload API
 
-向当前索引存储中插入directory_path目录下的新文件
+It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
 
-```bash
-load_data -c src/pai_rag/config/settings.yaml -d directory_path
-```
-
-#### Step4: 启动RAG服务
-
-使用OpenAI API，需要在命令行引入环境变量 export OPENAI_API_KEY=""
-使用DashScope API，需要在命令行引入环境变量 export DASHSCOPE_API_KEY=""
-
-```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml)
-pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
-```
-
-你可以使用命令行向服务侧发送API请求。比如调用[Upload API](#upload-api)上传知识库文件。
-
-##### Query API
-
-- **Rag Query请求**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-```
-
-- **多轮对话请求**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-
-# 传入session_id：对话历史会话唯一标识，传入session_id后，将对话历史进行记录，调用大模型将自动携带存储的对话历史。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-
-# 传入chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有哪些功能？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}]}'
-
-# 同时传入session_id和chat_history：会用chat_history对存储的session_id所对应的对话历史进行追加更新
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}], "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-```
-
-- **Agent及调用Fucntion Tool的简单对话**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
-```
-
-##### Evaluation API
-
-支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
-
-初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。
-
-- **（1）全链路效果评估（All）**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate
-```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "hit_rate_mean": 1.0,
-    "mrr_mean": 0.91666667,
-    "faithfulness_mean": 0.8333334,
-    "correctness_mean": 4.5833333,
-    "similarity_mean": 0.88153079
-  }
-}
-```
-
-- **（2）检索效果评估（Retrieval）**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/retrieval
-```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "hit_rate_mean": 1.0,
-    "mrr_mean": 0.91667
-  }
-}
-```
-
-- **（3）生成效果评估（Response）**
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
-```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "faithfulness_mean": 0.8333334,
-    "correctness_mean": 4.58333333,
-    "similarity_mean": 0.88153079
-  }
-}
-```
-
-##### Upload API
-
-支持通过API的方式上传本地文件，并支持指定不同的faiss_path，每次发送API请求会返回一个task_id，之后可以通过task_id来查看文件上传状态（processing、completed、failed）。
-
-- **（1）上传（upload_local_data）**
+- upload_local_data
 
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
@@ -156,7 +180,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type:
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
 
-- **（2）查看上传状态（upload_local_data）**
+- get_upload_state
 
 ```bash
 curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
@@ -164,29 +188,49 @@ curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9f
 # Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
 ```
 
-### RAG WEB UI
+## Query API
+
+- Supports three dialogue modes:
+  - /query/retrieval
+  - /query/llm
+  - /query: (default) RAG (retrieval + llm)
 
 ```bash
-# 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8001)
-pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
+curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
 ```
 
-你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
-
-### 独立脚本文件：不依赖于整体服务的启动，可独立运行
-
-1. 向当前索引存储中插入新文件
+- Multi-round dialogue
 
 ```bash
-load_data -d directory_path
+curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What is PAI?"}'
 ```
 
-2. 生成QA评估测试集和效果评估
+> Parameters: session_id
+>
+> The unique identifier of the conversation history session. After the session_id is passed in, the conversation history will be recorded. Calling the large model will automatically carry the stored conversation history.
+>
+> ```bash
+> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What are its advantages?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+> ```
 
-- type(t): 评估类型，可选，['retrieval', 'response', 'all']，默认为'all'
-- overwrite(o): 是否重新生成QA文件，适用于有新增文件的情况，可选 ['True', 'False']，默认为'False'
-- file_path(f): 评估结果的输出文件位置，可选，默认为'localdata/evaluation/batch_eval_results.xlsx'
+> Parameters: chat_history
+>
+> The conversation history between the user and the model. Each element in the list is a round of conversation in the form of {"user":"user input","bot":"model output"}. Multiple rounds of conversations are arranged in chronological order.
+>
+> ```bash
+> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What are its features？", "chat_history": [{"user":"What is PAI?", "bot":"PAI is Alibaba Cloud's artificial intelligence platform, which provides a one-stop machine learning solution. This platform supports various machine learning tasks, including supervised learning, unsupervised learning, and reinforcement learning, and is suitable for multiple scenarios such as marketing, finance, and social networks."}]}'
+> ```
+
+> Parameters: session_id + chat_history
+>
+> Chat_history will be used to append and update the conversation history corresponding to the stored session_id
+>
+> ```bash
+> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}], "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+> ```
+
+- Agent And Function Tool
 
 ```bash
-evaluation -t retrieval -o True -f results_output_path
+curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"This year is 2024. What year was it 10 years ago?"}'
 ```
