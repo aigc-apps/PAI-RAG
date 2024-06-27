@@ -78,6 +78,7 @@ class RagApplication:
             )
             for score_node in node_results
         ]
+
         return RetrievalResponse(docs=docs)
 
     async def aquery(self, query: RagQuery) -> RagResponse:
@@ -102,7 +103,6 @@ class RagApplication:
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = self.config.copy()
             sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
-            print(sessioned_config)
 
         chat_engine_factory = module_registry.get_module_with_config(
             "ChatEngineFactoryModule", sessioned_config
@@ -112,10 +112,6 @@ class RagApplication:
         )
         response = await query_chat_engine.achat(query.question)
 
-        chat_store = module_registry.get_module_with_config(
-            "ChatStoreModule", sessioned_config
-        )
-        chat_store.persist()
         return RagResponse(answer=response.response, session_id=session_id)
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
@@ -145,10 +141,6 @@ class RagApplication:
         )
         response = await llm_chat_engine.achat(query.question)
 
-        chat_store = module_registry.get_module_with_config(
-            "ChatStoreModule", self.config
-        )
-        chat_store.persist()
         return LlmResponse(answer=response.response, session_id=session_id)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:

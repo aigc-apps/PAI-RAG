@@ -9,7 +9,6 @@ from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
 )
 from pai_rag.app.web.rag_client import rag_client
-from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import logging
@@ -23,9 +22,7 @@ def connect_vector_db(input_elements: List[Any]):
         for element, value in input_elements.items():
             update_dict[element.elem_id] = value
 
-        view_model.update(update_dict)
-        new_config = view_model.to_app_config()
-        rag_client.reload_config(new_config)
+        rag_client.patch_config(update_dict)
         return f"[{datetime.datetime.now()}] Connect vector db success!"
     except Exception as ex:
         logger.critical(f"[Critical] Connect failed. {traceback.format_exc()}")
@@ -59,23 +56,17 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 def change_emb_source(source):
-                    view_model.embed_source = source
                     return {
                         embed_model: gr.update(visible=(source == "HuggingFace")),
-                        embed_dim: EMBEDDING_DIM_DICT.get(
-                            view_model.embed_model, DEFAULT_EMBED_SIZE
-                        )
+                        embed_dim: EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
                         if source == "HuggingFace"
                         else DEFAULT_EMBED_SIZE,
                     }
 
                 def change_emb_model(model):
-                    view_model.embed_model = model
                     return {
-                        embed_dim: EMBEDDING_DIM_DICT.get(
-                            view_model.embed_model, DEFAULT_EMBED_SIZE
-                        )
-                        if view_model.embed_source == "HuggingFace"
+                        embed_dim: EMBEDDING_DIM_DICT.get(model, DEFAULT_EMBED_SIZE)
+                        if embed_source == "HuggingFace"
                         else DEFAULT_EMBED_SIZE,
                     }
 
@@ -98,7 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     label="LLM Model Source",
                     elem_id="llm",
                 )
-                with gr.Column(visible=(view_model.llm == "PaiEas")) as eas_col:
+                with gr.Column(visible=(llm == "PaiEas")) as eas_col:
                     llm_eas_url = gr.Textbox(
                         label="EAS Url",
                         elem_id="llm_eas_url",
@@ -112,7 +103,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="EAS Model name",
                         elem_id="llm_eas_model_name",
                     )
-                with gr.Column(visible=(view_model.llm != "PaiEas")) as api_llm_col:
+                with gr.Column(visible=(llm != "PaiEas")) as api_llm_col:
                     llm_api_model_name = gr.Dropdown(
                         label="LLM Model Name",
                         elem_id="llm_api_model_name",
@@ -129,7 +120,6 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 def change_llm(value):
-                    view_model.llm = value
                     eas_visible = value == "PaiEas"
                     api_visible = value != "PaiEas"
                     model_options = LLM_MODEL_KEY_DICT.get(value, [])
