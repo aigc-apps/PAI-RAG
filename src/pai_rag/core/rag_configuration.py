@@ -13,6 +13,20 @@ class RagConfiguration:
         self.config = config
 
     @classmethod
+    def from_snapshot(cls):
+        try:
+            settings_files = [GENERATED_CONFIG_FILE_NAME]
+            config = Dynaconf(
+                envvar_prefix="PAIRAG",
+                settings_file=settings_files,
+                merge=True,
+            )
+            return cls(config)
+        except Exception as error:
+            logging.critical("Read config file failed.")
+            raise error
+
+    @classmethod
     def from_file(cls, config_file):
         try:
             settings_files = [config_file, GENERATED_CONFIG_FILE_NAME]
@@ -40,3 +54,10 @@ class RagConfiguration:
         data = self.config.as_dict()
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict(), merge=True)
+
+    def get_config_mtime(self):
+        try:
+            return os.path.getmtime(GENERATED_CONFIG_FILE_NAME)
+        except Exception as ex:
+            print(f"Fail to read config mtime {ex}")
+            return -1

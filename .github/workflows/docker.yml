@@ -3,6 +3,7 @@ name: Create and publish a Docker image
 
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
+  workflow_dispatch:
   push:
     branches: ["feature"]
 
@@ -48,6 +49,24 @@ jobs:
           IMAGE_TAG: 0.0.2_gpu
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_gpu .
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+
+      - name: Build and push UI image
+        env:
+          IMAGE_TAG: 0.0.2_ui
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_ui .
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+          docker push ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
+
+      - name: Build and push nginx image
+        env:
+          IMAGE_TAG: 0.0.2_nginx
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_nginx .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
           docker push ${{ env.REGISTRY_HZ }}/mybigpai/pairag:$IMAGE_TAG

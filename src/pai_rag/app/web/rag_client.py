@@ -1,12 +1,12 @@
 import json
-
 from typing import Any
 import requests
 import html
 import markdown
 import httpx
-
-cache_config = None
+import os
+import mimetypes
+from pai_rag.app.web.view_model import ViewModel
 
 
 class dotdict(dict):
@@ -42,7 +42,7 @@ class RagWebClient:
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/upload_data"
+        return f"{self.endpoint}service/upload_local_data"
 
     @property
     def get_load_state_url(self):
@@ -101,9 +101,19 @@ class RagWebClient:
         response["answer"] = formatted_text
         return response
 
-    def add_knowledge(self, file_dir: str, enable_qa_extraction: bool):
-        q = dict(file_path=file_dir, enable_qa_extraction=enable_qa_extraction)
-        r = requests.post(self.load_data_url, json=q)
+    def add_knowledge(self, file_name: str, enable_qa_extraction: bool):
+        with open(file_name, "rb") as file_obj:
+            mimetype = mimetypes.guess_type(file_name)[0]
+            # maybe we can upload multiple files in the future
+            files = {"file": (os.path.basename(file_name), file_obj, mimetype)}
+            print(files)
+            # headers = {"content-type": "multipart/form-data"}
+
+            r = requests.post(
+                self.load_data_url,
+                files=files,
+                # headers=headers,
+            )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         return response
@@ -115,18 +125,22 @@ class RagWebClient:
             response = dotdict(json.loads(r.text))
             return response
 
-    def reload_config(self, config: Any):
-        global cache_config
+    def patch_config(self, update_dict: Any):
+        config = self.get_config()
+        view_model: ViewModel = ViewModel.from_app_config(config)
+        view_model.update(update_dict)
+        new_config = view_model.to_app_config()
 
-        if cache_config == config:
-            return
-
-        r = requests.patch(self.config_url, json=config)
+        r = requests.patch(self.config_url, json=new_config)
         r.raise_for_status()
-        print(r.text)
-        cache_config = config
-
         return
+
+    def get_config(self):
+        r = requests.get(self.config_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        print(response)
+        return response
 
     def evaluate_for_generate_qa(self, overwrite):
         r = requests.post(
@@ -147,7 +161,6 @@ class RagWebClient:
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         print("evaluate_for_response_stage response", response)
-        return response
 
 
 rag_client = RagWebClient()

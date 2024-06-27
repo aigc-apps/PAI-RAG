@@ -113,109 +113,135 @@ class ViewModel(BaseModel):
             if key in attr_set:
                 setattr(self, key, value)
 
-    def sync_app_config(self, config):
-        self.embed_source = config["embedding"].get("source", self.embed_source)
-        self.embed_model = config["embedding"].get("model_name", self.embed_model)
-        self.embed_api_key = config["embedding"].get("api_key", self.embed_api_key)
-        self.embed_batch_size = config["embedding"].get(
-            "embed_batch_size", self.embed_batch_size
+    @staticmethod
+    def from_app_config(config):
+        view_model = ViewModel()
+        view_model.embed_source = config["embedding"].get(
+            "source", view_model.embed_source
+        )
+        view_model.embed_model = config["embedding"].get(
+            "model_name", view_model.embed_model
+        )
+        view_model.embed_api_key = config["embedding"].get(
+            "api_key", view_model.embed_api_key
+        )
+        view_model.embed_batch_size = config["embedding"].get(
+            "embed_batch_size", view_model.embed_batch_size
         )
 
-        self.llm = config["llm"].get("source", self.llm)
-        self.llm_eas_url = config["llm"].get("endpoint", self.llm_eas_url)
-        self.llm_eas_token = config["llm"].get("token", self.llm_eas_token)
-        self.llm_api_key = config["llm"].get("api_key", self.llm_api_key)
-        self.llm_temperature = config["llm"].get("temperature", self.llm_temperature)
-        if self.llm == "PaiEAS":
-            self.llm_eas_model_name = config["llm"].get("name", self.llm_eas_model_name)
+        view_model.llm = config["llm"].get("source", view_model.llm)
+        view_model.llm_eas_url = config["llm"].get("endpoint", view_model.llm_eas_url)
+        view_model.llm_eas_token = config["llm"].get("token", view_model.llm_eas_token)
+        view_model.llm_api_key = config["llm"].get("api_key", view_model.llm_api_key)
+        view_model.llm_temperature = config["llm"].get(
+            "temperature", view_model.llm_temperature
+        )
+        if view_model.llm == "PaiEAS":
+            view_model.llm_eas_model_name = config["llm"].get(
+                "name", view_model.llm_eas_model_name
+            )
         else:
-            self.llm_api_model_name = config["llm"].get("name", self.llm_api_model_name)
+            view_model.llm_api_model_name = config["llm"].get(
+                "name", view_model.llm_api_model_name
+            )
 
-        self.vectordb_type = config["index"]["vector_store"].get(
-            "type", self.vectordb_type
+        view_model.vectordb_type = config["index"]["vector_store"].get(
+            "type", view_model.vectordb_type
         )
-        self.faiss_path = config["index"].get("persist_path", self.faiss_path)
-        if self.vectordb_type == "AnalyticDB":
-            self.adb_ak = config["index"]["vector_store"]["ak"]
-            self.adb_sk = config["index"]["vector_store"]["sk"]
-            self.adb_region_id = config["index"]["vector_store"]["region_id"]
-            self.adb_instance_id = config["index"]["vector_store"]["instance_id"]
-            self.adb_account = config["index"]["vector_store"]["account"]
-            self.adb_account_password = config["index"]["vector_store"][
+        view_model.faiss_path = config["index"].get(
+            "persist_path", view_model.faiss_path
+        )
+        if view_model.vectordb_type == "AnalyticDB":
+            view_model.adb_ak = config["index"]["vector_store"]["ak"]
+            view_model.adb_sk = config["index"]["vector_store"]["sk"]
+            view_model.adb_region_id = config["index"]["vector_store"]["region_id"]
+            view_model.adb_instance_id = config["index"]["vector_store"]["instance_id"]
+            view_model.adb_account = config["index"]["vector_store"]["account"]
+            view_model.adb_account_password = config["index"]["vector_store"][
                 "account_password"
             ]
-            self.adb_namespace = config["index"]["vector_store"]["namespace"]
-            self.adb_collection = config["index"]["vector_store"]["collection"]
-            self.adb_metrics = config["index"]["vector_store"].get("metrics", "cosine")
+            view_model.adb_namespace = config["index"]["vector_store"]["namespace"]
+            view_model.adb_collection = config["index"]["vector_store"]["collection"]
+            view_model.adb_metrics = config["index"]["vector_store"].get(
+                "metrics", "cosine"
+            )
 
-        elif self.vectordb_type == "Hologres":
-            self.hologres_host = config["index"]["vector_store"]["host"]
-            self.hologres_port = config["index"]["vector_store"]["port"]
-            self.hologres_user = config["index"]["vector_store"]["user"]
-            self.hologres_password = config["index"]["vector_store"]["password"]
-            self.hologres_database = config["index"]["vector_store"]["database"]
-            self.hologres_table = config["index"]["vector_store"]["table_name"]
-            self.hologres_pre_delete = config["index"]["vector_store"].get(
+        elif view_model.vectordb_type == "Hologres":
+            view_model.hologres_host = config["index"]["vector_store"]["host"]
+            view_model.hologres_port = config["index"]["vector_store"]["port"]
+            view_model.hologres_user = config["index"]["vector_store"]["user"]
+            view_model.hologres_password = config["index"]["vector_store"]["password"]
+            view_model.hologres_database = config["index"]["vector_store"]["database"]
+            view_model.hologres_table = config["index"]["vector_store"]["table_name"]
+            view_model.hologres_pre_delete = config["index"]["vector_store"].get(
                 "pre_delete_table", False
             )
 
-        elif self.vectordb_type == "ElasticSearch":
-            self.es_index = config["index"]["vector_store"]["es_index"]
-            self.es_url = config["index"]["vector_store"]["es_url"]
-            self.es_user = config["index"]["vector_store"]["es_user"]
-            self.es_password = config["index"]["vector_store"]["es_password"]
+        elif view_model.vectordb_type == "ElasticSearch":
+            view_model.es_index = config["index"]["vector_store"]["es_index"]
+            view_model.es_url = config["index"]["vector_store"]["es_url"]
+            view_model.es_user = config["index"]["vector_store"]["es_user"]
+            view_model.es_password = config["index"]["vector_store"]["es_password"]
 
-        elif self.vectordb_type == "Milvus":
-            self.milvus_host = config["index"]["vector_store"]["host"]
-            self.milvus_port = config["index"]["vector_store"]["port"]
-            self.milvus_user = config["index"]["vector_store"]["user"]
-            self.milvus_password = config["index"]["vector_store"]["password"]
-            self.milvus_database = config["index"]["vector_store"]["database"]
-            self.milvus_collection_name = config["index"]["vector_store"][
+        elif view_model.vectordb_type == "Milvus":
+            view_model.milvus_host = config["index"]["vector_store"]["host"]
+            view_model.milvus_port = config["index"]["vector_store"]["port"]
+            view_model.milvus_user = config["index"]["vector_store"]["user"]
+            view_model.milvus_password = config["index"]["vector_store"]["password"]
+            view_model.milvus_database = config["index"]["vector_store"]["database"]
+            view_model.milvus_collection_name = config["index"]["vector_store"][
                 "collection_name"
             ]
 
-        self.parser_type = config["node_parser"]["type"]
-        self.chunk_size = config["node_parser"]["chunk_size"]
-        self.chunk_overlap = config["node_parser"]["chunk_overlap"]
+        view_model.parser_type = config["node_parser"]["type"]
+        view_model.chunk_size = config["node_parser"]["chunk_size"]
+        view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
 
-        self.reader_type = config["data_reader"].get("type", self.reader_type)
-        self.enable_qa_extraction = config["data_reader"].get(
-            "enable_qa_extraction", self.enable_qa_extraction
+        view_model.reader_type = config["data_reader"].get(
+            "type", view_model.reader_type
+        )
+        view_model.enable_qa_extraction = config["data_reader"].get(
+            "enable_qa_extraction", view_model.enable_qa_extraction
         )
 
-        self.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
+        view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
-            self.retrieval_mode = "Hybrid"
-            self.BM25_weight = config["retriever"]["BM25_weight"]
-            self.vector_weight = config["retriever"]["vector_weight"]
-            self.fusion_mode = config["retriever"]["fusion_mode"]
-            self.query_rewrite_n = config["retriever"]["query_rewrite_n"]
+            view_model.retrieval_mode = "Hybrid"
+            view_model.BM25_weight = config["retriever"]["BM25_weight"]
+            view_model.vector_weight = config["retriever"]["vector_weight"]
+            view_model.fusion_mode = config["retriever"]["fusion_mode"]
+            view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
         elif config["retriever"]["retrieval_mode"] == "embedding":
-            self.retrieval_mode = "Embedding Only"
+            view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
-            self.retrieval_mode = "Keyword Only"
+            view_model.retrieval_mode = "Keyword Only"
 
         # if "Similarity" in config["postprocessor"]:
-        #     self.similarity_cutoff = config["postprocessor"].get("similarity_cutoff", 0.1)
+        #     view_model.similarity_cutoff = config["postprocessor"].get("similarity_cutoff", 0.1)
 
         rerank_model = config["postprocessor"].get("rerank_model", "no-reranker")
         if rerank_model == "llm-reranker":
-            self.rerank_model = "llm-reranker"
+            view_model.rerank_model = "llm-reranker"
         elif rerank_model == "bge-reranker-base":
-            self.rerank_model = "bge-reranker-base"
+            view_model.rerank_model = "bge-reranker-base"
         elif rerank_model == "bge-reranker-large":
-            self.rerank_model = "bge-reranker-large"
+            view_model.rerank_model = "bge-reranker-large"
         else:
-            self.rerank_model = "no-reranker"
+            view_model.rerank_model = "no-reranker"
 
-        self.synthesizer_type = config["synthesizer"].get("type", "SimpleSummarize")
-        self.text_qa_template = config["synthesizer"].get("text_qa_template", None)
+        view_model.synthesizer_type = config["synthesizer"].get(
+            "type", "SimpleSummarize"
+        )
+        view_model.text_qa_template = config["synthesizer"].get(
+            "text_qa_template", None
+        )
 
         if config["query_engine"]["type"] == "TransformQueryEngine":
-            self.query_engine_type = "TransformQueryEngine"
+            view_model.query_engine_type = "TransformQueryEngine"
         else:
-            self.query_engine_type = "RetrieverQueryEngine"
+            view_model.query_engine_type = "RetrieverQueryEngine"
+
+        return view_model
 
     def to_app_config(self):
         config = recursive_dict()
@@ -417,7 +443,7 @@ class ViewModel(BaseModel):
         settings["rerank_model"] = {"value": self.rerank_model}
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
 
-        prm_type = PROMPT_MAP.get(view_model.text_qa_template, "Custom")
+        prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
         settings["prm_type"] = {"value": prm_type}
         settings["text_qa_template"] = {"value": self.text_qa_template}
 
@@ -472,6 +498,3 @@ class ViewModel(BaseModel):
             }
 
         return settings
-
-
-view_model = ViewModel()

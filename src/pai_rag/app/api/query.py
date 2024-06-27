@@ -42,6 +42,11 @@ async def aupdate(new_config: Any = Body(None)):
     return {"msg": "Update RAG configuration successfully."}
 
 
+@router.get("/config")
+async def aconfig():
+    return rag_service.get_config()
+
+
 @router.post("/upload_data")
 def load_data(input: DataInput, background_tasks: BackgroundTasks):
     task_id = uuid.uuid4().hex
@@ -93,7 +98,7 @@ async def generate_qa_dataset(overwrite: bool = False):
 @router.post("/upload_local_data")
 async def upload_local_data(
     file: UploadFile = File(),
-    faiss_path: str = Form(),
+    faiss_path: str = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
