@@ -3,7 +3,6 @@ import click
 import shutil
 import os
 import tempfile
-import re
 import glob
 from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
@@ -21,21 +20,22 @@ class RagDataPipeline:
         await self.data_loader.aload(folder_path, enable_qa_extraction)
 
     async def ingest_from_files(self, file_paths: str, enable_qa_extraction: bool):
-        if re.match(r"^\*\.[A-Za-z0-9_-]+$", os.path.split(file_paths)[1]):
-            file_paths = glob.glob(file_paths)
-        else:
-            file_paths = [file.strip() for file in file_paths.split(",")]
-        for file_path in file_paths:
-            if not os.path.isfile(file_path):
-                raise Exception(f"{file_path} is not a file path")
-            try:
-                temp_directory = tempfile.mkdtemp()
-                save_file = os.path.join(temp_directory, os.path.basename(file_path))
-                shutil.copy(file_path, save_file)
+        separate_file_paths = [file.strip() for file in file_paths.split(",")]
+        for separate_file_path in separate_file_paths:
+            file_paths = glob.glob(separate_file_path, recursive=True)
+            for file_path in file_paths:
+                if not os.path.isfile(file_path):
+                    raise Exception(f"{file_path} is not a file path")
+                try:
+                    temp_directory = tempfile.mkdtemp()
+                    save_file = os.path.join(
+                        temp_directory, os.path.basename(file_path)
+                    )
+                    shutil.copy(file_path, save_file)
 
-                await self.data_loader.aload(temp_directory, enable_qa_extraction)
-            except Exception as e:
-                raise e
+                    await self.data_loader.aload(temp_directory, enable_qa_extraction)
+                except Exception as e:
+                    raise e
 
     async def ingest_local_folder(self, input_path: str, enable_qa_extraction: bool):
         if not os.path.isdir(input_path):
@@ -75,13 +75,6 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
-@click.option(
-    "-t",
-    "--type",
-    type=click.Choice(["d", "f"]),
-    required=True,
-    help="type: d for directory, f for files",
-)
 @click.option("-p", "--paths", required=True, help="directory or files path to ingest.")
 @click.option(
     "-q",
@@ -101,11 +94,9 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     default=False,
     help="use local qa extraction model.",
 )
-def run(config, type, paths, extract_qa, use_local_qa_model):
+def run(config, paths, extract_qa, use_local_qa_model):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
-    if type == "d":
+    if os.path.isdir(paths):
         asyncio.run(data_pipeline.ingest_local_folder(paths, extract_qa))
-    elif type == "f":
-        asyncio.run(data_pipeline.ingest_from_files(paths, extract_qa))
     else:
-        raise click.BadParameter("need to choose d (directory) or f (files)")
+        asyncio.run(data_pipeline.ingest_from_files(paths, extract_qa))
