@@ -85,8 +85,8 @@ class RagDataLoader:
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
             elif doc_type == ".md":
-                self.node_parser = MarkdownNodeParser()
-                nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
+                md_node_parser = MarkdownNodeParser()
+                nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
 
