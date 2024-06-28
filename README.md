@@ -103,11 +103,14 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
    path examples:
-   a. test/example*data
-   b. test/example_data/pai_document.pdf
-   c. test/*/pai*document.pdf
-   d. test/*/\*.pdf
-   e. test/example_data/pai_document.pdf,test/example_data/ratio.csv
+
+   ```
+   a. load_data -p test/example
+   b. load_data -p test/example_data/pai_document.pdf
+   c. load_data -p test/*/pai_document.pdf
+   d. load_data -p test/*/*.pdf
+   e. load_data -p test/example_data/pai_document.pdf,test/example_data/ratio.csv
+   ```
 
 4. Run RAG Service
 

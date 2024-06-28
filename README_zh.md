@@ -97,11 +97,14 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```
 
    path examples:
-   a. test/example*data
-   b. test/example_data/pai_document.pdf
-   c. test/*/pai*document.pdf
-   d. test/*/\*.pdf
-   e. test/example_data/pai_document.pdf,test/example_data/ratio.csv
+
+   ```
+   a. load_data -p test/example
+   b. load_data -p test/example_data/pai_document.pdf
+   c. load_data -p test/*/pai_document.pdf
+   d. load_data -p test/*/*.pdf
+   e. load_data -p test/example_data/pai_document.pdf,test/example_data/ratio.csv
+   ```
 
 
 4. 启动RAG服务
