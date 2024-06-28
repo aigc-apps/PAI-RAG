@@ -234,3 +234,9 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"This year is 2024. What year was it 10 years ago?"}'
 ```
+
+# Parameter Configuration
+
+For more customization options, please refer to the documentation:
+
+[Parameter Configuration Instruction](./docs/config_guide_en.md)
