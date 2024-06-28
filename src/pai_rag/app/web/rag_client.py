@@ -22,7 +22,7 @@ class RagWebClient:
         self.endpoint = "http://127.0.0.1:8000/"  # default link
 
     def set_endpoint(self, endpoint: str):
-        self.endpoint = endpoint
+        self.endpoint = endpoint if endpoint.endswith("/") else f"{endpoint}/"
 
     @property
     def query_url(self):

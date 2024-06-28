@@ -22,6 +22,11 @@ from pai_rag.utils.prompt_template import (
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_QUESTION_GENERATION_QUERY,
 )
+from pai_rag.utils.open_dataset_miracl import (
+    load_qrels,
+    load_topic,
+    load_related_docs_for_dev,
+)
 
 
 class ModifiedRagDatasetGenerator(RagDatasetGenerator):
@@ -128,6 +133,32 @@ class ModifiedRagDatasetGenerator(RagDatasetGenerator):
         """Generates questions for each document."""
         return asyncio_run(self.agenerate_dataset_from_nodes())
 
+    def generate_dataset_from_miracl(self) -> LabelledRagDataset:
+        """Node question generator."""
+        examples: List[LabelledRagDataExample] = []
+        qrels, _ = load_qrels()
+        qid2topic = load_topic()
+        _, docid2doc = load_related_docs_for_dev()
+        for qid in qid2topic:
+            pos_docids = (
+                [docid for docid, rel in qrels[qid].items() if rel == 1]
+                if qrels is not None
+                else []
+            )
+            pos_docs = [docid2doc[docid] for docid in pos_docids if docid in docid2doc]
+
+            example = LabelledRagDataExample(
+                query=qid2topic[qid],
+                reference_answer="",
+                reference_contexts=pos_docs,
+                reference_node_id=pos_docids,
+                reference_answer_by=None,
+                query_by=None,
+            )
+            examples.append(example)
+
+        return LabelledRagDataset(examples=examples)
+
 
 class LabelledRagDataExample(BaseLlamaDataExample):
     """RAG example class. Analogous to traditional ML datasets, this dataset contains
@@ -227,6 +258,23 @@ class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
             show_progress=self.show_progress,
         )
         qas = await dataset_generator.agenerate_dataset_from_nodes()
+        logging.info("dataset generation completed.")
+        return qas
+
+    async def generate_dataset_from_miracl(self, dataset_name) -> LabelledRagDataset:
+        dataset_generator = ModifiedRagDatasetGenerator(
+            nodes=self.nodes,
+            llm=self.llm,
+            num_questions_per_chunk=self.num_questions_per_chunk,
+            text_question_template=self.text_question_template,
+            text_qa_template=self.text_qa_template,
+            question_gen_query=self.question_gen_query,
+            show_progress=self.show_progress,
+        )
+        if dataset_name == "miracl":
+            qas = dataset_generator.generate_dataset_from_miracl()
+        else:
+            raise ValueError(f"Not supported dataset name with {dataset_name}")
         logging.info("dataset generation completed.")
         return qas
 

@@ -11,7 +11,7 @@ from llama_index.llms.huggingface import HuggingFaceLLM
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
-
+from pai_rag.utils.open_dataset_miracl import load_related_docs_all
 import logging
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,45 @@ class RagDataLoader:
 
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
+
+    async def aload_eval_data(self, file_directory: str, name: str):
+        logger.info(f"[DataReader-Evaluation Dataset] Loaded from {file_directory}.")
+        if name == "miracl":
+            miracl_nodes, _ = load_related_docs_all(file_directory)
+            nodes = []
+            for node in miracl_nodes:
+                node_metadata = {
+                    "title": node[2],
+                    "file_path": node[3],
+                }
+                nodes.append(
+                    TextNode(id_=node[0], text=node[1], metadata=node_metadata)
+                )
+
+            print(f"[DataReader-Evaluation Dataset] Split into {len(nodes)} nodes.")
+
+            print("[DataReader-Evaluation Dataset] Start inserting to index.")
+
+            await self.index.vector_index.insert_nodes_async(nodes)
+            self.index.vector_index.storage_context.persist(
+                persist_dir=self.index.persist_path
+            )
+
+            index_metadata_file = os.path.join(
+                self.index.persist_path, "index.metadata"
+            )
+            if self.bm25_index:
+                self.bm25_index.add_docs(nodes)
+                metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+                with open(index_metadata_file, "w") as wf:
+                    wf.write(metadata_str)
+
+            print(
+                f"[DataReader-Evaluation Dataset] Inserted {len(nodes)} nodes successfully."
+            )
+            return
+        else:
+            raise ValueError(f"Not supported eval dataset name with {name}")
 
     nest_asyncio.apply()  # 应用嵌套补丁到事件循环
 

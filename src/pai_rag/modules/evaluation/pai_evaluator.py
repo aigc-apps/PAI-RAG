@@ -48,7 +48,9 @@ class PaiEvaluator:
 
         logger.info("PaiEvaluator initialized.")
 
-    async def aload_question_answer_pairs_json(self, overwrite: bool = False):
+    async def aload_question_answer_pairs_json(
+        self, overwrite: bool = False, dataset_name=None
+    ):
         file_exists = os.path.exists(self.dataset_path)
         if file_exists and not overwrite:
             logging.info(
@@ -61,7 +63,7 @@ class PaiEvaluator:
             directory = os.path.dirname(self.dataset_path)
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
-            await self.acustomized_generate_qas()
+            await self.acustomized_generate_qas(dataset_name)
 
         logging.info(
             f"[Evaluation] loading generated qa_dataset from path {self.dataset_path}. "
@@ -70,11 +72,15 @@ class PaiEvaluator:
             qa_dataset = json.load(f)
         return qa_dataset
 
-    async def acustomized_generate_qas(self):
+    async def acustomized_generate_qas(self, dataset_name=None):
         docs = self.index.vector_index._docstore.docs
         nodes = list(docs.values())
         pipeline = GenerateDatasetPipeline(llm=self.llm, nodes=nodes)
-        qas = await pipeline.agenerate_dataset()
+        if not dataset_name:
+            qas = await pipeline.agenerate_dataset()
+        else:
+            print(f"Generating ragdataset for open dataset_name {dataset_name}")
+            qas = await pipeline.generate_dataset_from_miracl(dataset_name)
         pipeline.save_json(qas, self.dataset_path)
 
     async def abatch_retrieval_response_aevaluation(
