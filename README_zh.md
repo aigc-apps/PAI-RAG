@@ -103,6 +103,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    d. test/*/\*.pdf
    e. test/example_data/pai_document.pdf,test/example_data/ratio.csv
 
+
 4. 启动RAG服务
 
    使用OpenAI API，需要在命令行引入环境变量
@@ -291,3 +292,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
   }
 }
 ``` -->
+
+
+# 参数配置
+
+如需实现更多个性化配置，请参考文档：
+
+[参数配置说明](./docs/config_guide_cn.md)

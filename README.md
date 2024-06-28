@@ -98,6 +98,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    Insert new files in the directory directory_path into the current index storage:
 
    ```bash
+
    load_data -c src/pai_rag/config/settings.yaml -p path
    ```
 
@@ -130,6 +131,33 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
    You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
+
+
+   ```
+
+4. Run RAG Service
+
+   To use the OpenAI or DashScope API, you need to introduce environment variables:
+
+   ```bash
+   export OPENAI_API_KEY=""
+   export DASHSCOPE_API_KEY=""
+   ```
+
+   ```bash
+   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml)
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   ```
+
+5. Run RAG WebUI
+
+   ```bash
+   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
+   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
+   ```
+
+   You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
+
 
 ## Run in Docker
 
@@ -171,6 +199,7 @@ You can refer to [How to Build Docker](docs/docker_build.md) to build the image 
 
 After the image is built, you can refer to the above steps to start the Rag service and WebUI.
 
+
 # 🔧 API Service
 
 You can use the command line to send API requests to the server, for example, calling the [Upload API](#upload-api) to upload a knowledge base file.
@@ -178,6 +207,7 @@ You can use the command line to send API requests to the server, for example, ca
 ## Upload API
 
 It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
+
 
 - upload_local_data
 
@@ -209,13 +239,8 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 - Multi-round dialogue
 
 ```bash
-<<<<<<< HEAD
-# -t(Required): Type flag to indicate the input is a directory (d) or a file (f)
-# -p(Required): 文件夹或者文件路径。当-t为d时，paths填单个文件夹路径; 当-t为f时: 1. paths支持单个file_path. 2. 支持多个files_path，中间用','隔开 3. 支持指定目录下，某些后缀的文件(例如*.md)
-load_data -t d/f -p paths
-=======
 curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What is PAI?"}'
->>>>>>> feature
+
 ```
 
 > Parameters: session_id
@@ -247,3 +272,9 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"This year is 2024. What year was it 10 years ago?"}'
 ```
+
+# Parameter Configuration
+
+For more customization options, please refer to the documentation:
+
+[Parameter Configuration Instruction](./docs/config_guide_en.md)
