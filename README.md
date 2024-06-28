@@ -98,7 +98,18 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    Insert new files in the directory directory_path into the current index storage:
 
    ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d directory_path
+
+   load_data -c src/pai_rag/config/settings.yaml -p path
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -p test/example
+   b. load_data -p test/example_data/pai_document.pdf
+   c. load_data -p test/*/pai_document.pdf
+   d. load_data -p test/*/*.pdf
+   e. load_data -p test/example_data/pai_document.pdf,test/example_data/ratio.csv
    ```
 
 4. Run RAG Service
@@ -116,6 +127,33 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
 5. Run RAG WebUI
+
+   ```bash
+   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
+   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
+   ```
+
+   You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
+
+   ```
+
+   ```
+
+6. Run RAG Service
+
+   To use the OpenAI or DashScope API, you need to introduce environment variables:
+
+   ```bash
+   export OPENAI_API_KEY=""
+   export DASHSCOPE_API_KEY=""
+   ```
+
+   ```bash
+   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml)
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   ```
+
+7. Run RAG WebUI
 
    ```bash
    # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
@@ -203,6 +241,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What is PAI?"}'
+
 ```
 
 > Parameters: session_id
