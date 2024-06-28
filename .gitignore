@@ -222,3 +222,4 @@ output
 *.local.toml
 
 localdata/
+*.tmp

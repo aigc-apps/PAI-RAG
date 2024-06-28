@@ -1,6 +1,5 @@
 import gradio as gr
 from typing import Any, Set, Callable, Dict
-from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.utils import components_to_dict
 
 
@@ -18,9 +17,7 @@ def create_vector_db_panel(
                 elem_id="vectordb_type",
             )
             # Adb
-            with gr.Column(
-                visible=(view_model.vectordb_type == "AnalyticDB")
-            ) as adb_col:
+            with gr.Column(visible=(vectordb_type == "AnalyticDB")) as adb_col:
                 adb_ak = gr.Textbox(
                     label="access-key-id",
                     type="password",
@@ -85,9 +82,7 @@ def create_vector_db_panel(
                     api_name="connect_adb",
                 )
             # Hologres
-            with gr.Column(
-                visible=(view_model.vectordb_type == "Hologres")
-            ) as holo_col:
+            with gr.Column(visible=(vectordb_type == "Hologres")) as holo_col:
                 hologres_host = gr.Textbox(
                     label="Host",
                     elem_id="hologres_host",
@@ -139,9 +134,7 @@ def create_vector_db_panel(
                     api_name="connect_hologres",
                 )
 
-            with gr.Column(
-                visible=(view_model.vectordb_type == "ElasticSearch")
-            ) as es_col:
+            with gr.Column(visible=(vectordb_type == "ElasticSearch")) as es_col:
                 es_url = gr.Textbox(label="ElasticSearch Url", elem_id="es_url")
                 es_index = gr.Textbox(label="Index Name", elem_id="es_index")
                 es_user = gr.Textbox(label="ES User", elem_id="es_user")
@@ -163,9 +156,7 @@ def create_vector_db_panel(
                     api_name="connect_elasticsearch",
                 )
 
-            with gr.Column(
-                visible=(view_model.vectordb_type == "Milvus")
-            ) as milvus_col:
+            with gr.Column(visible=(vectordb_type == "Milvus")) as milvus_col:
                 milvus_host = gr.Textbox(label="Host", elem_id="milvus_host")
                 milvus_port = gr.Textbox(label="Port", elem_id="milvus_port")
 
@@ -204,7 +195,7 @@ def create_vector_db_panel(
                     api_name="connect_milvus",
                 )
 
-            with gr.Column(visible=(view_model.vectordb_type == "FAISS")) as faiss_col:
+            with gr.Column(visible=(vectordb_type == "FAISS")) as faiss_col:
                 faiss_path = gr.Textbox(label="Path", elem_id="faiss_path")
                 connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
                 con_state_faiss = gr.Textbox(label="Connection Info: ")
