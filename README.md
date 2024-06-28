@@ -135,10 +135,11 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
    You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
 
+   ```
 
    ```
 
-4. Run RAG Service
+6. Run RAG Service
 
    To use the OpenAI or DashScope API, you need to introduce environment variables:
 
@@ -152,7 +153,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
    ```
 
-5. Run RAG WebUI
+7. Run RAG WebUI
 
    ```bash
    # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
@@ -160,7 +161,6 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
    You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
-
 
 ## Run in Docker
 
@@ -202,7 +202,6 @@ You can refer to [How to Build Docker](docs/docker_build.md) to build the image 
 
 After the image is built, you can refer to the above steps to start the Rag service and WebUI.
 
-
 # 🔧 API Service
 
 You can use the command line to send API requests to the server, for example, calling the [Upload API](#upload-api) to upload a knowledge base file.
@@ -210,7 +209,6 @@ You can use the command line to send API requests to the server, for example, ca
 ## Upload API
 
 It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
-
 
 - upload_local_data
 
