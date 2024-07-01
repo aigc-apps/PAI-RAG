@@ -65,6 +65,15 @@ class RagWebClient:
         r = requests.post(self.query_url, json=q)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        referenced_docs = ""
+        for i, doc in enumerate(response["docs"]):
+            referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
+
+        if session_id:
+            formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+        else:
+            formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+        response["answer"] = formatted_text
         return response
 
     def query_llm(
