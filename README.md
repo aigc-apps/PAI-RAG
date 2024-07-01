@@ -265,3 +265,9 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
+
+# Parameter Configuration
+
+For more customization options, please refer to the documentation:
+
+[Parameter Configuration Instruction](./docs/config_guide_en.md)
