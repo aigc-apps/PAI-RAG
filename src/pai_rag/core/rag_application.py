@@ -111,8 +111,22 @@ class RagApplication:
             session_id, query.chat_history
         )
         response = await query_chat_engine.achat(query.question)
-
-        return RagResponse(answer=response.response, session_id=session_id)
+        node_results = response.sources[0].raw_output.source_nodes
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+        new_query = response.sources[0].raw_input["query"]
+        return RagResponse(
+            answer=response.response,
+            session_id=session_id,
+            docs=reference_docs,
+            new_query=new_query,
+        )
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
         """Query answer from LLM response asynchronously.
