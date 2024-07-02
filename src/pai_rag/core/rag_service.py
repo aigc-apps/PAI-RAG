@@ -84,7 +84,7 @@ class RagService:
         else:
             logger.info("No updates")
 
-    def add_knowledge_async(
+    async def add_knowledge_async(
         self,
         task_id: str,
         file_dir: str,
@@ -95,7 +95,10 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id} processing\n")
         try:
-            self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            if faiss_path:
+                self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            else:
+                await self.rag.aload_knowledge(file_dir, enable_qa_extraction)
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id} completed\n")
         except Exception as ex:
