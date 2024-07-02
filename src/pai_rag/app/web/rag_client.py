@@ -128,7 +128,7 @@ class RagWebClient:
         return response
 
     async def get_knowledge_state(self, task_id: str):
-        async with httpx.AsyncClient(timeout=None) as client:
+        async with httpx.AsyncClient() as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
             r.raise_for_status()
             response = dotdict(json.loads(r.text))

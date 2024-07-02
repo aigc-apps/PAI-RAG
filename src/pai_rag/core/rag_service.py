@@ -95,10 +95,7 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id} processing\n")
         try:
-            if faiss_path:
-                self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
-            else:
-                await self.rag.aload_knowledge(file_dir, enable_qa_extraction)
+            await self.rag.aload_knowledge(file_dir, faiss_path, enable_qa_extraction)
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id} completed\n")
         except Exception as ex:

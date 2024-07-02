@@ -47,7 +47,7 @@ class IndexDaemon:
                     index.reload()
 
                     for bm25_index in bm25_indexes:
-                        if bm25_index.persist_path == index_path:
+                        if bm25_index and bm25_index.persist_path == index_path:
                             logger.info(
                                 f"{datetime.datetime.now()} Reloading bm25 index."
                             )
