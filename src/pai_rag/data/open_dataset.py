@@ -40,7 +40,7 @@ class MiraclOpenDataSet(OpenDataSet):
         )
         self.lang = lang
         if not os.path.exists(self.dataset_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl.tar.gz")
             self._extract_and_download_dataset(
                 dataset_url, file_path, self.dataset_path
@@ -50,7 +50,7 @@ class MiraclOpenDataSet(OpenDataSet):
                 f"[MiraclOpenDataSet] Dataset file already exists at {self.dataset_path}."
             )
         if not os.path.exists(self.corpus_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl-corpus.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl-corpus.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl-corpus.tar.gz")
             self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
         else:
