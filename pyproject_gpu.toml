@@ -71,7 +71,7 @@ gunicorn = "^22.0.0"
 pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.data.rag_datapipeline:run"
 load_easyocr_model = "pai_rag.utils.download_easyocr_models:download_easyocr_models"
-evaluation = "pai_rag.evaluations.batch_evaluator:run"
+evaluation = "pai_rag.evaluation.eval_pipeline:run"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

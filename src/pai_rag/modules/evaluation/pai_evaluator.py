@@ -1,14 +1,8 @@
-"""Evaluator for both Retrieval & Response based on config"""
-
-import click
 import logging
-from typing import Optional
-import pandas as pd
-import asyncio
 import os
-from pathlib import Path
-from pai_rag.core.rag_configuration import RagConfiguration
-from pai_rag.modules.module_registry import module_registry
+from typing import Optional
+import json
+import pandas as pd
 from llama_index.core.evaluation import RetrieverEvaluator
 from llama_index.core.evaluation import (
     AnswerRelevancyEvaluator,
@@ -16,54 +10,88 @@ from llama_index.core.evaluation import (
     CorrectnessEvaluator,
     SemanticSimilarityEvaluator,
 )
-from pai_rag.evaluations.dataset_generation.generate_question_answer_pairs import (
-    load_question_answer_pairs_json,
-)
-from pai_rag.evaluations.batch_eval_runner import BatchEvalRunner
+from pai_rag.modules.evaluation.ragdataset_generator import GenerateDatasetPipeline
+from pai_rag.modules.evaluation.batch_eval_runner import BatchEvalRunner
 
-DEFAULT_QA_DATASET_DIR = "localdata/evaluation"
 logger = logging.getLogger(__name__)
+DEFAULT_QA_DATASET_DIR = "localdata/evaluation"
 
 
-class BatchEvaluator(object):
+class PaiEvaluator:
     def __init__(
         self,
-        config,
-        retriever,
+        llm,
+        index,
         query_engine,
-        llm=None,
+        retriever,
+        retrieval_metrics,
+        response_metrics,
     ):
-        self.name = "BatchEvaluator"
-        self.config = config
         self.llm = llm
-        self.dataset_path = config.get(
-            "qa_dataset_path", os.path.join(DEFAULT_QA_DATASET_DIR, "qa_dataset.json")
-        )
+        self.index = index
         self.query_engine = query_engine
-        # retrieval
-        self.retrieval_metrics = config["evaluation"]["retrieval"]
+        self.retriever = retriever
+        self.retrieval_metrics = retrieval_metrics
         self.retrieval_evaluator = RetrieverEvaluator.from_metric_names(
-            self.retrieval_metrics, retriever=retriever
+            self.retrieval_metrics, retriever=self.retriever
         )
-        # response
-        self.response_metrics_list = self.config["evaluation"]["response"]
+        # TODO: if exists in list
+        self.response_metrics = response_metrics
         self.faithfulness = FaithfulnessEvaluator()
         self.answer_relevancy = AnswerRelevancyEvaluator()
         self.correctness = CorrectnessEvaluator()
         self.similarity = SemanticSimilarityEvaluator()
 
-        logger.info("batch evaluator created")
+        if not os.path.exists(DEFAULT_QA_DATASET_DIR):
+            os.makedirs(DEFAULT_QA_DATASET_DIR, exist_ok=True)
+        self.dataset_path = os.path.join(DEFAULT_QA_DATASET_DIR, "qa_dataset.json")
 
-    async def batch_retrieval_response_aevaluation(
+        logger.info("PaiEvaluator initialized.")
+
+    async def aload_question_answer_pairs_json(
+        self, overwrite: bool = False, dataset_name=None
+    ):
+        file_exists = os.path.exists(self.dataset_path)
+        if file_exists and not overwrite:
+            logging.info(
+                f"[Evaluation] qa_dataset '{self.dataset_path}' already exists, do not need to regenerate and overwrite."
+            )
+        else:
+            logging.info(
+                f"[Evaluation] qa_dataset '{self.dataset_path}' (re)generating and overwriting..."
+            )
+            directory = os.path.dirname(self.dataset_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            await self.acustomized_generate_qas(dataset_name)
+
+        logging.info(
+            f"[Evaluation] loading generated qa_dataset from path {self.dataset_path}. "
+        )
+        with open(self.dataset_path) as f:
+            qa_dataset = json.load(f)
+        return qa_dataset
+
+    async def acustomized_generate_qas(self, dataset_name=None):
+        docs = self.index.vector_index._docstore.docs
+        nodes = list(docs.values())
+        pipeline = GenerateDatasetPipeline(llm=self.llm, nodes=nodes)
+        if not dataset_name:
+            qas = await pipeline.agenerate_dataset()
+        else:
+            print(f"Generating ragdataset for open dataset_name {dataset_name}")
+            qas = await pipeline.generate_dataset_from_miracl(dataset_name)
+        pipeline.save_json(qas, self.dataset_path)
+
+    async def abatch_retrieval_response_aevaluation(
         self,
         type: Optional[str] = "all",
         workers: Optional[int] = 2,
-        save_to_file: Optional[bool] = True,
-        overwrite: Optional[bool] = False,
-        output: Optional[str] = None,
+        output_path: Optional[str] = None,
+        overwrite: bool = False,
     ):
         # generate or load qa_dataset
-        qas = await load_question_answer_pairs_json(self.dataset_path, overwrite)
+        qas = await self.aload_question_answer_pairs_json(overwrite)
         data = {
             "query": [t["query"] for t in qas["examples"]],
             "reference_contexts": [t["reference_contexts"] for t in qas["examples"]],
@@ -82,13 +110,13 @@ class BatchEvaluator(object):
 
         response_evaluators = {}
         if type in ["response", "all"]:
-            if "Faithfulness" in self.response_metrics_list:
+            if "Faithfulness" in self.response_metrics:
                 response_evaluators["Faithfulness"] = self.faithfulness
-            if "Answer Relevancy" in self.response_metrics_list:
+            if "Answer Relevancy" in self.response_metrics:
                 response_evaluators["Answer Relevancy"] = self.answer_relevancy
-            if "Correctness" in self.response_metrics_list:
+            if "Correctness" in self.response_metrics:
                 response_evaluators["Correctness"] = self.correctness
-            if "Semantic Similarity" in self.response_metrics_list:
+            if "Semantic Similarity" in self.response_metrics:
                 response_evaluators["Semantic Similarity"] = self.similarity
 
         runner = BatchEvalRunner(
@@ -124,7 +152,7 @@ class BatchEvaluator(object):
             else:
                 df["mrr"] = "not selected"
         if type in ["response", "all"]:
-            if "Faithfulness" in self.response_metrics_list:
+            if "Faithfulness" in self.response_metrics:
                 df["faithfulness_score"] = [
                     e.score for e in eval_results["Faithfulness"]
                 ]
@@ -133,17 +161,17 @@ class BatchEvaluator(object):
                 ]
             else:
                 df["faithfulness_score"] = "not selected"
-            if "Answer Relevancy" in self.response_metrics_list:
+            if "Answer Relevancy" in self.response_metrics:
                 df["answer_relevancy_score"] = [
                     e.feedback for e in eval_results["Answer Relevancy"]
                 ]
             else:
                 df["answer_relevancy_score"] = "not selected"
-            if "Correctness" in self.response_metrics_list:
+            if "Correctness" in self.response_metrics:
                 df["correctness_score"] = [e.score for e in eval_results["Correctness"]]
             else:
                 df["correctness_score"] = "not selected"
-            if "Semantic Similarity" in self.response_metrics_list:
+            if "Semantic Similarity" in self.response_metrics:
                 df["semantic_similarity_score"] = [
                     e.score for e in eval_results["Semantic Similarity"]
                 ]
@@ -173,59 +201,9 @@ class BatchEvaluator(object):
                 "similarity_mean": df["semantic_similarity_score"].agg("mean"),
             }
 
-        if save_to_file:
-            if output is None or output == "":
-                if not os.path.exists(DEFAULT_QA_DATASET_DIR):
-                    os.makedirs(DEFAULT_QA_DATASET_DIR, exist_ok=True)
-                output = os.path.join(DEFAULT_QA_DATASET_DIR, "batch_eval_results.xlsx")
-            df.to_excel(output)
+        if output_path is None or output_path == "":
+            output_path = os.path.join(
+                DEFAULT_QA_DATASET_DIR, f"batch_eval_results_{type}.xlsx"
+            )
+        df.to_excel(output_path)
         return df, eval_res_avg
-
-
-def __init_evaluator_pipeline():
-    base_dir = Path(__file__).parent.parent
-    config_file = os.path.join(base_dir, "config/settings.yaml")
-
-    config = RagConfiguration.from_file(config_file).get_value()
-    module_registry.init_modules(config)
-
-    retriever = module_registry.get_module_with_config("RetrieverModule", config)
-    query_engine = module_registry.get_module_with_config("QueryEngineModule", config)
-
-    return BatchEvaluator(config, retriever, query_engine)
-
-
-async def async_run(type, overwrite, output):
-    print(f"Running async task with evaluation type: {type}")
-    evaluation = __init_evaluator_pipeline()
-    df, eval_res_avg = await evaluation.batch_retrieval_response_aevaluation(
-        type=type, workers=2, save_to_file=True, overwrite=overwrite, output=output
-    )
-    return df, eval_res_avg
-
-
-@click.command()
-@click.option(
-    "-t",
-    "--type",
-    show_default=True,
-    help="Evaluation type: [retrieval, response, all]",
-    default="all",
-)
-@click.option(
-    "-o",
-    "--overwrite",
-    show_default=True,
-    help="Whether to regenerate and overwrite the qa_dataset file: [True, False]",
-    default=False,
-)
-@click.option(
-    "-f",
-    "--file_path",
-    show_default=True,
-    help="The output path of the generated evaluation result file",
-    default=None,
-)
-def run(type, overwrite, file_path):
-    df, eval_res_avg = asyncio.run(async_run(type, overwrite, file_path))
-    print("Evaluation results is:", eval_res_avg)

@@ -1,5 +1,4 @@
 from pai_rag.modules.module_registry import module_registry
-from pai_rag.evaluations.batch_evaluator import BatchEvaluator
 from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
@@ -111,10 +110,28 @@ class RagApplication:
             session_id, query.chat_history
         )
 
-        if not query.stream:
-            response = await query_chat_engine.achat(query.question)
-        else:
-            response = await query_chat_engine.astream_chat(query.question)
+        # if not query.stream:
+        #     response = await query_chat_engine.achat(query.question)
+        # else:
+        #     response = await query_chat_engine.astream_chat(query.question)
+
+        response = await query_chat_engine.achat(query.question)
+        node_results = response.sources[0].raw_output.source_nodes
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+        new_query = response.sources[0].raw_input["query"]
+        return RagResponse(
+            answer=response.response,
+            session_id=session_id,
+            docs=reference_docs,
+            new_query=new_query,
+        )
 
         chat_store = module_registry.get_module_with_config(
             "ChatStoreModule", sessioned_config
@@ -219,16 +236,34 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        retriever = module_registry.get_module_with_config(
-            "RetrieverModule", self.config
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
         )
-        query_engine = module_registry.get_module_with_config(
-            "QueryEngineModule", self.config
-        )
-        batch_eval = BatchEvaluator(self.config, retriever, query_engine)
-        df, eval_res_avg = await batch_eval.batch_retrieval_response_aevaluation(
-            type=type, workers=2, save_to_file=True
-        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
+            return qa_dataset
+        else:
+            return f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now."
 
-        return df, eval_res_avg
+    async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
+        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
+                type=type, workers=4, overwrite=overwrite
+            )
+
+            return df, eval_res_avg
+        else:
+            return (
+                None,
+                f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
+            )
