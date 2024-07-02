@@ -75,5 +75,10 @@ async def test_agent(rag_app: RagApplication):
 
 
 async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
-    df, eval_result = await rag_app.batch_evaluate_retrieval_and_response(type="all")
+    _, eval_result = await rag_app.aevaluate_retrieval_and_response(type="all")
     print(eval_result)
+
+
+async def test_load_evaluation_qa_dataset(rag_app: RagApplication):
+    qa_dataset = await rag_app.aload_evaluation_qa_dataset()
+    print(qa_dataset)

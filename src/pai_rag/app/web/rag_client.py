@@ -22,7 +22,7 @@ class RagWebClient:
         self.endpoint = "http://127.0.0.1:8000/"  # default link
 
     def set_endpoint(self, endpoint: str):
-        self.endpoint = endpoint
+        self.endpoint = endpoint if endpoint.endswith("/") else f"{endpoint}/"
 
     @property
     def query_url(self):
@@ -48,11 +48,32 @@ class RagWebClient:
     def get_load_state_url(self):
         return f"{self.endpoint}service/get_upload_state"
 
+    @property
+    def get_evaluate_generate_url(self):
+        return f"{self.endpoint}service/evaluate/generate"
+
+    @property
+    def get_evaluate_retrieval_url(self):
+        return f"{self.endpoint}service/evaluate/retrieval"
+
+    @property
+    def get_evaluate_response_url(self):
+        return f"{self.endpoint}service/evaluate/response"
+
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
         r = requests.post(self.query_url, json=q)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        referenced_docs = ""
+        for i, doc in enumerate(response["docs"]):
+            referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
+
+        if session_id:
+            formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+        else:
+            formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+        response["answer"] = formatted_text
         return response
 
     def query_llm(
@@ -107,7 +128,7 @@ class RagWebClient:
         return response
 
     async def get_knowledge_state(self, task_id: str):
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=None) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
             r.raise_for_status()
             response = dotdict(json.loads(r.text))
@@ -129,6 +150,26 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         print(response)
         return response
+
+    def evaluate_for_generate_qa(self, overwrite):
+        r = requests.post(
+            self.get_evaluate_generate_url, params={"overwrite": overwrite}
+        )
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def evaluate_for_retrieval_stage(self):
+        r = requests.post(self.get_evaluate_retrieval_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def evaluate_for_response_stage(self):
+        r = requests.post(self.get_evaluate_response_url)
+        r.raise_for_status()
+        response = dotdict(json.loads(r.text))
+        print("evaluate_for_response_stage response", response)
 
 
 rag_client = RagWebClient()

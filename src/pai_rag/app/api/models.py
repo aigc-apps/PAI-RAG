@@ -26,13 +26,6 @@ class RetrievalQuery(BaseModel):
     vector_db: VectorDbConfig | None = None
 
 
-class RagResponse(BaseModel):
-    answer: str
-    session_id: str | None = None
-    # TODO
-    # context: List[str] | None = None
-
-
 class LlmResponse(BaseModel):
     answer: str
     session_id: str | None = None
@@ -46,6 +39,13 @@ class ContextDoc(BaseModel):
 
 class RetrievalResponse(BaseModel):
     docs: List[ContextDoc]
+
+
+class RagResponse(BaseModel):
+    answer: str
+    session_id: str | None = None
+    docs: List[ContextDoc] | None = None
+    new_query: str | None = None
 
 
 class DataInput(BaseModel):

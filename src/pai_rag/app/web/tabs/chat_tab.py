@@ -226,7 +226,7 @@ def create_chat_tab() -> Dict[str, Any]:
             respond,
             chat_args,
             [question, chatbot, cur_tokens],
-            api_name="respond",
+            api_name="respond_clk",
         )
         question.submit(
             respond,

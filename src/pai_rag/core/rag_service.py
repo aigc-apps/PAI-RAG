@@ -84,7 +84,7 @@ class RagService:
         else:
             logger.info("No updates")
 
-    def add_knowledge_async(
+    async def add_knowledge_async(
         self,
         task_id: str,
         file_dir: str,
@@ -95,7 +95,10 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id} processing\n")
         try:
-            self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            if faiss_path:
+                self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            else:
+                await self.rag.aload_knowledge(file_dir, enable_qa_extraction)
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id} completed\n")
         except Exception as ex:
@@ -133,9 +136,13 @@ class RagService:
         self.check_updates()
         return await self.rag.aquery_agent(query)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        self.check_updates()
-        return await self.rag.batch_evaluate_retrieval_and_response(type)
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        return await self.rag.aload_evaluation_qa_dataset(overwrite)
+
+    async def aevaluate_retrieval_and_response(
+        self, type: str = "all", overwrite: bool = False
+    ):
+        return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
 
 
 rag_service = RagService()
