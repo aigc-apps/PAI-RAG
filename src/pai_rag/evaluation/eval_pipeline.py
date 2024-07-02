@@ -7,7 +7,6 @@ from pai_rag.modules.module_registry import module_registry
 
 _BASE_DIR = Path(__file__).parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
-DEFAULT_OPEN_DATASET_NAME = "miracl"
 
 
 class EvalDatasetPipeline:
@@ -58,7 +57,7 @@ def __init_eval_pipeline(config_file):
     "-n",
     "--name",
     show_default=True,
-    help="Open Dataset Name. Default: None",
+    help="Open Dataset Name. Optional: [miracl]",
     default=None,
 )
 def run(config, overwrite, type, name):

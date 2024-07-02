@@ -19,7 +19,7 @@ class RagDataPipeline:
         if not name:
             await self.data_loader.aload(folder_path, enable_qa_extraction)
         else:
-            await self.data_loader.aload_eval_data(folder_path, name)
+            await self.data_loader.aload_eval_data(name)
 
 
 def __init_data_pipeline(config_file, use_local_qa_model):
@@ -38,7 +38,9 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
-@click.option("-d", "--directory", required=True, help="directory path to ingest.")
+@click.option(
+    "-d", "--directory", required=False, default=None, help="directory path to ingest."
+)
 @click.option(
     "-q",
     "--extract-qa",
@@ -61,7 +63,7 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     "-n",
     "--name",
     show_default=True,
-    help="Open Dataset Name. Default: None",
+    help="Open Dataset Name. Optional: [miracl]",
     default=None,
 )
 def run(config, directory, extract_qa, use_local_qa_model, name):

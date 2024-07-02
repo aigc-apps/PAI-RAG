@@ -185,7 +185,7 @@ class RagApplication:
             qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
             return qa_dataset
         else:
-            return f"Not support for vector store —— {vector_store_type}"
+            return f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now."
 
     async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
         vector_store_type = (
@@ -201,4 +201,7 @@ class RagApplication:
 
             return df, eval_res_avg
         else:
-            return None, f"Not support for vector store —— {vector_store_type}"
+            return (
+                None,
+                f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
+            )

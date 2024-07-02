@@ -11,7 +11,8 @@ from llama_index.llms.huggingface import HuggingFaceLLM
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
-from pai_rag.utils.open_dataset_miracl import load_related_docs_all
+from pai_rag.data.open_dataset import MiraclOpenDataSet
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -130,10 +131,11 @@ class RagDataLoader:
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
-    async def aload_eval_data(self, file_directory: str, name: str):
-        logger.info(f"[DataReader-Evaluation Dataset] Loaded from {file_directory}.")
+    async def aload_eval_data(self, name: str):
+        logger.info("[DataReader-Evaluation Dataset]")
         if name == "miracl":
-            miracl_nodes, _ = load_related_docs_all(file_directory)
+            miracl_dataset = MiraclOpenDataSet()
+            miracl_nodes, _ = miracl_dataset.load_related_corpus()
             nodes = []
             for node in miracl_nodes:
                 node_metadata = {

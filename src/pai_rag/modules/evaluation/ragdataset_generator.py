@@ -22,11 +22,7 @@ from pai_rag.utils.prompt_template import (
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_QUESTION_GENERATION_QUERY,
 )
-from pai_rag.utils.open_dataset_miracl import (
-    load_qrels,
-    load_topic,
-    load_related_docs_for_dev,
-)
+from pai_rag.data.open_dataset import MiraclOpenDataSet
 
 
 class ModifiedRagDatasetGenerator(RagDatasetGenerator):
@@ -136,9 +132,10 @@ class ModifiedRagDatasetGenerator(RagDatasetGenerator):
     def generate_dataset_from_miracl(self) -> LabelledRagDataset:
         """Node question generator."""
         examples: List[LabelledRagDataExample] = []
-        qrels, _ = load_qrels()
-        qid2topic = load_topic()
-        _, docid2doc = load_related_docs_for_dev()
+        miracl_dataset = MiraclOpenDataSet()
+        qrels, _ = miracl_dataset.load_qrels("dev")
+        qid2topic = miracl_dataset.load_topic("dev")
+        _, docid2doc = miracl_dataset.load_related_corpus_for_type("dev")
         for qid in qid2topic:
             pos_docids = (
                 [docid for docid, rel in qrels[qid].items() if rel == 1]
