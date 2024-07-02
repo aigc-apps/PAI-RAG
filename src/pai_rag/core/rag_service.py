@@ -11,7 +11,7 @@ from pai_rag.app.api.models import (
     LlmResponse,
 )
 from openinference.instrumentation import using_attributes
-from typing import Any
+from typing import Any, List
 import logging
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
@@ -87,7 +87,7 @@ class RagService:
     async def add_knowledge_async(
         self,
         task_id: str,
-        file_dir: str,
+        input_files: List[str],
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
     ):
@@ -95,7 +95,9 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id} processing\n")
         try:
-            await self.rag.aload_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            await self.rag.aload_knowledge(
+                input_files, faiss_path, enable_qa_extraction
+            )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id} completed\n")
         except Exception as ex:
