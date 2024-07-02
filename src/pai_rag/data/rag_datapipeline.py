@@ -4,8 +4,11 @@ import os
 from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
+import logging
 
-_BASE_DIR = Path(__file__).parent
+logging.basicConfig(level=logging.INFO)
+
+_BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
 
 
@@ -17,7 +20,10 @@ class RagDataPipeline:
         self, folder_path: str, enable_qa_extraction: bool, name: str = None
     ):
         if not name:
-            await self.data_loader.aload(folder_path, enable_qa_extraction)
+            # call async method will get stuck
+            # maybe caused by run_in_thread wrapper we used to avoid blocking event loop
+            # when uploading large files
+            self.data_loader.load(folder_path, enable_qa_extraction)
         else:
             await self.data_loader.aload_eval_data(name)
 

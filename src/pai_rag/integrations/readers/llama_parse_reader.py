@@ -60,7 +60,14 @@ class LlamaParseDirectoryReader(SimpleDirectoryReader):
         api_key (str, optional): llama_parse api key.
         """
 
-        super().__init__(input_dir)
+        super().__init__(
+            input_dir=input_dir,
+            input_files=input_files,
+            exclude=exclude,
+            exclude_hidden=exclude_hidden,
+            errors=errors,
+        )
+
         """ "markdown" and "text" are available"""
         if not api_key:
             api_key = os.getenv("LLAMA_CLOUD_API_KEY")

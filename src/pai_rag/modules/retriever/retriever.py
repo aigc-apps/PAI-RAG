@@ -2,7 +2,6 @@
 
 import logging
 from typing import Dict, List, Any
-
 from llama_index.core.indices.list.base import SummaryIndex
 from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.tools import RetrieverTool
@@ -34,7 +33,7 @@ class RetrieverModule(ConfigurableModule):
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
 
         # Special handle elastic search
-        if index.vectordb_type == "elasticsearch":
+        if index.vectordb_type == "elasticsearch" or index.vectordb_type == "milvus":
             if retrieval_mode == "embedding":
                 query_mode = VectorStoreQueryMode.DEFAULT
             elif retrieval_mode == "keyword":

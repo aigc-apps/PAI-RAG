@@ -6,12 +6,13 @@ from llama_index.core.storage.index_store.simple_index_store import SimpleIndexS
 from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
 from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.vector_stores.milvus import MilvusVectorStore
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 
 from pai_rag.integrations.vector_stores.vector_stores_hologres.hologres import (
     HologresVectorStore,
 )
+from pai_rag.modules.index.my_milvus_vector_store import MyMilvusVectorStore
+from pai_rag.modules.index.sparse_embedding import BGEM3SparseEmbeddingFunction
 from llama_index.core import StorageContext
 import logging
 
@@ -148,11 +149,13 @@ class RagStore:
 
         milvus_url = f"http://{milvus_host.strip('/')}:{milvus_port}/{milvus_database}"
         token = f"{milvus_user}:{milvus_password}"
-        return MilvusVectorStore(
+        return MyMilvusVectorStore(
             uri=milvus_url,
             token=token,
             collection_name=milvus_config["collection_name"],
             dim=self.embed_dims,
+            enable_sparse=True,
+            sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
         )
 
     def _get_or_create_simple_doc_store(self):

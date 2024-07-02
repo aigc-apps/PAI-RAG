@@ -181,10 +181,10 @@ You can use the command line to send API requests to the server, for example, ca
 
 It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
 
-- upload_local_data
+- upload_data
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
