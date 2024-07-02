@@ -136,9 +136,13 @@ class RagService:
         self.check_updates()
         return await self.rag.aquery_agent(query)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        self.check_updates()
-        return await self.rag.batch_evaluate_retrieval_and_response(type)
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        return await self.rag.aload_evaluation_qa_dataset(overwrite)
+
+    async def aevaluate_retrieval_and_response(
+        self, type: str = "all", overwrite: bool = False
+    ):
+        return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
 
 
 rag_service = RagService()
