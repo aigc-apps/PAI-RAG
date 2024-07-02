@@ -121,7 +121,7 @@ class PaiEAS(CustomLLM):
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
-        chat_fn = acompletion_to_chat_decorator(self.complete)
+        chat_fn = acompletion_to_chat_decorator(self.acomplete)
         return await chat_fn(messages, **kwargs)
 
     @llm_completion_callback()
