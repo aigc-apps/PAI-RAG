@@ -12,8 +12,11 @@ from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__LLM__interactive", "true")
 
 
 def connect_vector_db(input_elements: List[Any]):
@@ -39,6 +42,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
                     elem_id="embed_source",
+                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
                 embed_model = gr.Dropdown(
                     EMBEDDING_DIM_DICT.keys(),
@@ -88,6 +92,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     ["PaiEas", "OpenAI", "DashScope"],
                     label="LLM Model Source",
                     elem_id="llm",
+                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
                 with gr.Column(visible=(llm == "PaiEas")) as eas_col:
                     llm_eas_url = gr.Textbox(
