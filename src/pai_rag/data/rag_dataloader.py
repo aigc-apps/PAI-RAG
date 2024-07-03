@@ -180,6 +180,7 @@ class RagDataLoader:
                 node_metadata = {
                     "title": node[2],
                     "file_path": node[3],
+                    "file_name": node[3],
                 }
                 nodes.append(
                     TextNode(id_=node[0], text=node[1], metadata=node_metadata)
