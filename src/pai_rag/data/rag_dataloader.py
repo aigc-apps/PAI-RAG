@@ -162,7 +162,7 @@ class RagDataLoader:
 
         index_metadata_file = os.path.join(self.index.persist_path, "index.metadata")
         if self.bm25_index:
-            self.bm25_index.add_docs(nodes)
+            await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
             metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
@@ -199,7 +199,7 @@ class RagDataLoader:
                 self.index.persist_path, "index.metadata"
             )
             if self.bm25_index:
-                self.bm25_index.add_docs(nodes)
+                await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
                 metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
                 with open(index_metadata_file, "w") as wf:
                     wf.write(metadata_str)
