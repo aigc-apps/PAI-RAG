@@ -63,21 +63,21 @@ def create_setting_tab() -> Dict[str, Any]:
                         else DEFAULT_EMBED_SIZE,
                     }
 
-                def change_emb_model(model):
+                def change_emb_model(source, model):
                     return {
                         embed_dim: EMBEDDING_DIM_DICT.get(model, DEFAULT_EMBED_SIZE)
-                        if embed_source == "HuggingFace"
+                        if source == "HuggingFace"
                         else DEFAULT_EMBED_SIZE,
                     }
 
-                embed_source.change(
+                embed_source.input(
                     fn=change_emb_source,
                     inputs=embed_source,
                     outputs=[embed_model, embed_dim],
                 )
-                embed_model.change(
+                embed_model.input(
                     fn=change_emb_model,
-                    inputs=embed_model,
+                    inputs=[embed_source, embed_model],
                     outputs=[embed_dim],
                 )
             components.extend([embed_source, embed_dim, embed_model, embed_batch_size])
@@ -132,7 +132,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         ),
                     }
 
-                llm.change(
+                llm.input(
                     fn=change_llm,
                     inputs=llm,
                     outputs=[eas_col, api_llm_col, llm_api_model_name],

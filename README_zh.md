@@ -184,7 +184,7 @@ docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com
 - 上传（upload_data）
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
