@@ -16,7 +16,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__LLM__interactive", "true")
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def connect_vector_db(input_elements: List[Any]):
