@@ -20,9 +20,11 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
             ),
         ]
 
+    response = rag_client.add_knowledge(
+        [file.name for file in upload_files], enable_qa_extraction
+    )
     my_upload_files = []
     for file in upload_files:
-        response = rag_client.add_knowledge(file.name, enable_qa_extraction)
         my_upload_files.append(
             MyUploadFile(os.path.basename(file.name), response["task_id"])
         )

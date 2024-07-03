@@ -1,5 +1,5 @@
-from typing import Any
-from fastapi import APIRouter, Body, BackgroundTasks, File, UploadFile, Form
+from typing import Any, List
+from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
 import uuid
 import os
 import tempfile
@@ -10,7 +10,6 @@ from pai_rag.app.api.models import (
     RetrievalQuery,
     RagResponse,
     LlmResponse,
-    DataInput,
 )
 
 router = APIRouter()
@@ -45,18 +44,6 @@ async def aupdate(new_config: Any = Body(None)):
 @router.get("/config")
 async def aconfig():
     return rag_service.get_config()
-
-
-@router.post("/upload_data")
-def load_data(input: DataInput, background_tasks: BackgroundTasks):
-    task_id = uuid.uuid4().hex
-    background_tasks.add_task(
-        rag_service.add_knowledge_async,
-        task_id=task_id,
-        file_dir=input.file_path,
-        enable_qa_extraction=input.enable_qa_extraction,
-    )
-    return {"task_id": task_id}
 
 
 @router.get("/get_upload_state")
@@ -95,30 +82,33 @@ async def generate_qa_dataset(overwrite: bool = False):
     return {"status": 200, "result": qa_datase}
 
 
-@router.post("/upload_local_data")
-async def upload_local_data(
-    file: UploadFile = File(),
+@router.post("/upload_data")
+async def upload_data(
+    files: List[UploadFile],
     faiss_path: str = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
-    if not file:
+    if not files:
         return {"message": "No upload file sent"}
-    else:
+
+    tmpdir = tempfile.mkdtemp()
+    input_files = []
+    for file in files:
         fn = file.filename
-        tmpdir = tempfile.mkdtemp()
         save_file = os.path.join(tmpdir, f"{task_id}_{fn}")
         with open(save_file, "wb") as f:
             data = await file.read()
             f.write(data)
             f.close()
+        input_files.append(save_file)
 
-        background_tasks.add_task(
-            rag_service.add_knowledge_async,
-            task_id=task_id,
-            file_dir=tmpdir,
-            faiss_path=faiss_path,
-            enable_qa_extraction=False,
-        )
+    background_tasks.add_task(
+        rag_service.add_knowledge_async,
+        task_id=task_id,
+        input_files=input_files,
+        faiss_path=faiss_path,
+        enable_qa_extraction=False,
+    )
 
     return {"task_id": task_id}

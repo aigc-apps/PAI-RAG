@@ -1,9 +1,8 @@
 import datetime
 import json
 import os
-from typing import Any, Dict
-import asyncio
-import nest_asyncio
+from typing import Any, Dict, List
+from fastapi.concurrency import run_in_threadpool
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -16,7 +15,6 @@ from pai_rag.data.open_dataset import MiraclOpenDataSet
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "/huggingface/transformers/qwen_1.8b"
 
@@ -64,8 +62,21 @@ class RagDataLoader:
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
 
-    async def aload(self, file_directory: str, enable_qa_extraction: bool):
-        data_reader = self.datareader_factory.get_reader(file_directory)
+    def _get_nodes(self, file_path: str | List[str], enable_qa_extraction: bool):
+        if isinstance(file_path, list):
+            input_files = [f for f in file_path if os.path.isfile(f)]
+        elif isinstance(file_path, str) and os.path.isdir(file_path):
+            import pathlib
+
+            directory = pathlib.Path(file_path)
+            input_files = [f for f in directory.rglob("*") if os.path.isfile(f)]
+        else:
+            input_files = [file_path]
+
+        if len(input_files) == 0:
+            return
+
+        data_reader = self.datareader_factory.get_reader(input_files)
         docs = data_reader.load_data()
         logger.info(f"[DataReader] Loaded {len(docs)} docs.")
 
@@ -94,7 +105,7 @@ class RagDataLoader:
             qa_nodes = []
 
             for extractor in self.extractors:
-                metadata_list = await extractor.aextract(nodes)
+                metadata_list = extractor.extract(nodes)
                 for i, node in enumerate(nodes):
                     qa_extraction_result = metadata_list[i].get(
                         "qa_extraction_result", {}
@@ -114,6 +125,34 @@ class RagDataLoader:
                 node.excluded_llm_metadata_keys.append("question")
             nodes.extend(qa_nodes)
 
+        return nodes
+
+    def load(self, file_path: str | List[str], enable_qa_extraction: bool):
+        print(logger.level)
+        nodes = self._get_nodes(file_path, enable_qa_extraction)
+
+        logger.info("[DataReader] Start inserting to index.")
+
+        self.index.vector_index.insert_nodes(nodes)
+        self.index.vector_index.storage_context.persist(
+            persist_dir=self.index.persist_path
+        )
+
+        index_metadata_file = os.path.join(self.index.persist_path, "index.metadata")
+        if self.bm25_index:
+            self.bm25_index.add_docs(nodes)
+            metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+            with open(index_metadata_file, "w") as wf:
+                wf.write(metadata_str)
+
+        logger.info(f"Inserted {len(nodes)} nodes successfully.")
+        return
+
+    async def aload(self, file_path: str | List[str], enable_qa_extraction: bool):
+        nodes = await run_in_threadpool(
+            lambda: self._get_nodes(file_path, enable_qa_extraction)
+        )
+
         logger.info("[DataReader] Start inserting to index.")
 
         await self.index.vector_index.insert_nodes_async(nodes)
@@ -123,7 +162,7 @@ class RagDataLoader:
 
         index_metadata_file = os.path.join(self.index.persist_path, "index.metadata")
         if self.bm25_index:
-            self.bm25_index.add_docs(nodes)
+            await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
             metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
@@ -160,7 +199,7 @@ class RagDataLoader:
                 self.index.persist_path, "index.metadata"
             )
             if self.bm25_index:
-                self.bm25_index.add_docs(nodes)
+                await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
                 metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
                 with open(index_metadata_file, "w") as wf:
                     wf.write(metadata_str)
@@ -171,9 +210,3 @@ class RagDataLoader:
             return
         else:
             raise ValueError(f"Not supported eval dataset name with {name}")
-
-    nest_asyncio.apply()  # 应用嵌套补丁到事件循环
-
-    def load(self, file_directory: str, enable_qa_extraction: bool):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.aload(file_directory, enable_qa_extraction))

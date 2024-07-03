@@ -181,10 +181,10 @@ docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com
 
 支持通过API的方式上传本地文件，并支持指定不同的faiss_path，每次发送API请求会返回一个task_id，之后可以通过task_id来查看文件上传状态（processing、completed、failed）。
 
-- 上传（upload_local_data）
+- 上传（upload_data）
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```

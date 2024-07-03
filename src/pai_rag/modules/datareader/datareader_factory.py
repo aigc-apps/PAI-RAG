@@ -39,16 +39,16 @@ class DataReaderFactoryModule(ConfigurableModule):
         }
         return self
 
-    def get_reader(self, directory: str):
+    def get_reader(self, input_files: str):
         if self.reader_config["type"] == "SimpleDirectoryReader":
             return SimpleDirectoryReader(
-                input_dir=directory,
+                input_files=input_files,
                 file_extractor=self.file_readers,
             )
 
         elif self.reader_config["type"] == "LlamaParseDirectoryReader":
             return LlamaParseDirectoryReader(
-                input_dir=directory,
+                input_files=input_files,
                 api_key=self.reader_config["llama_cloud_api_key"],
                 oss_cache=self.oss_cache,
             )

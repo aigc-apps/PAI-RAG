@@ -7,6 +7,7 @@ An index that is built on top of an existing vector store.
 import asyncio
 import logging
 from typing import Any, Sequence
+from fastapi.concurrency import run_in_threadpool
 from llama_index.core import VectorStoreIndex
 from llama_index.core.data_structs.data_structs import IndexDict
 from llama_index.core.schema import (
@@ -80,8 +81,8 @@ class MyVectorStoreIndex(VectorStoreIndex):
 
         node_batch_list = []
         for nodes_batch in iter_batch(nodes, 100):
-            nodes_batch = await self._aget_node_with_embedding(
-                nodes_batch, show_progress
+            nodes_batch = await run_in_threadpool(
+                lambda: self._get_node_with_embedding(nodes_batch, show_progress)
             )
             node_batch_list.append(nodes_batch)
 

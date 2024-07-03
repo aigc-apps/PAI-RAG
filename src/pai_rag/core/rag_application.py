@@ -32,14 +32,9 @@ class RagApplication:
         self.initialize(config)
         self.logger.info("RagApplication reloaded successfully.")
 
-    # TODO: 大量文件上传实现异步添加
-    async def aload_knowledge(self, file_dir, enable_qa_extraction=False):
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", self.config
-        )
-        await data_loader.aload(file_dir, enable_qa_extraction)
-
-    def load_knowledge(self, file_dir, faiss_path=None, enable_qa_extraction=False):
+    async def aload_knowledge(
+        self, input_files, faiss_path=None, enable_qa_extraction=False
+    ):
         sessioned_config = self.config
         if faiss_path:
             sessioned_config = self.config.copy()
@@ -51,7 +46,7 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        data_loader.load(file_dir, enable_qa_extraction)
+        await data_loader.aload(input_files, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
