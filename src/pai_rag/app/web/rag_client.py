@@ -8,6 +8,8 @@ import os
 import mimetypes
 from pai_rag.app.web.view_model import ViewModel
 
+DEFAULT_CLIENT_TIME_OUT = 60
+
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -62,7 +64,7 @@ class RagWebClient:
 
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
-        r = requests.post(self.query_url, json=q)
+        r = requests.post(self.query_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         referenced_docs = ""
@@ -88,7 +90,7 @@ class RagWebClient:
             session_id=session_id,
         )
 
-        r = requests.post(self.llm_url, json=q)
+        r = requests.post(self.llm_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
 
@@ -96,7 +98,7 @@ class RagWebClient:
 
     def query_vector(self, text: str):
         q = dict(question=text)
-        r = requests.post(self.retrieval_url, json=q)
+        r = requests.post(self.retrieval_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
@@ -122,8 +124,7 @@ class RagWebClient:
 
         try:
             r = requests.post(
-                self.load_data_url,
-                files=files,
+                self.load_data_url, files=files, timeout=DEFAULT_CLIENT_TIME_OUT
             )
             r.raise_for_status()
         except:
@@ -136,7 +137,7 @@ class RagWebClient:
         return response
 
     async def get_knowledge_state(self, task_id: str):
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
             r.raise_for_status()
             response = dotdict(json.loads(r.text))
@@ -148,12 +149,14 @@ class RagWebClient:
         view_model.update(update_dict)
         new_config = view_model.to_app_config()
 
-        r = requests.patch(self.config_url, json=new_config)
+        r = requests.patch(
+            self.config_url, json=new_config, timeout=DEFAULT_CLIENT_TIME_OUT
+        )
         r.raise_for_status()
         return
 
     def get_config(self):
-        r = requests.get(self.config_url)
+        r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         print(response)
@@ -161,20 +164,26 @@ class RagWebClient:
 
     def evaluate_for_generate_qa(self, overwrite):
         r = requests.post(
-            self.get_evaluate_generate_url, params={"overwrite": overwrite}
+            self.get_evaluate_generate_url,
+            params={"overwrite": overwrite},
+            timeout=DEFAULT_CLIENT_TIME_OUT,
         )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         return response
 
     def evaluate_for_retrieval_stage(self):
-        r = requests.post(self.get_evaluate_retrieval_url)
+        r = requests.post(
+            self.get_evaluate_retrieval_url, timeout=DEFAULT_CLIENT_TIME_OUT
+        )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         return response
 
     def evaluate_for_response_stage(self):
-        r = requests.post(self.get_evaluate_response_url)
+        r = requests.post(
+            self.get_evaluate_response_url, timeout=DEFAULT_CLIENT_TIME_OUT
+        )
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         print("evaluate_for_response_stage response", response)
