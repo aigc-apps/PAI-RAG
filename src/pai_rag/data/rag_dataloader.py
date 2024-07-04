@@ -6,11 +6,13 @@ from fastapi.concurrency import run_in_threadpool
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
+from llama_index.core.node_parser import MarkdownNodeParser
 
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet
+
 
 import logging
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "/huggingface/transformers/qwen_1.8b"
 
-DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".md", ".xls", ".htm", ".html"])
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".htm", ".html"])
 
 
 class RagDataLoader:
@@ -95,6 +97,9 @@ class RagDataLoader:
                 nodes.append(
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
+            elif doc_type == ".md":
+                md_node_parser = MarkdownNodeParser()
+                nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
 

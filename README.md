@@ -101,6 +101,20 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    load_data -c src/pai_rag/config/settings.yaml -d directory_path
    ```
 
+   ```bash
+   load_data -c src/pai_rag/config/settings.yaml -p data_path
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -p test/example
+   b. load_data -p test/example_data/pai_document.pdf
+   c. load_data -p test/*/pai_document.pdf
+   d. load_data -p test/*/*.pdf
+   e. load_data -p test/example_data/pai_document.pdf,test/example_data/ratio.csv
+   ```
+
 4. Run RAG Service
 
    To use the OpenAI or DashScope API, you need to introduce environment variables:
