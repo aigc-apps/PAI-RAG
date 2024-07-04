@@ -29,7 +29,7 @@ def resume_ui():
             elem_attr = component_settings[elem_id]
             elem = elem_manager.get_elem_by_id(elem_id=elem_id)
             # For gradio version 3.41.0, we can remove .value for latest gradio here.
-            outputs[elem] = elem.__class__(**elem_attr).value
+            outputs[elem] = gr.update(**elem_attr)
             # if elem_id == "qa_dataset_file":
             #     outputs[elem] = elem_attr["value"]
             # else:
