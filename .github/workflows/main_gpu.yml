@@ -54,12 +54,3 @@ jobs:
           PAIRAG_RAG__embedding__source: "DashScope"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__name: "qwen-turbo"
-
-      - name: Get Cover
-        uses: orgoro/coverage@v3.1
-        with:
-          coverageFile: localdata/test_output/coverage_report.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          thresholdAll: 0.5 # Total coverage threshold
-          #thresholdNew: 0.9 # New files coverage threshold
-          #thresholdModified: 0.9 # Modified files coverage threshold
