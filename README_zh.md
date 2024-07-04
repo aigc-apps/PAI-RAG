@@ -93,17 +93,16 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    向当前索引存储中插入directory_path目录下的新文件
 
    ```bash
-   load_data -c src/pai_rag/config/settings.yaml -p data_path
+   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
    ```
 
    path examples:
 
    ```
-   a. load_data -p test/example
-   b. load_data -p test/example_data/pai_document.pdf
-   c. load_data -p test/*/pai_document.pdf
-   d. load_data -p test/*/*.pdf
-   e. load_data -p test/example_data/pai_document.pdf,test/example_data/ratio.csv
+   a. load_data -d test/example
+   b. load_data -d test/example_data/pai_document.pdf
+   c. load_data -d test/example_data -p *.pdf
+
    ```
 
 4. 启动RAG服务

@@ -1,12 +1,13 @@
 import asyncio
 import click
 import os
-import re
-import glob
 from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 import logging
+
+logger = logging.getLogger(__name__)
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,7 +20,11 @@ class RagDataPipeline:
         self.data_loader = data_loader
 
     async def ingest_from_input_path(
-        self, input_path: str, enable_qa_extraction: bool, name: str = None
+        self,
+        input_path: str,
+        pattern: str,
+        enable_qa_extraction: bool,
+        name: str = None,
     ):
         if not name:
             # call async method will get stuck
@@ -27,13 +32,9 @@ class RagDataPipeline:
             # when uploading large files
             if isinstance(input_path, str) and os.path.isdir(input_path):
                 input_paths = input_path
-            elif isinstance(input_path, str) and re.match(
-                r"^\*\.[A-Za-z0-9_-]+$", os.path.split(input_path)[1]
-            ):
-                input_paths = glob.glob(input_path, recursive=True)
             else:
                 input_paths = [file.strip() for file in input_path.split(",")]
-            self.data_loader.load(input_paths, enable_qa_extraction)
+            self.data_loader.load(input_paths, pattern, enable_qa_extraction)
         else:
             await self.data_loader.aload_eval_data(name)
 
@@ -54,7 +55,12 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
-@click.option("-p", "--path", required=False, default=None, help="data path to ingest.")
+@click.option(
+    "-d", "--directory", required=True, default=None, help="directory path to ingest."
+)
+@click.option(
+    "-p", "--pattern", required=False, default=None, help="data pattern to ingest."
+)
 @click.option(
     "-q",
     "--extract-qa",
@@ -80,6 +86,8 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help="Open Dataset Name. Optional: [miracl]",
     default=None,
 )
-def run(config, path, extract_qa, use_local_qa_model, name):
+def run(config, directory, pattern, extract_qa, use_local_qa_model, name):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
-    asyncio.run(data_pipeline.ingest_from_input_path(path, extract_qa, name))
+    asyncio.run(
+        data_pipeline.ingest_from_input_path(directory, pattern, extract_qa, name)
+    )

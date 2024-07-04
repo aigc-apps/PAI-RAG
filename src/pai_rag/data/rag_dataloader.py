@@ -64,14 +64,22 @@ class RagDataLoader:
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
 
-    def _get_nodes(self, file_path: str | List[str], enable_qa_extraction: bool):
+    def _get_nodes(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
+        filter_pattern = filter_pattern or "*"
         if isinstance(file_path, list):
             input_files = [f for f in file_path if os.path.isfile(f)]
         elif isinstance(file_path, str) and os.path.isdir(file_path):
             import pathlib
 
             directory = pathlib.Path(file_path)
-            input_files = [f for f in directory.rglob("*") if os.path.isfile(f)]
+            input_files = [
+                f for f in directory.rglob(filter_pattern) if os.path.isfile(f)
+            ]
         else:
             input_files = [file_path]
 
@@ -132,9 +140,18 @@ class RagDataLoader:
 
         return nodes
 
-    def load(self, file_path: str | List[str], enable_qa_extraction: bool):
+    def load(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
         print(logger.level)
-        nodes = self._get_nodes(file_path, enable_qa_extraction)
+        nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
+
+        if not nodes:
+            logger.info("[DataReader] could not find files")
+            return
 
         logger.info("[DataReader] Start inserting to index.")
 
@@ -153,10 +170,18 @@ class RagDataLoader:
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
-    async def aload(self, file_path: str | List[str], enable_qa_extraction: bool):
+    async def aload(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
         nodes = await run_in_threadpool(
-            lambda: self._get_nodes(file_path, enable_qa_extraction)
+            lambda: self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
         )
+        if not nodes:
+            logger.info("[DataReader] could not find files")
+            return
 
         logger.info("[DataReader] Start inserting to index.")
 

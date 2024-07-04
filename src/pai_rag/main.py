@@ -172,7 +172,7 @@ def serve(host, port, config_file, workers, enable_example):
         data_pipeline = __init_data_pipeline(config_file, False)
         asyncio.run(
             data_pipeline.ingest_from_input_path(
-                DEFAULT_APPLICATION_EXAMPLE_DATA_FILE, False
+                DEFAULT_APPLICATION_EXAMPLE_DATA_FILE, None, False
             )
         )
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
