@@ -3,6 +3,7 @@ import json
 import os
 from typing import Any, Dict, List
 from fastapi.concurrency import run_in_threadpool
+import asyncio
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -11,6 +12,7 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet
+from pai_rag.integrations.retrievers.raptor.nodes_enhancement import enhance_nodes
 
 import logging
 
@@ -127,13 +129,24 @@ class RagDataLoader:
 
         return nodes
 
-    def load(self, file_path: str | List[str], enable_qa_extraction: bool):
+    def load(
+        self,
+        file_path: str | List[str],
+        enable_qa_extraction: bool,
+        enable_raptor: bool,
+    ):
         print(logger.level)
         nodes = self._get_nodes(file_path, enable_qa_extraction)
 
         logger.info("[DataReader] Start inserting to index.")
 
-        self.index.vector_index.insert_nodes(nodes)
+        if enable_raptor:
+            self.index.vector_index = asyncio.run(
+                enhance_nodes(nodes=nodes, index=self.index.vector_index)
+            )
+        else:
+            self.index.vector_index.insert_nodes(nodes)
+
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
         )
@@ -148,14 +161,29 @@ class RagDataLoader:
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
-    async def aload(self, file_path: str | List[str], enable_qa_extraction: bool):
+    async def aload(
+        self,
+        file_path: str | List[str],
+        enable_qa_extraction: bool,
+        enable_raptor: bool = True,
+    ):
         nodes = await run_in_threadpool(
             lambda: self._get_nodes(file_path, enable_qa_extraction)
         )
 
         logger.info("[DataReader] Start inserting to index.")
 
-        await self.index.vector_index.insert_nodes_async(nodes)
+        if enable_raptor:
+            self.index.vector_index = await enhance_nodes(
+                nodes=nodes, index=self.index.vector_index
+            )
+            logger.info(
+                f"Enhanced {len(self.index.vector_index.docstore.docs)} nodes successfully"
+            )
+        else:
+            await self.index.vector_index.insert_nodes_async(nodes)
+            logger.info(f"Inserted {len(nodes)} nodes successfully.")
+
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
         )
@@ -167,7 +195,6 @@ class RagDataLoader:
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
 
-        logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
     async def aload_eval_data(self, name: str):
