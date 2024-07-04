@@ -128,11 +128,9 @@ class RagDataLoader:
         return nodes
 
     def load(self, file_path: str | List[str], enable_qa_extraction: bool):
-        print(logger.level)
         nodes = self._get_nodes(file_path, enable_qa_extraction)
 
         logger.info("[DataReader] Start inserting to index.")
-
         self.index.vector_index.insert_nodes(nodes)
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
