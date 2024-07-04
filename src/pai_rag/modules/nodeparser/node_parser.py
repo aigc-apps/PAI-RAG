@@ -20,7 +20,7 @@ from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 
 
 def node_id_hash(i: int, doc: BaseNode) -> str:
-    encoded_raw_text = f"<<{i}>>{doc.metadata}".encode()
+    encoded_raw_text = f"""<<{i}>>{doc.metadata["file_name"]}""".encode()
     hash = hashlib.sha256(encoded_raw_text).hexdigest()
     return hash
 
