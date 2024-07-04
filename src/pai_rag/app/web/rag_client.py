@@ -7,6 +7,7 @@ import httpx
 import os
 import mimetypes
 from pai_rag.app.web.view_model import ViewModel
+from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 
 DEFAULT_CLIENT_TIME_OUT = 60
 
@@ -68,9 +69,7 @@ class RagWebClient:
         r.raise_for_status()
         response = dotdict(json.loads(r.text))
         if len(response["docs"]) == 0:
-            response[
-                "answer"
-            ] = "The knowledge base is empty. Kindly upload your knowledge files before executing a query."
+            response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
         else:
             referenced_docs = ""
             for i, doc in enumerate(response["docs"]):
@@ -108,9 +107,7 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
         if len(response["docs"]) == 0:
-            response[
-                "answer"
-            ] = "The knowledge base is empty. Kindly upload your knowledge files before executing a query."
+            response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
