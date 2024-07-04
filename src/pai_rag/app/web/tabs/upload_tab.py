@@ -2,14 +2,22 @@ import os
 from typing import Dict, Any
 import gradio as gr
 import time
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 import asyncio
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
-    rag_client.patch_config({"chunk_size": chunk_size, "chunk_overlap": chunk_overlap})
+    if not upload_files:
+        return
+
+    try:
+        rag_client.patch_config(
+            {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap}
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     if not upload_files:
         yield [
@@ -20,9 +28,13 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
             ),
         ]
 
-    response = rag_client.add_knowledge(
-        [file.name for file in upload_files], enable_qa_extraction
-    )
+    try:
+        response = rag_client.add_knowledge(
+            [file.name for file in upload_files], enable_qa_extraction
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     my_upload_files = []
     for file in upload_files:
         my_upload_files.append(
@@ -32,7 +44,13 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     while not all(file.finished is True for file in my_upload_files):
         for file in my_upload_files:
-            response = asyncio.run(rag_client.get_knowledge_state(str(file.task_id)))
+            try:
+                response = asyncio.run(
+                    rag_client.get_knowledge_state(str(file.task_id))
+                )
+            except RagApiError as api_error:
+                raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
             file.update_state(response["status"])
             file.update_process_duration()
             result[file.file_name] = file.__info__()
