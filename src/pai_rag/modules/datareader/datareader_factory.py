@@ -44,6 +44,7 @@ class DataReaderFactoryModule(ConfigurableModule):
             return SimpleDirectoryReader(
                 input_files=input_files,
                 file_extractor=self.file_readers,
+                raise_on_error=True,
             )
 
         elif self.reader_config["type"] == "LlamaParseDirectoryReader":

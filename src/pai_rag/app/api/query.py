@@ -49,8 +49,8 @@ async def aconfig():
 
 @router.get("/get_upload_state")
 def task_status(task_id: str):
-    status = rag_service.get_task_status(task_id)
-    return {"task_id": task_id, "status": status}
+    status, detail = rag_service.get_task_status(task_id)
+    return {"task_id": task_id, "status": status, "detail": detail}
 
 
 @router.post("/evaluate")

@@ -1,14 +1,13 @@
 from typing import Dict, Any, List
 import gradio as gr
 import datetime
-import traceback
 from pai_rag.app.web.ui_constants import (
     EMBEDDING_API_KEY_DICT,
     DEFAULT_EMBED_SIZE,
     EMBEDDING_DIM_DICT,
     LLM_MODEL_KEY_DICT,
 )
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import logging
@@ -27,9 +26,8 @@ def connect_vector_db(input_elements: List[Any]):
 
         rag_client.patch_config(update_dict)
         return f"[{datetime.datetime.now()}] Connect vector db success!"
-    except Exception as ex:
-        logger.critical(f"[Critical] Connect failed. {traceback.format_exc()}")
-        return f"Connect failed. Please check: {ex}"
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
 def create_setting_tab() -> Dict[str, Any]:
