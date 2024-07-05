@@ -95,10 +95,19 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 3. Load Data
 
-   Insert new files in the directory directory_path into the current index storage:
+   Insert new files in the data_path into the current index storage:
 
    ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d directory_path
+   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -d test/example
+   b. load_data -d test/example_data/pai_document.pdf
+   c. load_data -d test/example_data -p *.pdf
+
    ```
 
 4. Run RAG Service

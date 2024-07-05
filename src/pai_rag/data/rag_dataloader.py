@@ -6,11 +6,13 @@ from fastapi.concurrency import run_in_threadpool
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
+from llama_index.core.node_parser import MarkdownNodeParser
 
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet
+
 
 import logging
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "/huggingface/transformers/qwen_1.8b"
 
-DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".md", ".xls", ".htm", ".html"])
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".htm", ".html"])
 
 
 class RagDataLoader:
@@ -62,14 +64,22 @@ class RagDataLoader:
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
 
-    def _get_nodes(self, file_path: str | List[str], enable_qa_extraction: bool):
+    def _get_nodes(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
+        filter_pattern = filter_pattern or "*"
         if isinstance(file_path, list):
             input_files = [f for f in file_path if os.path.isfile(f)]
         elif isinstance(file_path, str) and os.path.isdir(file_path):
             import pathlib
 
             directory = pathlib.Path(file_path)
-            input_files = [f for f in directory.rglob("*") if os.path.isfile(f)]
+            input_files = [
+                f for f in directory.rglob(filter_pattern) if os.path.isfile(f)
+            ]
         else:
             input_files = [file_path]
 
@@ -95,6 +105,9 @@ class RagDataLoader:
                 nodes.append(
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
+            elif doc_type == ".md":
+                md_node_parser = MarkdownNodeParser()
+                nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
 
@@ -127,12 +140,20 @@ class RagDataLoader:
 
         return nodes
 
-    def load(self, file_path: str | List[str], enable_qa_extraction: bool):
+    def load(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
         print(logger.level)
-        nodes = self._get_nodes(file_path, enable_qa_extraction)
+        nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
+
+        if not nodes:
+            logger.info("[DataReader] could not find files")
+            return
 
         logger.info("[DataReader] Start inserting to index.")
-
         self.index.vector_index.insert_nodes(nodes)
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
@@ -148,10 +169,18 @@ class RagDataLoader:
         logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
-    async def aload(self, file_path: str | List[str], enable_qa_extraction: bool):
+    async def aload(
+        self,
+        file_path: str | List[str],
+        filter_pattern: str,
+        enable_qa_extraction: bool,
+    ):
         nodes = await run_in_threadpool(
-            lambda: self._get_nodes(file_path, enable_qa_extraction)
+            lambda: self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
         )
+        if not nodes:
+            logger.info("[DataReader] could not find files")
+            return
 
         logger.info("[DataReader] Start inserting to index.")
 

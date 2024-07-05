@@ -5,12 +5,17 @@ import uvicorn
 from fastapi import FastAPI
 from pai_rag.app.api.service import configure_app
 from pai_rag.app.web.webui import configure_webapp
+from pai_rag.data.rag_datapipeline import __init_data_pipeline
 from logging.config import dictConfig
 import os
 from pathlib import Path
 
 _BASE_DIR = Path(__file__).parent
+_ROOT_BASE_DIR = Path(__file__).parent.parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
+DEFAULT_APPLICATION_EXAMPLE_DATA_FILE = os.path.join(
+    _ROOT_BASE_DIR, "example_data/pai_document.pdf"
+)
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
@@ -151,7 +156,23 @@ def ui(host, port, rag_url):
     type=int,
     default=1,
 )
-def serve(host, port, config_file, workers):
+@click.option(
+    "-e",
+    "--enable-example",
+    show_default=True,
+    help="whether to load example data. Default:False ",
+    required=False,
+    type=bool,
+    default=False,
+)
+def serve(host, port, config_file, workers, enable_example):
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
+    if enable_example:
+        data_pipeline = __init_data_pipeline(config_file, False)
+        asyncio.run(
+            data_pipeline.ingest_from_input_path(
+                DEFAULT_APPLICATION_EXAMPLE_DATA_FILE, None, False
+            )
+        )
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)

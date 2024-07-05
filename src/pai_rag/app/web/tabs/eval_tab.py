@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
 import gradio as gr
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 import tempfile
 import json
 import pandas as pd
@@ -10,7 +10,11 @@ from datetime import datetime
 
 def generate_and_download_qa_file(overwrite):
     tmpdir = tempfile.mkdtemp()
-    qa_content = rag_client.evaluate_for_generate_qa(bool(overwrite))
+    try:
+        qa_content = rag_client.evaluate_for_generate_qa(bool(overwrite))
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     outputPath = os.path.join(tmpdir, "qa_dataset_output.json")
     with open(outputPath, "w", encoding="utf-8") as f:
         json.dump(qa_content, f, ensure_ascii=False, indent=4)
@@ -18,7 +22,11 @@ def generate_and_download_qa_file(overwrite):
 
 
 def eval_retrieval_stage():
-    retrieval_res = rag_client.evaluate_for_retrieval_stage()
+    try:
+        retrieval_res = rag_client.evaluate_for_retrieval_stage()
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pd_results = {
         "Metrics": ["HitRate", "MRR", "LastModified"],
@@ -32,7 +40,11 @@ def eval_retrieval_stage():
 
 
 def eval_response_stage():
-    response_res = rag_client.evaluate_for_response_stage()
+    try:
+        response_res = rag_client.evaluate_for_response_stage()
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pd_results = {
         "Metrics": ["Faithfulness", "Correctness", "Similarity", "LastModified"],

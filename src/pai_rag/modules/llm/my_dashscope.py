@@ -342,12 +342,17 @@ class MyDashScope(CustomLLM):
         parameters.pop("stream", None)
         parameters.pop("incremental_output", None)
         parameters["result_format"] = "message"  # only use message format.
+
         response = await call_with_messages_async(
             model=self.model_name,
             messages=chat_message_to_dashscope_messages(messages),
             api_key=self.api_key,
             parameters=parameters,
         )
+        if response["status_code"] != HTTPStatus.OK:
+            raise ValueError(
+                f"Call DashScope API failed, {response['code']}: {response['message']}"
+            )
         return dashscope_response_to_chat_response(response)
 
     @llm_completion_callback()
@@ -362,4 +367,8 @@ class MyDashScope(CustomLLM):
             api_key=self.api_key,
             parameters=parameters,
         )
+        if response["status_code"] != HTTPStatus.OK:
+            raise ValueError(
+                f"Call DashScope API failed, {response['code']}: {response['message']}"
+            )
         return dashscope_response_to_completion_response(response)

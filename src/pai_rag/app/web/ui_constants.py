@@ -53,3 +53,5 @@ LLM_MODEL_KEY_DICT = {
         "gpt-4-turbo",
     ],
 }
+
+EMPTY_KNOWLEDGEBASE_MESSAGE = "The knowledge base is empty. Kindly upload your knowledge files before executing a query."
