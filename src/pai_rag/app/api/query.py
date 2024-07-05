@@ -110,6 +110,7 @@ async def upload_data(
         rag_service.add_knowledge_async,
         task_id=task_id,
         input_files=input_files,
+        filter_pattern=None,
         faiss_path=faiss_path,
         enable_qa_extraction=False,
     )

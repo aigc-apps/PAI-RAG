@@ -6,6 +6,9 @@ from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 import logging
 
+logger = logging.getLogger(__name__)
+
+
 logging.basicConfig(level=logging.INFO)
 
 _BASE_DIR = Path(__file__).parent.parent
@@ -16,14 +19,22 @@ class RagDataPipeline:
     def __init__(self, data_loader):
         self.data_loader = data_loader
 
-    async def ingest_from_folder(
-        self, folder_path: str, enable_qa_extraction: bool, name: str = None
+    async def ingest_from_input_path(
+        self,
+        input_path: str,
+        pattern: str,
+        enable_qa_extraction: bool,
+        name: str = None,
     ):
         if not name:
             # call async method will get stuck
             # maybe caused by run_in_thread wrapper we used to avoid blocking event loop
             # when uploading large files
-            self.data_loader.load(folder_path, enable_qa_extraction)
+            if isinstance(input_path, str) and os.path.isdir(input_path):
+                input_paths = input_path
+            else:
+                input_paths = [file.strip() for file in input_path.split(",")]
+            self.data_loader.load(input_paths, pattern, enable_qa_extraction)
         else:
             await self.data_loader.aload_eval_data(name)
 
@@ -45,7 +56,14 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
 @click.option(
-    "-d", "--directory", required=False, default=None, help="directory path to ingest."
+    "-d",
+    "--data-path",
+    required=True,
+    default=None,
+    help="data path (file or directory) to ingest.",
+)
+@click.option(
+    "-p", "--pattern", required=False, default=None, help="data pattern to ingest."
 )
 @click.option(
     "-q",
@@ -72,6 +90,8 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help="Open Dataset Name. Optional: [miracl]",
     default=None,
 )
-def run(config, directory, extract_qa, use_local_qa_model, name):
+def run(config, data_path, pattern, extract_qa, use_local_qa_model, name):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
-    asyncio.run(data_pipeline.ingest_from_folder(directory, extract_qa, name))
+    asyncio.run(
+        data_pipeline.ingest_from_input_path(data_path, pattern, extract_qa, name)
+    )

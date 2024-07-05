@@ -95,6 +95,7 @@ class RagService:
         self,
         task_id: str,
         input_files: List[str],
+        filter_pattern: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
     ):
@@ -103,7 +104,7 @@ class RagService:
             f.write(f"{task_id}\tprocessing\n")
         try:
             await self.rag.aload_knowledge(
-                input_files, faiss_path, enable_qa_extraction
+                input_files, filter_pattern, faiss_path, enable_qa_extraction
             )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")

@@ -33,7 +33,11 @@ class RagApplication:
         self.logger.info("RagApplication reloaded successfully.")
 
     async def aload_knowledge(
-        self, input_files, faiss_path=None, enable_qa_extraction=False
+        self,
+        input_files,
+        filter_pattern=None,
+        faiss_path=None,
+        enable_qa_extraction=False,
     ):
         sessioned_config = self.config
         if faiss_path:
@@ -46,7 +50,7 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        await data_loader.aload(input_files, enable_qa_extraction)
+        await data_loader.aload(input_files, filter_pattern, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
