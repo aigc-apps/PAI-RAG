@@ -133,7 +133,9 @@ class RagWebClient:
             response["answer"] = formatted_text
         return response
 
-    def add_knowledge(self, input_files: str, enable_qa_extraction: bool):
+    def add_knowledge(
+        self, input_files: str, enable_qa_extraction: bool, enable_raptor: bool
+    ):
         files = []
         file_obj_list = []
         for file_name in input_files:
@@ -141,10 +143,13 @@ class RagWebClient:
             mimetype = mimetypes.guess_type(file_name)[0]
             files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
             file_obj_list.append(file_obj)
-
+        para = {"enable_raptor": enable_raptor}
         try:
             r = requests.post(
-                self.load_data_url, files=files, timeout=DEFAULT_CLIENT_TIME_OUT
+                self.load_data_url,
+                files=files,
+                data=para,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
             )
             response = dotdict(json.loads(r.text))
             if r.status_code != HTTPStatus.OK:

@@ -98,13 +98,18 @@ class RagService:
         filter_pattern: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
+        enable_raptor: bool = False,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
             await self.rag.aload_knowledge(
-                input_files, filter_pattern, faiss_path, enable_qa_extraction
+                input_files,
+                filter_pattern,
+                faiss_path,
+                enable_qa_extraction,
+                enable_raptor,
             )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
