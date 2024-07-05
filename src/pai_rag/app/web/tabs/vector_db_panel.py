@@ -1,6 +1,9 @@
 import gradio as gr
 from typing import Any, Set, Callable, Dict
 from pai_rag.app.web.utils import components_to_dict
+import os
+
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def create_vector_db_panel(
@@ -15,6 +18,7 @@ def create_vector_db_panel(
                 ["Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
+                interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
             )
             # Adb
             with gr.Column(visible=(vectordb_type == "AnalyticDB")) as adb_col:

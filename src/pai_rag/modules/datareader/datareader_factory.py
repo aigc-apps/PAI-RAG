@@ -8,6 +8,7 @@ from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
 from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from llama_index.readers.database import DatabaseReader
 from llama_index.core import SimpleDirectoryReader
+from llama_index.readers.file import FlatReader
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class DataReaderFactoryModule(ConfigurableModule):
             ".xls": PaiPandasExcelReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
             ),
+            ".md": FlatReader(),
         }
         return self
 
@@ -44,6 +46,7 @@ class DataReaderFactoryModule(ConfigurableModule):
             return SimpleDirectoryReader(
                 input_files=input_files,
                 file_extractor=self.file_readers,
+                raise_on_error=True,
             )
 
         elif self.reader_config["type"] == "LlamaParseDirectoryReader":

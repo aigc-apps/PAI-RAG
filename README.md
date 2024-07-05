@@ -95,10 +95,19 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 3. Load Data
 
-   Insert new files in the directory directory_path into the current index storage:
+   Insert new files in the data_path into the current index storage:
 
    ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d directory_path
+   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -d test/example
+   b. load_data -d test/example_data/pai_document.pdf
+   c. load_data -d test/example_data -p *.pdf
+
    ```
 
 4. Run RAG Service
@@ -184,7 +193,7 @@ It supports uploading local files through API and supports specifying different 
 - upload_data
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```

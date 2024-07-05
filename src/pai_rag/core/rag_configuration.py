@@ -17,7 +17,8 @@ class RagConfiguration:
         try:
             settings_files = [GENERATED_CONFIG_FILE_NAME]
             config = Dynaconf(
-                envvar_prefix="PAIRAG",
+                # don't respect env when checking snapshot
+                envvar_prefix="SOME_DUMMY_PREFIX",
                 settings_file=settings_files,
                 merge=True,
             )
