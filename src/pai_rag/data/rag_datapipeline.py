@@ -56,7 +56,11 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     default=DEFAULT_APPLICATION_CONFIG_FILE,
 )
 @click.option(
-    "-d", "--directory", required=True, default=None, help="directory path to ingest."
+    "-d",
+    "--data-path",
+    required=True,
+    default=None,
+    help="data path (file or directory) to ingest.",
 )
 @click.option(
     "-p", "--pattern", required=False, default=None, help="data pattern to ingest."
@@ -86,8 +90,8 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help="Open Dataset Name. Optional: [miracl]",
     default=None,
 )
-def run(config, directory, pattern, extract_qa, use_local_qa_model, name):
+def run(config, data_path, pattern, extract_qa, use_local_qa_model, name):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
     asyncio.run(
-        data_pipeline.ingest_from_input_path(directory, pattern, extract_qa, name)
+        data_pipeline.ingest_from_input_path(data_path, pattern, extract_qa, name)
     )
