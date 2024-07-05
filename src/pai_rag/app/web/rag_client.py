@@ -6,10 +6,17 @@ import markdown
 import httpx
 import os
 import mimetypes
+from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 
 DEFAULT_CLIENT_TIME_OUT = 60
+
+
+class RagApiError(Exception):
+    def __init__(self, code, msg):
+        self.code = code
+        self.msg = msg
 
 
 class dotdict(dict):
@@ -66,8 +73,10 @@ class RagWebClient:
     def query(self, text: str, session_id: str = None):
         q = dict(question=text, session_id=session_id)
         r = requests.post(self.query_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
+
         if len(response["docs"]) == 0:
             response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
         else:
@@ -95,16 +104,19 @@ class RagWebClient:
         )
 
         r = requests.post(self.llm_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
 
         return response
 
     def query_vector(self, text: str):
         q = dict(question=text)
         r = requests.post(self.retrieval_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
+
         formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
         if len(response["docs"]) == 0:
             response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
@@ -129,15 +141,14 @@ class RagWebClient:
             mimetype = mimetypes.guess_type(file_name)[0]
             files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
             file_obj_list.append(file_obj)
-        print(files)
 
         try:
             r = requests.post(
                 self.load_data_url, files=files, timeout=DEFAULT_CLIENT_TIME_OUT
             )
-            r.raise_for_status()
-        except:
-            raise
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
         finally:
             for file_obj in file_obj_list:
                 file_obj.close()
@@ -148,8 +159,9 @@ class RagWebClient:
     async def get_knowledge_state(self, task_id: str):
         async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
-            r.raise_for_status()
             response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
             return response
 
     def patch_config(self, update_dict: Any):
@@ -161,14 +173,15 @@ class RagWebClient:
         r = requests.patch(
             self.config_url, json=new_config, timeout=DEFAULT_CLIENT_TIME_OUT
         )
-        r.raise_for_status()
-        return
+        response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
 
     def get_config(self):
         r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
-        print(response)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
         return response
 
     def evaluate_for_generate_qa(self, overwrite):
@@ -177,24 +190,29 @@ class RagWebClient:
             params={"overwrite": overwrite},
             timeout=DEFAULT_CLIENT_TIME_OUT,
         )
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
         return response
 
     def evaluate_for_retrieval_stage(self):
         r = requests.post(
             self.get_evaluate_retrieval_url, timeout=DEFAULT_CLIENT_TIME_OUT
         )
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
+
         return response
 
     def evaluate_for_response_stage(self):
         r = requests.post(
             self.get_evaluate_response_url, timeout=DEFAULT_CLIENT_TIME_OUT
         )
-        r.raise_for_status()
         response = dotdict(json.loads(r.text))
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=response.message)
         print("evaluate_for_response_stage response", response)
 
 

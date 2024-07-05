@@ -154,7 +154,6 @@ class RagDataLoader:
             return
 
         logger.info("[DataReader] Start inserting to index.")
-
         self.index.vector_index.insert_nodes(nodes)
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path

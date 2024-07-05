@@ -1,6 +1,7 @@
 from typing import Any, List
 from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
 import uuid
+import hashlib
 import os
 import tempfile
 from pai_rag.core.rag_service import rag_service
@@ -48,8 +49,8 @@ async def aconfig():
 
 @router.get("/get_upload_state")
 def task_status(task_id: str):
-    status = rag_service.get_task_status(task_id)
-    return {"task_id": task_id, "status": status}
+    status, detail = rag_service.get_task_status(task_id)
+    return {"task_id": task_id, "status": status, "detail": detail}
 
 
 @router.post("/evaluate")
@@ -96,9 +97,11 @@ async def upload_data(
     input_files = []
     for file in files:
         fn = file.filename
-        save_file = os.path.join(tmpdir, f"{task_id}_{fn}")
+        data = await file.read()
+        file_hash = hashlib.md5(data).hexdigest()
+        save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
+
         with open(save_file, "wb") as f:
-            data = await file.read()
             f.write(data)
             f.close()
         input_files.append(save_file)
