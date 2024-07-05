@@ -100,31 +100,39 @@ class RagService:
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
-            f.write(f"{task_id} processing\n")
+            f.write(f"{task_id}\tprocessing\n")
         try:
             await self.rag.aload_knowledge(
                 input_files, faiss_path, enable_qa_extraction
             )
             with open(TASK_STATUS_FILE, "a") as f:
-                f.write(f"{task_id} completed\n")
+                f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
-            logger.error(f"Upload failed: {ex}")
+            logger.error(f"Upload failed: {ex} {str(ex.__cause__)}")
             with open(TASK_STATUS_FILE, "a") as f:
-                f.write(f"{task_id} failed\n")
+                detail = f"{ex}: {str(ex.__cause__)}".replace("\t", " ").replace(
+                    "\n", " "
+                )
+                f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
 
     def get_task_status(self, task_id: str) -> str:
         self.check_updates()
-        default_status = "unknown"
+        status = "unknown"
+        detail = None
         if not os.path.exists(TASK_STATUS_FILE):
-            return default_status
+            return status
 
         lines = open(TASK_STATUS_FILE).readlines()
         for line in lines[::-1]:
             if line.startswith(task_id):
-                return line.strip().split(" ")[1]
+                parts = line.strip().split("\t")
+                status = parts[1]
+                if len(parts) == 3:
+                    detail = parts[2]
+                break
 
-        return default_status
+        return status, detail
 
     async def aquery(self, query: RagQuery) -> RagResponse:
         try:

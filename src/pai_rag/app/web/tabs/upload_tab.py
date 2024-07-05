@@ -42,6 +42,7 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
         )
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
+    error_msg = ""
     while not all(file.finished is True for file in my_upload_files):
         for file in my_upload_files:
             try:
@@ -56,17 +57,22 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
             result[file.file_name] = file.__info__()
             if response["status"] in ["completed", "failed"]:
                 file.is_finished()
+            if response["detail"]:
+                error_msg = response["detail"]
         yield [
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
         time.sleep(2)
 
+    upload_result = "Upload success."
+    if error_msg:
+        upload_result = f"Upload failed: {error_msg}"
     yield [
         gr.update(visible=True, value=pd.DataFrame(result)),
         gr.update(
             visible=True,
-            value="Uploaded all files successfully!  \n Relevant content has been added to the vector store, you can now start chatting and asking questions.",
+            value=upload_result,
         ),
     ]
 

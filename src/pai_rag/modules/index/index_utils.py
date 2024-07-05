@@ -69,10 +69,8 @@ def load_indices_from_storage(
         **kwargs: Additional keyword args to pass to the index constructors.
     """
     if index_ids is None:
-        logger.info("Loading all indices.")
         index_structs = storage_context.index_store.index_structs()
     else:
-        logger.info(f"Loading indices with ids: {index_ids}")
         index_structs = []
         for index_id in index_ids:
             index_struct = storage_context.index_store.get_index_struct(index_id)
