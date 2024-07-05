@@ -3,9 +3,10 @@ from llama_index.core import Settings
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
 from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.embeddings.huggingface_optimum import OptimumEmbedding
+from pai_rag.modules.embedding.my_ort_embedding import MyORTModelForFeatureExtraction
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.modules.embedding.my_huggingface_embedding import MyHuggingFaceEmbedding
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import os
 import logging
@@ -52,10 +53,15 @@ class EmbeddingModule(ConfigurableModule):
             model_name = config.get("model_name", DEFAULT_HUGGINGFACE_EMBEDDING_MODEL)
 
             model_path = os.path.join(model_dir, model_name)
-            embed_model = MyHuggingFaceEmbedding(
-                model_name=model_path,
-                embed_batch_size=embed_batch_size,
+            # embed_model = MyHuggingFaceEmbedding(
+            #    model_name=model_path,
+            #    embed_batch_size=embed_batch_size,
+            # )
+
+            model = MyORTModelForFeatureExtraction.from_pretrained(
+                model_path, provider="CUDAExecutionProvider"
             )
+            embed_model = OptimumEmbedding(folder_name=model_path, model=model)
 
             logger.info(
                 f"Initialized HuggingFace embedding model {model_name} with {embed_batch_size} batch size."

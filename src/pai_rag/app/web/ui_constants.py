@@ -30,6 +30,7 @@ DEFAULT_EMBED_SIZE = 1536
 
 EMBEDDING_DIM_DICT = {
     "bge-small-zh-v1.5": 1024,
+    "bge-small-zh-v1.5-onnx": 1024,
     "SGPT-125M-weightedmean-nli-bitfit": 768,
     "text2vec-large-chinese": 1024,
     "paraphrase-multilingual-MiniLM-L12-v2": 384,

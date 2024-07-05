@@ -88,7 +88,7 @@ This setting is also available in webui.
 
 ## rag.index
 
-vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
+vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus]
 
 Currently, pai_rag provides a variety of approaches for creating & storing indices.
 
@@ -136,8 +136,6 @@ If vector_store.type = "Milvus", you need to provide the following information:
     password = ""
     database = "pairag"
     collection = "pairag_collection"
-
-If vector_store.type = "Chroma", there is no extra setting.
 
 This setting is also available in webui.
 

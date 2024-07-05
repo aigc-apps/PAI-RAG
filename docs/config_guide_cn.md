@@ -87,7 +87,7 @@ source = [PaiEas, OpenAI, DashScope]
 
 ## rag.index
 
-vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
+vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus]
 
 目前, pai_rag 多种方式创建和存储索引。
 
@@ -135,8 +135,6 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
     password = ""
     database = "pairag"
     collection = "pairag_collection"
-
-如果 vector_store.type = "Chroma", 无需提供额外信息。
 
 该设置在网页中不可用。
 

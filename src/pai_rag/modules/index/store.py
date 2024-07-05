@@ -1,11 +1,8 @@
-import os
-import chromadb
 import faiss
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 from llama_index.core.storage.index_store.simple_index_store import SimpleIndexStore
 from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
 from llama_index.vector_stores.faiss import FaissVectorStore
-from llama_index.vector_stores.chroma import ChromaVectorStore
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 
 from pai_rag.integrations.vector_stores.vector_stores_hologres.hologres import (
@@ -17,8 +14,6 @@ from llama_index.core import StorageContext
 import logging
 
 from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStore
-
-DEFAULT_CHROMA_COLLECTION_NAME = "pairag"
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +39,7 @@ class RagStore:
             self.store_config["vector_store"].get("type", "faiss").lower()
         )
 
-        if vector_store_type == "chroma":
-            self.vector_store = self._get_or_create_chroma()
-            logger.info("initialized Chroma vector store.")
-        elif vector_store_type == "faiss":
+        if vector_store_type == "faiss":
             self.doc_store = self._get_or_create_simple_doc_store()
             self.index_store = self._get_or_create_simple_index_store()
             persist_dir = self.persist_dir
@@ -74,17 +66,6 @@ class RagStore:
             persist_dir=persist_dir,
         )
         return storage_context
-
-    def _get_or_create_chroma(self):
-        chroma_path = os.path.join(self.persist_dir, "chroma")
-        chroma_db = chromadb.PersistentClient(path=chroma_path)
-
-        collection_name = self.store_config["vector_store"].get(
-            "collection_name", DEFAULT_CHROMA_COLLECTION_NAME
-        )
-        chroma_collection = chroma_db.get_or_create_collection(collection_name)
-
-        return ChromaVectorStore(chroma_collection=chroma_collection)
 
     def _get_or_create_faiss(self):
         if self.is_empty:
