@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import asyncio
 
@@ -86,7 +86,7 @@ async def enhance_nodes(
     nodes: List[BaseNode],
     index: VectorStoreIndex,
     tree_depth: int = 2,
-) -> VectorStoreIndex:
+) -> Tuple[VectorStoreIndex, int]:
     """Given a set of nodes, this function inserts higher level of abstractions within the index.
 
     For later retrieval
@@ -101,6 +101,7 @@ async def enhance_nodes(
     summary_module = SummaryModule()
 
     cur_nodes = nodes
+    new_nodes_collection = []
     for level in range(tree_depth):
         # get the embeddings for the current documents
 
@@ -140,6 +141,7 @@ async def enhance_nodes(
             )
             for summary in summaries_per_cluster
         ]
+        new_nodes_collection.extend(new_nodes)
 
         # insert the nodes with their embeddings and parent_id
         nodes_with_embeddings = []
@@ -158,4 +160,4 @@ async def enhance_nodes(
 
     index.insert_nodes(cur_nodes)
 
-    return index
+    return index, len(new_nodes_collection)

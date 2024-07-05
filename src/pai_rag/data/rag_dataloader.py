@@ -196,11 +196,11 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            self.index.vector_index = await enhance_nodes(
+            self.index.vector_index, n_new_nodes = await enhance_nodes(
                 nodes=nodes, index=self.index.vector_index
             )
             logger.info(
-                f"Enhanced {len(self.index.vector_index.docstore.docs)} nodes successfully"
+                f"Inserted {len(nodes)} and enhanced {n_new_nodes} nodes successfully."
             )
         else:
             await self.index.vector_index.insert_nodes_async(nodes)
