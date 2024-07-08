@@ -83,13 +83,14 @@ class RagService:
             raise UserInputError(f"Update RAG configuration failed: {ex}")
 
     def check_updates(self):
-        logger.info("Checking updates")
+        # Check config changes for multiple worker mode.
+        logger.debug("Checking configuration updates")
         new_modified_time = self.rag_configuration.get_config_mtime()
         if self.config_modified_time != new_modified_time:
             self.reload()
             self.config_modified_time = new_modified_time
         else:
-            logger.info("No updates")
+            logger.debug("No configuration updates")
 
     async def add_knowledge_async(
         self,

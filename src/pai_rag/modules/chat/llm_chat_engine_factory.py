@@ -31,7 +31,7 @@ class LlmChatEngineFactory:
                 memory=chat_memory,
                 verbose=True,
             )
-            logger.info("simple chat_engine instance created")
+            logger.debug("simple chat_engine instance created")
 
             return my_chat_engine
         else:
