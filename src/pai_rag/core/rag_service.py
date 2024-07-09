@@ -1,6 +1,7 @@
 import asyncio
 import os
 from asgi_correlation_id import correlation_id
+from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.core.rag_application import RagApplication
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.app.api.models import (
@@ -11,7 +12,7 @@ from pai_rag.app.api.models import (
     LlmResponse,
 )
 from openinference.instrumentation import using_attributes
-from typing import Any
+from typing import Any, List
 import logging
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
@@ -55,87 +56,127 @@ class RagService:
             open(TASK_STATUS_FILE, "w").close()
 
     def get_config(self):
-        self.check_updates()
+        try:
+            self.check_updates()
+        except Exception as ex:
+            raise ServiceError(f"Get RAG configuration failed: {ex}")
         return self.config_dict_value
 
     def reload(self, new_config: Any = None):
-        rag_snapshot = RagConfiguration.from_snapshot()
-        if new_config:
-            # 多worker模式，读取最新的setting
-            rag_snapshot.update(new_config)
-        config_snapshot = rag_snapshot.get_value()
+        try:
+            rag_snapshot = RagConfiguration.from_snapshot()
+            if new_config:
+                # 多worker模式，读取最新的setting
+                rag_snapshot.update(new_config)
+            config_snapshot = rag_snapshot.get_value()
 
-        new_dict_value = config_snapshot.to_dict()
-        if self.config_dict_value != new_dict_value:
-            logger.debug("Config changed, reload")
-            self.rag.reload(config_snapshot)
-            self.config_dict_value = new_dict_value
-            self.rag_configuration = rag_snapshot
-            self.rag_configuration.persist()
-        else:
-            logger.debug("Config not changed, not reload")
+            new_dict_value = config_snapshot.to_dict()
+            if self.config_dict_value != new_dict_value:
+                logger.debug("Config changed, reload")
+                self.rag.reload(config_snapshot)
+                self.config_dict_value = new_dict_value
+                self.rag_configuration = rag_snapshot
+                self.rag_configuration.persist()
+            else:
+                logger.debug("Config not changed, not reload")
+        except Exception as ex:
+            raise UserInputError(f"Update RAG configuration failed: {ex}")
 
     def check_updates(self):
-        logger.info("Checking updates")
+        # Check config changes for multiple worker mode.
+        logger.debug("Checking configuration updates")
         new_modified_time = self.rag_configuration.get_config_mtime()
         if self.config_modified_time != new_modified_time:
             self.reload()
             self.config_modified_time = new_modified_time
         else:
-            logger.info("No updates")
+            logger.debug("No configuration updates")
 
-    def add_knowledge_async(
+    async def add_knowledge_async(
         self,
         task_id: str,
-        file_dir: str,
+        input_files: List[str],
+        filter_pattern: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
-            f.write(f"{task_id} processing\n")
+            f.write(f"{task_id}\tprocessing\n")
         try:
-            self.rag.load_knowledge(file_dir, faiss_path, enable_qa_extraction)
+            await self.rag.aload_knowledge(
+                input_files, filter_pattern, faiss_path, enable_qa_extraction
+            )
             with open(TASK_STATUS_FILE, "a") as f:
-                f.write(f"{task_id} completed\n")
+                f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
-            logger.error(f"Upload failed: {ex}")
+            logger.error(f"Upload failed: {ex} {str(ex.__cause__)}")
             with open(TASK_STATUS_FILE, "a") as f:
-                f.write(f"{task_id} failed\n")
-            raise
+                detail = f"{ex}: {str(ex.__cause__)}".replace("\t", " ").replace(
+                    "\n", " "
+                )
+                f.write(f"{task_id}\tfailed\t{detail}\n")
+            raise UserInputError(f"Upload knowledge failed: {ex}")
 
     def get_task_status(self, task_id: str) -> str:
         self.check_updates()
-        default_status = "unknown"
+        status = "unknown"
+        detail = None
         if not os.path.exists(TASK_STATUS_FILE):
-            return default_status
+            return status
 
         lines = open(TASK_STATUS_FILE).readlines()
         for line in lines[::-1]:
             if line.startswith(task_id):
-                return line.strip().split(" ")[1]
+                parts = line.strip().split("\t")
+                status = parts[1]
+                if len(parts) == 3:
+                    detail = parts[2]
+                break
 
-        return default_status
+        return status, detail
 
     async def aquery(self, query: RagQuery) -> RagResponse:
-        self.check_updates()
-        return await self.rag.aquery(query)
+        try:
+            self.check_updates()
+            return await self.rag.aquery(query)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
-        self.check_updates()
-        return await self.rag.aquery_llm(query)
+        try:
+            self.check_updates()
+            return await self.rag.aquery_llm(query)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_retrieval(self, query: RetrievalQuery):
-        self.check_updates()
-        return await self.rag.aquery_retrieval(query)
+        try:
+            self.check_updates()
+            return await self.rag.aquery_retrieval(query)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
-        self.check_updates()
-        return await self.rag.aquery_agent(query)
+        try:
+            self.check_updates()
+            return await self.rag.aquery_agent(query)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        self.check_updates()
-        return await self.rag.batch_evaluate_retrieval_and_response(type)
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        try:
+            return await self.rag.aload_evaluation_qa_dataset(overwrite)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
+
+    async def aevaluate_retrieval_and_response(
+        self, type: str = "all", overwrite: bool = False
+    ):
+        try:
+            return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
+        except Exception as ex:
+            raise UserInputError(f"Query RAG failed: {ex}")
 
 
 rag_service = RagService()

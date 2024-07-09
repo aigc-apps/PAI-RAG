@@ -1,5 +1,4 @@
 from pai_rag.modules.module_registry import module_registry
-from pai_rag.evaluations.batch_evaluator import BatchEvaluator
 from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
@@ -33,14 +32,13 @@ class RagApplication:
         self.initialize(config)
         self.logger.info("RagApplication reloaded successfully.")
 
-    # TODO: 大量文件上传实现异步添加
-    async def aload_knowledge(self, file_dir, enable_qa_extraction=False):
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", self.config
-        )
-        await data_loader.aload(file_dir, enable_qa_extraction)
-
-    def load_knowledge(self, file_dir, faiss_path=None, enable_qa_extraction=False):
+    async def aload_knowledge(
+        self,
+        input_files,
+        filter_pattern=None,
+        faiss_path=None,
+        enable_qa_extraction=False,
+    ):
         sessioned_config = self.config
         if faiss_path:
             sessioned_config = self.config.copy()
@@ -52,7 +50,7 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        data_loader.load(file_dir, enable_qa_extraction)
+        await data_loader.aload(input_files, filter_pattern, enable_qa_extraction)
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
@@ -93,7 +91,7 @@ class RagApplication:
             RagResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.info(f"Get session ID: {session_id}.")
+        self.logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id
@@ -111,8 +109,22 @@ class RagApplication:
             session_id, query.chat_history
         )
         response = await query_chat_engine.achat(query.question)
-
-        return RagResponse(answer=response.response, session_id=session_id)
+        node_results = response.sources[0].raw_output.source_nodes
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+        new_query = response.sources[0].raw_input["query"]
+        return RagResponse(
+            answer=response.response,
+            session_id=session_id,
+            docs=reference_docs,
+            new_query=new_query,
+        )
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
         """Query answer from LLM response asynchronously.
@@ -126,7 +138,7 @@ class RagApplication:
             LlmResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.info(f"Get session ID: {session_id}.")
+        self.logger.debug(f"Get session ID: {session_id}.")
 
         if not query.question:
             return LlmResponse(
@@ -161,16 +173,34 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def batch_evaluate_retrieval_and_response(self, type):
-        retriever = module_registry.get_module_with_config(
-            "RetrieverModule", self.config
+    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
         )
-        query_engine = module_registry.get_module_with_config(
-            "QueryEngineModule", self.config
-        )
-        batch_eval = BatchEvaluator(self.config, retriever, query_engine)
-        df, eval_res_avg = await batch_eval.batch_retrieval_response_aevaluation(
-            type=type, workers=2, save_to_file=True
-        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
+            return qa_dataset
+        else:
+            return f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now."
 
-        return df, eval_res_avg
+    async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
+        vector_store_type = (
+            self.config.get("index").get("vector_store").get("type", None)
+        )
+        if vector_store_type == "FAISS":
+            evaluation = module_registry.get_module_with_config(
+                "EvaluationModule", self.config
+            )
+            df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
+                type=type, workers=4, overwrite=overwrite
+            )
+
+            return df, eval_res_avg
+        else:
+            return (
+                None,
+                f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
+            )

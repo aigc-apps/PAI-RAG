@@ -22,6 +22,7 @@ MODULE_CONFIG_KEY_MAP = {
     "ToolModule": "tool",
     "DataLoaderModule": "data_loader",
     "OssCacheModule": "cache",
+    "EvaluationModule": "evaluation",
     "BM25IndexModule": "bm25",
 }
 
@@ -101,14 +102,14 @@ class ModuleRegistry:
             raise ValueError(
                 f"Circular dependency detected. Please check module dependency configuration. Module initialized: {mod_cache}. Module ref count: {mod_ref_count}"
             )
-        logger.info(f"RAG modules init successfully. {mod_cache.keys()}")
+        logger.debug(f"RAG modules init successfully. {mod_cache.keys()}")
         return
 
     def _create_mod_lazily(self, mod_name, config, mod_cache=None):
         if mod_cache and mod_name in mod_cache:
             return mod_cache[mod_name]
 
-        logger.info(f"Get module {mod_name}.")
+        logger.debug(f"Get module {mod_name}.")
 
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
@@ -120,10 +121,10 @@ class ModuleRegistry:
 
         instance_key = self._get_param_hash(params)
         if mod_name == "IndexModule":
-            print(instance_key, params)
+            logger.debug(instance_key, params)
 
         if instance_key not in self._mod_instance_map[mod_name]:
-            logger.info(f"Creating new instance for module {mod_name} {instance_key}.")
+            logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params
             )

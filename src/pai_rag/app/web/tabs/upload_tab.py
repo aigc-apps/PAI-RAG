@@ -2,14 +2,22 @@ import os
 from typing import Dict, Any
 import gradio as gr
 import time
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 import asyncio
 
 
 def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
-    rag_client.patch_config({"chunk_size": chunk_size, "chunk_overlap": chunk_overlap})
+    if not upload_files:
+        return
+
+    try:
+        rag_client.patch_config(
+            {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap}
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     if not upload_files:
         yield [
@@ -20,33 +28,51 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
             ),
         ]
 
+    try:
+        response = rag_client.add_knowledge(
+            [file.name for file in upload_files], enable_qa_extraction
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     my_upload_files = []
     for file in upload_files:
-        response = rag_client.add_knowledge(file.name, enable_qa_extraction)
         my_upload_files.append(
             MyUploadFile(os.path.basename(file.name), response["task_id"])
         )
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
+    error_msg = ""
     while not all(file.finished is True for file in my_upload_files):
         for file in my_upload_files:
-            response = asyncio.run(rag_client.get_knowledge_state(str(file.task_id)))
+            try:
+                response = asyncio.run(
+                    rag_client.get_knowledge_state(str(file.task_id))
+                )
+            except RagApiError as api_error:
+                raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
             file.update_state(response["status"])
             file.update_process_duration()
             result[file.file_name] = file.__info__()
             if response["status"] in ["completed", "failed"]:
                 file.is_finished()
+            if response["detail"]:
+                error_msg = response["detail"]
         yield [
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
         time.sleep(2)
 
+    upload_result = "Upload success."
+    if error_msg:
+        upload_result = f"Upload failed: {error_msg}"
     yield [
         gr.update(visible=True, value=pd.DataFrame(result)),
         gr.update(
             visible=True,
-            value="Uploaded all files successfully!  \n Relevant content has been added to the vector store, you can now start chatting and asking questions.",
+            value=upload_result,
         ),
     ]
 

@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 import gradio as gr
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.app.web.ui_constants import (
     SIMPLE_PROMPTS,
     GENERAL_PROMPTS,
@@ -30,7 +30,10 @@ def respond(input_elements: List[Any]):
     if not update_dict["question"]:
         return "", update_dict["chatbot"], 0
 
-    rag_client.patch_config(update_dict)
+    try:
+        rag_client.patch_config(update_dict)
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     query_type = update_dict["query_type"]
     msg = update_dict["question"]
@@ -39,17 +42,21 @@ def respond(input_elements: List[Any]):
     if not update_dict["include_history"]:
         current_session_id = None
 
-    if query_type == "LLM":
-        response = rag_client.query_llm(
-            msg,
-            session_id=current_session_id,
-        )
-        current_session_id = response.session_id
-    elif query_type == "Retrieval":
-        response = rag_client.query_vector(msg)
-    else:
-        response = rag_client.query(msg, session_id=current_session_id)
-        current_session_id = response.session_id
+    try:
+        if query_type == "LLM":
+            response = rag_client.query_llm(
+                msg,
+                session_id=current_session_id,
+            )
+            current_session_id = response.session_id
+        elif query_type == "Retrieval":
+            response = rag_client.query_vector(msg)
+        else:
+            response = rag_client.query(msg, session_id=current_session_id)
+            current_session_id = response.session_id
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     chatbot.append((msg, response.answer))
     return "", chatbot, 0
 
@@ -226,7 +233,7 @@ def create_chat_tab() -> Dict[str, Any]:
             respond,
             chat_args,
             [question, chatbot, cur_tokens],
-            api_name="respond",
+            api_name="respond_clk",
         )
         question.submit(
             respond,

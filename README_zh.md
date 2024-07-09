@@ -90,10 +90,19 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 3. 加载数据
 
-   向当前索引存储中插入directory_path目录下的新文件
+   向当前索引存储中插入data_path路径下的新文件
 
    ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d directory_path
+   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -d test/example
+   b. load_data -d test/example_data/pai_document.pdf
+   c. load_data -d test/example_data -p *.pdf
+
    ```
 
 4. 启动RAG服务
@@ -123,6 +132,15 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```
 
    你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
+
+6. 评估 (调试)
+
+您可以评估RAG系统的不同阶段的效果，如检索、生成或者全链路。
+
+```bash
+# 支持自定义 config file (default -c src/pai_rag/config/settings.yaml), overwrite (default False), type (default all)
+evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
+```
 
 ## 方式二：Docker镜像
 
@@ -172,10 +190,10 @@ docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com
 
 支持通过API的方式上传本地文件，并支持指定不同的faiss_path，每次发送API请求会返回一个task_id，之后可以通过task_id来查看文件上传状态（processing、completed、failed）。
 
-- 上传（upload_local_data）
+- 上传（upload_data）
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_local_data -H 'Content-Type: multipart/form-data' -F 'file=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
@@ -217,73 +235,27 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
 ```
 
-<!--
 ## Evaluation API
 
 支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
 
+- /evaluate (all)
+- /evaluate/retrieval
+- /evaluate/response
+
 初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。
 
-- 1. 全链路效果评估（All）
+您也可以单独调用API（/evaluate/generate）来生成评估数据集。
+
+参考示例：
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/generate
+
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
+curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "hit_rate_mean": 1.0,
-    "mrr_mean": 0.91666667,
-    "faithfulness_mean": 0.8333334,
-    "correctness_mean": 4.5833333,
-    "similarity_mean": 0.88153079
-  }
-}
-```
-
-- 2. 检索效果评估（Retrieval）
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/retrieval
-```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "hit_rate_mean": 1.0,
-    "mrr_mean": 0.91667
-  }
-}
-```
-
-- 3. 生成效果评估（Response）
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/batch_evaluate/response
-```
-
-返回示例：
-
-```json
-{
-  "status": 200,
-  "result": {
-    "batch_number": 6,
-    "faithfulness_mean": 0.8333334,
-    "correctness_mean": 4.58333333,
-    "similarity_mean": 0.88153079
-  }
-}
-``` -->
 
 # 参数配置
 

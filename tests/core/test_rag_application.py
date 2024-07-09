@@ -13,7 +13,7 @@ EXPECTED_EMPTY_RESPONSE = """Empty query. Please input your question."""
 
 
 @pytest.fixture
-def rag_app():
+async def rag_app():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
 
@@ -25,7 +25,7 @@ def rag_app():
     rag_app.initialize(config)
 
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    rag_app.load_knowledge(data_dir)
+    await rag_app.aload_knowledge(data_dir)
 
     return rag_app
 
@@ -75,5 +75,10 @@ async def test_agent(rag_app: RagApplication):
 
 
 async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
-    df, eval_result = await rag_app.batch_evaluate_retrieval_and_response(type="all")
+    _, eval_result = await rag_app.aevaluate_retrieval_and_response(type="all")
     print(eval_result)
+
+
+async def test_load_evaluation_qa_dataset(rag_app: RagApplication):
+    qa_dataset = await rag_app.aload_evaluation_qa_dataset()
+    print(qa_dataset)
