@@ -87,18 +87,23 @@ source = [PaiEas, OpenAI, DashScope]
 
 ## rag.index
 
-vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
+vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus]
 
-目前, pai_rag 多种方式创建和存储索引。
+目前, pai_rag 支持多种方式创建和存储索引。
 
-如果 vector_store.type = "FAISS", 需要指定一个持久化路径：
+如果 vector_store.type = "FAISS", 直接在[rag.index]中指定一个持久化路径：
 
+    [rag.index]
     vector_store.type = "FAISS"
     persist_path = "localdata/storage"
 
-如果 vector_store.type = "Hologres", 需要补充如下信息：
+如果 vector_store.type = "Hologres", 配置如下：
 
-    vector_store.type = "Hologres"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "Hologres"
     host = "your hologres url"
     port = 80
     user = "your user name"
@@ -106,9 +111,13 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
     database = "pairag" (just for example)
     table_name = "pairag"
 
-如果 vector_store.type = "ElasticSearch", 需要准备如下信息：
+如果 vector_store.type = "ElasticSearch", 配置如下：
 
-    vector_store.type = "ElasticSearch"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "ElasticSearch"
     es_index = "create your index name"
     es_url = "es_host:es_port(9200)"
     es_user = ""
@@ -116,7 +125,11 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
 
 如果 vector_store.type = "AnalyticDB", 需要补充如下信息：
 
-    vector_store.type = "AnalyticDB"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "AnalyticDB"
     ak = ""
     sk = ""
     region_id = ""
@@ -128,7 +141,11 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
 
 如果 vector_store.type = "Milvus", 需要提供如下信息：
 
-    vector_store.type = "Milvus"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "Milvus"
     host = ""
     port = ""
     user = ""
@@ -136,9 +153,7 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
     database = "pairag"
     collection = "pairag_collection"
 
-如果 vector_store.type = "Chroma", 无需提供额外信息。
-
-该设置在网页中不可用。
+该设置也可在网页中配置。
 
 ## rag.node_parser
 
