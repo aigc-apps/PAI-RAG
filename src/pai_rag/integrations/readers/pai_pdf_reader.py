@@ -12,11 +12,12 @@ import pdfplumber
 from pdf2image import convert_from_path
 import easyocr
 from llama_index.core import Settings
-from pai_rag.utils.constants import DEFAULT_EASYOCR_MODEL_DIR
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import json
 import unicodedata
 import logging
 import tempfile
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ class PaiPDFReader(BaseReader):
     """
 
     def __init__(
-        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_EASYOCR_MODEL_DIR
+        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_MODEL_DIR
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
         if self.enable_image_ocr:
-            self.model_dir = model_dir or DEFAULT_EASYOCR_MODEL_DIR
+            self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
             logger.info("start loading ocr model")
             self.image_reader = easyocr.Reader(
                 ["ch_sim", "en"],
