@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR, DEFAULT_MODEL_DIC
 from llama_index.core.async_utils import get_asyncio_module
+from concurrent.futures import ProcessPoolExecutor
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from zipfile import ZipFile
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_READ_TIME_OUT = 60
 
 
 class DownloadModels(ABC):
@@ -42,7 +44,9 @@ class DownloadModelsFromOSS(DownloadModels):
                 local_zip_path = os.path.join(temp_dir, model_name)
 
                 start_time = time.time()
-                timeout = httpx.Timeout(DEFAULT_CLIENT_TIME_OUT)
+                timeout = httpx.Timeout(
+                    DEFAULT_CLIENT_TIME_OUT, read=DEFAULT_READ_TIME_OUT
+                )
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     async with client.stream("GET", oss_model_url) as response:
                         response.raise_for_status()
@@ -58,19 +62,17 @@ class DownloadModelsFromOSS(DownloadModels):
                 )
 
     async def unzip_file(self, local_zip_path, model_path):
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None, self._unzip_file_sync, local_zip_path, model_path
-        )
+        executor = ProcessPoolExecutor()
+        executor.submit(self._unzip_file_sync, (local_zip_path, model_path))
+        # loop = asyncio.get_running_loop()
+        # await loop.run_in_executor(
+        #     None, self._unzip_file_sync, local_zip_path, model_path
+        # )
 
     def _unzip_file_sync(self, local_zip_path, model_path):
         with ZipFile(local_zip_path, "r") as zip_ref:
             zip_ref.extractall(model_path)
         logger.info(f"Finished extracting {local_zip_path} to {model_path}")
-
-        # with ZipFile(local_zip_path, 'r') as zip_ref:
-        #     zip_ref.extractall(model_path)
-        # print(f"finished extracting zip file: {local_zip_path} to {model_path}")
 
     async def load_models(self, show_progress: bool = False):
         tasks = [
