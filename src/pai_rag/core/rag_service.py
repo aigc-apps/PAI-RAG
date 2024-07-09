@@ -1,5 +1,6 @@
 import asyncio
 import os
+import traceback
 from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.core.rag_application import RagApplication
@@ -59,6 +60,7 @@ class RagService:
         try:
             self.check_updates()
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise ServiceError(f"Get RAG configuration failed: {ex}")
         return self.config_dict_value
 
@@ -80,6 +82,7 @@ class RagService:
             else:
                 logger.debug("Config not changed, not reload")
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Update RAG configuration failed: {ex}")
 
     def check_updates(self):
@@ -110,7 +113,9 @@ class RagService:
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
-            logger.error(f"Upload failed: {ex} {str(ex.__cause__)}")
+            logger.error(
+                f"Upload failed: {ex} {str(ex.__cause__)} {traceback.format_exc()}"
+            )
             with open(TASK_STATUS_FILE, "a") as f:
                 detail = f"{ex}: {str(ex.__cause__)}".replace("\t", " ").replace(
                     "\n", " "
@@ -141,6 +146,7 @@ class RagService:
             self.check_updates()
             return await self.rag.aquery(query)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
@@ -148,6 +154,7 @@ class RagService:
             self.check_updates()
             return await self.rag.aquery_llm(query)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_retrieval(self, query: RetrievalQuery):
@@ -155,6 +162,7 @@ class RagService:
             self.check_updates()
             return await self.rag.aquery_retrieval(query)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
@@ -162,12 +170,14 @@ class RagService:
             self.check_updates()
             return await self.rag.aquery_agent(query)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         try:
             return await self.rag.aload_evaluation_qa_dataset(overwrite)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aevaluate_retrieval_and_response(
@@ -176,6 +186,7 @@ class RagService:
         try:
             return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
         except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
 
