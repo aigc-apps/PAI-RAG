@@ -95,7 +95,7 @@ class RagDataLoader:
         doc_cnt_map = {}
         for doc in docs:
             doc_type = self._extract_file_type(doc.metadata)
-
+            doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])[33:]
             if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
                 if doc_key not in doc_cnt_map:
@@ -183,7 +183,6 @@ class RagDataLoader:
             return
 
         logger.info("[DataReader] Start inserting to index.")
-
         await self.index.vector_index.insert_nodes_async(nodes)
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path

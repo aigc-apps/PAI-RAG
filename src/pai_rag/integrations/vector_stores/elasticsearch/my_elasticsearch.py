@@ -19,7 +19,9 @@ from llama_index.core.vector_stores.utils import (
     metadata_dict_to_node,
     node_to_metadata_dict,
 )
-from pai_rag.modules.retriever.my_async_vector_store import AsyncVectorStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_async_vector_store import (
+    AsyncVectorStore,
+)
 from elasticsearch.helpers.vectorstore import (
     AsyncBM25Strategy,
     AsyncSparseVectorStrategy,
@@ -522,17 +524,17 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                 )
             top_k_nodes.append(node)
             top_k_ids.append(node_id)
-            top_k_scores.append(hit.get("_rank", hit["_score"]))
+            top_k_scores.append(hit.get("_rank", round(hit["_score"], 6)))
 
         if (
-            isinstance(self.retrieval_strategy, AsyncDenseVectorStrategy)
-            and self.retrieval_strategy.hybrid
+            isinstance(retrieval_strategy, AsyncDenseVectorStrategy)
+            and retrieval_strategy.hybrid
         ):
             total_rank = sum(top_k_scores)
-            top_k_scores = [total_rank - rank / total_rank for rank in top_k_scores]
+            top_k_scores = [(total_rank - rank) / total_rank for rank in top_k_scores]
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,
             ids=top_k_ids,
-            similarities=_to_llama_similarities(top_k_scores),
+            similarities=top_k_scores,
         )

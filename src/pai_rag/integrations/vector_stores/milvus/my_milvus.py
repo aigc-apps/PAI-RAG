@@ -32,6 +32,7 @@ from llama_index.core.vector_stores.utils import (
     node_to_metadata_dict,
 )
 from pymilvus import Collection, MilvusClient, DataType, AnnSearchRequest
+from pai_rag.utils.store_utils import normalize_cosine_similarity_score
 
 logger = logging.getLogger(__name__)
 
@@ -484,7 +485,7 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
                     node = TextNode(text=text, metadata=metadata)
 
                 nodes.append(node)
-                similarities.append(hit["distance"])
+                similarities.append(normalize_cosine_similarity_score(hit["distance"]))
                 ids.append(hit["id"])
         else:
             # Perform hybrid search

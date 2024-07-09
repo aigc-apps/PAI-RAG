@@ -254,6 +254,8 @@ class AsyncVectorStore:
             fields.append("metadata")
         if self.text_field not in fields:
             fields.append(self.text_field)
+        if self.vector_field not in fields:
+            fields.append(self.vector_field)
 
         if self.embedding_service and not query_vector:
             if not query:
@@ -282,7 +284,6 @@ class AsyncVectorStore:
             source_includes=fields,
         )
         hits: List[Dict[str, Any]] = response["hits"]["hits"]
-
         return hits
 
     async def _create_index_if_not_exists(self) -> None:

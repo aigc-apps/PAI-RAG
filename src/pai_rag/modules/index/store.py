@@ -3,20 +3,25 @@ import chromadb
 import faiss
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 from llama_index.core.storage.index_store.simple_index_store import SimpleIndexStore
-from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
-from llama_index.vector_stores.faiss import FaissVectorStore
+
+# from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
+# from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 
-from pai_rag.integrations.vector_stores.vector_stores_hologres.hologres import (
-    HologresVectorStore,
-)
-from pai_rag.modules.index.my_milvus_vector_store import MyMilvusVectorStore
 from pai_rag.modules.index.sparse_embedding import BGEM3SparseEmbeddingFunction
 from llama_index.core import StorageContext
 import logging
 
-from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStore
+from pai_rag.integrations.vector_stores.hologres.hologres import HologresVectorStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
+    MyElasticsearchStore,
+)
+from pai_rag.integrations.vector_stores.faiss.my_faiss import MyFaissVectorStore
+from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorStore
+from pai_rag.integrations.vector_stores.analyticdb.my_analyticdb import (
+    MyAnalyticDBVectorStore,
+)
 
 DEFAULT_CHROMA_COLLECTION_NAME = "pairag"
 
@@ -88,10 +93,11 @@ class RagStore:
 
     def _get_or_create_faiss(self):
         if self.is_empty:
-            faiss_index = faiss.IndexFlatL2(self.embed_dims)
-            faiss_store = FaissVectorStore(faiss_index=faiss_index)
+            # faiss_index = faiss.IndexFlatL2(self.embed_dims)
+            faiss_index = faiss.IndexFlatIP(self.embed_dims)
+            faiss_store = MyFaissVectorStore(faiss_index=faiss_index)
         else:
-            faiss_store = FaissVectorStore.from_persist_dir(self.persist_dir)
+            faiss_store = MyFaissVectorStore.from_persist_dir(self.persist_dir)
 
         return faiss_store
 
@@ -111,7 +117,7 @@ class RagStore:
 
     def _get_or_create_adb(self):
         adb_config = self.store_config["vector_store"]
-        adb = AnalyticDBVectorStore.from_params(
+        adb = MyAnalyticDBVectorStore.from_params(
             access_key_id=adb_config["ak"],
             access_key_secret=adb_config["sk"],
             region_id=adb_config["region_id"],
@@ -156,6 +162,7 @@ class RagStore:
             dim=self.embed_dims,
             enable_sparse=True,
             sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
+            similarity_metric="cosine",
         )
 
     def _get_or_create_simple_doc_store(self):
