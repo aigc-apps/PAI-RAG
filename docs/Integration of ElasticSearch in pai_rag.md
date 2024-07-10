@@ -8,7 +8,7 @@
 
 ![aliyun_es_overview.png](/docs/figures/elastic/aliyun_es_overview.png)
 
-说明：PAI-RAG服务中使用ElasticSearch的前提是开通阿里云ElasticSearch实例
+说明：PAI-RAG服务中使用ElasticSearch的前提是开通阿里云ElasticSearch实例。
 
 # PAI-RAG webui中配置ElasticSearch
 
@@ -40,25 +40,25 @@ e) 私网操作步骤类似，需确保es和pai-rag服务位于同一VPC内
 
 &emsp; 2.2 **Index Name**
 
-首先，进入云端ES实例页面，点击左边栏 **配置与管理** 中 **ES集群配置**，将下图所示的自动创建索引设置为：允许自动创建索引。然后，可在PAI-RAG 界面Index Name中自定义字符串，如：“es-test”
+首先，进入云端ES实例页面，点击左边栏 **配置与管理** 中 **ES集群配置**，将下图所示的自动创建索引设置为：允许自动创建索引。然后，可在PAI-RAG 界面Index Name中自定义字符串，如：“es-test”。
 
 ![aliyun_es_instance_autoindex.png](/docs/figures/elastic/aliyun_es_instance_autoindex.png)
 
 &emsp; 2.3 **ES User**
 
-默认填写 elastic
+默认填写 elastic。
 
 &emsp; 2.4 **ES password**
 
-开通es实例时候设置的登陆密码
+填写开通es实例时候设置的登陆密码。
 
 ![aliyun_es_password.png](/docs/figures/elastic/aliyun_es_password.png)
 
-如果忘记密码，可在Elasticsearch实例详情页的安全配置中重置
+如果忘记密码，可在Elasticsearch实例详情页的安全配置中重置。
 
 ![aliyun_es_password_reset.png](/docs/figures/elastic/aliyun_es_password_reset.png)
 
-以上4个参数配置完成后，点击界面右下角的Connet ElasticSearch，看到Connetion Info中如下提示表示ElasticSearch配置成功
+以上4个参数配置完成后，点击界面右下角的Connet ElasticSearch，看到Connetion Info中如下提示表示ElasticSearch配置成功。
 
 ![pairag_es_connect.png](/docs/figures/elastic/pairag_es_connect.png)
 
@@ -139,7 +139,7 @@ PAI-RAG默认使用分词器类型为ik-smart，如何人工添加分词和停�
 
 由于阿里云Elasticsearch节点上的插件具有自动加载词典文件的功能，所以每个节点获取词典文件的可能时间不同，请耐心等待词典生效。大概两分钟后再使用更新之后的词典，为了保证准确性，可登录Kibana控制台进行验证，具体可参考：[https://help.aliyun.com/zh/es/user-guide/use-the-analysis-ik-plug-in?spm=a2cba.elasticsearch_plugin.c_plugin.2.4bd6a68cQZ3Jo6](https://help.aliyun.com/zh/es/user-guide/use-the-analysis-ik-plug-in?spm=a2cba.elasticsearch_plugin.c_plugin.2.4bd6a68cQZ3Jo6)
 
-10. 配置完成后，重新拉起PAI-RAG服务，参考2和3中配置（其中，检索模式选择keyword或hybrid），则可以使用更新词表后的ES全文检索。
+10. 配置完成后，重新拉起PAI-RAG服务，参考前述webui配置（其中，检索模式选择keyword或hybrid），则可以使用更新词表后的ES全文检索。
 
 # 索引管理
 
