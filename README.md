@@ -120,11 +120,18 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
    ```bash
-   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml)
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models False]
    ```
 
-5. Run RAG WebUI
+5. Download provided models to local directory
+
+   ```bash
+   # Support model name (default "")
+   load_model [--model-name MODEL_NAME]
+   ```
+
+6. Run RAG WebUI
 
    ```bash
    # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
@@ -133,7 +140,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
    You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
 
-6. Evaluation (Beta Version)
+7. Evaluation (Beta Version)
 
 You can evaluate the effects of different stages of RAG system, such as retrieval, response and all.
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pai_rag.app.api.service import configure_app
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.data.rag_datapipeline import __init_data_pipeline
-from pai_rag.utils.download_models import DownloadModelsFromOSS
+from pai_rag.utils.download_models import DownloadModelsFromModelScope
 from logging.config import dictConfig
 import os
 from pathlib import Path
@@ -171,11 +171,21 @@ def ui(host, port, rag_url):
     type=bool,
     default=False,
 )
-def serve(host, port, config_file, workers, enable_example):
+@click.option(
+    "-s",
+    "--skip-download-models",
+    show_default=True,
+    help="whether to skip download models from modelscope",
+    required=False,
+    type=bool,
+    default=False,
+)
+def serve(host, port, config_file, workers, enable_example, skip_download_models):
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
     logger.info("start loading models to local directory")
-    asyncio.run(DownloadModelsFromOSS().load_models(True))
+    if not skip_download_models:
+        asyncio.run(DownloadModelsFromModelScope().load_basic_models(True))
     if enable_example:
         data_pipeline = __init_data_pipeline(config_file, False)
         asyncio.run(

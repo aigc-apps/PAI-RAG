@@ -120,11 +120,18 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```
 
    ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml)
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(默认False)
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models False]
    ```
 
-5. 启动RAG WebUI
+5. 下载其他模型到本地
+
+   ```bash
+   # 支持 model name (默认 "")
+   load_model [--model-name MODEL_NAME]
+   ```
+
+6. 启动RAG WebUI
 
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8001)
@@ -133,7 +140,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
    你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
 
-6. 评估 (调试)
+7. 评估 (调试)
 
 您可以评估RAG系统的不同阶段的效果，如检索、生成或者全链路。
 
