@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pai_rag.app.api.service import configure_app
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.data.rag_datapipeline import __init_data_pipeline
-from pai_rag.utils.download_models import DownloadModelsFromModelScope
+from pai_rag.utils.download_models import ModelScopeDownloader
 from logging.config import dictConfig
 import os
 from pathlib import Path
@@ -25,7 +25,6 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
 DEFAULT_GRADIO_PORT = 8002
-DEFAULT_MODEL_PROCESSOR = 10
 
 
 def init_log():
@@ -185,7 +184,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
     configure_app(app, config_file=config_file)
     logger.info("start loading models to local directory")
     if not skip_download_models:
-        asyncio.run(DownloadModelsFromModelScope().load_basic_models(True))
+        ModelScopeDownloader().load_basic_models()
     if enable_example:
         data_pipeline = __init_data_pipeline(config_file, False)
         asyncio.run(

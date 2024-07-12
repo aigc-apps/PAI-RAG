@@ -121,13 +121,15 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(默认False)
+   # 默认启动时下载模型 [text2vec-base-chinese, easyocr] , 可设置 skip-download-models=True 避免启动时下载模型.
+   # 可使用命令行 "load_model" 下载模型 including [text2vec-base-chinese, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, bge-small-zh-v1.5, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models False]
    ```
 
 5. 下载其他模型到本地
 
    ```bash
-   # 支持 model name (默认 "")
+   # 支持 model name (默认 ""), 没有参数时, 默认下载上述所有模型。
    load_model [--model-name MODEL_NAME]
    ```
 

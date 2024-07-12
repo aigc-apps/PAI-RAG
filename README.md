@@ -121,13 +121,15 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
    ```bash
    # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
+   # Download [text2vec-base-chinese, easyocr] by default, you can skip it by setting skip-download-models=True.
+   # you can use tool "load_model" to download other models including [text2vec-base-chinese, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, bge-small-zh-v1.5, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models False]
    ```
 
 5. Download provided models to local directory
 
    ```bash
-   # Support model name (default "")
+   # Support model name (default ""), download all models mentioned before without parameter model_name.
    load_model [--model-name MODEL_NAME]
    ```
 
