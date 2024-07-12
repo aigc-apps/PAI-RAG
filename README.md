@@ -169,11 +169,17 @@ To make it easier to use and save time on environment installation, we also prov
   ```
 
 2. RAG UI
-
+Mac:
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
 docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+```
+Windows:
+```bash
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+
+docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui p ai_rag ui -p 8002 -c http://host.docker.internal:8001/
 ```
 
 ### Build your own image based on Dockerfile
