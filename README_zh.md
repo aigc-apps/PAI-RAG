@@ -169,13 +169,13 @@ evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
   ```
 
 2. 启动RAG WebUI
-Mac:
+Linux:
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
 docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 ```
-Windows:
+Mac/Windows:
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
