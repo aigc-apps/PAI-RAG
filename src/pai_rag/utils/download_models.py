@@ -46,6 +46,16 @@ class ModelScopeDownloader:
         for model_name in self.model_info["basic_models"].keys():
             self.load_model(model_name)
 
+    def load_models(self, model_name):
+        if model_name is None:
+            model_names = [
+                model_name for model_name in self.model_info["basic_models"].keys()
+            ] + [model_name for model_name in self.model_info["extra_models"].keys()]
+            for model_name in model_names:
+                self.load_model(model_name)
+        else:
+            self.load_model(model_name)
+
 
 @click.command()
 @click.option(
@@ -58,15 +68,4 @@ class ModelScopeDownloader:
 )
 def load_models(model_name):
     download_models = ModelScopeDownloader()
-    if not model_name:
-        for model_name in download_models.model_info["basic_models"].keys():
-            download_models.load_model(model_name)
-        for model_name in download_models.model_info["extra_models"].keys():
-            download_models.load_model(model_name)
-    else:
-        if model_name in download_models.model_info["basic_models"].keys():
-            download_models.load_model(model_name)
-        elif model_name in download_models.model_info["extra_models"].keys():
-            download_models.load_model(model_name)
-        else:
-            logger.info(f"{model_name} is not a valid model name")
+    download_models.load_models(model_name)
