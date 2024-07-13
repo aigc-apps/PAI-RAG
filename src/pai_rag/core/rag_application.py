@@ -91,7 +91,7 @@ class RagApplication:
             RagResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.info(f"Get session ID: {session_id}.")
+        self.logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id
@@ -138,7 +138,7 @@ class RagApplication:
             LlmResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.info(f"Get session ID: {session_id}.")
+        self.logger.debug(f"Get session ID: {session_id}.")
 
         if not query.question:
             return LlmResponse(
