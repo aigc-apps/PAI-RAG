@@ -21,6 +21,9 @@ import os
 
 logger = logging.getLogger(__name__)
 
+TABLE_SUMMARY_MAX_TOKEN = 200
+PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
+
 
 class PageItem(TypedDict):
     page_number: int
@@ -396,7 +399,9 @@ class PaiPDFReader(BaseReader):
                     summarized_table_text = PaiPDFReader.tables_summarize(table["text"])
                     json_data = PaiPDFReader.table_to_json(table["text"])
                     page_tables_texts.append(table_string)
-                    page_tables_summaries.append(summarized_table_text.text)
+                    page_tables_summaries.append(
+                        summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
+                    )
                     page_tables_json.append(json_data)
             page_table_text = "".join(page_tables_texts)
             page_table_summary = "".join(page_tables_summaries)
@@ -414,7 +419,9 @@ class PaiPDFReader(BaseReader):
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
                 extra_info["file_path"] = str(file_path)
-                extra_info["table_summary"] = page_table_summary
+                extra_info["table_summary"] = page_table_summary[
+                    :PAGE_TABLE_SUMMARY_MAX_TOKEN
+                ]
                 extra_info["table_json"] = page_table_json
 
                 doc = Document(
