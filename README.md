@@ -120,11 +120,20 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```
 
    ```bash
-   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml)
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
+   # Download [text2vec-base-chinese, easyocr] by default, you can skip it by setting skip-download-models=True.
+   # you can use tool "load_model" to download other models including [text2vec-base-chinese, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, bge-small-zh-v1.5, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models False]
    ```
 
-5. Run RAG WebUI
+5. Download provided models to local directory
+
+   ```bash
+   # Support model name (default ""), download all models mentioned before without parameter model_name.
+   load_model [--model-name MODEL_NAME]
+   ```
+
+6. Run RAG WebUI
 
    ```bash
    # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
@@ -133,7 +142,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
    You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
 
-6. Evaluation (Beta Version)
+7. Evaluation (Beta Version)
 
 You can evaluate the effects of different stages of RAG system, such as retrieval, response and all.
 
@@ -169,11 +178,20 @@ To make it easier to use and save time on environment installation, we also prov
   ```
 
 2. RAG UI
+   Linux:
 
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
 docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+```
+
+Mac/Windows:
+
+```bash
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+
+docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
 ```
 
 ### Build your own image based on Dockerfile
