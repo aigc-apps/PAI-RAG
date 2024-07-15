@@ -146,7 +146,6 @@ class RagDataLoader:
         filter_pattern: str,
         enable_qa_extraction: bool,
     ):
-        print(logger.level)
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
         if not nodes:
