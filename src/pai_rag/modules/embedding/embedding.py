@@ -61,7 +61,7 @@ class EmbeddingModule(ConfigurableModule):
             model = MyORTModelForFeatureExtraction.from_pretrained(
                 model_path,
                 provider="CUDAExecutionProvider",
-                file_name="model_optimized.onnx",
+                file_name="model_fp16.onnx",
             )
             embed_model = OptimumEmbedding(folder_name=model_path, model=model)
 

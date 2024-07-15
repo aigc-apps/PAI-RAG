@@ -11,6 +11,9 @@ stopword_list += [" "] + list(string.punctuation) + list(CHINESE_PUNKTUATION)
 stop_trie = TrieTree(stopword_list)
 
 
+jieba.lcut("这是一个分词启动用例。")
+
+
 ## PUT in utils file and add stopword in TRIE structure.
 def jieba_tokenizer(text: str) -> List[str]:
     tokens = []

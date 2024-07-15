@@ -58,7 +58,6 @@ class BM25Retriever(BaseRetriever):
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         if not query_bundle.query_str:
             return []
-
         scored_nodes = self._get_scored_nodes(query_bundle.query_str)
 
         # Sort and get top_k nodes, score range => 0..1, closer to 1 means more relevant

@@ -1,3 +1,4 @@
+import os
 import faiss
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 from llama_index.core.storage.index_store.simple_index_store import SimpleIndexStore
@@ -69,10 +70,18 @@ class RagStore:
 
     def _get_or_create_faiss(self):
         if self.is_empty:
-            faiss_index = faiss.IndexFlatL2(self.embed_dims)
-            faiss_store = FaissVectorStore(faiss_index=faiss_index)
+            cpu_index = faiss.IndexHNSWFlat(self.embed_dims, 50)  # build the index
+            # res = faiss.StandardGpuResources()  # use a single GPU
+            # gpu_index = faiss.index_cpu_to_gpu(res, 0, cpu_index) # make it a GPU index
+            faiss_store = FaissVectorStore(faiss_index=cpu_index)
+
         else:
-            faiss_store = FaissVectorStore.from_persist_dir(self.persist_dir)
+            cpu_index = faiss.read_index(
+                os.path.join(self.persist_dir, "default__vector_store.json")
+            )
+            # res = faiss.StandardGpuResources()  # use a single GPU
+            # gpu_index = faiss.index_cpu_to_gpu(res, 0, cpu_index) # make it a GPU index
+            faiss_store = FaissVectorStore(faiss_index=cpu_index)
 
         return faiss_store
 
