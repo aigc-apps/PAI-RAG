@@ -183,11 +183,12 @@ def ui(host, port, rag_url):
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
     if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
+        logger.info("Start to download models.")
         ModelScopeDownloader().load_basic_models()
+        logger.info("Finished downloading models.")
 
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
-    logger.info("start loading models to local directory")
     if enable_example:
         data_pipeline = __init_data_pipeline(config_file, False)
         asyncio.run(
