@@ -35,7 +35,7 @@ class ModelScopeDownloader:
                     raise ValueError(f"{model_name} is not a valid model name.")
                 temp_model_dir = snapshot_download(model_id, cache_dir=temp_dir)
 
-                shutil.move(temp_model_dir, self.download_directory_path)
+                shutil.move(temp_model_dir, model_path)
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info(
