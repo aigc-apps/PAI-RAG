@@ -16,6 +16,7 @@ from pai_rag.modules.tool.tool import ToolModule
 from pai_rag.modules.cache.oss_cache import OssCacheModule
 from pai_rag.modules.evaluation.evaluation import EvaluationModule
 from pai_rag.modules.index.bm25_index import BM25IndexModule
+from pai_rag.modules.nodesenhance.nodes_enhancement import NodesEnhancementModule
 
 
 ALL_MODULES = [
@@ -37,6 +38,7 @@ ALL_MODULES = [
     "OssCacheModule",
     "EvaluationModule",
     "BM25IndexModule",
+    "NodesEnhancementModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

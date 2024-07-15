@@ -13,7 +13,6 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet
-from pai_rag.integrations.retrievers.raptor.nodes_enhancement import enhance_nodes
 
 import logging
 
@@ -37,6 +36,7 @@ class RagDataLoader:
         index,
         bm25_index,
         oss_cache,
+        node_enhance,
         use_local_qa_model=False,
     ):
         self.datareader_factory = datareader_factory
@@ -44,6 +44,7 @@ class RagDataLoader:
         self.oss_cache = oss_cache
         self.index = index
         self.bm25_index = bm25_index
+        self.node_enhance = node_enhance
 
         if use_local_qa_model:
             # API暂不支持此选项
@@ -158,11 +159,17 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            self.index.vector_index = asyncio.run(
-                enhance_nodes(nodes=nodes, index=self.index.vector_index)
+            self.index.vector_index, n_new_nodes = asyncio.run(
+                self.node_enhance.enhance_nodes(
+                    nodes=nodes, index=self.index.vector_index
+                )
+            )
+            logger.info(
+                f"Inserted {len(nodes)} and enhanced {n_new_nodes} nodes successfully."
             )
         else:
             self.index.vector_index.insert_nodes(nodes)
+            logger.info(f"Inserted {len(nodes)} nodes successfully.")
 
         self.index.vector_index.insert_nodes(nodes)
         self.index.vector_index.storage_context.persist(
@@ -176,7 +183,6 @@ class RagDataLoader:
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
 
-        logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
     async def aload(
@@ -196,7 +202,10 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            self.index.vector_index, n_new_nodes = await enhance_nodes(
+            (
+                self.index.vector_index,
+                n_new_nodes,
+            ) = await self.node_enhance.enhance_nodes(
                 nodes=nodes, index=self.index.vector_index
             )
             logger.info(

@@ -8,7 +8,7 @@ from llama_index.llms.dashscope import DashScope
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import VectorStoreIndex
 
-from pai_rag.integrations.retrievers.raptor.nodes_enhancement import enhance_nodes
+from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorNodesEnhancement
 
 
 @pytest.mark.skipif(
@@ -50,7 +50,14 @@ async def test_enhance_nodes():
     # create index
     index = VectorStoreIndex(nodes=[], embed_model=embed_model)
 
-    # enhance nodes by raptor
-    res = await enhance_nodes(nodes=nodes, index=index, tree_depth=2)
+    # raptor init
+    raptor = RaptorNodesEnhancement(
+        tree_depth=2, max_length_in_cluster=3000, max_clusters=50, threshold=0.1
+    )
 
-    assert len(res.docstore.docs) == len(nodes) + 3
+    # enhance nodes by raptor
+    res_index, res_nodes = await raptor.enhance_nodes(nodes=nodes, index=index)
+
+    assert len(res_index.docstore.docs) == len(nodes) + 3
+
+    assert res_nodes == 3

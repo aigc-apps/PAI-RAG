@@ -40,7 +40,7 @@ def local_cluster_embeddings(
 
 
 def get_optimal_clusters(
-    embeddings: np.ndarray, max_clusters: int = 50, random_state: int = RANDOM_SEED
+    embeddings: np.ndarray, max_clusters: int, random_state: int = RANDOM_SEED
 ) -> int:
     max_clusters = min(max_clusters, len(embeddings))
     n_clusters = np.arange(1, max_clusters)
@@ -52,8 +52,10 @@ def get_optimal_clusters(
     return n_clusters[np.argmin(bics)]
 
 
-def GMM_cluster(embeddings: np.ndarray, threshold: float, random_state: int = 0):
-    n_clusters = get_optimal_clusters(embeddings)
+def GMM_cluster(
+    embeddings: np.ndarray, max_clusters: int, threshold: float, random_state: int = 0
+):
+    n_clusters = get_optimal_clusters(embeddings, max_clusters)
     gm = GaussianMixture(n_components=n_clusters, random_state=random_state)
     gm.fit(embeddings)
     probs = gm.predict_proba(embeddings)
@@ -63,6 +65,7 @@ def GMM_cluster(embeddings: np.ndarray, threshold: float, random_state: int = 0)
 
 def perform_clustering(
     embeddings: np.ndarray,
+    max_clusters: int,
     dim: int,
     threshold: float,
 ) -> List[np.ndarray]:
@@ -74,7 +77,7 @@ def perform_clustering(
 
     reduced_embeddings_global = global_cluster_embeddings(embeddings, dim)
     global_clusters, n_global_clusters = GMM_cluster(
-        reduced_embeddings_global, threshold
+        reduced_embeddings_global, max_clusters, threshold
     )
 
     all_local_clusters = [np.array([]) for _ in range(len(embeddings))]
@@ -95,7 +98,7 @@ def perform_clustering(
                 global_cluster_embeddings_, dim
             )
             local_clusters, n_local_clusters = GMM_cluster(
-                reduced_embeddings_local, threshold
+                reduced_embeddings_local, max_clusters, threshold
             )
 
         for j in range(n_local_clusters):
@@ -121,6 +124,7 @@ def get_clusters(
     max_length_in_cluster: int = 10000,  # 10k tokens max per cluster
     tokenizer: tiktoken.Encoding = tiktoken.get_encoding("cl100k_base"),
     reduction_dimension: int = 10,
+    max_clusters: int = 50,
     threshold: float = 0.1,
     prev_total_length=None,  # to keep track of the total length of the previous clusters
 ) -> List[List[BaseNode]]:
@@ -129,7 +133,10 @@ def get_clusters(
 
     # Perform the clustering
     clusters = perform_clustering(
-        embeddings, dim=reduction_dimension, threshold=threshold
+        embeddings,
+        max_clusters=max_clusters,
+        dim=reduction_dimension,
+        threshold=threshold,
     )
 
     # Initialize an empty list to store the clusters of nodes
