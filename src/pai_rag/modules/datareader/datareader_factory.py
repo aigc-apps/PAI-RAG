@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+from pai_rag.integrations.readers.markdown_reader import MarkdownReader
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
@@ -8,7 +9,6 @@ from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
 from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from llama_index.readers.database import DatabaseReader
 from llama_index.core import SimpleDirectoryReader
-from llama_index.readers.file import FlatReader
 import logging
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class DataReaderFactoryModule(ConfigurableModule):
             ".xls": PaiPandasExcelReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
             ),
-            ".md": FlatReader(),
+            ".md": MarkdownReader(),
         }
         return self
 
