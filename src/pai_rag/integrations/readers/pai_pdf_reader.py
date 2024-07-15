@@ -418,7 +418,13 @@ class PaiPDFReader(BaseReader):
                 if not extra_info:
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
-                extra_info["file_path"] = str(file_path)
+                extra_info["file_path"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_path)
+                )
+                file_name = os.path.basename(file_path)
+                extra_info["file_name"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_name)
+                )
                 extra_info["table_summary"] = page_table_summary[
                     :PAGE_TABLE_SUMMARY_MAX_TOKEN
                 ]
