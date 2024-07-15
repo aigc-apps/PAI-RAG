@@ -139,8 +139,10 @@ class PaiPDFReader(BaseReader):
             table = total_tables[i]
             pre_table = total_tables[i - 1]
             if table["page_number"] == pre_table["page_number"]:
+                i -= 1
                 continue
             if table["page_number"] - pre_table["page_number"] > 1:
+                i -= 1
                 continue
             if (
                 table["index_id"] <= 1
@@ -196,7 +198,11 @@ class PaiPDFReader(BaseReader):
         for row in range(1, len(table)):
             single_line_dict = {}
             for column in range(len(column_name)):
-                if column_name[column] and len(column_name[column]) > 0:
+                if (
+                    column_name[column]
+                    and len(column_name[column]) > 0
+                    and column < len(table[row])
+                ):
                     single_line_dict[column_name[column]] = table[row][column]
             table_info.append(single_line_dict)
 
