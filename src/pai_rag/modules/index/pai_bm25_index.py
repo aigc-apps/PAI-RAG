@@ -6,7 +6,6 @@ import numpy as np
 from typing import Callable, List, cast, Dict
 from llama_index.core.schema import BaseNode, TextNode, NodeWithScore
 from pai_rag.utils.tokenizer import jieba_tokenizer
-import concurrent.futures
 from scipy.sparse import csr_matrix
 
 
@@ -168,34 +167,8 @@ class PaiBm25Index:
             self.index.doc_lens, (0, pad_size), "constant", constant_values=(0)
         )
 
-        chunk_size = 100000
-        start_pos = 0
-        if len(text_list) < 2 * chunk_size:
-            tokens_list = self.split_doc(text_list, self.tokenizer)
-            self.process_token_list(tokens_list, id_list)
-        else:
-            with concurrent.futures.ProcessPoolExecutor(
-                max_workers=self.workers
-            ) as executor:
-                futures = []
-                future2startpos = {}
-                while start_pos < len(text_list):
-                    fut = executor.submit(
-                        self.split_doc,
-                        text_list[start_pos : start_pos + chunk_size],
-                        self.tokenizer,
-                    )
-                    futures.append(fut)
-                    future2startpos[fut] = start_pos
-                    start_pos += chunk_size
-
-                i = 0
-                for fut in concurrent.futures.as_completed(futures):
-                    start_pos = future2startpos[fut]
-                    i += 1
-                    tokens_list = fut.result()
-                    batch_id_list = id_list[start_pos : start_pos + chunk_size]
-                    self.process_token_list(tokens_list, batch_id_list)
+        tokens_list = self.split_doc(text_list, self.tokenizer)
+        self.process_token_list(tokens_list, id_list)
 
         self.construct_index_matrix()
 
