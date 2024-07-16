@@ -51,7 +51,6 @@ name = "qwen-turbo"
 type = "SimpleChatEngine"
 
 [rag.node_enhancement]
-max_token_in_cluster = 3000
 max_clusters = 52
 proba_threshold = 0.10
 

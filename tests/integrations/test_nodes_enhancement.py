@@ -51,9 +51,7 @@ async def test_enhance_nodes():
     index = VectorStoreIndex(nodes=[], embed_model=embed_model)
 
     # raptor init
-    raptor = RaptorNodesEnhancement(
-        tree_depth=2, max_length_in_cluster=3000, max_clusters=50, threshold=0.1
-    )
+    raptor = RaptorNodesEnhancement(tree_depth=2, max_clusters=50, threshold=0.1)
 
     # enhance nodes by raptor
     res_index, res_nodes = await raptor.enhance_nodes(nodes=nodes, index=index)

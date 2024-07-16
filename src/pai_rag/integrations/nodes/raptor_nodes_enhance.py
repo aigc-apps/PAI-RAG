@@ -13,6 +13,7 @@ from llama_index.core.schema import (
 )
 from llama_index.core import VectorStoreIndex
 from pai_rag.integrations.nodes.raptor_clusters import get_clusters
+from pai_rag.utils.prompt_template import DEFAULT_SUMMARY_PROMPT
 
 import logging
 
@@ -23,13 +24,11 @@ class RaptorNodesEnhancement:
     def __init__(
         self,
         tree_depth: int,
-        max_length_in_cluster: int,
         max_clusters: int,
         threshold: float,
     ) -> None:
         """get params from config"""
         self.tree_depth = tree_depth
-        self.max_length_in_cluster = max_length_in_cluster
         self.max_clusters = max_clusters
         self.threshold = threshold
 
@@ -75,7 +74,6 @@ class RaptorNodesEnhancement:
             nodes_per_cluster = get_clusters(
                 nodes=cur_nodes,
                 embedding_map=id_to_embedding,
-                max_length_in_cluster=self.max_length_in_cluster,
                 max_clusters=self.max_clusters,
                 threshold=self.threshold,
             )
@@ -121,11 +119,6 @@ class RaptorNodesEnhancement:
         index.insert_nodes(cur_nodes)
 
         return index, len(new_nodes_collection)
-
-
-DEFAULT_SUMMARY_PROMPT = (
-    "Summarize the provided text in Chinese, including as many key details as needed."
-)
 
 
 class SummaryModule(BaseModel):

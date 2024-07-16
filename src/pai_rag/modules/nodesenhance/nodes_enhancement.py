@@ -17,7 +17,6 @@ class NodesEnhancementModule(ConfigurableModule):
 
         return RaptorNodesEnhancement(
             tree_depth=3,
-            max_length_in_cluster=config["max_token_in_cluster"],
-            max_clusters=config["max_clusters"],
-            threshold=config["proba_threshold"],
+            max_clusters=config.get("max_clusters", 50),
+            threshold=config.get("proba_threshold", 0.1),
         )
