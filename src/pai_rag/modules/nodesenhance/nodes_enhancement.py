@@ -16,7 +16,7 @@ class NodesEnhancementModule(ConfigurableModule):
         config = new_params[MODULE_PARAM_CONFIG]
 
         return RaptorNodesEnhancement(
-            tree_depth=3,
+            tree_depth=config.get("tree_depth", 3),
             max_clusters=config.get("max_clusters", 50),
             threshold=config.get("proba_threshold", 0.1),
         )

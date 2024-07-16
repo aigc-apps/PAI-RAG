@@ -51,6 +51,7 @@ name = "qwen-turbo"
 type = "SimpleChatEngine"
 
 [rag.node_enhancement]
+tree_depth = 3
 max_clusters = 52
 proba_threshold = 0.10
 
