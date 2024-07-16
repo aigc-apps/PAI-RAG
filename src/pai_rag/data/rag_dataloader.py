@@ -7,8 +7,8 @@ import asyncio
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
-from llama_index.core.node_parser import MarkdownNodeParser
 
+from pai_rag.integrations.nodeparsers.base import MarkdownNodeParser
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
@@ -18,7 +18,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LOCAL_QA_MODEL_PATH = "/huggingface/transformers/qwen_1.8b"
+DEFAULT_LOCAL_QA_MODEL_PATH = "./model_repository/qwen_1.8b"
 
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".htm", ".html"])
 
@@ -108,7 +108,7 @@ class RagDataLoader:
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
             elif doc_type == ".md":
-                md_node_parser = MarkdownNodeParser()
+                md_node_parser = MarkdownNodeParser(id_func=node_id_hash)
                 nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
@@ -149,7 +149,6 @@ class RagDataLoader:
         enable_qa_extraction: bool,
         enable_raptor: bool,
     ):
-        print(logger.level)
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
         if not nodes:

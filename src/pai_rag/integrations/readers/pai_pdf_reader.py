@@ -12,13 +12,17 @@ import pdfplumber
 from pdf2image import convert_from_path
 import easyocr
 from llama_index.core import Settings
-from pai_rag.utils.constants import DEFAULT_EASYOCR_MODEL_DIR
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import json
 import unicodedata
 import logging
 import tempfile
+import os
 
 logger = logging.getLogger(__name__)
+
+TABLE_SUMMARY_MAX_TOKEN = 200
+PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 
 
 class PageItem(TypedDict):
@@ -39,11 +43,11 @@ class PaiPDFReader(BaseReader):
     """
 
     def __init__(
-        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_EASYOCR_MODEL_DIR
+        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_MODEL_DIR
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
         if self.enable_image_ocr:
-            self.model_dir = model_dir or DEFAULT_EASYOCR_MODEL_DIR
+            self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
             logger.info("start loading ocr model")
             self.image_reader = easyocr.Reader(
                 ["ch_sim", "en"],
@@ -138,8 +142,10 @@ class PaiPDFReader(BaseReader):
             table = total_tables[i]
             pre_table = total_tables[i - 1]
             if table["page_number"] == pre_table["page_number"]:
+                i -= 1
                 continue
             if table["page_number"] - pre_table["page_number"] > 1:
+                i -= 1
                 continue
             if (
                 table["index_id"] <= 1
@@ -195,7 +201,11 @@ class PaiPDFReader(BaseReader):
         for row in range(1, len(table)):
             single_line_dict = {}
             for column in range(len(column_name)):
-                if column_name[column] and len(column_name[column]) > 0:
+                if (
+                    column_name[column]
+                    and len(column_name[column]) > 0
+                    and column < len(table[row])
+                ):
                     single_line_dict[column_name[column]] = table[row][column]
             table_info.append(single_line_dict)
 
@@ -389,7 +399,9 @@ class PaiPDFReader(BaseReader):
                     summarized_table_text = PaiPDFReader.tables_summarize(table["text"])
                     json_data = PaiPDFReader.table_to_json(table["text"])
                     page_tables_texts.append(table_string)
-                    page_tables_summaries.append(summarized_table_text.text)
+                    page_tables_summaries.append(
+                        summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
+                    )
                     page_tables_json.append(json_data)
             page_table_text = "".join(page_tables_texts)
             page_table_summary = "".join(page_tables_summaries)
@@ -406,8 +418,16 @@ class PaiPDFReader(BaseReader):
                 if not extra_info:
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
-                extra_info["file_path"] = str(file_path)
-                extra_info["table_summary"] = page_table_summary
+                extra_info["file_path"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_path)
+                )
+                file_name = os.path.basename(file_path)
+                extra_info["file_name"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_name)
+                )
+                extra_info["table_summary"] = page_table_summary[
+                    :PAGE_TABLE_SUMMARY_MAX_TOKEN
+                ]
                 extra_info["table_json"] = page_table_json
 
                 doc = Document(

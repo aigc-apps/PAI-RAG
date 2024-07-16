@@ -88,18 +88,23 @@ This setting is also available in webui.
 
 ## rag.index
 
-vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Chroma]
+vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus]
 
 Currently, pai_rag provides a variety of approaches for creating & storing indices.
 
 If vector_store.type = "FAISS", you can specify a local persist_path as below:
 
+    [rag.index]
     vector_store.type = "FAISS"
     persist_path = "localdata/storage"
 
 If vector_store.type = "Hologres", you need to set up the following information:
 
-    vector_store.type = "Hologres"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "Hologres"
     host = "your hologres url"
     port = 80
     user = "your user name"
@@ -109,7 +114,11 @@ If vector_store.type = "Hologres", you need to set up the following information:
 
 If vector_store.type = "ElasticSearch", you need to prepare the following information:
 
-    vector_store.type = "ElasticSearch"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "ElasticSearch"
     es_index = "create your index name"
     es_url = "es_host:es_port(9200)"
     es_user = ""
@@ -117,7 +126,11 @@ If vector_store.type = "ElasticSearch", you need to prepare the following inform
 
 If vector_store.type = "AnalyticDB", you need to fill in the following information:
 
-    vector_store.type = "AnalyticDB"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "AnalyticDB"
     ak = ""
     sk = ""
     region_id = ""
@@ -129,15 +142,17 @@ If vector_store.type = "AnalyticDB", you need to fill in the following informati
 
 If vector_store.type = "Milvus", you need to provide the following information:
 
-    vector_store.type = "Milvus"
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "Milvus"
     host = ""
     port = ""
     user = ""
     password = ""
     database = "pairag"
     collection = "pairag_collection"
-
-If vector_store.type = "Chroma", there is no extra setting.
 
 This setting is also available in webui.
 

@@ -274,7 +274,6 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
         self._collection = Collection(collection_name, using=self._milvusclient._using)
         self._create_index_if_required()
 
-        self.enable_sparse = enable_sparse
         if self.enable_sparse is True and sparse_embedding_function is None:
             logger.warning("Sparse embedding function is not provided, using default.")
             self.sparse_embedding_function = get_default_sparse_embedding_function()
@@ -593,7 +592,6 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
                 self._collection.create_index(
                     self.embedding_field, index_params=index_params
                 )
-                self._collection.load()
         else:
             if (
                 self._collection.has_index(index_name=self.embedding_field)
@@ -608,7 +606,7 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
                 ):
                     self._collection.drop_index(index_name=self.sparse_embedding_field)
                 self._create_hybrid_index(self.collection_name)
-                self._collection.load()
+        self._collection.load()
 
     def _create_hybrid_index(self, collection_name):
         schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True)

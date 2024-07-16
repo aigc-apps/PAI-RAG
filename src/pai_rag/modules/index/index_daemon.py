@@ -26,7 +26,7 @@ class IndexDaemon:
 
     async def refresh_async(self):
         while True:
-            logger.info(f"{datetime.datetime.now()} Start scan.")
+            logger.debug(f"{datetime.datetime.now()} Start scan.")
             bm25_indexes = list(
                 module_registry.get_mod_instances("BM25IndexModule").values()
             )
@@ -57,7 +57,7 @@ class IndexDaemon:
                     logger.info(f"{datetime.datetime.now()} Reloaded index.")
                     module_registry.destroy_config_cache()
 
-            logger.info(f"{datetime.datetime.now()} Index scan complete.")
+            logger.debug(f"{datetime.datetime.now()} Index scan complete.")
             await asyncio.sleep(10)
 
 

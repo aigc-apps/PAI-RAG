@@ -120,11 +120,20 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```
 
    ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml)
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE]
+   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
+   # 默认启动时下载模型 [bge-small-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
+   # 可使用命令行 "load_model" 下载模型 including [bge-small-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
+   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
    ```
 
-5. 启动RAG WebUI
+5. 下载其他模型到本地
+
+   ```bash
+   # 支持 model name (默认 ""), 没有参数时, 默认下载上述所有模型。
+   load_model [--model-name MODEL_NAME]
+   ```
+
+6. 启动RAG WebUI
 
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8001)
@@ -133,7 +142,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
    你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
 
-6. 评估 (调试)
+7. 评估 (调试)
 
 您可以评估RAG系统的不同阶段的效果，如检索、生成或者全链路。
 
@@ -169,11 +178,20 @@ evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
   ```
 
 2. 启动RAG WebUI
+   Linux:
 
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
 docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+```
+
+Mac/Windows:
+
+```bash
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+
+docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
 ```
 
 ### 基于Dockerfile自行构建镜像
