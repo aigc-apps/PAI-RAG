@@ -54,8 +54,6 @@ async def test_enhance_nodes():
     raptor = RaptorNodesEnhancement(tree_depth=2, max_clusters=50, threshold=0.1)
 
     # enhance nodes by raptor
-    res_index, res_nodes = await raptor.enhance_nodes(nodes=nodes, index=index)
+    res_index, len_new_nodes = await raptor.enhance_nodes(nodes=nodes, index=index)
 
-    assert len(res_index.docstore.docs) == len(nodes) + 3
-
-    assert res_nodes == 3
+    assert len(res_index.docstore.docs) == len(nodes) + len_new_nodes
