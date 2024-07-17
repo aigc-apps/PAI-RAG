@@ -12,6 +12,7 @@ from pai_rag.app.api.models import (
     RagResponse,
     LlmResponse,
 )
+from pai_rag.core.rag_trace import start_trace
 from openinference.instrumentation import using_attributes
 from typing import Any, List
 import logging
@@ -51,6 +52,7 @@ class RagService:
         self.rag_configuration.persist()
 
         self.rag = RagApplication()
+        start_trace(self.rag_configuration.get_value())
         self.rag.initialize(self.rag_configuration.get_value())
 
         if os.path.exists(TASK_STATUS_FILE):
