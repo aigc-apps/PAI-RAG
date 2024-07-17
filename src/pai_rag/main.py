@@ -6,9 +6,15 @@ from fastapi import FastAPI
 from pai_rag.app.api.service import configure_app
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.data.rag_datapipeline import __init_data_pipeline
+from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR, EAS_DEFAULT_MODEL_DIR
 from logging.config import dictConfig
 import os
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 _BASE_DIR = Path(__file__).parent
 _ROOT_BASE_DIR = Path(__file__).parent.parent.parent
@@ -165,7 +171,22 @@ def ui(host, port, rag_url):
     type=bool,
     default=False,
 )
-def serve(host, port, config_file, workers, enable_example):
+@click.option(
+    "-s",
+    "--skip-download-models",
+    show_default=True,
+    help="whether to skip download models from modelscope",
+    required=False,
+    type=bool,
+    is_flag=True,
+    default=False,
+)
+def serve(host, port, config_file, workers, enable_example, skip_download_models):
+    if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
+        logger.info("Start to download models.")
+        ModelScopeDownloader().load_basic_models()
+        logger.info("Finished downloading models.")
+
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
     if enable_example:

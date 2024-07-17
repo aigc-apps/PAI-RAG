@@ -67,11 +67,12 @@ chardet = "^5.2.0"
 locust = "^2.29.0"
 gunicorn = "^22.0.0"
 protobuf = "3.20.0"
+modelscope = "^1.16.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.data.rag_datapipeline:run"
-load_easyocr_model = "pai_rag.utils.download_easyocr_models:download_easyocr_models"
+load_model = "pai_rag.utils.download_models:load_models"
 evaluation = "pai_rag.evaluation.eval_pipeline:run"
 
 [tool.pytest.ini_options]
