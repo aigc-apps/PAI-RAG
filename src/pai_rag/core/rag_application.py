@@ -130,10 +130,16 @@ class RagApplication:
                 new_query=new_query,
             )
         else:
+            reference_image_text = ""
             referenced_docs_text = ""
             for i, node in enumerate(node_results):
-                referenced_docs_text += f"[{i+1}]: {node.node.metadata.get('file_name')[33:]}   Score:{node.score} +++"
-            return [response, session_id, referenced_docs_text]
+                image_url = node.node.metadata.get("image_url", "")
+                if image_url:
+                    reference_image_text += f"![image_{i}]({image_url})"
+
+                file_name = node.node.metadata.get("file_name")
+                referenced_docs_text += f"[{i+1}]: {file_name}   Score:{node.score} +++"
+            return [response, session_id, reference_image_text + referenced_docs_text]
 
     async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.

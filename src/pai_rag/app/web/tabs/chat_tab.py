@@ -19,9 +19,13 @@ def clear_history(chatbot):
     return chatbot, 0
 
 
+def reset_textbox():
+    return gr.update(value="")
+
+
 def respond(input_elements: List[Any]):
     global current_session_id
-
+    print(input_elements)
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -60,28 +64,28 @@ def respond(input_elements: List[Any]):
 
     if query_type == "Retrieval":
         chatbot.append((msg, response.answer))
-        yield "", chatbot, 0
+        yield chatbot
     elif is_streaming:
         current_session_id = response.headers["x-session-id"]
         chatbot.append([msg, None])
-        chatbot[-1][1] = "Answer:"
+        chatbot[-1][1] = ""
         for chunk in response.iter_lines(
             chunk_size=8192, decode_unicode=False, delimiter=b"\0"
         ):
             if chunk:
                 chatbot[-1][1] += chunk.decode("utf-8")
-                yield "", chatbot, 0
+                yield chatbot
                 time.sleep(0.1)
         if query_type != "LLM":
             refernce_docs = response.headers["reference_docs"]
             chatbot[-1][1] += "\n\n **Reference:** \n" + refernce_docs.replace(
                 "+++", "\n"
             )
-            yield "", chatbot, 0
+            yield chatbot
     else:
         current_session_id = response["session_id"]
         chatbot.append((msg, response["answer"]))
-        yield "", chatbot, 0
+        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -260,15 +264,28 @@ def create_chat_tab() -> Dict[str, Any]:
         submitBtn.click(
             respond,
             chat_args,
-            [question, chatbot, cur_tokens],
+            [chatbot],
             api_name="respond_clk",
         )
         question.submit(
             respond,
             chat_args,
-            [question, chatbot, cur_tokens],
+            [chatbot],
             api_name="respond_q",
         )
+        submitBtn.click(
+            reset_textbox,
+            [],
+            [question],
+            api_name="reset_clk",
+        )
+        question.submit(
+            reset_textbox,
+            [],
+            [question],
+            api_name="reset_q",
+        )
+
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,
