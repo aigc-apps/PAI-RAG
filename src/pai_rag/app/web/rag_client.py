@@ -70,45 +70,55 @@ class RagWebClient:
     def get_evaluate_response_url(self):
         return f"{self.endpoint}service/evaluate/response"
 
-    def query(self, text: str, session_id: str = None):
-        q = dict(question=text, session_id=session_id)
-        r = requests.post(self.query_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
-        response = dotdict(json.loads(r.text))
+    def query(self, text: str, session_id: str = None, stream: bool = False):
+        q = dict(question=text, session_id=session_id, stream=stream)
+        r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
-            raise RagApiError(code=r.status_code, msg=response.message)
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
 
-        if len(response["docs"]) == 0:
-            response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
-        else:
-            referenced_docs = ""
-            for i, doc in enumerate(response["docs"]):
-                referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
-
-            if session_id:
-                formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+            if len(response["docs"]) == 0:
+                response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
             else:
-                formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
-            response["answer"] = formatted_text
-        return response
+                referenced_docs = ""
+                for i, doc in enumerate(response["docs"]):
+                    referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
+
+                if session_id:
+                    formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+                else:
+                    formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+                response["answer"] = formatted_text
+            return response
+        return r
 
     def query_llm(
         self,
         text: str,
         session_id: str = None,
         temperature: float = 0.1,
+        stream: bool = False,
     ):
         q = dict(
             question=text,
             temperature=temperature,
             session_id=session_id,
+            stream=stream,
         )
 
-        r = requests.post(self.llm_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
-        response = dotdict(json.loads(r.text))
+        r = requests.post(
+            self.llm_url, json=q, stream=True, timeout=DEFAULT_CLIENT_TIME_OUT
+        )
         if r.status_code != HTTPStatus.OK:
-            raise RagApiError(code=r.status_code, msg=response.message)
-
-        return response
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            return response
+        else:
+            return r
 
     def query_vector(self, text: str):
         q = dict(question=text)
