@@ -479,7 +479,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             filter = [_to_elasticsearch_filter(query.filters)]
         else:
             filter = es_filter or []
-
         hits = await self._store.search(
             query=query.query_str,
             query_vector=query.query_embedding,
@@ -488,7 +487,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             filter=filter,
             custom_query=custom_query,
         )
-
         top_k_nodes = []
         top_k_ids = []
         top_k_scores = []

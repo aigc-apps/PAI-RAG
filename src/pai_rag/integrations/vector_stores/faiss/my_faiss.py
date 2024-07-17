@@ -73,8 +73,7 @@ class MyFaissVectorStore(FaissVectorStore):
             if idx < 0:
                 continue
             # Ours: normalize the cosine sim score to [0,1]
-            dist = round(normalize_cosine_similarity_score(dist))
-            filtered_dists.append(dist)
+            filtered_dists.append(normalize_cosine_similarity_score(dist))
             filtered_node_idxs.append(str(idx))
 
         return VectorStoreQueryResult(

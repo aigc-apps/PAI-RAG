@@ -254,8 +254,8 @@ class AsyncVectorStore:
             fields.append("metadata")
         if self.text_field not in fields:
             fields.append(self.text_field)
-        if self.vector_field not in fields:
-            fields.append(self.vector_field)
+        # if self.vector_field not in fields:
+        #     fields.append(self.vector_field)
 
         if self.embedding_service and not query_vector:
             if not query:

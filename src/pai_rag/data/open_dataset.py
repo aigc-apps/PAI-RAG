@@ -5,6 +5,7 @@ import gzip
 import json
 import urllib.request
 import tarfile
+from datasets import load_dataset
 
 DEFAULT_DATASET_DIR = "datasets"
 
@@ -13,13 +14,6 @@ class OpenDataSet(ABC):
     @abstractmethod
     def load_qrels(self, type: str):
         """加载评测文件
-        :param type: 要加载的数据集的类型 [train, dev, test]
-        """
-        pass
-
-    @abstractmethod
-    def load_topic(self, type: str):
-        """加载主题文件
         :param type: 要加载的数据集的类型 [train, dev, test]
         """
         pass
@@ -40,7 +34,7 @@ class MiraclOpenDataSet(OpenDataSet):
         )
         self.lang = lang
         if not os.path.exists(self.dataset_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl.tar.gz")
             self._extract_and_download_dataset(
                 dataset_url, file_path, self.dataset_path
@@ -50,7 +44,7 @@ class MiraclOpenDataSet(OpenDataSet):
                 f"[MiraclOpenDataSet] Dataset file already exists at {self.dataset_path}."
             )
         if not os.path.exists(self.corpus_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl-corpus.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl-corpus.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl-corpus.tar.gz")
             self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
         else:
@@ -163,15 +157,52 @@ class MiraclOpenDataSet(OpenDataSet):
         return nodes, docid2doc
 
 
-class DureaderDataSet(OpenDataSet):
-    def load_qrels(self, type: str):
-        # DureaderDataSet 的 load_qrels 实现
-        print("Loading qrels for DureaderDataSet...")
+class DuRetrievalDataSet(OpenDataSet):
+    def __init__(self, dataset_path: str = None, corpus_path: str = None):
+        self.dataset_path = dataset_path or os.path.join(
+            "/home/xiaowen/xiaowen/github_code", "DuRetrieval-qrels"
+        )
+        self.corpus_path = corpus_path or os.path.join(
+            "/home/xiaowen/xiaowen/github_code", "DuRetrieval"
+        )
 
-    def load_topic(self, type: str):
-        # DureaderDataSet 的 load_topic 实现
-        print("Loading topic for DureaderDataSet...")
+    def load_qrels(self, type: str = "dev"):
+        print(
+            f"[DuRetrievalDataSet] Loading qrels for DuRetrievalDataSet with type {type} from {self.dataset_path}..."
+        )
+        qrels_ori = load_dataset(self.dataset_path)
+        qrels = defaultdict(dict)
+        for sample in qrels_ori[type]:
+            qid = sample["qid"]
+            docid = sample["pid"]
+            rel = sample["score"]
+            qrels[qid][docid] = int(rel)
+        print(f"[DuRetrievalDataSet] Loaded qrels {len(qrels)} with type {type}")
+        return qrels
 
     def load_related_corpus(self):
-        # DureaderDataSet 的 load_related_corpus 实现
-        print("Loading related docs for dev for DureaderDataSet...")
+        docid2doc = {}
+        qid2query = {}
+        nodes = set()
+        du_dataset = load_dataset(self.corpus_path)
+        for sample in du_dataset["corpus"]:
+            nodes.add(
+                (
+                    sample["id"],
+                    sample["text"],
+                    self.corpus_path,
+                )
+            )
+            docid2doc[sample["id"]] = sample["text"]
+        print(
+            f"[DuRetrievalDataSet] Loaded nodes {len(nodes)} from file_path {self.corpus_path}"
+        )
+
+        for sample in du_dataset["queries"]:
+            qid2query[sample["id"]] = sample["text"]
+        print(
+            f"[DuRetrievalDataSet] Loaded queries {len(nodes)} from file_path {self.corpus_path}"
+        )
+
+        print(f"[DuRetrievalDataSet] Loaded all nodes {len(nodes)}")
+        return nodes, docid2doc, qid2query
