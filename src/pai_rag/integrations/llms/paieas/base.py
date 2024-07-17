@@ -1,249 +1,623 @@
+import functools
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Optional,
+    Sequence,
+    cast,
+)
+
+import httpx
+from llama_index.core.base.llms.generic_utils import (
+    achat_to_completion_decorator,
+    acompletion_to_chat_decorator,
+    astream_chat_to_completion_decorator,
+    astream_completion_to_chat_decorator,
+    chat_to_completion_decorator,
+    completion_to_chat_decorator,
+    stream_chat_to_completion_decorator,
+    stream_completion_to_chat_decorator,
+)
 from llama_index.core.base.llms.types import (
     ChatMessage,
     ChatResponse,
+    ChatResponseAsyncGen,
     ChatResponseGen,
     CompletionResponse,
+    CompletionResponseAsyncGen,
     CompletionResponseGen,
     LLMMetadata,
+    MessageRole,
+)
+from llama_index.core.bridge.pydantic import Field, PrivateAttr
+from llama_index.core.callbacks import CallbackManager
+from llama_index.core.constants import (
+    DEFAULT_TEMPERATURE,
 )
 from llama_index.core.llms.callbacks import (
     llm_chat_callback,
     llm_completion_callback,
 )
-from llama_index.core.llms.custom import CustomLLM
-from llama_index.core.base.llms.generic_utils import (
-    completion_to_chat_decorator,
-    stream_completion_to_chat_decorator,
-    acompletion_to_chat_decorator,
+from llama_index.core.llms.function_calling import FunctionCallingLLM
+from llama_index.core.types import BaseOutputParser, PydanticProgramMode
+from llama_index.llms.openai.utils import (
+    create_retry_decorator,
+    from_openai_completion_logprobs,
+    from_openai_message,
+    from_openai_token_logprobs,
+    resolve_openai_credentials,
+    to_openai_message_dicts,
 )
-from typing import Any, Dict, Optional, Sequence
-from llama_index.core.bridge.pydantic import Field
-import json
-import requests
-import httpx
 
-DEFAULT_EAS_MODEL_NAME = "pai-eas-custom-llm"
-DEFAULT_EAS_MAX_NEW_TOKENS = 512
+from openai import AsyncOpenAI, AzureOpenAI
+from openai import OpenAI as SyncOpenAI
+from openai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk,
+    ChoiceDelta,
+)
 
 
-class PaiEAS(CustomLLM):
-    """PaiEas LLM."""
+def llm_retry_decorator(f: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    @functools.wraps(f)
+    def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        max_retries = getattr(self, "max_retries", 0)
+        if max_retries <= 0:
+            return f(self, *args, **kwargs)
 
-    model_name: str = Field(
-        default=DEFAULT_EAS_MODEL_NAME,
-        description="The DashScope model to use.",
-    )
-    endpoint: str = Field(default=None, description="The PAI EAS endpoint.")
-    token: str = Field(default=None, description="The PAI EAS token.")
-    max_new_tokens: int = Field(
-        default=DEFAULT_EAS_MAX_NEW_TOKENS, description="Max new tokens."
-    )
-    temperature: Optional[float] = Field(
+        retry = create_retry_decorator(
+            max_retries=max_retries,
+            random_exponential=True,
+            stop_after_delay_seconds=60,
+            min_seconds=1,
+            max_seconds=20,
+        )
+        return retry(f)(self, *args, **kwargs)
+
+    return wrapper
+
+
+class PaiEAS(FunctionCallingLLM):
+    """
+    OpenAI LLM.
+
+    Args:
+        temperature: a float from 0 to 1 controlling randomness in generation; higher will lead to more creative, less deterministic responses.
+        max_tokens: the maximum number of tokens to generate.
+        additional_kwargs: Optional[Dict[str, Any]] = None,
+        max_retries: How many times to retry the API call if it fails.
+        timeout: How long to wait, in seconds, for an API call before failing.
+        reuse_client: Reuse the OpenAI client between requests. When doing anything with large volumes of async API calls, setting this to false can improve stability.
+        api_key: Your OpenAI api key
+        api_base: The base URL of the API to call
+        api_version: the version of the API to call
+        callback_manager: the callback manager is used for observability.
+        default_headers: override the default headers for API requests.
+        http_client: pass in your own httpx.Client instance.
+        async_http_client: pass in your own httpx.AsyncClient instance.
+
+    Examples:
+        `pip install llama-index-llms-openai`
+
+        ```python
+        import os
+        import openai
+
+        os.environ["OPENAI_API_KEY"] = "sk-..."
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+
+        from llama_index.llms.openai import OpenAI
+
+        llm = OpenAI(model="gpt-3.5-turbo")
+
+        stream = llm.stream("Hi, write a short story")
+
+        for r in stream:
+            print(r.delta, end="")
+        ```
+    """
+
+    temperature: float = Field(
+        default=DEFAULT_TEMPERATURE,
         description="The temperature to use during generation.",
-        default=0.1,
         gte=0.0,
-        lte=2.0,
+        lte=1.0,
     )
-    top_p: float = Field(
-        default=0.8, description="Sample probability threshold when generate."
+    max_tokens: Optional[int] = Field(
+        description="The maximum number of tokens to generate.",
+        gt=0,
     )
-    top_k: int = Field(default=30, description="Sample counter when generate.")
-    top_k: int = Field(default=30, description="Sample counter when generate.")
-    version: str = Field(default="2.0", description="PAI EAS endpoint version.")
+    logprobs: Optional[bool] = Field(
+        description="Whether to return logprobs per token."
+    )
+    top_logprobs: int = Field(
+        description="The number of top token log probs to return.",
+        default=0,
+        gte=0,
+        lte=20,
+    )
+    additional_kwargs: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional kwargs for the OpenAI API."
+    )
+    max_retries: int = Field(
+        default=3,
+        description="The maximum number of API retries.",
+        gte=0,
+    )
+    timeout: float = Field(
+        default=60.0,
+        description="The timeout, in seconds, for API requests.",
+        gte=0,
+    )
+    default_headers: Dict[str, str] = Field(
+        default=None, description="The default headers for API requests."
+    )
+    reuse_client: bool = Field(
+        default=True,
+        description=(
+            "Reuse the OpenAI client between requests. When doing anything with large "
+            "volumes of async API calls, setting this to false can improve stability."
+        ),
+    )
 
-    """
-    Llm model deployed in Aliyun PAI EAS.
-    """
+    api_key: str = Field(default=None, description="The OpenAI API key.")
+    api_base: str = Field(description="The base URL for OpenAI API.")
+    api_version: str = Field(description="The API version for OpenAI API.")
+
+    _client: Optional[SyncOpenAI] = PrivateAttr()
+    _aclient: Optional[AsyncOpenAI] = PrivateAttr()
+    _http_client: Optional[httpx.Client] = PrivateAttr()
+    _async_http_client: Optional[httpx.AsyncClient] = PrivateAttr()
 
     def __init__(
         self,
-        endpoint: str = "",
-        token: str = "",
-        model_name: str = "",
-        max_new_tokens: int = DEFAULT_EAS_MAX_NEW_TOKENS,
-        temperature: float = 0.1,
-        top_p: float = 0.8,
-        top_k: int = 30,
-        version: str = "2.0",
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: Optional[int] = None,
+        additional_kwargs: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+        timeout: float = 60.0,
+        reuse_client: bool = True,
+        api_key: Optional[str] = None,
+        api_base: Optional[str] = None,
+        api_version: Optional[str] = None,
+        callback_manager: Optional[CallbackManager] = None,
+        default_headers: Optional[Dict[str, str]] = None,
+        http_client: Optional[httpx.Client] = None,
+        async_http_client: Optional[httpx.AsyncClient] = None,
+        # base class
+        system_prompt: Optional[str] = None,
+        messages_to_prompt: Optional[Callable[[Sequence[ChatMessage]], str]] = None,
+        completion_to_prompt: Optional[Callable[[str], str]] = None,
+        pydantic_program_mode: PydanticProgramMode = PydanticProgramMode.DEFAULT,
+        output_parser: Optional[BaseOutputParser] = None,
         **kwargs: Any,
-    ):
-        super().__init__(
-            endpoint=endpoint,
-            token=token,
-            model_name=model_name,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            version=version,
-            kwargs=kwargs,
+    ) -> None:
+        additional_kwargs = additional_kwargs or {}
+
+        api_key, api_base, api_version = resolve_openai_credentials(
+            api_key=api_key,
+            api_base=api_base,
+            api_version=api_version,
         )
+
+        super().__init__(
+            temperature=temperature,
+            max_tokens=max_tokens,
+            additional_kwargs=additional_kwargs,
+            max_retries=max_retries,
+            callback_manager=callback_manager,
+            api_key=api_key,
+            api_version=api_version,
+            api_base=api_base,
+            timeout=timeout,
+            reuse_client=reuse_client,
+            default_headers=default_headers,
+            system_prompt=system_prompt,
+            messages_to_prompt=messages_to_prompt,
+            completion_to_prompt=completion_to_prompt,
+            pydantic_program_mode=pydantic_program_mode,
+            output_parser=output_parser,
+            **kwargs,
+        )
+
+        self._client = None
+        self._aclient = None
+        self._http_client = http_client
+        self._async_http_client = async_http_client
+
+    def _get_client(self) -> SyncOpenAI:
+        if not self.reuse_client:
+            return SyncOpenAI(**self._get_credential_kwargs())
+
+        if self._client is None:
+            self._client = SyncOpenAI(**self._get_credential_kwargs())
+        return self._client
+
+    def _get_aclient(self) -> AsyncOpenAI:
+        if not self.reuse_client:
+            return AsyncOpenAI(**self._get_credential_kwargs(is_async=True))
+
+        if self._aclient is None:
+            self._aclient = AsyncOpenAI(**self._get_credential_kwargs(is_async=True))
+        return self._aclient
+
+    def _is_azure_client(self) -> bool:
+        return isinstance(self._get_client(), AzureOpenAI)
 
     @classmethod
     def class_name(cls) -> str:
-        return "PaiEAS"
+        return "paieas_llm"
 
     @property
     def metadata(self) -> LLMMetadata:
-        return LLMMetadata(model_name=self.model_name)
-
-    def _default_params(self):
-        params = {
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "top_k": self.top_k,
-            "max_new_tokens": self.max_new_tokens,
-        }
-        return params
-
-    @llm_completion_callback()
-    def complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
-        params = self._default_params()
-        params.update(kwargs)
-        response = self._call_eas(prompt, params=params)
-        text = self._process_eas_response(response)
-        return CompletionResponse(text=text)
-
-    @llm_completion_callback()
-    async def acomplete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
-        params = self._default_params()
-        params.update(kwargs)
-        response = await self._call_eas_async(prompt, params=params)
-        text = self._process_eas_response(response)
-        return CompletionResponse(text=text)
+        return LLMMetadata(model_name="pai-eas-custom-llm", is_chat_model=True)
 
     @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
-        chat_fn = completion_to_chat_decorator(self.complete)
+        if self._use_chat_completions(kwargs):
+            chat_fn = self._chat
+        else:
+            chat_fn = completion_to_chat_decorator(self._complete)
         return chat_fn(messages, **kwargs)
-
-    @llm_chat_callback()
-    async def achat(
-        self, messages: Sequence[ChatMessage], **kwargs: Any
-    ) -> ChatResponse:
-        chat_fn = acompletion_to_chat_decorator(self.acomplete)
-        return await chat_fn(messages, **kwargs)
-
-    @llm_completion_callback()
-    def stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
-        return self._stream(prompt=prompt, kwargs=kwargs)
 
     @llm_chat_callback()
     def stream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseGen:
-        stream_chat_fn = stream_completion_to_chat_decorator(self.stream_complete)
+        if self._use_chat_completions(kwargs):
+            stream_chat_fn = self._stream_chat
+        else:
+            stream_chat_fn = stream_completion_to_chat_decorator(self._stream_complete)
         return stream_chat_fn(messages, **kwargs)
 
-    def _process_eas_response(self, response: Any) -> str:
-        if self.version == "1.0":
-            text = response
+    @llm_completion_callback()
+    def complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        if self._use_chat_completions(kwargs):
+            complete_fn = chat_to_completion_decorator(self._chat)
         else:
-            text = response["response"]
-        return text
+            complete_fn = self._complete
+        return complete_fn(prompt, **kwargs)
 
-    def _call_eas(self, prompt: str = "", params: Dict = {}) -> Any:
-        """Generate text from the eas service."""
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"{self.token}",
-        }
-        if self.version == "1.0":
-            body = {
-                "input_ids": f"{prompt}",
-            }
-        else:
-            body = {
-                "prompt": f"{prompt}",
-            }
-
-        # add params to body
-        for key, value in params.items():
-            body[key] = value
-
-        # make request
-        response = requests.post(self.endpoint, headers=headers, json=body)
-
-        if response.status_code != 200:
-            raise Exception(
-                f"Request failed with status code {response.status_code}"
-                f" and message {response.text}"
-            )
-
-        try:
-            return json.loads(response.text)
-        except Exception as e:
-            raise e
-
-    async def _call_eas_async(self, prompt: str = "", params: Dict = {}) -> Any:
-        """Generate text from the eas service."""
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"{self.token}",
-        }
-        if self.version == "1.0":
-            body = {
-                "input_ids": f"{prompt}",
-            }
-        else:
-            body = {
-                "prompt": f"{prompt}",
-            }
-
-        # add params to body
-        for key, value in params.items():
-            body[key] = value
-
-        # make request
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.post(
-                url=self.endpoint, headers=headers, json=body, timeout=60
-            )
-
-        if response.status_code != 200:
-            raise Exception(
-                f"Request failed with status code {response.status_code}"
-                f" and message {response.text}"
-            )
-
-        try:
-            return json.loads(response.text)
-        except Exception as e:
-            raise e
-
-    def _stream(
-        self,
-        prompt: str,
-        **kwargs: Any,
+    @llm_completion_callback()
+    def stream_complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseGen:
-        params = self._default_params()
-        headers = {"User-Agent": "PAI Rag Client", "Authorization": f"{self.token}"}
-
-        if self.version == "1.0":
-            pload = {"input_ids": prompt, **params}
-            response = requests.post(
-                self.endpoint, headers=headers, json=pload, stream=True
-            )
-
-            res = CompletionResponse(text=response.text)
-
-            # yield text, if any
-            yield res
+        if self._use_chat_completions(kwargs):
+            stream_complete_fn = stream_chat_to_completion_decorator(self._stream_chat)
         else:
-            pload = {"prompt": prompt, "use_stream_chat": "True", **params}
+            stream_complete_fn = self._stream_complete
+        return stream_complete_fn(prompt, **kwargs)
 
-            response = requests.post(
-                self.endpoint, headers=headers, json=pload, stream=True
+    def _use_chat_completions(self, kwargs: Dict[str, Any]) -> bool:
+        if "use_chat_completions" in kwargs:
+            return kwargs["use_chat_completions"]
+        return self.metadata.is_chat_model
+
+    def _get_credential_kwargs(self, is_async: bool = False) -> Dict[str, Any]:
+        return {
+            "api_key": self.api_key,
+            "base_url": self.api_base,
+            "http_client": self._async_http_client if is_async else self._http_client,
+        }
+
+    @llm_retry_decorator
+    def _chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        client = self._get_client()
+        message_dicts = to_openai_message_dicts(messages)
+        if self.reuse_client:
+            response = client.chat.completions.create(
+                model="default",
+                messages=message_dicts,
+                stream=False,
             )
+        else:
+            with client:
+                response = client.chat.completions.create(
+                    model="default",
+                    messages=message_dicts,
+                    stream=False,
+                )
 
-            for chunk in response.iter_lines(
-                chunk_size=8192, decode_unicode=False, delimiter=b"\0"
+        openai_message = response.choices[0].message
+        message = from_openai_message(openai_message)
+        openai_token_logprobs = response.choices[0].logprobs
+        logprobs = None
+        if openai_token_logprobs and openai_token_logprobs.content:
+            logprobs = from_openai_token_logprobs(openai_token_logprobs.content)
+
+        return ChatResponse(
+            message=message,
+            raw=response,
+            logprobs=logprobs,
+        )
+
+    @llm_retry_decorator
+    def _stream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseGen:
+        client = self._get_client()
+        message_dicts = to_openai_message_dicts(messages)
+
+        def gen() -> ChatResponseGen:
+            content = ""
+
+            for response in client.chat.completions.create(
+                model="default",
+                messages=message_dicts,
+                stream=True,
             ):
-                if chunk:
-                    data = json.loads(chunk.decode("utf-8"))
-                    text = data["response"]
+                response = cast(ChatCompletionChunk, response)
+                if len(response.choices) > 0:
+                    delta = response.choices[0].delta
+                else:
+                    if self._is_azure_client():
+                        continue
+                    else:
+                        delta = ChoiceDelta()
 
-                    # yield text, if any
-                    if text:
-                        res = CompletionResponse(text=text)
-                        yield res
+                # update using deltas
+                role = delta.role or MessageRole.ASSISTANT
+                content_delta = delta.content or ""
+                content += content_delta
+
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=role,
+                        content=content,
+                    ),
+                    delta=content_delta,
+                    raw=response,
+                )
+
+        return gen()
+
+    @llm_retry_decorator
+    def _complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
+        client = self._get_client()
+
+        if self.reuse_client:
+            response = client.completions.create(
+                model="default",
+                prompt=prompt,
+                stream=False,
+            )
+        else:
+            with client:
+                response = client.completions.create(
+                    model="default",
+                    prompt=prompt,
+                    stream=False,
+                )
+        text = response.choices[0].text
+
+        openai_completion_logprobs = response.choices[0].logprobs
+        logprobs = None
+        if openai_completion_logprobs:
+            logprobs = from_openai_completion_logprobs(openai_completion_logprobs)
+
+        return CompletionResponse(
+            text=text,
+            raw=response,
+            logprobs=logprobs,
+        )
+
+    @llm_retry_decorator
+    def _stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
+        client = self._get_client()
+
+        def gen() -> CompletionResponseGen:
+            text = ""
+            for response in client.completions.create(
+                model="default",
+                prompt=prompt,
+                stream=True,
+            ):
+                if len(response.choices) > 0:
+                    delta = response.choices[0].text
+                    if delta is None:
+                        delta = ""
+                else:
+                    delta = ""
+                text += delta
+                yield CompletionResponse(
+                    delta=delta,
+                    text=text,
+                    raw=response,
+                )
+
+        return gen()
+
+    # ===== Async Endpoints =====
+    @llm_chat_callback()
+    async def achat(
+        self,
+        messages: Sequence[ChatMessage],
+        **kwargs: Any,
+    ) -> ChatResponse:
+        achat_fn: Callable[..., Awaitable[ChatResponse]]
+        if self._use_chat_completions(kwargs):
+            achat_fn = self._achat
+        else:
+            achat_fn = acompletion_to_chat_decorator(self._acomplete)
+        return await achat_fn(messages, **kwargs)
+
+    @llm_chat_callback()
+    async def astream_chat(
+        self,
+        messages: Sequence[ChatMessage],
+        **kwargs: Any,
+    ) -> ChatResponseAsyncGen:
+        astream_chat_fn: Callable[..., Awaitable[ChatResponseAsyncGen]]
+        if self._use_chat_completions(kwargs):
+            astream_chat_fn = self._astream_chat
+        else:
+            astream_chat_fn = astream_completion_to_chat_decorator(
+                self._astream_complete
+            )
+        return await astream_chat_fn(messages, **kwargs)
+
+    @llm_completion_callback()
+    async def acomplete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        if self._use_chat_completions(kwargs):
+            acomplete_fn = achat_to_completion_decorator(self._achat)
+        else:
+            acomplete_fn = self._acomplete
+        return await acomplete_fn(prompt, **kwargs)
+
+    @llm_completion_callback()
+    async def astream_complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponseAsyncGen:
+        if self._use_chat_completions(kwargs):
+            astream_complete_fn = astream_chat_to_completion_decorator(
+                self._astream_chat
+            )
+        else:
+            astream_complete_fn = self._astream_complete
+        return await astream_complete_fn(prompt, **kwargs)
+
+    @llm_retry_decorator
+    async def _achat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponse:
+        aclient = self._get_aclient()
+        message_dicts = to_openai_message_dicts(messages)
+
+        if self.reuse_client:
+            response = await aclient.chat.completions.create(
+                model="default", messages=message_dicts, stream=False
+            )
+        else:
+            async with aclient:
+                response = await aclient.chat.completions.create(
+                    model="default",
+                    messages=message_dicts,
+                    stream=False,
+                )
+
+        openai_message = response.choices[0].message
+        message = from_openai_message(openai_message)
+        openai_token_logprobs = response.choices[0].logprobs
+        logprobs = None
+        if openai_token_logprobs and openai_token_logprobs.content:
+            logprobs = from_openai_token_logprobs(openai_token_logprobs.content)
+
+        return ChatResponse(
+            message=message,
+            raw=response,
+            logprobs=logprobs,
+        )
+
+    @llm_retry_decorator
+    async def _astream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
+        aclient = self._get_aclient()
+        message_dicts = to_openai_message_dicts(messages)
+
+        async def gen() -> ChatResponseAsyncGen:
+            content = ""
+
+            first_chat_chunk = True
+            async for response in await aclient.chat.completions.create(
+                model="default",
+                messages=message_dicts,
+                stream=True,
+            ):
+                response = cast(ChatCompletionChunk, response)
+                if len(response.choices) > 0:
+                    # check if the first chunk has neither content nor tool_calls
+                    # this happens when 1106 models end up calling multiple tools
+                    if (
+                        first_chat_chunk
+                        and response.choices[0].delta.content is None
+                        and response.choices[0].delta.tool_calls is None
+                    ):
+                        first_chat_chunk = False
+                        continue
+                    delta = response.choices[0].delta
+                else:
+                    if self._is_azure_client():
+                        continue
+                    else:
+                        delta = ChoiceDelta()
+                first_chat_chunk = False
+
+                # update using deltas
+                role = delta.role or MessageRole.ASSISTANT
+                content_delta = delta.content or ""
+                content += content_delta
+
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=role,
+                        content=content,
+                    ),
+                    delta=content_delta,
+                    raw=response,
+                )
+
+        return gen()
+
+    @llm_retry_decorator
+    async def _acomplete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
+        aclient = self._get_aclient()
+
+        if self.reuse_client:
+            response = await aclient.completions.create(
+                model="default",
+                prompt=prompt,
+                stream=False,
+            )
+        else:
+            async with aclient:
+                response = await aclient.completions.create(
+                    model="default",
+                    prompt=prompt,
+                    stream=False,
+                )
+
+        text = response.choices[0].text
+        openai_completion_logprobs = response.choices[0].logprobs
+        logprobs = None
+        if openai_completion_logprobs:
+            logprobs = from_openai_completion_logprobs(openai_completion_logprobs)
+
+        return CompletionResponse(
+            text=text,
+            raw=response,
+            logprobs=logprobs,
+        )
+
+    @llm_retry_decorator
+    async def _astream_complete(
+        self, prompt: str, **kwargs: Any
+    ) -> CompletionResponseAsyncGen:
+        aclient = self._get_aclient()
+
+        async def gen() -> CompletionResponseAsyncGen:
+            text = ""
+            async for response in await aclient.completions.create(
+                model="default",
+                prompt=prompt,
+                stream=True,
+            ):
+                if len(response.choices) > 0:
+                    delta = response.choices[0].text
+                    if delta is None:
+                        delta = ""
+                else:
+                    delta = ""
+                text += delta
+                yield CompletionResponse(
+                    delta=delta,
+                    text=text,
+                    raw=response,
+                )
+
+        return gen()
