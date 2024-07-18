@@ -34,7 +34,7 @@ class MiraclOpenDataSet(OpenDataSet):
         )
         self.lang = lang
         if not os.path.exists(self.dataset_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl.tar.gz")
             self._extract_and_download_dataset(
                 dataset_url, file_path, self.dataset_path
@@ -44,7 +44,7 @@ class MiraclOpenDataSet(OpenDataSet):
                 f"[MiraclOpenDataSet] Dataset file already exists at {self.dataset_path}."
             )
         if not os.path.exists(self.corpus_path):
-            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/small_test/miracl-corpus.tar.gz"
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/miracl-corpus.tar.gz"
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl-corpus.tar.gz")
             self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
         else:
@@ -159,12 +159,11 @@ class MiraclOpenDataSet(OpenDataSet):
 
 class DuRetrievalDataSet(OpenDataSet):
     def __init__(self, dataset_path: str = None, corpus_path: str = None):
+        # TODO: fix the dataset path
         self.dataset_path = dataset_path or os.path.join(
-            "/home/xiaowen/xiaowen/github_code", "DuRetrieval-qrels"
+            "/home/datasets", "DuRetrieval-qrels"
         )
-        self.corpus_path = corpus_path or os.path.join(
-            "/home/xiaowen/xiaowen/github_code", "DuRetrieval"
-        )
+        self.corpus_path = corpus_path or os.path.join("/home/datasets", "DuRetrieval")
 
     def load_qrels(self, type: str = "dev"):
         print(
