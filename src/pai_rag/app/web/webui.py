@@ -29,15 +29,6 @@ def resume_ui():
     for elem in elem_manager.get_elem_list():
         elem_id = elem.elem_id
         if elem_id in component_settings.keys():
-            if DEFAULT_IS_INTERACTIVE.lower() == "false" and elem_id == "llm":
-                outputs[elem] = "PaiEas"
-                continue
-            elif (
-                DEFAULT_IS_INTERACTIVE.lower() == "false" and elem_id == "llm_eas_token"
-            ):
-                outputs[elem] = "******"
-                continue
-
             elem_attr = component_settings[elem_id]
             elem = elem_manager.get_elem_by_id(elem_id=elem_id)
             # For gradio version 3.41.0, we can remove .value for latest gradio here.
