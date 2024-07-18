@@ -25,7 +25,6 @@ def reset_textbox():
 
 def respond(input_elements: List[Any]):
     global current_session_id
-    print(input_elements)
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -77,10 +76,11 @@ def respond(input_elements: List[Any]):
                 yield chatbot
                 time.sleep(0.1)
         if query_type != "LLM":
-            refernce_docs = response.headers["reference_docs"]
-            chatbot[-1][1] += "\n\n **Reference:** \n" + refernce_docs.replace(
-                "+++", "\n"
-            )
+            images = response.headers["images"]
+            chatbot[-1][1] += f"\n\n{images}"
+
+            docs = response.headers["docs"]
+            chatbot[-1][1] += "\n\n **Reference:** \n" + docs.replace("+++", "\n")
             yield chatbot
     else:
         current_session_id = response["session_id"]

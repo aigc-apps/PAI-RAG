@@ -30,7 +30,11 @@ async def aquery(query: RagQuery):
     else:
         return StreamingResponse(
             event_generator_async(response[0]),
-            headers={"x-session-id": response[1], "reference_docs": response[2]},
+            headers={
+                "x-session-id": response[1],
+                "images": response[2],
+                "docs": response[3],
+            },
             media_type="text/plain",
         )
 
