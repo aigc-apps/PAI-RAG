@@ -195,7 +195,7 @@ evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
    docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
    ```
 - Tips:
-  低版本的docker
+  低版本的docker(<=20.10.7)
   - 需要添加参数```--security-opt seccomp:unconfined```这是因为numpy在低版本会报Operation not permitted的错误
   - 将```-c http://host.docker.internal:8001/```改为```-c http://172.17.0.1:8001/```这是因为低版本docker不支持```host.docker.internal```访问宿主机ip
 
