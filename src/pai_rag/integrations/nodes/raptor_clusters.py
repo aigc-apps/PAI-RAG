@@ -1,11 +1,13 @@
 """
 Minorly tweaked from https://github.com/parthsarthi03/raptor/blob/master/raptor/cluster_tree_builder.py.
-
+Tokenizer supports Chinese
 """
 
 import numpy as np
 import random
 import tiktoken
+import dashscope
+from http import HTTPStatus
 import umap
 from sklearn.mixture import GaussianMixture
 from typing import Dict, List, Optional
@@ -122,7 +124,6 @@ def get_clusters(
     nodes: List[BaseNode],
     embedding_map: Dict[str, List[List[float]]],
     max_length_in_cluster: int = 10000,  # 10k tokens max per cluster
-    tokenizer: tiktoken.Encoding = tiktoken.get_encoding("cl100k_base"),
     reduction_dimension: int = 10,
     max_clusters: int = 50,
     threshold: float = 0.1,
@@ -156,7 +157,7 @@ def get_clusters(
             continue
 
         # Calculate the total length of the text in the nodes
-        total_length = sum([len(tokenizer.encode(node.text)) for node in cluster_nodes])
+        total_length = sum([tokenizer_cn(node.text) for node in cluster_nodes])
 
         # If the total length exceeds the maximum allowed length, recluster this cluster
         # If the total length did not change from the previous call then don't try again to avoid infinite recursion!
@@ -168,7 +169,6 @@ def get_clusters(
                     cluster_nodes,
                     embedding_map,
                     max_length_in_cluster=max_length_in_cluster,
-                    tokenizer=tokenizer,
                     reduction_dimension=reduction_dimension,
                     threshold=threshold,
                     prev_total_length=total_length,
@@ -178,3 +178,17 @@ def get_clusters(
             node_clusters.append(cluster_nodes)
 
     return node_clusters
+
+
+def tokenizer_cn(text: str) -> int:
+    response = dashscope.Tokenization.call(
+        model="qwen-turbo",
+        messages=[{"role": "user", "content": text}],
+    )
+    if response.status_code == HTTPStatus.OK:
+        return response["usage"]["input_tokens"]
+    else:
+        openai_tokenzier = tiktoken.get_encoding("cl100k_base")
+        return (
+            len(openai_tokenzier.encode(text)) / 1.8
+        )  # roughly calculation for Chinese tokens if dashscope is unavailable
