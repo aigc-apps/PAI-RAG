@@ -93,7 +93,6 @@ class MyModelBasedReranker(BaseNodePostprocessor):
             },
         ) as event:
             scores = self._model.compute_score(query_and_nodes)
-
             # a single node passed into compute_score returns a float
             if isinstance(scores, float):
                 scores = [scores]
@@ -106,7 +105,10 @@ class MyModelBasedReranker(BaseNodePostprocessor):
             new_nodes = sorted(nodes, key=lambda x: -x.score if x.score else 0)[
                 : self.top_n
             ]
-            if self.similarity_threshold:
+            self.similarity_threshold = (
+                self.similarity_threshold if self.similarity_threshold > 0 else None
+            )
+            if self.similarity_threshold is not None:
                 new_nodes = [
                     node for node in new_nodes if node.score > self.similarity_threshold
                 ]

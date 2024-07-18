@@ -140,7 +140,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         )
 
                     with gr.Column(
-                        visible=(reranker_type == "'model-based-reranker")
+                        visible=(reranker_type == "model-based-reranker")
                     ) as model_reranker_col:
                         reranker_model = gr.Radio(
                             [
@@ -186,6 +186,11 @@ def create_chat_tab() -> Dict[str, Any]:
                             return {
                                 simple_reranker_col: gr.update(visible=False),
                                 model_reranker_col: gr.update(visible=True),
+                            }
+                        else:
+                            return {
+                                simple_reranker_col: gr.update(visible=False),
+                                model_reranker_col: gr.update(visible=False),
                             }
 
                     def change_retrieval_mode(retrieval_mode):

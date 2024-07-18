@@ -35,7 +35,7 @@ class RetrieverModule(ConfigurableModule):
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
 
         # Special handle elastic search
-        if index.vectordb_type == "elasticsearch" or index.vectordb_type == "milvus":
+        if index.vectordb_type == "milvus":
             if retrieval_mode == "embedding":
                 query_mode = VectorStoreQueryMode.DEFAULT
             elif retrieval_mode == "keyword":
@@ -48,16 +48,36 @@ class RetrieverModule(ConfigurableModule):
                 similarity_top_k=similarity_top_k,
                 vector_store_query_mode=query_mode,
             )
-
-        vector_retriever = MyVectorIndexRetriever(
-            index=index.vector_index, similarity_top_k=similarity_top_k
-        )
-
-        # keyword
-        bm25_retriever = BM25Retriever.from_defaults(
-            bm25_index=bm25_index,
-            similarity_top_k=similarity_top_k,
-        )
+        elif index.vectordb_type == "elasticsearch":
+            if retrieval_mode != "hybrid":
+                if retrieval_mode == "embedding":
+                    query_mode = VectorStoreQueryMode.DEFAULT
+                elif retrieval_mode == "keyword":
+                    query_mode = VectorStoreQueryMode.TEXT_SEARCH
+                return MyVectorIndexRetriever(
+                    index=index.vector_index,
+                    similarity_top_k=similarity_top_k,
+                    vector_store_query_mode=query_mode,
+                )
+            else:
+                vector_retriever = MyVectorIndexRetriever(
+                    index=index.vector_index,
+                    similarity_top_k=similarity_top_k,
+                    vector_store_query_mode=VectorStoreQueryMode.DEFAULT,
+                )
+                bm25_retriever = MyVectorIndexRetriever(
+                    index=index.vector_index,
+                    similarity_top_k=similarity_top_k,
+                    vector_store_query_mode=VectorStoreQueryMode.TEXT_SEARCH,
+                )
+        else:
+            vector_retriever = MyVectorIndexRetriever(
+                index=index.vector_index, similarity_top_k=similarity_top_k
+            )
+            bm25_retriever = BM25Retriever.from_defaults(
+                bm25_index=bm25_index,
+                similarity_top_k=similarity_top_k,
+            )
 
         if retrieval_mode == "embedding":
             logger.info(f"MyVectorIndexRetriever used with top_k {similarity_top_k}.")
@@ -69,16 +89,15 @@ class RetrieverModule(ConfigurableModule):
 
         else:
             num_queries_gen = config.get("query_rewrite_n", 3)
-            fusion_retriever = MyQueryFusionRetriever(
-                [vector_retriever, bm25_retriever],
-                similarity_top_k=similarity_top_k,
-                num_queries=num_queries_gen,  # set this to 1 to disable query generation
-                use_async=True,
-                verbose=True,
-                query_gen_prompt=QUERY_GEN_PROMPT,
-            )
-
             if config["retrieval_mode"] == "hybrid":
+                fusion_retriever = MyQueryFusionRetriever(
+                    [vector_retriever, bm25_retriever],
+                    similarity_top_k=similarity_top_k,
+                    num_queries=num_queries_gen,  # set this to 1 to disable query generation
+                    use_async=True,
+                    verbose=True,
+                    query_gen_prompt=QUERY_GEN_PROMPT,
+                )
                 logger.info(f"FusionRetriever used with top_k {similarity_top_k}.")
                 return fusion_retriever
 

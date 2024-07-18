@@ -484,7 +484,13 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
                     node = TextNode(text=text, metadata=metadata)
 
                 nodes.append(node)
-                similarities.append(normalize_cosine_similarity_score(hit["distance"]))
+                if query.mode == VectorStoreQueryMode.DEFAULT:
+                    similarities.append(
+                        normalize_cosine_similarity_score(hit["distance"])
+                    )
+                else:
+                    similarities.append(hit["distance"])
+
                 ids.append(hit["id"])
         else:
             # Perform hybrid search
@@ -570,7 +576,6 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
                 nodes.append(node)
                 similarities.append(hit.distance)
                 ids.append(hit.id)
-
         return VectorStoreQueryResult(nodes=nodes, similarities=similarities, ids=ids)
 
     def _create_index_if_required(self, force: bool = False) -> None:

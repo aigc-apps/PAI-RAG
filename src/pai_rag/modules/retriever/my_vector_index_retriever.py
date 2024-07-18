@@ -78,8 +78,13 @@ class MyVectorIndexRetriever(VectorIndexRetriever):
             score: Optional[float] = None
             if query_result.similarities is not None:
                 score = query_result.similarities[ind]
-            node_with_scores.append(
-                MyNodeWithScore(node=node, score=score, retriever_type="vector")
-            )
+            if node.metadata.get("retrieval_type", "None") == "bm25":
+                node_with_scores.append(
+                    MyNodeWithScore(node=node, score=score, retriever_type="bm25")
+                )
+            else:
+                node_with_scores.append(
+                    MyNodeWithScore(node=node, score=score, retriever_type="vector")
+                )
 
         return node_with_scores

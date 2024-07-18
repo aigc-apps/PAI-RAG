@@ -22,6 +22,9 @@ from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorSt
 from pai_rag.integrations.vector_stores.analyticdb.my_analyticdb import (
     MyAnalyticDBVectorStore,
 )
+from pai_rag.integrations.postprocessor.my_simple_weighted_rerank import (
+    MySimpleWeightedRerank,
+)
 
 DEFAULT_CHROMA_COLLECTION_NAME = "pairag"
 
@@ -29,8 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 class RagStore:
-    def __init__(self, config, persist_dir, is_empty, embed_dims):
+    def __init__(self, config, postprocessor, persist_dir, is_empty, embed_dims):
         self.store_config = config
+        print("self.store_config", self.store_config)
+        self.postprocessor = postprocessor
+        print("self.postprocessor", self.postprocessor)
         self.embed_dims = embed_dims
         self.persist_dir = persist_dir
         self.is_empty = is_empty
@@ -155,6 +161,15 @@ class RagStore:
 
         milvus_url = f"http://{milvus_host.strip('/')}:{milvus_port}/{milvus_database}"
         token = f"{milvus_user}:{milvus_password}"
+        weighted_reranker = False
+        weights = []
+        for item in self.postprocessor:
+            if isinstance(item, MySimpleWeightedRerank):
+                weighted_reranker = True
+                weights.append(item.vector_weight)
+                weights.append(item.keyword_weight)
+                print("weighted_reranker", weighted_reranker, weights)
+                break
         return MyMilvusVectorStore(
             uri=milvus_url,
             token=token,
@@ -164,7 +179,7 @@ class RagStore:
             sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
             similarity_metric="cosine",
             hybrid_ranker="WeightedRanker",
-            hybrid_ranker_params={"weights": [0.7, 0.3]},
+            hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
         )
 
     def _get_or_create_simple_doc_store(self):

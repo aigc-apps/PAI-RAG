@@ -105,7 +105,7 @@ class ViewModel(BaseModel):
     reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
-    similarity_threshold: float = 0.5
+    similarity_threshold: float = None
 
     query_engine_type: str = "RetrieverQueryEngine"
 
@@ -223,7 +223,9 @@ class ViewModel(BaseModel):
             "reranker_type", "simple-weighted-reranker"
         )
         similarity_threshold = config["postprocessor"].get("similarity_threshold", None)
-        view_model.similarity_threshold = similarity_threshold
+        view_model.similarity_threshold = (
+            similarity_threshold if similarity_threshold > 0 else None
+        )
 
         if reranker_type == "simple-weighted-reranker":
             view_model.reranker_type = "simple-weighted-reranker"

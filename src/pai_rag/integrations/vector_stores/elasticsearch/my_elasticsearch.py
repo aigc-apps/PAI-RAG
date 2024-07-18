@@ -452,8 +452,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
 
         """
         if query.mode == VectorStoreQueryMode.HYBRID:
-            retrieval_strategy = AsyncDenseVectorStrategy(
-                hybrid=True, rrf={"window_size": 50}
+            # retrieval_strategy = AsyncDenseVectorStrategy(
+            #     hybrid=True, rrf={"window_size": 50}
+            # )
+            raise ValueError(
+                "Not support query.mode == VectorStoreQueryMode.HYBRID for Elasticsearch."
             )
         elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
             retrieval_strategy = AsyncBM25Strategy()
@@ -499,6 +502,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             try:
                 node = metadata_dict_to_node(metadata)
                 node.text = text
+                node.metadata["retrieval_type"] = (
+                    "bm25"
+                    if isinstance(retrieval_strategy, AsyncBM25Strategy)
+                    else "vector"
+                )
             except Exception:
                 # Legacy support for old metadata format
                 logger.warning(
@@ -512,6 +520,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                     start_char_idx = node_info.get("start", None)
                     end_char_idx = node_info.get("end", None)
 
+                metadata["retrieval_type"] = (
+                    "bm25"
+                    if isinstance(retrieval_strategy, AsyncBM25Strategy)
+                    else "vector"
+                )
                 node = TextNode(
                     text=text,
                     metadata=metadata,
@@ -527,126 +540,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
         if isinstance(retrieval_strategy, AsyncBM25Strategy) and len(top_k_nodes) > 0:
             max_score = max(top_k_scores)
             top_k_scores = [score / max_score for score in top_k_scores]
-
-        if (
-            isinstance(retrieval_strategy, AsyncDenseVectorStrategy)
-            and retrieval_strategy.hybrid
-        ):
-            total_rank = sum(top_k_scores)
-            top_k_scores = [(total_rank - rank) / total_rank for rank in top_k_scores]
-
-        return VectorStoreQueryResult(
-            nodes=top_k_nodes,
-            ids=top_k_ids,
-            similarities=top_k_scores,
-        )
-
-    async def aquery_hybrid(
-        self,
-        query: VectorStoreQuery,
-        custom_query: Optional[
-            Callable[[Dict, Union[VectorStoreQuery, None]], Dict]
-        ] = None,
-        es_filter: Optional[List[Dict]] = None,
-        **kwargs: Any,
-    ) -> VectorStoreQueryResult:
-        """
-        Asynchronous query index for top k most similar nodes.
-
-        Args:
-            query_embedding (VectorStoreQuery): query embedding
-            custom_query: Optional. custom query function that takes in the es query
-                        body and returns a modified query body.
-                        This can be used to add additional query
-                        parameters to the AsyncElasticsearch query.
-            es_filter: Optional. AsyncElasticsearch filter to apply to the
-                        query. If filter is provided in the query,
-                        this filter will be ignored.
-
-        Returns:
-            VectorStoreQueryResult: Result of the query.
-
-        Raises:
-            Exception: If AsyncElasticsearch query fails.
-
-        """
-        retrieval_strategies = [AsyncDenseVectorStrategy(), AsyncBM25Strategy()]
-
-        metadata_mappings = {
-            "document_id": {"type": "keyword"},
-            "doc_id": {"type": "keyword"},
-            "ref_doc_id": {"type": "keyword"},
-        }
-        for retrieval_strategy in retrieval_strategies:
-            self._store = AsyncVectorStore(
-                user_agent=get_user_agent(),
-                client=self.es_client,
-                index=self.index_name,
-                retrieval_strategy=retrieval_strategy,
-                text_field=self.text_field,
-                vector_field=self.vector_field,
-                metadata_mappings=metadata_mappings,
-            )
-
-        if query.filters is not None and len(query.filters.legacy_filters()) > 0:
-            filter = [_to_elasticsearch_filter(query.filters)]
-        else:
-            filter = es_filter or []
-        hits = await self._store.search(
-            query=query.query_str,
-            query_vector=query.query_embedding,
-            k=query.similarity_top_k,
-            num_candidates=query.similarity_top_k * 10,
-            filter=filter,
-            custom_query=custom_query,
-        )
-        top_k_nodes = []
-        top_k_ids = []
-        top_k_scores = []
-        for hit in hits:
-            source = hit["_source"]
-            metadata = source.get("metadata", None)
-            text = source.get(self.text_field, None)
-            node_id = hit["_id"]
-
-            try:
-                node = metadata_dict_to_node(metadata)
-                node.text = text
-            except Exception:
-                # Legacy support for old metadata format
-                logger.warning(
-                    f"Could not parse metadata from hit {hit['_source']['metadata']}"
-                )
-                node_info = source.get("node_info")
-                relationships = source.get("relationships", {})
-                start_char_idx = None
-                end_char_idx = None
-                if isinstance(node_info, dict):
-                    start_char_idx = node_info.get("start", None)
-                    end_char_idx = node_info.get("end", None)
-
-                node = TextNode(
-                    text=text,
-                    metadata=metadata,
-                    id_=node_id,
-                    start_char_idx=start_char_idx,
-                    end_char_idx=end_char_idx,
-                    relationships=relationships,
-                )
-            top_k_nodes.append(node)
-            top_k_ids.append(node_id)
-            top_k_scores.append(hit.get("_rank", round(hit["_score"], 6)))
-
-        if isinstance(retrieval_strategy, AsyncBM25Strategy) and len(top_k_nodes) > 0:
-            max_score = max(top_k_scores)
-            top_k_scores = [score / max_score for score in top_k_scores]
-
-        if (
-            isinstance(retrieval_strategy, AsyncDenseVectorStrategy)
-            and retrieval_strategy.hybrid
-        ):
-            total_rank = sum(top_k_scores)
-            top_k_scores = [(total_rank - rank) / total_rank for rank in top_k_scores]
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,

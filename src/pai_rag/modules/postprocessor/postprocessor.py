@@ -16,6 +16,9 @@ from pai_rag.integrations.postprocessor.my_model_based_reranker import (
 )
 
 DEFAULT_RANK_MODEL = "bge-reranker-base"
+DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
+DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
+DEFAULT_RANK_SIMILARITY_THRES = None
 DEFAULT_RANK_TOP_N = 2
 
 logger = logging.getLogger(__name__)
@@ -33,11 +36,15 @@ class PostprocessorModule(ConfigurableModule):
         reranker_type = config.get("reranker_type", "")
 
         if reranker_type == "simple-weighted-reranker":
-            vector_weight = config.get("vector_weight", DEFAULT_RANK_TOP_N)
-            keyword_weight = config.get("keyword_weight", DEFAULT_RANK_TOP_N)
+            vector_weight = config.get(
+                "vector_weight", DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT
+            )
+            keyword_weight = config.get(
+                "keyword_weight", DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT
+            )
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
             similarity_threshold = config.get(
-                "similarity_threshold", DEFAULT_RANK_TOP_N
+                "similarity_threshold", DEFAULT_RANK_SIMILARITY_THRES
             )
             logger.info(
                 f"[PostProcessor]: Simple weighted reranker used with top_n: {top_n}, keyword_weight: {keyword_weight}, vector_weight: {vector_weight}, and similarity_threshold: {similarity_threshold}."
