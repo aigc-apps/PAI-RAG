@@ -23,7 +23,8 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = self._retriever.retrieve(query_bundle)
-        return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        nodes = self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        return [n for n in nodes if n.score > 0]
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
@@ -35,7 +36,7 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
                 query_bundle=query_bundle,
             )
 
-        return nodes
+        return [n for n in nodes if n.score > 0]
 
     @dispatcher.span
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:

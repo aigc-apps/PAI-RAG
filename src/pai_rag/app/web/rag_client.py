@@ -5,6 +5,7 @@ import html
 import markdown
 import httpx
 import os
+import re
 import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
@@ -84,13 +85,21 @@ class RagWebClient:
                 response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
             else:
                 referenced_docs = ""
+                images = ""
                 for i, doc in enumerate(response["docs"]):
-                    referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
-
+                    formatted_file_name = re.sub(
+                        "^[0-9a-z]{32}_", "", doc["metadata"]["file_name"]
+                    )
+                    referenced_docs += (
+                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                    )
+                    image_url = doc["metadata"].get("image_url", None)
+                    if image_url:
+                        images += f"""<img src="{image_url}"/>"""
                 if session_id:
-                    formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+                    formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n {images} \n\n **Reference**:\n {referenced_docs}'
                 else:
-                    formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
+                    formatted_text = f'**Answer**: {response["answer"]} \n\n {images} \n\n **Reference**:\n {referenced_docs}'
                 response["answer"] = formatted_text
             return response
         return r
@@ -127,15 +136,20 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
 
-        formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
+        formatted_text = (
+            "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
+        )
         if len(response["docs"]) == 0:
             response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url:
+                    media_url = f"""<img src="{media_url}"/>"""
                 safe_html_content = html.escape(html_content).replace("\n", "<br>")
-                formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                    i + 1, doc["score"], safe_html_content
+                formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                    i + 1, doc["score"], safe_html_content, media_url
                 )
             formatted_text = (
                 "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"

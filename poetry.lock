@@ -3197,6 +3197,21 @@ files = [
 llama-index-core = ">=0.10.24,<0.11.0"
 
 [[package]]
+name = "llama-index-multi-modal-llms-dashscope"
+version = "0.1.2"
+description = "llama-index multi modal llms dashscope integration"
+optional = false
+python-versions = ">=3.8.1,<4.0"
+files = [
+    {file = "llama_index_multi_modal_llms_dashscope-0.1.2-py3-none-any.whl", hash = "sha256:aa4fa40ca60eacf9b3639d7eca1af19c1f71e5def244666fe6c50cfcbd479e6d"},
+    {file = "llama_index_multi_modal_llms_dashscope-0.1.2.tar.gz", hash = "sha256:4222e055f14edb9b8e886068d499a0b68b805b32477cc68fc2d1b95703bfbae9"},
+]
+
+[package.dependencies]
+dashscope = ">=1.14.1,<2.0.0"
+llama-index-core = ">=0.10.1,<0.11.0"
+
+[[package]]
 name = "llama-index-multi-modal-llms-openai"
 version = "0.1.6"
 description = "llama-index multi-modal-llms openai integration"
@@ -8546,4 +8561,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "431dad512e661cd03528e67eeceb3c9ebda67563ac4bbb9b60cf63eac5c9ee2e"
+content-hash = "94fc81a2563b67c4f1b7cdf55840c21d93c389bc9c8c13bf54da0091c493fe7f"

@@ -59,7 +59,9 @@ class LlmModule(ConfigurableModule):
                 """
             )
             llm = MyDashScope(
-                model_name=model_name, temperature=config.get("temperature", 0.1)
+                model_name=model_name,
+                temperature=config.get("temperature", 0.1),
+                max_tokens=2000,
             )
         elif source == "paieas":
             model_name = config.get("name", "PAI-EAS-LLM")

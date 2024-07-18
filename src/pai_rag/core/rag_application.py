@@ -11,6 +11,7 @@ from pai_rag.app.api.models import (
 from llama_index.core.schema import QueryBundle
 import logging
 from uuid import uuid4
+import re
 
 
 def uuid_generator() -> str:
@@ -130,10 +131,20 @@ class RagApplication:
                 new_query=new_query,
             )
         else:
+            reference_image_text = ""
             referenced_docs_text = ""
             for i, node in enumerate(node_results):
-                referenced_docs_text += f"[{i+1}]: {node.node.metadata.get('file_name')[33:]}   Score:{node.score} +++"
-            return [response, session_id, referenced_docs_text]
+                image_url = node.node.metadata.get("image_url", "")
+                if image_url:
+                    reference_image_text += f"""<img src="{image_url}" width=150/>"""
+
+                file_name = node.node.metadata.get("file_name")
+                formatted_file_name = re.sub("^[0-9a-z]{32}_", "", file_name)
+                referenced_docs_text += (
+                    f"[{i+1}]: {formatted_file_name}   Score:{node.score} +++"
+                )
+
+            return [response, session_id, reference_image_text, referenced_docs_text]
 
     async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
