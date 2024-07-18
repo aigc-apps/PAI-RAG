@@ -7,7 +7,7 @@ from pai_rag.app.web.ui_constants import (
     EXTRACT_URL_PROMPTS,
     ACCURATE_CONTENT_PROMPTS,
 )
-
+import time
 
 current_session_id = None
 
@@ -19,16 +19,19 @@ def clear_history(chatbot):
     return chatbot, 0
 
 
+def reset_textbox():
+    return gr.update(value="")
+
+
 def respond(input_elements: List[Any]):
     global current_session_id
-
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
     # empty input.
     if not update_dict["question"]:
-        return "", update_dict["chatbot"], 0
+        yield "", update_dict["chatbot"], 0
 
     try:
         rag_client.patch_config(update_dict)
@@ -38,6 +41,7 @@ def respond(input_elements: List[Any]):
     query_type = update_dict["query_type"]
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
+    is_streaming = update_dict["is_streaming"]
 
     if not update_dict["include_history"]:
         current_session_id = None
@@ -45,20 +49,43 @@ def respond(input_elements: List[Any]):
     try:
         if query_type == "LLM":
             response = rag_client.query_llm(
-                msg,
-                session_id=current_session_id,
+                msg, session_id=current_session_id, stream=is_streaming
             )
-            current_session_id = response.session_id
         elif query_type == "Retrieval":
             response = rag_client.query_vector(msg)
         else:
-            response = rag_client.query(msg, session_id=current_session_id)
-            current_session_id = response.session_id
+            response = rag_client.query(
+                msg, session_id=current_session_id, stream=is_streaming
+            )
+
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
-    chatbot.append((msg, response.answer))
-    return "", chatbot, 0
+    if query_type == "Retrieval":
+        chatbot.append((msg, response.answer))
+        yield chatbot
+    elif is_streaming:
+        current_session_id = response.headers["x-session-id"]
+        chatbot.append([msg, None])
+        chatbot[-1][1] = ""
+        for chunk in response.iter_lines(
+            chunk_size=8192, decode_unicode=False, delimiter=b"\0"
+        ):
+            if chunk:
+                chatbot[-1][1] += chunk.decode("utf-8")
+                yield chatbot
+                time.sleep(0.1)
+        if query_type != "LLM":
+            images = response.headers["images"]
+            chatbot[-1][1] += f"\n\n{images}"
+
+            docs = response.headers["docs"]
+            chatbot[-1][1] += "\n\n **Reference:** \n" + docs.replace("+++", "\n")
+            yield chatbot
+    else:
+        current_session_id = response["session_id"]
+        chatbot.append((msg, response["answer"]))
+        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -70,7 +97,12 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="query_type",
                 value="RAG (Retrieval + LLM)",
             )
-
+            is_streaming = gr.Checkbox(
+                label="Streaming Output",
+                info="Streaming Output",
+                elem_id="is_streaming",
+                value=True,
+            )
             with gr.Column(visible=True) as vs_col:
                 vec_model_argument = gr.Accordion(
                     "Parameters of Vector Retrieval", open=False
@@ -302,7 +334,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
         chat_args = (
-            {text_qa_template, question, query_type, chatbot}
+            {text_qa_template, question, query_type, chatbot, is_streaming}
             .union(vec_args)
             .union(llm_args)
         )
@@ -310,15 +342,28 @@ def create_chat_tab() -> Dict[str, Any]:
         submitBtn.click(
             respond,
             chat_args,
-            [question, chatbot, cur_tokens],
+            [chatbot],
             api_name="respond_clk",
         )
         question.submit(
             respond,
             chat_args,
-            [question, chatbot, cur_tokens],
+            [chatbot],
             api_name="respond_q",
         )
+        submitBtn.click(
+            reset_textbox,
+            [],
+            [question],
+            api_name="reset_clk",
+        )
+        question.submit(
+            reset_textbox,
+            [],
+            [question],
+            api_name="reset_q",
+        )
+
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,

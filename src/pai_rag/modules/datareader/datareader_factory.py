@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 from pai_rag.integrations.readers.markdown_reader import MarkdownReader
+from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
@@ -17,10 +18,11 @@ logger = logging.getLogger(__name__)
 class DataReaderFactoryModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return []
+        return ["MultiModalLlmModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         self.reader_config = new_params[MODULE_PARAM_CONFIG]
+        self.multi_modal_llm = new_params["MultiModalLlmModule"]
         self.file_readers = {
             ".html": HtmlReader(),
             ".htm": HtmlReader(),
@@ -39,6 +41,10 @@ class DataReaderFactoryModule(ConfigurableModule):
             ),
             ".md": MarkdownReader(),
         }
+
+        if self.multi_modal_llm:
+            self.file_readers[".imagelist"] = PaiImageReader(self.multi_modal_llm)
+
         return self
 
     def get_reader(self, input_files: str):

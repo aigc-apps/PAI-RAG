@@ -12,6 +12,7 @@ class RagQuery(BaseModel):
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
     vector_db: VectorDbConfig | None = None
+    stream: bool | None = False
 
 
 class LlmQuery(BaseModel):
@@ -19,6 +20,7 @@ class LlmQuery(BaseModel):
     temperature: float | None = 0.1
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
+    stream: bool | None = False
 
 
 class RetrievalQuery(BaseModel):
