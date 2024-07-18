@@ -178,21 +178,26 @@ evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
   ```
 
 2. 启动RAG WebUI
-   Linux:
+   
+- Linux:
 
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+   ```bash
+   docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
-docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
-```
+   docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+   ```
 
-Mac/Windows:
+- Mac/Windows:
 
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+   ```bash
+   docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
-docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
-```
+   docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
+   ```
+- Tips:
+  低版本的docker
+  - 需要添加参数```--security-opt seccomp:unconfined```这是因为numpy在低版本会报Operation not permitted的错误
+  - 将```-c http://host.docker.internal:8001/```改为```-c -c http://172.17.0.1:8001/```这是因为低版本docker不支持```host.docker.internal```访问宿主机ip
 
 ### 基于Dockerfile自行构建镜像
 
