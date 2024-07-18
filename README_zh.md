@@ -197,7 +197,7 @@ evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
 - Tips:
   低版本的docker
   - 需要添加参数```--security-opt seccomp:unconfined```这是因为numpy在低版本会报Operation not permitted的错误
-  - 将```-c http://host.docker.internal:8001/```改为```-c -c http://172.17.0.1:8001/```这是因为低版本docker不支持```host.docker.internal```访问宿主机ip
+  - 将```-c http://host.docker.internal:8001/```改为```-c http://172.17.0.1:8001/```这是因为低版本docker不支持```host.docker.internal```访问宿主机ip
 
 ### 基于Dockerfile自行构建镜像
 
