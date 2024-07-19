@@ -69,6 +69,7 @@ gunicorn = "^22.0.0"
 umap-learn = "^0.5.6"
 protobuf = "3.20.0"
 modelscope = "^1.16.0"
+llama-index-multi-modal-llms-dashscope = "^0.1.2"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

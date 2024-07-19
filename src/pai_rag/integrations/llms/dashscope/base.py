@@ -8,6 +8,7 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
     ChatResponseGen,
     CompletionResponse,
+    ChatResponseAsyncGen,
     CompletionResponseGen,
     LLMMetadata,
     MessageRole,
@@ -372,3 +373,37 @@ class MyDashScope(CustomLLM):
                 f"Call DashScope API failed, {response['code']}: {response['message']}"
             )
         return dashscope_response_to_completion_response(response)
+
+    @llm_chat_callback()
+    async def astream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
+        parameters = self._get_default_parameters()
+        parameters.update({**kwargs})
+        parameters["stream"] = True
+        parameters["incremental_output"] = True
+        parameters["result_format"] = "message"  # only use message format.
+        response = await call_with_messages_async(
+            model=self.model_name,
+            messages=chat_message_to_dashscope_messages(messages),
+            api_key=self.api_key,
+            parameters=parameters,
+        )
+
+        async def gen() -> ChatResponseAsyncGen:
+            content = ""
+            async for r in response:
+                if r.status_code == HTTPStatus.OK:
+                    top_choice = r.output.choices[0]
+                    incremental_output = top_choice["message"]["content"]
+                    role = top_choice["message"]["role"]
+                    content += incremental_output
+                    yield ChatResponse(
+                        message=ChatMessage(role=role, content=content),
+                        delta=incremental_output,
+                        raw=r,
+                    )
+                else:
+                    raise ValueError(f"Call DashScope failed: {r}")
+
+        return gen()

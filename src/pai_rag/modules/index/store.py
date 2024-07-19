@@ -156,6 +156,8 @@ class RagStore:
             dim=self.embed_dims,
             enable_sparse=True,
             sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
+            hybrid_ranker="WeightedRanker",
+            hybrid_ranker_params={"weights": [0.7, 0.3]},
         )
 
     def _get_or_create_simple_doc_store(self):

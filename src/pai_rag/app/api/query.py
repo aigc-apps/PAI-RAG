@@ -9,21 +9,50 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
 )
+from fastapi.responses import StreamingResponse
+import urllib.parse
 
 router = APIRouter()
 
 
+async def event_generator_async(response):
+    delimiter = "\0"
+    async for token in response.async_response_gen():
+        yield token + delimiter
+
+
 @router.post("/query")
-async def aquery(query: RagQuery) -> RagResponse:
-    return await rag_service.aquery(query)
+async def aquery(query: RagQuery):
+    response = await rag_service.aquery(query)
+    if not query.stream:
+        return response
+    else:
+        images_escaped_string = urllib.parse.quote(response[2])
+        docs_escaped_string = urllib.parse.quote(response[3])
+        return StreamingResponse(
+            event_generator_async(response[0]),
+            headers={
+                "x-session-id": response[1],
+                "images": images_escaped_string,
+                "docs": docs_escaped_string,
+            },
+            media_type="text/plain",
+        )
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery) -> LlmResponse:
-    return await rag_service.aquery_llm(query)
+async def aquery_llm(query: LlmQuery):
+    response = await rag_service.aquery_llm(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            event_generator_async(response[0]),
+            headers={"x-session-id": response[1]},
+            media_type="text/plain",
+        )
 
 
 @router.post("/query/retrieval")

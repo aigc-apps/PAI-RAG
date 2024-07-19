@@ -137,7 +137,7 @@ class ViewModel(BaseModel):
         view_model.llm_temperature = config["llm"].get(
             "temperature", view_model.llm_temperature
         )
-        if view_model.llm == "PaiEAS":
+        if view_model.llm.lower() == "paieas":
             view_model.llm_eas_model_name = config["llm"].get(
                 "name", view_model.llm_eas_model_name
             )
@@ -260,7 +260,7 @@ class ViewModel(BaseModel):
         config["llm"]["token"] = self.llm_eas_token
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
-        if self.llm == "PaiEas":
+        if self.llm.lower() == "paieas":
             config["llm"]["name"] = self.llm_eas_model_name
         else:
             config["llm"]["name"] = self.llm_api_model_name
@@ -440,6 +440,7 @@ class ViewModel(BaseModel):
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
+            "visible": self.llm.lower() != "paieas",
         }
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}

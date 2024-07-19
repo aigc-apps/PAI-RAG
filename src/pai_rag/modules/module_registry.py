@@ -9,6 +9,7 @@ MODULE_CONFIG_KEY_MAP = {
     "IndexModule": "index",
     "EmbeddingModule": "embedding",
     "LlmModule": "llm",
+    "MultiModalLlmModule": "multi_modal_llm",
     "NodeParserModule": "node_parser",
     "RetrieverModule": "retriever",
     "PostprocessorModule": "postprocessor",

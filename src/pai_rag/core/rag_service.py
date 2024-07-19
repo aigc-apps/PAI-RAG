@@ -9,7 +9,6 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
 )
 from openinference.instrumentation import using_attributes
@@ -146,7 +145,7 @@ class RagService:
 
         return status, detail
 
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         try:
             self.check_updates()
             return await self.rag.aquery(query)
@@ -154,7 +153,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_llm(self, query: LlmQuery):
         try:
             self.check_updates()
             return await self.rag.aquery_llm(query)

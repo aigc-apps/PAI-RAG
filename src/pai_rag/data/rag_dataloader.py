@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "./model_repository/qwen_1.8b"
 
-DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".htm", ".html"])
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
+    [".csv", ".xlsx", ".xls", ".htm", ".html", ".imagelist"]
+)
 
 
 class RagDataLoader:
