@@ -15,7 +15,7 @@ from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.utils.tokenization_qwen import QWenTokenizer
 
 
-VOCAB_FILE = os.path.join(DEFAULT_MODEL_DIR, "qwen.tiktoken")
+VOCAB_FILE = os.path.join(DEFAULT_MODEL_DIR, "tokenization/qwen.tiktoken")
 
 # Set a random seed for reproducibility
 RANDOM_SEED = 224
