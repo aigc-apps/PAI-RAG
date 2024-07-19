@@ -8,6 +8,7 @@ from pai_rag.app.web.ui_constants import (
     ACCURATE_CONTENT_PROMPTS,
 )
 import time
+import urllib.parse
 
 current_session_id = None
 
@@ -76,11 +77,12 @@ def respond(input_elements: List[Any]):
                 yield chatbot
                 time.sleep(0.1)
         if query_type != "LLM":
-            images = response.headers["images"]
-            chatbot[-1][1] += f"\n\n{images}"
-
-            docs = response.headers["docs"]
-            chatbot[-1][1] += "\n\n **Reference:** \n" + docs.replace("+++", "\n")
+            images_decoded_string = urllib.parse.unquote(response.headers["images"])
+            chatbot[-1][1] += f"\n\n{images_decoded_string}"
+            docs_decoded_string = urllib.parse.unquote(response.headers["docs"])
+            chatbot[-1][1] += "\n\n **Reference:** \n" + docs_decoded_string.replace(
+                "+++", "\n"
+            )
             yield chatbot
     else:
         current_session_id = response["session_id"]

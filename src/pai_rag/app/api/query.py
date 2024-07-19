@@ -12,6 +12,7 @@ from pai_rag.app.api.models import (
     LlmResponse,
 )
 from fastapi.responses import StreamingResponse
+import urllib.parse
 
 router = APIRouter()
 
@@ -28,12 +29,14 @@ async def aquery(query: RagQuery):
     if not query.stream:
         return response
     else:
+        images_escaped_string = urllib.parse.quote(response[2])
+        docs_escaped_string = urllib.parse.quote(response[3])
         return StreamingResponse(
             event_generator_async(response[0]),
             headers={
                 "x-session-id": response[1],
-                "images": response[2],
-                "docs": response[3],
+                "images": images_escaped_string,
+                "docs": docs_escaped_string,
             },
             media_type="text/plain",
         )
