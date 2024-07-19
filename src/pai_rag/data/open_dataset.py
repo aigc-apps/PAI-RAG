@@ -208,7 +208,8 @@ class DuRetrievalDataSet(OpenDataSet):
         print(
             f"[DuRetrievalDataSet] Loading qrels for DuRetrievalDataSet with type {type} from {self.dataset_path}..."
         )
-        qrels_ori = load_dataset(self.dataset_path)
+        qrels_path = f"{self.dataset_path}/DuRetrieval-qrels"
+        qrels_ori = load_dataset(qrels_path)
         qrels = defaultdict(dict)
         for sample in qrels_ori[type]:
             qid = sample["qid"]
@@ -219,10 +220,11 @@ class DuRetrievalDataSet(OpenDataSet):
         return qrels
 
     def load_related_corpus(self):
+        corpus_path = f"{self.corpus_path}/DuRetrieval"
         docid2doc = {}
         qid2query = {}
         nodes = set()
-        du_dataset = load_dataset(self.corpus_path)
+        du_dataset = load_dataset(corpus_path)
         for sample in du_dataset["corpus"]:
             nodes.add(
                 (
