@@ -2,18 +2,20 @@
 Minorly tweaked from https://github.com/parthsarthi03/raptor/blob/master/raptor/cluster_tree_builder.py.
 Tokenizer supports Chinese
 """
-
+import os
 import numpy as np
 import random
-import tiktoken
-import dashscope
-from http import HTTPStatus
 import umap
 from sklearn.mixture import GaussianMixture
 from typing import Dict, List, Optional
 
 from llama_index.core.schema import BaseNode
 
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
+from pai_rag.utils.tokenization_qwen import QWenTokenizer
+
+
+VOCAB_FILE = os.path.join(DEFAULT_MODEL_DIR, "qwen.tiktoken")
 
 # Set a random seed for reproducibility
 RANDOM_SEED = 224
@@ -157,7 +159,11 @@ def get_clusters(
             continue
 
         # Calculate the total length of the text in the nodes
-        total_length = sum([tokenizer_cn(node.text) for node in cluster_nodes])
+
+        tokenizer_qwen = QWenTokenizer(VOCAB_FILE)
+        total_length = sum(
+            [len(tokenizer_qwen.encode(node.text)) for node in cluster_nodes]
+        )
 
         # If the total length exceeds the maximum allowed length, recluster this cluster
         # If the total length did not change from the previous call then don't try again to avoid infinite recursion!
@@ -178,17 +184,3 @@ def get_clusters(
             node_clusters.append(cluster_nodes)
 
     return node_clusters
-
-
-def tokenizer_cn(text: str) -> int:
-    response = dashscope.Tokenization.call(
-        model="qwen-turbo",
-        messages=[{"role": "user", "content": text}],
-    )
-    if response.status_code == HTTPStatus.OK:
-        return response["usage"]["input_tokens"]
-    else:
-        openai_tokenzier = tiktoken.get_encoding("cl100k_base")
-        return (
-            len(openai_tokenzier.encode(text)) / 1.8
-        )  # roughly calculation for Chinese tokens if dashscope is unavailable
