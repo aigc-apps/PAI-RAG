@@ -159,11 +159,50 @@ class MiraclOpenDataSet(OpenDataSet):
 
 class DuRetrievalDataSet(OpenDataSet):
     def __init__(self, dataset_path: str = None, corpus_path: str = None):
-        # TODO: fix the dataset path
         self.dataset_path = dataset_path or os.path.join(
-            "/home/datasets", "DuRetrieval-qrels"
+            DEFAULT_DATASET_DIR, "DuRetrieval-qrels"
         )
-        self.corpus_path = corpus_path or os.path.join("/home/datasets", "DuRetrieval")
+        self.corpus_path = corpus_path or os.path.join(
+            DEFAULT_DATASET_DIR, "DuRetrieval"
+        )
+        if not os.path.exists(self.dataset_path):
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/DuRetrieval-qrels.tar.gz"
+            file_path = os.path.join(DEFAULT_DATASET_DIR, "DuRetrieval-qrels.tar.gz")
+            self._extract_and_download_dataset(
+                dataset_url, file_path, self.dataset_path
+            )
+        else:
+            print(
+                f"[DuRetrievalDataSet] Dataset file already exists at {self.dataset_path}."
+            )
+        if not os.path.exists(self.corpus_path):
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/DuRetrieval.tar.gz"
+            file_path = os.path.join(DEFAULT_DATASET_DIR, "DuRetrieval.tar.gz")
+            self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
+        else:
+            print(
+                f"[DuRetrievalDataSet] Corpus file already exists at {self.corpus_path}."
+            )
+
+    def _extract_and_download_dataset(self, url, file_path, extract_path):
+        file_path_dir = os.path.dirname(file_path)
+        if not os.path.exists(file_path_dir):
+            os.makedirs(file_path_dir)
+        with urllib.request.urlopen(url) as response, open(file_path, "wb") as out_file:
+            print(
+                f"[DuRetrievalDataSet] Start downloading file {file_path} from {url}."
+            )
+            data = response.read()
+            out_file.write(data)
+            print("[DuRetrievalDataSet] Finish downloading.")
+        if not os.path.exists(extract_path):
+            os.makedirs(extract_path)
+        with tarfile.open(file_path, "r:gz") as tar:
+            print(
+                f"[DuRetrievalDataSet] Start extracting file {file_path} to {extract_path}."
+            )
+            tar.extractall(path=extract_path)
+            print("[DuRetrievalDataSet] Finish extracting.")
 
     def load_qrels(self, type: str = "dev"):
         print(
