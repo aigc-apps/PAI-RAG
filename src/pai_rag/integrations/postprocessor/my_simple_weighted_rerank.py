@@ -71,29 +71,29 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
         bm25_nodes = [node for node in bm25_nodes if node.score > 0]
         if len(bm25_nodes) > 0:
             for vector_node_with_score in vector_nodes:
-                text = vector_node_with_score.node.get_content()
-                all_nodes[text] = vector_node_with_score
-                all_nodes[text].score = (
+                node_id = vector_node_with_score.node.node_id
+                all_nodes[node_id] = vector_node_with_score
+                all_nodes[node_id].score = (
                     vector_node_with_score.score * self.vector_weight
                 )
 
             bm25_nodes = self.normalize_bm25_nodes(bm25_nodes)
             for bm25_node_with_score in bm25_nodes:
-                text = bm25_node_with_score.node.get_content()
-                if text in all_nodes:
-                    all_nodes[text].score += (
+                node_id = bm25_node_with_score.node.node_id
+                if node_id in all_nodes:
+                    all_nodes[node_id].score += (
                         bm25_node_with_score.score * self.keyword_weight
                     )
                 else:
-                    all_nodes[text] = bm25_node_with_score
-                    all_nodes[text].score = (
+                    all_nodes[node_id] = bm25_node_with_score
+                    all_nodes[node_id].score = (
                         bm25_node_with_score.score * self.keyword_weight
                     )
         else:
             for vector_node_with_score in vector_nodes:
-                text = vector_node_with_score.node.get_content()
-                all_nodes[text] = vector_node_with_score
-                all_nodes[text].score = vector_node_with_score.score * 1.0
+                node_id = vector_node_with_score.node.node_id
+                all_nodes[node_id] = vector_node_with_score
+                all_nodes[node_id].score = vector_node_with_score.score * 1.0
 
         return self.filter_threshhold(all_nodes.values())
 

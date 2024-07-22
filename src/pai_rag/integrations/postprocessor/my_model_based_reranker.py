@@ -105,9 +105,7 @@ class MyModelBasedReranker(BaseNodePostprocessor):
             new_nodes = sorted(nodes, key=lambda x: -x.score if x.score else 0)[
                 : self.top_n
             ]
-            self.similarity_threshold = (
-                self.similarity_threshold if self.similarity_threshold > 0 else None
-            )
+
             if self.similarity_threshold is not None:
                 new_nodes = [
                     node for node in new_nodes if node.score > self.similarity_threshold
