@@ -11,9 +11,7 @@ from llama_index.core import VectorStoreIndex
 from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorNodesEnhancement
 
 
-@pytest.mark.skipif(
-    os.getenv("DASHSCOPE_API_KEY") is None, reason="no api key provided"
-)
+@pytest.mark.skip(reason="no vocab file in the test environment")
 async def test_enhance_nodes():
     load_dotenv(verbose=True)
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
