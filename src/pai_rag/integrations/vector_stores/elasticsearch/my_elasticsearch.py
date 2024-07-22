@@ -19,7 +19,9 @@ from llama_index.core.vector_stores.utils import (
     metadata_dict_to_node,
     node_to_metadata_dict,
 )
-from pai_rag.modules.retriever.my_async_vector_store import AsyncVectorStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_async_vector_store import (
+    AsyncVectorStore,
+)
 from elasticsearch.helpers.vectorstore import (
     AsyncBM25Strategy,
     AsyncSparseVectorStrategy,
@@ -450,8 +452,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
 
         """
         if query.mode == VectorStoreQueryMode.HYBRID:
-            retrieval_strategy = AsyncDenseVectorStrategy(
-                hybrid=True, rrf={"window_size": 50}
+            # retrieval_strategy = AsyncDenseVectorStrategy(
+            #     hybrid=True, rrf={"window_size": 50}
+            # )
+            raise ValueError(
+                "Not support query.mode == VectorStoreQueryMode.HYBRID for Elasticsearch."
             )
         elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
             retrieval_strategy = AsyncBM25Strategy()
@@ -477,7 +482,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             filter = [_to_elasticsearch_filter(query.filters)]
         else:
             filter = es_filter or []
-
         hits = await self._store.search(
             query=query.query_str,
             query_vector=query.query_embedding,
@@ -486,7 +490,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             filter=filter,
             custom_query=custom_query,
         )
-
         top_k_nodes = []
         top_k_ids = []
         top_k_scores = []
@@ -499,6 +502,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             try:
                 node = metadata_dict_to_node(metadata)
                 node.text = text
+                node.metadata["retrieval_type"] = (
+                    "keyword"
+                    if isinstance(retrieval_strategy, AsyncBM25Strategy)
+                    else "vector"
+                )
             except Exception:
                 # Legacy support for old metadata format
                 logger.warning(
@@ -512,6 +520,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                     start_char_idx = node_info.get("start", None)
                     end_char_idx = node_info.get("end", None)
 
+                metadata["retrieval_type"] = (
+                    "keyword"
+                    if isinstance(retrieval_strategy, AsyncBM25Strategy)
+                    else "vector"
+                )
                 node = TextNode(
                     text=text,
                     metadata=metadata,
@@ -522,17 +535,14 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                 )
             top_k_nodes.append(node)
             top_k_ids.append(node_id)
-            top_k_scores.append(hit.get("_rank", hit["_score"]))
+            top_k_scores.append(hit.get("_rank", round(hit["_score"], 6)))
 
-        if (
-            isinstance(self.retrieval_strategy, AsyncDenseVectorStrategy)
-            and self.retrieval_strategy.hybrid
-        ):
-            total_rank = sum(top_k_scores)
-            top_k_scores = [total_rank - rank / total_rank for rank in top_k_scores]
+        if isinstance(retrieval_strategy, AsyncBM25Strategy) and len(top_k_nodes) > 0:
+            max_score = max(top_k_scores)
+            top_k_scores = [score / max_score for score in top_k_scores]
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,
             ids=top_k_ids,
-            similarities=_to_llama_similarities(top_k_scores),
+            similarities=top_k_scores,
         )

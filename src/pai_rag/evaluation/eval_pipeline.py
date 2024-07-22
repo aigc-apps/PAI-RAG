@@ -57,7 +57,7 @@ def __init_eval_pipeline(config_file):
     "-n",
     "--name",
     show_default=True,
-    help="Open Dataset Name. Optional: [miracl]",
+    help="Open Dataset Name. Optional: [miracl, duretrieval]",
     default=None,
 )
 def run(config, overwrite, type, name):
