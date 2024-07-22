@@ -121,7 +121,6 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            print(response)
             yield self._format_rag_response(
                 response, session_id=session_id, stream=stream
             )
