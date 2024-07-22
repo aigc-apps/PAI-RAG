@@ -71,6 +71,46 @@ class RagWebClient:
     def get_evaluate_response_url(self):
         return f"{self.endpoint}service/evaluate/response"
 
+    def _format_rag_response(
+        self, response, session_id: str = None, stream: bool = False
+    ):
+        text_key = "answer"
+        if stream:
+            text_key = "delta"
+
+        referenced_docs = ""
+        images = ""
+
+        is_finished = response.get("is_finished", False)
+
+        if is_finished and len(response["docs"]) == 0:
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE
+            return response
+        elif is_finished:
+            for i, doc in enumerate(response["docs"]):
+                formatted_file_name = re.sub(
+                    "^[0-9a-z]{32}_", "", doc["metadata"]["file_name"]
+                )
+                referenced_docs += (
+                    f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                )
+                image_url = doc["metadata"].get("image_url", None)
+                if image_url:
+                    images += f"""<img src="{image_url}"/>"""
+
+        formatted_answer = ""
+        if session_id:
+            new_query = response["new_query"]
+            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
+        formatted_answer += f"**Answer**: {response[text_key]} \n\n"
+        if images:
+            formatted_answer += f"{images} \n\n"
+        if referenced_docs:
+            formatted_answer += f"**Reference**:\n {referenced_docs}"
+
+        response["result"] = formatted_answer
+        return response
+
     def query(self, text: str, session_id: str = None, stream: bool = False):
         q = dict(question=text, session_id=session_id, stream=stream)
         r = requests.post(self.query_url, json=q, stream=True)
@@ -78,31 +118,18 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            if r.status_code != HTTPStatus.OK:
-                raise RagApiError(code=r.status_code, msg=response.message)
-
-            if len(response["docs"]) == 0:
-                response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
-            else:
-                referenced_docs = ""
-                images = ""
-                for i, doc in enumerate(response["docs"]):
-                    formatted_file_name = re.sub(
-                        "^[0-9a-z]{32}_", "", doc["metadata"]["file_name"]
-                    )
-                    referenced_docs += (
-                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                    )
-                    image_url = doc["metadata"].get("image_url", None)
-                    if image_url:
-                        images += f"""<img src="{image_url}"/>"""
-                if session_id:
-                    formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n {images} \n\n **Reference**:\n {referenced_docs}'
-                else:
-                    formatted_text = f'**Answer**: {response["answer"]} \n\n {images} \n\n **Reference**:\n {referenced_docs}'
-                response["answer"] = formatted_text
-            return response
-        return r
+            yield self._format_rag_response(
+                response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    chunk_response, session_id=session_id, stream=stream
+                )
 
     def query_llm(
         self,
