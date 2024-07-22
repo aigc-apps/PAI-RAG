@@ -64,7 +64,6 @@ def respond(input_elements: List[Any]):
     chatbot.append((msg, content))
     for resp in response_gen:
         chatbot[-1] = (msg, resp.result)
-        print(chatbot)
         yield chatbot
 
 
