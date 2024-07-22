@@ -9,13 +9,32 @@ from pai_rag.app.api.models import (
     RetrievalResponse,
 )
 from llama_index.core.schema import QueryBundle
-
+import json
 import logging
 from uuid import uuid4
+
+DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
 
 
 def uuid_generator() -> str:
     return uuid4().hex
+
+
+async def event_generator_async(response, extra_info=None):
+    content = ""
+    async for token in response.async_response_gen():
+        if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
+            chunk = {"delta": token, "is_finished": False}
+            content += token
+            yield json.dumps(chunk) + "\n"
+
+    if extra_info:
+        # 返回
+        last_chunk = {"delta": "", "is_finished": True, **extra_info}
+    else:
+        last_chunk = {"delta": "", "is_finished": True}
+
+    yield json.dumps(last_chunk, default=lambda x: x.dict())
 
 
 class RagApplication:
@@ -79,7 +98,7 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery) -> RagResponse:
+    async def aquery(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.
@@ -108,8 +127,14 @@ class RagApplication:
         query_chat_engine = chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await query_chat_engine.achat(query.question)
+        if not query.stream:
+            response = await query_chat_engine.achat(query.question)
+        else:
+            response = await query_chat_engine.astream_chat(query.question)
+
         node_results = response.sources[0].raw_output.source_nodes
+        new_query = response.sources[0].raw_input["query"]
+
         reference_docs = [
             ContextDoc(
                 text=score_node.node.get_content(),
@@ -118,15 +143,19 @@ class RagApplication:
             )
             for score_node in node_results
         ]
-        new_query = response.sources[0].raw_input["query"]
-        return RagResponse(
-            answer=response.response,
-            session_id=session_id,
-            docs=reference_docs,
-            new_query=new_query,
-        )
 
-    async def aquery_llm(self, query: LlmQuery) -> LlmResponse:
+        result_info = {
+            "session_id": session_id,
+            "docs": reference_docs,
+            "new_query": new_query,
+        }
+
+        if not query.stream:
+            return RagResponse(answer=response.response, **result_info)
+        else:
+            return event_generator_async(response=response, extra_info=result_info)
+
+    async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
 
         Generate answer from LLM's or LLM Chat Engine's achat interface.
@@ -151,9 +180,12 @@ class RagApplication:
         llm_chat_engine = llm_chat_engine_factory.get_chat_engine(
             session_id, query.chat_history
         )
-        response = await llm_chat_engine.achat(query.question)
-
-        return LlmResponse(answer=response.response, session_id=session_id)
+        if not query.stream:
+            response = await llm_chat_engine.achat(query.question)
+            return LlmResponse(answer=response.response, session_id=session_id)
+        else:
+            response = await llm_chat_engine.astream_chat(query.question)
+            return event_generator_async(response=response)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.

@@ -50,6 +50,9 @@ name = "qwen-turbo"
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
 
+[rag.multi_modal_llm]
+source = ""
+
 [rag.node_parser]
 type = "Sentence"
 chunk_size = 500

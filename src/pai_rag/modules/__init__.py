@@ -1,5 +1,6 @@
 from pai_rag.modules.embedding.embedding import EmbeddingModule
 from pai_rag.modules.llm.llm_module import LlmModule
+from pai_rag.modules.llm.multi_modal_llm import MultiModalLlmModule
 from pai_rag.modules.datareader.data_loader import DataLoaderModule
 from pai_rag.modules.datareader.datareader_factory import DataReaderFactoryModule
 from pai_rag.modules.index.index import IndexModule
@@ -20,6 +21,7 @@ from pai_rag.modules.index.bm25_index import BM25IndexModule
 
 ALL_MODULES = [
     "EmbeddingModule",
+    "MultiModalLlmModule",
     "LlmModule",
     "DataLoaderModule",
     "DataReaderFactoryModule",

@@ -4,8 +4,10 @@ from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.azure_openai import AzureOpenAI
 
+import os
+
 # from llama_index.llms.dashscope import DashScope
-from pai_rag.modules.llm.my_dashscope import MyDashScope
+from pai_rag.integrations.llms.dashscope.base import MyDashScope
 from pai_rag.integrations.llms.paieas.base import PaiEAS
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -21,7 +23,24 @@ class LlmModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         source = config["source"].lower()
-        if source == "openai":
+
+        # Get DASHSCOPE KEY, will use dashscope LLM
+        # Since we might have already configured key for dashscope mebedding and multi-modal
+        # Will refine later.
+        if os.getenv("DASHSCOPE_API_KEY", None):
+            model_name = "qwen-turbo"
+            logger.info(
+                f"""
+                [Parameters][LLM:DashScope]
+                    model = {model_name}
+                """
+            )
+            llm = MyDashScope(
+                model_name=model_name,
+                temperature=config.get("temperature", 0.1),
+                max_tokens=2000,
+            )
+        elif source == "openai":
             logger.info(
                 f"""
                 [Parameters][LLM:OpenAI]
@@ -59,7 +78,9 @@ class LlmModule(ConfigurableModule):
                 """
             )
             llm = MyDashScope(
-                model_name=model_name, temperature=config.get("temperature", 0.1)
+                model_name=model_name,
+                temperature=config.get("temperature", 0.1),
+                max_tokens=2000,
             )
         elif source == "paieas":
             model_name = config.get("name", "PAI-EAS-LLM")
@@ -73,12 +94,9 @@ class LlmModule(ConfigurableModule):
                     token = {token}
                 """
             )
-            llm = PaiEAS(
-                endpoint=endpoint,
-                token=token,
-                model_name=model_name,
-                temperature=config.get("temperature", 0.1),
-            )
+            from urllib.parse import urljoin
+
+            llm = PaiEAS(api_key=token, api_base=urljoin(endpoint, "v1"))
         else:
             raise ValueError(f"Unknown LLM source: '{config['llm']['source']}'")
 

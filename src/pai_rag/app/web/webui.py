@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 import gradio as gr
+import os
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
@@ -14,6 +15,8 @@ from pai_rag.app.web.ui_constants import (
 import logging
 
 DEFAULT_LOCAL_URL = "http://localhost:8001/"
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
+
 logger = logging.getLogger("WebUILogger")
 
 

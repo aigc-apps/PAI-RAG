@@ -9,21 +9,35 @@ from pai_rag.app.api.models import (
     RagQuery,
     LlmQuery,
     RetrievalQuery,
-    RagResponse,
     LlmResponse,
 )
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
 
 @router.post("/query")
-async def aquery(query: RagQuery) -> RagResponse:
-    return await rag_service.aquery(query)
+async def aquery(query: RagQuery):
+    response = await rag_service.aquery(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery) -> LlmResponse:
-    return await rag_service.aquery_llm(query)
+async def aquery_llm(query: LlmQuery):
+    response = await rag_service.aquery_llm(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/query/retrieval")
