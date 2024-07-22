@@ -31,7 +31,10 @@ async def event_generator_async(response, extra_info=None):
     if extra_info:
         # 返回
         last_chunk = {"delta": "", "is_finished": True, **extra_info}
-        yield json.dumps(last_chunk, default=lambda x: x.dict())
+    else:
+        last_chunk = {"delta": "", "is_finished": True}
+
+    yield json.dumps(last_chunk, default=lambda x: x.dict())
 
 
 class RagApplication:
