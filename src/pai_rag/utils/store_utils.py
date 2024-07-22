@@ -60,7 +60,3 @@ def read_chat_store_state(persist_dir, file_path):
             return json.load(file)
     except Exception:
         return None  # 如果文件不存在/json不合法，则返回None
-
-
-def normalize_cosine_similarity_score(sim_score):
-    return round((1 + sim_score) / 2, 6)

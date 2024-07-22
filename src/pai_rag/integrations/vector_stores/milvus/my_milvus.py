@@ -32,7 +32,7 @@ from llama_index.core.vector_stores.utils import (
     node_to_metadata_dict,
 )
 from pymilvus import Collection, MilvusClient, DataType, AnnSearchRequest
-from pai_rag.utils.store_utils import normalize_cosine_similarity_score
+from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
 logger = logging.getLogger(__name__)
 

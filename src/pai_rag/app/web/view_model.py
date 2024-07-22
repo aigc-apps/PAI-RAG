@@ -236,13 +236,9 @@ class ViewModel(BaseModel):
 
         elif reranker_type == "model-based-reranker":
             view_model.reranker_type = "model-based-reranker"
-            reranker_model = config["postprocessor"].get(
+            view_model.reranker_model = config["postprocessor"].get(
                 "reranker_model", "bge-reranker-base"
             )
-            if reranker_model == "bge-reranker-base":
-                view_model.reranker_model = "bge-reranker-base"
-            elif reranker_model == "bge-reranker-large":
-                view_model.reranker_model = "bge-reranker-large"
 
         view_model.synthesizer_type = config["synthesizer"].get(
             "type", "SimpleSummarize"

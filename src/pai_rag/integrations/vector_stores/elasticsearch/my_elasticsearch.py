@@ -503,7 +503,7 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                 node = metadata_dict_to_node(metadata)
                 node.text = text
                 node.metadata["retrieval_type"] = (
-                    "bm25"
+                    "keyword"
                     if isinstance(retrieval_strategy, AsyncBM25Strategy)
                     else "vector"
                 )
@@ -521,7 +521,7 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                     end_char_idx = node_info.get("end", None)
 
                 metadata["retrieval_type"] = (
-                    "bm25"
+                    "keyword"
                     if isinstance(retrieval_strategy, AsyncBM25Strategy)
                     else "vector"
                 )

@@ -295,7 +295,9 @@ class PaiBm25Index:
         for i, node in enumerate(text_nodes):
             results.append(
                 MyNodeWithScore(
-                    node=node, score=doc_scores[doc_indexes[i]], retriever_type="bm25"
+                    node=node,
+                    score=doc_scores[doc_indexes[i]],
+                    retriever_type="keyword",
                 )
             )
 

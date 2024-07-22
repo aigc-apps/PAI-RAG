@@ -13,7 +13,7 @@ from llama_index.core.vector_stores.utils import (
 )
 from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
 from llama_index.vector_stores.analyticdb.base import _recursively_parse_adb_filter
-from pai_rag.utils.store_utils import normalize_cosine_similarity_score
+from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
 
 class MyAnalyticDBVectorStore(AnalyticDBVectorStore):

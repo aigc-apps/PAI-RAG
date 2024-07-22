@@ -17,7 +17,7 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryResult,
 )
 from llama_index.vector_stores.faiss import FaissVectorStore
-from pai_rag.utils.store_utils import normalize_cosine_similarity_score
+from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
 logger = logging.getLogger()
 

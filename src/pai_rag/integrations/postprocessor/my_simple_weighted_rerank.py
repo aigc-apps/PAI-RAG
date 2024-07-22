@@ -54,6 +54,49 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
     def class_name(cls) -> str:
         return "MySimpleWeightedRerank"
 
+    def filter_threshhold(self, nodes):
+        if self.similarity_threshold:
+            nodes = [node for node in nodes if node.score > self.similarity_threshold]
+        return sorted(nodes, key=lambda x: x.score or 0.0, reverse=True)[: self.top_n]
+
+    def normalize_bm25_nodes(self, bm25_nodes):
+        bm25_scores = [node.score for node in bm25_nodes]
+        max_score = max(bm25_scores)
+        for node_with_score in bm25_nodes:
+            node_with_score.score = node_with_score.score / max_score
+        return bm25_nodes
+
+    def _weighted_fusion(self, vector_nodes, bm25_nodes):
+        all_nodes: Dict[str, NodeWithScore] = {}
+        bm25_nodes = [node for node in bm25_nodes if node.score > 0]
+        if len(bm25_nodes) > 0:
+            for vector_node_with_score in vector_nodes:
+                text = vector_node_with_score.node.get_content()
+                all_nodes[text] = vector_node_with_score
+                all_nodes[text].score = (
+                    vector_node_with_score.score * self.vector_weight
+                )
+
+            bm25_nodes = self.normalize_bm25_nodes(bm25_nodes)
+            for bm25_node_with_score in bm25_nodes:
+                text = bm25_node_with_score.node.get_content()
+                if text in all_nodes:
+                    all_nodes[text].score += (
+                        bm25_node_with_score.score * self.keyword_weight
+                    )
+                else:
+                    all_nodes[text] = bm25_node_with_score
+                    all_nodes[text].score = (
+                        bm25_node_with_score.score * self.keyword_weight
+                    )
+        else:
+            for vector_node_with_score in vector_nodes:
+                text = vector_node_with_score.node.get_content()
+                all_nodes[text] = vector_node_with_score
+                all_nodes[text].score = vector_node_with_score.score * 1.0
+
+        return self.filter_threshhold(all_nodes.values())
+
     def _postprocess_nodes(
         self,
         nodes: List[MyNodeWithScore],
@@ -65,76 +108,16 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
             return []
 
         vector_nodes = [node for node in nodes if node.retriever_type == "vector"]
-        bm25_nodes = [node for node in nodes if node.retriever_type == "bm25"]
+        bm25_nodes = [node for node in nodes if node.retriever_type == "keyword"]
 
         if len(vector_nodes) > 0 and len(bm25_nodes) == 0:
-            if self.similarity_threshold:
-                vector_nodes = [
-                    node
-                    for node in vector_nodes
-                    if node.score > self.similarity_threshold
-                ]
-            return sorted(vector_nodes, key=lambda x: x.score or 0.0, reverse=True)[
-                : self.top_n
-            ]
+            return self.filter_threshhold(vector_nodes)
         elif len(vector_nodes) == 0 and len(bm25_nodes) > 0:
             bm25_nodes = [node for node in bm25_nodes if node.score > 0]
             if len(bm25_nodes) > 0:
-                bm25_scores = [node.score for node in bm25_nodes]
-                max_score = max(bm25_scores)
-                all_nodes: Dict[str, NodeWithScore] = {}
-                for node_with_score in bm25_nodes:
-                    node_with_score.score = node_with_score.score / max_score
-                if self.similarity_threshold:
-                    bm25_nodes = [
-                        node
-                        for node in bm25_nodes
-                        if node.score > self.similarity_threshold
-                    ]
-                return sorted(bm25_nodes, key=lambda x: x.score or 0.0, reverse=True)[
-                    : self.top_n
-                ]
+                bm25_nodes = self.normalize_bm25_nodes(bm25_nodes)
+                return self.filter_threshhold(bm25_nodes)
             else:
                 return []
         else:
-            all_nodes: Dict[str, NodeWithScore] = {}
-            bm25_nodes = [node for node in bm25_nodes if node.score > 0]
-            if len(bm25_nodes) > 0:
-                for node_with_score in vector_nodes:
-                    text = node_with_score.node.get_content()
-                    all_nodes[text] = node_with_score
-                    all_nodes[text].score = node_with_score.score * self.vector_weight
-
-                bm25_scores = [node.score for node in bm25_nodes]
-                max_score = max(bm25_scores)
-                for node_with_score in bm25_nodes:
-                    text = node_with_score.node.get_content()
-                    node_with_score.score = node_with_score.score / max_score
-                    if text in all_nodes:
-                        all_nodes[text].score += (
-                            node_with_score.score * self.keyword_weight
-                        )
-                    else:
-                        all_nodes[text] = node_with_score
-                        all_nodes[text].score = (
-                            node_with_score.score * self.keyword_weight
-                        )
-            else:
-                for node_with_score in vector_nodes:
-                    text = node_with_score.node.get_content()
-                    all_nodes[text] = node_with_score
-                    all_nodes[text].score = node_with_score.score * 1.0
-
-            if self.similarity_threshold:
-                all_nodes = [
-                    node
-                    for node in all_nodes.values()
-                    if node.score > self.similarity_threshold
-                ]
-                return sorted(all_nodes, key=lambda x: x.score or 0.0, reverse=True)[
-                    : self.top_n
-                ]
-            else:
-                return sorted(
-                    all_nodes.values(), key=lambda x: x.score or 0.0, reverse=True
-                )[: self.top_n]
+            return self._weighted_fusion(vector_nodes, bm25_nodes)
