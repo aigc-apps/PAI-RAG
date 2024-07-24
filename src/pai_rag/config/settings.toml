@@ -79,3 +79,4 @@ text_qa_template = "参考内容信息如下\n---------------------\n{context_st
 
 [rag.tool]
 type = ["calculator","weather"]
+weather_api_key = ""
