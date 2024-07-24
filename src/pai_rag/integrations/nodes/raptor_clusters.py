@@ -11,11 +11,11 @@ from typing import Dict, List, Optional
 
 from llama_index.core.schema import BaseNode
 
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
+from pai_rag.utils.constants import DEFAULT_DATAFILE_DIR
 from pai_rag.utils.tokenization_qwen import QWenTokenizer
 
 
-VOCAB_FILE = os.path.join(DEFAULT_MODEL_DIR, "tokenization/qwen.tiktoken")
+VOCAB_FILE = os.path.join(DEFAULT_DATAFILE_DIR, "tokenization/qwen.tiktoken")
 
 # Set a random seed for reproducibility
 RANDOM_SEED = 224

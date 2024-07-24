@@ -160,19 +160,19 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            self.index.vector_index, n_new_nodes = asyncio.run(
-                self.node_enhance.enhance_nodes(
-                    nodes=nodes, index=self.index.vector_index
-                )
+            nodes_with_embeddings, len_new_nodes = asyncio.run(
+                self.node_enhance.enhance_nodes(nodes=nodes)
             )
+            assert len_new_nodes == len(nodes_with_embeddings) - len(nodes)
+            self.index.vector_index.insert_nodes(nodes_with_embeddings)
+
             logger.info(
-                f"Inserted {len(nodes)} and enhanced {n_new_nodes} nodes successfully."
+                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
             )
         else:
             self.index.vector_index.insert_nodes(nodes)
             logger.info(f"Inserted {len(nodes)} nodes successfully.")
 
-        self.index.vector_index.insert_nodes(nodes)
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
         )
@@ -204,14 +204,16 @@ class RagDataLoader:
 
         if enable_raptor:
             (
-                self.index.vector_index,
-                n_new_nodes,
-            ) = await self.node_enhance.enhance_nodes(
-                nodes=nodes, index=self.index.vector_index
-            )
+                nodes_with_embeddings,
+                len_new_nodes,
+            ) = await self.node_enhance.enhance_nodes(nodes=nodes)
+            assert len_new_nodes == len(nodes_with_embeddings) - len(nodes)
+            self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
+
             logger.info(
-                f"Inserted {len(nodes)} and enhanced {n_new_nodes} nodes successfully."
+                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
             )
+
         else:
             await self.index.vector_index.insert_nodes_async(nodes)
             logger.info(f"Inserted {len(nodes)} nodes successfully.")

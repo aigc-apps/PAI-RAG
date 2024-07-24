@@ -11,7 +11,6 @@ from llama_index.core.schema import (
     NodeWithScore,
     TextNode,
 )
-from llama_index.core import VectorStoreIndex
 from pai_rag.integrations.nodes.raptor_clusters import get_clusters
 from pai_rag.utils.prompt_template import DEFAULT_SUMMARY_PROMPT
 
@@ -20,23 +19,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class RaptorNodesEnhancement:
+class RaptorProcessor:
     def __init__(
-        self,
-        tree_depth: int,
-        max_clusters: int,
-        threshold: float,
+        self, tree_depth: int, max_clusters: int, threshold: float, embed_model
     ) -> None:
         """get params from config"""
         self.tree_depth = tree_depth
         self.max_clusters = max_clusters
         self.threshold = threshold
+        self.embed_model = embed_model
 
     async def enhance_nodes(
         self,
-        index: VectorStoreIndex,
         nodes: List[BaseNode],
-    ) -> Tuple[VectorStoreIndex, int]:
+    ) -> Tuple[List, int]:
         """Given a set of nodes, this function inserts higher level of abstractions within the index.
 
         For later retrieval
@@ -50,11 +46,12 @@ class RaptorNodesEnhancement:
             threshold: probability threshold
         """
 
-        embed_model = index._embed_model
+        embed_model = self.embed_model
         summary_module = SummaryModule()
 
         cur_nodes = nodes
         new_nodes_collection = []
+        nodes_with_embeddings_collections = []
         for level in range(self.tree_depth):
             # get the embeddings for the current documents
 
@@ -111,14 +108,33 @@ class RaptorNodesEnhancement:
                     node.embedding = id_to_embedding[node.id_]
                     nodes_with_embeddings.append(node)
 
-            index.insert_nodes(nodes_with_embeddings)
+            nodes_with_embeddings_collections.append(nodes_with_embeddings)
 
             # set the current nodes to the new nodes
             cur_nodes = new_nodes
 
-        index.insert_nodes(cur_nodes)
+            if level == self.tree_depth - 1:
+                embeddings = await embed_model.aget_text_embedding_batch(
+                    [node.get_content(metadata_mode="embed") for node in cur_nodes]
+                )
+                assert len(embeddings) == len(cur_nodes)
+                id_to_embedding = {
+                    node.id_: embedding
+                    for node, embedding in zip(cur_nodes, embeddings)
+                }
+                for node in cur_nodes:
+                    node.metadata["parent_id"] = ""
+                    node.excluded_embed_metadata_keys.append("parent_id")
+                    node.excluded_llm_metadata_keys.append("parent_id")
+                    node.embedding = id_to_embedding[node.id_]
+                    nodes_with_embeddings_collections.append([node])
 
-        return index, len(new_nodes_collection)
+        # index.insert_nodes(cur_nodes)
+        nodes_with_embeddings_collections = [
+            k for i in nodes_with_embeddings_collections for k in i
+        ]
+
+        return nodes_with_embeddings_collections, len(new_nodes_collection)
 
 
 class SummaryModule(BaseModel):

@@ -40,7 +40,10 @@ class DashScopeGenerationModels:
 
 DASHSCOPE_MODEL_META = {
     DashScopeGenerationModels.QWEN_TURBO: {
-        "context_window": 1024 * (8 - 2),
+        "context_window": 1024
+        * (
+            8 - 2
+        ),  # https://help.aliyun.com/zh/model-studio/developer-reference/what-is-tongyi-qianwen-llm
         "num_output": 1024 * 8,
         "is_chat_model": True,
     },

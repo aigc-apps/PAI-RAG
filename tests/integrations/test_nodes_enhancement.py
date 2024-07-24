@@ -6,12 +6,15 @@ from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.dashscope import DashScope
 from llama_index.embeddings.dashscope import DashScopeEmbedding
-from llama_index.core import VectorStoreIndex
 
-from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorNodesEnhancement
+from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorProcessor
+
+load_dotenv()
 
 
-@pytest.mark.skip(reason="no vocab file in the test environment")
+@pytest.mark.skipif(
+    os.getenv("DASHSCOPE_API_KEY") is None, reason="no llm api key provided"
+)
 async def test_enhance_nodes():
     load_dotenv(verbose=True)
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
@@ -45,13 +48,12 @@ async def test_enhance_nodes():
     for i, text_i in enumerate(text_list):
         nodes.append(TextNode(text=text_i, id_=f"chunk_{i}"))
 
-    # create index
-    index = VectorStoreIndex(nodes=[], embed_model=embed_model)
-
     # raptor init
-    raptor = RaptorNodesEnhancement(tree_depth=2, max_clusters=50, threshold=0.1)
+    raptor = RaptorProcessor(
+        tree_depth=2, max_clusters=50, threshold=0.1, embed_model=embed_model
+    )
 
     # enhance nodes by raptor
-    res_index, len_new_nodes = await raptor.enhance_nodes(nodes=nodes, index=index)
+    nodes_with_embeddings, len_new_nodes = await raptor.enhance_nodes(nodes=nodes)
 
-    assert len(res_index.docstore.docs) == len(nodes) + len_new_nodes
+    assert len(nodes) + len_new_nodes == len(nodes_with_embeddings)
