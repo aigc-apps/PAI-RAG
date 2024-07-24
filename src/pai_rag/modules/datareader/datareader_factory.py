@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 class DataReaderFactoryModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["MultiModalLlmModule"]
+        return ["MultiModalLlmModule", "OssCacheModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         self.reader_config = new_params[MODULE_PARAM_CONFIG]
         self.multi_modal_llm = new_params["MultiModalLlmModule"]
+        self.oss_cache = new_params["OssCacheModule"]
+
         self.file_readers = {
             ".html": HtmlReader(),
             ".htm": HtmlReader(),
@@ -43,7 +45,13 @@ class DataReaderFactoryModule(ConfigurableModule):
         }
 
         if self.multi_modal_llm:
-            self.file_readers[".imagelist"] = PaiImageReader(self.multi_modal_llm)
+            image_reader = PaiImageReader(
+                self.multi_modal_llm, oss_cache=self.oss_cache
+            )
+            self.file_readers[".imagelist"] = image_reader
+            self.file_readers[".jpg"] = image_reader
+            self.file_readers[".jpeg"] = image_reader
+            self.file_readers[".png"] = image_reader
 
         return self
 

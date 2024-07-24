@@ -83,7 +83,6 @@ class RagWebClient:
         is_finished = response.get("is_finished", True)
 
         referenced_docs = ""
-        images = ""
 
         # 空结果，TODO: 适配score_threshold的场景
         if is_finished and len(docs) == 0 and not text:
@@ -97,17 +96,12 @@ class RagWebClient:
                 referenced_docs += (
                     f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
                 )
-                image_url = doc["metadata"].get("image_url", None)
-                if image_url:
-                    images += f"""<img src="{image_url}"/>"""
 
         formatted_answer = ""
         if session_id:
             new_query = response["new_query"]
             formatted_answer += f"**Query Transformation**: {new_query} \n\n"
         formatted_answer += f"**Answer**: {text} \n\n"
-        if images:
-            formatted_answer += f"{images} \n\n"
         if referenced_docs:
             formatted_answer += f"**Reference**:\n {referenced_docs}"
 

@@ -224,7 +224,9 @@ class ViewModel(BaseModel):
         )
         similarity_threshold = config["postprocessor"].get("similarity_threshold", None)
         view_model.similarity_threshold = (
-            similarity_threshold if similarity_threshold > 0 else None
+            similarity_threshold
+            if similarity_threshold and similarity_threshold > 0
+            else None
         )
 
         if reranker_type == "simple-weighted-reranker":
