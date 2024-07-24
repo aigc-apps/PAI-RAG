@@ -8,6 +8,7 @@ import os
 
 # from llama_index.llms.dashscope import DashScope
 from pai_rag.integrations.llms.dashscope.base import MyDashScope
+from pai_rag.integrations.llms.dashscope.fc_base import MyFCDashScope
 from pai_rag.integrations.llms.paieas.base import PaiEAS
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -28,18 +29,27 @@ class LlmModule(ConfigurableModule):
         # Since we might have already configured key for dashscope mebedding and multi-modal
         # Will refine later.
         if os.getenv("DASHSCOPE_API_KEY", None):
-            model_name = "qwen-turbo"
-            logger.info(
-                f"""
-                [Parameters][LLM:DashScope]
-                    model = {model_name}
-                """
-            )
-            llm = MyDashScope(
-                model_name=model_name,
-                temperature=config.get("temperature", 0.1),
-                max_tokens=2000,
-            )
+            model_name = config.get("name", "qwen-turbo")
+            if config.get("type", None) == "function_calling":
+                logger.info(
+                    f"""
+                    [Parameters][LLM:DashScope-FunctionCalling]
+                        model = {model_name}
+                    """
+                )
+                llm = MyFCDashScope(model_name=model_name)
+            else:
+                logger.info(
+                    f"""
+                    [Parameters][LLM:DashScope]
+                        model = {model_name}
+                    """
+                )
+                llm = MyDashScope(
+                    model_name=model_name,
+                    temperature=config.get("temperature", 0.1),
+                    max_tokens=2000,
+                )
         elif source == "openai":
             logger.info(
                 f"""
