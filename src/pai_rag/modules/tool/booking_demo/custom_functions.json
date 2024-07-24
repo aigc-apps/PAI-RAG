@@ -2,7 +2,7 @@
   {
     "type": "function",
     "function": {
-      "name": "会议室状态查询",
+      "name": "get_booking_state",
       "description": "用于查询给定会议室ID的预定状态",
       "parameters": {
         "type": "object",
@@ -19,7 +19,7 @@
   {
     "type": "function",
     "function": {
-      "name": "更新预定信息",
+      "name": "update_booking",
       "description": "用于更新预定指定会议室ID(room_id)的预定人信息，包含姓名(name)、电子邮件(email)、电话(phone)、日期(date)和时间(time)。",
       "parameters": {
         "type": "object",
@@ -44,7 +44,7 @@
   {
     "type": "function",
     "function": {
-      "name": "预定会议室",
+      "name": "create_booking",
       "description": "预定指定会议室ID的会议室",
       "parameters": {
         "type": "object",
@@ -61,7 +61,7 @@
   {
     "type": "function",
     "function": {
-      "name": "确认会议室预定",
+      "name": "confirm_booking",
       "description": "用于确认是否预定指定会议室ID的会议室",
       "parameters": {
         "type": "object",

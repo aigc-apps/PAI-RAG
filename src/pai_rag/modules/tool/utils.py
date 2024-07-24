@@ -2,8 +2,9 @@ from llama_index.tools.google import GoogleSearchToolSpec
 from pai_rag.modules.tool.load_and_search_tool_spec import LoadAndSearchToolSpec
 from llama_index.core.tools import FunctionTool
 from llama_index.core.bridge.pydantic import FieldInfo, create_model
-from pai_rag.modules.tool.sample_tools_for_booking import function_mapper
 import json
+import os
+import sys
 from pai_rag.modules.tool.default_tool_description_template import (
     DEFAULT_GOOGLE_SEARCH_TOOL_DESP,
     DEFAULT_CALCULATE_MULTIPLY,
@@ -74,26 +75,31 @@ def get_calculator_tool():
     return [multiply_tool, add_tool, divide_tool, subtract_tool]
 
 
-def get_booking_demo_tool():
-    booking_tools = []
-
+def get_customized_tool(config):
+    func_path = config["func_path"]
+    sys.path.append(func_path)
+    module = __import__("custom_functions")
+    tools = []
     # 加载JSON文件
-    with open("example_data/sample_tools_for_booking.json", "r") as file:
+    with open(os.path.join(func_path, "custom_functions.json"), "r") as file:
         custom_tools = json.load(file)
 
         for c_tool in custom_tools:
             fn_name = c_tool["function"]["name"]
-
-            fn_schema = create_tool_fn_schema(fn_name, c_tool["function"]["parameters"])
-            tool = FunctionTool.from_defaults(
-                fn=function_mapper[fn_name],
-                name=fn_name,
-                fn_schema=fn_schema,
-                description=c_tool["function"]["description"],
-            )
-            booking_tools.append(tool)
-    return booking_tools
-
-
-def get_customized_tool(config):
-    return []
+            if hasattr(module, fn_name):
+                func = getattr(module, fn_name)
+                fn_schema = create_tool_fn_schema(
+                    fn_name, c_tool["function"]["parameters"]
+                )
+                tool = FunctionTool.from_defaults(
+                    fn=func,
+                    name=fn_name,
+                    fn_schema=fn_schema,
+                    description=c_tool["function"]["description"],
+                )
+                tools.append(tool)
+            else:
+                raise ValueError(
+                    f"Function {fn_name} has not been defined in the custom_functions.py, please define it."
+                )
+    return tools

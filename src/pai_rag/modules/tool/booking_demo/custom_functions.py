@@ -55,11 +55,3 @@ def confirm_booking(room_id: str) -> str:
 
     # return f"Booking ID {user_id} confirmed!"
     return f"会议室预订ID {room_id} 信息已全部确认，预定成功！"
-
-
-function_mapper = {
-    "会议室状态查询": get_booking_state,
-    "更新预定信息": update_booking,
-    "预定会议室": create_booking,
-    "确认会议室预定": confirm_booking,
-}

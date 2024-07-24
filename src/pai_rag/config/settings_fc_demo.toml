@@ -35,6 +35,10 @@ retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
+[rag.function_calling_llm]
+source = "DashScope"
+name = "qwen2-7b-instruct"
+
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
@@ -46,8 +50,7 @@ vector_store.type = "FAISS"
 # token = ""
 [rag.llm]
 source = "DashScope"
-type = "function_calling"
-name = "qwen2-7b-instruct"
+name = "qwen-turbo"
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
@@ -81,4 +84,5 @@ type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
 
 [rag.tool]
-type = ["booking_demo"]
+type = ["custom"]
+func_path = "src/pai_rag/modules/tool/booking_demo"

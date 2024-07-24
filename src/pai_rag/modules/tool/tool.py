@@ -5,7 +5,6 @@ from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.modules.tool.utils import (
     get_google_web_search_tool,
     get_calculator_tool,
-    get_booking_demo_tool,
     get_customized_tool,
 )
 
@@ -34,10 +33,7 @@ class ToolModule(ConfigurableModule):
         if "calculator" in type:
             tools.extend(get_calculator_tool())
 
-        if "booking_demo" in type:
-            tools.extend(get_booking_demo_tool())
-
         if "custom" in type:
-            tools.extend(get_customized_tool())
+            tools.extend(get_customized_tool(self.config))
 
         return tools

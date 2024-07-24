@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 class AgentModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["LlmModule", "ToolModule"]
+        return ["LlmModule", "FunctionCallingLlmModule", "ToolModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        llm = new_params["LlmModule"]
         func_tool = new_params["ToolModule"]
         type = config["type"].lower()
         if type == "react":
+            llm = new_params["LlmModule"]
             logger.info(
                 f"""
                 [Parameters][Agent]
@@ -30,6 +30,7 @@ class AgentModule(ConfigurableModule):
             )
             agent = ReActAgent.from_tools(tools=func_tool, llm=llm, verbose=True)
         elif type == "function_calling":
+            llm = new_params["FunctionCallingLlmModule"]
             system_content = config["system_prompt"]
             prefix_messages = [
                 ChatMessage(
