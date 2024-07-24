@@ -202,6 +202,7 @@ class PaiPDFReader(BaseReader):
 
     @staticmethod
     def is_horizontal_table(table: List[List]) -> bool:
+        # if the table is empty or the first (header) of table is empty, it's not a horizontal table
         if not table or not table[0]:
             return False
 
