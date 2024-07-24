@@ -14,7 +14,7 @@ WELCOME_MESSAGE = """
             # \N{fire} Chatbot with RAG on PAI !
             ### \N{rocket} Build your own personalized knowledge base question-answering chatbot.
 
-            #### \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
+            #### \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Milvus](https://www.aliyun.com/product/bigdata/emapreduce/milvus) / [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss)
 
             #### \N{fire} <a href='/docs'>API Docs</a> &emsp; \N{rocket} \N{fire}  欢迎加入【PAI】RAG答疑群 27370042974
             """
@@ -29,7 +29,7 @@ DEFAULT_CSS_STYPE = """
 DEFAULT_EMBED_SIZE = 1536
 
 EMBEDDING_DIM_DICT = {
-    "bge-small-zh-v1.5": 1024,
+    "bge-small-zh-v1.5": 512,
     "SGPT-125M-weightedmean-nli-bitfit": 768,
     "text2vec-large-chinese": 1024,
     "paraphrase-multilingual-MiniLM-L12-v2": 384,

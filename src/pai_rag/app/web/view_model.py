@@ -93,15 +93,21 @@ class ViewModel(BaseModel):
     milvus_database: str = "pairag"
     milvus_collection_name: str = "pairagcollection"
 
+    # retriever
     similarity_top_k: int = 5
-    # similarity_cutoff: float = 0.3
-    rerank_model: str = "no-reranker"
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
-    query_engine_type: str = "RetrieverQueryEngine"
-    BM25_weight: float = 0.5
-    vector_weight: float = 0.5
-    fusion_mode: str = "reciprocal_rerank"  # [simple, reciprocal_rerank, dist_based_score, relative_score]
     query_rewrite_n: int = 1
+
+    # postprocessor
+    reranker_type: str = (
+        "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
+    )
+    reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
+    keyword_weight: float = 0.3
+    vector_weight: float = 0.7
+    similarity_threshold: float = None
+
+    query_engine_type: str = "RetrieverQueryEngine"
 
     synthesizer_type: str = None
 
@@ -136,7 +142,7 @@ class ViewModel(BaseModel):
         view_model.llm_temperature = config["llm"].get(
             "temperature", view_model.llm_temperature
         )
-        if view_model.llm == "PaiEAS":
+        if view_model.llm.lower() == "paieas":
             view_model.llm_eas_model_name = config["llm"].get(
                 "name", view_model.llm_eas_model_name
             )
@@ -207,27 +213,32 @@ class ViewModel(BaseModel):
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
-            view_model.BM25_weight = config["retriever"]["BM25_weight"]
-            view_model.vector_weight = config["retriever"]["vector_weight"]
-            view_model.fusion_mode = config["retriever"]["fusion_mode"]
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
         elif config["retriever"]["retrieval_mode"] == "embedding":
             view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
 
-        # if "Similarity" in config["postprocessor"]:
-        #     view_model.similarity_cutoff = config["postprocessor"].get("similarity_cutoff", 0.1)
+        reranker_type = config["postprocessor"].get(
+            "reranker_type", "simple-weighted-reranker"
+        )
+        similarity_threshold = config["postprocessor"].get("similarity_threshold", None)
+        view_model.similarity_threshold = (
+            similarity_threshold if similarity_threshold > 0 else None
+        )
 
-        rerank_model = config["postprocessor"].get("rerank_model", "no-reranker")
-        if rerank_model == "llm-reranker":
-            view_model.rerank_model = "llm-reranker"
-        elif rerank_model == "bge-reranker-base":
-            view_model.rerank_model = "bge-reranker-base"
-        elif rerank_model == "bge-reranker-large":
-            view_model.rerank_model = "bge-reranker-large"
-        else:
-            view_model.rerank_model = "no-reranker"
+        if reranker_type == "simple-weighted-reranker":
+            view_model.reranker_type = "simple-weighted-reranker"
+            vector_weight = config["postprocessor"].get("vector_weight", 0.7)
+            view_model.vector_weight = float(vector_weight)
+            keyword_weight = config["postprocessor"].get("keyword_weight", 0.3)
+            view_model.keyword_weight = float(keyword_weight)
+
+        elif reranker_type == "model-based-reranker":
+            view_model.reranker_type = "model-based-reranker"
+            view_model.reranker_model = config["postprocessor"].get(
+                "reranker_model", "bge-reranker-base"
+            )
 
         view_model.synthesizer_type = config["synthesizer"].get(
             "type", "SimpleSummarize"
@@ -256,7 +267,7 @@ class ViewModel(BaseModel):
         config["llm"]["token"] = self.llm_eas_token
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
-        if self.llm == "PaiEas":
+        if self.llm.lower() == "paieas":
             config["llm"]["name"] = self.llm_eas_model_name
         else:
             config["llm"]["name"] = self.llm_api_model_name
@@ -316,24 +327,17 @@ class ViewModel(BaseModel):
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
-            config["retriever"]["vector_weight"] = self.vector_weight
-            config["retriever"]["BM25_weight"] = self.BM25_weight
-            config["retriever"]["fusion_mode"] = self.fusion_mode
             config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
         elif self.retrieval_mode == "Embedding Only":
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
 
-        # config["postprocessor"]["similarity_cutoff"] = self.similarity_cutoff
-        if self.rerank_model == "llm-reranker":
-            config["postprocessor"]["rerank_model"] = "llm-reranker"
-        elif self.rerank_model == "bge-reranker-base":
-            config["postprocessor"]["rerank_model"] = "bge-reranker-base"
-        elif self.rerank_model == "bge-reranker-large":
-            config["postprocessor"]["rerank_model"] = "bge-reranker-large"
-        else:
-            config["postprocessor"]["rerank_model"] = "no-reranker"
+        config["postprocessor"]["reranker_type"] = self.reranker_type
+        config["postprocessor"]["reranker_model"] = self.reranker_model
+        config["postprocessor"]["keyword_weight"] = self.keyword_weight
+        config["postprocessor"]["vector_weight"] = self.vector_weight
+        config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
@@ -435,13 +439,20 @@ class ViewModel(BaseModel):
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
+            "visible": self.llm.lower() != "paieas",
         }
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
-        settings["similarity_top_k"] = {"value": self.similarity_top_k}
-        settings["rerank_model"] = {"value": self.rerank_model}
+
+        # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
+        settings["reranker_type"] = {"value": self.reranker_type}
+        settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["reranker_model"] = {"value": self.reranker_model}
+        settings["vector_weight"] = {"value": self.vector_weight}
+        settings["keyword_weight"] = {"value": self.keyword_weight}
+        settings["similarity_threshold"] = {"value": self.similarity_threshold}
 
         prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
         settings["prm_type"] = {"value": prm_type}

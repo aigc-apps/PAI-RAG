@@ -50,13 +50,20 @@ name = "qwen-turbo"
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
 
+[rag.multi_modal_llm]
+source = ""
+
 [rag.node_parser]
 type = "Sentence"
 chunk_size = 500
 chunk_overlap = 10
 
 [rag.postprocessor]
-rerank_model = "no-reranker" # [no-reranker, bge-reranker-base, bge-reranker-large, llm-reranker]
+reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
+reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
+keyword_weight = 0.3
+vector_weight = 0.7
+similarity_threshold = 0.5
 top_n = 2
 
 [rag.query_engine]
@@ -65,9 +72,6 @@ type = "RetrieverQueryEngine"
 [rag.retriever]
 similarity_top_k = 3
 retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
-BM25_weight = 0.5
-vector_weight = 0.5
-fusion_mode = "reciprocal_rerank" # [simple, reciprocal_rerank, dist_based_score, relative_score]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
 [rag.synthesizer]

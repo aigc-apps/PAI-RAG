@@ -85,7 +85,6 @@ class MyVectorStoreIndex(VectorStoreIndex):
                 lambda: self._get_node_with_embedding(nodes_batch, show_progress)
             )
             node_batch_list.append(nodes_batch)
-
         await self._postprocess_all_batch(
             node_batch_list, index_struct, **insert_kwargs
         )

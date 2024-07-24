@@ -4,7 +4,6 @@ Vector store using hologres back end.
 """
 
 import logging
-import math
 from typing import Any, List, cast, Dict
 from hologres_vector import HologresVector
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -14,6 +13,7 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryResult,
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
+from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
 logger = logging.getLogger()
 
@@ -66,6 +66,7 @@ class HologresVectorStore(BasePydanticVectorStore):
             table_name=table_name,
             table_schema=table_schema,
             pre_delete_table=pre_delete_table,
+            distance_method="InnerProduct",
         )
         return cls(hologres_storage=hologres_storage)
 
@@ -185,7 +186,7 @@ class HologresVectorStore(BasePydanticVectorStore):
             )
             nodes.append(node)
             ids.append(result["id"])
-            similarities.append(math.exp(-result["distance"]))
+            similarities.append(normalize_cosine_similarity_score(result["distance"]))
 
         return VectorStoreQueryResult(nodes=nodes, similarities=similarities, ids=ids)
 

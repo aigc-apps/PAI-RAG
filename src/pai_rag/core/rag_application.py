@@ -9,12 +9,32 @@ from pai_rag.app.api.models import (
     RetrievalResponse,
 )
 from llama_index.core.schema import QueryBundle
+import json
 import logging
 from uuid import uuid4
+
+DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
 
 
 def uuid_generator() -> str:
     return uuid4().hex
+
+
+async def event_generator_async(response, extra_info=None):
+    content = ""
+    async for token in response.async_response_gen():
+        if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
+            chunk = {"delta": token, "is_finished": False}
+            content += token
+            yield json.dumps(chunk) + "\n"
+
+    if extra_info:
+        # 返回
+        last_chunk = {"delta": "", "is_finished": True, **extra_info}
+    else:
+        last_chunk = {"delta": "", "is_finished": True}
+
+    yield json.dumps(last_chunk, default=lambda x: x.dict())
 
 
 class RagApplication:
@@ -113,27 +133,27 @@ class RagApplication:
             response = await query_chat_engine.astream_chat(query.question)
 
         node_results = response.sources[0].raw_output.source_nodes
-        if not query.stream:
-            reference_docs = [
-                ContextDoc(
-                    text=score_node.node.get_content(),
-                    metadata=score_node.node.metadata,
-                    score=score_node.score,
-                )
-                for score_node in node_results
-            ]
-            new_query = response.sources[0].raw_input["query"]
-            return RagResponse(
-                answer=response.response,
-                session_id=session_id,
-                docs=reference_docs,
-                new_query=new_query,
+        new_query = response.sources[0].raw_input["query"]
+
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
             )
+            for score_node in node_results
+        ]
+
+        result_info = {
+            "session_id": session_id,
+            "docs": reference_docs,
+            "new_query": new_query,
+        }
+
+        if not query.stream:
+            return RagResponse(answer=response.response, **result_info)
         else:
-            referenced_docs_text = ""
-            for i, node in enumerate(node_results):
-                referenced_docs_text += f"[{i+1}]: {node.node.metadata.get('file_name')[33:]}   Score:{node.score} +++"
-            return [response, session_id, referenced_docs_text]
+            return event_generator_async(response=response, extra_info=result_info)
 
     async def aquery_llm(self, query: LlmQuery):
         """Query answer from LLM response asynchronously.
@@ -165,7 +185,7 @@ class RagApplication:
             return LlmResponse(answer=response.response, session_id=session_id)
         else:
             response = await llm_chat_engine.astream_chat(query.question)
-            return [response, session_id]
+            return event_generator_async(response=response)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.

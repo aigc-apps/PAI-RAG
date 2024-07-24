@@ -404,7 +404,6 @@ class MyDashScope(CustomLLM):
                         raw=r,
                     )
                 else:
-                    yield ChatResponse(message=ChatMessage(), raw=response)
-                    return
+                    raise ValueError(f"Call DashScope failed: {r}")
 
         return gen()

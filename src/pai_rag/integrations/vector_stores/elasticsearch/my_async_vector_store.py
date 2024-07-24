@@ -282,7 +282,6 @@ class AsyncVectorStore:
             source_includes=fields,
         )
         hits: List[Dict[str, Any]] = response["hits"]["hits"]
-
         return hits
 
     async def _create_index_if_not_exists(self) -> None:

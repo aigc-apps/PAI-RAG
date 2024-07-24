@@ -5,6 +5,7 @@ import html
 import markdown
 import httpx
 import os
+import re
 import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
@@ -70,6 +71,49 @@ class RagWebClient:
     def get_evaluate_response_url(self):
         return f"{self.endpoint}service/evaluate/response"
 
+    def _format_rag_response(
+        self, response, session_id: str = None, stream: bool = False
+    ):
+        if stream:
+            text = response["delta"]
+        else:
+            text = response["answer"]
+
+        docs = response.get("docs", [])
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        images = ""
+
+        # 空结果，TODO: 适配score_threshold的场景
+        if is_finished and len(docs) == 0 and not text:
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE
+            return response
+        elif is_finished:
+            for i, doc in enumerate(docs):
+                formatted_file_name = re.sub(
+                    "^[0-9a-z]{32}_", "", doc["metadata"]["file_name"]
+                )
+                referenced_docs += (
+                    f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                )
+                image_url = doc["metadata"].get("image_url", None)
+                if image_url:
+                    images += f"""<img src="{image_url}"/>"""
+
+        formatted_answer = ""
+        if session_id:
+            new_query = response["new_query"]
+            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
+        formatted_answer += f"**Answer**: {text} \n\n"
+        if images:
+            formatted_answer += f"{images} \n\n"
+        if referenced_docs:
+            formatted_answer += f"**Reference**:\n {referenced_docs}"
+
+        response["result"] = formatted_answer
+        return response
+
     def query(self, text: str, session_id: str = None, stream: bool = False):
         q = dict(question=text, session_id=session_id, stream=stream)
         r = requests.post(self.query_url, json=q, stream=True)
@@ -77,23 +121,18 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            if r.status_code != HTTPStatus.OK:
-                raise RagApiError(code=r.status_code, msg=response.message)
-
-            if len(response["docs"]) == 0:
-                response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
-            else:
-                referenced_docs = ""
-                for i, doc in enumerate(response["docs"]):
-                    referenced_docs += f'[{i+1}]: {doc["metadata"]["file_name"][33:]}   Score:{doc["score"]} \n'
-
-                if session_id:
-                    formatted_text = f'**Query Transformation**: {response["new_query"]} \n\n **Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
-                else:
-                    formatted_text = f'**Answer**: {response["answer"]} \n\n **Reference**:\n {referenced_docs}'
-                response["answer"] = formatted_text
-            return response
-        return r
+            yield self._format_rag_response(
+                response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    chunk_response, session_id=session_id, stream=stream
+                )
 
     def query_llm(
         self,
@@ -116,9 +155,18 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            return response
+            yield self._format_rag_response(
+                response, session_id=session_id, stream=stream
+            )
         else:
-            return r
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    chunk_response, session_id=session_id, stream=stream
+                )
 
     def query_vector(self, text: str):
         q = dict(question=text)
@@ -127,21 +175,26 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
 
-        formatted_text = "<tr><th>Document</th><th>Score</th><th>Text</th></tr>\n"
+        formatted_text = (
+            "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
+        )
         if len(response["docs"]) == 0:
-            response["answer"] = EMPTY_KNOWLEDGEBASE_MESSAGE
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url:
+                    media_url = f"""<img src="{media_url}"/>"""
                 safe_html_content = html.escape(html_content).replace("\n", "<br>")
-                formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                    i + 1, doc["score"], safe_html_content
+                formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                    i + 1, doc["score"], safe_html_content, media_url
                 )
             formatted_text = (
                 "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
             )
-            response["answer"] = formatted_text
-        return response
+            response["result"] = formatted_text
+        yield response
 
     def add_knowledge(self, input_files: str, enable_qa_extraction: bool):
         files = []
