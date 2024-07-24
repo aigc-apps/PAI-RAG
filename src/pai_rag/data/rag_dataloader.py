@@ -12,7 +12,8 @@ from pai_rag.integrations.nodeparsers.base import MarkdownNodeParser
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
-from pai_rag.data.open_dataset import MiraclOpenDataSet
+from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
+
 
 import logging
 
@@ -99,7 +100,7 @@ class RagDataLoader:
         doc_cnt_map = {}
         for doc in docs:
             doc_type = self._extract_file_type(doc.metadata)
-
+            doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])[33:]
             if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
                 if doc_key not in doc_cnt_map:
@@ -231,7 +232,7 @@ class RagDataLoader:
 
         return
 
-    async def aload_eval_data(self, name: str):
+    def load_eval_data(self, name: str):
         logger.info("[DataReader-Evaluation Dataset]")
         if name == "miracl":
             miracl_dataset = MiraclOpenDataSet()
@@ -251,7 +252,7 @@ class RagDataLoader:
 
             print("[DataReader-Evaluation Dataset] Start inserting to index.")
 
-            await self.index.vector_index.insert_nodes_async(nodes)
+            self.index.vector_index.insert_nodes(nodes)
             self.index.vector_index.storage_context.persist(
                 persist_dir=self.index.persist_path
             )
@@ -260,7 +261,42 @@ class RagDataLoader:
                 self.index.persist_path, "index.metadata"
             )
             if self.bm25_index:
-                await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
+                self.bm25_index.add_docs(nodes)
+                metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+                with open(index_metadata_file, "w") as wf:
+                    wf.write(metadata_str)
+
+            print(
+                f"[DataReader-Evaluation Dataset] Inserted {len(nodes)} nodes successfully."
+            )
+            return
+        elif name == "duretrieval":
+            duretrieval_dataset = DuRetrievalDataSet()
+            miracl_nodes, _, _ = duretrieval_dataset.load_related_corpus()
+            nodes = []
+            for node in miracl_nodes:
+                node_metadata = {
+                    "file_path": node[2],
+                    "file_name": node[2],
+                }
+                nodes.append(
+                    TextNode(id_=node[0], text=node[1], metadata=node_metadata)
+                )
+
+            print(f"[DataReader-Evaluation Dataset] Split into {len(nodes)} nodes.")
+
+            print("[DataReader-Evaluation Dataset] Start inserting to index.")
+
+            self.index.vector_index.insert_nodes(nodes)
+            self.index.vector_index.storage_context.persist(
+                persist_dir=self.index.persist_path
+            )
+
+            index_metadata_file = os.path.join(
+                self.index.persist_path, "index.metadata"
+            )
+            if self.bm25_index:
+                self.bm25_index.add_docs(nodes)
                 metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
                 with open(index_metadata_file, "w") as wf:
                     wf.write(metadata_str)

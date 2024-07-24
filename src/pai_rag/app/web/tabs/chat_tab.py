@@ -7,8 +7,6 @@ from pai_rag.app.web.ui_constants import (
     EXTRACT_URL_PROMPTS,
     ACCURATE_CONTENT_PROMPTS,
 )
-import time
-import urllib.parse
 
 current_session_id = None
 
@@ -49,44 +47,23 @@ def respond(input_elements: List[Any]):
 
     try:
         if query_type == "LLM":
-            response = rag_client.query_llm(
+            response_gen = rag_client.query_llm(
                 msg, session_id=current_session_id, stream=is_streaming
             )
         elif query_type == "Retrieval":
-            response = rag_client.query_vector(msg)
+            response_gen = rag_client.query_vector(msg)
         else:
-            response = rag_client.query(
+            response_gen = rag_client.query(
                 msg, session_id=current_session_id, stream=is_streaming
             )
 
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
-    if query_type == "Retrieval":
-        chatbot.append((msg, response.answer))
-        yield chatbot
-    elif is_streaming:
-        current_session_id = response.headers["x-session-id"]
-        chatbot.append([msg, None])
-        chatbot[-1][1] = ""
-        for chunk in response.iter_lines(
-            chunk_size=8192, decode_unicode=False, delimiter=b"\0"
-        ):
-            if chunk:
-                chatbot[-1][1] += chunk.decode("utf-8")
-                yield chatbot
-                time.sleep(0.1)
-        if query_type != "LLM":
-            images_decoded_string = urllib.parse.unquote(response.headers["images"])
-            chatbot[-1][1] += f"\n\n{images_decoded_string}"
-            docs_decoded_string = urllib.parse.unquote(response.headers["docs"])
-            chatbot[-1][1] += "\n\n **Reference:** \n" + docs_decoded_string.replace(
-                "+++", "\n"
-            )
-            yield chatbot
-    else:
-        current_session_id = response["session_id"]
-        chatbot.append((msg, response["answer"]))
+    content = ""
+    chatbot.append((msg, content))
+    for resp in response_gen:
+        chatbot[-1] = (msg, resp.result)
         yield chatbot
 
 
@@ -109,37 +86,120 @@ def create_chat_tab() -> Dict[str, Any]:
                 vec_model_argument = gr.Accordion(
                     "Parameters of Vector Retrieval", open=False
                 )
-
                 with vec_model_argument:
-                    similarity_top_k = gr.Slider(
-                        minimum=0,
-                        maximum=100,
-                        step=1,
-                        elem_id="similarity_top_k",
-                        label="Top K (choose between 0 and 100)",
-                    )
-                    # similarity_cutoff = gr.Slider(minimum=0, maximum=1, step=0.01,elem_id="similarity_cutoff",value=view_model.similarity_cutoff, label="Similarity Distance Threshold (The more similar the vectors, the smaller the value.)")
-                    rerank_model = gr.Radio(
-                        [
-                            "no-reranker",
-                            "bge-reranker-base",
-                            "bge-reranker-large",
-                            "llm-reranker",
-                        ],
-                        label="Re-Rank Model (Note: It will take a long time to load the model when using it for the first time.)",
-                        elem_id="rerank_model",
-                    )
                     retrieval_mode = gr.Radio(
                         ["Embedding Only", "Keyword Only", "Hybrid"],
                         label="Retrieval Mode",
                         elem_id="retrieval_mode",
                     )
+
+                    reranker_type = gr.Radio(
+                        ["simple-weighted-reranker", "model-based-reranker"],
+                        label="Reranker Type",
+                        elem_id="reranker_type",
+                    )
+
+                    with gr.Column(
+                        visible=(reranker_type == "simple-weighted-reranker")
+                    ) as simple_reranker_col:
+                        vector_weight = gr.Slider(
+                            minimum=0,
+                            maximum=1,
+                            value=0.7,
+                            elem_id="vector_weight",
+                            label="Weight of embedding retrieval results",
+                        )
+                        keyword_weight = gr.Slider(
+                            minimum=0,
+                            maximum=1,
+                            value=float(1 - vector_weight.value),
+                            elem_id="keyword_weight",
+                            label="Weight of keyword retrieval results",
+                            interactive=False,
+                        )
+
+                    with gr.Column(
+                        visible=(reranker_type == "model-based-reranker")
+                    ) as model_reranker_col:
+                        reranker_model = gr.Radio(
+                            [
+                                "bge-reranker-base",
+                                "bge-reranker-large",
+                            ],
+                            label="Re-Ranker Model (Note: It will take a long time to load the model when using it for the first time.)",
+                            elem_id="reranker_model",
+                        )
+
+                    with gr.Column():
+                        similarity_top_k = gr.Slider(
+                            minimum=0,
+                            maximum=100,
+                            step=1,
+                            elem_id="similarity_top_k",
+                            label="Top K (choose between 0 and 100)",
+                        )
+                        similarity_threshold = gr.Slider(
+                            minimum=0,
+                            maximum=1,
+                            step=0.01,
+                            elem_id="similarity_threshold",
+                            label="Similarity Score Threshold (The more similar the items, the bigger the value.)",
+                        )
+
+                    def change_weight(change_weight):
+                        return round(float(1 - change_weight), 2)
+
+                    vector_weight.change(
+                        fn=change_weight,
+                        inputs=vector_weight,
+                        outputs=[keyword_weight],
+                    )
+
+                    def change_reranker_type(reranker_type):
+                        if reranker_type == "simple-weighted-reranker":
+                            return {
+                                simple_reranker_col: gr.update(visible=True),
+                                model_reranker_col: gr.update(visible=False),
+                            }
+                        elif reranker_type == "model-based-reranker":
+                            return {
+                                simple_reranker_col: gr.update(visible=False),
+                                model_reranker_col: gr.update(visible=True),
+                            }
+                        else:
+                            return {
+                                simple_reranker_col: gr.update(visible=False),
+                                model_reranker_col: gr.update(visible=False),
+                            }
+
+                    def change_retrieval_mode(retrieval_mode):
+                        if retrieval_mode == "Hybrid":
+                            return {simple_reranker_col: gr.update(visible=True)}
+                        else:
+                            return {simple_reranker_col: gr.update(visible=False)}
+
+                    reranker_type.change(
+                        fn=change_reranker_type,
+                        inputs=reranker_type,
+                        outputs=[simple_reranker_col, model_reranker_col],
+                    )
+
+                    retrieval_mode.change(
+                        fn=change_retrieval_mode,
+                        inputs=retrieval_mode,
+                        outputs=[simple_reranker_col],
+                    )
+
                 vec_args = {
-                    similarity_top_k,
-                    # similarity_cutoff,
-                    rerank_model,
                     retrieval_mode,
+                    reranker_type,
+                    vector_weight,
+                    keyword_weight,
+                    similarity_top_k,
+                    similarity_threshold,
+                    reranker_model,
                 }
+
             with gr.Column(visible=True) as llm_col:
                 model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
@@ -291,8 +351,12 @@ def create_chat_tab() -> Dict[str, Any]:
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,
-            rerank_model.elem_id: rerank_model,
             retrieval_mode.elem_id: retrieval_mode,
+            reranker_type.elem_id: reranker_type,
+            reranker_model.elem_id: reranker_model,
+            vector_weight.elem_id: vector_weight,
+            keyword_weight.elem_id: keyword_weight,
+            similarity_threshold.elem_id: similarity_threshold,
             prm_type.elem_id: prm_type,
             text_qa_template.elem_id: text_qa_template,
         }

@@ -39,7 +39,7 @@ class RagDataPipeline:
                 input_paths, pattern, enable_qa_extraction, enable_raptor
             )
         else:
-            await self.data_loader.aload_eval_data(name)
+            self.data_loader.load_eval_data(name)
 
 
 def __init_data_pipeline(config_file, use_local_qa_model):
@@ -61,7 +61,7 @@ def __init_data_pipeline(config_file, use_local_qa_model):
 @click.option(
     "-d",
     "--data-path",
-    required=True,
+    required=False,
     default=None,
     help="data path (file or directory) to ingest.",
 )
@@ -99,7 +99,7 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     "-n",
     "--name",
     show_default=True,
-    help="Open Dataset Name. Optional: [miracl]",
+    help="Open Dataset Name. Optional: [miracl, duretrieval]",
     default=None,
 )
 def run(

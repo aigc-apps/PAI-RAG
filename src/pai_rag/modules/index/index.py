@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class RagIndex:
-    def __init__(self, config, embed_model):
+    def __init__(self, config, embed_model, postprocessor):
         self.config = config
         self.embed_model = embed_model
         self.embed_dims = self._get_embed_vec_dim(embed_model)
@@ -27,7 +27,9 @@ class RagIndex:
         index_entry.register(self.persist_path)
 
         is_empty = not os.path.exists(self.persist_path)
-        rag_store = RagStore(config, self.persist_path, is_empty, self.embed_dims)
+        rag_store = RagStore(
+            config, postprocessor, self.persist_path, is_empty, self.embed_dims
+        )
         self.storage_context = rag_store.get_storage_context()
 
         self.vectordb_type = config["vector_store"].get("type", "faiss").lower()
@@ -85,9 +87,10 @@ class IndexModule(ConfigurableModule):
 
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["EmbeddingModule"]
+        return ["EmbeddingModule", "PostprocessorModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         embed_model = new_params["EmbeddingModule"]
-        return RagIndex(config, embed_model)
+        postprocessor = new_params["PostprocessorModule"]
+        return RagIndex(config, embed_model, postprocessor)

@@ -3,7 +3,8 @@ import os
 from typing import Optional
 import json
 import pandas as pd
-from llama_index.core.evaluation import RetrieverEvaluator
+
+# from llama_index.core.evaluation import RetrieverEvaluator
 from llama_index.core.evaluation import (
     AnswerRelevancyEvaluator,
     FaithfulnessEvaluator,
@@ -12,6 +13,7 @@ from llama_index.core.evaluation import (
 )
 from pai_rag.modules.evaluation.ragdataset_generator import GenerateDatasetPipeline
 from pai_rag.modules.evaluation.batch_eval_runner import BatchEvalRunner
+from pai_rag.integrations.evaluation.retrieval.evaluator import MyRetrieverEvaluator
 
 logger = logging.getLogger(__name__)
 DEFAULT_QA_DATASET_DIR = "localdata/evaluation"
@@ -32,7 +34,7 @@ class PaiEvaluator:
         self.query_engine = query_engine
         self.retriever = retriever
         self.retrieval_metrics = retrieval_metrics
-        self.retrieval_evaluator = RetrieverEvaluator.from_metric_names(
+        self.retrieval_evaluator = MyRetrieverEvaluator.from_metric_names(
             self.retrieval_metrics, retriever=self.retriever
         )
         # TODO: if exists in list
@@ -80,7 +82,7 @@ class PaiEvaluator:
             qas = await pipeline.agenerate_dataset()
         else:
             print(f"Generating ragdataset for open dataset_name {dataset_name}")
-            qas = await pipeline.generate_dataset_from_miracl(dataset_name)
+            qas = await pipeline.generate_dataset_from_opendataset(dataset_name)
         pipeline.save_json(qas, self.dataset_path)
 
     async def abatch_retrieval_response_aevaluation(
@@ -125,12 +127,20 @@ class PaiEvaluator:
             workers=workers,
             show_progress=True,
         )
-        eval_results = await runner.aevaluate_queries(
-            query_engine=self.query_engine,
-            queries=queries,
-            node_ids=reference_node_ids,
-            reference_answers=reference_answers,
-        )
+        if type in ["response", "all"]:
+            eval_results = await runner.aevaluate_queries(
+                query_engine=self.query_engine,
+                queries=queries,
+                node_ids=reference_node_ids,
+                reference_answers=reference_answers,
+            )
+        else:
+            eval_results = await runner.aevaluate_queries_for_retrieval(
+                retriever=self.retriever,
+                queries=queries,
+                node_ids=reference_node_ids,
+                reference_answers=reference_answers,
+            )
 
         if type in ["retrieval", "all"]:
             df["retrieval_contexts"] = [
@@ -138,6 +148,9 @@ class PaiEvaluator:
             ]
             df["retrieval_node_ids"] = [
                 e.retrieved_ids for e in eval_results["retrieval"]
+            ]
+            df["retrieval_node_scores"] = [
+                e.retrieved_scores for e in eval_results["retrieval"]
             ]
             if "hit_rate" in self.retrieval_metrics:
                 df["hit_rate"] = [
