@@ -5,7 +5,8 @@ name = "pai_rag"
 version = "0.1.1"
 
 [rag.agent]
-type = "react"
+type = "function_calling"
+system_prompt = "你是一个管理会议室预定的助手，需要协助用户预订会议室。请严格使用输入的工具，不要虚构任何细节。"
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
@@ -35,7 +36,8 @@ response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
 [rag.function_calling_llm]
-source = ""
+source = "DashScope"
+name = "qwen2-7b-instruct"
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -82,4 +84,5 @@ type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
 
 [rag.tool]
-type = ["calculator"]
+type = ["custom"]
+func_path = "src/pai_rag/modules/tool/booking_demo"
