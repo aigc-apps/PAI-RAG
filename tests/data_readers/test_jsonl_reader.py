@@ -14,10 +14,7 @@ def test_jsonl_reader():
     module_registry.init_modules(config)
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/jsonl_data",
-        file_extractor={
-            ".jsonl": PaiJsonLReader(
-            )
-        },
+        file_extractor={".jsonl": PaiJsonLReader()},
     )
     documents = directory_reader.load_data()
     for doc in documents:
