@@ -31,11 +31,13 @@ def test_fc_llm_chat_with_tools():
         response, error_on_no_tool_call=False
     )
     assert len(tool_calls) > 0
-    for i, tool_call in enumerate(tool_calls):
-        if i == 0:
-            assert tool_call.tool_name == "add"
+    for _, tool_call in enumerate(tool_calls):
+        if tool_call.tool_name == "add":
             assert tool_call.tool_kwargs["a"] == 121
             assert tool_call.tool_kwargs["b"] == 2
+        if tool_call.tool_name == "multiply":
+            assert tool_call.tool_kwargs["a"] == 123
+            assert tool_call.tool_kwargs["b"] == 5
 
 
 async def test_fc_llm_achat_with_tools():
@@ -46,8 +48,10 @@ async def test_fc_llm_achat_with_tools():
         response, error_on_no_tool_call=False
     )
     assert len(tool_calls) > 0
-    for i, tool_call in enumerate(tool_calls):
-        if i == 0:
-            assert tool_call.tool_name == "add"
+    for _, tool_call in enumerate(tool_calls):
+        if tool_call.tool_name == "add":
             assert tool_call.tool_kwargs["a"] == 121
             assert tool_call.tool_kwargs["b"] == 2
+        if tool_call.tool_name == "multiply":
+            assert tool_call.tool_kwargs["a"] == 123
+            assert tool_call.tool_kwargs["b"] == 5
