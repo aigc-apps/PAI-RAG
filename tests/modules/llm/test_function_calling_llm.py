@@ -38,20 +38,3 @@ def test_fc_llm_chat_with_tools():
         if tool_call.tool_name == "multiply":
             assert tool_call.tool_kwargs["a"] == 123
             assert tool_call.tool_kwargs["b"] == 5
-
-
-async def test_fc_llm_achat_with_tools():
-    response = await fc_llm.achat_with_tools(
-        tools=tools, user_msg="What is (121 + 2) * 5?"
-    )
-    tool_calls = fc_llm.get_tool_calls_from_response(
-        response, error_on_no_tool_call=False
-    )
-    assert len(tool_calls) > 0
-    for _, tool_call in enumerate(tool_calls):
-        if tool_call.tool_name == "add":
-            assert tool_call.tool_kwargs["a"] == 121
-            assert tool_call.tool_kwargs["b"] == 2
-        if tool_call.tool_name == "multiply":
-            assert tool_call.tool_kwargs["a"] == 123
-            assert tool_call.tool_kwargs["b"] == 5

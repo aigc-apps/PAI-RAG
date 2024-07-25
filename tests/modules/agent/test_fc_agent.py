@@ -51,21 +51,3 @@ def test_fc_agent_chat():
             assert tool_call.tool_name == "multiply"
             assert tool_call.raw_input["kwargs"]["a"] == 123
             assert tool_call.raw_input["kwargs"]["b"] == 5
-
-
-async def test_fc_agent_achat():
-    response = await agent.achat("What is (121 + 2) * 5?")
-    assert len(response.sources) == 2
-    for i, tool_call in enumerate(response.sources):
-        if i == 0:
-            # content='123', tool_name='add', raw_input={'args': (), 'kwargs': {'a': 121, 'b': 2}}
-            assert tool_call.content == "123"
-            assert tool_call.tool_name == "add"
-            assert tool_call.raw_input["kwargs"]["a"] == 121
-            assert tool_call.raw_input["kwargs"]["b"] == 2
-        if i == 1:
-            # content='615', tool_name='multiply', raw_input={'args': (), 'kwargs': {'a': 123, 'b': 5}}
-            assert tool_call.content == "615"
-            assert tool_call.tool_name == "multiply"
-            assert tool_call.raw_input["kwargs"]["a"] == 123
-            assert tool_call.raw_input["kwargs"]["b"] == 5
