@@ -24,7 +24,7 @@ def create_tool_fn_schema(name, params):
     return create_model(name, **fields)  # type: ignore
 
 
-def get_google_web_search_tool(config):
+def get_google_web_search_tools(config):
     google_spec = GoogleSearchToolSpec(
         key=config.get("google_search_api", None),
         engine=config.get("google_search_engine", None),
@@ -37,7 +37,7 @@ def get_google_web_search_tool(config):
     ).to_tool_list()
 
 
-def get_calculator_tool():
+def get_calculator_tools():
     def multiply(a: int, b: int) -> int:
         """Multiply two integers and returns the result integer"""
         return a * b
@@ -75,7 +75,7 @@ def get_calculator_tool():
     return [multiply_tool, add_tool, divide_tool, subtract_tool]
 
 
-def get_customized_tool(config):
+def get_customized_tools(config):
     func_path = config["func_path"]
     sys.path.append(func_path)
     module = __import__("custom_functions")

@@ -3,9 +3,9 @@ from typing import Dict, List, Any
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.modules.tool.utils import (
-    get_google_web_search_tool,
-    get_calculator_tool,
-    get_customized_tool,
+    get_google_web_search_tools,
+    get_calculator_tools,
+    get_customized_tools,
 )
 
 
@@ -28,12 +28,12 @@ class ToolModule(ConfigurableModule):
         )
         tools = []
         if "googlewebsearch" in type:
-            tools.extend(get_google_web_search_tool(self.config))
+            tools.extend(get_google_web_search_tools(self.config))
 
         if "calculator" in type:
-            tools.extend(get_calculator_tool())
+            tools.extend(get_calculator_tools())
 
         if "custom" in type:
-            tools.extend(get_customized_tool(self.config))
+            tools.extend(get_customized_tools(self.config))
 
         return tools

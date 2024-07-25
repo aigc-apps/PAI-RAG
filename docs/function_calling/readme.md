@@ -6,8 +6,6 @@
 
 OpenAI于23年6月份的更新的 gpt-4-0613 和 gpt-3.5-turbo-0613 版本中为模型添加了Function Calling功能，通过给模型提供一组预定义的函数（Function list）以及用户提问（Query），让大模型自主选择要调用的函数，并向该函数提供所需的输入参数。随后我们就可以在自己的环境中基于模型生成的参数调用该函数，并将结果返回给大模型。
 
-![function_calling.png](/docs/figures/function_calling/fc.png)
-
 ChatGPT的Function Calling功能在发布之后立刻引起了人们的关注，因其简单易用的特性以及规范的输入输出迅速成为模型生态中Function calling的格式规范。后续的具有function calling功能的模型有很多参照了OpenAI的Function Calling格式，其输入的函数列表以及输出的Function Calling及其参数都以JSON格式输出：输入的函数列表中通常包括函数名称、函数功能描述、函数参数等部分，而输出中则按顺序输出所调用的函数名称和其中使用的参数。
 
 # 如何定义 Function 及其实现
