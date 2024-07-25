@@ -166,6 +166,26 @@ files = [
 alibabacloud-tea = "*"
 
 [[package]]
+name = "alibabacloud-darabonba-encode-util"
+version = "0.0.2"
+description = "Darabonba Util Library for Alibaba Cloud Python SDK"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "alibabacloud_darabonba_encode_util-0.0.2.tar.gz", hash = "sha256:f1c484f276d60450fa49b4b2987194e741fcb2f7faae7f287c0ae65abc85fd4d"},
+]
+
+[[package]]
+name = "alibabacloud-darabonba-string"
+version = "0.0.4"
+description = "Alibaba Cloud Darabonba String Library for Python"
+optional = false
+python-versions = "*"
+files = [
+    {file = "alibabacloud-darabonba-string-0.0.4.tar.gz", hash = "sha256:ec6614c0448dadcbc5e466485838a1f8cfdd911135bea739e20b14511270c6f7"},
+]
+
+[[package]]
 name = "alibabacloud-endpoint-util"
 version = "0.0.3"
 description = "The endpoint-util module of alibabaCloud Python SDK."
@@ -211,6 +231,21 @@ alibabacloud-oss-util = ">=0.0.5,<1.0.0"
 alibabacloud-tea-fileform = ">=0.0.3,<1.0.0"
 alibabacloud-tea-openapi = ">=0.3.10,<1.0.0"
 alibabacloud-tea-util = ">=0.3.12,<1.0.0"
+
+[[package]]
+name = "alibabacloud-ha3engine-vector"
+version = "1.1.6"
+description = "Alibaba Cloud Ha3engine-Vector SDK Library for Python"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "alibabacloud_ha3engine_vector-1.1.6.tar.gz", hash = "sha256:586f94afe2bc91d1b109bc769c46eff199f7e745cffb6819e76a520a6cd94520"},
+]
+
+[package.dependencies]
+alibabacloud_darabonba_encode_util = ">=0.0.2,<1.0.0"
+alibabacloud_darabonba_string = ">=0.0.4,<1.0.0"
+alibabacloud_tea_util = ">=0.3.12,<1.0.0"
 
 [[package]]
 name = "alibabacloud-openapi-util"
@@ -1967,8 +2002,8 @@ files = [
 [package.dependencies]
 cffi = {version = ">=1.12.2", markers = "platform_python_implementation == \"CPython\" and sys_platform == \"win32\""}
 greenlet = [
-    {version = ">=2.0.0", markers = "platform_python_implementation == \"CPython\" and python_version < \"3.11\""},
     {version = ">=3.0rc3", markers = "platform_python_implementation == \"CPython\" and python_version >= \"3.11\""},
+    {version = ">=2.0.0", markers = "platform_python_implementation == \"CPython\" and python_version < \"3.11\""},
 ]
 "zope.event" = "*"
 "zope.interface" = "*"
@@ -3385,6 +3420,21 @@ google-auth-oauthlib = ">=1.2.0,<2.0.0"
 llama-index-core = ">=0.10.1,<0.11.0"
 
 [[package]]
+name = "llama-index-vector-stores-alibabacloud-opensearch"
+version = "0.1.0"
+description = "llama-index vector_stores Alibaba Cloud OpenSearch integration"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+files = [
+    {file = "llama_index_vector_stores_alibabacloud_opensearch-0.1.0-py3-none-any.whl", hash = "sha256:502dba2cd46e649b11476bcea0750d1c421a7621a1050ad1b45cd83d25a8758a"},
+    {file = "llama_index_vector_stores_alibabacloud_opensearch-0.1.0.tar.gz", hash = "sha256:0af180f174ef25cf435bf15c65713f11e94a8624cff16fc7df7d07eee8784881"},
+]
+
+[package.dependencies]
+alibabacloud_ha3engine_vector = ">=1.1.3,<2.0.0"
+llama-index-core = ">=0.10.1,<0.11.0"
+
+[[package]]
 name = "llama-index-vector-stores-analyticdb"
 version = "0.1.1"
 description = "llama-index vector_stores analyticdb integration"
@@ -4519,9 +4569,9 @@ files = [
 
 [package.dependencies]
 numpy = [
+    {version = ">=1.23.5", markers = "python_version >= \"3.11\""},
     {version = ">=1.21.4", markers = "python_version >= \"3.10\" and platform_system == \"Darwin\" and python_version < \"3.11\""},
     {version = ">=1.21.2", markers = "platform_system != \"Darwin\" and python_version >= \"3.10\" and python_version < \"3.11\""},
-    {version = ">=1.23.5", markers = "python_version >= \"3.11\""},
 ]
 
 [[package]]
@@ -4542,9 +4592,9 @@ files = [
 
 [package.dependencies]
 numpy = [
+    {version = ">=1.23.5", markers = "python_version >= \"3.11\""},
     {version = ">=1.21.4", markers = "python_version >= \"3.10\" and platform_system == \"Darwin\" and python_version < \"3.11\""},
     {version = ">=1.21.2", markers = "platform_system != \"Darwin\" and python_version >= \"3.10\" and python_version < \"3.11\""},
-    {version = ">=1.23.5", markers = "python_version >= \"3.11\""},
 ]
 
 [[package]]
@@ -4916,8 +4966,8 @@ files = [
 
 [package.dependencies]
 numpy = [
-    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
     {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -8558,4 +8608,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "b9565237c801f9838ea6e340c22709d1ce700845d1e5a374f27bd6c6ea9dceb8"
+content-hash = "f2ed1365b4739ece337e7a25308263f621c1b3c79b8bd503a7906405a2b0df1d"

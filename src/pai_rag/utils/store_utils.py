@@ -32,6 +32,10 @@ def get_store_persist_directory_name(storage_config, ndims):
         keywords = ["host", "port", "database", "collection_name"]
         json_data = {k: storage_config["vector_store"][k] for k in keywords}
         raw_text = json.dumps(json_data)
+    elif vector_store_type == "opensearch":
+        keywords = ["endpoint", "instance_id", "table_name"]
+        json_data = {k: storage_config["vector_store"][k] for k in keywords}
+        raw_text = json.dumps(json_data)
     else:
         raise ValueError(f"Unknown vector_store type '{vector_store_type}'.")
 
