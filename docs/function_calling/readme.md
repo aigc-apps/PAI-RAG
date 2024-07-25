@@ -58,6 +58,8 @@ def get_booking_state(room_id: str) -> str:
 pai_rag serve -p 8071 -c src/pai_rag/config/settings_fc_demo.toml
 ```
 
+[注意] 在demo中，我们默认使用qwen2-7b-instruct作为function calling的LLM，您也可以根据需要替换为更大的模型，如qwen2-72b-instruct。
+
 1. 发送预定会议室的请求
 
 ```bash
