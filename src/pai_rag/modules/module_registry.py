@@ -26,6 +26,7 @@ MODULE_CONFIG_KEY_MAP = {
     "OssCacheModule": "cache",
     "EvaluationModule": "evaluation",
     "BM25IndexModule": "bm25",
+    "NodesEnhancementModule": "node_enhancement",
 }
 
 

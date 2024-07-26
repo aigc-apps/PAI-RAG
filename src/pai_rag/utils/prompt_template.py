@@ -100,3 +100,8 @@ QUERY_GEN_PROMPT = (
     "Query: {query}\n"
     "Queries:\n"
 )
+
+
+DEFAULT_SUMMARY_PROMPT = (
+    "Summarize the provided text in Chinese, including as many key details as needed."
+)

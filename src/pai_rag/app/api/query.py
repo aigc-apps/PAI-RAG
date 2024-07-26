@@ -101,6 +101,7 @@ async def generate_qa_dataset(overwrite: bool = False):
 async def upload_data(
     files: List[UploadFile],
     faiss_path: str = Form(None),
+    enable_raptor: bool = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
@@ -127,6 +128,7 @@ async def upload_data(
         filter_pattern=None,
         faiss_path=faiss_path,
         enable_qa_extraction=False,
+        enable_raptor=enable_raptor,
     )
 
     return {"task_id": task_id}
