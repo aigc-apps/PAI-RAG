@@ -94,6 +94,13 @@ class ViewModel(BaseModel):
     milvus_database: str = "pairag"
     milvus_collection_name: str = "pairagcollection"
 
+    # open search
+    opensearch_endpoint: str = None
+    opensearch_instance_id: str = None
+    opensearch_username: str = None
+    opensearch_password: str = None
+    opensearch_table_name: str = "pairag"
+
     # retriever
     similarity_top_k: int = 5
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
@@ -200,6 +207,17 @@ class ViewModel(BaseModel):
                 "collection_name"
             ]
 
+        elif view_model.vectordb_type.lower() == "opensearch":
+            view_model.opensearch_endpoint = config["index"]["vector_store"]["endpoint"]
+            view_model.opensearch_instance_id = config["index"]["vector_store"][
+                "instance_id"
+            ]
+            view_model.opensearch_username = config["index"]["vector_store"]["username"]
+            view_model.opensearch_password = config["index"]["vector_store"]["password"]
+            view_model.opensearch_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
+
         view_model.parser_type = config["node_parser"]["type"]
         view_model.chunk_size = config["node_parser"]["chunk_size"]
         view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
@@ -226,9 +244,11 @@ class ViewModel(BaseModel):
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
         )
-        similarity_threshold = config["postprocessor"].get("similarity_threshold", None)
+        similarity_threshold = config["postprocessor"].get("similarity_threshold", 0)
         view_model.similarity_threshold = (
-            similarity_threshold if similarity_threshold > 0 else None
+            similarity_threshold
+            if similarity_threshold and similarity_threshold > 0
+            else None
         )
 
         if reranker_type == "simple-weighted-reranker":
@@ -328,6 +348,13 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"][
                 "collection_name"
             ] = self.milvus_collection_name
+
+        elif self.vectordb_type.lower() == "opensearch":
+            config["index"]["vector_store"]["endpoint"] = self.opensearch_endpoint
+            config["index"]["vector_store"]["instance_id"] = self.opensearch_instance_id
+            config["index"]["vector_store"]["username"] = self.opensearch_username
+            config["index"]["vector_store"]["password"] = self.opensearch_password
+            config["index"]["vector_store"]["table_name"] = self.opensearch_table_name
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         if self.retrieval_mode == "Hybrid":
@@ -501,6 +528,13 @@ class ViewModel(BaseModel):
 
         # faiss
         settings["faiss_path"] = {"value": self.faiss_path}
+
+        # opensearch
+        settings["opensearch_endpoint"] = {"value": self.opensearch_endpoint}
+        settings["opensearch_instance_id"] = {"value": self.opensearch_instance_id}
+        settings["opensearch_username"] = {"value": self.opensearch_username}
+        settings["opensearch_password"] = {"value": self.opensearch_password}
+        settings["opensearch_table_name"] = {"value": self.opensearch_table_name}
 
         # evaluation
         if self.vectordb_type == "FAISS":

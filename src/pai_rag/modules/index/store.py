@@ -75,6 +75,8 @@ class RagStore:
             logger.info("initialized ElasticSearch vector store.")
         elif vector_store_type == "milvus":
             self.vector_store = self._get_or_create_milvus()
+        elif vector_store_type == "opensearch":
+            self.vector_store = self._get_or_create_open_search_store()
         else:
             raise ValueError(f"Unknown vector_store type '{vector_store_type}'.")
 
@@ -181,6 +183,26 @@ class RagStore:
             hybrid_ranker="WeightedRanker",
             hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
         )
+
+    def _get_or_create_open_search_store(self):
+        from llama_index.vector_stores.alibabacloud_opensearch import (
+            AlibabaCloudOpenSearchStore,
+            AlibabaCloudOpenSearchConfig,
+        )
+
+        open_search_config = self.store_config["vector_store"]
+        output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
+        db_config = AlibabaCloudOpenSearchConfig(
+            endpoint=open_search_config["endpoint"],
+            instance_id=open_search_config["instance_id"],
+            username=open_search_config["username"],
+            password=open_search_config["password"],
+            table_name=open_search_config["table_name"],
+            # OpenSearch constructor has bug in dealing with output fields
+            field_mapping=dict(zip(output_fields, output_fields)),
+        )
+
+        return AlibabaCloudOpenSearchStore(config=db_config)
 
     def _get_or_create_simple_doc_store(self):
         if self.is_empty:

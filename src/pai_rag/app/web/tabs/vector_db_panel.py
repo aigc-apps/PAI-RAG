@@ -15,7 +15,14 @@ def create_vector_db_panel(
         with gr.Column():
             _ = gr.Markdown(value="**Please check your Vector Store.**")
             vectordb_type = gr.Dropdown(
-                ["Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"],
+                [
+                    "Hologres",
+                    "Milvus",
+                    "ElasticSearch",
+                    "AnalyticDB",
+                    "FAISS",
+                    "OpenSearch",
+                ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
                 interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
@@ -211,12 +218,51 @@ def create_vector_db_panel(
                     api_name="connect_faiss",
                 )
 
+            with gr.Column(visible=(vectordb_type == "OpenSearch")) as opensearch_col:
+                opensearch_endpoint = gr.Textbox(
+                    label="Endpoint", elem_id="opensearch_endpoint"
+                )
+                opensearch_instance_id = gr.Textbox(
+                    label="InstanceId", elem_id="opensearch_instance_id"
+                )
+                opensearch_username = gr.Textbox(
+                    label="UserName", elem_id="opensearch_username"
+                )
+                opensearch_password = gr.Textbox(
+                    label="Password", elem_id="opensearch_password"
+                )
+                opensearch_table_name = gr.Textbox(
+                    label="TableName", elem_id="opensearch_table_name"
+                )
+
+                connect_btn_opensearch = gr.Button(
+                    "Connect OpenSearch", variant="primary"
+                )
+                con_state_opensearch = gr.Textbox(label="Connection Info: ")
+                inputs_opensearch = input_elements.union(
+                    {
+                        vectordb_type,
+                        opensearch_endpoint,
+                        opensearch_instance_id,
+                        opensearch_username,
+                        opensearch_password,
+                        opensearch_table_name,
+                    }
+                )
+                connect_btn_opensearch.click(
+                    fn=connect_vector_func,
+                    inputs=inputs_opensearch,
+                    outputs=con_state_opensearch,
+                    api_name="connect_faiss",
+                )
+
             def change_vectordb_conn(vectordb_type):
                 adb_visible = False
                 hologres_visible = False
                 faiss_visible = False
                 es_visible = False
                 milvus_visible = False
+                opensearch_visible = False
                 if vectordb_type == "AnalyticDB":
                     adb_visible = True
                 elif vectordb_type == "Hologres":
@@ -227,6 +273,8 @@ def create_vector_db_panel(
                     milvus_visible = True
                 elif vectordb_type == "FAISS":
                     faiss_visible = True
+                elif vectordb_type == "OpenSearch":
+                    opensearch_visible = True
 
                 return {
                     adb_col: gr.update(visible=adb_visible),
@@ -234,12 +282,20 @@ def create_vector_db_panel(
                     es_col: gr.update(visible=es_visible),
                     faiss_col: gr.update(visible=faiss_visible),
                     milvus_col: gr.update(visible=milvus_visible),
+                    opensearch_col: gr.update(visible=opensearch_visible),
                 }
 
             vectordb_type.change(
                 fn=change_vectordb_conn,
                 inputs=vectordb_type,
-                outputs=[adb_col, holo_col, faiss_col, es_col, milvus_col],
+                outputs=[
+                    adb_col,
+                    holo_col,
+                    faiss_col,
+                    es_col,
+                    milvus_col,
+                    opensearch_col,
+                ],
             )
 
             components.extend(
@@ -271,6 +327,11 @@ def create_vector_db_panel(
                     es_index,
                     es_user,
                     es_password,
+                    opensearch_endpoint,
+                    opensearch_instance_id,
+                    opensearch_username,
+                    opensearch_password,
+                    opensearch_table_name,
                 ]
             )
 
