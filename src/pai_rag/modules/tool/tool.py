@@ -6,7 +6,7 @@ from pai_rag.modules.tool.utils import (
     get_google_web_search_tools,
     get_calculator_tools,
     get_customized_tools,
-    get_weather_tool,
+    get_weather_tools,
 )
 
 
@@ -38,6 +38,6 @@ class ToolModule(ConfigurableModule):
             tools.extend(get_customized_tools(self.config))
 
         if "weather" in type:
-            tools.extend(get_weather_tool(self.config))
+            tools.extend(get_weather_tools(self.config))
 
         return tools

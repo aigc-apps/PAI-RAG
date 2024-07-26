@@ -77,7 +77,7 @@ def get_calculator_tools():
     return [multiply_tool, add_tool, divide_tool, subtract_tool]
 
 
-def get_weather_tool(config):
+def get_weather_tools(config):
     def get_place_weather(city: str) -> str:
         """Get city name and return city weather"""
         api_key = config.get("weather_api_key", None)
