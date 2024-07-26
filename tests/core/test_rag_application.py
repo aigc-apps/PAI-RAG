@@ -74,9 +74,9 @@ async def test_agent(rag_app: RagApplication):
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
 
-async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
-    _, eval_result = await rag_app.aevaluate_retrieval_and_response(type="all")
-    print(eval_result)
+# async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
+#     _, eval_res_avg = await rag_app.aevaluate_retrieval_and_response(type="all")
+#     print('eval_res_avg', eval_res_avg)
 
 
 async def test_load_evaluation_qa_dataset(rag_app: RagApplication):

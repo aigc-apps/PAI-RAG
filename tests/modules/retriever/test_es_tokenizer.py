@@ -7,7 +7,9 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQuery,
     VectorStoreQueryResult,
 )
-from pai_rag.modules.retriever.my_elasticsearch_store import MyElasticsearchStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
+    MyElasticsearchStore,
+)
 
 
 @pytest.fixture()

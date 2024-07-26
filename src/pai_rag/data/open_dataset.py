@@ -5,6 +5,7 @@ import gzip
 import json
 import urllib.request
 import tarfile
+from datasets import load_dataset
 
 DEFAULT_DATASET_DIR = "datasets"
 
@@ -13,13 +14,6 @@ class OpenDataSet(ABC):
     @abstractmethod
     def load_qrels(self, type: str):
         """加载评测文件
-        :param type: 要加载的数据集的类型 [train, dev, test]
-        """
-        pass
-
-    @abstractmethod
-    def load_topic(self, type: str):
-        """加载主题文件
         :param type: 要加载的数据集的类型 [train, dev, test]
         """
         pass
@@ -163,15 +157,92 @@ class MiraclOpenDataSet(OpenDataSet):
         return nodes, docid2doc
 
 
-class DureaderDataSet(OpenDataSet):
-    def load_qrels(self, type: str):
-        # DureaderDataSet 的 load_qrels 实现
-        print("Loading qrels for DureaderDataSet...")
+class DuRetrievalDataSet(OpenDataSet):
+    def __init__(self, dataset_path: str = None, corpus_path: str = None):
+        self.dataset_path = dataset_path or os.path.join(
+            DEFAULT_DATASET_DIR, "DuRetrieval-qrels"
+        )
+        self.corpus_path = corpus_path or os.path.join(
+            DEFAULT_DATASET_DIR, "DuRetrieval"
+        )
+        if not os.path.exists(self.dataset_path):
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/DuRetrieval-qrels.tar.gz"
+            file_path = os.path.join(DEFAULT_DATASET_DIR, "DuRetrieval-qrels.tar.gz")
+            self._extract_and_download_dataset(
+                dataset_url, file_path, self.dataset_path
+            )
+        else:
+            print(
+                f"[DuRetrievalDataSet] Dataset file already exists at {self.dataset_path}."
+            )
+        if not os.path.exists(self.corpus_path):
+            dataset_url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/huggingface/datasets/DuRetrieval.tar.gz"
+            file_path = os.path.join(DEFAULT_DATASET_DIR, "DuRetrieval.tar.gz")
+            self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
+        else:
+            print(
+                f"[DuRetrievalDataSet] Corpus file already exists at {self.corpus_path}."
+            )
 
-    def load_topic(self, type: str):
-        # DureaderDataSet 的 load_topic 实现
-        print("Loading topic for DureaderDataSet...")
+    def _extract_and_download_dataset(self, url, file_path, extract_path):
+        file_path_dir = os.path.dirname(file_path)
+        if not os.path.exists(file_path_dir):
+            os.makedirs(file_path_dir)
+        with urllib.request.urlopen(url) as response, open(file_path, "wb") as out_file:
+            print(
+                f"[DuRetrievalDataSet] Start downloading file {file_path} from {url}."
+            )
+            data = response.read()
+            out_file.write(data)
+            print("[DuRetrievalDataSet] Finish downloading.")
+        if not os.path.exists(extract_path):
+            os.makedirs(extract_path)
+        with tarfile.open(file_path, "r:gz") as tar:
+            print(
+                f"[DuRetrievalDataSet] Start extracting file {file_path} to {extract_path}."
+            )
+            tar.extractall(path=extract_path)
+            print("[DuRetrievalDataSet] Finish extracting.")
+
+    def load_qrels(self, type: str = "dev"):
+        print(
+            f"[DuRetrievalDataSet] Loading qrels for DuRetrievalDataSet with type {type} from {self.dataset_path}..."
+        )
+        qrels_path = f"{self.dataset_path}/DuRetrieval-qrels"
+        qrels_ori = load_dataset(qrels_path)
+        qrels = defaultdict(dict)
+        for sample in qrels_ori[type]:
+            qid = sample["qid"]
+            docid = sample["pid"]
+            rel = sample["score"]
+            qrels[qid][docid] = int(rel)
+        print(f"[DuRetrievalDataSet] Loaded qrels {len(qrels)} with type {type}")
+        return qrels
 
     def load_related_corpus(self):
-        # DureaderDataSet 的 load_related_corpus 实现
-        print("Loading related docs for dev for DureaderDataSet...")
+        corpus_path = f"{self.corpus_path}/DuRetrieval"
+        docid2doc = {}
+        qid2query = {}
+        nodes = set()
+        du_dataset = load_dataset(corpus_path)
+        for sample in du_dataset["corpus"]:
+            nodes.add(
+                (
+                    sample["id"],
+                    sample["text"],
+                    self.corpus_path,
+                )
+            )
+            docid2doc[sample["id"]] = sample["text"]
+        print(
+            f"[DuRetrievalDataSet] Loaded nodes {len(nodes)} from file_path {self.corpus_path}"
+        )
+
+        for sample in du_dataset["queries"]:
+            qid2query[sample["id"]] = sample["text"]
+        print(
+            f"[DuRetrievalDataSet] Loaded queries {len(nodes)} from file_path {self.corpus_path}"
+        )
+
+        print(f"[DuRetrievalDataSet] Loaded all nodes {len(nodes)}")
+        return nodes, docid2doc, qid2query

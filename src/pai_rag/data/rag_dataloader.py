@@ -3,6 +3,7 @@ import json
 import os
 from typing import Any, Dict, List
 from fastapi.concurrency import run_in_threadpool
+import asyncio
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -11,7 +12,7 @@ from pai_rag.integrations.nodeparsers.base import MarkdownNodeParser
 from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
-from pai_rag.data.open_dataset import MiraclOpenDataSet
+from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
 
 
 import logging
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_LOCAL_QA_MODEL_PATH = "./model_repository/qwen_1.8b"
 
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
-    [".csv", ".xlsx", ".xls", ".htm", ".html", ".imagelist"]
+    [".csv", ".xlsx", ".xls", ".htm", ".html", ".imagelist", ".jsonl"]
 )
 
 
@@ -38,6 +39,7 @@ class RagDataLoader:
         index,
         bm25_index,
         oss_cache,
+        node_enhance,
         use_local_qa_model=False,
     ):
         self.datareader_factory = datareader_factory
@@ -45,6 +47,7 @@ class RagDataLoader:
         self.oss_cache = oss_cache
         self.index = index
         self.bm25_index = bm25_index
+        self.node_enhance = node_enhance
 
         if use_local_qa_model:
             # API暂不支持此选项
@@ -97,7 +100,7 @@ class RagDataLoader:
         doc_cnt_map = {}
         for doc in docs:
             doc_type = self._extract_file_type(doc.metadata)
-
+            doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])[33:]
             if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
                 if doc_key not in doc_cnt_map:
@@ -147,6 +150,7 @@ class RagDataLoader:
         file_path: str | List[str],
         filter_pattern: str,
         enable_qa_extraction: bool,
+        enable_raptor: bool,
     ):
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
@@ -155,7 +159,20 @@ class RagDataLoader:
             return
 
         logger.info("[DataReader] Start inserting to index.")
-        self.index.vector_index.insert_nodes(nodes)
+
+        if enable_raptor:
+            nodes_with_embeddings, len_new_nodes = asyncio.run(
+                self.node_enhance.enhance_nodes(nodes=nodes)
+            )
+            self.index.vector_index.insert_nodes(nodes_with_embeddings)
+
+            logger.info(
+                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+            )
+        else:
+            self.index.vector_index.insert_nodes(nodes)
+            logger.info(f"Inserted {len(nodes)} nodes successfully.")
+
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
         )
@@ -167,7 +184,6 @@ class RagDataLoader:
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
 
-        logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
     async def aload(
@@ -175,6 +191,7 @@ class RagDataLoader:
         file_path: str | List[str],
         filter_pattern: str,
         enable_qa_extraction: bool,
+        enable_raptor: bool,
     ):
         nodes = await run_in_threadpool(
             lambda: self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
@@ -185,7 +202,21 @@ class RagDataLoader:
 
         logger.info("[DataReader] Start inserting to index.")
 
-        await self.index.vector_index.insert_nodes_async(nodes)
+        if enable_raptor:
+            (
+                nodes_with_embeddings,
+                len_new_nodes,
+            ) = await self.node_enhance.enhance_nodes(nodes=nodes)
+            self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
+
+            logger.info(
+                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+            )
+
+        else:
+            await self.index.vector_index.insert_nodes_async(nodes)
+            logger.info(f"Inserted {len(nodes)} nodes successfully.")
+
         self.index.vector_index.storage_context.persist(
             persist_dir=self.index.persist_path
         )
@@ -197,10 +228,9 @@ class RagDataLoader:
             with open(index_metadata_file, "w") as wf:
                 wf.write(metadata_str)
 
-        logger.info(f"Inserted {len(nodes)} nodes successfully.")
         return
 
-    async def aload_eval_data(self, name: str):
+    def load_eval_data(self, name: str):
         logger.info("[DataReader-Evaluation Dataset]")
         if name == "miracl":
             miracl_dataset = MiraclOpenDataSet()
@@ -220,7 +250,7 @@ class RagDataLoader:
 
             print("[DataReader-Evaluation Dataset] Start inserting to index.")
 
-            await self.index.vector_index.insert_nodes_async(nodes)
+            self.index.vector_index.insert_nodes(nodes)
             self.index.vector_index.storage_context.persist(
                 persist_dir=self.index.persist_path
             )
@@ -229,7 +259,42 @@ class RagDataLoader:
                 self.index.persist_path, "index.metadata"
             )
             if self.bm25_index:
-                await run_in_threadpool(lambda: self.bm25_index.add_docs(nodes))
+                self.bm25_index.add_docs(nodes)
+                metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
+                with open(index_metadata_file, "w") as wf:
+                    wf.write(metadata_str)
+
+            print(
+                f"[DataReader-Evaluation Dataset] Inserted {len(nodes)} nodes successfully."
+            )
+            return
+        elif name == "duretrieval":
+            duretrieval_dataset = DuRetrievalDataSet()
+            miracl_nodes, _, _ = duretrieval_dataset.load_related_corpus()
+            nodes = []
+            for node in miracl_nodes:
+                node_metadata = {
+                    "file_path": node[2],
+                    "file_name": node[2],
+                }
+                nodes.append(
+                    TextNode(id_=node[0], text=node[1], metadata=node_metadata)
+                )
+
+            print(f"[DataReader-Evaluation Dataset] Split into {len(nodes)} nodes.")
+
+            print("[DataReader-Evaluation Dataset] Start inserting to index.")
+
+            self.index.vector_index.insert_nodes(nodes)
+            self.index.vector_index.storage_context.persist(
+                persist_dir=self.index.persist_path
+            )
+
+            index_metadata_file = os.path.join(
+                self.index.persist_path, "index.metadata"
+            )
+            if self.bm25_index:
+                self.bm25_index.add_docs(nodes)
                 metadata_str = json.dumps({"lastUpdated": f"{datetime.datetime.now()}"})
                 with open(index_metadata_file, "w") as wf:
                     wf.write(metadata_str)

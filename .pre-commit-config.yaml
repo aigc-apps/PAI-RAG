@@ -85,6 +85,8 @@ repos:
           (\/.*?\.[\w:]+)/poetry.lock
         args:
           [
+            "--exclude",
+            "./data/tokenization/qwen.tiktoken",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
           ]

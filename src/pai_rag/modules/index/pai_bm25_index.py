@@ -4,10 +4,10 @@ import pickle
 import json
 import numpy as np
 from typing import Callable, List, cast, Dict
-from llama_index.core.schema import BaseNode, TextNode, NodeWithScore
+from llama_index.core.schema import BaseNode, TextNode
 from pai_rag.utils.tokenizer import jieba_tokenizer
 from scipy.sparse import csr_matrix
-
+from pai_rag.integrations.retrievers.fusion_retriever import MyNodeWithScore
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +252,7 @@ class PaiBm25Index:
 
         return [self.doc_cache[i] for i in doc_indexes]
 
-    def query(self, query_str: str, top_n: int = 5) -> List[NodeWithScore]:
+    def query(self, query_str: str, top_n: int = 5) -> List[MyNodeWithScore]:
         results = []
         if self.index_matrix is None:
             return results
@@ -262,12 +262,17 @@ class PaiBm25Index:
         for token in tokens:
             if token in self.index.token_map:
                 query_vec[self.index.token_map[token]] += 1
-
         doc_scores = self.index_matrix.multiply(query_vec).sum(axis=1).getA1()
         doc_indexes = doc_scores.argsort()[::-1][:top_n]
         text_nodes = self.load_docs_with_index(doc_indexes)
         for i, node in enumerate(text_nodes):
-            results.append(NodeWithScore(node=node, score=doc_scores[doc_indexes[i]]))
+            results.append(
+                MyNodeWithScore(
+                    node=node,
+                    score=doc_scores[doc_indexes[i]],
+                    retriever_type="keyword",
+                )
+            )
 
         return results
 

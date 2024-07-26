@@ -22,7 +22,7 @@ from pai_rag.utils.prompt_template import (
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_QUESTION_GENERATION_QUERY,
 )
-from pai_rag.data.open_dataset import MiraclOpenDataSet
+from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
 
 
 class ModifiedRagDatasetGenerator(RagDatasetGenerator):
@@ -156,6 +156,26 @@ class ModifiedRagDatasetGenerator(RagDatasetGenerator):
 
         return LabelledRagDataset(examples=examples)
 
+    def generate_dataset_from_duretrieval(self) -> LabelledRagDataset:
+        """Node question generator."""
+        examples: List[LabelledRagDataExample] = []
+        duretrieval_dataset = DuRetrievalDataSet()
+        qrels = duretrieval_dataset.load_qrels()
+        _, docid2doc, qid2query = duretrieval_dataset.load_related_corpus()
+        for qid in qrels:
+            pos_docids = list(qrels[qid].keys())
+            pos_docs = [docid2doc[docid] for docid in pos_docids]
+            example = LabelledRagDataExample(
+                query=qid2query[qid],
+                reference_answer="",
+                reference_contexts=pos_docs,
+                reference_node_id=pos_docids,
+                reference_answer_by=None,
+                query_by=None,
+            )
+            examples.append(example)
+        return LabelledRagDataset(examples=examples)
+
 
 class LabelledRagDataExample(BaseLlamaDataExample):
     """RAG example class. Analogous to traditional ML datasets, this dataset contains
@@ -258,7 +278,9 @@ class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
         logging.info("dataset generation completed.")
         return qas
 
-    async def generate_dataset_from_miracl(self, dataset_name) -> LabelledRagDataset:
+    async def generate_dataset_from_opendataset(
+        self, dataset_name
+    ) -> LabelledRagDataset:
         dataset_generator = ModifiedRagDatasetGenerator(
             nodes=self.nodes,
             llm=self.llm,
@@ -270,6 +292,8 @@ class GenerateDatasetPipeline(ModifiedRagDatasetGenerator):
         )
         if dataset_name == "miracl":
             qas = dataset_generator.generate_dataset_from_miracl()
+        elif dataset_name == "duretrieval":
+            qas = dataset_generator.generate_dataset_from_duretrieval()
         else:
             raise ValueError(f"Not supported dataset name with {dataset_name}")
         logging.info("dataset generation completed.")
