@@ -40,27 +40,30 @@ class DashScopeGenerationModels:
 
 DASHSCOPE_MODEL_META = {
     DashScopeGenerationModels.QWEN_TURBO: {
-        "context_window": 1024 * 8,
+        "context_window": 1024
+        * (
+            8 - 2
+        ),  # https://help.aliyun.com/zh/model-studio/developer-reference/what-is-tongyi-qianwen-llm
         "num_output": 1024 * 8,
         "is_chat_model": True,
     },
     DashScopeGenerationModels.QWEN_PLUS: {
-        "context_window": 1024 * 32,
+        "context_window": 1024 * (32 - 2),
         "num_output": 1024 * 32,
         "is_chat_model": True,
     },
     DashScopeGenerationModels.QWEN_MAX: {
-        "context_window": 1024 * 8,
+        "context_window": 1024 * (8 - 2),
         "num_output": 1024 * 8,
         "is_chat_model": True,
     },
     DashScopeGenerationModels.QWEN_MAX_1201: {
-        "context_window": 1024 * 8,
+        "context_window": 1024 * (8 - 2),
         "num_output": 1024 * 8,
         "is_chat_model": True,
     },
     DashScopeGenerationModels.QWEN_MAX_LONGCONTEXT: {
-        "context_window": 1024 * 30,
+        "context_window": 1024 * (30 - 2),
         "num_output": 1024 * 30,
         "is_chat_model": True,
     },

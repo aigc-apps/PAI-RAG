@@ -157,14 +157,15 @@ class PaiEvaluator:
                     e.metric_vals_dict["hit_rate"] for e in eval_results["retrieval"]
                 ]
             else:
-                df["hit_rate"] = "not selected"
+                df["hit_rate"] = None
             if "mrr" in self.retrieval_metrics:
                 df["mrr"] = [
                     e.metric_vals_dict["mrr"] for e in eval_results["retrieval"]
                 ]
             else:
-                df["mrr"] = "not selected"
+                df["mrr"] = None
         if type in ["response", "all"]:
+            df["response_answer"] = None
             if "Faithfulness" in self.response_metrics:
                 df["faithfulness_score"] = [
                     e.score for e in eval_results["Faithfulness"]
@@ -173,23 +174,35 @@ class PaiEvaluator:
                     e.response for e in eval_results["Faithfulness"]
                 ]
             else:
-                df["faithfulness_score"] = "not selected"
+                df["faithfulness_score"] = None
             if "Answer Relevancy" in self.response_metrics:
                 df["answer_relevancy_score"] = [
                     e.feedback for e in eval_results["Answer Relevancy"]
                 ]
+                if df["response_answer"][0] is None:
+                    df["response_answer"] = [
+                        e.response for e in eval_results["Answer Relevancy"]
+                    ]
             else:
-                df["answer_relevancy_score"] = "not selected"
+                df["answer_relevancy_score"] = None
             if "Correctness" in self.response_metrics:
                 df["correctness_score"] = [e.score for e in eval_results["Correctness"]]
+                if df["response_answer"][0] is None:
+                    df["response_answer"] = [
+                        e.response for e in eval_results["Correctness"]
+                    ]
             else:
-                df["correctness_score"] = "not selected"
+                df["correctness_score"] = None
             if "Semantic Similarity" in self.response_metrics:
                 df["semantic_similarity_score"] = [
                     e.score for e in eval_results["Semantic Similarity"]
                 ]
+                if df["response_answer"][0] is None:
+                    df["response_answer"] = [
+                        e.response for e in eval_results["Correctness"]
+                    ]
             else:
-                df["semantic_similarity_score"] = "not selected"
+                df["semantic_similarity_score"] = None
 
         if type == "retrieval":
             eval_res_avg = {
