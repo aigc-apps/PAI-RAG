@@ -164,7 +164,6 @@ class RagDataLoader:
             nodes_with_embeddings, len_new_nodes = asyncio.run(
                 self.node_enhance.enhance_nodes(nodes=nodes)
             )
-            assert len_new_nodes == len(nodes_with_embeddings) - len(nodes)
             self.index.vector_index.insert_nodes(nodes_with_embeddings)
 
             logger.info(
@@ -208,7 +207,6 @@ class RagDataLoader:
                 nodes_with_embeddings,
                 len_new_nodes,
             ) = await self.node_enhance.enhance_nodes(nodes=nodes)
-            assert len_new_nodes == len(nodes_with_embeddings) - len(nodes)
             self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
 
             logger.info(

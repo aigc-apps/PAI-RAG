@@ -129,7 +129,6 @@ class RaptorProcessor:
                     node.embedding = id_to_embedding[node.id_]
                     nodes_with_embeddings_collections.append([node])
 
-        # index.insert_nodes(cur_nodes)
         nodes_with_embeddings_collections = [
             k for i in nodes_with_embeddings_collections for k in i
         ]
