@@ -212,7 +212,7 @@ To make it easier to use and save time on environment installation, we also prov
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
-docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+docker run -p --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 ```
 
 Mac/Windows:
