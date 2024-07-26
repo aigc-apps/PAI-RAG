@@ -57,6 +57,7 @@ class RagApplication:
         filter_pattern=None,
         faiss_path=None,
         enable_qa_extraction=False,
+        enable_raptor=False,
     ):
         sessioned_config = self.config
         if faiss_path:
@@ -69,7 +70,9 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        await data_loader.aload(input_files, filter_pattern, enable_qa_extraction)
+        await data_loader.aload(
+            input_files, filter_pattern, enable_qa_extraction, enable_raptor
+        )
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:

@@ -24,6 +24,7 @@ class RagDataPipeline:
         input_path: str,
         pattern: str,
         enable_qa_extraction: bool,
+        enable_raptor: bool,
         name: str = None,
     ):
         if not name:
@@ -34,7 +35,9 @@ class RagDataPipeline:
                 input_paths = input_path
             else:
                 input_paths = [file.strip() for file in input_path.split(",")]
-            self.data_loader.load(input_paths, pattern, enable_qa_extraction)
+            self.data_loader.load(
+                input_paths, pattern, enable_qa_extraction, enable_raptor
+            )
         else:
             self.data_loader.load_eval_data(name)
 
@@ -84,14 +87,27 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     help="use local qa extraction model.",
 )
 @click.option(
+    "-r",
+    "--enable-raptor",
+    required=False,
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="use raptor for node enhancement.",
+)
+@click.option(
     "-n",
     "--name",
     show_default=True,
     help="Open Dataset Name. Optional: [miracl, duretrieval]",
     default=None,
 )
-def run(config, data_path, pattern, extract_qa, use_local_qa_model, name):
+def run(
+    config, data_path, pattern, extract_qa, use_local_qa_model, enable_raptor, name
+):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
     asyncio.run(
-        data_pipeline.ingest_from_input_path(data_path, pattern, extract_qa, name)
+        data_pipeline.ingest_from_input_path(
+            data_path, pattern, extract_qa, enable_raptor, name
+        )
     )

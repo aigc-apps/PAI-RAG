@@ -15,6 +15,7 @@ class DataLoaderModule(ConfigurableModule):
             "NodeParserModule",
             "IndexModule",
             "BM25IndexModule",
+            "NodesEnhancementModule",
         ]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
@@ -23,7 +24,8 @@ class DataLoaderModule(ConfigurableModule):
         node_parser = new_params["NodeParserModule"]
         index = new_params["IndexModule"]
         bm25_index = new_params["BM25IndexModule"]
+        node_enhance = new_params["NodesEnhancementModule"]
 
         return RagDataLoader(
-            data_reader_factory, node_parser, index, bm25_index, oss_cache
+            data_reader_factory, node_parser, index, bm25_index, oss_cache, node_enhance
         )

@@ -51,6 +51,7 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
+    enable_raptor: bool = False
 
     config_file: str = None
 
@@ -209,6 +210,9 @@ class ViewModel(BaseModel):
         view_model.enable_qa_extraction = config["data_reader"].get(
             "enable_qa_extraction", view_model.enable_qa_extraction
         )
+        view_model.enable_raptor = config["data_reader"].get(
+            "enable_raptor", view_model.enable_raptor
+        )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
@@ -280,6 +284,7 @@ class ViewModel(BaseModel):
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
+        config["data_reader"]["enable_raptor"] = self.enable_raptor
         config["data_reader"]["type"] = self.reader_type
 
         if self.vectordb_type == "Hologres":
@@ -444,6 +449,7 @@ class ViewModel(BaseModel):
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
+        settings["enable_raptor"] = {"value": self.enable_raptor}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
