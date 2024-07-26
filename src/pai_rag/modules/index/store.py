@@ -191,12 +191,15 @@ class RagStore:
         )
 
         open_search_config = self.store_config["vector_store"]
+        output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
         db_config = AlibabaCloudOpenSearchConfig(
             endpoint=open_search_config["endpoint"],
             instance_id=open_search_config["instance_id"],
-            username=open_search_config["endpoint"],
+            username=open_search_config["username"],
             password=open_search_config["password"],
             table_name=open_search_config["table_name"],
+            # OpenSearch constructor has bug in dealing with output fields
+            field_mapping=dict(zip(output_fields, output_fields)),
         )
 
         return AlibabaCloudOpenSearchStore(config=db_config)
