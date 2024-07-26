@@ -205,6 +205,7 @@ To make it easier to use and save time on environment installation, we also prov
    a. load_data -d /data/test/example
    b. load_data -d /data/test/example_data/pai_document.pdf
    c. load_data -d /data/test/example_data -p *.pdf
+   ```
 
 3. RAG UI
    Linux:
