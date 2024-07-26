@@ -165,7 +165,13 @@ To make it easier to use and save time on environment installation, we also prov
   docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2
 
   # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, need to be introduced) -w (number of workers, can be specified as the approximate number of CPU cores)
-  docker run -p 8001:8001 -v /huggingface:/huggingface -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+  docker run --name pai_rag \
+              -p 8001:8001 \
+              -v /huggingface:/huggingface \
+              -v /your_local_documents_path:/data \
+              -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
+              -d \
+              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
   ```
 
 - GPU
@@ -174,16 +180,39 @@ To make it easier to use and save time on environment installation, we also prov
   docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu
 
   # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, you need to introduce it) -w (number of workers, which can be specified as the approximate number of CPU cores)
-  docker run -p 8001:8001 -v /huggingface:/huggingface --gpus all -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+  docker run --name pai_rag \
+              -p 8001:8001 \
+              -v /huggingface:/huggingface \
+              -v /your_local_documents_path:/data \
+              --gpus all \
+              -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
+              -d \
+              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
   ```
 
-2. RAG UI
+2. Load Data
+
+   Insert new files in the /data into the current index storage:
+
+   ```bash
+   sudo docker exec -ti pai_rag bash
+   load_data -c src/pai_rag/config/settings.yaml -d /data -p pattern
+   ```
+
+   path examples:
+
+   ```
+   a. load_data -d /data/test/example
+   b. load_data -d /data/test/example_data/pai_document.pdf
+   c. load_data -d /data/test/example_data -p *.pdf
+
+3. RAG UI
    Linux:
 
 ```bash
 docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 
-docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
 ```
 
 Mac/Windows:
@@ -193,6 +222,8 @@ docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:
 
 docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
 ```
+
+You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
 
 ### Build your own image based on Dockerfile
 
