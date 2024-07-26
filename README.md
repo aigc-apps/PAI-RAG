@@ -293,6 +293,11 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
+# Function Calling
+
+You can use function calling tools in PAI-RAG, please refer to the documentation:
+[Function Calling Instruction](./docs/function_calling/readme.md)
+
 # Parameter Configuration
 
 For more customization options, please refer to the documentation:
