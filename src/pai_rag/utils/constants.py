@@ -18,3 +18,5 @@ else:
 OSS_URL = (
     "https://pai-rag-bj.oss-cn-beijing.aliyuncs.com/model_repository/model_config.json"
 )
+
+DEFAULT_DATAFILE_DIR = "./data"

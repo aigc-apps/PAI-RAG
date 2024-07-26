@@ -32,7 +32,7 @@ embed_batch_size = 10
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
+response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
 
 [rag.function_calling_llm]
 source = ""
@@ -55,6 +55,11 @@ type = "SimpleChatEngine"
 
 [rag.multi_modal_llm]
 source = ""
+
+[rag.node_enhancement]
+tree_depth = 3
+max_clusters = 52
+proba_threshold = 0.10
 
 [rag.node_parser]
 type = "Sentence"

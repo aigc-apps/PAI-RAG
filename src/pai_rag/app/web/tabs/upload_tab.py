@@ -8,7 +8,9 @@ import pandas as pd
 import asyncio
 
 
-def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extraction):
+def upload_knowledge(
+    upload_files, chunk_size, chunk_overlap, enable_qa_extraction, enable_raptor
+):
     if not upload_files:
         return
 
@@ -28,13 +30,9 @@ def upload_knowledge(upload_files, chunk_size, chunk_overlap, enable_qa_extracti
             ),
         ]
 
-    try:
-        response = rag_client.add_knowledge(
-            [file.name for file in upload_files], enable_qa_extraction
-        )
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
+    response = rag_client.add_knowledge(
+        [file.name for file in upload_files], enable_qa_extraction, enable_raptor
+    )
     my_upload_files = []
     for file in upload_files:
         my_upload_files.append(
@@ -94,6 +92,11 @@ def create_upload_tab() -> Dict[str, Any]:
                 info="Process with QA Extraction Model",
                 elem_id="enable_qa_extraction",
             )
+            enable_raptor = gr.Checkbox(
+                label="Yes",
+                info="Process with Raptor Node Enhancement",
+                elem_id="enable_raptor",
+            )
         with gr.Column(scale=8):
             with gr.Tab("Files"):
                 upload_file = gr.File(
@@ -121,6 +124,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_size,
                     chunk_overlap,
                     enable_qa_extraction,
+                    enable_raptor,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
@@ -132,6 +136,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_size,
                     chunk_overlap,
                     enable_qa_extraction,
+                    enable_raptor,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
@@ -140,4 +145,5 @@ def create_upload_tab() -> Dict[str, Any]:
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_qa_extraction.elem_id: enable_qa_extraction,
+                enable_raptor.elem_id: enable_raptor,
             }
