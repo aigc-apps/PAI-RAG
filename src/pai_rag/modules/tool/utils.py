@@ -5,12 +5,14 @@ from llama_index.core.bridge.pydantic import FieldInfo, create_model
 import json
 import os
 import sys
+import requests
 from pai_rag.modules.tool.default_tool_description_template import (
     DEFAULT_GOOGLE_SEARCH_TOOL_DESP,
     DEFAULT_CALCULATE_MULTIPLY,
     DEFAULT_CALCULATE_ADD,
     DEFAULT_CALCULATE_DIVIDE,
     DEFAULT_CALCULATE_SUBTRACT,
+    DEFAULT_GET_WEATHER,
 )
 
 
@@ -73,6 +75,35 @@ def get_calculator_tools():
         description=DEFAULT_CALCULATE_SUBTRACT,
     )
     return [multiply_tool, add_tool, divide_tool, subtract_tool]
+
+
+def get_weather_tool(config):
+    def get_place_weather(city: str) -> str:
+        """Get city name and return city weather"""
+        api_key = config.get("weather_api_key", None)
+        # 可以直接赋值给api_key,原始代码的config只有type类型。
+        base_url = "http://api.openweathermap.org/data/2.5/forecast?"
+        complete_url = f"{base_url}q={city}&appid={api_key}&lang=zh_cn&units=metric"
+        response = requests.get(complete_url)
+        weather_data = response.json()
+
+        if weather_data["cod"] != "200":
+            print(f"获取天气信息失败，错误代码：{weather_data['cod']}")
+            return None
+
+        element = weather_data["list"][0]
+
+        return str(
+            f"{city}的天气:\n 时间: {element['dt_txt']}\n 温度: {element['main']['temp']} °C\n 天气描述: {element['weather'][0]['description']}\n"
+        )
+
+    weather_tool = FunctionTool.from_defaults(
+        fn=get_place_weather,
+        name="get_weather",
+        description=DEFAULT_GET_WEATHER,
+    )
+
+    return [weather_tool]
 
 
 def get_customized_tools(config):

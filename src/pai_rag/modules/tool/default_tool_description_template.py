@@ -91,3 +91,21 @@ DEFAULT_CALCULATE_SUBTRACT = """
 
     Example uses of this tool include but are not limited to calculating age differences, determining the number of items sold from inventory, working out loan repayments, and any other context where subtraction of numerical values plays a key role.
 """
+
+DEFAULT_GET_WEATHER = """
+    The get_weather tool has been meticulously crafted to fetch real-time weather data for any global location, empowering users with accurate meteorological insights. Whether you're planning outdoor activities, assessing travel conditions, monitoring agricultural climates, or simply staying informed about the day's weather, this tool offers a streamlined solution. It taps into reputable weather APIs to deliver up-to-date information on temperature, humidity, precipitation, wind conditions, and more, ensuring you're equipped with the latest atmospheric conditions.
+
+    get_weather(city: str) -> str
+    This function not only provides current weather conditions but also encompasses forecast data when supported by the API, thereby catering to a wide array of weather-dependent decision-making processes. The returned dictionary encapsulates various weather parameters, enabling detailed analysis tailored to your needs.
+
+    Args:
+        city (str): The name of the city, town, or specific location for which weather data is desired. Ensure the input adheres to the API's naming conventions for optimal results.
+
+    Returns:
+        str: A neatly packaged string presenting the time, city, temperature in Celsius or Fahrenheit (as per the API's standard setting), and a brief description of the weather, such as "sunny," "partly cloudy," or "light rain." This format facilitates easy reading and can be seamlessly integrated into messages, notifications, or displayed on-screen.
+
+    Raises:
+        ValueError: If the 'city' input is invalid or unrecognizable, ensuring that errors are promptly communicated for corrective action.
+
+    Embracing versatility, the get_weather tool finds application in travel planning, event organization, health advisories related to extreme weather, educational projects studying climatology, and everyday life decisions influenced by the elements. Its capability to distill complex meteorological data into digestible insights underscores its value as an indispensable utility in understanding our dynamic atmospheric surroundings.
+"""
