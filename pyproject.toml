@@ -11,6 +11,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10.0,<3.12"
+setuptools = "72.0.0"
 fastapi = "^0.110.1"
 uvicorn = "^0.29.0"
 llama-index-core = ">=0.10.29,<=0.10.39"

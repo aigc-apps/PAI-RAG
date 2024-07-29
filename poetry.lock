@@ -1447,18 +1447,18 @@ files = [
 
 [[package]]
 name = "duckduckgo-search"
-version = "6.2.3"
+version = "6.2.4"
 description = "Search for words, documents, images, news, maps and text translation using the DuckDuckGo.com search engine."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "duckduckgo_search-6.2.3-py3-none-any.whl", hash = "sha256:07e717dc8a2dc195086a319a6d094979ff0637be4a829b0f001cd6c220fb7490"},
-    {file = "duckduckgo_search-6.2.3.tar.gz", hash = "sha256:69e51c88504212c5ce371b3684fa6fa2459ad8f296d2c94759909ae096f05319"},
+    {file = "duckduckgo_search-6.2.4-py3-none-any.whl", hash = "sha256:19358d892ae7d010492d08f7ed5f7790e2df25a3f6bf1c83e8de9bdcf895fd91"},
+    {file = "duckduckgo_search-6.2.4.tar.gz", hash = "sha256:58c1df49e1c9e671f35d3dba34463dde64a94fb4446c9cc5a9e7bec6664edeaa"},
 ]
 
 [package.dependencies]
 click = ">=8.1.7"
-pyreqwest-impersonate = ">=0.5.3"
+primp = ">=0.5.4"
 
 [package.extras]
 dev = ["mypy (>=1.11.0)", "pytest (>=8.3.1)", "pytest-asyncio (>=0.23.8)", "ruff (>=0.5.4)"]
@@ -3794,7 +3794,6 @@ python-versions = ">=3.7"
 files = [
     {file = "milvus_lite-2.4.8-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:b7e90b34b214884cd44cdc112ab243d4cb197b775498355e2437b6cafea025fe"},
     {file = "milvus_lite-2.4.8-py3-none-macosx_11_0_arm64.whl", hash = "sha256:519dfc62709d8f642d98a1c5b1dcde7080d107e6e312d677fef5a3412a40ac08"},
-    {file = "milvus_lite-2.4.8-py3-none-manylinux2014_aarch64.whl", hash = "sha256:b21f36d24cbb0e920b4faad607019bb28c1b2c88b4d04680ac8c7697a4ae8a4d"},
     {file = "milvus_lite-2.4.8-py3-none-manylinux2014_x86_64.whl", hash = "sha256:08332a2b9abfe7c4e1d7926068937e46f8fb81f2707928b7bc02c9dc99cebe41"},
 ]
 
@@ -5281,6 +5280,26 @@ sentry = ["django", "sentry-sdk"]
 test = ["coverage", "flake8", "freezegun (==0.3.15)", "mock (>=2.0.0)", "pylint", "pytest", "pytest-timeout"]
 
 [[package]]
+name = "primp"
+version = "0.5.4"
+description = "HTTP client that can impersonate web browsers, mimicking their headers and `TLS/JA3/JA4/HTTP2` fingerprints"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "primp-0.5.4-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:aa93fe21f99b846ce9caecf11b26cf84f36ff7ddcfdb23ba18f5e685087557f9"},
+    {file = "primp-0.5.4-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:dfd13fd1c02f83a2dd0b87e6b7dbd893ee1cc13271b2a1eb229d5c47bf0935f6"},
+    {file = "primp-0.5.4-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5a9df95f033305f61a1ed906e717eb606c5570447ca9f3f37ae48ba6b59f7982"},
+    {file = "primp-0.5.4-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8019767eafba068178e921aa0374e668cbb432e616b9a092027376bc4ad3223c"},
+    {file = "primp-0.5.4-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:e15cf0b6a217a5c3a0a75f611440c498eadfad09be3ce3c0b3755647fa7c5063"},
+    {file = "primp-0.5.4-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:ba0612eae5b55e82269d7804aa417dd452fcd446123483731d52fec8c44342e2"},
+    {file = "primp-0.5.4-cp38-abi3-win_amd64.whl", hash = "sha256:f4e4cd37eabd6958e578e26fa120de53f039dce469b4b5171adc45b87be6a3d9"},
+    {file = "primp-0.5.4.tar.gz", hash = "sha256:3aad76e319c54b0166c12a8dcd5935c47c95189bffdc5a7c73a515a2814a0786"},
+]
+
+[package.extras]
+dev = ["pytest (>=8.1.1)"]
+
+[[package]]
 name = "protobuf"
 version = "3.20.0"
 description = "Protocol Buffers"
@@ -5929,26 +5948,6 @@ files = [
     {file = "pyreadline3-3.4.1-py3-none-any.whl", hash = "sha256:b0efb6516fd4fb07b45949053826a62fa4cb353db5be2bbb4a7aa1fdd1e345fb"},
     {file = "pyreadline3-3.4.1.tar.gz", hash = "sha256:6f3d1f7b8a31ba32b73917cefc1f28cc660562f39aea8646d30bd6eff21f7bae"},
 ]
-
-[[package]]
-name = "pyreqwest-impersonate"
-version = "0.5.3"
-description = "HTTP client that can impersonate web browsers, mimicking their headers and `TLS/JA3/JA4/HTTP2` fingerprints"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:f15922496f728769fb9e1b116d5d9d7ba5525d0f2f7a76a41a1daef8b2e0c6c3"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:77533133ae73020e59bc56d776eea3fe3af4ac41d763a89f39c495436da0f4cf"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:436055fa3eeb3e01e2e8efd42a9f6c4ab62fd643eddc7c66d0e671b71605f273"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7e9d2e981a525fb72c1521f454e5581d2c7a3b1fcf1c97c0acfcb7a923d8cf3e"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:a6bf986d4a165f6976b3e862111e2a46091883cb55e9e6325150f5aea2644229"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:b7397f6dad3d5ae158e0b272cb3eafe8382e71775d829b286ae9c21cb5a879ff"},
-    {file = "pyreqwest_impersonate-0.5.3-cp38-abi3-win_amd64.whl", hash = "sha256:6026e4751b5912aec1e45238c07daf1e2c9126b3b32b33396b72885021e8990c"},
-    {file = "pyreqwest_impersonate-0.5.3.tar.gz", hash = "sha256:f21c10609958ff5be18df0c329eed42d2b3ba8a339b65dc5f96ab74537231692"},
-]
-
-[package.extras]
-dev = ["pytest (>=8.1.1)"]
 
 [[package]]
 name = "pytest"
@@ -6940,13 +6939,13 @@ files = [
 
 [[package]]
 name = "setuptools"
-version = "71.1.0"
+version = "72.0.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "setuptools-71.1.0-py3-none-any.whl", hash = "sha256:33874fdc59b3188304b2e7c80d9029097ea31627180896fb549c578ceb8a0855"},
-    {file = "setuptools-71.1.0.tar.gz", hash = "sha256:032d42ee9fb536e33087fb66cac5f840eb9391ed05637b3f2a76a7c8fb477936"},
+    {file = "setuptools-72.0.0-py3-none-any.whl", hash = "sha256:98b4d786a12fadd34eabf69e8d014b84e5fc655981e4ff419994700434ace132"},
+    {file = "setuptools-72.0.0.tar.gz", hash = "sha256:5a0d9c6a2f332881a0153f629d8000118efd33255cfa802757924c53312c76da"},
 ]
 
 [package.extras]
@@ -7736,13 +7735,13 @@ telegram = ["requests"]
 
 [[package]]
 name = "transformers"
-version = "4.43.2"
+version = "4.43.3"
 description = "State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow"
 optional = false
 python-versions = ">=3.8.0"
 files = [
-    {file = "transformers-4.43.2-py3-none-any.whl", hash = "sha256:283c8b47cf38640c5c0caea60be0dfa948669fa48e9739b03717cbf5e8b20f11"},
-    {file = "transformers-4.43.2.tar.gz", hash = "sha256:99dbbdeef9d451cdbc1c5316dce3af3dd5bb56b6cda5d0c564253e8fa7ccaf02"},
+    {file = "transformers-4.43.3-py3-none-any.whl", hash = "sha256:6552beada5d826c25ff9b79139d237ab9050c6ea96b73d7fd2f8a8ba23ee76a4"},
+    {file = "transformers-4.43.3.tar.gz", hash = "sha256:820c5b192bb1bf47250802901a8f0bf581e06b8fded89179d4ef08a1e903ee1c"},
 ]
 
 [package.dependencies]
@@ -8741,4 +8740,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "c7cac31e07a08a6e598e4080be3a629758735d1b629253c94743eaac28032ee4"
+content-hash = "1003e60cfcf81a4d13aa9f9fdf785ff7a8bea774298f03771ed46f6a40d9be56"
