@@ -96,7 +96,7 @@ class MarkdownReader(BaseReader):
                 else:
                     text += pre_line
                     pre_line = striped_line
-                    if is_code or line.endswith("  \n"):
+                    if is_code or line.startswith("#") or line.endswith("  \n"):
                         pre_line = f"{striped_line}\n"
                     line = fp.readline()
 

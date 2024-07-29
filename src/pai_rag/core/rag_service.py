@@ -70,8 +70,11 @@ class RagService:
                 # 多worker模式，读取最新的setting
                 rag_snapshot.update(new_config)
             config_snapshot = rag_snapshot.get_value()
-
-            new_dict_value = config_snapshot.to_dict()
+            if config_snapshot:
+                new_dict_value = config_snapshot.to_dict()
+            else:
+                logger.debug("No snapshot found, not reload")
+                return
             if self.config_dict_value != new_dict_value:
                 logger.debug("Config changed, reload")
                 self.rag.reload(config_snapshot)

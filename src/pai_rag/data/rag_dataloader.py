@@ -16,13 +16,19 @@ from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
 
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "./model_repository/qwen_1.8b"
 
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
-    [".csv", ".xlsx", ".xls", ".htm", ".html", ".imagelist", ".jsonl"]
+    [".csv", ".xlsx", ".xls", ".htm", ".html", ".jsonl"]
+)
+
+IMAGE_URL_REGEX = re.compile(
+    r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\.(?:jpg|jpeg|png)",
+    re.IGNORECASE,
 )
 
 
@@ -116,6 +122,12 @@ class RagDataLoader:
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
 
+        for node in nodes:
+            node_text = node.get_content()
+            image_urls = re.findall(IMAGE_URL_REGEX, node_text)
+            if image_urls:
+                node.metadata["image_url"] = image_urls[0]
+
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
 
         # QA metadata extraction
@@ -155,7 +167,7 @@ class RagDataLoader:
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
         if not nodes:
-            logger.info("[DataReader] could not find files")
+            logger.warning("[DataReader] no nodes parsed.")
             return
 
         logger.info("[DataReader] Start inserting to index.")

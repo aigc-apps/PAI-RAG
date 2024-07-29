@@ -45,7 +45,7 @@ class RagConfiguration:
 
     def get_value(self, key=None):
         key = key or "rag"  # use rag key as default config
-        return self.config[key]
+        return self.config.get(key, None)
 
     def update(self, new_value: Dynaconf):
         self.config.rag.update(new_value, tomlfy=True, merge=True)

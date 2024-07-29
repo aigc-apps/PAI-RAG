@@ -80,6 +80,7 @@ protobuf = "3.20.0"
 modelscope = "^1.16.0"
 llama-index-multi-modal-llms-dashscope = "^0.1.2"
 llama-index-vector-stores-alibabacloud-opensearch = "^0.1.0"
+cn-clip = "^1.5.1"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
