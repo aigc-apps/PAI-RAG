@@ -23,7 +23,7 @@ MODULE_CONFIG_KEY_MAP = {
     "AgentModule": "agent",
     "ToolModule": "tool",
     "DataLoaderModule": "data_loader",
-    "OssCacheModule": "cache",
+    "OssCacheModule": "oss_store",
     "EvaluationModule": "evaluation",
     "BM25IndexModule": "bm25",
     "NodesEnhancementModule": "node_enhancement",

@@ -127,7 +127,7 @@ class LlamaParseDirectoryReader(SimpleDirectoryReader):
         # TODO: make this less redundant
 
         documents: List[Document] = []
-        prefix = "reader/"
+        prefix = "pairag/reader/"
         file_key = None
         if oss_cache:
             file_key = calculate_file_md5(input_file, prefix)

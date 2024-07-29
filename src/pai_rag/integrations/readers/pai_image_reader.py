@@ -26,10 +26,42 @@ class PaiImageReader(BaseReader):
 
     """
 
-    def __init__(self, multimodal_llm: Any, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, multimodal_llm: Any, oss_cache: Any, *args: Any, **kwargs: Any
+    ) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
         self._multimodal_llm = multimodal_llm
+        self._oss_cache = oss_cache
+
+    def load_image_urls(self, image_urls: List[str], extra_info: Optional[Dict] = None):
+        logger.info(f"Get {len(image_urls)} image urls. Start parsing.")
+        docs = []
+        for url in tqdm(image_urls):
+            image_documents = load_image_urls([url])
+            image_response = self._multimodal_llm.complete(
+                prompt="详细描述图片中是什么",
+                image_documents=image_documents,
+            )
+            if image_response.text:
+                print(image_response.text)
+                metadata = {}
+                url_hash = hashlib.md5(url.encode("utf-8")).hexdigest()
+                metadata["file_name"] = f"{url_hash}_{os.path.basename(url)}"
+                metadata["file_path"] = url
+                metadata["image_url"] = url
+                if extra_info:
+                    metadata.update(extra_info)
+
+                docs.append(Document(text=image_response.text, metadata=metadata))
+            else:
+                logger.warn(
+                    f"Process {url} failed. Get empty response from multimodal model: {image_response.raw}"
+                )
+        logger.info(
+            f"Finished processing {len(image_urls)} image urls into {len(docs)} docs."
+        )
+        return docs
 
     def load_data(
         self,
@@ -37,28 +69,20 @@ class PaiImageReader(BaseReader):
         extra_info: Optional[Dict] = None,
         fs: Optional[AbstractFileSystem] = None,
     ) -> List[Document]:
-        image_urls = []
-        with open(file_path, "r", encoding="utf-8") as file:
-            image_urls = [line.strip() for line in file.readlines()]
+        assert (
+            self._oss_cache is not None
+        ), "Oss config must be provided for image processing."
 
-        logger.info(f"Get {len(image_urls)} image urls. Start parsing.")
-        docs = []
-        for url in tqdm(image_urls):
-            url_hash = hashlib.md5(url.encode("utf-8")).hexdigest()
-
-            image_documents = load_image_urls([url])
-            image_response = self._multimodal_llm.complete(
-                prompt="详细描述图片中是什么",
-                image_documents=image_documents,
+        file_ext = os.path.splitext(file_path)[1]
+        with open(file_path, "rb") as file:
+            data = file.read()
+            image_url = self._oss_cache.put_object_if_not_exists(
+                data=data,
+                file_ext=file_ext,
+                headers={
+                    "x-oss-object-acl": "public-read"
+                },  # set public read to make image accessible
+                path_prefix="pairag/images/",
             )
-            print(url, image_response.text)
 
-            metadata = {}
-            metadata["file_name"] = f"{url_hash}_{os.path.basename(url)}"
-            metadata["file_path"] = url
-            metadata["image_url"] = url
-            if extra_info:
-                metadata.update(extra_info)
-
-            docs.append(Document(text=image_response.text, metadata=metadata))
-        return docs
+            return self.load_image_urls([image_url], extra_info=extra_info)
