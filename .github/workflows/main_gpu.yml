@@ -31,7 +31,9 @@ jobs:
       - name: Install Dependencies
         run: |
           mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-          python -m pip install --upgrade pip wheel setuptools==71.1.0
+          python3 -m venv ./venv
+          source ./venv/bin/activate
+          pip install -U pip setuptools
           pip install poetry
           poetry install
         env:
