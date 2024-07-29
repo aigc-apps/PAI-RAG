@@ -179,7 +179,7 @@ class RagStore:
             dim=self.embed_dims,
             enable_sparse=True,
             sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
-            similarity_metric="IP",
+            similarity_metric="cosine",
             hybrid_ranker="WeightedRanker",
             hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
         )

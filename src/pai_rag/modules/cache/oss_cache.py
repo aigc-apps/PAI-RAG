@@ -14,10 +14,11 @@ class OssCacheModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         cache_config = new_params[MODULE_PARAM_CONFIG]
-        oss_bucket = cache_config.get("bucket", None)
-        oss_endpoint = cache_config.get("endpoint", None)
 
         if cache_config:
+            oss_bucket = cache_config.get("bucket", None)
+            oss_endpoint = cache_config.get("endpoint", None)
+
             logger.info(f"Using OSS bucket {oss_bucket} for caching objects.")
             return OssClient(bucket_name=oss_bucket, endpoint=oss_endpoint)
         else:
