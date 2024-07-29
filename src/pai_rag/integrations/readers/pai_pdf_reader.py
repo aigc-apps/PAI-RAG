@@ -211,6 +211,10 @@ class PaiPDFReader(BaseReader):
         vertical_value_all_count = 0
         horizontal_value_all_count = 0
 
+        """If it is a horizontal table, the probability that each row contains at least one number is higher than the probability that each column contains at least one number.
+        If it is a horizontal table with headers, the number of rows that are entirely composed of numbers will be greater than the number of columns that are entirely composed of numbers.
+        """
+
         for row in table:
             if any(isinstance(item, (int, float)) for item in row):
                 horizontal_value_any_count += 1
