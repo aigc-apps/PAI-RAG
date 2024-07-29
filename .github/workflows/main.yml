@@ -32,7 +32,7 @@ jobs:
         run: |
           python3 -m venv ./venv
           source ./venv/bin/activate
-          pip install -U pip setuptools
+          pip install -U pip setuptools==71.1.0
           pip install poetry
           poetry install
         env:
