@@ -23,6 +23,7 @@ import json
 import unicodedata
 import logging
 import tempfile
+import cv2
 import os
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,10 @@ class PaiPDFReader(BaseReader):
         Returns:
             str: text from ocr.
         """
+        image = cv2.imread(image_path)
+        if image is None or image.shape[0] <= 1 or image.shape[1] <= 1:
+            return ""
+
         result = self.image_reader.readtext(image_path)
         predictions = "".join([item[1] for item in result])
         return predictions
