@@ -1,7 +1,7 @@
-name: PR Build (GPU)
+name: PAI-RAG CI Build
 
 on:
-  pull_request:
+  push:
     # Sequence of patterns matched against refs/heads
     branches:
       - main
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and Test GPU version
+    name: Build and Test
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +30,6 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry install
