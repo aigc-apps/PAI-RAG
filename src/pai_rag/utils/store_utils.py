@@ -37,7 +37,7 @@ def get_store_persist_directory_name(storage_config, ndims):
         json_data = {k: storage_config["vector_store"][k] for k in keywords}
         raw_text = json.dumps(json_data)
     elif vector_store_type == "postgresql":
-        keywords = ["host", "port", "database"]
+        keywords = ["host", "port", "database", "table_name"]
         json_data = {k: storage_config["vector_store"][k] for k in keywords}
         raw_text = json.dumps(json_data)
     else:

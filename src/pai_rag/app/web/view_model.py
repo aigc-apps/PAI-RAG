@@ -105,6 +105,7 @@ class ViewModel(BaseModel):
     postgresql_host: str = None
     postgresql_port: int = 5432
     postgresql_database: str = None
+    postgresql_table_name: str = "pairag"
     postgresql_username: str = None
     postgresql_password: str = None
 
@@ -229,6 +230,7 @@ class ViewModel(BaseModel):
             view_model.postgresql_host = config["index"]["vector_store"]["host"]
             view_model.postgresql_port = config["index"]["vector_store"]["port"]
             view_model.postgresql_database = config["index"]["vector_store"]["database"]
+            view_model.postgresql_table_name = config["index"]["vector_store"]["table_name"]
             view_model.postgresql_username = config["index"]["vector_store"]["username"]
             view_model.postgresql_password = config["index"]["vector_store"]["password"]
 
@@ -374,6 +376,7 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["host"] = self.postgresql_host
             config["index"]["vector_store"]["port"] = self.postgresql_port
             config["index"]["vector_store"]["database"] = self.postgresql_database
+            config["index"]["vector_store"]["table_name"] = self.postgresql_table_name
             config["index"]["vector_store"]["username"] = self.postgresql_username
             config["index"]["vector_store"]["password"] = self.postgresql_password
 
@@ -561,6 +564,7 @@ class ViewModel(BaseModel):
         settings["postgresql_host"] = {"value": self.postgresql_host}
         settings["postgresql_port"] = {"value": self.postgresql_port}
         settings["postgresql_database"] = {"value": self.postgresql_database}
+        settings["postgresql_table_name"] = {"value": self.postgresql_table_name}
         settings["postgresql_username"] = {"value": self.postgresql_username}
         settings["postgresql_password"] = {"value": self.postgresql_password}
 

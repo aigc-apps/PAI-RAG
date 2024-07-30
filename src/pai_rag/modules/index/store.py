@@ -213,6 +213,7 @@ class RagStore:
             host=pg_config["host"],
             port=pg_config["port"],
             database=pg_config["database"],
+            table_name=pg_config["table_name"],
             user=pg_config["username"],
             password=pg_config["password"],
             embed_dim=self.embed_dims,

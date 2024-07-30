@@ -262,6 +262,9 @@ def create_vector_db_panel(
                 postgresql_database = gr.Textbox(
                     label="Database", elem_id="postgresql_database"
                 )
+                postgresql_table_name = gr.Textbox(
+                    label="TableName", elem_id="postgresql_table_name"
+                )
                 postgresql_password = gr.Textbox(
                     label="Password", elem_id="postgresql_password"
                 )
@@ -276,6 +279,7 @@ def create_vector_db_panel(
                         postgresql_host,
                         postgresql_port,
                         postgresql_database,
+                        postgresql_table_name,
                         postgresql_username,
                         postgresql_password,
                     }
@@ -371,6 +375,7 @@ def create_vector_db_panel(
                     postgresql_host,
                     postgresql_port,
                     postgresql_database,
+                    postgresql_table_name,
                     postgresql_username,
                     postgresql_password,
                 ]
