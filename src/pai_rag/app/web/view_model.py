@@ -230,7 +230,9 @@ class ViewModel(BaseModel):
             view_model.postgresql_host = config["index"]["vector_store"]["host"]
             view_model.postgresql_port = config["index"]["vector_store"]["port"]
             view_model.postgresql_database = config["index"]["vector_store"]["database"]
-            view_model.postgresql_table_name = config["index"]["vector_store"]["table_name"]
+            view_model.postgresql_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
             view_model.postgresql_username = config["index"]["vector_store"]["username"]
             view_model.postgresql_password = config["index"]["vector_store"]["password"]
 
