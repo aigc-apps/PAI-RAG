@@ -1,4 +1,4 @@
-name: PAI-RAG CI (GPU)
+name: PR Build (GPU)
 
 on:
   pull_request:
