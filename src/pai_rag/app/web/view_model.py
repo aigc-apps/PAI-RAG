@@ -91,7 +91,7 @@ class ViewModel(BaseModel):
     milvus_port: int = None
     milvus_user: str = None
     milvus_password: str = None
-    milvus_database: str = "pairag"
+    milvus_database: str = "default"
     milvus_collection_name: str = "pairagcollection"
 
     # open search

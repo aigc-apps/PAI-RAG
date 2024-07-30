@@ -229,7 +229,7 @@ def create_vector_db_panel(
                     label="UserName", elem_id="opensearch_username"
                 )
                 opensearch_password = gr.Textbox(
-                    label="Password", elem_id="opensearch_password"
+                    label="Password", type="password", elem_id="opensearch_password"
                 )
                 opensearch_table_name = gr.Textbox(
                     label="TableName", elem_id="opensearch_table_name"
