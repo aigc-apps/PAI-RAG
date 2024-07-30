@@ -217,7 +217,7 @@ class RagStore:
             password=pg_config["password"],
             embed_dim=self.embed_dims,
             hybrid_search=True,
-            text_search_config='jiebacfg'
+            text_search_config="jiebacfg",
         )
         return pg
 

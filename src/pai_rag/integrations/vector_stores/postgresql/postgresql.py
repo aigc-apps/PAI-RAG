@@ -113,16 +113,11 @@ def get_data_model(
     reference: https://github.com/pgvector/pgvector
     """
     Index(
-        tablename + '_embedding',
+        tablename + "_embedding",
         model.embedding,
         postgresql_using="hnsw",
-        postgresql_ops={
-            'embedding': 'vector_cosine_ops'
-        },
-        postgresql_with={
-            'm': '16',
-            'ef_construction': '64'
-        }
+        postgresql_ops={"embedding": "vector_cosine_ops"},
+        postgresql_with={"m": "16", "ef_construction": "64"},
     )
     return model
 
@@ -306,7 +301,7 @@ class PGVectorStore(BasePydanticVectorStore):
         with self._session() as session, session.begin():
             # Check if the specified schema exists with "CREATE" statement
             check_schema_statement = sqlalchemy.text(
-                f"SELECT schema_name FROM information_schema.schemata WHERE schema_name = :schema_name"
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name = :schema_name"
             ).bindparams(schema_name=self.schema_name)
             result = session.execute(check_schema_statement).fetchone()
 
@@ -512,13 +507,13 @@ class PGVectorStore(BasePydanticVectorStore):
             if kwargs.get("ivfflat_probes"):
                 ivfflat_probes = kwargs.get("ivfflat_probes")
                 session.execute(
-                    text(f"SET ivfflat.probes = :ivfflat_probes"),
+                    text("SET ivfflat.probes = :ivfflat_probes"),
                     {"ivfflat_probes": ivfflat_probes},
                 )
             if kwargs.get("hnsw_ef_search"):
                 hnsw_ef_search = kwargs.get("hnsw_ef_search")
                 session.execute(
-                    text(f"SET hnsw.ef_search = :hnsw_ef_search"),
+                    text("SET hnsw.ef_search = :hnsw_ef_search"),
                     {"hnsw_ef_search": hnsw_ef_search},
                 )
 
@@ -549,13 +544,13 @@ class PGVectorStore(BasePydanticVectorStore):
             if kwargs.get("hnsw_ef_search"):
                 hnsw_ef_search = kwargs.get("hnsw_ef_search")
                 await async_session.execute(
-                    text(f"SET hnsw.ef_search = :hnsw_ef_search"),
+                    text("SET hnsw.ef_search = :hnsw_ef_search"),
                     {"hnsw_ef_search": hnsw_ef_search},
                 )
             if kwargs.get("ivfflat_probes"):
                 ivfflat_probes = kwargs.get("ivfflat_probes")
                 await async_session.execute(
-                    text(f"SET ivfflat.probes = :ivfflat_probes"),
+                    text("SET ivfflat.probes = :ivfflat_probes"),
                     {"ivfflat_probes": ivfflat_probes},
                 )
 

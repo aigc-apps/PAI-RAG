@@ -22,7 +22,7 @@ def create_vector_db_panel(
                     "AnalyticDB",
                     "FAISS",
                     "OpenSearch",
-                    "PostgreSQL"
+                    "PostgreSQL",
                 ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
@@ -257,12 +257,8 @@ def create_vector_db_panel(
                     api_name="connect_faiss",
                 )
             with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
-                postgresql_host = gr.Textbox(
-                    label="Host", elem_id="postgresql_host"
-                )
-                postgresql_port = gr.Textbox(
-                    label="Port", elem_id="postgresql_port"
-                )
+                postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")
+                postgresql_port = gr.Textbox(label="Port", elem_id="postgresql_port")
                 postgresql_database = gr.Textbox(
                     label="Database", elem_id="postgresql_database"
                 )
@@ -376,7 +372,7 @@ def create_vector_db_panel(
                     postgresql_port,
                     postgresql_database,
                     postgresql_username,
-                    postgresql_password
+                    postgresql_password,
                 ]
             )
 
