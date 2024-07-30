@@ -22,6 +22,7 @@ from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorSt
 from pai_rag.integrations.vector_stores.analyticdb.my_analyticdb import (
     MyAnalyticDBVectorStore,
 )
+from pai_rag.integrations.vector_stores.postgresql.postgresql import PGVectorStore
 from pai_rag.integrations.postprocessor.my_simple_weighted_rerank import (
     MySimpleWeightedRerank,
 )
@@ -77,6 +78,8 @@ class RagStore:
             self.vector_store = self._get_or_create_milvus()
         elif vector_store_type == "opensearch":
             self.vector_store = self._get_or_create_open_search_store()
+        elif vector_store_type == "postgresql":
+            self.vector_store = self._get_or_create_postgresql_store()
         else:
             raise ValueError(f"Unknown vector_store type '{vector_store_type}'.")
 
@@ -203,6 +206,20 @@ class RagStore:
         )
 
         return AlibabaCloudOpenSearchStore(config=db_config)
+
+    def _get_or_create_postgresql_store(self):
+        pg_config = self.store_config["vector_store"]
+        pg = PGVectorStore.from_params(
+            host=pg_config["host"],
+            port=pg_config["port"],
+            database=pg_config["database"],
+            user=pg_config["username"],
+            password=pg_config["password"],
+            embed_dim=self.embed_dims,
+            hybrid_search=True,
+            text_search_config='jiebacfg'
+        )
+        return pg
 
     def _get_or_create_simple_doc_store(self):
         if self.is_empty:
