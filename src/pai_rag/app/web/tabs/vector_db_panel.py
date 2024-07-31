@@ -266,7 +266,7 @@ def create_vector_db_panel(
                     label="TableName", elem_id="postgresql_table_name"
                 )
                 postgresql_password = gr.Textbox(
-                    label="Password", elem_id="postgresql_password"
+                    label="Password", type="password", elem_id="postgresql_password"
                 )
                 postgresql_username = gr.Textbox(
                     label="UserName", elem_id="postgresql_username"
