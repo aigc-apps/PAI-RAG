@@ -22,6 +22,7 @@ def create_vector_db_panel(
                     "AnalyticDB",
                     "FAISS",
                     "OpenSearch",
+                    "PostgreSQL",
                 ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
@@ -255,6 +256,40 @@ def create_vector_db_panel(
                     outputs=con_state_opensearch,
                     api_name="connect_faiss",
                 )
+            with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
+                postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")
+                postgresql_port = gr.Textbox(label="Port", elem_id="postgresql_port")
+                postgresql_database = gr.Textbox(
+                    label="Database", elem_id="postgresql_database"
+                )
+                postgresql_table_name = gr.Textbox(
+                    label="TableName", elem_id="postgresql_table_name"
+                )
+                postgresql_password = gr.Textbox(
+                    label="Password", elem_id="postgresql_password"
+                )
+                postgresql_username = gr.Textbox(
+                    label="UserName", elem_id="postgresql_username"
+                )
+                connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
+                con_state_pg = gr.Textbox(label="Connection Info: ")
+                inputs_pg = input_elements.union(
+                    {
+                        vectordb_type,
+                        postgresql_host,
+                        postgresql_port,
+                        postgresql_database,
+                        postgresql_table_name,
+                        postgresql_username,
+                        postgresql_password,
+                    }
+                )
+                connect_btn_pg.click(
+                    fn=connect_vector_func,
+                    inputs=inputs_pg,
+                    outputs=con_state_pg,
+                    api_name="connect_pg",
+                )
 
             def change_vectordb_conn(vectordb_type):
                 adb_visible = False
@@ -263,6 +298,7 @@ def create_vector_db_panel(
                 es_visible = False
                 milvus_visible = False
                 opensearch_visible = False
+                postgresql_visible = False
                 if vectordb_type == "AnalyticDB":
                     adb_visible = True
                 elif vectordb_type == "Hologres":
@@ -275,6 +311,8 @@ def create_vector_db_panel(
                     faiss_visible = True
                 elif vectordb_type == "OpenSearch":
                     opensearch_visible = True
+                elif vectordb_type == "PostgreSQL":
+                    postgresql_visible = True
 
                 return {
                     adb_col: gr.update(visible=adb_visible),
@@ -283,6 +321,7 @@ def create_vector_db_panel(
                     faiss_col: gr.update(visible=faiss_visible),
                     milvus_col: gr.update(visible=milvus_visible),
                     opensearch_col: gr.update(visible=opensearch_visible),
+                    postgresql_col: gr.update(visible=postgresql_visible),
                 }
 
             vectordb_type.change(
@@ -295,6 +334,7 @@ def create_vector_db_panel(
                     es_col,
                     milvus_col,
                     opensearch_col,
+                    postgresql_col,
                 ],
             )
 
@@ -332,6 +372,12 @@ def create_vector_db_panel(
                     opensearch_username,
                     opensearch_password,
                     opensearch_table_name,
+                    postgresql_host,
+                    postgresql_port,
+                    postgresql_database,
+                    postgresql_table_name,
+                    postgresql_username,
+                    postgresql_password,
                 ]
             )
 
