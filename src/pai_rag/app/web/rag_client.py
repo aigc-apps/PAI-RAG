@@ -85,7 +85,6 @@ class RagWebClient:
         referenced_docs = ""
         images = ""
 
-        # 空结果，TODO: 适配score_threshold的场景
         if is_finished and len(docs) == 0 and not text:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
