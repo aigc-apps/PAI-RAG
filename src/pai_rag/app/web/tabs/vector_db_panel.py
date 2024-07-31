@@ -254,7 +254,7 @@ def create_vector_db_panel(
                     fn=connect_vector_func,
                     inputs=inputs_opensearch,
                     outputs=con_state_opensearch,
-                    api_name="connect_faiss",
+                    api_name="connect_opensearch",
                 )
             with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
                 postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")

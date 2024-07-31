@@ -61,7 +61,8 @@ def upload_knowledge(
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
-        time.sleep(2)
+        if not all(file.finished is True for file in my_upload_files):
+            time.sleep(2)
 
     upload_result = "Upload success."
     if error_msg:
@@ -72,6 +73,13 @@ def upload_knowledge(
             visible=True,
             value=upload_result,
         ),
+    ]
+
+
+def clear_files():
+    yield [
+        gr.update(visible=False, value=pd.DataFrame()),
+        gr.update(visible=False, value=""),
     ]
 
 
@@ -127,6 +135,12 @@ def create_upload_tab() -> Dict[str, Any]:
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
             )
+            upload_file.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_file_state_df, upload_file_state],
+                api_name="clear_file",
+            )
             upload_file_dir.upload(
                 fn=upload_knowledge,
                 inputs=[
@@ -138,6 +152,12 @@ def create_upload_tab() -> Dict[str, Any]:
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
+            )
+            upload_file_dir.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_dir_state_df, upload_dir_state],
+                api_name="clear_file_dir",
             )
             return {
                 chunk_size.elem_id: chunk_size,
