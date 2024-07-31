@@ -2,7 +2,7 @@
     <h1>PAI-RAG: An easy-to-use framework for modular RAG </h1>
 </p>
 
-[![PAI-RAG CI](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/main.yml)
+[![PAI-RAG CI Build](https://github.com/aigc-apps/PAI-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/ci.yml)
 
 <p align="center">
   <a href="./README.md">English</a> |
