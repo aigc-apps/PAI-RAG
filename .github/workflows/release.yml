@@ -39,7 +39,7 @@ jobs:
 
       - name: Build and push base image
         env:
-          IMAGE_TAG: ${{VERSION_TAG}}
+          IMAGE_TAG: ${{env.VERSION_TAG}}
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
@@ -47,7 +47,7 @@ jobs:
 
       - name: Build and push GPU image
         env:
-          IMAGE_TAG: ${{VERSION_TAG}}-gpu
+          IMAGE_TAG: ${{env.VERSION_TAG}}-gpu
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_gpu .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
@@ -55,7 +55,7 @@ jobs:
 
       - name: Build and push UI image
         env:
-          IMAGE_TAG: ${{VERSION_TAG}}-ui
+          IMAGE_TAG: ${{env.VERSION_TAG}}-ui
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_ui .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
@@ -63,7 +63,7 @@ jobs:
 
       - name: Build and push nginx image
         env:
-          IMAGE_TAG: ${{VERSION_TAG}}-nginx
+          IMAGE_TAG: ${{env.VERSION_TAG}}-nginx
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_nginx .
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
