@@ -53,6 +53,4 @@ LLM_MODEL_KEY_DICT = {
     ],
 }
 
-# EMPTY_KNOWLEDGEBASE_MESSAGE = "The knowledge base is empty. Kindly upload your knowledge files before executing a query."
-
-EMPTY_KNOWLEDGEBASE_MESSAGE = "Poor Response: the knowledge base is empty or no documents are retrieved with the specified score_threshold."
+EMPTY_KNOWLEDGEBASE_MESSAGE = "We couldn't find any documents related to your question: {query_str}. \n\n You may try lowering the similarity_threshold or uploading relevant knowledge files."

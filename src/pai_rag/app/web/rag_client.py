@@ -72,7 +72,7 @@ class RagWebClient:
         return f"{self.endpoint}service/evaluate/response"
 
     def _format_rag_response(
-        self, response, session_id: str = None, stream: bool = False
+        self, question, response, session_id: str = None, stream: bool = False
     ):
         if stream:
             text = response["delta"]
@@ -87,7 +87,7 @@ class RagWebClient:
 
         # 空结果，TODO: 适配score_threshold的场景
         if is_finished and len(docs) == 0 and not text:
-            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
         elif is_finished:
             for i, doc in enumerate(docs):
@@ -122,7 +122,7 @@ class RagWebClient:
         if not stream:
             response = dotdict(json.loads(r.text))
             yield self._format_rag_response(
-                response, session_id=session_id, stream=stream
+                text, response, session_id=session_id, stream=stream
             )
         else:
             full_content = ""
@@ -131,7 +131,7 @@ class RagWebClient:
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
-                    chunk_response, session_id=session_id, stream=stream
+                    text, chunk_response, session_id=session_id, stream=stream
                 )
 
     def query_llm(
@@ -156,7 +156,7 @@ class RagWebClient:
         if not stream:
             response = dotdict(json.loads(r.text))
             yield self._format_rag_response(
-                response, session_id=session_id, stream=stream
+                text, response, session_id=session_id, stream=stream
             )
         else:
             full_content = ""
@@ -165,7 +165,7 @@ class RagWebClient:
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
-                    chunk_response, session_id=session_id, stream=stream
+                    text, chunk_response, session_id=session_id, stream=stream
                 )
 
     def query_vector(self, text: str):
@@ -179,7 +179,7 @@ class RagWebClient:
             "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
         )
         if len(response["docs"]) == 0:
-            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
