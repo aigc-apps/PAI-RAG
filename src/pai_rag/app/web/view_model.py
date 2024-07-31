@@ -101,6 +101,14 @@ class ViewModel(BaseModel):
     opensearch_password: str = None
     opensearch_table_name: str = "pairag"
 
+    # PostgreSQL
+    postgresql_host: str = None
+    postgresql_port: int = 5432
+    postgresql_database: str = None
+    postgresql_table_name: str = "pairag"
+    postgresql_username: str = None
+    postgresql_password: str = None
+
     # retriever
     similarity_top_k: int = 5
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
@@ -217,6 +225,16 @@ class ViewModel(BaseModel):
             view_model.opensearch_table_name = config["index"]["vector_store"][
                 "table_name"
             ]
+
+        elif view_model.vectordb_type.lower() == "postgresql":
+            view_model.postgresql_host = config["index"]["vector_store"]["host"]
+            view_model.postgresql_port = config["index"]["vector_store"]["port"]
+            view_model.postgresql_database = config["index"]["vector_store"]["database"]
+            view_model.postgresql_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
+            view_model.postgresql_username = config["index"]["vector_store"]["username"]
+            view_model.postgresql_password = config["index"]["vector_store"]["password"]
 
         view_model.parser_type = config["node_parser"]["type"]
         view_model.chunk_size = config["node_parser"]["chunk_size"]
@@ -355,6 +373,14 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["username"] = self.opensearch_username
             config["index"]["vector_store"]["password"] = self.opensearch_password
             config["index"]["vector_store"]["table_name"] = self.opensearch_table_name
+
+        elif self.vectordb_type.lower() == "postgresql":
+            config["index"]["vector_store"]["host"] = self.postgresql_host
+            config["index"]["vector_store"]["port"] = self.postgresql_port
+            config["index"]["vector_store"]["database"] = self.postgresql_database
+            config["index"]["vector_store"]["table_name"] = self.postgresql_table_name
+            config["index"]["vector_store"]["username"] = self.postgresql_username
+            config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         if self.retrieval_mode == "Hybrid":
@@ -535,6 +561,14 @@ class ViewModel(BaseModel):
         settings["opensearch_username"] = {"value": self.opensearch_username}
         settings["opensearch_password"] = {"value": self.opensearch_password}
         settings["opensearch_table_name"] = {"value": self.opensearch_table_name}
+
+        # postgresql
+        settings["postgresql_host"] = {"value": self.postgresql_host}
+        settings["postgresql_port"] = {"value": self.postgresql_port}
+        settings["postgresql_database"] = {"value": self.postgresql_database}
+        settings["postgresql_table_name"] = {"value": self.postgresql_table_name}
+        settings["postgresql_username"] = {"value": self.postgresql_username}
+        settings["postgresql_password"] = {"value": self.postgresql_password}
 
         # evaluation
         if self.vectordb_type == "FAISS":
