@@ -25,6 +25,7 @@ import logging
 import tempfile
 import cv2
 import os
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class PaiPDFReader(BaseReader):
 
         return (
             horizontal_value_any_count >= vertical_value_any_count
-            or horizontal_value_all_count >= vertical_value_all_count > 0
+            or horizontal_value_all_count > 0 >= vertical_value_all_count
         )
 
     """Function to convert table data to json
@@ -344,7 +345,10 @@ class PaiPDFReader(BaseReader):
         page_items = []
         # Open the PDF and extract pages
         pdf = pdfplumber.open(file_path)
-        for pagenum, page in enumerate(extract_pages(file_path)):
+        pages = tqdm(
+            extract_pages(file_path), desc="processing pages in pdf", unit="page"
+        )
+        for pagenum, page in enumerate(pages):
             # Initialize variables for extracting text from the page
             page_object = pdf_read.pages[pagenum]
             text_elements = []
@@ -435,6 +439,7 @@ class PaiPDFReader(BaseReader):
 
         # Construct the returned data
         docs = []
+        page_items = tqdm(page_items, desc="processing tables in pages", unit="page")
         for pagenum, item in enumerate(page_items):
             page_tables_summaries = []
             page_tables_json = []
