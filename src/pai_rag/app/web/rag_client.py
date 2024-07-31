@@ -91,12 +91,12 @@ class RagWebClient:
             return response
         elif is_finished:
             for i, doc in enumerate(docs):
-                formatted_file_name = re.sub(
-                    "^[0-9a-z]{32}_", "", doc["metadata"]["file_name"]
-                )
-                referenced_docs += (
-                    f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                )
+                filename = doc["metadata"].get("file_name", None)
+                if filename:
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    referenced_docs += (
+                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                    )
                 image_url = doc["metadata"].get("image_url", None)
                 if image_url:
                     images += f"""<img src="{image_url}"/>"""
