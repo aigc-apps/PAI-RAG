@@ -254,22 +254,22 @@ def create_vector_db_panel(
                     fn=connect_vector_func,
                     inputs=inputs_opensearch,
                     outputs=con_state_opensearch,
-                    api_name="connect_faiss",
+                    api_name="connect_opensearch",
                 )
             with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
                 postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")
                 postgresql_port = gr.Textbox(label="Port", elem_id="postgresql_port")
+                postgresql_username = gr.Textbox(
+                    label="UserName", elem_id="postgresql_username"
+                )
+                postgresql_password = gr.Textbox(
+                    label="Password", type="password", elem_id="postgresql_password"
+                )
                 postgresql_database = gr.Textbox(
                     label="Database", elem_id="postgresql_database"
                 )
                 postgresql_table_name = gr.Textbox(
                     label="TableName", elem_id="postgresql_table_name"
-                )
-                postgresql_password = gr.Textbox(
-                    label="Password", elem_id="postgresql_password"
-                )
-                postgresql_username = gr.Textbox(
-                    label="UserName", elem_id="postgresql_username"
                 )
                 connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
                 con_state_pg = gr.Textbox(label="Connection Info: ")

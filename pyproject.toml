@@ -82,6 +82,7 @@ llama-index-multi-modal-llms-dashscope = "^0.1.2"
 llama-index-vector-stores-alibabacloud-opensearch = "^0.1.0"
 asyncpg = "^0.29.0"
 pgvector = "^0.3.2"
+pre-commit = "^3.8.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

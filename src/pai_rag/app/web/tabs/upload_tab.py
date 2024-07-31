@@ -61,7 +61,8 @@ def upload_knowledge(
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
-        time.sleep(2)
+        if not all(file.finished is True for file in my_upload_files):
+            time.sleep(2)
 
     upload_result = "Upload success."
     if error_msg:
@@ -72,6 +73,13 @@ def upload_knowledge(
             visible=True,
             value=upload_result,
         ),
+    ]
+
+
+def clear_files():
+    yield [
+        gr.update(visible=False, value=pd.DataFrame()),
+        gr.update(visible=False, value=""),
     ]
 
 
@@ -102,7 +110,6 @@ def create_upload_tab() -> Dict[str, Any]:
                 upload_file = gr.File(
                     label="Upload a knowledge file.", file_count="multiple"
                 )
-                upload_file_btn = gr.Button("Upload", variant="primary")
                 upload_file_state_df = gr.DataFrame(
                     label="Upload Status Info", visible=False
                 )
@@ -112,12 +119,11 @@ def create_upload_tab() -> Dict[str, Any]:
                     label="Upload a knowledge directory.",
                     file_count="directory",
                 )
-                upload_dir_btn = gr.Button("Upload", variant="primary")
                 upload_dir_state_df = gr.DataFrame(
                     label="Upload Status Info", visible=False
                 )
                 upload_dir_state = gr.Textbox(label="Upload Status", visible=False)
-            upload_file_btn.click(
+            upload_file.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file,
@@ -129,7 +135,13 @@ def create_upload_tab() -> Dict[str, Any]:
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
             )
-            upload_dir_btn.click(
+            upload_file.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_file_state_df, upload_file_state],
+                api_name="clear_file",
+            )
+            upload_file_dir.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file_dir,
@@ -140,6 +152,12 @@ def create_upload_tab() -> Dict[str, Any]:
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
+            )
+            upload_file_dir.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_dir_state_df, upload_dir_state],
+                api_name="clear_file_dir",
             )
             return {
                 chunk_size.elem_id: chunk_size,
