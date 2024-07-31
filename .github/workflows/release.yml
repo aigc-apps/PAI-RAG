@@ -35,7 +35,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.ACR_USER }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          password: ${{ secrets.ACR_PUBLIC_PASSWORD }}
 
       - name: Build and push base image
         env:
