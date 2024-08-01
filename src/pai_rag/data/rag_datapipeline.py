@@ -25,6 +25,8 @@ class RagDataPipeline:
         pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
+        enable_ocr: bool,
+        enable_table_summary: bool,
         name: str = None,
     ):
         if not name:
@@ -36,7 +38,12 @@ class RagDataPipeline:
             else:
                 input_paths = [file.strip() for file in input_path.split(",")]
             self.data_loader.load(
-                input_paths, pattern, enable_qa_extraction, enable_raptor
+                input_paths,
+                pattern,
+                enable_qa_extraction,
+                enable_raptor,
+                enable_ocr,
+                enable_table_summary,
             )
         else:
             self.data_loader.load_eval_data(name)
@@ -103,11 +110,25 @@ def __init_data_pipeline(config_file, use_local_qa_model):
     default=None,
 )
 def run(
-    config, data_path, pattern, extract_qa, use_local_qa_model, enable_raptor, name
+    config,
+    data_path,
+    pattern,
+    extract_qa,
+    use_local_qa_model,
+    enable_raptor,
+    enable_ocr,
+    enable_table_summary,
+    name,
 ):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
     asyncio.run(
         data_pipeline.ingest_from_input_path(
-            data_path, pattern, extract_qa, enable_raptor, name
+            data_path,
+            pattern,
+            extract_qa,
+            enable_raptor,
+            enable_ocr,
+            enable_table_summary,
+            name,
         )
     )

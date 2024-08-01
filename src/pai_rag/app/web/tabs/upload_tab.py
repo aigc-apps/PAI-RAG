@@ -9,14 +9,25 @@ import asyncio
 
 
 def upload_knowledge(
-    upload_files, chunk_size, chunk_overlap, enable_qa_extraction, enable_raptor
+    upload_files,
+    chunk_size,
+    chunk_overlap,
+    enable_qa_extraction,
+    enable_raptor,
+    enable_ocr,
+    enable_table_summary,
 ):
     if not upload_files:
         return
 
     try:
         rag_client.patch_config(
-            {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap}
+            {
+                "chunk_size": chunk_size,
+                "chunk_overlap": chunk_overlap,
+                "enable_ocr": enable_ocr,
+                "enable_table_summary": enable_table_summary,
+            }
         )
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -31,7 +42,11 @@ def upload_knowledge(
         ]
 
     response = rag_client.add_knowledge(
-        [file.name for file in upload_files], enable_qa_extraction, enable_raptor
+        [file.name for file in upload_files],
+        enable_qa_extraction,
+        enable_raptor,
+        enable_ocr,
+        enable_table_summary,
     )
     my_upload_files = []
     for file in upload_files:
@@ -105,6 +120,16 @@ def create_upload_tab() -> Dict[str, Any]:
                 info="Process with Raptor Node Enhancement",
                 elem_id="enable_raptor",
             )
+            enable_ocr = gr.Checkbox(
+                label="Yes",
+                info="Process with OCR",
+                elem_id="enable_ocr",
+            )
+            enable_table_summary = gr.Checkbox(
+                label="Yes",
+                info="Process with Table Summary ",
+                elem_id="enable_table_summary",
+            )
         with gr.Column(scale=8):
             with gr.Tab("Files"):
                 upload_file = gr.File(
@@ -131,6 +156,8 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
+                    enable_ocr,
+                    enable_table_summary,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
@@ -149,6 +176,8 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
+                    enable_ocr,
+                    enable_table_summary,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
@@ -164,4 +193,6 @@ def create_upload_tab() -> Dict[str, Any]:
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_qa_extraction.elem_id: enable_qa_extraction,
                 enable_raptor.elem_id: enable_raptor,
+                enable_ocr.elem_id: enable_ocr,
+                enable_table_summary.elem_id: enable_table_summary,
             }

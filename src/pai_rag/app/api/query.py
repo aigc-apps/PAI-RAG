@@ -102,6 +102,8 @@ async def upload_data(
     files: List[UploadFile],
     faiss_path: str = Form(None),
     enable_raptor: bool = Form(False),
+    enable_ocr: bool = Form(False),
+    enable_table_summary: bool = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
@@ -129,6 +131,8 @@ async def upload_data(
         faiss_path=faiss_path,
         enable_qa_extraction=False,
         enable_raptor=enable_raptor,
+        enable_ocr=enable_ocr,
+        enable_table_summary=enable_table_summary,
     )
 
     return {"task_id": task_id}
