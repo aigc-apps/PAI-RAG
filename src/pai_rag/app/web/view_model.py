@@ -52,6 +52,8 @@ class ViewModel(BaseModel):
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
+    enable_ocr: bool = False
+    enable_table_summary: bool = False
 
     config_file: str = None
 
@@ -100,6 +102,14 @@ class ViewModel(BaseModel):
     opensearch_username: str = None
     opensearch_password: str = None
     opensearch_table_name: str = "pairag"
+
+    # PostgreSQL
+    postgresql_host: str = None
+    postgresql_port: int = 5432
+    postgresql_database: str = None
+    postgresql_table_name: str = "pairag"
+    postgresql_username: str = None
+    postgresql_password: str = None
 
     # retriever
     similarity_top_k: int = 5
@@ -218,6 +228,16 @@ class ViewModel(BaseModel):
                 "table_name"
             ]
 
+        elif view_model.vectordb_type.lower() == "postgresql":
+            view_model.postgresql_host = config["index"]["vector_store"]["host"]
+            view_model.postgresql_port = config["index"]["vector_store"]["port"]
+            view_model.postgresql_database = config["index"]["vector_store"]["database"]
+            view_model.postgresql_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
+            view_model.postgresql_username = config["index"]["vector_store"]["username"]
+            view_model.postgresql_password = config["index"]["vector_store"]["password"]
+
         view_model.parser_type = config["node_parser"]["type"]
         view_model.chunk_size = config["node_parser"]["chunk_size"]
         view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
@@ -230,6 +250,12 @@ class ViewModel(BaseModel):
         )
         view_model.enable_raptor = config["data_reader"].get(
             "enable_raptor", view_model.enable_raptor
+        )
+        view_model.enable_ocr = config["data_reader"].get(
+            "enable_ocr", view_model.enable_ocr
+        )
+        view_model.enable_table_summary = config["data_reader"].get(
+            "enable_table_summary", view_model.enable_table_summary
         )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
@@ -305,6 +331,8 @@ class ViewModel(BaseModel):
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["enable_raptor"] = self.enable_raptor
+        config["data_reader"]["enable_ocr"] = self.enable_ocr
+        config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
         if self.vectordb_type == "Hologres":
@@ -355,6 +383,14 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["username"] = self.opensearch_username
             config["index"]["vector_store"]["password"] = self.opensearch_password
             config["index"]["vector_store"]["table_name"] = self.opensearch_table_name
+
+        elif self.vectordb_type.lower() == "postgresql":
+            config["index"]["vector_store"]["host"] = self.postgresql_host
+            config["index"]["vector_store"]["port"] = self.postgresql_port
+            config["index"]["vector_store"]["database"] = self.postgresql_database
+            config["index"]["vector_store"]["table_name"] = self.postgresql_table_name
+            config["index"]["vector_store"]["username"] = self.postgresql_username
+            config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         if self.retrieval_mode == "Hybrid":
@@ -477,6 +513,8 @@ class ViewModel(BaseModel):
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
         settings["enable_raptor"] = {"value": self.enable_raptor}
+        settings["enable_ocr"] = {"value": self.enable_ocr}
+        settings["enable_table_summary"] = {"value": self.enable_table_summary}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
@@ -535,6 +573,14 @@ class ViewModel(BaseModel):
         settings["opensearch_username"] = {"value": self.opensearch_username}
         settings["opensearch_password"] = {"value": self.opensearch_password}
         settings["opensearch_table_name"] = {"value": self.opensearch_table_name}
+
+        # postgresql
+        settings["postgresql_host"] = {"value": self.postgresql_host}
+        settings["postgresql_port"] = {"value": self.postgresql_port}
+        settings["postgresql_database"] = {"value": self.postgresql_database}
+        settings["postgresql_table_name"] = {"value": self.postgresql_table_name}
+        settings["postgresql_username"] = {"value": self.postgresql_username}
+        settings["postgresql_password"] = {"value": self.postgresql_password}
 
         # evaluation
         if self.vectordb_type == "FAISS":

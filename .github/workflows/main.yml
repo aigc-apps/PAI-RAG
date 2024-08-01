@@ -1,4 +1,4 @@
-name: PAI-RAG CI
+name: PR Build
 
 on:
   pull_request:

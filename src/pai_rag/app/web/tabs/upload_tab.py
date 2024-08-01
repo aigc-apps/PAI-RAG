@@ -9,14 +9,25 @@ import asyncio
 
 
 def upload_knowledge(
-    upload_files, chunk_size, chunk_overlap, enable_qa_extraction, enable_raptor
+    upload_files,
+    chunk_size,
+    chunk_overlap,
+    enable_qa_extraction,
+    enable_raptor,
+    enable_ocr,
+    enable_table_summary,
 ):
     if not upload_files:
         return
 
     try:
         rag_client.patch_config(
-            {"chunk_size": chunk_size, "chunk_overlap": chunk_overlap}
+            {
+                "chunk_size": chunk_size,
+                "chunk_overlap": chunk_overlap,
+                "enable_ocr": enable_ocr,
+                "enable_table_summary": enable_table_summary,
+            }
         )
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -61,7 +72,8 @@ def upload_knowledge(
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
-        time.sleep(2)
+        if not all(file.finished is True for file in my_upload_files):
+            time.sleep(2)
 
     upload_result = "Upload success."
     if error_msg:
@@ -72,6 +84,13 @@ def upload_knowledge(
             visible=True,
             value=upload_result,
         ),
+    ]
+
+
+def clear_files():
+    yield [
+        gr.update(visible=False, value=pd.DataFrame()),
+        gr.update(visible=False, value=""),
     ]
 
 
@@ -97,12 +116,21 @@ def create_upload_tab() -> Dict[str, Any]:
                 info="Process with Raptor Node Enhancement",
                 elem_id="enable_raptor",
             )
+            enable_ocr = gr.Checkbox(
+                label="Yes",
+                info="Process with OCR",
+                elem_id="enable_ocr",
+            )
+            enable_table_summary = gr.Checkbox(
+                label="Yes",
+                info="Process with Table Summary ",
+                elem_id="enable_table_summary",
+            )
         with gr.Column(scale=8):
             with gr.Tab("Files"):
                 upload_file = gr.File(
                     label="Upload a knowledge file.", file_count="multiple"
                 )
-                upload_file_btn = gr.Button("Upload", variant="primary")
                 upload_file_state_df = gr.DataFrame(
                     label="Upload Status Info", visible=False
                 )
@@ -112,12 +140,11 @@ def create_upload_tab() -> Dict[str, Any]:
                     label="Upload a knowledge directory.",
                     file_count="directory",
                 )
-                upload_dir_btn = gr.Button("Upload", variant="primary")
                 upload_dir_state_df = gr.DataFrame(
                     label="Upload Status Info", visible=False
                 )
                 upload_dir_state = gr.Textbox(label="Upload Status", visible=False)
-            upload_file_btn.click(
+            upload_file.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file,
@@ -125,11 +152,19 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
+                    enable_ocr,
+                    enable_table_summary,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
             )
-            upload_dir_btn.click(
+            upload_file.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_file_state_df, upload_file_state],
+                api_name="clear_file",
+            )
+            upload_file_dir.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file_dir,
@@ -137,13 +172,23 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
+                    enable_ocr,
+                    enable_table_summary,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
+            )
+            upload_file_dir.clear(
+                fn=clear_files,
+                inputs=[],
+                outputs=[upload_dir_state_df, upload_dir_state],
+                api_name="clear_file_dir",
             )
             return {
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_qa_extraction.elem_id: enable_qa_extraction,
                 enable_raptor.elem_id: enable_raptor,
+                enable_ocr.elem_id: enable_ocr,
+                enable_table_summary.elem_id: enable_table_summary,
             }

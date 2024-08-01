@@ -21,6 +21,7 @@ class RagIndex:
         self.config = config
         self.embed_model = embed_model
         self.embed_dims = self._get_embed_vec_dim(embed_model)
+        self.postprocessor = postprocessor
         persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
         folder_name = get_store_persist_directory_name(config, self.embed_dims)
         self.persist_path = os.path.join(persist_path, folder_name)
@@ -29,7 +30,7 @@ class RagIndex:
 
         is_empty = not os.path.exists(self.persist_path)
         rag_store = RagStore(
-            config, postprocessor, self.persist_path, is_empty, self.embed_dims
+            config, self.postprocessor, self.persist_path, is_empty, self.embed_dims
         )
         self.storage_context = rag_store.get_storage_context()
 
