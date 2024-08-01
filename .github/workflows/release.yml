@@ -27,7 +27,7 @@ jobs:
         run: |
           pip install poetry
           VERSION_TAG=$(poetry version --short)
-          SPECIFIC_VERSION_TAG=$VERSION_TAG_$(date +'%Y%m%d')
+          SPECIFIC_VERSION_TAG="$VERSION_TAG_$(date +'%Y%m%d')"
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
           echo "SPECIFIC_VERSION_TAG=$SPECIFIC_VERSION_TAG" >> $GITHUB_ENV
           echo "version:$SPECIFIC_VERSION_TAG\ncommit_id:$(git rev-parse HEAD)" >  __build_version.cfg
