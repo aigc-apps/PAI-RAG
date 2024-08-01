@@ -70,6 +70,18 @@ class RetrieverModule(ConfigurableModule):
                     similarity_top_k=similarity_top_k,
                     vector_store_query_mode=VectorStoreQueryMode.TEXT_SEARCH,
                 )
+        elif index.vectordb_type == "postgresql":
+            if retrieval_mode == "embedding":
+                query_mode = VectorStoreQueryMode.DEFAULT
+            elif retrieval_mode == "keyword":
+                query_mode = VectorStoreQueryMode.TEXT_SEARCH
+            else:
+                query_mode = VectorStoreQueryMode.HYBRID
+            return MyVectorIndexRetriever(
+                index=index.vector_index,
+                similarity_top_k=similarity_top_k,
+                vector_store_query_mode=query_mode,
+            )
         else:
             vector_retriever = MyVectorIndexRetriever(
                 index=index.vector_index, similarity_top_k=similarity_top_k
