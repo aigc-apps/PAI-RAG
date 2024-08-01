@@ -196,7 +196,10 @@ class RagWebClient:
         yield response
 
     def add_knowledge(
-        self, input_files: str, enable_qa_extraction: bool, enable_raptor: bool
+        self,
+        input_files: str,
+        enable_qa_extraction: bool,
+        enable_raptor: bool,
     ):
         files = []
         file_obj_list = []
