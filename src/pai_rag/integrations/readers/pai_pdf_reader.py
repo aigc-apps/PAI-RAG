@@ -61,6 +61,8 @@ class PaiPDFReader(BaseReader):
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
         self.enable_table_summary = enable_table_summary
+        if self.enable_table_summary:
+            logger.info("process with table summary")
         if self.enable_image_ocr:
             self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
             logger.info("start loading ocr model")
