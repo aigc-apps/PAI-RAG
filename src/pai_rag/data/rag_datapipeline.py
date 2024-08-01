@@ -25,8 +25,6 @@ class RagDataPipeline:
         pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
-        enable_ocr: bool,
-        enable_table_summary: bool,
         name: str = None,
     ):
         if not name:
@@ -42,8 +40,6 @@ class RagDataPipeline:
                 pattern,
                 enable_qa_extraction,
                 enable_raptor,
-                enable_ocr,
-                enable_table_summary,
             )
         else:
             self.data_loader.load_eval_data(name)
@@ -116,8 +112,6 @@ def run(
     extract_qa,
     use_local_qa_model,
     enable_raptor,
-    enable_ocr,
-    enable_table_summary,
     name,
 ):
     data_pipeline = __init_data_pipeline(config, use_local_qa_model)
@@ -127,8 +121,6 @@ def run(
             pattern,
             extract_qa,
             enable_raptor,
-            enable_ocr,
-            enable_table_summary,
             name,
         )
     )

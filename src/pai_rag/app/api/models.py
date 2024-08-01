@@ -54,5 +54,3 @@ class DataInput(BaseModel):
     file_path: str
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
-    enable_ocr: bool = False
-    enable_table_summary: bool = False

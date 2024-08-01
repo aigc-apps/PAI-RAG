@@ -102,8 +102,6 @@ class RagService:
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
-        enable_ocr: bool = False,
-        enable_table_summary: bool = False,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
@@ -115,8 +113,6 @@ class RagService:
                 faiss_path,
                 enable_qa_extraction,
                 enable_raptor,
-                enable_ocr,
-                enable_table_summary,
             )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")

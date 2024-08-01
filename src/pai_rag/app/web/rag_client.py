@@ -200,8 +200,6 @@ class RagWebClient:
         input_files: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
-        enable_ocr: bool,
-        enable_table_summary: bool,
     ):
         files = []
         file_obj_list = []
@@ -210,11 +208,7 @@ class RagWebClient:
             mimetype = mimetypes.guess_type(file_name)[0]
             files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
             file_obj_list.append(file_obj)
-        para = {
-            "enable_raptor": enable_raptor,
-            "enable_ocr": enable_ocr,
-            "enable_table_summary": enable_table_summary,
-        }
+        para = {"enable_raptor": enable_raptor}
         try:
             r = requests.post(
                 self.load_data_url,

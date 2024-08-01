@@ -42,11 +42,7 @@ def upload_knowledge(
         ]
 
     response = rag_client.add_knowledge(
-        [file.name for file in upload_files],
-        enable_qa_extraction,
-        enable_raptor,
-        enable_ocr,
-        enable_table_summary,
+        [file.name for file in upload_files], enable_qa_extraction, enable_raptor
     )
     my_upload_files = []
     for file in upload_files:

@@ -151,8 +151,6 @@ class RagDataLoader:
         filter_pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
-        enable_ocr: bool,
-        enable_table_summary: bool,
     ):
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
@@ -194,8 +192,6 @@ class RagDataLoader:
         filter_pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
-        enable_ocr: bool,
-        enable_table_summary: bool,
     ):
         nodes = await run_in_threadpool(
             lambda: self._get_nodes(file_path, filter_pattern, enable_qa_extraction)

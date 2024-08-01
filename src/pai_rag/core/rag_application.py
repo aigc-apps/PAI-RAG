@@ -58,8 +58,6 @@ class RagApplication:
         faiss_path=None,
         enable_qa_extraction=False,
         enable_raptor=False,
-        enable_ocr=False,
-        enable_table_summary=False,
     ):
         sessioned_config = self.config
         if faiss_path:
@@ -73,12 +71,7 @@ class RagApplication:
             "DataLoaderModule", sessioned_config
         )
         await data_loader.aload(
-            input_files,
-            filter_pattern,
-            enable_qa_extraction,
-            enable_raptor,
-            enable_ocr,
-            enable_table_summary,
+            input_files, filter_pattern, enable_qa_extraction, enable_raptor
         )
 
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
