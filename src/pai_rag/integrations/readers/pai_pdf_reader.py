@@ -54,9 +54,15 @@ class PaiPDFReader(BaseReader):
     """
 
     def __init__(
-        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_MODEL_DIR
+        self,
+        enable_image_ocr: bool = False,
+        enable_table_summary: bool = False,
+        model_dir: str = DEFAULT_MODEL_DIR,
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
+        self.enable_table_summary = enable_table_summary
+        if self.enable_table_summary:
+            logger.info("process with table summary")
         if self.enable_image_ocr:
             self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
             logger.info("start loading ocr model")
@@ -446,11 +452,14 @@ class PaiPDFReader(BaseReader):
             for table in total_tables:
                 # If the page number matches
                 if pagenum == table["page_number"]:
-                    summarized_table_text = PaiPDFReader.tables_summarize(table["text"])
+                    if self.enable_table_summary:
+                        summarized_table_text = PaiPDFReader.tables_summarize(
+                            table["text"]
+                        )
+                        page_tables_summaries.append(
+                            summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
+                        )
                     json_data = PaiPDFReader.table_to_json(table["text"])
-                    page_tables_summaries.append(
-                        summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
-                    )
                     page_tables_json.append(json_data)
             page_table_summary = "\n".join(page_tables_summaries)
             page_table_json = "\n".join(page_tables_json)
