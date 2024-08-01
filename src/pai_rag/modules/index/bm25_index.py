@@ -22,7 +22,12 @@ class BM25IndexModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         index = new_params["IndexModule"]
-        if index.vectordb_type == "elasticsearch" or index.vectordb_type == "milvus":
+        if (
+            index.vectordb_type == "elasticsearch"
+            or index.vectordb_type == "milvus"
+            or index.vectordb_type == "postgresql"
+        ):
+            logger.info(f"Do not use local BM25 Index for {index.vectordb_type}.")
             return None
         else:
             logger.info("Using BM25 Index.")

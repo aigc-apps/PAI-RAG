@@ -224,3 +224,4 @@ output
 localdata/
 model_repository/
 *.tmp
+__*
