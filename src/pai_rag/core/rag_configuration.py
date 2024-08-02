@@ -48,11 +48,14 @@ class RagConfiguration:
         return self.config[key]
 
     def update(self, new_value: Dynaconf):
-        self.config.rag.update(new_value, tomlfy=True, merge=True)
+        if self.config.get("rag", None):
+            self.config.rag.update(new_value, tomlfy=True, merge=True)
 
     def persist(self):
         """Save configuration to file."""
         data = self.config.as_dict()
+        data["dynaconf_merge"] = True
+
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict(), merge=True)
 
