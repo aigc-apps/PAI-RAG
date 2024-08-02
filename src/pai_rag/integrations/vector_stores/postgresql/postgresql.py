@@ -170,6 +170,7 @@ class PGVectorStore(BasePydanticVectorStore):
     _async_engine: Any = PrivateAttr()
     _async_session: Any = PrivateAttr()
     _is_initialized: bool = PrivateAttr(default=False)
+    _is_extension_load: bool = PrivateAttr(default=False)
 
     def __init__(
         self,
@@ -295,6 +296,11 @@ class PGVectorStore(BasePydanticVectorStore):
         self._async_engine = create_async_engine(self.async_connection_string)
         self._async_session = sessionmaker(self._async_engine, class_=AsyncSession)  # type: ignore
 
+        # load user dict for pg_jieba extension
+        with self._session() as session, session.begin():
+            session.execute(sqlalchemy.text("SELECT jieba_load_user_dict(0,0)"))
+            session.commit()
+
     def _create_schema_if_not_exists(self) -> None:
         if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", self.schema_name):
             raise ValueError(f"Invalid schema_name: {self.schema_name}")
@@ -338,6 +344,14 @@ class PGVectorStore(BasePydanticVectorStore):
                 self._create_schema_if_not_exists()
                 self._create_tables_if_not_exists()
             self._is_initialized = True
+
+    async def _extension_load(self) -> None:
+        if not self._is_extension_load:
+            async with self._async_session() as async_session, async_session.begin():
+                await async_session.execute(
+                    sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
+                )
+            self._is_extension_load = True
 
     def _node_to_table_row(self, node: BaseNode) -> Any:
         return self._table_class(
@@ -731,6 +745,7 @@ class PGVectorStore(BasePydanticVectorStore):
         self, query: VectorStoreQuery, **kwargs: Any
     ) -> VectorStoreQueryResult:
         self._initialize()
+        await self._extension_load()
         if query.mode == VectorStoreQueryMode.HYBRID:
             results = await self._async_hybrid_query(query, **kwargs)
         elif query.mode in [
