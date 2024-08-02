@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Union, TypedDict, Any
 from llama_index.core.readers.base import BaseReader
-from llama_index.core.schema import Document
+from llama_index.core.schema import Document, ImageDocument
 import PyPDF2
 from PyPDF2 import PageObject
 from pdfminer.high_level import extract_pages
@@ -15,17 +15,17 @@ from pdfminer.layout import (
     LTLine,
 )
 import pdfplumber
-from pdf2image import convert_from_path
+from pdf2image import convert_from_bytes
 import easyocr
 from llama_index.core import Settings
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import json
 import unicodedata
 import logging
-import tempfile
 import cv2
 import os
 from tqdm import tqdm
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,11 @@ class PaiPDFReader(BaseReader):
         enable_image_ocr: bool = False,
         enable_table_summary: bool = False,
         model_dir: str = DEFAULT_MODEL_DIR,
+        oss_cache: Any = None,
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
         self.enable_table_summary = enable_table_summary
+        self._oss_cache = oss_cache
         if self.enable_table_summary:
             logger.info("process with table summary")
         if self.enable_image_ocr:
@@ -86,6 +88,10 @@ class PaiPDFReader(BaseReader):
         Returns:
             str: The OCR-processed text from the cropped image.
         """
+        assert (
+            self._oss_cache is not None
+        ), "Oss config must be provided for image processing."
+
         # Retrieve the image's coordinates
         [image_left, image_top, image_right, image_bottom] = [
             element.x0,
@@ -98,33 +104,37 @@ class PaiPDFReader(BaseReader):
         page_object.mediabox.upper_right = (image_right, image_top)
         # Save the cropped page as a new PDF file and perform OCR
         cropped_pdf_writer = PyPDF2.PdfWriter()
-        with tempfile.NamedTemporaryFile(
-            delete=True, suffix=".pdf"
-        ) as cropped_pdf_file:
-            cropped_pdf_writer.add_page(page_object)
-            cropped_pdf_writer.write(cropped_pdf_file)
-            cropped_pdf_file.flush()
-            # Return the OCR-processed text
-            return self.ocr_pdf(cropped_pdf_file.name)
+        cropped_pdf_stream = BytesIO()
 
-    def ocr_pdf(self, input_file: str) -> str:
-        """
-        Function to convert PDF content into an image and then perform OCR (Optical Character Recognition)
+        cropped_pdf_writer.add_page(page_object)
+        cropped_pdf_writer.write(cropped_pdf_stream)
 
-        Args:
-            input_file (str): input file path.
+        image = convert_from_bytes(cropped_pdf_stream.getvalue())[0]
 
-        Returns:
-             str: text from ocr.
-        """
-        images = convert_from_path(input_file)
-        image = images[0]
-        with tempfile.NamedTemporaryFile(
-            delete=True, suffix=".png"
-        ) as output_image_file:
-            image.save(output_image_file, "PNG")
-            output_image_file.flush()
-            return self.image_to_text(output_image_file.name)
+        # Check image size
+        if image.width <= 200 or image.height <= 200:
+            logger.info(
+                f"Skip crop image with width={image.width}, height={image.height}."
+            )
+            return None
+
+        image_stream = BytesIO()
+        image.save(image_stream, format="PNG")
+        data = image_stream.getvalue()
+
+        image_url = self._oss_cache.put_object_if_not_exists(
+            data=data,
+            file_ext=".png",
+            headers={
+                "x-oss-object-acl": "public-read"
+            },  # set public read to make image accessible
+            path_prefix="pairag/pdf_images/",
+        )
+
+        logger.info(
+            f"Cropped image {image_url} with width={image.width}, height={image.height}."
+        )
+        return image_url
 
     def image_to_text(self, image_path: str) -> str:
         """
@@ -354,11 +364,12 @@ class PaiPDFReader(BaseReader):
         pages = tqdm(
             extract_pages(file_path), desc="processing pages in pdf", unit="page"
         )
+        image_documents = []
+
         for pagenum, page in enumerate(pages):
             # Initialize variables for extracting text from the page
             page_object = pdf_read.pages[pagenum]
             text_elements = []
-            text_from_images = []
             # Initialize table count
             table_num = 0
             first_element = True
@@ -381,11 +392,11 @@ class PaiPDFReader(BaseReader):
                 if isinstance(element, LTTextBoxHorizontal):
                     text_elements.append(element)
 
-                # Check for images and extract text from them if OCR is enabled
-                elif isinstance(element, LTFigure) and self.enable_image_ocr:
-                    # Extract text from the PDF image
-                    image_texts = self.process_pdf_image(element, page_object)
-                    text_from_images.append(image_texts)
+                elif isinstance(element, LTFigure):
+                    image_url = self.process_pdf_image(element, page_object)
+                    image_documents.append(
+                        ImageDocument(image_url=image_url, image_mimetype="image/png")
+                    )
 
                 # Check for table elements
                 elif isinstance(element, LTRect) or isinstance(element, LTLine):
@@ -424,20 +435,9 @@ class PaiPDFReader(BaseReader):
             # Text extraction from text elements
             text_from_texts = PaiPDFReader.text_extraction(text_elements)
             page_plain_text = "".join(text_from_texts)
-            # Image text extraction
-            page_image_text = "".join(text_from_images)
 
             page_items.append(
-                (
-                    PageItem(
-                        page_number=pagenum, item_type="text", text=page_plain_text
-                    ),
-                    PageItem(
-                        page_number=pagenum,
-                        item_type="image_text",
-                        text=page_image_text,
-                    ),
-                )
+                PageItem(page_number=pagenum, item_type="text", text=page_plain_text)
             )
 
         # Merge tables across pages
@@ -464,7 +464,7 @@ class PaiPDFReader(BaseReader):
             page_table_summary = "\n".join(page_tables_summaries)
             page_table_json = "\n".join(page_tables_json)
 
-            page_info_text = item[0]["text"] + item[1]["text"] + page_table_json
+            page_info_text = item["text"] + page_table_json
 
             # if `extra_info` is not None, check if it is a dictionary
             if extra_info:
