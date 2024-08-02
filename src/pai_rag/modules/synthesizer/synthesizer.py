@@ -36,7 +36,7 @@ from llama_index.core.types import BasePydanticProgram
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.utils.prompt_template import DEFAULT_TEXT_QA_PROMPT_TMPL
-from pai_rag.integrations.synthesizer.my_synthesizer import MySimpleSummarize
+from pai_rag.integrations.synthesizer.my_simple_synthesizer import MySimpleSummarize
 
 logger = logging.getLogger(__name__)
 

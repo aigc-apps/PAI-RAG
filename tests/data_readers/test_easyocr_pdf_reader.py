@@ -24,3 +24,36 @@ def test_pai_pdf_reader():
     )
     documents = directory_reader.load_data()
     assert len(documents) > 0
+
+
+def test_is_horizontal_table():
+    # example data
+    horizontal_table_1 = [
+        ["Name", "Age", "City"],
+        ["Alice", 30, "New York"],
+        ["Bob", 25, "San Francisco"],
+    ]
+
+    horizontal_table_2 = [
+        ["Name", "Age", "discount"],
+        ["Alice", 30, 0.3],
+        ["Bob", 25, 0.4],
+    ]
+
+    horizontal_table_3 = [
+        ["Age", "discount", "amount"],
+        [30, 0.3, 3],
+        [25, 0.4, 7],
+        [34, 0.2, 9],
+    ]
+
+    vertical_table = [
+        ["Field", "Record1", "Record2"],
+        ["Name", "Alice", "Bob"],
+        ["Age", 30, 25],
+        ["City", "New York", "San Francisco"],
+    ]
+    assert PaiPDFReader.is_horizontal_table(horizontal_table_1)
+    assert PaiPDFReader.is_horizontal_table(horizontal_table_2)
+    assert PaiPDFReader.is_horizontal_table(horizontal_table_3)
+    assert not PaiPDFReader.is_horizontal_table(vertical_table)

@@ -52,6 +52,8 @@ class ViewModel(BaseModel):
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
+    enable_ocr: bool = False
+    enable_table_summary: bool = False
 
     config_file: str = None
 
@@ -230,7 +232,9 @@ class ViewModel(BaseModel):
             view_model.postgresql_host = config["index"]["vector_store"]["host"]
             view_model.postgresql_port = config["index"]["vector_store"]["port"]
             view_model.postgresql_database = config["index"]["vector_store"]["database"]
-            view_model.postgresql_table_name = config["index"]["vector_store"]["table_name"]
+            view_model.postgresql_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
             view_model.postgresql_username = config["index"]["vector_store"]["username"]
             view_model.postgresql_password = config["index"]["vector_store"]["password"]
 
@@ -246,6 +250,12 @@ class ViewModel(BaseModel):
         )
         view_model.enable_raptor = config["data_reader"].get(
             "enable_raptor", view_model.enable_raptor
+        )
+        view_model.enable_ocr = config["data_reader"].get(
+            "enable_ocr", view_model.enable_ocr
+        )
+        view_model.enable_table_summary = config["data_reader"].get(
+            "enable_table_summary", view_model.enable_table_summary
         )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
@@ -321,6 +331,8 @@ class ViewModel(BaseModel):
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["enable_raptor"] = self.enable_raptor
+        config["data_reader"]["enable_ocr"] = self.enable_ocr
+        config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
         if self.vectordb_type == "Hologres":
@@ -501,6 +513,8 @@ class ViewModel(BaseModel):
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
         settings["enable_raptor"] = {"value": self.enable_raptor}
+        settings["enable_ocr"] = {"value": self.enable_ocr}
+        settings["enable_table_summary"] = {"value": self.enable_table_summary}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}

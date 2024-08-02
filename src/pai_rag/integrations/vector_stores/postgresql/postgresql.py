@@ -1,6 +1,7 @@
 import logging
 import re
 from typing import Any, List, NamedTuple, Optional, Type, Union
+from urllib.parse import quote_plus
 
 import asyncpg  # noqa
 import pgvector  # noqa
@@ -260,10 +261,10 @@ class PGVectorStore(BasePydanticVectorStore):
         """Return connection string from database parameters."""
         conn_str = (
             connection_string
-            or f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
+            or f"postgresql+psycopg2://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         )
         async_conn_str = async_connection_string or (
-            f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+            f"postgresql+asyncpg://{user}:{quote_plus(password)}@{host}:{port}/{database}"
         )
         return cls(
             connection_string=conn_str,
