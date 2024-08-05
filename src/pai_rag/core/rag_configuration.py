@@ -56,6 +56,8 @@ class RagConfiguration:
     def persist(self):
         """Save configuration to file."""
         data = self.config.as_dict()
+        data["dynaconf_merge"] = True
+
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict(), merge=True)
 
