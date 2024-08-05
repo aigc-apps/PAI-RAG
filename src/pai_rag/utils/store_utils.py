@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-from dataclasses import dataclass
 
 
 def get_store_persist_directory_name(storage_config, ndims):
@@ -14,9 +13,9 @@ def get_store_persist_directory_name(storage_config, ndims):
     raw_text = "sample_store_key"
     vector_store_type = storage_config["vector_store"]["type"].lower()
     if vector_store_type == "chroma":
-        raw_text = json.dumps(storage_config["vector_store"])
+        raw_text = json.dumps(storage_config["vector_store"], sort_keys=True)
     elif vector_store_type == "faiss":
-        raw_text = json.dumps(storage_config["vector_store"])
+        raw_text = {"type": "faiss"}
     elif vector_store_type == "hologres":
         keywords = ["host", "port", "database", "table_name"]
         json_data = {k: storage_config["vector_store"][k] for k in keywords}
@@ -31,6 +30,14 @@ def get_store_persist_directory_name(storage_config, ndims):
         raw_text = json.dumps(json_data)
     elif vector_store_type == "milvus":
         keywords = ["host", "port", "database", "collection_name"]
+        json_data = {k: storage_config["vector_store"][k] for k in keywords}
+        raw_text = json.dumps(json_data)
+    elif vector_store_type == "opensearch":
+        keywords = ["endpoint", "instance_id", "table_name"]
+        json_data = {k: storage_config["vector_store"][k] for k in keywords}
+        raw_text = json.dumps(json_data)
+    elif vector_store_type == "postgresql":
+        keywords = ["host", "port", "database", "table_name"]
         json_data = {k: storage_config["vector_store"][k] for k in keywords}
         raw_text = json.dumps(json_data)
     else:
@@ -61,11 +68,3 @@ def read_chat_store_state(persist_dir, file_path):
             return json.load(file)
     except Exception:
         return None  # 如果文件不存在/json不合法，则返回None
-
-
-@dataclass
-class StorePath:
-    persist_path: str = "./store"  # 知识库数据保存地址
-
-
-store_path = StorePath()

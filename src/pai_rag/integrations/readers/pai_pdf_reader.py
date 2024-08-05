@@ -7,18 +7,33 @@ from llama_index.core.schema import Document
 import PyPDF2
 from PyPDF2 import PageObject
 from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTRect, LTFigure, LTTextBoxHorizontal, LTTextLineHorizontal
+from pdfminer.layout import (
+    LTRect,
+    LTFigure,
+    LTTextBoxHorizontal,
+    LTTextLineHorizontal,
+    LTLine,
+)
 import pdfplumber
 from pdf2image import convert_from_path
 import easyocr
 from llama_index.core import Settings
-from pai_rag.utils.constants import DEFAULT_EASYOCR_MODEL_DIR
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import json
 import unicodedata
 import logging
 import tempfile
+import cv2
+import os
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+TABLE_SUMMARY_MAX_ROW_NUM = 5
+TABLE_SUMMARY_MAX_COL_NUM = 10
+TABLE_SUMMARY_MAX_CELL_TOKEN = 20
+TABLE_SUMMARY_MAX_TOKEN = 200
+PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 
 
 class PageItem(TypedDict):
@@ -39,11 +54,17 @@ class PaiPDFReader(BaseReader):
     """
 
     def __init__(
-        self, enable_image_ocr: bool = False, model_dir: str = DEFAULT_EASYOCR_MODEL_DIR
+        self,
+        enable_image_ocr: bool = False,
+        enable_table_summary: bool = False,
+        model_dir: str = DEFAULT_MODEL_DIR,
     ) -> None:
         self.enable_image_ocr = enable_image_ocr
+        self.enable_table_summary = enable_table_summary
+        if self.enable_table_summary:
+            logger.info("process with table summary")
         if self.enable_image_ocr:
-            self.model_dir = model_dir or DEFAULT_EASYOCR_MODEL_DIR
+            self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
             logger.info("start loading ocr model")
             self.image_reader = easyocr.Reader(
                 ["ch_sim", "en"],
@@ -115,6 +136,10 @@ class PaiPDFReader(BaseReader):
         Returns:
             str: text from ocr.
         """
+        image = cv2.imread(image_path)
+        if image is None or image.shape[0] <= 1 or image.shape[1] <= 1:
+            return ""
+
         result = self.image_reader.readtext(image_path)
         predictions = "".join([item[1] for item in result])
         return predictions
@@ -138,8 +163,10 @@ class PaiPDFReader(BaseReader):
             table = total_tables[i]
             pre_table = total_tables[i - 1]
             if table["page_number"] == pre_table["page_number"]:
+                i -= 1
                 continue
             if table["page_number"] - pre_table["page_number"] > 1:
+                i -= 1
                 continue
             if (
                 table["index_id"] <= 1
@@ -151,31 +178,31 @@ class PaiPDFReader(BaseReader):
             i -= 1
         return total_tables
 
-    """Function to parse table
-    """
-
-    @staticmethod
-    def parse_table(table: List[List]) -> str:
-        table_string = ""
-        for row_num in range(len(table)):
-            row = table[row_num]
-            cleaned_row = [
-                item.replace("\n", " ")
-                if item is not None and "\n" in item
-                else "None"
-                if item is None
-                else item
-                for item in row
-            ]
-            table_string += "|" + "|".join(cleaned_row) + "|" + "\n"
-        table_string = table_string.strip()
-        return table_string
-
     """Function to summarize table
     """
 
     @staticmethod
+    def limit_cell_size(cell: str, max_chars: int) -> str:
+        return (cell[:max_chars] + "...") if len(cell) > max_chars else cell
+
+    @staticmethod
+    def limit_table_content(table: List[List]) -> List[List]:
+        return [
+            [
+                PaiPDFReader.limit_cell_size(str(cell), TABLE_SUMMARY_MAX_CELL_TOKEN)
+                for cell in row
+            ]
+            for row in table
+        ]
+
+    @staticmethod
     def tables_summarize(table: List[List]) -> str:
+        table = PaiPDFReader.limit_table_content(table)
+        if not PaiPDFReader.is_horizontal_table(table):
+            table = list(zip(*table))
+        table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
+        table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
+
         prompt_text = f"请为以下表格生成一个摘要: {table}"
         response = Settings.llm.complete(
             prompt_text,
@@ -185,17 +212,55 @@ class PaiPDFReader(BaseReader):
         summarized_text = response
         return summarized_text
 
+    @staticmethod
+    def is_horizontal_table(table: List[List]) -> bool:
+        # if the table is empty or the first (header) of table is empty, it's not a horizontal table
+        if not table or not table[0]:
+            return False
+
+        vertical_value_any_count = 0
+        horizontal_value_any_count = 0
+        vertical_value_all_count = 0
+        horizontal_value_all_count = 0
+
+        """If it is a horizontal table, the probability that each row contains at least one number is higher than the probability that each column contains at least one number.
+        If it is a horizontal table with headers, the number of rows that are entirely composed of numbers will be greater than the number of columns that are entirely composed of numbers.
+        """
+
+        for row in table:
+            if any(isinstance(item, (int, float)) for item in row):
+                horizontal_value_any_count += 1
+            if all(isinstance(item, (int, float)) for item in row):
+                horizontal_value_all_count += 1
+
+        for col in zip(*table):
+            if any(isinstance(item, (int, float)) for item in col):
+                vertical_value_any_count += 1
+            if all(isinstance(item, (int, float)) for item in col):
+                vertical_value_all_count += 1
+
+        return (
+            horizontal_value_any_count >= vertical_value_any_count
+            or horizontal_value_all_count > 0 >= vertical_value_all_count
+        )
+
     """Function to convert table data to json
-    """
+       """
 
     @staticmethod
     def table_to_json(table: List[List]) -> str:
         table_info = []
+        if not PaiPDFReader.is_horizontal_table(table):
+            table = list(zip(*table))
         column_name = table[0]
         for row in range(1, len(table)):
             single_line_dict = {}
             for column in range(len(column_name)):
-                if column_name[column] and len(column_name[column]) > 0:
+                if (
+                    column_name[column]
+                    and len(column_name[column]) > 0
+                    and column < len(table[row])
+                ):
                     single_line_dict[column_name[column]] = table[row][column]
             table_info.append(single_line_dict)
 
@@ -286,7 +351,10 @@ class PaiPDFReader(BaseReader):
         page_items = []
         # Open the PDF and extract pages
         pdf = pdfplumber.open(file_path)
-        for pagenum, page in enumerate(extract_pages(file_path)):
+        pages = tqdm(
+            extract_pages(file_path), desc="processing pages in pdf", unit="page"
+        )
+        for pagenum, page in enumerate(pages):
             # Initialize variables for extracting text from the page
             page_object = pdf_read.pages[pagenum]
             text_elements = []
@@ -320,7 +388,7 @@ class PaiPDFReader(BaseReader):
                     text_from_images.append(image_texts)
 
                 # Check for table elements
-                elif isinstance(element, LTRect):
+                elif isinstance(element, LTRect) or isinstance(element, LTLine):
                     lower_side = float("inf")
                     upper_side = 0
 
@@ -377,25 +445,26 @@ class PaiPDFReader(BaseReader):
 
         # Construct the returned data
         docs = []
+        page_items = tqdm(page_items, desc="processing tables in pages", unit="page")
         for pagenum, item in enumerate(page_items):
-            page_tables_texts = []
             page_tables_summaries = []
             page_tables_json = []
             for table in total_tables:
                 # If the page number matches
                 if pagenum == table["page_number"]:
-                    # Convert the table data to a structured string
-                    table_string = PaiPDFReader.parse_table(table["text"])
-                    summarized_table_text = PaiPDFReader.tables_summarize(table["text"])
+                    if self.enable_table_summary:
+                        summarized_table_text = PaiPDFReader.tables_summarize(
+                            table["text"]
+                        )
+                        page_tables_summaries.append(
+                            summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
+                        )
                     json_data = PaiPDFReader.table_to_json(table["text"])
-                    page_tables_texts.append(table_string)
-                    page_tables_summaries.append(summarized_table_text.text)
                     page_tables_json.append(json_data)
-            page_table_text = "".join(page_tables_texts)
-            page_table_summary = "".join(page_tables_summaries)
-            page_table_json = "".join(page_tables_json)
+            page_table_summary = "\n".join(page_tables_summaries)
+            page_table_json = "\n".join(page_tables_json)
 
-            page_info_text = item[0]["text"] + item[1]["text"] + page_table_text
+            page_info_text = item[0]["text"] + item[1]["text"] + page_table_json
 
             # if `extra_info` is not None, check if it is a dictionary
             if extra_info:
@@ -406,9 +475,16 @@ class PaiPDFReader(BaseReader):
                 if not extra_info:
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
-                extra_info["file_path"] = str(file_path)
-                extra_info["table_summary"] = page_table_summary
-                extra_info["table_json"] = page_table_json
+                extra_info["file_path"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_path)
+                )
+                file_name = os.path.basename(file_path)
+                extra_info["file_name"] = f"_page_{pagenum + 1}".join(
+                    os.path.splitext(file_name)
+                )
+                extra_info["table_summary"] = page_table_summary[
+                    :PAGE_TABLE_SUMMARY_MAX_TOKEN
+                ]
 
                 doc = Document(
                     text=page_info_text,
@@ -419,9 +495,6 @@ class PaiPDFReader(BaseReader):
                         },
                     ),
                 )
-
-                doc.excluded_embed_metadata_keys.append("table_json")
-                doc.excluded_llm_metadata_keys.append("table_json")
 
                 docs.append(doc)
             else:

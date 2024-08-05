@@ -21,7 +21,7 @@ from llama_index.core.response_synthesizers import (
     Refine,
     CompactAndRefine,
     TreeSummarize,
-    SimpleSummarize,
+    # SimpleSummarize,
 )
 
 # from llama_index.core.response_synthesizers.type import ResponseMode
@@ -35,6 +35,8 @@ from llama_index.core.settings import (
 from llama_index.core.types import BasePydanticProgram
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
+from pai_rag.utils.prompt_template import DEFAULT_TEXT_QA_PROMPT_TMPL
+from pai_rag.integrations.synthesizer.my_simple_synthesizer import MySimpleSummarize
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +49,9 @@ class SynthesizerModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         llm = new_params["LlmModule"]
-        text_qa_template_str = config.get("text_qa_template", None)
+        text_qa_template_str = config.get(
+            "text_qa_template", DEFAULT_TEXT_QA_PROMPT_TMPL
+        )
         text_qa_template = None
         if text_qa_template_str:
             text_qa_template = PromptTemplate(text_qa_template_str)
@@ -131,7 +135,7 @@ class SynthesizerModule(ConfigurableModule):
                 # deprecated
                 service_context=service_context,
             )
-        elif response_mode == "Tree_summarize":
+        elif response_mode == "TreeSummarize":
             logger.info("TreeSummarize synthesizer used")
             return TreeSummarize(
                 llm=llm,
@@ -146,8 +150,8 @@ class SynthesizerModule(ConfigurableModule):
                 service_context=service_context,
             )
         elif response_mode == "SimpleSummarize":
-            logger.info("SimpleSummarize synthesizer used")
-            return SimpleSummarize(
+            logger.info("MySimpleSummarize synthesizer used")
+            return MySimpleSummarize(
                 llm=llm,
                 callback_manager=callback_manager,
                 prompt_helper=prompt_helper,

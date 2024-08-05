@@ -2,13 +2,17 @@ from pydantic import BaseModel
 from typing import List, Dict
 
 
+class VectorDbConfig(BaseModel):
+    faiss_path: str | None = None
+
+
 class RagQuery(BaseModel):
     question: str
     temperature: float | None = 0.1
-    vector_topk: int | None = 3
-    score_threshold: float | None = 0.5
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
+    vector_db: VectorDbConfig | None = None
+    stream: bool | None = False
 
 
 class LlmQuery(BaseModel):
@@ -16,19 +20,12 @@ class LlmQuery(BaseModel):
     temperature: float | None = 0.1
     chat_history: List[Dict[str, str]] | None = None
     session_id: str | None = None
+    stream: bool | None = False
 
 
 class RetrievalQuery(BaseModel):
     question: str
-    topk: int | None = 3
-    score_threshold: float | None = 0.5
-
-
-class RagResponse(BaseModel):
-    answer: str
-    session_id: str | None = None
-    # TODO
-    # context: List[str] | None = None
+    vector_db: VectorDbConfig | None = None
 
 
 class LlmResponse(BaseModel):
@@ -46,6 +43,14 @@ class RetrievalResponse(BaseModel):
     docs: List[ContextDoc]
 
 
+class RagResponse(BaseModel):
+    answer: str
+    session_id: str | None = None
+    docs: List[ContextDoc] | None = None
+    new_query: str | None = None
+
+
 class DataInput(BaseModel):
     file_path: str
     enable_qa_extraction: bool = False
+    enable_raptor: bool = False

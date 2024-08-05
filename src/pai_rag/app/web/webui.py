@@ -1,5 +1,8 @@
+from fastapi import FastAPI
 import gradio as gr
-from pai_rag.app.web.view_model import view_model
+import os
+from pai_rag.app.web.view_model import ViewModel
+from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
@@ -11,25 +14,34 @@ from pai_rag.app.web.ui_constants import (
 
 import logging
 
+DEFAULT_LOCAL_URL = "http://localhost:8001/"
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
+
 logger = logging.getLogger("WebUILogger")
 
 
 def resume_ui():
     outputs = {}
+    rag_config = rag_client.get_config()
+    view_model = ViewModel.from_app_config(rag_config)
     component_settings = view_model.to_component_settings()
 
     for elem in elem_manager.get_elem_list():
         elem_id = elem.elem_id
-        elem_attr = component_settings[elem_id]
-        elem = elem_manager.get_elem_by_id(elem_id=elem_id)
-
-        # For gradio version 3.41.0, we can remove .value for latest gradio here.
-        outputs[elem] = elem.__class__(**elem_attr).value
+        if elem_id in component_settings.keys():
+            elem_attr = component_settings[elem_id]
+            elem = elem_manager.get_elem_by_id(elem_id=elem_id)
+            # For gradio version 3.41.0, we can remove .value for latest gradio here.
+            outputs[elem] = gr.update(**elem_attr)
+            # if elem_id == "qa_dataset_file":
+            #     outputs[elem] = elem_attr["value"]
+            # else:
+            #     outputs[elem] = elem.__class__(**elem_attr).value
 
     return outputs
 
 
-def create_ui():
+def make_homepage():
     with gr.Blocks(css=DEFAULT_CSS_STYPE) as homepage:
         # generate components
         gr.Markdown(value=WELCOME_MESSAGE)
@@ -42,7 +54,21 @@ def create_ui():
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
+        # with gr.Tab("\N{rocket} Evaluation"):
+        #     eval_elements = create_evaluation_tab()
+        # elem_manager.add_elems(eval_elements)
+
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None
         )
     return homepage
+
+
+def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blocks:
+    rag_client.set_endpoint(rag_url)
+    home = make_homepage()
+    home.queue(concurrency_count=1, max_size=64)
+    home._queue.set_url(web_url)
+    print(web_url)
+    gr.mount_gradio_app(app, home, path="")
+    return home

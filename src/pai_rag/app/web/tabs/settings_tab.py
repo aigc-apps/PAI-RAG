@@ -1,20 +1,21 @@
 from typing import Dict, Any, List
 import gradio as gr
 import datetime
-import traceback
 from pai_rag.app.web.ui_constants import (
     EMBEDDING_API_KEY_DICT,
     DEFAULT_EMBED_SIZE,
     EMBEDDING_DIM_DICT,
     LLM_MODEL_KEY_DICT,
 )
-from pai_rag.app.web.rag_client import rag_client
-from pai_rag.app.web.view_model import view_model
+from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def connect_vector_db(input_elements: List[Any]):
@@ -23,13 +24,10 @@ def connect_vector_db(input_elements: List[Any]):
         for element, value in input_elements.items():
             update_dict[element.elem_id] = value
 
-        view_model.update(update_dict)
-        new_config = view_model.to_app_config()
-        rag_client.reload_config(new_config)
+        rag_client.patch_config(update_dict)
         return f"[{datetime.datetime.now()}] Connect vector db success!"
-    except Exception as ex:
-        logger.critical(f"[Critical] Connect failed. {traceback.format_exc()}")
-        return f"Connect failed. Please check: {ex}"
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
 def create_setting_tab() -> Dict[str, Any]:
@@ -42,6 +40,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
                     elem_id="embed_source",
+                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
                 embed_model = gr.Dropdown(
                     EMBEDDING_DIM_DICT.keys(),
@@ -59,34 +58,28 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 def change_emb_source(source):
-                    view_model.embed_source = source
                     return {
                         embed_model: gr.update(visible=(source == "HuggingFace")),
-                        embed_dim: EMBEDDING_DIM_DICT.get(
-                            view_model.embed_model, DEFAULT_EMBED_SIZE
-                        )
+                        embed_dim: EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
                         if source == "HuggingFace"
                         else DEFAULT_EMBED_SIZE,
                     }
 
-                def change_emb_model(model):
-                    view_model.embed_model = model
+                def change_emb_model(source, model):
                     return {
-                        embed_dim: EMBEDDING_DIM_DICT.get(
-                            view_model.embed_model, DEFAULT_EMBED_SIZE
-                        )
-                        if view_model.embed_source == "HuggingFace"
+                        embed_dim: EMBEDDING_DIM_DICT.get(model, DEFAULT_EMBED_SIZE)
+                        if source == "HuggingFace"
                         else DEFAULT_EMBED_SIZE,
                     }
 
-                embed_source.change(
+                embed_source.input(
                     fn=change_emb_source,
                     inputs=embed_source,
                     outputs=[embed_model, embed_dim],
                 )
-                embed_model.change(
+                embed_model.input(
                     fn=change_emb_model,
-                    inputs=embed_model,
+                    inputs=[embed_source, embed_model],
                     outputs=[embed_dim],
                 )
             components.extend([embed_source, embed_dim, embed_model, embed_batch_size])
@@ -97,8 +90,9 @@ def create_setting_tab() -> Dict[str, Any]:
                     ["PaiEas", "OpenAI", "DashScope"],
                     label="LLM Model Source",
                     elem_id="llm",
+                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
-                with gr.Column(visible=(view_model.llm == "PaiEas")) as eas_col:
+                with gr.Column(visible=(llm == "PaiEas")) as eas_col:
                     llm_eas_url = gr.Textbox(
                         label="EAS Url",
                         elem_id="llm_eas_url",
@@ -112,7 +106,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="EAS Model name",
                         elem_id="llm_eas_model_name",
                     )
-                with gr.Column(visible=(view_model.llm != "PaiEas")) as api_llm_col:
+                with gr.Column(visible=(llm != "PaiEas")) as api_llm_col:
                     llm_api_model_name = gr.Dropdown(
                         label="LLM Model Name",
                         elem_id="llm_api_model_name",
@@ -129,7 +123,6 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 def change_llm(value):
-                    view_model.llm = value
                     eas_visible = value == "PaiEas"
                     api_visible = value != "PaiEas"
                     model_options = LLM_MODEL_KEY_DICT.get(value, [])
@@ -142,7 +135,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         ),
                     }
 
-                llm.change(
+                llm.input(
                     fn=change_llm,
                     inputs=llm,
                     outputs=[eas_col, api_llm_col, llm_api_model_name],

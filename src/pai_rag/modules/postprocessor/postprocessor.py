@@ -5,14 +5,20 @@ import logging
 from typing import Dict, List, Any
 
 # from modules.query.postprocessor.base import BaseNodePostprocessor
-from llama_index.core.postprocessor import SimilarityPostprocessor
-from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.modules.postprocessor.my_llm_rerank import MyLLMRerank
+from pai_rag.integrations.postprocessor.my_simple_weighted_rerank import (
+    MySimpleWeightedRerank,
+)
+from pai_rag.integrations.postprocessor.my_model_based_reranker import (
+    MyModelBasedReranker,
+)
 
 DEFAULT_RANK_MODEL = "bge-reranker-base"
+DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
+DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
+DEFAULT_RANK_SIMILARITY_THRES = None
 DEFAULT_RANK_TOP_N = 2
 
 logger = logging.getLogger(__name__)
@@ -25,36 +31,57 @@ class PostprocessorModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        llm = new_params["LlmModule"]
         post_processors = []
 
-        if "similarity_cutoff" in config:
-            similarity_cutoff = config["similarity_cutoff"]
+        reranker_type = config.get("reranker_type", "")
+
+        if reranker_type == "simple-weighted-reranker":
+            vector_weight = config.get(
+                "vector_weight", DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT
+            )
+            keyword_weight = config.get(
+                "keyword_weight", DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT
+            )
+            top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
+            similarity_threshold = config.get(
+                "similarity_threshold", DEFAULT_RANK_SIMILARITY_THRES
+            )
             logger.info(
-                f"[PostProcessor]: SimilarityPostprocessor used with threshold {similarity_cutoff}."
+                f"[PostProcessor]: Simple weighted reranker used with top_n: {top_n}, keyword_weight: {keyword_weight}, vector_weight: {vector_weight}, and similarity_threshold: {similarity_threshold}."
             )
             post_processors.append(
-                SimilarityPostprocessor(similarity_cutoff=similarity_cutoff)
+                MySimpleWeightedRerank(
+                    vector_weight=vector_weight,
+                    keyword_weight=keyword_weight,
+                    top_n=top_n,
+                    similarity_threshold=similarity_threshold,
+                )
             )
-
-        rerank_model = config.get("rerank_model", "")
-        if rerank_model == "llm-reranker":
+        elif reranker_type == "model-based-reranker":
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
-            logger.info(f"[PostProcessor]: Llm reranker used with top_n {top_n}.")
-            post_processors.append(MyLLMRerank(top_n=top_n, llm=llm))
-
-        elif (
-            rerank_model == "bge-reranker-base" or rerank_model == "bge-reranker-large"
-        ):
-            model_dir = config.get("rerank_model_dir", DEFAULT_MODEL_DIR)
-            model_name = config.get("rerank_model_name", rerank_model)
-            model = os.path.join(model_dir, model_name)
-            top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
-            logger.info(
-                f"[PostProcessor]: Reranker model used with top_n {top_n}, model {model_name}."
+            similarity_threshold = config.get(
+                "similarity_threshold", DEFAULT_RANK_TOP_N
             )
-            post_processors.append(FlagEmbeddingReranker(model=model, top_n=top_n))
-
+            reranker_model = config.get("reranker_model", DEFAULT_RANK_TOP_N)
+            if (
+                reranker_model == "bge-reranker-base"
+                or reranker_model == "bge-reranker-large"
+            ):
+                model_dir = config.get("rerank_model_dir", DEFAULT_MODEL_DIR)
+                model = os.path.join(model_dir, reranker_model)
+                logger.info(
+                    f"[PostProcessor]: Reranker model used with model-based-reranker: {reranker_model}, top_n: {top_n}, and similarity_threshold: {similarity_threshold}."
+                )
+                post_processors.append(
+                    MyModelBasedReranker(
+                        model=model,
+                        top_n=top_n,
+                        similarity_threshold=similarity_threshold,
+                        use_fp16=True,
+                    ),
+                )
+            else:
+                raise ValueError(f"Not supported reranker_model: {reranker_model}")
         else:
             logger.info("[PostProcessor]: No Reranker used.")
 

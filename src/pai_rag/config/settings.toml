@@ -19,27 +19,47 @@ persist_path = "localdata/storage"
 [rag.data_reader]
 type = "SimpleDirectoryReader"
 
+# embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# eg.
+# source = "HuggingFace"
+# model_name = "bge-small-zh-v1.5"
+# embed_batch_size = 10
 [rag.embedding]
-source = "HuggingFace"
-model_name = "bge-small-zh-v1.5"
+source = "DashScope"
 embed_batch_size = 10
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
+response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
+
+[rag.function_calling_llm]
+source = ""
 
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
 
+# llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
+# eg.
+# source = "PaiEas"
+# endpoint = ""
+# token = ""
 [rag.llm]
-source = "PaiEas"
-endpoint = ""
-token = ""
+source = "DashScope"
+name = "qwen-turbo"
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
+
+[rag.multi_modal_llm]
+source = ""
+
+[rag.node_enhancement]
+tree_depth = 3
+max_clusters = 52
+proba_threshold = 0.10
 
 [rag.node_parser]
 type = "Sentence"
@@ -47,7 +67,11 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.postprocessor]
-rerank_model = "no-reranker" # [no-reranker, bge-reranker-base, bge-reranker-large, llm-reranker]
+reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
+reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
+keyword_weight = 0.3
+vector_weight = 0.7
+similarity_threshold = 0.5
 top_n = 2
 
 [rag.query_engine]
@@ -56,9 +80,6 @@ type = "RetrieverQueryEngine"
 [rag.retriever]
 similarity_top_k = 3
 retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
-BM25_weight = 0.5
-vector_weight = 0.5
-fusion_mode = "reciprocal_rerank" # [simple, reciprocal_rerank, dist_based_score, relative_score]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
 [rag.synthesizer]
@@ -66,4 +87,5 @@ type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
 
 [rag.tool]
-type = ["calculator"]
+type = ["calculator", "weather"]
+weather_api_key = ""

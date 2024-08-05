@@ -222,3 +222,6 @@ output
 *.local.toml
 
 localdata/
+model_repository/
+*.tmp
+__*

@@ -1,7 +1,9 @@
 import gradio as gr
 from typing import Any, Set, Callable, Dict
-from pai_rag.app.web.view_model import view_model
 from pai_rag.app.web.utils import components_to_dict
+import os
+
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def create_vector_db_panel(
@@ -13,14 +15,21 @@ def create_vector_db_panel(
         with gr.Column():
             _ = gr.Markdown(value="**Please check your Vector Store.**")
             vectordb_type = gr.Dropdown(
-                ["Hologres", "Milvus", "ElasticSearch", "AnalyticDB", "FAISS"],
+                [
+                    "Hologres",
+                    "Milvus",
+                    "ElasticSearch",
+                    "AnalyticDB",
+                    "FAISS",
+                    "OpenSearch",
+                    "PostgreSQL",
+                ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
+                interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
             )
             # Adb
-            with gr.Column(
-                visible=(view_model.vectordb_type == "AnalyticDB")
-            ) as adb_col:
+            with gr.Column(visible=(vectordb_type == "AnalyticDB")) as adb_col:
                 adb_ak = gr.Textbox(
                     label="access-key-id",
                     type="password",
@@ -85,9 +94,7 @@ def create_vector_db_panel(
                     api_name="connect_adb",
                 )
             # Hologres
-            with gr.Column(
-                visible=(view_model.vectordb_type == "Hologres")
-            ) as holo_col:
+            with gr.Column(visible=(vectordb_type == "Hologres")) as holo_col:
                 hologres_host = gr.Textbox(
                     label="Host",
                     elem_id="hologres_host",
@@ -139,9 +146,7 @@ def create_vector_db_panel(
                     api_name="connect_hologres",
                 )
 
-            with gr.Column(
-                visible=(view_model.vectordb_type == "ElasticSearch")
-            ) as es_col:
+            with gr.Column(visible=(vectordb_type == "ElasticSearch")) as es_col:
                 es_url = gr.Textbox(label="ElasticSearch Url", elem_id="es_url")
                 es_index = gr.Textbox(label="Index Name", elem_id="es_index")
                 es_user = gr.Textbox(label="ES User", elem_id="es_user")
@@ -163,9 +168,7 @@ def create_vector_db_panel(
                     api_name="connect_elasticsearch",
                 )
 
-            with gr.Column(
-                visible=(view_model.vectordb_type == "Milvus")
-            ) as milvus_col:
+            with gr.Column(visible=(vectordb_type == "Milvus")) as milvus_col:
                 milvus_host = gr.Textbox(label="Host", elem_id="milvus_host")
                 milvus_port = gr.Textbox(label="Port", elem_id="milvus_port")
 
@@ -204,7 +207,7 @@ def create_vector_db_panel(
                     api_name="connect_milvus",
                 )
 
-            with gr.Column(visible=(view_model.vectordb_type == "FAISS")) as faiss_col:
+            with gr.Column(visible=(vectordb_type == "FAISS")) as faiss_col:
                 faiss_path = gr.Textbox(label="Path", elem_id="faiss_path")
                 connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
                 con_state_faiss = gr.Textbox(label="Connection Info: ")
@@ -216,12 +219,86 @@ def create_vector_db_panel(
                     api_name="connect_faiss",
                 )
 
+            with gr.Column(visible=(vectordb_type == "OpenSearch")) as opensearch_col:
+                opensearch_endpoint = gr.Textbox(
+                    label="Endpoint", elem_id="opensearch_endpoint"
+                )
+                opensearch_instance_id = gr.Textbox(
+                    label="InstanceId", elem_id="opensearch_instance_id"
+                )
+                opensearch_username = gr.Textbox(
+                    label="UserName", elem_id="opensearch_username"
+                )
+                opensearch_password = gr.Textbox(
+                    label="Password", type="password", elem_id="opensearch_password"
+                )
+                opensearch_table_name = gr.Textbox(
+                    label="TableName", elem_id="opensearch_table_name"
+                )
+
+                connect_btn_opensearch = gr.Button(
+                    "Connect OpenSearch", variant="primary"
+                )
+                con_state_opensearch = gr.Textbox(label="Connection Info: ")
+                inputs_opensearch = input_elements.union(
+                    {
+                        vectordb_type,
+                        opensearch_endpoint,
+                        opensearch_instance_id,
+                        opensearch_username,
+                        opensearch_password,
+                        opensearch_table_name,
+                    }
+                )
+                connect_btn_opensearch.click(
+                    fn=connect_vector_func,
+                    inputs=inputs_opensearch,
+                    outputs=con_state_opensearch,
+                    api_name="connect_opensearch",
+                )
+            with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
+                postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")
+                postgresql_port = gr.Textbox(label="Port", elem_id="postgresql_port")
+                postgresql_username = gr.Textbox(
+                    label="UserName", elem_id="postgresql_username"
+                )
+                postgresql_password = gr.Textbox(
+                    label="Password", type="password", elem_id="postgresql_password"
+                )
+                postgresql_database = gr.Textbox(
+                    label="Database", elem_id="postgresql_database"
+                )
+                postgresql_table_name = gr.Textbox(
+                    label="TableName", elem_id="postgresql_table_name"
+                )
+                connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
+                con_state_pg = gr.Textbox(label="Connection Info: ")
+                inputs_pg = input_elements.union(
+                    {
+                        vectordb_type,
+                        postgresql_host,
+                        postgresql_port,
+                        postgresql_database,
+                        postgresql_table_name,
+                        postgresql_username,
+                        postgresql_password,
+                    }
+                )
+                connect_btn_pg.click(
+                    fn=connect_vector_func,
+                    inputs=inputs_pg,
+                    outputs=con_state_pg,
+                    api_name="connect_pg",
+                )
+
             def change_vectordb_conn(vectordb_type):
                 adb_visible = False
                 hologres_visible = False
                 faiss_visible = False
                 es_visible = False
                 milvus_visible = False
+                opensearch_visible = False
+                postgresql_visible = False
                 if vectordb_type == "AnalyticDB":
                     adb_visible = True
                 elif vectordb_type == "Hologres":
@@ -232,6 +309,10 @@ def create_vector_db_panel(
                     milvus_visible = True
                 elif vectordb_type == "FAISS":
                     faiss_visible = True
+                elif vectordb_type == "OpenSearch":
+                    opensearch_visible = True
+                elif vectordb_type == "PostgreSQL":
+                    postgresql_visible = True
 
                 return {
                     adb_col: gr.update(visible=adb_visible),
@@ -239,12 +320,22 @@ def create_vector_db_panel(
                     es_col: gr.update(visible=es_visible),
                     faiss_col: gr.update(visible=faiss_visible),
                     milvus_col: gr.update(visible=milvus_visible),
+                    opensearch_col: gr.update(visible=opensearch_visible),
+                    postgresql_col: gr.update(visible=postgresql_visible),
                 }
 
             vectordb_type.change(
                 fn=change_vectordb_conn,
                 inputs=vectordb_type,
-                outputs=[adb_col, holo_col, faiss_col, es_col, milvus_col],
+                outputs=[
+                    adb_col,
+                    holo_col,
+                    faiss_col,
+                    es_col,
+                    milvus_col,
+                    opensearch_col,
+                    postgresql_col,
+                ],
             )
 
             components.extend(
@@ -276,6 +367,17 @@ def create_vector_db_panel(
                     es_index,
                     es_user,
                     es_password,
+                    opensearch_endpoint,
+                    opensearch_instance_id,
+                    opensearch_username,
+                    opensearch_password,
+                    opensearch_table_name,
+                    postgresql_host,
+                    postgresql_port,
+                    postgresql_database,
+                    postgresql_table_name,
+                    postgresql_username,
+                    postgresql_password,
                 ]
             )
 

@@ -8,6 +8,11 @@ from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
     PROMPT_MAP,
 )
+import pandas as pd
+import os
+from datetime import datetime
+import tempfile
+import json
 
 
 def recursive_dict():
@@ -46,6 +51,9 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
+    enable_raptor: bool = False
+    enable_ocr: bool = False
+    enable_table_summary: bool = False
 
     config_file: str = None
 
@@ -85,18 +93,39 @@ class ViewModel(BaseModel):
     milvus_port: int = None
     milvus_user: str = None
     milvus_password: str = None
-    milvus_database: str = "pairag"
+    milvus_database: str = "default"
     milvus_collection_name: str = "pairagcollection"
 
+    # open search
+    opensearch_endpoint: str = None
+    opensearch_instance_id: str = None
+    opensearch_username: str = None
+    opensearch_password: str = None
+    opensearch_table_name: str = "pairag"
+
+    # PostgreSQL
+    postgresql_host: str = None
+    postgresql_port: int = 5432
+    postgresql_database: str = None
+    postgresql_table_name: str = "pairag"
+    postgresql_username: str = None
+    postgresql_password: str = None
+
+    # retriever
     similarity_top_k: int = 5
-    # similarity_cutoff: float = 0.3
-    rerank_model: str = "no-reranker"
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
-    query_engine_type: str = "RetrieverQueryEngine"
-    BM25_weight: float = 0.5
-    vector_weight: float = 0.5
-    fusion_mode: str = "reciprocal_rerank"  # [simple, reciprocal_rerank, dist_based_score, relative_score]
     query_rewrite_n: int = 1
+
+    # postprocessor
+    reranker_type: str = (
+        "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
+    )
+    reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
+    keyword_weight: float = 0.3
+    vector_weight: float = 0.7
+    similarity_threshold: float = None
+
+    query_engine_type: str = "RetrieverQueryEngine"
 
     synthesizer_type: str = None
 
@@ -108,109 +137,172 @@ class ViewModel(BaseModel):
             if key in attr_set:
                 setattr(self, key, value)
 
-    def sync_app_config(self, config):
-        self.embed_source = config["embedding"].get("source", self.embed_source)
-        self.embed_model = config["embedding"].get("model_name", self.embed_model)
-        self.embed_api_key = config["embedding"].get("api_key", self.embed_api_key)
-        self.embed_batch_size = config["embedding"].get(
-            "embed_batch_size", self.embed_batch_size
+    @staticmethod
+    def from_app_config(config):
+        view_model = ViewModel()
+        view_model.embed_source = config["embedding"].get(
+            "source", view_model.embed_source
+        )
+        view_model.embed_model = config["embedding"].get(
+            "model_name", view_model.embed_model
+        )
+        view_model.embed_api_key = config["embedding"].get(
+            "api_key", view_model.embed_api_key
+        )
+        view_model.embed_batch_size = config["embedding"].get(
+            "embed_batch_size", view_model.embed_batch_size
         )
 
-        self.llm = config["llm"].get("source", self.llm)
-        self.llm_eas_url = config["llm"].get("endpoint", self.llm_eas_url)
-        self.llm_eas_token = config["llm"].get("token", self.llm_eas_token)
-        self.llm_api_key = config["llm"].get("api_key", self.llm_api_key)
-        self.llm_temperature = config["llm"].get("temperature", self.llm_temperature)
-        if self.llm == "PaiEAS":
-            self.llm_eas_model_name = config["llm"].get("name", self.llm_eas_model_name)
+        view_model.llm = config["llm"].get("source", view_model.llm)
+        view_model.llm_eas_url = config["llm"].get("endpoint", view_model.llm_eas_url)
+        view_model.llm_eas_token = config["llm"].get("token", view_model.llm_eas_token)
+        view_model.llm_api_key = config["llm"].get("api_key", view_model.llm_api_key)
+        view_model.llm_temperature = config["llm"].get(
+            "temperature", view_model.llm_temperature
+        )
+        if view_model.llm.lower() == "paieas":
+            view_model.llm_eas_model_name = config["llm"].get(
+                "name", view_model.llm_eas_model_name
+            )
         else:
-            self.llm_api_model_name = config["llm"].get("name", self.llm_api_model_name)
+            view_model.llm_api_model_name = config["llm"].get(
+                "name", view_model.llm_api_model_name
+            )
 
-        self.vectordb_type = config["index"]["vector_store"].get(
-            "type", self.vectordb_type
+        view_model.vectordb_type = config["index"]["vector_store"].get(
+            "type", view_model.vectordb_type
         )
-        self.faiss_path = config["index"].get("persist_path", self.faiss_path)
-        if self.vectordb_type == "AnalyticDB":
-            self.adb_ak = config["index"]["vector_store"]["ak"]
-            self.adb_sk = config["index"]["vector_store"]["sk"]
-            self.adb_region_id = config["index"]["vector_store"]["region_id"]
-            self.adb_instance_id = config["index"]["vector_store"]["instance_id"]
-            self.adb_account = config["index"]["vector_store"]["account"]
-            self.adb_account_password = config["index"]["vector_store"][
+        view_model.faiss_path = config["index"].get(
+            "persist_path", view_model.faiss_path
+        )
+        if view_model.vectordb_type == "AnalyticDB":
+            view_model.adb_ak = config["index"]["vector_store"]["ak"]
+            view_model.adb_sk = config["index"]["vector_store"]["sk"]
+            view_model.adb_region_id = config["index"]["vector_store"]["region_id"]
+            view_model.adb_instance_id = config["index"]["vector_store"]["instance_id"]
+            view_model.adb_account = config["index"]["vector_store"]["account"]
+            view_model.adb_account_password = config["index"]["vector_store"][
                 "account_password"
             ]
-            self.adb_namespace = config["index"]["vector_store"]["namespace"]
-            self.adb_collection = config["index"]["vector_store"]["collection"]
-            self.adb_metrics = config["index"]["vector_store"].get("metrics", "cosine")
+            view_model.adb_namespace = config["index"]["vector_store"]["namespace"]
+            view_model.adb_collection = config["index"]["vector_store"]["collection"]
+            view_model.adb_metrics = config["index"]["vector_store"].get(
+                "metrics", "cosine"
+            )
 
-        elif self.vectordb_type == "Hologres":
-            self.hologres_host = config["index"]["vector_store"]["host"]
-            self.hologres_port = config["index"]["vector_store"]["port"]
-            self.hologres_user = config["index"]["vector_store"]["user"]
-            self.hologres_password = config["index"]["vector_store"]["password"]
-            self.hologres_database = config["index"]["vector_store"]["database"]
-            self.hologres_table = config["index"]["vector_store"]["table_name"]
-            self.hologres_pre_delete = config["index"]["vector_store"].get(
+        elif view_model.vectordb_type == "Hologres":
+            view_model.hologres_host = config["index"]["vector_store"]["host"]
+            view_model.hologres_port = config["index"]["vector_store"]["port"]
+            view_model.hologres_user = config["index"]["vector_store"]["user"]
+            view_model.hologres_password = config["index"]["vector_store"]["password"]
+            view_model.hologres_database = config["index"]["vector_store"]["database"]
+            view_model.hologres_table = config["index"]["vector_store"]["table_name"]
+            view_model.hologres_pre_delete = config["index"]["vector_store"].get(
                 "pre_delete_table", False
             )
 
-        elif self.vectordb_type == "ElasticSearch":
-            self.es_index = config["index"]["vector_store"]["es_index"]
-            self.es_url = config["index"]["vector_store"]["es_url"]
-            self.es_user = config["index"]["vector_store"]["es_user"]
-            self.es_password = config["index"]["vector_store"]["es_password"]
+        elif view_model.vectordb_type == "ElasticSearch":
+            view_model.es_index = config["index"]["vector_store"]["es_index"]
+            view_model.es_url = config["index"]["vector_store"]["es_url"]
+            view_model.es_user = config["index"]["vector_store"]["es_user"]
+            view_model.es_password = config["index"]["vector_store"]["es_password"]
 
-        elif self.vectordb_type == "Milvus":
-            self.milvus_host = config["index"]["vector_store"]["host"]
-            self.milvus_port = config["index"]["vector_store"]["port"]
-            self.milvus_user = config["index"]["vector_store"]["user"]
-            self.milvus_password = config["index"]["vector_store"]["password"]
-            self.milvus_database = config["index"]["vector_store"]["database"]
-            self.milvus_collection_name = config["index"]["vector_store"][
+        elif view_model.vectordb_type == "Milvus":
+            view_model.milvus_host = config["index"]["vector_store"]["host"]
+            view_model.milvus_port = config["index"]["vector_store"]["port"]
+            view_model.milvus_user = config["index"]["vector_store"]["user"]
+            view_model.milvus_password = config["index"]["vector_store"]["password"]
+            view_model.milvus_database = config["index"]["vector_store"]["database"]
+            view_model.milvus_collection_name = config["index"]["vector_store"][
                 "collection_name"
             ]
 
-        self.parser_type = config["node_parser"]["type"]
-        self.chunk_size = config["node_parser"]["chunk_size"]
-        self.chunk_overlap = config["node_parser"]["chunk_overlap"]
+        elif view_model.vectordb_type.lower() == "opensearch":
+            view_model.opensearch_endpoint = config["index"]["vector_store"]["endpoint"]
+            view_model.opensearch_instance_id = config["index"]["vector_store"][
+                "instance_id"
+            ]
+            view_model.opensearch_username = config["index"]["vector_store"]["username"]
+            view_model.opensearch_password = config["index"]["vector_store"]["password"]
+            view_model.opensearch_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
 
-        self.reader_type = config["data_reader"].get("type", self.reader_type)
-        self.enable_qa_extraction = config["data_reader"].get(
-            "enable_qa_extraction", self.enable_qa_extraction
+        elif view_model.vectordb_type.lower() == "postgresql":
+            view_model.postgresql_host = config["index"]["vector_store"]["host"]
+            view_model.postgresql_port = config["index"]["vector_store"]["port"]
+            view_model.postgresql_database = config["index"]["vector_store"]["database"]
+            view_model.postgresql_table_name = config["index"]["vector_store"][
+                "table_name"
+            ]
+            view_model.postgresql_username = config["index"]["vector_store"]["username"]
+            view_model.postgresql_password = config["index"]["vector_store"]["password"]
+
+        view_model.parser_type = config["node_parser"]["type"]
+        view_model.chunk_size = config["node_parser"]["chunk_size"]
+        view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
+
+        view_model.reader_type = config["data_reader"].get(
+            "type", view_model.reader_type
+        )
+        view_model.enable_qa_extraction = config["data_reader"].get(
+            "enable_qa_extraction", view_model.enable_qa_extraction
+        )
+        view_model.enable_raptor = config["data_reader"].get(
+            "enable_raptor", view_model.enable_raptor
+        )
+        view_model.enable_ocr = config["data_reader"].get(
+            "enable_ocr", view_model.enable_ocr
+        )
+        view_model.enable_table_summary = config["data_reader"].get(
+            "enable_table_summary", view_model.enable_table_summary
         )
 
-        self.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
+        view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
         if config["retriever"]["retrieval_mode"] == "hybrid":
-            self.retrieval_mode = "Hybrid"
-            self.BM25_weight = config["retriever"]["BM25_weight"]
-            self.vector_weight = config["retriever"]["vector_weight"]
-            self.fusion_mode = config["retriever"]["fusion_mode"]
-            self.query_rewrite_n = config["retriever"]["query_rewrite_n"]
+            view_model.retrieval_mode = "Hybrid"
+            view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
         elif config["retriever"]["retrieval_mode"] == "embedding":
-            self.retrieval_mode = "Embedding Only"
+            view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
-            self.retrieval_mode = "Keyword Only"
+            view_model.retrieval_mode = "Keyword Only"
 
-        # if "Similarity" in config["postprocessor"]:
-        #     self.similarity_cutoff = config["postprocessor"].get("similarity_cutoff", 0.1)
+        reranker_type = config["postprocessor"].get(
+            "reranker_type", "simple-weighted-reranker"
+        )
+        similarity_threshold = config["postprocessor"].get("similarity_threshold", 0)
+        view_model.similarity_threshold = (
+            similarity_threshold
+            if similarity_threshold and similarity_threshold > 0
+            else None
+        )
 
-        rerank_model = config["postprocessor"].get("rerank_model", "no-reranker")
-        if rerank_model == "llm-reranker":
-            self.rerank_model = "llm-reranker"
-        elif rerank_model == "bge-reranker-base":
-            self.rerank_model = "bge-reranker-base"
-        elif rerank_model == "bge-reranker-large":
-            self.rerank_model = "bge-reranker-large"
-        else:
-            self.rerank_model = "no-reranker"
+        if reranker_type == "simple-weighted-reranker":
+            view_model.reranker_type = "simple-weighted-reranker"
+            vector_weight = config["postprocessor"].get("vector_weight", 0.7)
+            view_model.vector_weight = float(vector_weight)
+            keyword_weight = config["postprocessor"].get("keyword_weight", 0.3)
+            view_model.keyword_weight = float(keyword_weight)
 
-        self.synthesizer_type = config["synthesizer"].get("type", "SimpleSummarize")
-        self.text_qa_template = config["synthesizer"].get("text_qa_template", None)
+        elif reranker_type == "model-based-reranker":
+            view_model.reranker_type = "model-based-reranker"
+            view_model.reranker_model = config["postprocessor"].get(
+                "reranker_model", "bge-reranker-base"
+            )
+
+        view_model.synthesizer_type = config["synthesizer"].get(
+            "type", "SimpleSummarize"
+        )
+        view_model.text_qa_template = config["synthesizer"].get(
+            "text_qa_template", None
+        )
 
         if config["query_engine"]["type"] == "TransformQueryEngine":
-            self.query_engine_type = "TransformQueryEngine"
+            view_model.query_engine_type = "TransformQueryEngine"
         else:
-            self.query_engine_type = "RetrieverQueryEngine"
+            view_model.query_engine_type = "RetrieverQueryEngine"
+
+        return view_model
 
     def to_app_config(self):
         config = recursive_dict()
@@ -225,7 +317,7 @@ class ViewModel(BaseModel):
         config["llm"]["token"] = self.llm_eas_token
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
-        if self.llm == "PaiEas":
+        if self.llm.lower() == "paieas":
             config["llm"]["name"] = self.llm_eas_model_name
         else:
             config["llm"]["name"] = self.llm_api_model_name
@@ -238,6 +330,9 @@ class ViewModel(BaseModel):
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
+        config["data_reader"]["enable_raptor"] = self.enable_raptor
+        config["data_reader"]["enable_ocr"] = self.enable_ocr
+        config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
         if self.vectordb_type == "Hologres":
@@ -282,27 +377,35 @@ class ViewModel(BaseModel):
                 "collection_name"
             ] = self.milvus_collection_name
 
+        elif self.vectordb_type.lower() == "opensearch":
+            config["index"]["vector_store"]["endpoint"] = self.opensearch_endpoint
+            config["index"]["vector_store"]["instance_id"] = self.opensearch_instance_id
+            config["index"]["vector_store"]["username"] = self.opensearch_username
+            config["index"]["vector_store"]["password"] = self.opensearch_password
+            config["index"]["vector_store"]["table_name"] = self.opensearch_table_name
+
+        elif self.vectordb_type.lower() == "postgresql":
+            config["index"]["vector_store"]["host"] = self.postgresql_host
+            config["index"]["vector_store"]["port"] = self.postgresql_port
+            config["index"]["vector_store"]["database"] = self.postgresql_database
+            config["index"]["vector_store"]["table_name"] = self.postgresql_table_name
+            config["index"]["vector_store"]["username"] = self.postgresql_username
+            config["index"]["vector_store"]["password"] = self.postgresql_password
+
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
-            config["retriever"]["vector_weight"] = self.vector_weight
-            config["retriever"]["BM25_weight"] = self.BM25_weight
-            config["retriever"]["fusion_mode"] = self.fusion_mode
             config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
         elif self.retrieval_mode == "Embedding Only":
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
 
-        # config["postprocessor"]["similarity_cutoff"] = self.similarity_cutoff
-        if self.rerank_model == "llm-reranker":
-            config["postprocessor"]["rerank_model"] = "llm-reranker"
-        elif self.rerank_model == "bge-reranker-base":
-            config["postprocessor"]["rerank_model"] = "bge-reranker-base"
-        elif self.rerank_model == "bge-reranker-large":
-            config["postprocessor"]["rerank_model"] = "bge-reranker-large"
-        else:
-            config["postprocessor"]["rerank_model"] = "no-reranker"
+        config["postprocessor"]["reranker_type"] = self.reranker_type
+        config["postprocessor"]["reranker_model"] = self.reranker_model
+        config["postprocessor"]["keyword_weight"] = self.keyword_weight
+        config["postprocessor"]["vector_weight"] = self.vector_weight
+        config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
@@ -313,6 +416,75 @@ class ViewModel(BaseModel):
             config["query_engine"]["type"] = "RetrieverQueryEngine"
 
         return _transform_to_dict(config)
+
+    def get_local_generated_qa_file(self):
+        DEFALUT_EVAL_PATH = "localdata/evaluation"
+        qa_dataset_path = os.path.join(DEFALUT_EVAL_PATH, "qa_dataset.json")
+        if os.path.exists(qa_dataset_path):
+            tmpdir = tempfile.mkdtemp()
+            with open(qa_dataset_path, "r", encoding="utf-8") as file:
+                qa_content = json.load(file)
+            outputPath = os.path.join(tmpdir, "qa_dataset.json")
+            with open(outputPath, "w", encoding="utf-8") as f:
+                json.dump(qa_content, f, ensure_ascii=False, indent=4)
+            return outputPath, qa_content["examples"][0:5]
+        else:
+            return None, None
+
+    def get_local_evaluation_result_file(self, type):
+        DEFALUT_EVAL_PATH = "localdata/evaluation"
+        output_path = os.path.join(DEFALUT_EVAL_PATH, f"batch_eval_results_{type}.xlsx")
+        if type == "retrieval":
+            if os.path.exists(output_path):
+                modification_time = os.path.getmtime(output_path)
+                formatted_time = datetime.fromtimestamp(modification_time).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                df = pd.read_excel(output_path)
+                retrieval_pd_results = {
+                    "Metrics": ["HitRate", "MRR", "LastModified"],
+                    "Value": [df["hit_rate"].mean(), df["mrr"].mean(), formatted_time],
+                }
+            else:
+                retrieval_pd_results = {
+                    "Metrics": ["HitRate", "MRR", "LastModified"],
+                    "Value": [None, None, None],
+                }
+            return pd.DataFrame(retrieval_pd_results)
+        elif type == "response":
+            if os.path.exists(output_path):
+                modification_time = os.path.getmtime(output_path)
+                formatted_time = datetime.fromtimestamp(modification_time).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                df = pd.read_excel(output_path)
+                response_pd_results = {
+                    "Metrics": [
+                        "Faithfulness",
+                        "Correctness",
+                        "SemanticSimilarity",
+                        "LastModified",
+                    ],
+                    "Value": [
+                        df["faithfulness_score"].mean(),
+                        df["correctness_score"].mean(),
+                        df["semantic_similarity_score"].mean(),
+                        formatted_time,
+                    ],
+                }
+            else:
+                response_pd_results = {
+                    "Metrics": [
+                        "Faithfulness",
+                        "Correctness",
+                        "SemanticSimilarity",
+                        "LastModified",
+                    ],
+                    "Value": [None, None, None, None],
+                }
+            return pd.DataFrame(response_pd_results)
+        else:
+            raise ValueError(f"Not supported the evaluation type {type}")
 
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
@@ -335,15 +507,25 @@ class ViewModel(BaseModel):
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
+            "visible": self.llm.lower() != "paieas",
         }
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
-        settings["similarity_top_k"] = {"value": self.similarity_top_k}
-        settings["rerank_model"] = {"value": self.rerank_model}
-        settings["retrieval_mode"] = {"value": self.retrieval_mode}
+        settings["enable_raptor"] = {"value": self.enable_raptor}
+        settings["enable_ocr"] = {"value": self.enable_ocr}
+        settings["enable_table_summary"] = {"value": self.enable_table_summary}
 
-        prm_type = PROMPT_MAP.get(view_model.text_qa_template, "Custom")
+        # retrieval and rerank
+        settings["retrieval_mode"] = {"value": self.retrieval_mode}
+        settings["reranker_type"] = {"value": self.reranker_type}
+        settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["reranker_model"] = {"value": self.reranker_model}
+        settings["vector_weight"] = {"value": self.vector_weight}
+        settings["keyword_weight"] = {"value": self.keyword_weight}
+        settings["similarity_threshold"] = {"value": self.similarity_threshold}
+
+        prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
         settings["prm_type"] = {"value": prm_type}
         settings["text_qa_template"] = {"value": self.text_qa_template}
 
@@ -385,7 +567,31 @@ class ViewModel(BaseModel):
         # faiss
         settings["faiss_path"] = {"value": self.faiss_path}
 
+        # opensearch
+        settings["opensearch_endpoint"] = {"value": self.opensearch_endpoint}
+        settings["opensearch_instance_id"] = {"value": self.opensearch_instance_id}
+        settings["opensearch_username"] = {"value": self.opensearch_username}
+        settings["opensearch_password"] = {"value": self.opensearch_password}
+        settings["opensearch_table_name"] = {"value": self.opensearch_table_name}
+
+        # postgresql
+        settings["postgresql_host"] = {"value": self.postgresql_host}
+        settings["postgresql_port"] = {"value": self.postgresql_port}
+        settings["postgresql_database"] = {"value": self.postgresql_database}
+        settings["postgresql_table_name"] = {"value": self.postgresql_table_name}
+        settings["postgresql_username"] = {"value": self.postgresql_username}
+        settings["postgresql_password"] = {"value": self.postgresql_password}
+
+        # evaluation
+        if self.vectordb_type == "FAISS":
+            qa_dataset_path, qa_dataset_res = self.get_local_generated_qa_file()
+            settings["qa_dataset_file"] = {"value": qa_dataset_path}
+            settings["qa_dataset_json_text"] = {"value": qa_dataset_res}
+            settings["eval_retrieval_res"] = {
+                "value": self.get_local_evaluation_result_file(type="retrieval")
+            }
+            settings["eval_response_res"] = {
+                "value": self.get_local_evaluation_result_file(type="response")
+            }
+
         return settings
-
-
-view_model = ViewModel()

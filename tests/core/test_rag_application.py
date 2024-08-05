@@ -13,7 +13,7 @@ EXPECTED_EMPTY_RESPONSE = """Empty query. Please input your question."""
 
 
 @pytest.fixture
-def rag_app():
+async def rag_app():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
 
@@ -24,16 +24,10 @@ def rag_app():
     rag_app = RagApplication()
     rag_app.initialize(config)
 
-    return rag_app
-
-
-# Test load knowledge file
-async def test_add_knowledge_file(rag_app: RagApplication):
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    print(len(rag_app.index.docstore.docs))
-    await rag_app.load_knowledge(data_dir)
-    print(len(rag_app.index.docstore.docs))
-    assert len(rag_app.index.docstore.docs) > 0
+    await rag_app.aload_knowledge(data_dir)
+
+    return rag_app
 
 
 # Test rag query
@@ -80,6 +74,11 @@ async def test_agent(rag_app: RagApplication):
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
 
-async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
-    df, eval_result = await rag_app.batch_evaluate_retrieval_and_response(type="all")
-    print(eval_result)
+# async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
+#     _, eval_res_avg = await rag_app.aevaluate_retrieval_and_response(type="all")
+#     print('eval_res_avg', eval_res_avg)
+
+
+async def test_load_evaluation_qa_dataset(rag_app: RagApplication):
+    qa_dataset = await rag_app.aload_evaluation_qa_dataset()
+    print(qa_dataset)

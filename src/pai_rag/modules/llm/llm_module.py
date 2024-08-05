@@ -3,7 +3,9 @@ from typing import Dict, List, Any
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.azure_openai import AzureOpenAI
-from llama_index.llms.dashscope import DashScope
+
+# from llama_index.llms.dashscope import DashScope
+from pai_rag.integrations.llms.dashscope.base import MyDashScope
 from pai_rag.integrations.llms.paieas.base import PaiEAS
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -19,6 +21,7 @@ class LlmModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         source = config["source"].lower()
+
         if source == "openai":
             logger.info(
                 f"""
@@ -56,8 +59,10 @@ class LlmModule(ConfigurableModule):
                     model = {model_name}
                 """
             )
-            llm = DashScope(
-                model_name=model_name, temperature=config.get("temperature", 0.1)
+            llm = MyDashScope(
+                model_name=model_name,
+                temperature=config.get("temperature", 0.1),
+                max_tokens=2000,
             )
         elif source == "paieas":
             model_name = config.get("name", "PAI-EAS-LLM")
@@ -71,12 +76,9 @@ class LlmModule(ConfigurableModule):
                     token = {token}
                 """
             )
-            llm = PaiEAS(
-                endpoint=endpoint,
-                token=token,
-                model_name=model_name,
-                temperature=config.get("temperature", 0.1),
-            )
+            from urllib.parse import urljoin
+
+            llm = PaiEAS(api_key=token, api_base=urljoin(endpoint, "v1"))
         else:
             raise ValueError(f"Unknown LLM source: '{config['llm']['source']}'")
 
