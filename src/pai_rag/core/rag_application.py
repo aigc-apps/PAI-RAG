@@ -208,6 +208,32 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
+    async def aquery_agentic_rag(self, query: LlmQuery):
+        """Query answer from RAG App asynchronously.
+
+        Generate answer from Query Engine's or Chat Engine's achat interface.
+
+        Args:
+            query: RagQuery
+
+        Returns:
+            RagResponse
+        """
+        if not query.question:
+            return RagResponse(answer="Empty query. Please input your question.")
+        intent_detector = module_registry.get_module_with_config(
+            "IntentDetectionModule", self.config
+        )
+        intent = await intent_detector.aselect(
+            intent_detector._choices, query=query.question
+        )
+        if int(intent.index) == 0:
+            return await self.aquery_agent(query)
+        elif int(intent.index) == 1:
+            return await self.aquery(RagQuery(question=query.question))
+        else:
+            return ValueError(f"Invalid intent {intent.intent}")
+
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         vector_store_type = (
             self.config.get("index").get("vector_store").get("type", None)

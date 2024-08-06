@@ -21,6 +21,12 @@ class FunctionCallingLlmModule(ConfigurableModule):
                 f"Using DashScope for Function-Calling-LLM with model: {model_name}."
             )
             return MyFCDashScope(model_name=model_name)
+        elif llm_config and llm_config.source.lower() == "openai":
+            model_name = llm_config.get("name", "gpt-3.5-turbo")
+            logger.info(
+                f"Using OpenAI for Function-Calling-LLM with model: {model_name}."
+            )
+            return MyFCDashScope(model_name=model_name)
         else:
             logger.info("Don't use Function-Calling-LLM.")
             return None

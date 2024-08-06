@@ -27,6 +27,7 @@ MODULE_CONFIG_KEY_MAP = {
     "EvaluationModule": "evaluation",
     "BM25IndexModule": "bm25",
     "NodesEnhancementModule": "node_enhancement",
+    "IntentDetectionModule": "intent_detection",
 }
 
 

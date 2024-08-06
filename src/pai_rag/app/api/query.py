@@ -50,6 +50,11 @@ async def aquery_agent(query: LlmQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
 
 
+@router.post("/query/agentic/assistant")
+async def aquery_agent_assistant(query: LlmQuery):
+    return await rag_service.aquery_agentic_rag(query)
+
+
 @router.patch("/config")
 async def aupdate(new_config: Any = Body(None)):
     rag_service.reload(new_config)

@@ -177,6 +177,14 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
+    async def aquery_agentic_rag(self, query: LlmQuery):
+        try:
+            self.check_updates()
+            return await self.rag.aquery_agentic_rag(query)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query RAG failed: {ex}")
+
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         try:
             return await self.rag.aload_evaluation_qa_dataset(overwrite)
