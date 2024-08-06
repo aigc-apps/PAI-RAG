@@ -43,10 +43,10 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 2. 配置开发环境
 
-   本项目使用poetry进行管理，若在本地环境下使用，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
+   本项目使用poetry进行管理，若在本地环境下使用，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.11。
 
    ```bash
-   conda create -n rag_env python==3.10
+   conda create -n rag_env python==3.11
    conda activate rag_env
    ```
 
