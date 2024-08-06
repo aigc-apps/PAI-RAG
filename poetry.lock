@@ -349,19 +349,19 @@ alibabacloud-tea = ">=0.0.1"
 
 [[package]]
 name = "alibabacloud-tea-openapi"
-version = "0.3.10"
+version = "0.3.11"
 description = "Alibaba Cloud openapi SDK Library for Python"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "alibabacloud_tea_openapi-0.3.10.tar.gz", hash = "sha256:46e9c54ea857346306cd5c628dc33479349b559179ed2fdb2251dbe6ec9a1cf1"},
+    {file = "alibabacloud_tea_openapi-0.3.11.tar.gz", hash = "sha256:3f5cace1b1aeb8a64587574097403cfd066b86ee4c3c9abde587f9abfcad38de"},
 ]
 
 [package.dependencies]
 alibabacloud_credentials = ">=0.3.1,<1.0.0"
 alibabacloud_gateway_spi = ">=0.0.1,<1.0.0"
 alibabacloud_openapi_util = ">=0.2.1,<1.0.0"
-alibabacloud_tea_util = ">=0.3.12,<1.0.0"
+alibabacloud_tea_util = ">=0.3.13,<1.0.0"
 alibabacloud_tea_xml = ">=0.0.2,<1.0.0"
 
 [[package]]
@@ -3057,13 +3057,13 @@ test = ["pytest (>=7.4)", "pytest-cov (>=4.1)"]
 
 [[package]]
 name = "llama-cloud"
-version = "0.0.11"
+version = "0.0.12"
 description = ""
 optional = false
 python-versions = "<4,>=3.8"
 files = [
-    {file = "llama_cloud-0.0.11-py3-none-any.whl", hash = "sha256:7e2c673a4ab50749e20807f57bc511e81a04cf70d0dbd5db2a1d74d6599fec3f"},
-    {file = "llama_cloud-0.0.11.tar.gz", hash = "sha256:100882b528892065211436da048252d57eca14d8683d2fde6f89eeb20950ac18"},
+    {file = "llama_cloud-0.0.12-py3-none-any.whl", hash = "sha256:0bdbe34f8e711eb226239ef2c2178b269bfd203359026a6afa0eec8c1aff88c6"},
+    {file = "llama_cloud-0.0.12.tar.gz", hash = "sha256:caa52fd89b4d174c3abd4ae6a46c502d9713487056f76f03681f0b07562f840b"},
 ]
 
 [package.dependencies]
@@ -4826,17 +4826,17 @@ test = ["opentelemetry-sdk"]
 
 [[package]]
 name = "openinference-instrumentation-llama-index"
-version = "1.3.0"
+version = "1.4.2"
 description = "OpenInference LlamaIndex Instrumentation"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "openinference_instrumentation_llama_index-1.3.0-py3-none-any.whl", hash = "sha256:b9a315864235373d8c65e47afa15ca3ae3c3b39ae84052c3a83b6f72c4ee7823"},
-    {file = "openinference_instrumentation_llama_index-1.3.0.tar.gz", hash = "sha256:d6e8af2a033f789b92af6c4b769a26fa25d9551047ff4a2bd0f7fb9cbb09406b"},
+    {file = "openinference_instrumentation_llama_index-1.4.2-py3-none-any.whl", hash = "sha256:d7772e0637ae05ab1748f5a72fa09d3e00a28140a61792656ea9135e64ff3ea1"},
+    {file = "openinference_instrumentation_llama_index-1.4.2.tar.gz", hash = "sha256:fddfe360a8445bf47aeae8a840543fda6b61a1877f4a0912d921c1d111bcf617"},
 ]
 
 [package.dependencies]
-openinference-instrumentation = ">=0.1.3"
+openinference-instrumentation = ">=0.1.7"
 openinference-semantic-conventions = "*"
 opentelemetry-api = "*"
 opentelemetry-instrumentation = "*"
@@ -4845,8 +4845,8 @@ typing-extensions = "*"
 wrapt = "*"
 
 [package.extras]
-instruments = ["llama-index (>=0.10.5)"]
-test = ["llama-index (==0.10.5)", "llama-index-llms-openai", "opentelemetry-sdk", "respx"]
+instruments = ["llama-index-core (>=0.10.5)"]
+test = ["llama-index (==0.10.36)", "llama-index-core (==0.10.36)", "llama-index-llms-openai", "opentelemetry-sdk", "respx"]
 
 [[package]]
 name = "openinference-semantic-conventions"
@@ -8930,4 +8930,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "2b6c0d6d289825574d03927576e1c5d4a64c59eb2565dc7849ed4e10cbd931ae"
+content-hash = "dde827ded54794923a74c0b02d716bf5b278c147bc09673faac0ccc0a31b9238"
