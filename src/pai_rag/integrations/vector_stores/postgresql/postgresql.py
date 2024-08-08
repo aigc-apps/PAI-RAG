@@ -329,8 +329,11 @@ class PGVectorStore(BasePydanticVectorStore):
         with self._session() as session, session.begin():
             statement = sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS vector")
             session.execute(statement)
-            statement = sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS pg_jieba")
-            session.execute(statement)
+            try:
+                statement = sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS pg_jieba")
+                session.execute(statement)
+            except Exception:
+                _logger.warning("create extension pg_jieba failed")
             session.commit()
 
     def _initialize(self) -> None:
