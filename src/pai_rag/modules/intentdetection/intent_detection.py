@@ -11,12 +11,11 @@ logger = logging.getLogger(__name__)
 class IntentDetectionModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["LlmModule"]
+        return ["FunctionCallingLlmModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        llm = new_params["LlmModule"]
-        print("config", config)
+        llm = new_params["FunctionCallingLlmModule"]
         type = config.get("type", "single")
         intents = config.get("intent", None)
         if type == "single":

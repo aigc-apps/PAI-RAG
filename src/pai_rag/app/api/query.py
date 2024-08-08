@@ -7,7 +7,6 @@ import tempfile
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
-    LlmQuery,
     RetrievalQuery,
     LlmResponse,
 )
@@ -29,7 +28,7 @@ async def aquery(query: RagQuery):
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery):
+async def aquery_llm(query: RagQuery):
     response = await rag_service.aquery_llm(query)
     if not query.stream:
         return response
@@ -46,12 +45,12 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 
 @router.post("/query/agent")
-async def aquery_agent(query: LlmQuery) -> LlmResponse:
+async def aquery_agent(query: RagQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
 
 
 @router.post("/query/agentic/assistant")
-async def aquery_agent_assistant(query: LlmQuery):
+async def aquery_agent_assistant(query: RagQuery):
     return await rag_service.aquery_agentic_rag(query)
 
 

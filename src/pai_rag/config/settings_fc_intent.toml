@@ -36,10 +36,8 @@ response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
 [rag.function_calling_llm]
-# source = "DashScope"
-# name = "qwen2-7b-instruct"
-source = "OpenAI"
-name = "gpt-4"
+source = "DashScope"
+name = "qwen2-7b-instruct"
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -47,7 +45,7 @@ vector_store.type = "FAISS"
 
 [rag.intent_detection]
 type = "single"
-intent = [["工具调用", "当用户的问题涉及到实时性的信息查询，比如查询航班信息、查询高铁信息、查询天气等时效性很强的信息。"], ["知识库检索", "当用户的问题是关于一些通用的信息检索，比如搜索旅游攻略、搜索美食攻略、搜索注意事项等信息。"]]
+intent = [["agent", "当用户的问题涉及到实时性的信息查询，比如查询航班信息、查询高铁信息、查询天气等时效性很强的信息。"], ["retrieval", "当用户的问题是关于一些通用的信息检索，比如搜索旅游攻略、搜索美食攻略、搜索注意事项等信息。"]]
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.

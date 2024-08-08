@@ -1,7 +1,6 @@
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.app.api.models import (
     RagQuery,
-    LlmQuery,
     RetrievalQuery,
     RagResponse,
     LlmResponse,
@@ -158,13 +157,13 @@ class RagApplication:
         else:
             return event_generator_async(response=response, extra_info=result_info)
 
-    async def aquery_llm(self, query: LlmQuery):
+    async def aquery_llm(self, query: RagQuery):
         """Query answer from LLM response asynchronously.
 
         Generate answer from LLM's or LLM Chat Engine's achat interface.
 
         Args:
-            query: LlmQuery
+            query: RagQuery
 
         Returns:
             LlmResponse
@@ -190,13 +189,13 @@ class RagApplication:
             response = await llm_chat_engine.astream_chat(query.question)
             return event_generator_async(response=response)
 
-    async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_agent(self, query: RagQuery) -> LlmResponse:
         """Query answer from RAG App via web search asynchronously.
 
         Generate answer from agent's achat interface.
 
         Args:
-            query: LlmQuery
+            query: RagQuery
 
         Returns:
             LlmResponse
@@ -208,7 +207,7 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def aquery_agentic_rag(self, query: LlmQuery):
+    async def aquery_agentic_rag(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.
@@ -227,10 +226,10 @@ class RagApplication:
         intent = await intent_detector.aselect(
             intent_detector._choices, query=query.question
         )
-        if int(intent.index) == 0:
+        if intent.intent == "agent":
             return await self.aquery_agent(query)
-        elif int(intent.index) == 1:
-            return await self.aquery(RagQuery(question=query.question))
+        elif intent.intent == "retrieval":
+            return await self.aquery(query)
         else:
             return ValueError(f"Invalid intent {intent.intent}")
 

@@ -7,7 +7,6 @@ from pai_rag.core.rag_application import RagApplication
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.app.api.models import (
     RagQuery,
-    LlmQuery,
     RetrievalQuery,
     LlmResponse,
 )
@@ -153,7 +152,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_llm(self, query: LlmQuery):
+    async def aquery_llm(self, query: RagQuery):
         try:
             self.check_updates()
             return await self.rag.aquery_llm(query)
@@ -169,7 +168,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_agent(self, query: RagQuery) -> LlmResponse:
         try:
             self.check_updates()
             return await self.rag.aquery_agent(query)
@@ -177,7 +176,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_agentic_rag(self, query: LlmQuery):
+    async def aquery_agentic_rag(self, query: RagQuery):
         try:
             self.check_updates()
             return await self.rag.aquery_agentic_rag(query)
