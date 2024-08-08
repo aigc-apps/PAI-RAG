@@ -368,6 +368,7 @@ class PaiPDFReader(BaseReader):
             extract_pages(file_path), desc="processing pages in pdf", unit="page"
         )
         image_documents = []
+        text_image_documents = []
 
         file_name = os.path.basename(file_path)
         for pagenum, page in enumerate(pages):
@@ -414,6 +415,15 @@ class PaiPDFReader(BaseReader):
                             ImageDocument(
                                 image_url=image_url,
                                 image_mimetype="image/jpeg",
+                                extra_info={"image_url": image_url, **extra_info},
+                            )
+                        )
+                        text_from_texts = "".join(
+                            PaiPDFReader.text_extraction(text_elements)
+                        )
+                        text_image_documents.append(
+                            Document(
+                                text=text_from_texts[-300:],
                                 extra_info={"image_url": image_url, **extra_info},
                             )
                         )
@@ -529,4 +539,5 @@ class PaiPDFReader(BaseReader):
                 docs.append(doc)
 
         docs.extend(image_documents)
+        docs.extend(text_image_documents)
         return docs

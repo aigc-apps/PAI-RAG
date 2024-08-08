@@ -235,10 +235,14 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
             query_bundle_with_embeddings, similarity_top_k
         )
         query_result = vector_store.query(query, **self._kwargs)
-        return self._build_node_list_from_query_result(query_result)
+        return self._build_node_list_from_query_result(
+            query_result, vector_store == self._image_vector_store
+        )
 
     def _build_node_list_from_query_result(
-        self, query_result: VectorStoreQueryResult
+        self,
+        query_result: VectorStoreQueryResult,
+        is_image=False,
     ) -> List[NodeWithScore]:
         if query_result.nodes is None:
             # NOTE: vector store does not keep text and returns node indices.
@@ -250,7 +254,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
                 )
             assert isinstance(self._index.index_struct, IndexDict)
             node_ids = [
-                self._index.index_struct.nodes_dict[f"image_{idx}"]
+                self._index.index_struct.nodes_dict[f"image_{idx}" if is_image else idx]
                 for idx in query_result.ids
             ]
             nodes = self._docstore.get_nodes(node_ids)

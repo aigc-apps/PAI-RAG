@@ -47,6 +47,16 @@ def _get_image_and_text_nodes(
             image_nodes.append(res_node)
         else:
             text_nodes.append(res_node)
+            if res_node.node.metadata.get("image_url", None):
+                image_nodes.append(
+                    NodeWithScore(
+                        node=ImageNode(
+                            image_url=res_node.node.metadata["image_url"],
+                            extra_info=res_node.node.metadata,
+                        ),
+                        score=res_node.score,
+                    )
+                )
     return image_nodes, text_nodes
 
 
@@ -121,6 +131,9 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
             text_nodes = node_postprocessor.postprocess_nodes(
                 text_nodes, query_bundle=query_bundle
             )
+        import pdb
+
+        pdb.set_trace()
         return image_nodes + text_nodes
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
