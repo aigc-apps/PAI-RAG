@@ -298,9 +298,12 @@ class PGVectorStore(BasePydanticVectorStore):
         self._async_session = sessionmaker(self._async_engine, class_=AsyncSession)  # type: ignore
 
         # load user dict for pg_jieba extension
-        with self._session() as session, session.begin():
-            session.execute(sqlalchemy.text("SELECT jieba_load_user_dict(0,0)"))
-            session.commit()
+        try:
+            with self._session() as session, session.begin():
+                session.execute(sqlalchemy.text("SELECT jieba_load_user_dict(0,0)"))
+                session.commit()
+        except Exception as e:
+            _logger.warning(e)
 
     def _create_schema_if_not_exists(self) -> None:
         if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", self.schema_name):
@@ -348,10 +351,13 @@ class PGVectorStore(BasePydanticVectorStore):
 
     async def _extension_load(self) -> None:
         if not self._is_extension_load:
-            async with self._async_session() as async_session, async_session.begin():
-                await async_session.execute(
-                    sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
-                )
+            try:
+                async with self._async_session() as async_session, async_session.begin():
+                    await async_session.execute(
+                        sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
+                    )
+            except Exception as e:
+                _logger.warning(e)
             self._is_extension_load = True
 
     def _node_to_table_row(self, node: BaseNode) -> Any:
