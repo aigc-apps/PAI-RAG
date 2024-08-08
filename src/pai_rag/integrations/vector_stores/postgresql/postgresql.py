@@ -247,7 +247,7 @@ class PGVectorStore(BasePydanticVectorStore):
         database: Optional[str] = None,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        table_name: str = "postgresql",
+        table_name: str = "llamaindex",
         schema_name: str = "public",
         connection_string: Optional[Union[str, sqlalchemy.engine.URL]] = None,
         async_connection_string: Optional[Union[str, sqlalchemy.engine.URL]] = None,
