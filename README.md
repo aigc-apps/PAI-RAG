@@ -48,10 +48,10 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 2. Development Environment Settings
 
-   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.10.
+   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.11.
 
    ```bash
-   conda create -n rag_env python==3.10
+   conda create -n rag_env python==3.11
    conda activate rag_env
    ```
 

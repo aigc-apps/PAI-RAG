@@ -58,6 +58,11 @@ type = "SimpleChatEngine"
 [rag.multi_modal_llm]
 source = ""
 
+[rag.node_enhancement]
+tree_depth = 3
+max_clusters = 52
+proba_threshold = 0.10
+
 [rag.node_parser]
 type = "Sentence"
 chunk_size = 500

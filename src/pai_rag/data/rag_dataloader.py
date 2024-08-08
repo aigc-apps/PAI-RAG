@@ -231,7 +231,7 @@ class RagDataLoader:
             self.index.vector_index.insert_nodes(nodes_with_embeddings)
 
             logger.info(
-                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+                f"Async inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
             )
 
         else:
