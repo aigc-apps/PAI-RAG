@@ -9,7 +9,7 @@ from llama_index.core.tools import RetrieverTool
 from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from llama_index.core.indices.multi_modal import MultiModalVectorStoreIndex
+from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -34,7 +34,7 @@ class RetrieverModule(ConfigurableModule):
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
 
-        if isinstance(index.vector_index, MultiModalVectorStoreIndex):
+        if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever()
         # Special handle elastic search
         elif index.vectordb_type == "milvus":

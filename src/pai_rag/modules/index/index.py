@@ -2,8 +2,8 @@ import logging
 import os
 from typing import Dict, List, Any
 from llama_index.vector_stores.faiss import FaissVectorStore
-from llama_index.core.indices import MultiModalVectorStoreIndex
 from llama_index.core.embeddings import MultiModalEmbedding
+from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
 from pai_rag.modules.index.index_utils import load_index_from_storage
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -18,11 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class RagIndex:
-    def __init__(self, config, embed_model, postprocessor):
+    def __init__(self, config, embed_model, multi_modal_embed_model, postprocessor):
         self.config = config
         self.embed_model = embed_model
+        self.multi_modal_embed_model = multi_modal_embed_model
         self.embed_dims = self._get_embed_vec_dim(embed_model)
-        self.postprocessor = postprocessor
+        self.multi_modal_embed_dims = self._get_embed_vec_dim(
+            self.multi_modal_embed_model
+        )
         persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
         folder_name = get_store_persist_directory_name(config, self.embed_dims)
         self.persist_path = os.path.join(persist_path, folder_name)
@@ -31,7 +34,12 @@ class RagIndex:
 
         is_empty = not os.path.exists(self.persist_path)
         rag_store = RagStore(
-            config, self.postprocessor, self.persist_path, is_empty, self.embed_dims
+            config,
+            self.postprocessor,
+            self.persist_path,
+            is_empty,
+            self.embed_dims,
+            self.multi_modal_embed_dims,
         )
         self.storage_context = rag_store.get_storage_context()
 
@@ -48,12 +56,12 @@ class RagIndex:
     def create_indices(self, storage_context, embed_model):
         logging.info("Empty index, need to create indices.")
 
-        if isinstance(embed_model, MultiModalEmbedding):
-            self.vector_index = MultiModalVectorStoreIndex(
+        if self.multi_modal_embed_model:
+            self.vector_index = MyMultiModalVectorStoreIndex(
                 nodes=[],
                 storage_context=storage_context,
                 embed_model=embed_model,
-                image_embed_model=embed_model,
+                image_embed_model=self.multi_modal_embed_model,
             )
         else:
             self.vector_index = MyVectorStoreIndex(
@@ -65,14 +73,17 @@ class RagIndex:
     def load_indices(self, storage_context, embed_model):
         if isinstance(storage_context.vector_store, FaissVectorStore):
             self.vector_index = load_index_from_storage(
-                storage_context=storage_context, image_embed_model=embed_model
+                storage_context=storage_context,
+                embed_model=embed_model,
+                image_embed_model=self.multi_modal_embed_model,
             )
         else:
             if isinstance(embed_model, MultiModalEmbedding):
-                self.vector_index = MultiModalVectorStoreIndex(
+                self.vector_index = MyMultiModalVectorStoreIndex(
                     nodes=[],
                     storage_context=storage_context,
                     embed_model=embed_model,
+                    image_embed_model=self.multi_modal_embed_model,
                 )
             else:
                 self.vector_index = MyVectorStoreIndex(
@@ -87,11 +98,13 @@ class RagIndex:
                 self.persist_path,
                 False,
                 self.embed_dims,
+                self.multi_modal_embed_dims,
             )
             self.storage_context = rag_store.get_storage_context()
 
             self.vector_index = load_index_from_storage(
-                storage_context=self.storage_context, image_embed_model=self.embed_model
+                storage_context=self.storage_context,
+                image_embed_model=self.multi_modal_embed_model,
             )
             logger.info(
                 f"FaissIndex {self.persist_path} reloaded with {len(self.vector_index.docstore.docs)} nodes."
@@ -109,10 +122,12 @@ class IndexModule(ConfigurableModule):
 
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["EmbeddingModule", "PostprocessorModule"]
+        return ["EmbeddingModule", "PostprocessorModule", "MultiModalEmbeddingModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         embed_model = new_params["EmbeddingModule"]
         postprocessor = new_params["PostprocessorModule"]
-        return RagIndex(config, embed_model, postprocessor)
+        multi_modal_embed_model = new_params["MultiModalEmbeddingModule"]
+
+        return RagIndex(config, embed_model, multi_modal_embed_model, postprocessor)

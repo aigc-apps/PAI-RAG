@@ -30,19 +30,26 @@ from pai_rag.integrations.postprocessor.my_simple_weighted_rerank import (
 )
 
 DEFAULT_CHROMA_COLLECTION_NAME = "pairag"
-DEFAULT_PERSIST_IMAGE_FNAME = "image_store.json"
+DEFAULT_PERSIST_IMAGE_NAMESPACE = "image"
 logger = logging.getLogger(__name__)
 
 
 class RagStore:
-    def __init__(self, config, postprocessor, persist_dir, is_empty, embed_dims):
+    def __init__(
+        self,
+        config,
+        postprocessor,
+        persist_dir,
+        is_empty,
+        embed_dims,
+        multi_modal_embed_dims,
+    ):
         self.store_config = config
-        print("self.store_config", self.store_config)
         self.postprocessor = postprocessor
-        print("self.postprocessor", self.postprocessor)
         self.embed_dims = embed_dims
         self.persist_dir = persist_dir
         self.is_empty = is_empty
+        self.multi_modal_embed_dims = multi_modal_embed_dims
 
     def get_storage_context(self):
         storage_context = self._get_or_create_storage_context()
@@ -113,7 +120,7 @@ class RagStore:
         )
         faiss_image_vector_index_path = os.path.join(
             self.persist_dir,
-            f"{DEFAULT_VECTOR_STORE}{NAMESPACE_SEP}{DEFAULT_PERSIST_IMAGE_FNAME}",
+            f"{DEFAULT_PERSIST_IMAGE_NAMESPACE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
         )
 
         if os.path.exists(faiss_vector_index_path):
@@ -127,7 +134,7 @@ class RagStore:
                 faiss_image_vector_index_path
             )
         else:
-            image_index = faiss.IndexFlatIP(self.embed_dims)
+            image_index = faiss.IndexFlatIP(self.multi_modal_embed_dims)
             faiss_image_store = MyFaissVectorStore(faiss_index=image_index)
 
         return faiss_store, faiss_image_store

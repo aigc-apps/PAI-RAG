@@ -61,7 +61,7 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise ServiceError(f"Get RAG configuration failed: {ex}")
-        return self.config_dict_value
+        return self.config_dict_value.get("RAG")
 
     def reload(self, new_config: Any = None):
         try:

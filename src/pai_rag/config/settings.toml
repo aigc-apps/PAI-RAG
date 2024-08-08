@@ -29,6 +29,9 @@ type = "SimpleDirectoryReader"
 source = "DashScope"
 embed_batch_size = 10
 
+[rag.embedding.multi_modal]
+source = "cnclip"
+
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
@@ -50,11 +53,11 @@ vector_store.type = "FAISS"
 source = "DashScope"
 name = "qwen-turbo"
 
+[rag.llm.multi_modal]
+source = "DashScope"
+
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
-
-[rag.multi_modal_llm]
-source = ""
 
 [rag.node_enhancement]
 tree_depth = 3
