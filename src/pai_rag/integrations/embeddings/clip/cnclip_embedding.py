@@ -53,13 +53,14 @@ class CnClipEmbedding(MultiModalEmbedding):
         return self._get_query_embedding(query)
 
     def _get_text_embedding(self, text: str) -> Embedding:
-        return self._get_text_embeddings([text])[0]
+        embedding = self._get_text_embeddings([text])[0]
+        return embedding
 
     def _get_text_embeddings(self, texts: List[str]) -> List[Embedding]:
         results = []
         for text in texts:
             text_embedding = self._model.encode_text(
-                clip.tokenize(text).to(self._device)
+                clip.tokenize(text, context_length=512).to(self._device)
             )
             normed_embeddings = text_embedding / text_embedding.norm(
                 dim=1, keepdim=True
@@ -79,7 +80,6 @@ class CnClipEmbedding(MultiModalEmbedding):
     def _get_image_embedding(self, img_file_path: ImageType) -> Embedding:
         if not img_file_path:
             return None
-
         with torch.no_grad():
             image = (
                 self._preprocess(Image.open(img_file_path))
@@ -89,6 +89,7 @@ class CnClipEmbedding(MultiModalEmbedding):
 
             embeddings = self._model.encode_image(image)
             normed_embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+            print(normed_embeddings.tolist()[0][-10:])
             return normed_embeddings.tolist()[0]
 
 

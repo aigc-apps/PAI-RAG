@@ -24,6 +24,7 @@ DEFAULT_QUESTION_GENERATION_PROMPT = '''\
     {query_str}
     '''
 
+
 DEFAULT_TEXT_QA_PROMPT_TMPL = """内容信息如下
     ---------------------
     {context_str}
@@ -104,4 +105,17 @@ QUERY_GEN_PROMPT = (
 
 DEFAULT_SUMMARY_PROMPT = (
     "Summarize the provided text in Chinese, including as many key details as needed."
+)
+
+DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL = (
+    "结合上面给出的图片和下面给出的参考材料来回答用户的问题。材料中包含一组图片链接，分别对应到前面给出的图片的地址。\n\n"
+    "材料:"
+    "---------------------\n\n"
+    "{context_str}\n"
+    "---------------------\n\n"
+    "请根据给定的材料回答给出的问题，如果材料中没有找到答案，就说没有找到相关的信息，不要编造答案。\n\n"
+    "如果上面有图片对你生成答案有帮助，请从图片列表中找到对应的图片链接并用markdown格式给出，如![](image_url)。\n\n"
+    "---------------------\n\n"
+    "问题: {query_str}\n"
+    "答案: "
 )

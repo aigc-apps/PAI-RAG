@@ -11,7 +11,7 @@ from fsspec import AbstractFileSystem
 import os
 from tqdm import tqdm
 from llama_index.core.readers.base import BaseReader
-from llama_index.core.schema import Document
+from llama_index.core.schema import Document, ImageDocument
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 import logging
 
@@ -85,4 +85,10 @@ class PaiImageReader(BaseReader):
                 path_prefix="pairag/images/",
             )
 
-            return self.load_image_urls([image_url], extra_info=extra_info)
+            extra_info["file_path"] = file_path
+            extra_info["file_name"] = os.path.basename(file_path)
+            extra_info["image_url"] = image_url
+            image_doc = ImageDocument(image=image_url, extra_info=extra_info)
+            docs = [image_doc]
+            # docs = self.load_image_urls([image_url], extra_info=extra_info)
+        return docs

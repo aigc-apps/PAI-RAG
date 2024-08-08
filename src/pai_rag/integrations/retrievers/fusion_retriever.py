@@ -1,6 +1,6 @@
 import asyncio
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, cast, Any
+from typing import Dict, List, Optional, Tuple, cast
 
 from llama_index.core.async_utils import run_async_tasks
 from llama_index.core.callbacks.base import CallbackManager
@@ -13,10 +13,6 @@ from llama_index.core.schema import (
     IndexNode,
     NodeWithScore,
     QueryBundle,
-    BaseComponent,
-    BaseNode,
-    TextNode,
-    MetadataMode,
 )
 from llama_index.core.settings import Settings
 from llama_index.core.utils import print_text
@@ -39,66 +35,6 @@ class FUSION_MODES(str, Enum):
     DIST_BASED_SCORE = "dist_based_score"  # apply distance-based score fusion
     SIMPLE = "simple"  # simple re-ordering of results based on original scores
     NO_FUSION = "no_fusion"
-
-
-class MyNodeWithScore(BaseComponent):
-    node: BaseNode
-    score: Optional[float] = None
-    retriever_type: Optional[str] = None
-
-    def __str__(self) -> str:
-        score_str = "None" if self.score is None else f"{self.score: 0.3f}"
-        return f"{self.node}\nScore: {score_str}\nRetrieverType: {self.retriever_type}"
-
-    def get_score(self, raise_error: bool = False) -> float:
-        """Get score."""
-        if self.score is None:
-            if raise_error:
-                raise ValueError("Score not set.")
-            else:
-                return 0.0
-        else:
-            return self.score
-
-    @classmethod
-    def class_name(cls) -> str:
-        return "MyNodeWithScore"
-
-    ##### pass through methods to BaseNode #####
-    @property
-    def node_id(self) -> str:
-        return self.node.node_id
-
-    @property
-    def id_(self) -> str:
-        return self.node.id_
-
-    @property
-    def text(self) -> str:
-        if isinstance(self.node, TextNode):
-            return self.node.text
-        else:
-            raise ValueError("Node must be a TextNode to get text.")
-
-    @property
-    def metadata(self) -> Dict[str, Any]:
-        return self.node.metadata
-
-    @property
-    def embedding(self) -> Optional[List[float]]:
-        return self.node.embedding
-
-    def get_text(self) -> str:
-        if isinstance(self.node, TextNode):
-            return self.node.get_text()
-        else:
-            raise ValueError("Node must be a TextNode to get text.")
-
-    def get_content(self, metadata_mode: MetadataMode = MetadataMode.NONE) -> str:
-        return self.node.get_content(metadata_mode=metadata_mode)
-
-    def get_embedding(self) -> List[float]:
-        return self.node.get_embedding()
 
 
 class MyQueryFusionRetriever(BaseRetriever):
@@ -170,7 +106,7 @@ class MyQueryFusionRetriever(BaseRetriever):
 
     def _reciprocal_rerank_fusion(
         self, results: Dict[Tuple[str, int], List[NodeWithScore]]
-    ) -> List[MyNodeWithScore]:
+    ) -> List[NodeWithScore]:
         """
         Apply reciprocal rank fusion.
 
@@ -198,7 +134,7 @@ class MyQueryFusionRetriever(BaseRetriever):
         )
 
         # adjust node scores
-        reranked_nodes: List[MyNodeWithScore] = []
+        reranked_nodes: List[NodeWithScore] = []
         for text, score in reranked_results.items():
             reranked_nodes.append(text_to_node[text])
             reranked_nodes[-1].score = score
@@ -281,7 +217,7 @@ class MyQueryFusionRetriever(BaseRetriever):
 
     def _no_fusion(
         self, results: Dict[Tuple[str, int], List[NodeWithScore]]
-    ) -> List[MyNodeWithScore]:
+    ) -> List[NodeWithScore]:
         """Apply simple fusion."""
         # Use a dict to de-duplicate nodes
         all_nodes: List[NodeWithScore] = []

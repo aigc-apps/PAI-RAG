@@ -108,6 +108,7 @@ class PaiPDFReader(BaseReader):
 
         cropped_pdf_writer.add_page(page_object)
         cropped_pdf_writer.write(cropped_pdf_stream)
+        cropped_pdf_stream.seek(0)
 
         image = convert_from_bytes(cropped_pdf_stream.getvalue())[0]
 
@@ -119,12 +120,14 @@ class PaiPDFReader(BaseReader):
             return None
 
         image_stream = BytesIO()
-        image.save(image_stream, format="PNG")
+        image.save(image_stream, format="jpeg")
+
+        image_stream.seek(0)
         data = image_stream.getvalue()
 
         image_url = self._oss_cache.put_object_if_not_exists(
             data=data,
-            file_ext=".png",
+            file_ext=".jpeg",
             headers={
                 "x-oss-object-acl": "public-read"
             },  # set public read to make image accessible
@@ -366,7 +369,12 @@ class PaiPDFReader(BaseReader):
         )
         image_documents = []
 
+        file_name = os.path.basename(file_path)
         for pagenum, page in enumerate(pages):
+            extra_info["file_path"] = f"_page_{pagenum + 1}".join(
+                os.path.splitext(file_path)
+            )
+
             # Initialize variables for extracting text from the page
             page_object = pdf_read.pages[pagenum]
             text_elements = []
@@ -383,6 +391,7 @@ class PaiPDFReader(BaseReader):
             # Sort the elements on the page by their y1 coordinate
             page_elements.sort(key=lambda a: a[0], reverse=True)
 
+            image_cnt = 0
             # Iterate through the page's elements
             for i, component in enumerate(page_elements):
                 # Extract text elements
@@ -394,9 +403,20 @@ class PaiPDFReader(BaseReader):
 
                 elif isinstance(element, LTFigure):
                     image_url = self.process_pdf_image(element, page_object)
-                    image_documents.append(
-                        ImageDocument(image_url=image_url, image_mimetype="image/png")
-                    )
+                    if image_url:
+                        image_cnt += 1
+                        extra_info[
+                            "file_name"
+                        ] = f"_page_{pagenum + 1}_image_{image_cnt}".join(
+                            os.path.splitext(file_name)
+                        )
+                        image_documents.append(
+                            ImageDocument(
+                                image_url=image_url,
+                                image_mimetype="image/jpeg",
+                                extra_info={"image_url": image_url, **extra_info},
+                            )
+                        )
 
                 # Check for table elements
                 elif isinstance(element, LTRect) or isinstance(element, LTLine):
@@ -465,6 +485,9 @@ class PaiPDFReader(BaseReader):
             page_table_json = "\n".join(page_tables_json)
 
             page_info_text = item["text"] + page_table_json
+            if not page_info_text:
+                # Skip empty page
+                continue
 
             # if `extra_info` is not None, check if it is a dictionary
             if extra_info:
@@ -475,16 +498,12 @@ class PaiPDFReader(BaseReader):
                 if not extra_info:
                     extra_info = {}
                 extra_info["total_pages"] = len(pdf_read.pages)
-                extra_info["file_path"] = f"_page_{pagenum + 1}".join(
-                    os.path.splitext(file_path)
-                )
-                file_name = os.path.basename(file_path)
+                table_summary = page_table_summary[:PAGE_TABLE_SUMMARY_MAX_TOKEN]
+                if table_summary:
+                    extra_info["table_summary"] = table_summary
                 extra_info["file_name"] = f"_page_{pagenum + 1}".join(
                     os.path.splitext(file_name)
                 )
-                extra_info["table_summary"] = page_table_summary[
-                    :PAGE_TABLE_SUMMARY_MAX_TOKEN
-                ]
 
                 doc = Document(
                     text=page_info_text,
@@ -508,5 +527,6 @@ class PaiPDFReader(BaseReader):
                     ),
                 )
                 docs.append(doc)
-        # return list of documents
+
+        docs.extend(image_documents)
         return docs

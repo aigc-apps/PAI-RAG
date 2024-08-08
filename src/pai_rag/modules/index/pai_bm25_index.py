@@ -4,10 +4,9 @@ import pickle
 import json
 import numpy as np
 from typing import Callable, List, cast, Dict
-from llama_index.core.schema import BaseNode, TextNode
+from llama_index.core.schema import BaseNode, TextNode, NodeWithScore
 from pai_rag.utils.tokenizer import jieba_tokenizer
 from scipy.sparse import csr_matrix
-from pai_rag.integrations.retrievers.fusion_retriever import MyNodeWithScore
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +147,9 @@ class PaiBm25Index:
         for node in nodes:
             if isinstance(node, TextNode):
                 text_node = cast(TextNode, node)
+                if not text_node.get_content():
+                    # skip empty nodes
+                    continue
                 node_id = text_node.node_id
                 id_list.append(node_id)
                 metadata_list.append(text_node.metadata)
@@ -162,6 +164,10 @@ class PaiBm25Index:
             else:
                 # don't handle image or graph node
                 pass
+
+        if not id_list:
+            return
+
         pad_size = self.index.doc_count - len(self.index.doc_lens)
         self.index.doc_lens = np.lib.pad(
             self.index.doc_lens, (0, pad_size), "constant", constant_values=(0)
@@ -188,6 +194,8 @@ class PaiBm25Index:
         # m * n matrix
         m = self.index.doc_count
         n = self.index.token_count
+        if m == 0 or n == 0:
+            return
 
         df = np.array([len(i) for i in self.index.inverted_index])
         idf = np.log(1 + (m - df + 0.5) / (df + 0.5))
@@ -252,7 +260,7 @@ class PaiBm25Index:
 
         return [self.doc_cache[i] for i in doc_indexes]
 
-    def query(self, query_str: str, top_n: int = 5) -> List[MyNodeWithScore]:
+    def query(self, query_str: str, top_n: int = 5) -> List[NodeWithScore]:
         results = []
         if self.index_matrix is None:
             return results
@@ -266,11 +274,11 @@ class PaiBm25Index:
         doc_indexes = doc_scores.argsort()[::-1][:top_n]
         text_nodes = self.load_docs_with_index(doc_indexes)
         for i, node in enumerate(text_nodes):
+            node.metadata["retrieval_type"] = "keyword"
             results.append(
-                MyNodeWithScore(
+                NodeWithScore(
                     node=node,
                     score=doc_scores[doc_indexes[i]],
-                    retriever_type="keyword",
                 )
             )
 

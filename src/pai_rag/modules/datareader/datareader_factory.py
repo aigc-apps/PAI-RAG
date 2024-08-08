@@ -35,6 +35,7 @@ class DataReaderFactoryModule(ConfigurableModule):
                     "enable_table_summary", False
                 ),
                 model_dir=self.reader_config.get("easyocr_model_dir", None),
+                oss_cache=self.oss_cache,
             ),
             ".csv": PaiPandasCSVReader(
                 concat_rows=self.reader_config.get("concat_rows", False),

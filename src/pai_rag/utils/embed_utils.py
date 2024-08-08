@@ -1,28 +1,29 @@
+from io import BytesIO
 import logging
 import httpx
 import asyncio
-import tempfile
 import numpy as np
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
-from llama_index.core.schema import BaseNode, MetadataMode
+from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 from typing import Dict, List, Sequence
 
 logger = logging.getLogger(__name__)
 
 
-async def download_url(url, temp_dir):
+async def download_url(url):
     if not url:
         return None
+
+    image_stream = BytesIO()
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code == 200:
             # Create a temporary file in the temporary directory
-            temp_file = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir.name)
-            temp_file.write(response.content)
-            temp_file.close()
-            return temp_file.name
+            image_stream.write(response.content)
+            image_stream.seek(0)
+            return image_stream
         else:
             logger.error(
                 f"Failed to download {url}: Status code {response.status_code}"
@@ -30,15 +31,10 @@ async def download_url(url, temp_dir):
             return None
 
 
-async def load_images_from_nodes(nodes: Sequence[BaseNode]) -> List[str]:
-    temp_dir = tempfile.TemporaryDirectory()
-
-    tasks = [
-        download_url(node.metadata.get("image_url", None), temp_dir) for node in nodes
-    ]
+async def load_images_from_nodes(nodes: Sequence[ImageNode]) -> List[BytesIO]:
+    tasks = [download_url(node.image_url) for node in nodes]
     results = await asyncio.gather(*tasks)
-
-    return temp_dir, results
+    return results
 
 
 def merge_embeddings_sum_normalize(emb1, emb2):
@@ -59,11 +55,14 @@ async def async_embed_nodes(
     Returns:
         Dict[str, List[float]]: A map from node id to embedding.
     """
+    text_nodes = [node for node in nodes if not isinstance(node, ImageNode)]
+    image_nodes = [node for node in nodes if isinstance(node, ImageNode)]
+
     id_to_embed_map: Dict[str, List[float]] = {}
 
     texts_to_embed = []
     ids_to_embed = []
-    for node in nodes:
+    for node in text_nodes:
         if node.embedding is None:
             ids_to_embed.append(node.node_id)
             texts_to_embed.append(node.get_content(metadata_mode=MetadataMode.EMBED))
@@ -75,19 +74,18 @@ async def async_embed_nodes(
     )
 
     if isinstance(embed_model, MultiModalEmbedding):
-        temp_dir, image_paths = await load_images_from_nodes(nodes)
-        image_embeddings = await embed_model.aget_image_embedding_batch(
-            image_paths, show_progress=show_progress
-        )
+        image_list = await load_images_from_nodes(image_nodes)
+        active_image_nodes, active_image_list = [], []
+        for i, image in enumerate(image_list):
+            if image:
+                active_image_nodes.append(image_nodes[i])
+                active_image_list.append(image_list[i])
 
-        for i in range(len(new_embeddings)):
-            if image_embeddings[i]:
-                new_embeddings[i] = list(
-                    merge_embeddings_sum_normalize(
-                        new_embeddings[i], image_embeddings[i]
-                    )
-                )
-        temp_dir.cleanup()
+        image_embeddings = await embed_model.aget_image_embedding_batch(
+            active_image_list, show_progress=show_progress
+        )
+        for i in range(len(image_embeddings)):
+            id_to_embed_map[active_image_nodes[i].node_id] = image_embeddings[i]
 
     for new_id, text_embedding in zip(ids_to_embed, new_embeddings):
         id_to_embed_map[new_id] = text_embedding

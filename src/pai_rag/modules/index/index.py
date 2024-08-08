@@ -1,13 +1,14 @@
 import logging
 import os
 from typing import Dict, List, Any
-
-from pai_rag.modules.index.my_vector_store_index import MyVectorStoreIndex
+from llama_index.vector_stores.faiss import FaissVectorStore
+from llama_index.core.indices import MultiModalVectorStoreIndex
+from llama_index.core.embeddings import MultiModalEmbedding
 from pai_rag.modules.index.index_utils import load_index_from_storage
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
+from pai_rag.modules.index.my_vector_store_index import MyVectorStoreIndex
 from pai_rag.modules.index.store import RagStore
-from llama_index.vector_stores.faiss import FaissVectorStore
 from pai_rag.utils.store_utils import get_store_persist_directory_name
 from pai_rag.modules.index.index_entry import index_entry
 
@@ -36,9 +37,9 @@ class RagIndex:
 
         self.vectordb_type = config["vector_store"].get("type", "faiss").lower()
         if is_empty:
-            self.vector_index = self.create_indices(self.storage_context, embed_model)
+            self.create_indices(self.storage_context, embed_model)
         else:
-            self.vector_index = self.load_indices(self.storage_context, embed_model)
+            self.load_indices(self.storage_context, embed_model)
 
     def _get_embed_vec_dim(self, embed_model):
         # Get dimension size of embedding vector
@@ -47,23 +48,36 @@ class RagIndex:
     def create_indices(self, storage_context, embed_model):
         logging.info("Empty index, need to create indices.")
 
-        vector_index = MyVectorStoreIndex(
-            nodes=[], storage_context=storage_context, embed_model=embed_model
-        )
-        logging.info("Created vector_index.")
-        return vector_index
-
-    def load_indices(self, storage_context, embed_model):
-        if isinstance(storage_context.vector_store, FaissVectorStore):
-            vector_index = load_index_from_storage(storage_context=storage_context)
-            return vector_index
-        else:
-            vector_index = MyVectorStoreIndex(
+        if isinstance(embed_model, MultiModalEmbedding):
+            self.vector_index = MultiModalVectorStoreIndex(
                 nodes=[],
                 storage_context=storage_context,
                 embed_model=embed_model,
+                image_embed_model=embed_model,
             )
-        return vector_index
+        else:
+            self.vector_index = MyVectorStoreIndex(
+                nodes=[], storage_context=storage_context, embed_model=embed_model
+            )
+
+        logging.info("Created vector_index.")
+
+    def load_indices(self, storage_context, embed_model):
+        if isinstance(storage_context.vector_store, FaissVectorStore):
+            self.vector_index = load_index_from_storage(
+                storage_context=storage_context, image_embed_model=embed_model
+            )
+        else:
+            if isinstance(embed_model, MultiModalEmbedding):
+                self.vector_index = MultiModalVectorStoreIndex(
+                    nodes=[],
+                    storage_context=storage_context,
+                    embed_model=embed_model,
+                )
+            else:
+                self.vector_index = MyVectorStoreIndex(
+                    nodes=[], storage_context=storage_context, embed_model=embed_model
+                )
 
     def reload(self):
         if isinstance(self.storage_context.vector_store, FaissVectorStore):
@@ -77,7 +91,7 @@ class RagIndex:
             self.storage_context = rag_store.get_storage_context()
 
             self.vector_index = load_index_from_storage(
-                storage_context=self.storage_context
+                storage_context=self.storage_context, image_embed_model=self.embed_model
             )
             logger.info(
                 f"FaissIndex {self.persist_path} reloaded with {len(self.vector_index.docstore.docs)} nodes."

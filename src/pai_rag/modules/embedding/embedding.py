@@ -71,7 +71,7 @@ class EmbeddingModule(ConfigurableModule):
                 f"Initialized DashScope embedding model with {embed_batch_size} batch size."
             )
 
-        elif source == "clip":
+        elif source == "cnclip":
             embed_model = CnClipEmbedding(embed_batch_size=embed_batch_size)
             logger.info(
                 f"Initialized CnClip embedding model with {embed_batch_size} batch size."
