@@ -48,10 +48,10 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 2. Development Environment Settings
 
-   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.10.
+   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.11.
 
    ```bash
-   conda create -n rag_env python==3.10
+   conda create -n rag_env python==3.11
    conda activate rag_env
    ```
 
@@ -162,7 +162,7 @@ To make it easier to use and save time on environment installation, we also prov
 - CPU
 
   ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2
+  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0
 
   # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, need to be introduced) -w (number of workers, can be specified as the approximate number of CPU cores)
   docker run --name pai_rag \
@@ -171,13 +171,13 @@ To make it easier to use and save time on environment installation, we also prov
               -v /your_local_documents_path:/data \
               -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
               -d \
-              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
   ```
 
 - GPU
 
   ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu
+  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu
 
   # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, you need to introduce it) -w (number of workers, which can be specified as the approximate number of CPU cores)
   docker run --name pai_rag \
@@ -187,7 +187,7 @@ To make it easier to use and save time on environment installation, we also prov
               --gpus all \
               -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
               -d \
-              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
+              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
   ```
 
 2. Load Data
@@ -211,17 +211,17 @@ To make it easier to use and save time on environment installation, we also prov
    Linux:
 
 ```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
 
-docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
 ```
 
 Mac/Windows:
 
 ```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui
+docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
 
-docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.0.2_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
+docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
 ```
 
 You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.

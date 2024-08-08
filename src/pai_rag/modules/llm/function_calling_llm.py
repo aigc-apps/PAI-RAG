@@ -14,7 +14,6 @@ class FunctionCallingLlmModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         llm_config = new_params[MODULE_PARAM_CONFIG]
-        print("llm_config", llm_config)
         if llm_config and llm_config.source.lower() == "dashscope":
             model_name = llm_config.get("name", "qwen2-7b-instruct")
             logger.info(

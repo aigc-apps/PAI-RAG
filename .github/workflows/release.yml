@@ -1,0 +1,91 @@
+name: Release image
+
+# Configures this workflow to run every time a change is pushed to the branch called `release`.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "release_test"]
+
+# Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
+env:
+  REGISTRY: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com
+
+# There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Check disk space
+        run: df . -h
+
+      - name: Free disk space
+        run: |
+          sudo docker rmi $(docker image ls -aq) >/dev/null 2>&1 || true
+          sudo rm -rf \
+            /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
+            /usr/lib/jvm || true
+
+      - name: Extract version
+        run: |
+          pip install poetry
+          VERSION_TAG=$(poetry version --short)
+          SPECIFIC_VERSION_TAG="$VERSION_TAG-$(date +'%Y%m%d')"
+          echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
+          echo "SPECIFIC_VERSION_TAG=$SPECIFIC_VERSION_TAG" >> $GITHUB_ENV
+          echo "version:$SPECIFIC_VERSION_TAG\ncommit_id:$(git rev-parse HEAD)" >  __build_version.cfg
+
+      # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
+      - name: Login to ACR region
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USER }}
+          password: ${{ secrets.ACR_PUBLIC_PASSWORD }}
+
+      - name: Build and push base image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}
+          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+
+      - name: Build and push UI image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}-ui
+          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-ui
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_ui .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+
+      - name: Build and push nginx image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}-nginx
+          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-nginx
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_nginx .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+
+      - name: Build and push GPU image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}-gpu
+          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-gpu
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_gpu .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}

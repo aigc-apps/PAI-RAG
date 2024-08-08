@@ -28,7 +28,10 @@ class DataReaderFactoryModule(ConfigurableModule):
             ".html": HtmlReader(),
             ".htm": HtmlReader(),
             ".pdf": PaiPDFReader(
-                enable_image_ocr=self.reader_config.get("enable_image_ocr", False),
+                enable_image_ocr=self.reader_config.get("enable_ocr", False),
+                enable_table_summary=self.reader_config.get(
+                    "enable_table_summary", False
+                ),
                 model_dir=self.reader_config.get("easyocr_model_dir", None),
             ),
             ".csv": PaiPandasCSVReader(

@@ -149,7 +149,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     def change_weight(change_weight):
                         return round(float(1 - change_weight), 2)
 
-                    vector_weight.change(
+                    vector_weight.input(
                         fn=change_weight,
                         inputs=vector_weight,
                         outputs=[keyword_weight],
@@ -178,13 +178,13 @@ def create_chat_tab() -> Dict[str, Any]:
                         else:
                             return {simple_reranker_col: gr.update(visible=False)}
 
-                    reranker_type.change(
+                    reranker_type.input(
                         fn=change_reranker_type,
                         inputs=reranker_type,
                         outputs=[simple_reranker_col, model_reranker_col],
                     )
 
-                    retrieval_mode.change(
+                    retrieval_mode.input(
                         fn=change_retrieval_mode,
                         inputs=retrieval_mode,
                         outputs=[simple_reranker_col],
@@ -232,7 +232,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 )
                 text_qa_template = gr.Textbox(
                     label="prompt template",
-                    placeholder="",
+                    value="",
                     elem_id="text_qa_template",
                     lines=4,
                 )
@@ -266,7 +266,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     else:
                         return {text_qa_template: gr.update(value="", interactive=True)}
 
-                prm_type.change(
+                prm_type.input(
                     fn=change_prompt_template,
                     inputs=prm_type,
                     outputs=[text_qa_template],
@@ -304,7 +304,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         lc_col: gr.update(visible=True),
                     }
 
-            query_type.change(
+            query_type.input(
                 fn=change_query_radio,
                 inputs=query_type,
                 outputs=[vs_col, vec_model_argument, llm_col, model_argument, lc_col],

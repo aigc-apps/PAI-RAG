@@ -30,12 +30,14 @@ class RagConfiguration:
     @classmethod
     def from_file(cls, config_file):
         try:
-            settings_files = [config_file, GENERATED_CONFIG_FILE_NAME]
+            settings_files = [config_file]
             config = Dynaconf(
                 envvar_prefix="PAIRAG",
                 settings_file=settings_files,
                 merge=True,
             )
+            snapshot_config = Dynaconf(settings_file=[GENERATED_CONFIG_FILE_NAME])
+            config.update(snapshot_config, tomlfy=True, merge=True)
             return cls(config)
             # `envvar_prefix` = export envvars with `export PAIRAG_FOO=bar`.
             # `settings_files` = Load these files in the order.
@@ -48,7 +50,8 @@ class RagConfiguration:
         return self.config[key]
 
     def update(self, new_value: Dynaconf):
-        self.config.rag.update(new_value, tomlfy=True, merge=True)
+        if self.config.get("rag", None):
+            self.config.rag.update(new_value, tomlfy=True, merge=True)
 
     def persist(self):
         """Save configuration to file."""
