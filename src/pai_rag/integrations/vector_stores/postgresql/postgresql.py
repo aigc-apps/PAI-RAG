@@ -171,6 +171,8 @@ class PGVectorStore(BasePydanticVectorStore):
     _async_engine: Any = PrivateAttr()
     _async_session: Any = PrivateAttr()
     _is_initialized: bool = PrivateAttr(default=False)
+    _is_extension_load: bool = PrivateAttr(default=False)
+    _is_async_extension_load: bool = PrivateAttr(default=False)
 
     def __init__(
         self,
@@ -245,7 +247,7 @@ class PGVectorStore(BasePydanticVectorStore):
         database: Optional[str] = None,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        table_name: str = "llamaindex",
+        table_name: str = "postgresql",
         schema_name: str = "public",
         connection_string: Optional[Union[str, sqlalchemy.engine.URL]] = None,
         async_connection_string: Optional[Union[str, sqlalchemy.engine.URL]] = None,
@@ -339,6 +341,43 @@ class PGVectorStore(BasePydanticVectorStore):
                 self._create_schema_if_not_exists()
                 self._create_tables_if_not_exists()
             self._is_initialized = True
+
+    def _extension_load(self) -> None:
+        if not self._is_extension_load:
+            try:
+                with self._session() as session, session.begin():
+                    res = session.execute(
+                        sqlalchemy.text("show shared_preload_libraries")
+                    )
+                    result = res.all()
+                    if "pg_jieba" in result[0][0]:
+                        session.execute(
+                            sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
+                        )
+                        _logger.info("session load jieba_load_user_dict success!")
+                    session.commit()
+            except Exception as e:
+                _logger.warning(e)
+            self._is_extension_load = True
+            _logger.info("load extension done!")
+
+    async def _async_extension_load(self) -> None:
+        if not self._is_async_extension_load:
+            try:
+                async with self._async_session() as async_session, async_session.begin():
+                    res = await async_session.execute(
+                        sqlalchemy.text("show shared_preload_libraries")
+                    )
+                    result = res.all()
+                    if "pg_jieba" in result[0][0]:
+                        await async_session.execute(
+                            sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
+                        )
+                        _logger.info("async_session load jieba_load_user_dict success!")
+            except Exception as e:
+                _logger.warning(e)
+            self._is_async_extension_load = True
+            _logger.info("async load extension done!")
 
     def _node_to_table_row(self, node: BaseNode) -> Any:
         return self._table_class(
@@ -732,6 +771,7 @@ class PGVectorStore(BasePydanticVectorStore):
         self, query: VectorStoreQuery, **kwargs: Any
     ) -> VectorStoreQueryResult:
         self._initialize()
+        await self._async_extension_load()
         if query.mode == VectorStoreQueryMode.HYBRID:
             results = await self._async_hybrid_query(query, **kwargs)
         elif query.mode in [
@@ -756,6 +796,7 @@ class PGVectorStore(BasePydanticVectorStore):
 
     def query(self, query: VectorStoreQuery, **kwargs: Any) -> VectorStoreQueryResult:
         self._initialize()
+        self._extension_load()
         if query.mode == VectorStoreQueryMode.HYBRID:
             results = self._hybrid_query(query, **kwargs)
         elif query.mode in [
