@@ -57,3 +57,13 @@ async def test_enhance_nodes():
     nodes_with_embeddings, len_new_nodes = await raptor.enhance_nodes(nodes=nodes)
 
     assert len(nodes) + len_new_nodes == len(nodes_with_embeddings)
+
+    # use transforms directly
+    nodes_with_embeddings = raptor(nodes)
+
+    assert len(nodes_with_embeddings) - len(nodes) > 0
+
+    # use a transformation in async
+    nodes_with_embeddings = await raptor.acall(nodes)
+
+    assert len(nodes_with_embeddings) - len(nodes) > 0
