@@ -131,9 +131,6 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
             text_nodes = node_postprocessor.postprocess_nodes(
                 text_nodes, query_bundle=query_bundle
             )
-        import pdb
-
-        pdb.set_trace()
         return image_nodes + text_nodes
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:

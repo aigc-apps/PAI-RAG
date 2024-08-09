@@ -236,7 +236,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         )
         query_result = vector_store.query(query, **self._kwargs)
         return self._build_node_list_from_query_result(
-            query_result, vector_store == self._image_vector_store
+            query_result, vector_store is self._image_vector_store
         )
 
     def _build_node_list_from_query_result(
@@ -364,7 +364,10 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
             query_bundle_with_embeddings, similarity_top_k
         )
         query_result = await vector_store.aquery(query, **self._kwargs)
-        return self._build_node_list_from_query_result(query_result)
+
+        return self._build_node_list_from_query_result(
+            query_result, vector_store is self._image_vector_store
+        )
 
     async def _aimage_to_image_retrieve(
         self,
