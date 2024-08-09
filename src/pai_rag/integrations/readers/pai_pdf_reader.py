@@ -421,12 +421,13 @@ class PaiPDFReader(BaseReader):
                         text_from_texts = "".join(
                             PaiPDFReader.text_extraction(text_elements)
                         )
-                        text_image_documents.append(
-                            Document(
-                                text=text_from_texts[-300:],
-                                extra_info={"image_url": image_url, **extra_info},
+                        if text_from_texts:
+                            text_image_documents.append(
+                                Document(
+                                    text=text_from_texts[-300:],
+                                    extra_info={"image_url": image_url, **extra_info},
+                                )
                             )
-                        )
 
                 # Check for table elements
                 elif isinstance(element, LTRect) or isinstance(element, LTLine):
