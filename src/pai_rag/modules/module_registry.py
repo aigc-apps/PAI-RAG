@@ -20,13 +20,14 @@ MODULE_CONFIG_KEY_MAP = {
     "ChatEngineFactoryModule": "chat_engine",
     "LlmChatEngineFactoryModule": "llm_chat_engine",
     "DataReaderFactoryModule": "data_reader",
-    "AgentModule": "agent",
-    "ToolModule": "tool",
     "DataLoaderModule": "data_loader",
     "OssCacheModule": "cache",
     "EvaluationModule": "evaluation",
     "BM25IndexModule": "bm25",
     "NodesEnhancementModule": "node_enhancement",
+    "AgentModule": "agent",
+    "CustomConfigModule": "custom_config",
+    "ToolModule": "tool",
     "IntentDetectionModule": "intent_detection",
 }
 
@@ -118,7 +119,7 @@ class ModuleRegistry:
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
         mod_cls = self._mod_cls_map[mod_name]
-
+        print("MODULE_PARAM_CONFIG", MODULE_PARAM_CONFIG)
         params = {MODULE_PARAM_CONFIG: config.get(mod_config_key, None)}
         for dep in mod_deps:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)
@@ -129,6 +130,9 @@ class ModuleRegistry:
 
         if instance_key not in self._mod_instance_map[mod_name]:
             logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
+            print("mod_name", mod_name)
+            print("params", params)
+            print("instance_key", instance_key)
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params
             )

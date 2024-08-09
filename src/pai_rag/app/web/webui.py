@@ -6,6 +6,7 @@ from pai_rag.app.web.rag_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
+from pai_rag.app.web.tabs.agent_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager
 from pai_rag.app.web.ui_constants import (
     DEFAULT_CSS_STYPE,
@@ -57,6 +58,9 @@ def make_homepage():
         # with gr.Tab("\N{rocket} Evaluation"):
         #     eval_elements = create_evaluation_tab()
         # elem_manager.add_elems(eval_elements)
+        with gr.Tab("\N{rocket} Agent"):
+            agent_elements = create_evaluation_tab()
+            elem_manager.add_elems(agent_elements)
 
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None

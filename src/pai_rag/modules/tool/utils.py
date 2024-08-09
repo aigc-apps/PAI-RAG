@@ -26,6 +26,15 @@ def create_tool_fn_schema(name, params):
     return create_model(name, **fields)  # type: ignore
 
 
+def create_api_tool_fn_schema(name, params_prop):
+    fields = {}
+    for param_name in params_prop:
+        param_type = params_prop[param_name]["type"]
+        param_desc = params_prop[param_name]["description"]
+        fields[param_name] = (param_type, FieldInfo(description=param_desc))
+    return create_model(name, **fields)  # type: ignore
+
+
 def get_google_web_search_tools(config):
     google_spec = GoogleSearchToolSpec(
         key=config.get("google_search_api", None),
@@ -137,3 +146,49 @@ def get_customized_tools(config):
         return tools
     except Exception:
         return []
+
+
+def get_customized_api_tools(config):
+    tools = []
+
+    def generate_api_function(api_info):
+        # 获取API信息
+        function_name = api_info["name"]
+        api_url = api_info["api"]
+        method = api_info["method"]
+
+        # 生成函数的参数
+        required_params = api_info["required"]
+        param_str = ", ".join(required_params)
+
+        # 定义函数体
+        function_body = f"""
+def {function_name}({param_str}):
+    url = '{api_url}'
+    data = {{k: v for k, v in locals().items() if k in {list(required_params)}}}
+
+    response = requests.{method.lower()}(url, json=data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        response.raise_for_status()
+"""
+
+        # 将函数添加到当前模块的执行环境
+        exec(function_body, globals())
+        # 返回生成的函数
+        return globals()[function_name]
+
+    for api_info in config["functions"]:
+        # 生成API函数
+        func = generate_api_function(api_info)
+        fn_name = api_info["name"]
+        fn_schema = create_api_tool_fn_schema(fn_name, api_info["parameters"])
+        tool = FunctionTool.from_defaults(
+            fn=func,
+            name=fn_name,
+            fn_schema=fn_schema,
+            description=api_info["description"],
+        )
+        tools.append(tool)
+    return tools

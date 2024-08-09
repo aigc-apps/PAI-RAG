@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class IntentDetectionModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["FunctionCallingLlmModule"]
+        return ["FunctionCallingLlmModule", "CustomConfigModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         llm = new_params["FunctionCallingLlmModule"]
+        agent_config = new_params["CustomConfigModule"]
         type = config.get("type", "single")
-        intents = config.get("intent", None)
         if type == "single":
             logger.info(
                 f"""
@@ -26,11 +26,18 @@ class IntentDetectionModule(ConfigurableModule):
                 """
             )
             intents_tools = []
+            if agent_config:
+                intents = []
+                for name in agent_config["intent"]:
+                    intents.append([name, agent_config["intent"][name]])
+            else:
+                intents = config.get("intent", None)
+
             for intent in intents:
-                tool = ToolMetadata(description=intent[1], name=intent[0])
+                tool = ToolMetadata(name=intent[0], description=intent[1])
                 intents_tools.append(tool)
             intent_detector = LLMSingleDetector(llm=llm, choices=intents_tools)
+            return intent_detector
         else:
-            raise ValueError(f"Unknown inten detection type: '{config['type']}'")
-
-        return intent_detector
+            logger.info("Don't use IntentDetection Module.")
+            return None

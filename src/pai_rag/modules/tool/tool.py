@@ -7,6 +7,7 @@ from pai_rag.modules.tool.utils import (
     get_calculator_tools,
     get_customized_tools,
     get_weather_tools,
+    get_customized_api_tools,
 )
 
 
@@ -16,10 +17,11 @@ logger = logging.getLogger(__name__)
 class ToolModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return []
+        return ["CustomConfigModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         self.config = new_params[MODULE_PARAM_CONFIG]
+        agent_config = new_params["CustomConfigModule"]
         type = self.config["type"]
         logger.info(
             f"""
@@ -34,10 +36,13 @@ class ToolModule(ConfigurableModule):
         if "calculator" in type:
             tools.extend(get_calculator_tools())
 
+        if "weather" in type:
+            tools.extend(get_weather_tools(self.config))
+
         if "custom" in type:
             tools.extend(get_customized_tools(self.config))
 
-        if "weather" in type:
-            tools.extend(get_weather_tools(self.config))
+        if "api" in type:
+            tools.extend(get_customized_api_tools(agent_config["agent"]))
 
         return tools

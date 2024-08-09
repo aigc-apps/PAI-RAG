@@ -226,6 +226,7 @@ class RagApplication:
         intent = await intent_detector.aselect(
             intent_detector._choices, query=query.question
         )
+        self.logger.info(f"[IntentDetection] Routing query to {intent.intent}.")
         if intent.intent == "agent":
             return await self.aquery_agent(query)
         elif intent.intent == "retrieval":
