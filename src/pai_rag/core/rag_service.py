@@ -61,7 +61,7 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise ServiceError(f"Get RAG configuration failed: {ex}")
-        return self.config_dict_value
+        return self.config_dict_value.get("RAG")
 
     def reload(self, new_config: Any = None):
         try:
@@ -70,8 +70,11 @@ class RagService:
                 # 多worker模式，读取最新的setting
                 rag_snapshot.update(new_config)
             config_snapshot = rag_snapshot.get_value()
-
-            new_dict_value = config_snapshot.to_dict()
+            if config_snapshot:
+                new_dict_value = config_snapshot.to_dict()
+            else:
+                logger.debug("No snapshot found, not reload")
+                return
             if self.config_dict_value != new_dict_value:
                 logger.debug("Config changed, reload")
                 self.rag.reload(config_snapshot)

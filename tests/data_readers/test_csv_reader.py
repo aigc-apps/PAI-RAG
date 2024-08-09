@@ -12,7 +12,7 @@ def test_csv_reader():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
-    reader_config = config["data_reader"]
+    reader_config = config["rag"]["data_reader"]
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/csv_data",
         file_extractor={
@@ -32,7 +32,7 @@ def test_pandas_csv_reader():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
-    reader_config = config["data_reader"]
+    reader_config = config["rag"]["data_reader"]
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/csv_data",
         file_extractor={

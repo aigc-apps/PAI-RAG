@@ -69,9 +69,8 @@ class EmbeddingModule(ConfigurableModule):
             logger.info(
                 f"Initialized DashScope embedding model with {embed_batch_size} batch size."
             )
-
         else:
-            raise ValueError(f"Unknown LLM source: {config['source']}")
+            raise ValueError(f"Unknown Embedding source: {config['source']}")
 
         Settings.embed_model = embed_model
         return embed_model

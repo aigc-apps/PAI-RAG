@@ -6,8 +6,7 @@ An index that is built on top of an existing vector store.
 
 import asyncio
 import logging
-from typing import Any, Sequence
-from fastapi.concurrency import run_in_threadpool
+from typing import Any, List, Sequence
 from llama_index.core import VectorStoreIndex
 from llama_index.core.data_structs.data_structs import IndexDict
 from llama_index.core.schema import (
@@ -16,16 +15,9 @@ from llama_index.core.schema import (
 )
 from llama_index.core.utils import iter_batch
 
+from pai_rag.utils.embed_utils import async_embed_nodes
+
 logger = logging.getLogger(__name__)
-
-
-def call_async(coro):
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    else:
-        return loop.run_until_complete(coro)
 
 
 class MyVectorStoreIndex(VectorStoreIndex):
@@ -81,8 +73,8 @@ class MyVectorStoreIndex(VectorStoreIndex):
 
         node_batch_list = []
         for nodes_batch in iter_batch(nodes, 100):
-            nodes_batch = await run_in_threadpool(
-                lambda: self._get_node_with_embedding(nodes_batch, show_progress)
+            nodes_batch = await self._aget_node_with_embedding(
+                nodes, show_progress=show_progress
             )
             node_batch_list.append(nodes_batch)
         await self._postprocess_all_batch(
@@ -117,3 +109,28 @@ class MyVectorStoreIndex(VectorStoreIndex):
         with self._callback_manager.as_trace("insert_nodes"):
             await self._insert_async(nodes, **insert_kwargs)
             self._storage_context.index_store.add_index_struct(self._index_struct)
+
+    async def _aget_node_with_embedding(
+        self,
+        nodes: Sequence[BaseNode],
+        show_progress: bool = False,
+    ) -> List[BaseNode]:
+        """Asynchronously get tuples of id, node, and embedding.
+
+        Allows us to store these nodes in a vector store.
+        Embeddings are called in batches.
+
+        """
+        id_to_embed_map = await async_embed_nodes(
+            nodes=nodes,
+            embed_model=self._embed_model,
+            show_progress=show_progress,
+        )
+
+        results = []
+        for node in nodes:
+            embedding = id_to_embed_map[node.node_id]
+            result = node.copy()
+            result.embedding = embedding
+            results.append(result)
+        return results

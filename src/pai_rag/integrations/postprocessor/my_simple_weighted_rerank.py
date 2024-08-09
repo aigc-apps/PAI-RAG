@@ -9,7 +9,6 @@ from llama_index.core.indices.utils import (
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle
 from llama_index.core.service_context import ServiceContext
-from pai_rag.integrations.retrievers.fusion_retriever import MyNodeWithScore
 
 
 class MySimpleWeightedRerank(BaseNodePostprocessor):
@@ -99,7 +98,7 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
 
     def _postprocess_nodes(
         self,
-        nodes: List[MyNodeWithScore],
+        nodes: List[NodeWithScore],
         query_bundle: Optional[QueryBundle] = None,
     ) -> List[NodeWithScore]:
         if query_bundle is None:
@@ -107,8 +106,16 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
         if len(nodes) == 0:
             return []
 
-        vector_nodes = [node for node in nodes if node.retriever_type == "vector"]
-        bm25_nodes = [node for node in nodes if node.retriever_type == "keyword"]
+        vector_nodes = [
+            node
+            for node in nodes
+            if node.metadata.get("retrieval_type", "vector") == "vector"
+        ]
+        bm25_nodes = [
+            node
+            for node in nodes
+            if node.metadata.get("retrieval_type", "vector") == "keyword"
+        ]
 
         if len(vector_nodes) > 0 and len(bm25_nodes) == 0:
             return self.filter_threshhold(vector_nodes)
