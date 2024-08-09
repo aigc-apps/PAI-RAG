@@ -53,17 +53,17 @@ async def test_enhance_nodes():
         tree_depth=2, max_clusters=50, threshold=0.1, embed_model=embed_model
     )
 
-    # enhance nodes by raptor
+    # enhance nodes by raptor without transform
     nodes_with_embeddings, len_new_nodes = await raptor.enhance_nodes(nodes=nodes)
 
     assert len(nodes) + len_new_nodes == len(nodes_with_embeddings)
 
-    # use transforms directly
+    # use transform directly
     nodes_with_embeddings = raptor(nodes)
 
     assert len(nodes_with_embeddings) - len(nodes) > 0
 
-    # use a transformation in async
+    # use transformation in async
     nodes_with_embeddings = await raptor.acall(nodes)
 
     assert len(nodes_with_embeddings) - len(nodes) > 0
