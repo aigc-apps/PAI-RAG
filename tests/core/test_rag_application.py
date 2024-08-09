@@ -19,7 +19,7 @@ async def rag_app():
 
     if os.path.isdir(TEST_INDEX_PATH):
         shutil.rmtree(TEST_INDEX_PATH)
-    config.index.update({"persist_path": TEST_INDEX_PATH})
+    config.rag.index.update({"persist_path": TEST_INDEX_PATH})
 
     rag_app = RagApplication()
     rag_app.initialize(config)
