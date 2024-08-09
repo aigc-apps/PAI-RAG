@@ -3,7 +3,6 @@ import json
 import os
 from typing import Any, Dict, List
 from fastapi.concurrency import run_in_threadpool
-import asyncio
 from llama_index.core import Settings
 from llama_index.core.schema import TextNode
 from llama_index.llms.huggingface import HuggingFaceLLM
@@ -161,13 +160,11 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            nodes_with_embeddings, len_new_nodes = asyncio.run(
-                self.node_enhance.enhance_nodes(nodes=nodes)
-            )
+            nodes_with_embeddings = self.node_enhance(nodes=nodes)
             self.index.vector_index.insert_nodes(nodes_with_embeddings)
 
             logger.info(
-                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+                f"Inserted {len(nodes)} and enhanced {len(nodes_with_embeddings)-len(nodes)} nodes successfully."
             )
         else:
             self.index.vector_index.insert_nodes(nodes)
@@ -203,14 +200,11 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            (
-                nodes_with_embeddings,
-                len_new_nodes,
-            ) = await self.node_enhance.enhance_nodes(nodes=nodes)
+            nodes_with_embeddings = await self.node_enhance.acall(nodes=nodes)
             await self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
 
             logger.info(
-                f"Async inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+                f"Async inserted {len(nodes)} and enhanced {len(nodes_with_embeddings)-len(nodes)} nodes successfully."
             )
 
         else:
