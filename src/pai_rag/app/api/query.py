@@ -49,9 +49,9 @@ async def aquery_agent(query: RagQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
 
 
-@router.post("/query/agentic/assistant")
+@router.post("/query/intent")
 async def aquery_agent_assistant(query: RagQuery):
-    return await rag_service.aquery_agentic_rag(query)
+    return await rag_service.aquery_with_intent(query)
 
 
 @router.patch("/config")

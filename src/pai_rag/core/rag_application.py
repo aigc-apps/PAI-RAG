@@ -211,7 +211,7 @@ class RagApplication:
         response = await agent.achat(query.question)
         return LlmResponse(answer=response.response)
 
-    async def aquery_agentic_rag(self, query: RagQuery):
+    async def aquery_with_intent(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.

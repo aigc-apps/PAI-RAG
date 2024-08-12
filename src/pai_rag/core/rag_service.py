@@ -179,10 +179,10 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_agentic_rag(self, query: RagQuery):
+    async def aquery_with_intent(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_agentic_rag(query)
+            return await self.rag.aquery_with_intent(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
