@@ -7,6 +7,15 @@ version = "0.1.1"
 [rag.agent]
 type = "function_calling"
 
+[rag.agent.custom_config]
+agent_file_path = "example_data/travel_assistant_demo/config.json"
+
+[rag.agent.intent_detection]
+type = "single"
+
+[rag.agent.tool]
+type = ["api"]
+
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
 
@@ -15,9 +24,6 @@ type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
-
-[rag.custom_config]
-agent_file_path = "example_data/travel_assistant_demo/config.json"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
@@ -32,21 +38,17 @@ type = "SimpleDirectoryReader"
 source = "DashScope"
 embed_batch_size = 10
 
+[rag.embedding.multi_modal]
+source = "cnclip"
+
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
-[rag.function_calling_llm]
-source = "DashScope"
-name = "qwen2-7b-instruct"
-
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
-
-[rag.intent_detection]
-type = "single"
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
@@ -57,11 +59,15 @@ type = "single"
 source = "DashScope"
 name = "qwen-turbo"
 
+[rag.llm.function_calling_llm]
+source = "DashScope"
+name = "qwen2-7b-instruct"
+
+[rag.llm.multi_modal]
+source = ""
+
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
-
-[rag.multi_modal_llm]
-source = ""
 
 [rag.node_enhancement]
 tree_depth = 3
@@ -92,6 +98,3 @@ query_rewrite_n = 1 # set to 1 to disable query generation
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
-
-[rag.tool]
-type = ["api"]
