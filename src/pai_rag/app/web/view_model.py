@@ -125,7 +125,7 @@ class ViewModel(BaseModel):
     vector_weight: float = 0.7
     similarity_threshold: float = None
 
-    query_engine_type: str = "RetrieverQueryEngine"
+    query_engine_type: str = None
 
     synthesizer_type: str = None
 
@@ -297,11 +297,6 @@ class ViewModel(BaseModel):
             "text_qa_template", None
         )
 
-        if config["query_engine"]["type"] == "TransformQueryEngine":
-            view_model.query_engine_type = "TransformQueryEngine"
-        else:
-            view_model.query_engine_type = "RetrieverQueryEngine"
-
         return view_model
 
     def to_app_config(self):
@@ -410,10 +405,6 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
-        if self.query_engine_type == "TransformQueryEngine":
-            config["query_engine"]["type"] = "TransformQueryEngine"
-        else:
-            config["query_engine"]["type"] = "RetrieverQueryEngine"
 
         return _transform_to_dict(config)
 

@@ -16,9 +16,6 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
-[rag.custom_config]
-agent_file_path = ""
-
 [rag.data_reader]
 type = "SimpleDirectoryReader"
 
@@ -46,9 +43,6 @@ source = ""
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
-
-[rag.intent_detection]
-type = ""
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
@@ -88,7 +82,7 @@ similarity_threshold = 0.5
 top_n = 2
 
 [rag.query_engine]
-type = "RetrieverQueryEngine"
+type = "SimpleMultiModalQueryEngine"
 
 [rag.retriever]
 similarity_top_k = 3

@@ -1,4 +1,5 @@
 from pai_rag.modules.embedding.embedding import EmbeddingModule
+from pai_rag.modules.embedding.multi_modal_embedding import MultiModalEmbeddingModule
 from pai_rag.modules.llm.llm_module import LlmModule
 from pai_rag.modules.llm.multi_modal_llm import MultiModalLlmModule
 from pai_rag.modules.llm.function_calling_llm import FunctionCallingLlmModule
@@ -24,6 +25,7 @@ from pai_rag.modules.customconfig.custom_config import CustomConfigModule
 
 ALL_MODULES = [
     "EmbeddingModule",
+    "MultiModalEmbeddingModule",
     "MultiModalLlmModule",
     "LlmModule",
     "FunctionCallingLlmModule",

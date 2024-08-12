@@ -13,7 +13,7 @@ import llama_index.core.instrumentation as instrument
 from llama_index.core.retrievers import (
     VectorIndexRetriever,
 )
-from pai_rag.integrations.retrievers.fusion_retriever import MyNodeWithScore
+from pai_rag.integrations.retrievers.fusion_retriever import NodeWithScore
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -41,7 +41,7 @@ class MyVectorIndexRetriever(VectorIndexRetriever):
 
     def _build_node_list_from_query_result(
         self, query_result: VectorStoreQueryResult
-    ) -> List[MyNodeWithScore]:
+    ) -> List[NodeWithScore]:
         if query_result.nodes is None:
             # NOTE: vector store does not keep text and returns node indices.
             # Need to recover all nodes from docstore
@@ -72,19 +72,12 @@ class MyVectorIndexRetriever(VectorIndexRetriever):
 
         log_vector_store_query_result(query_result)
 
-        node_with_scores: List[MyNodeWithScore] = []
+        node_with_scores: List[NodeWithScore] = []
         query_result.similarities = sorted(query_result.similarities, reverse=True)
         for ind, node in enumerate(query_result.nodes):
             score: Optional[float] = None
             if query_result.similarities is not None:
                 score = query_result.similarities[ind]
-            if node.metadata.get("retrieval_type", "None") == "keyword":
-                node_with_scores.append(
-                    MyNodeWithScore(node=node, score=score, retriever_type="keyword")
-                )
-            else:
-                node_with_scores.append(
-                    MyNodeWithScore(node=node, score=score, retriever_type="vector")
-                )
+                node_with_scores.append(NodeWithScore(node=node, score=score))
 
         return node_with_scores

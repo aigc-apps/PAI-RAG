@@ -61,7 +61,7 @@ class RagApplication:
         sessioned_config = self.config
         if faiss_path:
             sessioned_config = self.config.copy()
-            sessioned_config.index.update({"persist_path": faiss_path})
+            sessioned_config.rag.index.update({"persist_path": faiss_path})
             self.logger.info(
                 f"Update rag_application config with faiss_persist_path: {faiss_path}"
             )
@@ -80,7 +80,9 @@ class RagApplication:
         sessioned_config = self.config
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = self.config.copy()
-            sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
+            sessioned_config.rag.index.update(
+                {"persist_path": query.vector_db.faiss_path}
+            )
 
         query_bundle = QueryBundle(query.question)
 
@@ -121,7 +123,9 @@ class RagApplication:
         sessioned_config = self.config
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = self.config.copy()
-            sessioned_config.index.update({"persist_path": query.vector_db.faiss_path})
+            sessioned_config.rag.index.update(
+                {"persist_path": query.vector_db.faiss_path}
+            )
 
         chat_engine_factory = module_registry.get_module_with_config(
             "ChatEngineFactoryModule", sessioned_config
@@ -236,7 +240,7 @@ class RagApplication:
 
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         vector_store_type = (
-            self.config.get("index").get("vector_store").get("type", None)
+            self.config.rag.get("index").get("vector_store").get("type", None)
         )
         if vector_store_type == "FAISS":
             evaluation = module_registry.get_module_with_config(
@@ -249,7 +253,7 @@ class RagApplication:
 
     async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
         vector_store_type = (
-            self.config.get("index").get("vector_store").get("type", None)
+            self.config.rag.get("index").get("vector_store").get("type", None)
         )
         if vector_store_type == "FAISS":
             evaluation = module_registry.get_module_with_config(

@@ -3,6 +3,8 @@ import chromadb
 import faiss
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 from llama_index.core.storage.index_store.simple_index_store import SimpleIndexStore
+from llama_index.core.vector_stores.simple import DEFAULT_VECTOR_STORE, NAMESPACE_SEP
+from llama_index.core.vector_stores.types import DEFAULT_PERSIST_FNAME
 
 # from llama_index.vector_stores.analyticdb import AnalyticDBVectorStore
 # from llama_index.vector_stores.faiss import FaissVectorStore
@@ -28,19 +30,26 @@ from pai_rag.integrations.postprocessor.my_simple_weighted_rerank import (
 )
 
 DEFAULT_CHROMA_COLLECTION_NAME = "pairag"
-
+DEFAULT_PERSIST_IMAGE_NAMESPACE = "image"
 logger = logging.getLogger(__name__)
 
 
 class RagStore:
-    def __init__(self, config, postprocessor, persist_dir, is_empty, embed_dims):
+    def __init__(
+        self,
+        config,
+        postprocessor,
+        persist_dir,
+        is_empty,
+        embed_dims,
+        multi_modal_embed_dims,
+    ):
         self.store_config = config
-        print("self.store_config", self.store_config)
         self.postprocessor = postprocessor
-        print("self.postprocessor", self.postprocessor)
         self.embed_dims = embed_dims
         self.persist_dir = persist_dir
         self.is_empty = is_empty
+        self.multi_modal_embed_dims = multi_modal_embed_dims
 
     def get_storage_context(self):
         storage_context = self._get_or_create_storage_context()
@@ -50,6 +59,7 @@ class RagStore:
         self.vector_store = None
         self.doc_store = None
         self.index_store = None
+        self.image_store = None
         persist_dir = None
 
         vector_store_type = (
@@ -62,9 +72,9 @@ class RagStore:
         elif vector_store_type == "faiss":
             self.doc_store = self._get_or_create_simple_doc_store()
             self.index_store = self._get_or_create_simple_index_store()
-            persist_dir = self.persist_dir
-            self.vector_store = self._get_or_create_faiss()
-            logger.info("initialized FAISS vector store.")
+            self.vector_store, self.image_store = self._get_or_create_faiss()
+
+            logger.info("initialized FAISS vector & image store.")
         elif vector_store_type == "hologres":
             self.vector_store = self._get_or_create_hologres()
             logger.info("initialized Hologres vector store.")
@@ -87,6 +97,7 @@ class RagStore:
             docstore=self.doc_store,
             index_store=self.index_store,
             vector_store=self.vector_store,
+            image_store=self.image_store,
             persist_dir=persist_dir,
         )
         return storage_context
@@ -103,14 +114,30 @@ class RagStore:
         return ChromaVectorStore(chroma_collection=chroma_collection)
 
     def _get_or_create_faiss(self):
-        if self.is_empty:
-            # faiss_index = faiss.IndexFlatL2(self.embed_dims)
+        faiss_vector_index_path = os.path.join(
+            self.persist_dir,
+            f"{DEFAULT_VECTOR_STORE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
+        )
+        faiss_image_vector_index_path = os.path.join(
+            self.persist_dir,
+            f"{DEFAULT_PERSIST_IMAGE_NAMESPACE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
+        )
+
+        if os.path.exists(faiss_vector_index_path):
+            faiss_store = MyFaissVectorStore.from_persist_path(faiss_vector_index_path)
+        else:
             faiss_index = faiss.IndexFlatIP(self.embed_dims)
             faiss_store = MyFaissVectorStore(faiss_index=faiss_index)
-        else:
-            faiss_store = MyFaissVectorStore.from_persist_dir(self.persist_dir)
 
-        return faiss_store
+        if os.path.exists(faiss_image_vector_index_path):
+            faiss_image_store = MyFaissVectorStore.from_persist_path(
+                faiss_image_vector_index_path
+            )
+        else:
+            image_index = faiss.IndexFlatIP(self.multi_modal_embed_dims)
+            faiss_image_store = MyFaissVectorStore(faiss_index=image_index)
+
+        return faiss_store, faiss_image_store
 
     def _get_or_create_hologres(self):
         hologres_config = self.store_config["vector_store"]
@@ -213,7 +240,9 @@ class RagStore:
             host=pg_config["host"],
             port=pg_config["port"],
             database=pg_config["database"],
-            table_name=pg_config["table_name"],
+            table_name=pg_config["table_name"]
+            if pg_config["table_name"].strip()
+            else "default",
             user=pg_config["username"],
             password=pg_config["password"],
             embed_dim=self.embed_dims,

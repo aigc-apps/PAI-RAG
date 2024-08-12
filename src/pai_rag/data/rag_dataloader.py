@@ -3,9 +3,8 @@ import json
 import os
 from typing import Any, Dict, List
 from fastapi.concurrency import run_in_threadpool
-import asyncio
 from llama_index.core import Settings
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, ImageNode, ImageDocument
 from llama_index.llms.huggingface import HuggingFaceLLM
 
 from pai_rag.integrations.nodeparsers.base import MarkdownNodeParser
@@ -16,13 +15,19 @@ from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
 
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_QA_MODEL_PATH = "./model_repository/qwen_1.8b"
-
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
-    [".csv", ".xlsx", ".xls", ".htm", ".html", ".imagelist", ".jsonl"]
+    [".csv", ".xlsx", ".xls", ".htm", ".html", ".jsonl"]
+)
+IMAGE_FILE_TYPES = set([".jpg", ".jpeg", ".png"])
+
+IMAGE_URL_REGEX = re.compile(
+    r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\.(?:jpg|jpeg|png)",
+    re.IGNORECASE,
 )
 
 
@@ -94,17 +99,26 @@ class RagDataLoader:
         data_reader = self.datareader_factory.get_reader(input_files)
         docs = data_reader.load_data()
         logger.info(f"[DataReader] Loaded {len(docs)} docs.")
-
         nodes = []
 
         doc_cnt_map = {}
         for doc in docs:
             doc_type = self._extract_file_type(doc.metadata)
             doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])[33:]
-            if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
+            doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
+            if doc_key not in doc_cnt_map:
+                doc_cnt_map[doc_key] = 0
+
+            if isinstance(doc, ImageDocument):
+                node_id = node_id_hash(doc_cnt_map[doc_key], doc)
+                doc_cnt_map[doc_key] += 1
+                nodes.append(
+                    ImageNode(
+                        id_=node_id, image_url=doc.image_url, metadata=doc.metadata
+                    )
+                )
+            elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
-                if doc_key not in doc_cnt_map:
-                    doc_cnt_map[doc_key] = 0
                 doc_cnt_map[doc_key] += 1
                 node_id = node_id_hash(doc_cnt_map[doc_key], doc)
                 nodes.append(
@@ -115,6 +129,12 @@ class RagDataLoader:
                 nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
+
+        for node in nodes:
+            node.excluded_embed_metadata_keys.append("file_path")
+            node.excluded_embed_metadata_keys.append("image_url")
+            node.excluded_embed_metadata_keys.append("total_pages")
+            node.excluded_embed_metadata_keys.append("source")
 
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
 
@@ -155,19 +175,17 @@ class RagDataLoader:
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
         if not nodes:
-            logger.info("[DataReader] could not find files")
+            logger.warning("[DataReader] no nodes parsed.")
             return
 
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            nodes_with_embeddings, len_new_nodes = asyncio.run(
-                self.node_enhance.enhance_nodes(nodes=nodes)
-            )
+            nodes_with_embeddings = self.node_enhance(nodes=nodes)
             self.index.vector_index.insert_nodes(nodes_with_embeddings)
 
             logger.info(
-                f"Inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+                f"Inserted {len(nodes)} and enhanced {len(nodes_with_embeddings)-len(nodes)} nodes successfully."
             )
         else:
             self.index.vector_index.insert_nodes(nodes)
@@ -203,18 +221,15 @@ class RagDataLoader:
         logger.info("[DataReader] Start inserting to index.")
 
         if enable_raptor:
-            (
-                nodes_with_embeddings,
-                len_new_nodes,
-            ) = await self.node_enhance.enhance_nodes(nodes=nodes)
+            nodes_with_embeddings = await self.node_enhance.acall(nodes=nodes)
             await self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
 
             logger.info(
-                f"Async inserted {len(nodes)} and enhanced {len_new_nodes} nodes successfully."
+                f"Async inserted {len(nodes)} and enhanced {len(nodes_with_embeddings)-len(nodes)} nodes successfully."
             )
 
         else:
-            await self.index.vector_index.insert_nodes_async(nodes)
+            self.index.vector_index.insert_nodes(nodes)
             logger.info(f"Inserted {len(nodes)} nodes successfully.")
 
         self.index.vector_index.storage_context.persist(

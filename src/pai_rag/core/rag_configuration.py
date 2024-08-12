@@ -46,11 +46,17 @@ class RagConfiguration:
             raise error
 
     def get_value(self, key=None):
-        key = key or "rag"  # use rag key as default config
-        return self.config[key]
+        return self.config
 
     def update(self, new_value: Dynaconf):
         if self.config.get("rag", None):
+            if not new_value.get("llm").get("multi_modal"):
+                new_value["llm"]["multi_modal"] = self.config["rag.llm.multi_modal"]
+            if not new_value.get("embedding").get("multi_modal"):
+                new_value["embedding"]["multi_modal"] = self.config[
+                    "rag.embedding.multi_modal"
+                ]
+
             self.config.rag.update(new_value, tomlfy=True, merge=True)
 
     def persist(self):
