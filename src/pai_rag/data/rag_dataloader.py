@@ -222,7 +222,7 @@ class RagDataLoader:
 
         if enable_raptor:
             nodes_with_embeddings = await self.node_enhance.acall(nodes=nodes)
-            await self.index.vector_index.insert_nodes_async(nodes_with_embeddings)
+            self.index.vector_index.insert_nodes(nodes_with_embeddings)
 
             logger.info(
                 f"Async inserted {len(nodes)} and enhanced {len(nodes_with_embeddings)-len(nodes)} nodes successfully."
