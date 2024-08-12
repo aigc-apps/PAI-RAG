@@ -6,7 +6,15 @@ version = "0.1.1"
 
 [rag.agent]
 type = "function_calling"
-system_prompt = "你是一个管理会议室预定的助手，需要协助用户预订会议室。请严格使用输入的工具，不要虚构任何细节。"
+
+[rag.agent.custom_config]
+agent_file_path = "example_data/function_tools/python-tool-for-booking-demo"
+
+[rag.agent.intent_detection]
+type = "single"
+
+[rag.agent.tool]
+type = "python"
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
@@ -16,9 +24,6 @@ type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
-
-[rag.custom_config]
-agent_file_path = ""
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
@@ -33,21 +38,17 @@ type = "SimpleDirectoryReader"
 source = "DashScope"
 embed_batch_size = 10
 
+[rag.embedding.multi_modal]
+source = "cnclip"
+
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
-[rag.function_calling_llm]
-source = "DashScope"
-name = "qwen2-7b-instruct"
-
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
-
-[rag.intent_detection]
-type = ""
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
@@ -58,11 +59,15 @@ type = ""
 source = "DashScope"
 name = "qwen-turbo"
 
+[rag.llm.function_calling_llm]
+source = "DashScope"
+name = "qwen2-7b-instruct"
+
+[rag.llm.multi_modal]
+source = ""
+
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
-
-[rag.multi_modal_llm]
-source = ""
 
 [rag.node_enhancement]
 tree_depth = 3
@@ -93,7 +98,3 @@ query_rewrite_n = 1 # set to 1 to disable query generation
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
-
-[rag.tool]
-type = ["custom"]
-func_path = "src/pai_rag/modules/tool/booking_demo"

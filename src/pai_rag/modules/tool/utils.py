@@ -26,7 +26,7 @@ def create_tool_fn_schema(name, params):
     return create_model(name, **fields)  # type: ignore
 
 
-def create_api_tool_fn_schema(name, params_prop):
+def create_custom_tool_fn_schema(name, params_prop):
     fields = {}
     for param_name in params_prop:
         param_type = params_prop[param_name]["type"]
@@ -115,7 +115,7 @@ def get_weather_tools(config):
     return [weather_tool]
 
 
-def get_customized_tools(config):
+def get_customized_python_tools(config):
     func_path = config["func_path"]
     sys.path.append(func_path)
     try:
@@ -149,8 +149,6 @@ def get_customized_tools(config):
 
 
 def get_customized_api_tools(config):
-    tools = []
-
     def generate_api_function(api_info):
         # 获取API信息
         function_name = api_info["name"]
@@ -179,16 +177,45 @@ def {function_name}({param_str}):
         # 返回生成的函数
         return globals()[function_name]
 
+    tools = []
     for api_info in config["functions"]:
         # 生成API函数
         func = generate_api_function(api_info)
         fn_name = api_info["name"]
-        fn_schema = create_api_tool_fn_schema(fn_name, api_info["parameters"])
+        fn_schema = create_custom_tool_fn_schema(fn_name, api_info["parameters"])
         tool = FunctionTool.from_defaults(
             fn=func,
             name=fn_name,
             fn_schema=fn_schema,
             description=api_info["description"],
+        )
+        tools.append(tool)
+    return tools
+
+
+def get_customized_python_tools_1(config, function_body_str):
+    def generate_python_functions(config, function_body_str):
+        # 将函数添加到当前模块的执行环境
+        print("function_body_str", function_body_str)
+        exec(function_body_str, globals())
+        func_dict = {}
+        for func_info in config["functions"]:
+            function_name = func_info["name"]
+            func = func_info["function"]
+            func_dict[function_name] = globals()[func]
+        return func_dict
+
+    tools = []
+    func_dict = generate_python_functions(config, function_body_str)
+    for func_info in config["functions"]:
+        fn_name = func_info["name"]
+        func = func_dict[fn_name]
+        fn_schema = create_custom_tool_fn_schema(fn_name, func_info["parameters"])
+        tool = FunctionTool.from_defaults(
+            fn=func,
+            name=fn_name,
+            fn_schema=fn_schema,
+            description=func_info["description"],
         )
         tools.append(tool)
     return tools

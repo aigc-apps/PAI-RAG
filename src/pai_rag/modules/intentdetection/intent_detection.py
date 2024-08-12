@@ -16,7 +16,7 @@ class IntentDetectionModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         llm = new_params["FunctionCallingLlmModule"]
-        agent_config = new_params["CustomConfigModule"]
+        agent_config, _ = new_params["CustomConfigModule"]
         type = config.get("type", "single")
         if type == "single":
             logger.info(

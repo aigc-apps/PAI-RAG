@@ -120,7 +120,6 @@ class ModuleRegistry:
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
         mod_cls = self._mod_cls_map[mod_name]
-        print("MODULE_PARAM_CONFIG", MODULE_PARAM_CONFIG)
         params = {MODULE_PARAM_CONFIG: config.get(mod_config_key, None)}
         for dep in mod_deps:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)

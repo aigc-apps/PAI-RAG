@@ -24,7 +24,7 @@ class AgentModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
         func_tool = new_params["ToolModule"]
-        agent_config = new_params["CustomConfigModule"]
+        agent_config, _ = new_params["CustomConfigModule"]
         type = config["type"].lower()
         if type == "react":
             llm = new_params["LlmModule"]

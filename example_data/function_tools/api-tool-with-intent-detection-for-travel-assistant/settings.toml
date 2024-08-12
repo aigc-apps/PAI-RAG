@@ -8,13 +8,13 @@ version = "0.1.1"
 type = "function_calling"
 
 [rag.agent.custom_config]
-agent_file_path = "example_data/travel_assistant_demo/config.json"
+agent_file_path = "example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant"
 
 [rag.agent.intent_detection]
 type = "single"
 
 [rag.agent.tool]
-type = ["api"]
+type = "api"
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
