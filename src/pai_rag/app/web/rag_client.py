@@ -215,7 +215,6 @@ class RagWebClient:
             file_obj_list.append(file_obj)
         para = {"enable_raptor": enable_raptor}
         try:
-            print("files", files)
             r = requests.post(
                 self.load_data_url,
                 files=files,
