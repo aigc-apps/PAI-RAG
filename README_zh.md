@@ -275,11 +275,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
-# Function Calling
+# Agentic RAG
 
-您也可以在PAI-RAG中使用function calling功能，请参考文档：
-
-[Function Calling 使用说明](./docs/function_calling/readme.md)
+您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
+[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
 
 # 参数配置
 

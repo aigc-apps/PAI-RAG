@@ -49,9 +49,18 @@ async def aquery_agent(query: RagQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
 
 
-@router.post("/query/intent")
-async def aquery_agent_assistant(query: RagQuery):
-    return await rag_service.aquery_with_intent(query)
+@router.post("/config/agent")
+async def aload_agent_config(file: UploadFile):
+    tmpdir = tempfile.mkdtemp()
+    fn = file.filename
+    data = await file.read()
+    file_hash = hashlib.md5(data).hexdigest()
+    save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
+
+    with open(save_file, "wb") as f:
+        f.write(data)
+        f.close()
+    return await rag_service.aload_agent_config(save_file)
 
 
 @router.patch("/config")

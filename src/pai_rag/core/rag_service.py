@@ -179,13 +179,13 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_with_intent(self, query: RagQuery):
+    async def aload_agent_config(self, agent_cfg_path: str):
         try:
             self.check_updates()
-            return await self.rag.aquery_with_intent(query)
+            return await self.rag.aload_agent_config(agent_cfg_path)
         except Exception as ex:
             logger.error(traceback.format_exc())
-            raise UserInputError(f"Query RAG failed: {ex}")
+            raise UserInputError(f"Load agent config: {ex}")
 
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         try:

@@ -8,59 +8,74 @@
     "functions": [
       {
         "name": "search_flight_ticket_api",
-        "api": "http://127.0.0.1:8070/demo/api/search_flight_ticket",
-        "method": "POST",
+        "api": "http://127.0.0.1:8070/demo/api/flights",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
         "description": "帮助用户获取机票信息，用户需要输入出发地、目的地",
         "parameters": {
-          "arr_airport": {
+          "from_city": {
             "type": "str",
-            "description": "到达的机场，如'上海虹桥'"
+            "description": "出发城市，如'北京'、'上海'、'南京''"
           },
-          "arr_city": {
+          "to_city": {
             "type": "str",
             "description": "目的地城市，如'北京'、'上海'、'南京'"
           },
-          "dep_airport": {
-            "type": "str",
-            "description": "出发的机场，如'大兴机场'"
-          },
-          "dep_city": {
-            "type": "str",
-            "description": "出发城市，如'北京'、'上海'、'南京'"
-          },
-          "flight_date": {
+          "date": {
             "type": "str",
             "description": "出发时间，如'2024-03-29'"
           }
         },
-        "required": [
-          "arr_airport",
-          "arr_city",
-          "dep_airport",
-          "dep_city",
-          "flight_date"
-        ]
+        "required": ["from_city", "to_city", "date"]
       },
       {
         "name": "search_train_ticket_api",
-        "api": "http://127.0.0.1:8070/demo/api/search_train_ticket",
-        "method": "POST",
+        "api": "http://127.0.0.1:8070/demo/api/trains",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
         "description": "帮助用户查询火车票或者高铁票信息",
         "parameters": {
-          "start_city": {
+          "from_city": {
             "type": "str",
-            "description": "出发城市，如'长沙'"
+            "description": "出发城市，如'北京'、'上海'、'南京''"
           },
-          "end_city": {
+          "to_city": {
             "type": "str",
-            "description": "终点城市，如'青岛'"
+            "description": "目的地城市，如'北京'、'上海'、'南京'"
           },
-          "train_date": {
+          "date": {
             "type": "str",
-            "description": "出发日期，如'2024-03-29'"
+            "description": "出发时间，如'2024-03-29'"
           }
         },
-        "required": ["start_city", "end_city", "train_date"]
+        "required": ["from_city", "to_city", "date"]
+      },
+      {
+        "name": "search_hotels_api",
+        "api": "http://127.0.0.1:8070/demo/api/hotels",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
+        "description": "帮助用户查询酒店信息",
+        "parameters": {
+          "city": {
+            "type": "str",
+            "description": "查询的城市，如'北京'、'上海'、'南京''"
+          },
+          "date": {
+            "type": "str",
+            "description": "出发时间，如'2024-03-29'"
+          }
+        },
+        "required": ["city", "date"]
       }
     ]
   }

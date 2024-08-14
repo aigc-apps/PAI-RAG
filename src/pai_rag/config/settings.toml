@@ -14,8 +14,7 @@ agent_file_path = ""
 type = ""
 
 [rag.agent.tool]
-type = "built-in" # [built-in", "python", "api"]
-name = ["calculator", "googlewebsearch", "weather"]
+type = "" # [built-in", "python", "api"]
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"

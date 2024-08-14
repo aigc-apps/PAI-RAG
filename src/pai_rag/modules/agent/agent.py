@@ -37,6 +37,7 @@ class AgentModule(ConfigurableModule):
             agent = ReActAgent.from_tools(tools=func_tool, llm=llm, verbose=True)
         elif type == "function_calling":
             llm = new_params["FunctionCallingLlmModule"]
+            print("FunctionCallingLlmModule llm", llm)
             if agent_config:
                 system_content = agent_config["agent"]["system_prompt"]
             else:

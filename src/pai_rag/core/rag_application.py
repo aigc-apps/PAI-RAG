@@ -10,6 +10,7 @@ from pai_rag.app.api.models import (
 from llama_index.core.schema import QueryBundle
 import json
 import logging
+import os
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
@@ -102,7 +103,7 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery):
+    async def aquery_rag(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Query Engine's or Chat Engine's achat interface.
@@ -193,7 +194,7 @@ class RagApplication:
             response = await llm_chat_engine.astream_chat(query.question)
             return event_generator_async(response=response)
 
-    async def aquery_agent(self, query: RagQuery) -> LlmResponse:
+    async def aquery_agent(self, query: RagQuery) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
 
         Generate answer from agent's achat interface.
@@ -209,7 +210,7 @@ class RagApplication:
 
         agent = module_registry.get_module_with_config("AgentModule", self.config)
         response = await agent.achat(query.question)
-        return LlmResponse(answer=response.response)
+        return RagResponse(answer=response.response)
 
     async def aquery_with_intent(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
@@ -234,9 +235,39 @@ class RagApplication:
         if intent.intent == "agent":
             return await self.aquery_agent(query)
         elif intent.intent == "retrieval":
-            return await self.aquery(query)
+            return await self.aquery_rag(query)
         else:
             return ValueError(f"Invalid intent {intent.intent}")
+
+    async def aquery(self, query: RagQuery):
+        if query.with_intent:
+            return await self.aquery_with_intent(query)
+        else:
+            return await self.aquery_rag(query)
+
+    async def aload_agent_config(self, agent_cfg_path: str):
+        if os.path.exists(agent_cfg_path):
+            sessioned_config = self.config.as_dict().copy()
+            sessioned_config["RAG"]["llm"]["function_calling_llm"][
+                "source"
+            ] = "DashScope"
+            sessioned_config["RAG"]["llm"]["function_calling_llm"][
+                "name"
+            ] = "qwen2-7b-instruct"
+            sessioned_config["RAG"]["agent"]["type"] = "function_calling"
+            sessioned_config["RAG"]["agent"]["custom_config"][
+                "agent_file_path"
+            ] = agent_cfg_path
+            sessioned_config["RAG"]["agent"]["intent_detection"]["type"] = "single"
+            sessioned_config["RAG"]["agent"]["tool"]["type"] = "api"
+
+            new_settings = self.config
+            new_settings.update(sessioned_config)
+
+            self.reload(new_settings)
+            return "Update agent config successfully."
+        else:
+            return f"The agent config path {agent_cfg_path} not exists."
 
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         vector_store_type = (

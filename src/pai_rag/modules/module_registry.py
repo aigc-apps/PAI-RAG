@@ -130,9 +130,6 @@ class ModuleRegistry:
 
         if instance_key not in self._mod_instance_map[mod_name]:
             logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
-            print("mod_name", mod_name)
-            print("params", params)
-            print("instance_key", instance_key)
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params
             )

@@ -5,7 +5,7 @@ from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.modules.tool.utils import (
     get_google_web_search_tools,
     get_calculator_tools,
-    get_customized_python_tools_1,
+    get_customized_python_tools,
     get_weather_tools,
     get_customized_api_tools,
 )
@@ -23,6 +23,9 @@ class ToolModule(ConfigurableModule):
         self.config = new_params[MODULE_PARAM_CONFIG]
         agent_config, function_body_str = new_params["CustomConfigModule"]
         type = self.config["type"]
+        if type == "":
+            logger.info("Don't use Tool Module.")
+            return None
         logger.info(
             f"""
             [Parameters][Tool:FunctionTool]
@@ -40,9 +43,10 @@ class ToolModule(ConfigurableModule):
                 tools.extend(get_weather_tools(self.config))
         elif type == "python":
             tools.extend(
-                get_customized_python_tools_1(agent_config["agent"], function_body_str)
+                get_customized_python_tools(agent_config["agent"], function_body_str)
             )
         elif type == "api":
             tools.extend(get_customized_api_tools(agent_config["agent"]))
-
+        else:
+            raise ValueError(f"Not Support Tool type {type}")
         return tools

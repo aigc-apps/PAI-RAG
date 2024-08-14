@@ -325,10 +325,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
-# Function Calling
+# Agentic RAG
 
-You can use function calling tools in PAI-RAG, please refer to the documentation:
-[Function Calling Instruction](./docs/function_calling/readme.md)
+You can use agent with function calling api-tools in PAI-RAG, please refer to the documentation:
+[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
 
 # Parameter Configuration
 
