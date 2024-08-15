@@ -16,9 +16,7 @@ from pdfminer.layout import (
 )
 import pdfplumber
 from pdf2image import convert_from_bytes
-import easyocr
 from llama_index.core import Settings
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import json
 import unicodedata
 import logging
@@ -49,44 +47,31 @@ class PaiPDFReader(BaseReader):
     """Read PDF files including texts, tables, images.
 
     Args:
-        enable_image_ocr (bool): whether load ocr model to process images
-        model_dir: (str): ocr model path
+        enable_multimodal (bool):  whether to use multimodal to process images
     """
 
     def __init__(
         self,
-        enable_image_ocr: bool = False,
+        enable_multimodal: bool = False,
         enable_table_summary: bool = False,
-        model_dir: str = DEFAULT_MODEL_DIR,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_image_ocr = enable_image_ocr
         self.enable_table_summary = enable_table_summary
+        self.enable_multimodal = enable_multimodal
         self._oss_cache = oss_cache
         if self.enable_table_summary:
             logger.info("process with table summary")
-        if self.enable_image_ocr:
-            self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
-            logger.info("start loading ocr model")
-            self.image_reader = easyocr.Reader(
-                ["ch_sim", "en"],
-                model_storage_directory=self.model_dir,
-                download_enabled=True,
-                detector=True,
-                recognizer=True,
-            )
-            logger.info("finished loading ocr model")
 
     def process_pdf_image(self, element: LTFigure, page_object: PageObject) -> str:
         """
-        Processes an image element from a PDF, crops it out, and performs OCR on the result.
+        Processes an image element from a PDF, crops it out, and performs multimodal on the result.
 
         Args:
             element (LTFigure): An LTFigure object representing the image in the PDF, containing its coordinates.
             page_object (PageObject): A PageObject representing the page in the PDF to be cropped.
 
         Returns:
-            str: The OCR-processed text from the cropped image.
+            str: The image_url from the cropped image.
         """
         assert (
             self._oss_cache is not None
@@ -102,7 +87,7 @@ class PaiPDFReader(BaseReader):
         # Adjust the page's media box to crop the image based on the coordinates
         page_object.mediabox.lower_left = (image_left, image_bottom)
         page_object.mediabox.upper_right = (image_right, image_top)
-        # Save the cropped page as a new PDF file and perform OCR
+        # Save the cropped page as a new PDF file and get url
         cropped_pdf_writer = PyPDF2.PdfWriter()
         cropped_pdf_stream = BytesIO()
 
@@ -402,7 +387,7 @@ class PaiPDFReader(BaseReader):
                 if isinstance(element, LTTextBoxHorizontal):
                     text_elements.append(element)
 
-                elif isinstance(element, LTFigure):
+                elif isinstance(element, LTFigure) and self.enable_multimodal:
                     image_url = self.process_pdf_image(element, page_object)
                     if image_url:
                         image_cnt += 1

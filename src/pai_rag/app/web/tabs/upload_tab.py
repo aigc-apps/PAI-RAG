@@ -14,7 +14,7 @@ def upload_knowledge(
     chunk_overlap,
     enable_qa_extraction,
     enable_raptor,
-    enable_ocr,
+    enable_multimodal,
     enable_table_summary,
 ):
     if not upload_files:
@@ -25,7 +25,7 @@ def upload_knowledge(
             {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
-                "enable_ocr": enable_ocr,
+                "enable_multimodal": enable_multimodal,
                 "enable_table_summary": enable_table_summary,
             }
         )
@@ -116,10 +116,10 @@ def create_upload_tab() -> Dict[str, Any]:
                 info="Process with Raptor Node Enhancement",
                 elem_id="enable_raptor",
             )
-            enable_ocr = gr.Checkbox(
+            enable_multimodal = gr.Checkbox(
                 label="Yes",
-                info="Process with OCR",
-                elem_id="enable_ocr",
+                info="Process with MultiModal",
+                elem_id="enable_multimodal",
             )
             enable_table_summary = gr.Checkbox(
                 label="Yes",
@@ -152,7 +152,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
-                    enable_ocr,
+                    enable_multimodal,
                     enable_table_summary,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
@@ -172,7 +172,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_qa_extraction,
                     enable_raptor,
-                    enable_ocr,
+                    enable_multimodal,
                     enable_table_summary,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
@@ -189,6 +189,6 @@ def create_upload_tab() -> Dict[str, Any]:
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_qa_extraction.elem_id: enable_qa_extraction,
                 enable_raptor.elem_id: enable_raptor,
-                enable_ocr.elem_id: enable_ocr,
+                enable_multimodal.elem_id: enable_multimodal,
                 enable_table_summary.elem_id: enable_table_summary,
             }
