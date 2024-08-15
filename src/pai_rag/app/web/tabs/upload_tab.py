@@ -120,6 +120,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 label="Yes",
                 info="Process with MultiModal",
                 elem_id="enable_multimodal",
+                visible=False,
             )
             enable_table_summary = gr.Checkbox(
                 label="Yes",

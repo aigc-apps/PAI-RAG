@@ -121,13 +121,6 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    export DASHSCOPE_API_KEY=""
    ```
 
-   使用多模态模型，需要在命令行提供阿里云OSS的ak和sk
-
-   ```bash
-   export OSS_ACCESS_KEY_ID=""
-   export OSS_ACCESS_KEY_SECRET=""
-   ```
-
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
    # 默认启动时下载模型 [bge-small-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
