@@ -121,6 +121,13 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    export DASHSCOPE_API_KEY=""
    ```
 
+   To use MultiModel, you need to provide Aliyun OSS ak and sk:
+
+   ```bash
+   export OSS_ACCESS_KEY_ID=""
+   export OSS_ACCESS_KEY_SECRET=""
+   ```
+
    ```bash
    # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
    # Download [bge-small-zh-v1.5, easyocr] by default, you can skip it by setting --skip-download-models.
