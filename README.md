@@ -55,6 +55,8 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    conda activate rag_env
    ```
 
+   Inorder to convert PDF to a PIL Image object, you need to use pdf2image. Please refer to this link to download Poppler first:https://github.com/Belval/pdf2image
+
 - (1) CPU
 
   Use poetry to install project dependency packages directly:

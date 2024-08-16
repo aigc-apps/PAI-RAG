@@ -17,8 +17,7 @@ def test_pai_pdf_reader():
         input_dir="tests/testdata/data/pdf_data",
         file_extractor={
             ".pdf": PaiPDFReader(
-                enable_image_ocr=reader_config.get("enable_image_ocr", False),
-                model_dir=reader_config.get("easyocr_model_dir", None),
+                enable_multimodal=reader_config.get("enable_multimodal", False)
             )
         },
     )
