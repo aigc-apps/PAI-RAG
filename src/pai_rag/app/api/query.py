@@ -51,11 +51,10 @@ async def aquery_agent(query: RagQuery) -> LlmResponse:
 
 @router.post("/config/agent")
 async def aload_agent_config(file: UploadFile):
-    tmpdir = tempfile.mkdtemp()
     fn = file.filename
     data = await file.read()
     file_hash = hashlib.md5(data).hexdigest()
-    save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
+    save_file = os.path.join("localdata", f"{file_hash}_{fn}")
 
     with open(save_file, "wb") as f:
         f.write(data)

@@ -63,7 +63,7 @@ curl -X 'POST' http://127.0.0.1:8071/service/config/agent -H 'Content-Type: mult
 (1) 知识库检索
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8071/service/query -H "Content-Type: application/json" -d '{"question":"北京旅游攻略", "with_intent":"True"}'
+curl -X 'POST' http://127.0.0.1:8071/service/query -H "Content-Type: application/json" -d '{"question":"北京旅游攻略", "with_intent":true}'
 
 # "answer"
 # 北京旅游攻略包括以下景点推荐、开放时间、特色美食、旅行建议等信息：
@@ -89,7 +89,7 @@ curl -X 'POST' http://127.0.0.1:8071/service/query -H "Content-Type: application
 (2) API调用
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8071/service/query -H "Content-Type: application/json" -d '{"question":"2024年8月6号从北京到上海的机票信息"  "with_intent":"True"}'
+curl -X 'POST' http://127.0.0.1:8071/service/query -H "Content-Type: application/json" -d '{"question":"2024年8月6号从北京到上海的机票信息", "with_intent":true}'
 
 # "answer"
 # assistant: 2024年8月6日从北京到上海的航班信息如下：

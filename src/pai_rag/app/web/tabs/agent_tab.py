@@ -5,8 +5,10 @@ import gradio as gr
 
 
 def upload_config_file_fn(upload_config_file):
-    file_obj = open(upload_config_file.name, "rb")
-    res = json.loads(file_obj.read())
+    if upload_config_file is None:
+        return None
+    with open(upload_config_file.name, "rb") as file:
+        res = json.loads(file.read())
     return res
 
 
