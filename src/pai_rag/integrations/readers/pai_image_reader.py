@@ -88,7 +88,7 @@ class PaiImageReader(BaseReader):
             extra_info["file_path"] = file_path
             extra_info["file_name"] = os.path.basename(file_path)
             extra_info["image_url"] = image_url
-            image_doc = ImageDocument(image=image_url, extra_info=extra_info)
+            image_doc = ImageDocument(image_url=image_url, extra_info=extra_info)
             docs = [image_doc]
             # docs = self.load_image_urls([image_url], extra_info=extra_info)
         return docs
