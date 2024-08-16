@@ -1,0 +1,82 @@
+{
+  "intent": {
+    "retrieval": "关于一些通用的信息检索，比如搜索旅游攻略、搜索美食攻略、搜索注意事项等信息。",
+    "agent": "实时性的信息查询，比如查询航班信息、查询高铁信息、查询天气等时效性很强的信息。"
+  },
+  "agent": {
+    "system_prompt": "你是一个旅游小助手，可以帮助用户查询指定时间从A地区到B地区的机票信息，以及火车票信息等。请严格使用输入的工具，不要虚构任何细节。",
+    "functions": [
+      {
+        "name": "search_flight_ticket_api",
+        "api": "http://127.0.0.1:8070/demo/api/flights",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
+        "description": "帮助用户获取机票信息，用户需要输入出发地、目的地",
+        "parameters": {
+          "from_city": {
+            "type": "str",
+            "description": "出发城市，如'北京'、'上海'、'南京''"
+          },
+          "to_city": {
+            "type": "str",
+            "description": "目的地城市，如'北京'、'上海'、'南京'"
+          },
+          "date": {
+            "type": "str",
+            "description": "出发时间，如'2024-03-29'"
+          }
+        },
+        "required": ["from_city", "to_city", "date"]
+      },
+      {
+        "name": "search_train_ticket_api",
+        "api": "http://127.0.0.1:8070/demo/api/trains",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
+        "description": "帮助用户查询火车票或者高铁票信息",
+        "parameters": {
+          "from_city": {
+            "type": "str",
+            "description": "出发城市，如'北京'、'上海'、'南京''"
+          },
+          "to_city": {
+            "type": "str",
+            "description": "目的地城市，如'北京'、'上海'、'南京'"
+          },
+          "date": {
+            "type": "str",
+            "description": "出发时间，如'2024-03-29'"
+          }
+        },
+        "required": ["from_city", "to_city", "date"]
+      },
+      {
+        "name": "search_hotels_api",
+        "api": "http://127.0.0.1:8070/demo/api/hotels",
+        "headers": {
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        },
+        "method": "GET",
+        "request_body_type": "params",
+        "description": "帮助用户查询酒店信息",
+        "parameters": {
+          "city": {
+            "type": "str",
+            "description": "查询的城市，如'北京'、'上海'、'南京''"
+          },
+          "date": {
+            "type": "str",
+            "description": "出发时间，如'2024-03-29'"
+          }
+        },
+        "required": ["city", "date"]
+      }
+    ]
+  }
+}

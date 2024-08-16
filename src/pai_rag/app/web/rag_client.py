@@ -56,6 +56,10 @@ class RagWebClient:
         return f"{self.endpoint}service/upload_data"
 
     @property
+    def load_agent_cfg_url(self):
+        return f"{self.endpoint}service/config/agent"
+
+    @property
     def get_load_state_url(self):
         return f"{self.endpoint}service/get_upload_state"
 
@@ -79,11 +83,10 @@ class RagWebClient:
         else:
             text = response["answer"]
 
-        docs = response.get("docs", [])
+        docs = response.get("docs", []) or []
         is_finished = response.get("is_finished", True)
 
         referenced_docs = ""
-
         if is_finished and len(docs) == 0 and not text:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
@@ -107,8 +110,16 @@ class RagWebClient:
         response["result"] = formatted_answer
         return response
 
-    def query(self, text: str, session_id: str = None, stream: bool = False):
-        q = dict(question=text, session_id=session_id, stream=stream)
+    def query(
+        self,
+        text: str,
+        session_id: str = None,
+        stream: bool = False,
+        with_intent: bool = False,
+    ):
+        q = dict(
+            question=text, session_id=session_id, stream=stream, with_intent=with_intent
+        )
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -246,6 +257,25 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
+        return response
+
+    def load_agent_config(self, file_name: str):
+        files = []
+        file_obj = open(file_name, "rb")
+        mimetype = mimetypes.guess_type(file_name)[0]
+        files.append(("file", (os.path.basename(file_name), file_obj, mimetype)))
+        try:
+            r = requests.post(
+                self.load_agent_cfg_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = json.loads(r.text)
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        finally:
+            file_obj.close()
+
         return response
 
     def evaluate_for_generate_qa(self, overwrite):

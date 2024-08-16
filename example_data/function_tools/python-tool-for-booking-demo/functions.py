@@ -14,26 +14,26 @@ class Booking(BaseModel):
     time: Optional[str] = None
 
 
-def get_booking_state(room_id: str) -> str:
+def get_booking_state_func(room_id: str) -> str:
     try:
         return str(bookings[room_id].dict())
     except Exception:
         return f"没有找到会议室ID:{room_id}"
 
 
-def update_booking(room_id: str, property: str, value: str) -> str:
+def update_booking_func(room_id: str, property: str, value: str) -> str:
     booking = bookings[room_id]
     setattr(booking, property, value)
     return f"预订ID {room_id} 更新属性信息 {property} = {value}"
 
 
-def create_booking(room_id: str) -> str:
+def create_booking_func(room_id: str) -> str:
     bookings[room_id] = Booking()
     # return "Booking created, but not yet confirmed. Please provide your name, email, phone, date, and time."
     return f"会议室预订ID:{room_id}已创建，但尚未确认。请提供您的姓名(name)、电子邮件(email)、电话(phone)、日期(date)和时间(time)。"
 
 
-def confirm_booking(room_id: str) -> str:
+def confirm_booking_func(room_id: str) -> str:
     # """Confirm a booking for a given booking ID."""
     """确认给定会议室预订ID的预订。"""
     booking = bookings[room_id]

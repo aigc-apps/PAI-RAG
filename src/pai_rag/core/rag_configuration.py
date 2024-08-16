@@ -52,6 +52,10 @@ class RagConfiguration:
         if self.config.get("rag", None):
             if not new_value.get("llm").get("multi_modal"):
                 new_value["llm"]["multi_modal"] = self.config["rag.llm.multi_modal"]
+            if not new_value.get("llm").get("function_calling_llm"):
+                new_value["llm"]["function_calling_llm"] = self.config[
+                    "rag.llm.function_calling_llm"
+                ]
             if not new_value.get("embedding").get("multi_modal"):
                 new_value["embedding"]["multi_modal"] = self.config[
                     "rag.embedding.multi_modal"

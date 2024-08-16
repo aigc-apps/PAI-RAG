@@ -7,7 +7,6 @@ import tempfile
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
-    LlmQuery,
     RetrievalQuery,
     LlmResponse,
 )
@@ -29,7 +28,7 @@ async def aquery(query: RagQuery):
 
 
 @router.post("/query/llm")
-async def aquery_llm(query: LlmQuery):
+async def aquery_llm(query: RagQuery):
     response = await rag_service.aquery_llm(query)
     if not query.stream:
         return response
@@ -46,8 +45,21 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 
 @router.post("/query/agent")
-async def aquery_agent(query: LlmQuery) -> LlmResponse:
+async def aquery_agent(query: RagQuery) -> LlmResponse:
     return await rag_service.aquery_agent(query)
+
+
+@router.post("/config/agent")
+async def aload_agent_config(file: UploadFile):
+    fn = file.filename
+    data = await file.read()
+    file_hash = hashlib.md5(data).hexdigest()
+    save_file = os.path.join("localdata", f"{file_hash}_{fn}")
+
+    with open(save_file, "wb") as f:
+        f.write(data)
+        f.close()
+    return await rag_service.aload_agent_config(save_file)
 
 
 @router.patch("/config")

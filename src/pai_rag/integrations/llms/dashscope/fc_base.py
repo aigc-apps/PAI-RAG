@@ -14,12 +14,14 @@ class DashScopeGenerationModels:
     QWEN_MAX_1201 = "qwen-max-1201"
     QWEN_MAX_LONGCONTEXT = "qwen-max-longcontext"
 
+    QWEM1P5_1P8B_CHAT = "qwen1.5-1.8b-chat"
     QWEM1P5_7B_CHAT = "qwen1.5-7b-chat"
     QWEM1P5_14B_CHAT = "qwen1.5-14b-chat"
     QWEM1P5_32B_CHAT = "qwen1.5-32b-chat"
     QWEM1P5_72B_CHAT = "qwen1.5-72b-chat"
     QWEM1P5_110B_CHAT = "qwen1.5-110b-chat"
 
+    QWEM2_1P5B_INSTRUCT = "qwen2-1.5b-instruct"
     QWEM2_7B_INSTRUCT = "qwen2-7b-instruct"
     QWEM2_72B_INSTRUCT = "qwen2-72b-instruct"
 
@@ -55,6 +57,12 @@ DASHSCOPE_MODEL_META = {
         "is_chat_model": True,
         "is_function_calling_model": True,
     },
+    DashScopeGenerationModels.QWEM1P5_1P8B_CHAT: {
+        "context_window": 1024 * 30,
+        "num_output": 1024 * 2,
+        "is_chat_model": True,
+        "is_function_calling_model": True,
+    },
     DashScopeGenerationModels.QWEM1P5_7B_CHAT: {
         "context_window": 1024 * 8,
         "num_output": 1024 * 8,
@@ -81,6 +89,12 @@ DASHSCOPE_MODEL_META = {
     },
     DashScopeGenerationModels.QWEM1P5_110B_CHAT: {
         "context_window": 1024 * 32,
+        "num_output": 1024 * 32,
+        "is_chat_model": True,
+        "is_function_calling_model": True,
+    },
+    DashScopeGenerationModels.QWEM2_1P5B_INSTRUCT: {
+        "context_window": 1024 * 30,
         "num_output": 1024 * 32,
         "is_chat_model": True,
         "is_function_calling_model": True,

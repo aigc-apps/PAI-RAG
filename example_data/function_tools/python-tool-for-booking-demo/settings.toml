@@ -5,16 +5,16 @@ name = "pai_rag"
 version = "0.1.1"
 
 [rag.agent]
-type = "react"
+type = "function_calling"
 
 [rag.agent.custom_config]
-agent_file_path = ""
+agent_file_path = "example_data/function_tools/python-tool-for-booking-demo"
 
 [rag.agent.intent_detection]
-type = ""
+type = "single"
 
 [rag.agent.tool]
-type = "" # [built-in", "python", "api"]
+type = "python"
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
@@ -44,7 +44,7 @@ source = "cnclip"
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
+response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -60,10 +60,11 @@ source = "DashScope"
 name = "qwen-turbo"
 
 [rag.llm.function_calling_llm]
-source = ""
+source = "DashScope"
+name = "qwen2-7b-instruct"
 
 [rag.llm.multi_modal]
-source = "DashScope"
+source = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
@@ -77,10 +78,6 @@ proba_threshold = 0.10
 type = "Sentence"
 chunk_size = 500
 chunk_overlap = 10
-
-[rag.oss_store]
-bucket = ""
-endpoint = ""
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
