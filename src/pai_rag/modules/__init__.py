@@ -20,7 +20,8 @@ from pai_rag.modules.cache.oss_cache import OssCacheModule
 from pai_rag.modules.evaluation.evaluation import EvaluationModule
 from pai_rag.modules.index.bm25_index import BM25IndexModule
 from pai_rag.modules.nodesenhance.nodes_enhancement import NodesEnhancementModule
-
+from pai_rag.modules.intentdetection.intent_detection import IntentDetectionModule
+from pai_rag.modules.customconfig.custom_config import CustomConfigModule
 
 ALL_MODULES = [
     "EmbeddingModule",
@@ -45,6 +46,8 @@ ALL_MODULES = [
     "EvaluationModule",
     "BM25IndexModule",
     "NodesEnhancementModule",
+    "IntentDetectionModule",
+    "CustomConfigModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

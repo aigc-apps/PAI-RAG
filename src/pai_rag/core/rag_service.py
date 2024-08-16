@@ -7,7 +7,6 @@ from pai_rag.core.rag_application import RagApplication
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.app.api.models import (
     RagQuery,
-    LlmQuery,
     RetrievalQuery,
     LlmResponse,
 )
@@ -156,7 +155,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_llm(self, query: LlmQuery):
+    async def aquery_llm(self, query: RagQuery):
         try:
             self.check_updates()
             return await self.rag.aquery_llm(query)
@@ -172,13 +171,21 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
+    async def aquery_agent(self, query: RagQuery) -> LlmResponse:
         try:
             self.check_updates()
             return await self.rag.aquery_agent(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
+
+    async def aload_agent_config(self, agent_cfg_path: str):
+        try:
+            self.check_updates()
+            return await self.rag.aload_agent_config(agent_cfg_path)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Load agent config: {ex}")
 
     async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
         try:

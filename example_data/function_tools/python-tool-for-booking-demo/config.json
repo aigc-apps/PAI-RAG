@@ -1,0 +1,64 @@
+{
+  "intent": {},
+  "agent": {
+    "system_prompt": "你是一个管理会议室预定的助手，需要协助用户预订会议室。请严格使用输入的工具，不要虚构任何细节。",
+    "functions": [
+      {
+        "name": "get_booking_state",
+        "function": "get_booking_state_func",
+        "description": "用于查询给定会议室ID的预定状态",
+        "parameters": {
+          "room_id": {
+            "type": "str",
+            "description": "待查询的会议室ID"
+          }
+        },
+        "required": ["room_id"]
+      },
+      {
+        "name": "update_booking",
+        "function": "update_booking_func",
+        "description": "用于更新预定指定会议室ID(room_id)的预定人信息，包含姓名(name)、电子邮件(email)、电话(phone)、日期(date)和时间(time)。",
+        "parameters": {
+          "room_id": {
+            "type": "str",
+            "description": "待更新信息的会议室ID"
+          },
+          "property": {
+            "type": "str",
+            "description": "待更新的信息属性，如姓名(name)、电子邮件(email)、电话(phone)、日期(date)和时间(time)."
+          },
+          "value": {
+            "type": "str",
+            "description": "待更新的信息属性的值."
+          }
+        },
+        "required": ["room_id", "property", "value"]
+      },
+      {
+        "name": "create_booking",
+        "function": "create_booking_func",
+        "description": "预定指定会议室ID的会议室",
+        "parameters": {
+          "room_id": {
+            "type": "str",
+            "description": "指定预定的会议室ID"
+          }
+        },
+        "required": ["room_id"]
+      },
+      {
+        "name": "confirm_booking",
+        "function": "confirm_booking_func",
+        "description": "用于确认是否预定指定会议室ID的会议室",
+        "parameters": {
+          "room_id": {
+            "type": "str",
+            "description": "需要确认的会议室ID"
+          }
+        },
+        "required": ["room_id"]
+      }
+    ]
+  }
+}
