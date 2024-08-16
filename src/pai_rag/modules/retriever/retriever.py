@@ -1,21 +1,30 @@
 """retriever factory, used to generate retriever instance based on customer config and index"""
 
+import os
 import logging
 from typing import Dict, List, Any
-from llama_index.core.indices.list.base import SummaryIndex
 
 # from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
+
+# from llama_index.core.retrievers import NLSQLRetriever
+from llama_index.core import SQLDatabase
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from llama_index.core.indices.list.base import SummaryIndex
+
 from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT
+from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT, DEFAULT_TEXT_TO_SQL_TMPL
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 from pai_rag.integrations.retrievers.fusion_retriever import MyQueryFusionRetriever
+from pai_rag.modules.retriever.my_nl2sql_retriever import MyNLSQLRetriever
+
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import URL
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +42,18 @@ class RetrieverModule(ConfigurableModule):
         similarity_top_k = config.get("similarity_top_k", 5)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
+
+        if retrieval_mode == "nl2sql":
+            sql_database, tables, table_descriptions = self.db_connection(config)
+            nl2sql_retriever = MyNLSQLRetriever(
+                sql_database=sql_database,
+                text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
+                tables=tables,
+                context_query_kwargs=table_descriptions,
+                sql_only=False,
+            )
+            logger.info("NL2SQLRetriever used")
+            return nl2sql_retriever
 
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever()
@@ -144,3 +165,53 @@ class RetrieverModule(ConfigurableModule):
 
             else:
                 raise ValueError("Not supported retrieval type.")
+
+    def db_connection(self, config):
+        # get rds_db config
+        dialect = config.get("dialect", "sqlite")
+        user = config.get("user", "")
+        password = config.get("password", "")
+        host = config.get("host", "")
+        port = config.get("port", "")
+        path = config.get("path", "")
+        dbname = config.get("dbname", "")
+        desired_tables = config.get("tables", [])
+        table_descriptions = config.get("descriptions", {})
+
+        if dialect == "sqlite":
+            db_path = os.path.join(path, dbname)
+            database_uri = f"{dialect}:///{db_path}"
+        elif dialect == "mysql":
+            dd_prefix = f"{dialect}+pymysql"
+            database_uri = URL.create(
+                dd_prefix,
+                username=user,
+                password=password,
+                host=host,
+                port=port,
+                database=dbname,
+            )
+        else:
+            raise ValueError("not supported SQL dialect")
+
+        # use sqlalchemy engine for db connection
+        engine = create_engine(database_uri, echo=False)
+        inspector = inspect(engine)
+        db_tables = inspector.get_table_names()
+        if len(db_tables) == 0:
+            raise ValueError("No database tables")
+
+        if len(desired_tables) > 0:
+            tables = db_tables
+        else:
+            tables = db_tables
+
+        # create an sqldatabase instance including desired table info
+        sql_database = SQLDatabase(engine, include_tables=tables)
+
+        if len(table_descriptions) > 0:
+            table_descriptions = table_descriptions
+        else:
+            table_descriptions = {}
+
+        return sql_database, tables, table_descriptions

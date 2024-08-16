@@ -85,6 +85,7 @@ pgvector = "^0.3.2"
 pre-commit = "^3.8.0"
 cn-clip = "^1.5.1"
 llama-index-llms-paieas = "^0.1.0"
+pymysql = "^1.1.1"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
