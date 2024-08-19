@@ -85,22 +85,20 @@ top_n = 2
 type = "RetrieverQueryEngine"
 
 [rag.retriever]
-similarity_top_k = 3
+retrieval_mode = "nl2sql"
 dialect = "sqlite"
 user = ""
 password = ""
 host = ""
 port = ""
-path = ""
+path = "./tests/testdata/data/db_data"
 dbname = ""
 tables = []
 descriptions = {}
-query_rewrite_n = 1
-retrieval_mode = "nl2sql"
 
 [rag.synthesizer]
 type = "SimpleSummarize"
-text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.如果提供的内容是一个元组列表，请直接提取元组列表中的数字或文本信息回答问题. \n问题: {query_str}\n答案: \n"
+text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.如果提供的内容是一个元组列表，请直接提取元组列表中的数字或文本信息回答问题.\n\n以下是示例：\n示例1:\n问题：年龄小于20岁的学生有哪些\n参考文本：[('Linda', 'Smith'), ('Tracy', 'Kim')]\n答案：年龄小于20岁的学生有：Linda Smith 和 Tracy Kim\n\n示例2:\n问题：年龄小于20的学生有多少个\n参考文本：[(19,)]\n答案：有19个学生\n\n示例3:\n问题：有多少只狗\n参考文本：[(2,)]\n答案：有2只狗 \n问题: {query_str}\n答案: \n"
 
 [rag.tool]
 type = ["calculator", "weather"]
