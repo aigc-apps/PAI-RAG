@@ -24,17 +24,24 @@ Settings.embed_model = embed_model
 
 
 @pytest.fixture()
-@pytest.mark.skipif(os.getenv("dialect") is None, reason="no dialect")
 def db_connection():
-    dialect = os.getenv("dialect")
-    user = os.getenv("user")
-    password = os.getenv("password")
-    host = os.getenv("host")
-    port = os.getenv("port")
-    path = os.getenv("path")
-    dbname = os.getenv("dbname")
-    desired_tables = os.getenv("tables")
-    table_descriptions = os.getenv("descriptions")
+    if os.path.exists("./env"):
+        dialect = os.getenv("dialect")
+        user = os.getenv("user")
+        password = os.getenv("password")
+        host = os.getenv("host")
+        port = os.getenv("port")
+        path = os.getenv("path")
+        dbname = os.getenv("dbname")
+        desired_tables = os.getenv("tables")
+        table_descriptions = os.getenv("descriptions")
+    else:
+        dialect = "sqlite"
+        path = "./tests/testdata/data/db_data"
+        dbname = "pets.db"
+        desired_tables = []
+        table_descriptions = {}
+
     if dialect == "sqlite":
         db_path = os.path.join(path, dbname)
         database_uri = f"{dialect}:///{db_path}"
