@@ -92,7 +92,7 @@ password = ""
 host = ""
 port = ""
 path = "./tests/testdata/data/db_data"
-dbname = ""
+dbname = "pets.db"
 tables = []
 descriptions = {}
 
