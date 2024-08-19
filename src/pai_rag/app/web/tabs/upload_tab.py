@@ -9,6 +9,7 @@ import asyncio
 
 IGNORE_FILE_LIST = [".DS_Store"]
 
+
 def upload_knowledge(
     upload_files,
     chunk_size,
