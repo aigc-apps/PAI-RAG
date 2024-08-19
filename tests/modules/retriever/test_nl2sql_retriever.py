@@ -56,7 +56,7 @@ def db_connection():
             database=dbname,
         )
     else:
-        raise ValueError("not supported SQL dialect")
+        raise ValueError(f"not supported SQL dialect: {dialect}")
 
     # use sqlalchemy engine for db connection
     engine = create_engine(database_uri, echo=False)
@@ -66,7 +66,7 @@ def db_connection():
         raise ValueError("No database tables")
 
     if len(desired_tables) > 0:
-        tables = db_tables
+        tables = desired_tables
     else:
         tables = db_tables
 
