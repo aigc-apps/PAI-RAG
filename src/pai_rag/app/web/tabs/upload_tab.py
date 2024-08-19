@@ -49,9 +49,7 @@ def upload_knowledge(
     for file in upload_files:
         base_name = os.path.basename(file.name)
         if base_name not in IGNORE_FILE_LIST:
-            my_upload_files.append(
-                MyUploadFile(base_name, response["task_id"])
-            )
+            my_upload_files.append(MyUploadFile(base_name, response["task_id"]))
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     error_msg = ""
