@@ -25,12 +25,14 @@ def reset_textbox():
 def respond(input_elements: List[Any]):
     global current_session_id
     update_dict = {}
+
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
     # empty input.
     if not update_dict["question"]:
-        yield "", update_dict["chatbot"], 0
+        yield update_dict["chatbot"]
+        return
 
     try:
         rag_client.patch_config(update_dict)
@@ -61,7 +63,10 @@ def respond(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     content = ""
-    chatbot.append((msg, content))
+    if chatbot is None:
+        chatbot = [(msg, content)]
+    else:
+        chatbot.append((msg, content))
     for resp in response_gen:
         chatbot[-1] = (msg, resp.result)
         yield chatbot

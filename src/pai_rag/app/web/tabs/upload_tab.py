@@ -7,6 +7,8 @@ from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 import asyncio
 
+IGNORE_FILE_LIST = [".DS_Store"]
+
 
 def upload_knowledge(
     upload_files,
@@ -46,9 +48,9 @@ def upload_knowledge(
     )
     my_upload_files = []
     for file in upload_files:
-        my_upload_files.append(
-            MyUploadFile(os.path.basename(file.name), response["task_id"])
-        )
+        base_name = os.path.basename(file.name)
+        if base_name not in IGNORE_FILE_LIST:
+            my_upload_files.append(MyUploadFile(base_name, response["task_id"]))
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     error_msg = ""
