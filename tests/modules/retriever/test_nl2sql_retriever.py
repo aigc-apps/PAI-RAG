@@ -91,7 +91,7 @@ def test_sql_retriever(db_connection):
 
     res = sql_retriever.retrieve(sql_query)
 
-    assert res[0].metadata["sql_query"] == sql_query + " limit 100"
+    assert res[0].metadata["query_code_instruction"] == sql_query + " limit 100"
 
 
 @pytest.mark.skipif(
