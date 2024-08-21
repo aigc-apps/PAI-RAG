@@ -141,16 +141,20 @@ class MySQLRetriever(BaseRetriever):
                     node=TextNode(
                         text=raw_response_str,
                         metadata={
-                            "sql_query": query_bundle.query_str,
-                            "result": metadata["result"],
+                            "query_code_instruction": query_bundle.query_str,
+                            "query_output": metadata["result"],
                             "col_keys": metadata["col_keys"],
                         },
                         excluded_embed_metadata_keys=[
-                            "sql_query",
-                            "result",
+                            "query_code_instruction",
+                            "query_output",
                             "col_keys",
                         ],
-                        excluded_llm_metadata_keys=["sql_query", "result", "col_keys"],
+                        excluded_llm_metadata_keys=[
+                            "query_code_instruction",
+                            "query_output",
+                            "col_keys",
+                        ],
                     ),
                     score=1.0,
                 ),
@@ -328,7 +332,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         else:
             query_bundle = str_or_query_bundle
         table_desc_str = self._get_table_context(query_bundle)
-        logger.info(f"> Table desc str: {table_desc_str}")
+        logger.info(f"> Table desc str: {table_desc_str}\n")
 
         response_str = self._llm.predict(
             self._text_to_sql_prompt,
@@ -341,9 +345,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             response_str, query_bundle
         )
         # assume that it's a valid SQL query
-        logger.info(f"> Predicted SQL query: {sql_query_str}")
+        logger.info(f"> Predicted SQL query: {sql_query_str}\n")
         if self._verbose:
-            print(f"> Predicted SQL query: {sql_query_str}")
+            print(f"> Predicted SQL query: {sql_query_str}\n")
 
         if self._sql_only:
             sql_only_node = TextNode(text=f"{sql_query_str}")
@@ -355,7 +359,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     sql_query_str
                 )
                 logger.info(
-                    f"> SQL query result: {retrieved_nodes[0].metadata['result']}"
+                    f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}"
                 )
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
@@ -378,7 +382,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         else:
             query_bundle = str_or_query_bundle
         table_desc_str = self._get_table_context(query_bundle)
-        logger.info(f"> Table desc str: {table_desc_str}")
+        logger.info(f"> Table desc str: {table_desc_str}\n")
 
         response_str = await self._llm.apredict(
             self._text_to_sql_prompt,
@@ -391,7 +395,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             response_str, query_bundle
         )
         # assume that it's a valid SQL query
-        logger.info(f"> Predicted SQL query: {sql_query_str}")
+        logger.info(f"> Predicted SQL query: {sql_query_str}\n")
 
         if self._sql_only:
             sql_only_node = TextNode(text=f"{sql_query_str}")
@@ -404,13 +408,13 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
                 logger.info(
-                    f"> SQL query result: {retrieved_nodes[0].metadata['result']}"
+                    f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
                     err_node = TextNode(text=f"Error: {e!s}")
-                    logger.info(f"async error_node info: {err_node}")
+                    logger.info(f"async error_node info: {err_node}\n")
                     retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
                     metadata = {}
                 else:

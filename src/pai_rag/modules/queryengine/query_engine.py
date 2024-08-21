@@ -36,7 +36,9 @@ class QueryEngineModule(ConfigurableModule):
         multi_modal_llm = new_params["MultiModalLlmModule"]
 
         if config["type"] == "RetrieverQueryEngine":
-            if (not postprocessor) or ("NLSQLRetriever" in retriever.__repr__()):
+            if (not postprocessor) or (
+                "NLSQLRetriever" or "PandasQueryRetriever" in retriever.__repr__()
+            ):
                 logger.info("Query_engine without postprocess created")
                 my_query_engine = MyRetrieverQueryEngine(
                     retriever=retriever, response_synthesizer=synthesizer

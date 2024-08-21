@@ -18,13 +18,20 @@ from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStore
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT, DEFAULT_TEXT_TO_SQL_TMPL
+from pai_rag.utils.prompt_template import (
+    QUERY_GEN_PROMPT,
+    DEFAULT_TEXT_TO_SQL_TMPL,
+    DEFAULT_INSTRUCTION_STR,
+    DEFAULT_PANDAS_PROMPT,
+)
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 from pai_rag.integrations.retrievers.fusion_retriever import MyQueryFusionRetriever
 from pai_rag.modules.retriever.my_nl2sql_retriever import MyNLSQLRetriever
+from pai_rag.integrations.retrievers.data_analysis_retriever import PandasQueryRetriever
 
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import URL
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +61,16 @@ class RetrieverModule(ConfigurableModule):
             )
             logger.info("NL2SQLRetriever used")
             return nl2sql_retriever
+
+        if retrieval_mode == "data_analysis":
+            df = self.get_dataframe(config)
+            analysis_retriever = PandasQueryRetriever(
+                df=df,
+                instruction_str=DEFAULT_INSTRUCTION_STR,
+                pandas_prompt=DEFAULT_PANDAS_PROMPT,
+            )
+            logger.info("PandasQueryRetriever used")
+            return analysis_retriever
 
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever()
@@ -215,3 +232,25 @@ class RetrieverModule(ConfigurableModule):
             table_descriptions = {}
 
         return sql_database, tables, table_descriptions
+
+    def get_dataframe(self, config):
+        file_path = config.get("file_path", None)
+        if file_path is None:
+            raise ValueError("Please provide your file_path")
+        _, file_extension = os.path.splitext(file_path)  # get the extension type
+        if file_extension == ".csv":
+            try:
+                df = pd.read_csv(file_path)
+                return df
+            except Exception as e:
+                logger.info(f"Cannot load the csv file, {e}")
+            return
+        elif file_extension == ".xlsx":
+            try:
+                df = pd.read_excel(file_path)
+                return df
+            except Exception as e:
+                logger.info(f"Cannot load the csv file, {e}")
+                return
+        else:
+            raise ValueError(f"Unsupported file extensions: {file_extension}\n")

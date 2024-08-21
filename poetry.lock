@@ -3329,6 +3329,20 @@ files = [
 llama-index-core = ">=0.10.1,<0.11.0"
 
 [[package]]
+name = "llama-index-experimental"
+version = "0.2.0"
+description = "llama-index experimental package"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+files = [
+    {file = "llama_index_experimental-0.2.0-py3-none-any.whl", hash = "sha256:c252e63fb7595a8be7cf107a565ec37fb78cc10df7bc89e215b6c8dece04d733"},
+    {file = "llama_index_experimental-0.2.0.tar.gz", hash = "sha256:8d36236dd914fa0bea41c41fd6da1ffb15a650b6d34758e07eed862a01b77a9b"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.10.11.post1,<0.11.0"
+
+[[package]]
 name = "llama-index-indices-managed-llama-cloud"
 version = "0.2.7"
 description = "llama-index indices llama-cloud integration"
@@ -9126,4 +9140,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "98071b988f87e148242b8dcab7b8357634df1ab7d3521fdb1344d878192c1547"
+content-hash = "41056d854e2acfe019ae6978d3b7e7ccc5c865856076109c906a39ce47fccef4"
