@@ -57,24 +57,73 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
    Inorder to convert PDF to a PIL Image object, you need to use pdf2image. Please refer to this link to download Poppler first:https://github.com/Belval/pdf2image
 
-- (1) CPU
+### (1) CPU
 
-  Use poetry to install project dependency packages directly:
+Use poetry to install project dependency packages directly:
 
-  ```bash
-  pip install poetry
-  poetry install
-  ```
+```bash
+pip install poetry
+poetry install
+```
 
-- (2) GPU
+#### Configure smart document environment
 
-  First replace the default pyproject.toml with the GPU version, and then use poetry to install the project dependency package:
+1. Install the required packages
 
-  ```bash
-  mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-  pip install poetry
-  poetry install
-  ```
+```bash
+ pip install --extra-index-url https://miropsota.github.io/torch_packages_builder detectron2==<version>+<OPTIONAL_commit_hash>pt<PyTorch_version><compute_platform>
+```
+
+2. Install magic-pdf
+
+```bash
+setopt no_nomatch
+pip install magic-pdf[full]==0.7.0b1 --extra-index-url https://wheels.myhloli.com -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+3. Download model weight files
+
+Refer to [How to Download Model Files](docs/how_to_download_models_en.md) for detailed instructions.
+
+> ❗️After downloading the models, please make sure to verify the completeness of the model files.
+>
+> Check if the model file sizes match the description on the webpage. If possible, use sha256 to verify the integrity of the files. 4. Copy and configure the template file
+> You can find the `magic-pdf.template.json` template configuration file in the root directory of the repository.
+> ❗️Make sure to execute the following command to copy the configuration file to your **user directory**; otherwise, the program will not run.
+>
+> The user directory for Windows is `C:\Users\YourUsername`, for Linux it is `/home/YourUsername`, and for macOS it is `/Users/YourUsername`.
+
+```bash
+cp magic-pdf.template.json ~/magic-pdf.json
+```
+
+Find the `magic-pdf.json` file in your user directory and configure the "models-dir" path to point to the directory where the model weight files were downloaded in [Step 2](#2-download-model-weight-files).
+
+> ❗️Make sure to correctly configure the **absolute path** to the model weight files directory, otherwise the program will not run because it can't find the model files.
+>
+> On Windows, this path should include the drive letter and all backslashes (`\`) in the path should be replaced with forward slashes (`/`) to avoid syntax errors in the JSON file due to escape sequences.
+>
+> For example: If the models are stored in the "models" directory at the root of the D drive, the "model-dir" value should be `D:/models`.
+
+```json
+{
+  "models-dir": "D:/models",
+  "table-config": {
+    "is_table_recog_enable": false,
+    "max_time": 400
+  }
+}
+```
+
+### (2) GPU
+
+First replace the default pyproject.toml with the GPU version, and then use poetry to install the project dependency package:
+
+```bash
+mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+pip install poetry
+poetry install
+```
 
 - Common network timeout issues
 
@@ -94,6 +143,13 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
   poetry lock
   poetry install
   ```
+
+  #### Configure smart document environment
+
+  If your device supports CUDA and meets the GPU requirements of the mainline environment, you can use GPU acceleration. Please select the appropriate guide based on your system:
+
+- [Ubuntu 22.04 LTS + GPU](docs/README_Ubuntu_CUDA_Acceleration_en_US.md)
+- [Windows 10/11 + GPU](docs/README_Windows_CUDA_Acceleration_en_US.md)
 
 3. Load Data
 

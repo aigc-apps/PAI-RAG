@@ -124,7 +124,7 @@ class RagDataLoader:
                 nodes.append(
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
-            elif doc_type == ".md":
+            elif doc_type == ".md" or doc_type == ".pdf":
                 md_node_parser = MarkdownNodeParser(id_func=node_id_hash)
                 nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
             else:
