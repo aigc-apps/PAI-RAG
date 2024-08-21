@@ -68,30 +68,20 @@ poetry install
 
 #### Configure smart document environment
 
-1. Install the required packages
+1. Install the required packages detectron2， refer to link:https://miropsota.github.io/torch_packages_builder/detectron2/ and use pip install to download the version corresponding to Python 3.11.
 
-```bash
- pip install --extra-index-url https://miropsota.github.io/torch_packages_builder detectron2==<version>+<OPTIONAL_commit_hash>pt<PyTorch_version><compute_platform>
-```
+2. Download model weight files
 
-2. Install magic-pdf
-
-```bash
-setopt no_nomatch
-pip install magic-pdf[full]==0.7.0b1 --extra-index-url https://wheels.myhloli.com -i https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-3. Download model weight files
-
-Refer to [How to Download Model Files](docs/how_to_download_models_en.md) for detailed instructions.
+Refer to [How to Download Model Files](docs/minerU/how_to_download_models_en.md) for detailed instructions.
 
 > ❗️After downloading the models, please make sure to verify the completeness of the model files.
 >
 > Check if the model file sizes match the description on the webpage. If possible, use sha256 to verify the integrity of the files. 4. Copy and configure the template file
-> You can find the `magic-pdf.template.json` template configuration file in the root directory of the repository.
-> ❗️Make sure to execute the following command to copy the configuration file to your **user directory**; otherwise, the program will not run.
->
-> The user directory for Windows is `C:\Users\YourUsername`, for Linux it is `/home/YourUsername`, and for macOS it is `/Users/YourUsername`.
+
+3. You can find the [magic-pdf.template.json](magic-pdf.template.json) template configuration file in the root directory of the repository.
+   > ❗️Make sure to execute the following command to copy the configuration file to your **user directory**; otherwise, the program will not run.
+   >
+   > The user directory for Windows is `C:\Users\YourUsername`, for Linux it is `/home/YourUsername`, and for macOS it is `/Users/YourUsername`.
 
 ```bash
 cp magic-pdf.template.json ~/magic-pdf.json
@@ -148,8 +138,8 @@ poetry install
 
   If your device supports CUDA and meets the GPU requirements of the mainline environment, you can use GPU acceleration. Please select the appropriate guide based on your system:
 
-- [Ubuntu 22.04 LTS + GPU](docs/README_Ubuntu_CUDA_Acceleration_en_US.md)
-- [Windows 10/11 + GPU](docs/README_Windows_CUDA_Acceleration_en_US.md)
+- [Ubuntu 22.04 LTS + GPU](docs/minerU/README_Ubuntu_CUDA_Acceleration_en_US.md)
+- [Windows 10/11 + GPU](docs/minerU/README_Windows_CUDA_Acceleration_en_US.md)
 
 3. Load Data
 

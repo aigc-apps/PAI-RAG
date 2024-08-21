@@ -59,10 +59,11 @@ class PaiPDFReader(BaseReader):
             logger.info("process with table summary")
 
     def replace_image_paths(self, pdf_name: str, context: str):
-        combined_pattern = r"!\[.*?\]\((https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp)|([a-zA-Z]:)?(/[^\s]*?\.(jpg|jpeg|png|gif|bmp)|[^\s]+/\w+\.(jpg|jpeg|png|gif|bmp)))\)"
+        combined_pattern = r"!\[.*?\]\((https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp)|([a-zA-Z]:)?(/[^\s]*?\.(jpg|jpeg|png|gif|bmp)|[^\s]+/\w+[\s\w.-]*\.(jpg|jpeg|png|gif|bmp)))\)"
 
         def replace_func(match):
             origin_path = match.group(1) or match.group(3)
+            print(f"origin_path: {origin_path}")
             try:
                 if origin_path.startswith(("http://", "https://")):
                     response = requests.get(origin_path)
@@ -87,7 +88,7 @@ class PaiPDFReader(BaseReader):
                     headers={
                         "x-oss-object-acl": "public-read"
                     },  # set public read to make image accessible
-                    path_prefix="pairag/pdf_images/",
+                    path_prefix=f"pairag/pdf_images/{pdf_name}/",
                 )
                 print(
                     f"Cropped image {image_url} with width={image.width}, height={image.height}."
@@ -114,7 +115,7 @@ class PaiPDFReader(BaseReader):
             title_text = sections[i + 1]
             content = sections[i + 2] if i + 2 < len(sections) else ""
 
-            url_pattern = r"(https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp))"
+            url_pattern = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
             images = re.findall(url_pattern, content)
             if title_level:
                 for image in images:
@@ -314,6 +315,12 @@ class PaiPDFReader(BaseReader):
                 md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
+                with open(
+                    f"/Users/cecelia/PycharmProjects/PAI-RAG/tests/testdata/data/test_back_data/{pdf_name}.md",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write(new_md_content)
 
             return new_md_content
 

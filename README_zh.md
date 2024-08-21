@@ -61,21 +61,14 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
    #### 配置智能文档环境
 
-3. 安装依赖包
-   ```bash
-   pip install --extra-index-url https://miropsota.github.io/torch_packages_builder detectron2==<version>+<OPTIONAL_commit_hash>pt<PyTorch_version><compute_platform>
-   ```
-4. 安装magic-pdf
-   ```bash
-   setopt no_nomatch
-   pip install magic-pdf[full]==0.7.0b1 --extra-index-url https://wheels.myhloli.com -i https://pypi.tuna.tsinghua.edu.cn/simple
-   ```
-5. 下载模型权重文件
-   详细参考 [如何下载模型文件](docs/how_to_download_models_zh_cn.md)
+3. 需要下载detectron2, 跳转到链接：https://miropsota.github.io/torch_packages_builder/detectron2 并用 pip install下载python 3.11对应环境的版本。
 
-   > > ❗️模型下载后请务必检查模型文件是否下载完整
-   > >
-   > > 请检查目录下的模型文件大小与网页上描述是否一致，如果可以的话，最好通过sha256校验模型是否下载完整
+4. 下载模型权重文件
+   详细参考 [如何下载模型文件](docs/minerU/how_to_download_models_zh_cn.md)
+
+> > ❗️模型下载后请务必检查模型文件是否下载完整
+> >
+> > 请检查目录下的模型文件大小与网页上描述是否一致，如果可以的话，最好通过sha256校验模型是否下载完整
 
 6. 拷贝配置文件并进行配置
    在仓库根目录可以获得 [magic-pdf.template.json](magic-pdf.template.json) 配置模版文件
@@ -132,8 +125,8 @@ poetry install
 
 - 如果您的设备支持CUDA，且满足主线环境中的显卡要求，则可以使用GPU加速，请根据自己的系统选择适合的教程：
 
-- [Ubuntu22.04LTS + GPU](docs/README_Ubuntu_CUDA_Acceleration_zh_CN.md)
-- [Windows10/11 + GPU](docs/README_Windows_CUDA_Acceleration_zh_CN.md)
+- [Ubuntu22.04LTS + GPU](docs/minerU/README_Ubuntu_CUDA_Acceleration_zh_CN.md)
+- [Windows10/11 + GPU](docs/minerU/README_Windows_CUDA_Acceleration_zh_CN.md)
 
 3. 加载数据
 

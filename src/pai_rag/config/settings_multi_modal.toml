@@ -18,6 +18,7 @@ persist_path = "localdata/storage"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
+enable_multimodal = true
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
