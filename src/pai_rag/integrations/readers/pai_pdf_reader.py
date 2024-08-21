@@ -105,7 +105,7 @@ class PaiPDFReader(BaseReader):
     def extract_images(markdown_text):
         # split_markdown_by_title
         title_pattern = r"^(#+)\s*(.*)$"
-
+        print("markdown_text", markdown_text)
         sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
 
         output = {}
@@ -315,12 +315,12 @@ class PaiPDFReader(BaseReader):
                 md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
-                with open(
-                    f"/Users/cecelia/PycharmProjects/PAI-RAG/tests/testdata/data/test_back_data/{pdf_name}.md",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    f.write(new_md_content)
+                # with open(
+                #     f"localdata/{pdf_name}.md",
+                #     "w",
+                #     encoding="utf-8",
+                # ) as f:
+                #     f.write(new_md_content)
 
             return new_md_content
 

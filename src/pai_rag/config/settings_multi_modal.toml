@@ -7,6 +7,15 @@ version = "0.1.1"
 [rag.agent]
 type = "react"
 
+[rag.agent.custom_config]
+agent_file_path = ""
+
+[rag.agent.intent_detection]
+type = ""
+
+[rag.agent.tool]
+type = "" # [built-in", "python", "api"]
+
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
 
@@ -38,9 +47,6 @@ retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
 
-[rag.function_calling_llm]
-source = ""
-
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
@@ -53,6 +59,9 @@ vector_store.type = "FAISS"
 [rag.llm]
 source = "DashScope"
 name = "qwen-turbo"
+
+[rag.llm.function_calling_llm]
+source = ""
 
 [rag.llm.multi_modal]
 source = "DashScope"
@@ -87,13 +96,10 @@ type = "SimpleMultiModalQueryEngine"
 
 [rag.retriever]
 similarity_top_k = 3
+image_similarity_top_k = 2
 retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
-
-[rag.tool]
-type = ["calculator", "weather"]
-weather_api_key = ""

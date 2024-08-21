@@ -31,11 +31,15 @@ class RetrieverModule(ConfigurableModule):
         bm25_index = new_params["BM25IndexModule"]
 
         similarity_top_k = config.get("similarity_top_k", 5)
+        image_similarity_top_k = config.get("image_similarity_top_k", 2)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
 
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
-            return index.vector_index.as_retriever()
+            return index.vector_index.as_retriever(
+                similarity_top_k=similarity_top_k,
+                image_similarity_top_k=image_similarity_top_k,
+            )
         # Special handle elastic search
         elif index.vectordb_type == "milvus":
             if retrieval_mode == "embedding":
