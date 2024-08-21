@@ -9,7 +9,6 @@ from pai_rag.app.web.ui_constants import (
 )
 
 
-
 def clear_history(chatbot):
     rag_client.clear_history()
     chatbot = []

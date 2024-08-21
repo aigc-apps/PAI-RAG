@@ -188,9 +188,7 @@ class RagApplication:
             return LlmResponse(answer=response.response, session_id=session_id)
         else:
             response = await llm_chat_engine.astream_chat(query.question)
-            result_info = {
-                "session_id": session_id
-            }
+            result_info = {"session_id": session_id}
             return event_generator_async(response=response, extra_info=result_info)
 
     async def aquery_agent(self, query: LlmQuery) -> LlmResponse:
