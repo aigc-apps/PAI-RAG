@@ -41,16 +41,14 @@ class BingSearchTool:
     def _search(
         self,
         query: str,
-        lang: str = None,
-        count: Optional[int] = None,
     ):
         response = requests.get(
             self.endpoint,
             headers={"Ocp-Apim-Subscription-Key": self.api_key},
             params={
                 "q": query,
-                "mkt": lang or self.search_lang,
-                "count": count or self.search_count,
+                "mkt": self.search_lang,
+                "count": self.search_count,
                 "responseFilter": "webpages",
             },
             timeout=5,
@@ -83,7 +81,6 @@ class BingSearchTool:
     def _rank_nodes(
         self,
         nodes: List[BaseNode],
-        similarity_top_k: int,
         query_embedding: Any,
     ) -> List[NodeWithScore]:
         faiss_index = faiss.IndexFlatIP(self.embed_dims)
@@ -96,7 +93,7 @@ class BingSearchTool:
 
         query_embedding = cast(List[float], query_embedding)
         query_embedding_np = np.array(query_embedding, dtype="float32")[np.newaxis, :]
-        dists, indices = faiss_index.search(query_embedding_np, similarity_top_k)
+        dists, indices = faiss_index.search(query_embedding_np, self.search_count)
         faiss_index.reset()
         dists = list(dists[0])
         # if empty, then return an empty response
@@ -119,15 +116,20 @@ class BingSearchTool:
         lang: str = None,
         search_top_k: Optional[int] = None,
     ):
+        if lang:
+            self.search_lang = lang
+        if search_top_k:
+            self.search_count = search_top_k
+
         query_embedding = self.embed_model.get_query_embedding(query)
 
-        docs = self._search(query=query, count=search_top_k, lang=lang)
+        docs = self._search(query=query)
         logger.info(f"Get {len(docs)} docs from url.")
 
         nodes = self.node_parser.get_nodes_from_documents(docs)
         logger.info(f"Parsed {len(docs)} nodes from doc.")
 
-        nodes_result = self._rank_nodes(nodes, search_top_k, query_embedding)
+        nodes_result = self._rank_nodes(nodes, query_embedding)
         logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
 
         return await self.synthesizer.asynthesize(query=query, nodes=nodes_result)
@@ -135,22 +137,26 @@ class BingSearchTool:
     async def astream_query(
         self,
         query: str,
-        similarity_top_k: int = 15,
         lang: str = None,
         search_top_k: Optional[int] = None,
     ):
+        if lang:
+            self.search_lang = lang
+        if search_top_k:
+            self.search_count = search_top_k
+
         streaming = self.synthesizer._streaming
         self.synthesizer._streaming = True
 
         query_embedding = self.embed_model.get_query_embedding(query)
 
-        docs = self._search(query=query, count=search_top_k, lang=lang)
+        docs = self._search(query=query)
         logger.info(f"Get {len(docs)} docs from url.")
 
         nodes = self.node_parser.get_nodes_from_documents(docs)
         logger.info(f"Parsed {len(docs)} nodes from doc.")
 
-        nodes_result = self._rank_nodes(nodes, similarity_top_k, query_embedding)
+        nodes_result = self._rank_nodes(nodes, query_embedding)
         logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
 
         stream_response = await self.synthesizer.asynthesize(

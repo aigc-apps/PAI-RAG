@@ -45,6 +45,9 @@ def respond(input_elements: List[Any]):
     if not update_dict["include_history"]:
         current_session_id = None
 
+    content = ""
+    chatbot.append((msg, content))
+
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
@@ -61,15 +64,12 @@ def respond(input_elements: List[Any]):
             response_gen = rag_client.query(
                 msg, session_id=current_session_id, stream=is_streaming
             )
+        for resp in response_gen:
+            chatbot[-1] = (msg, resp.result)
+            yield chatbot
 
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-    content = ""
-    chatbot.append((msg, content))
-    for resp in response_gen:
-        chatbot[-1] = (msg, resp.result)
-        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
