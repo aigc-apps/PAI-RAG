@@ -20,13 +20,13 @@ class SearchModule(ConfigurableModule):
         config = new_params[MODULE_PARAM_CONFIG] or {}
         api_key = config.get("search_api_key") or os.environ.get("BING_SEARCH_KEY")
         if not api_key:
-            logger.info(f"[AiSearch] Not enabled.")
+            logger.info("[AiSearch] Not enabled.")
             return None
-        
+
         embed_model = new_params["EmbeddingModule"]
         synthesizer = new_params["SynthesizerModule"]
 
-        logger.info(f"[AiSearch] Using BING searcher.")
+        logger.info("[AiSearch] Using BING searcher.")
         return BingSearchTool(
             api_key=api_key,
             embed_model=embed_model,

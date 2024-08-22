@@ -24,7 +24,7 @@ class BingSearchTool:
         synthesizer: BaseSynthesizer = None,
         endpoint: str = DEFAULT_ENDPOINT_BASE_URL,
         search_count: int = DEFAULT_SEARCH_COUNT,
-        search_lang: str = DEFAULT_LANG
+        search_lang: str = DEFAULT_LANG,
     ):
         self.api_key = api_key
         self.node_parser = SentenceSplitter(chunk_size=800, chunk_overlap=100)
@@ -37,7 +37,7 @@ class BingSearchTool:
 
         self.endpoint = endpoint
         self.html_reader = ReadabilityWebPageReader(wait_until="domcontentloaded")
-    
+
     def _search(
         self,
         query: str,
@@ -46,20 +46,17 @@ class BingSearchTool:
     ):
         response = requests.get(
             self.endpoint,
-            headers={"Ocp-Apim-Subscription-Key":self.api_key},
+            headers={"Ocp-Apim-Subscription-Key": self.api_key},
             params={
                 "q": query,
                 "mkt": lang or self.search_lang,
                 "count": count or self.search_count,
-                "responseFilter": "webpages"
+                "responseFilter": "webpages",
             },
         )
         return response.json()
 
-    async def _aload_urls(
-        self,
-        urls: List[str]
-    ):
+    async def _aload_urls(self, urls: List[str]):
         if not urls:
             return []
 
@@ -70,9 +67,9 @@ class BingSearchTool:
             for doc in temp_docs:
                 doc.metadata["file_name"] = url
             docs.extend(temp_docs)
-        
+
         return docs
-    
+
     def _rank_nodes(
         self,
         nodes: List[BaseNode],
@@ -80,16 +77,16 @@ class BingSearchTool:
         query_embedding: Any,
     ) -> List[NodeWithScore]:
         faiss_index = faiss.IndexFlatIP(self.embed_dims)
-        embeddings = self.embed_model.get_text_embedding_batch([node.text for node in nodes])
+        embeddings = self.embed_model.get_text_embedding_batch(
+            [node.text for node in nodes]
+        )
         for embedding in embeddings:
             text_embedding_np = np.array(embedding, dtype="float32")[np.newaxis, :]
             faiss_index.add(text_embedding_np)
-        
+
         query_embedding = cast(List[float], query_embedding)
         query_embedding_np = np.array(query_embedding, dtype="float32")[np.newaxis, :]
-        dists, indices = faiss_index.search(
-            query_embedding_np, similarity_top_k
-        )
+        dists, indices = faiss_index.search(query_embedding_np, similarity_top_k)
         faiss_index.reset()
         dists = list(dists[0])
         # if empty, then return an empty response
@@ -106,7 +103,7 @@ class BingSearchTool:
             nodes_result.append(NodeWithScore(node=nodes[idx], score=dist))
 
         return nodes_result
-    
+
     async def aquery(
         self,
         query: str,
@@ -129,7 +126,7 @@ class BingSearchTool:
         nodes_result = self._rank_nodes(nodes, similarity_top_k, query_embedding)
 
         return await self.synthesizer.asynthesize(query=query, nodes=nodes_result)
-    
+
     async def astream_query(
         self,
         query: str,
@@ -154,7 +151,9 @@ class BingSearchTool:
 
         nodes_result = self._rank_nodes(nodes, similarity_top_k, query_embedding)
 
-        stream_response = await self.synthesizer.asynthesize(query=query, nodes=nodes_result)
+        stream_response = await self.synthesizer.asynthesize(
+            query=query, nodes=nodes_result
+        )
         self.synthesizer._streaming = streaming
-        
+
         return stream_response

@@ -38,6 +38,7 @@ async def aquery_llm(query: RagQuery):
             media_type="text/event-stream",
         )
 
+
 @router.post("/query/search")
 async def aquery_search(query: RagQuery):
     response = await rag_service.aquery_search(query)
@@ -48,7 +49,7 @@ async def aquery_search(query: RagQuery):
             response,
             media_type="text/event-stream",
         )
-    
+
 
 @router.post("/query/retrieval")
 async def aquery_retrieval(query: RetrievalQuery):

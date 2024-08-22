@@ -90,7 +90,6 @@ class CnClipEmbedding(MultiModalEmbedding):
 
             embeddings = self._model.encode_image(image)
             normed_embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
-            print(normed_embeddings.tolist()[0][-10:])
             return normed_embeddings.tolist()[0]
 
 

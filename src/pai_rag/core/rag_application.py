@@ -114,17 +114,19 @@ class RagApplication:
 
         Returns:
             RagResponse
-        """            
+        """
         session_id = query.session_id or uuid_generator()
         self.logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id
             )
-        
+
         sessioned_config = self.config
 
-        searcher: BingSearchTool = module_registry.get_module_with_config("SearchModule", sessioned_config)
+        searcher: BingSearchTool = module_registry.get_module_with_config(
+            "SearchModule", sessioned_config
+        )
         if not searcher:
             raise ValueError("AI search not enabled. Please add search API key.")
         if not query.stream:
@@ -165,14 +167,14 @@ class RagApplication:
 
         Returns:
             RagResponse
-        """            
+        """
         session_id = query.session_id or uuid_generator()
         self.logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id
             )
-        
+
         sessioned_config = self.config
 
         if query.vector_db and query.vector_db.faiss_path:

@@ -108,10 +108,7 @@ class RagWebClient:
                             f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
                         )
                     else:
-                        referenced_docs += (
-                            f'[{i+1}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
-                        )
-
+                        referenced_docs += f'[{i+1}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
 
         formatted_answer = ""
         if session_id:
@@ -158,9 +155,7 @@ class RagWebClient:
         session_id: str = None,
         stream: bool = False,
     ):
-        q = dict(
-            question=text, session_id=session_id, stream=stream, with_intent=False
-        )
+        q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
         r = requests.post(self.search_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -178,7 +173,7 @@ class RagWebClient:
                 yield self._format_rag_response(
                     text, chunk_response, session_id=session_id, stream=stream
                 )
-    
+
     def query_llm(
         self,
         text: str,

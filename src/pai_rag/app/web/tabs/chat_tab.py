@@ -76,7 +76,7 @@ def create_chat_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
             query_type = gr.Radio(
-                ["Retrieval", "LLM",  "WebSearch", "RAG (Retrieval + LLM)"],
+                ["Retrieval", "LLM", "WebSearch", "RAG (Retrieval + LLM)"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
                 value="RAG (Retrieval + LLM)",
@@ -228,8 +228,19 @@ def create_chat_tab() -> Dict[str, Any]:
                     "Parameters of Web Search", open=False
                 )
                 with search_model_argument:
-                    search_api_key = gr.Text(label="Bing API Key", value="", type="password", elem_id="search_api_key")
-                    search_count = gr.Slider(label="Search Count", minimum=5, maximum=30, step=1, elem_id="search_count")
+                    search_api_key = gr.Text(
+                        label="Bing API Key",
+                        value="",
+                        type="password",
+                        elem_id="search_api_key",
+                    )
+                    search_count = gr.Slider(
+                        label="Search Count",
+                        minimum=5,
+                        maximum=30,
+                        step=1,
+                        elem_id="search_count",
+                    )
                     search_lang = gr.Radio(label="Language", choices=["zh-CN", "en-US"])
                 search_args = {search_api_key, search_count, search_lang}
 
@@ -322,7 +333,6 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_col: gr.update(visible=True),
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
-                        model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
                     }
                 elif query_type == "RAG (Retrieval + LLM)":
@@ -339,7 +349,15 @@ def create_chat_tab() -> Dict[str, Any]:
             query_type.input(
                 fn=change_query_radio,
                 inputs=query_type,
-                outputs=[vs_col, vec_model_argument, search_model_argument, search_col, llm_col, model_argument, lc_col],
+                outputs=[
+                    vs_col,
+                    vec_model_argument,
+                    search_model_argument,
+                    search_col,
+                    llm_col,
+                    model_argument,
+                    lc_col,
+                ],
             )
 
         with gr.Column(scale=8):
@@ -394,5 +412,5 @@ def create_chat_tab() -> Dict[str, Any]:
             text_qa_template.elem_id: text_qa_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,
-            search_count.elem_id: search_count
+            search_count.elem_id: search_count,
         }

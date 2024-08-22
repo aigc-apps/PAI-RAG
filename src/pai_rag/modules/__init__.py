@@ -49,7 +49,7 @@ ALL_MODULES = [
     "NodesEnhancementModule",
     "IntentDetectionModule",
     "CustomConfigModule",
-    "SearchModule"
+    "SearchModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]
