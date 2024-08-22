@@ -64,6 +64,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
   ```bash
   pip install poetry
   poetry install
+  playwright install # For web search
   ```
 
 - (2) GPU
@@ -74,6 +75,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
   pip install poetry
   poetry install
+  playwright install #  # For web search
   ```
 
 - Common network timeout issues

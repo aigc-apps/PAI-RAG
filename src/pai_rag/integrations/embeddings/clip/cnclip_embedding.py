@@ -39,6 +39,7 @@ class CnClipEmbedding(MultiModalEmbedding):
             raise ValueError(f"Unknown ChineseClip model: {model_name}.")
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
+
         self._model, self._preprocess = load_from_name(
             self.model_name, device=self._device, download_root=DEFAULT_CNCLIP_MODEL_DIR
         )

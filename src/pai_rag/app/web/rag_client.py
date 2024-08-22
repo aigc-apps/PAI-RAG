@@ -40,6 +40,10 @@ class RagWebClient:
         return f"{self.endpoint}service/query"
 
     @property
+    def search_url(self):
+        return f"{self.endpoint}service/query/search"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}service/query/llm"
 
@@ -91,13 +95,23 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
         elif is_finished:
+            seen_filenames = set()
+            print(docs)
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
-                if filename:
+                if filename and filename not in seen_filenames:
+                    seen_filenames.add(filename)
                     formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    referenced_docs += (
-                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                    )
+                    title = doc["metadata"].get("title")
+                    if not title:
+                        referenced_docs += (
+                            f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                        )
+                    else:
+                        referenced_docs += (
+                            f'[{i+1}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+                        )
+
 
         formatted_answer = ""
         if session_id:
@@ -138,6 +152,33 @@ class RagWebClient:
                     text, chunk_response, session_id=session_id, stream=stream
                 )
 
+    def query_search(
+        self,
+        text: str,
+        session_id: str = None,
+        stream: bool = False,
+    ):
+        q = dict(
+            question=text, session_id=session_id, stream=stream, with_intent=False
+        )
+        r = requests.post(self.search_url, json=q, stream=True)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            yield self._format_rag_response(
+                text, response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    text, chunk_response, session_id=session_id, stream=stream
+                )
+    
     def query_llm(
         self,
         text: str,

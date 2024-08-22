@@ -59,6 +59,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
   ```bash
   pip install poetry
   poetry install
+  playwright install # 如果要使用web search功能
   ```
 
 - (2) GPU环境
@@ -69,6 +70,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
   pip install poetry
   poetry install
+  playwright install # 如果要使用web search功能
   ```
 
 - 常见网络超时问题
