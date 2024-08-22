@@ -35,7 +35,7 @@ TABLE_SUMMARY_MAX_CELL_TOKEN = 20
 TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
-IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp)|([a-zA-Z]:)?(/[^\s]*?\.(jpg|jpeg|png|gif|bmp)|[^\s]+/\w+[\s\w.-]*\.(jpg|jpeg|png|gif|bmp)))\)"
+IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
 
 
 class PaiPDFReader(BaseReader):
@@ -94,7 +94,7 @@ class PaiPDFReader(BaseReader):
                     headers={
                         "x-oss-object-acl": "public-read"
                     },  # set public read to make image accessible
-                    path_prefix=f"pairag/pdf_images/{pdf_name}/",
+                    path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
                 )
                 print(
                     f"Cropped image {image_url} with width={image.width}, height={image.height}."
@@ -119,6 +119,7 @@ class PaiPDFReader(BaseReader):
             title_level = sections[i]
             title_text = sections[i + 1]
             content = sections[i + 2] if i + 2 < len(sections) else ""
+            content_without_images_url = PaiPDFReader.remove_image_paths(content)
 
             url_pattern = IMAGE_URL_PATTERN
             images = re.findall(url_pattern, content)
@@ -126,7 +127,9 @@ class PaiPDFReader(BaseReader):
                 for image in images:
                     image_url = image[0]
                     if len(image_url) > 0:
-                        output[image_url] = f"{title_text}: {content.strip()}"
+                        output[
+                            image_url
+                        ] = f"{title_text}: {content_without_images_url.strip()}"
         return output
 
     @staticmethod
@@ -360,7 +363,7 @@ class PaiPDFReader(BaseReader):
         if not isinstance(file_path, str) and not isinstance(file_path, Path):
             raise TypeError("file_path must be a string or Path.")
 
-        md_content = self.parse_pdf(file_path, "ocr")
+        md_content = self.parse_pdf(file_path, "auto")
         images_with_content = PaiPDFReader.extract_images(md_content)
         md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
 
