@@ -53,6 +53,7 @@ class BingSearchTool:
                 "count": count or self.search_count,
                 "responseFilter": "webpages",
             },
+            timeout=5,
         )
         response_json = response.json()
         titles = [value["name"] for value in response_json["webPages"]["value"]]
