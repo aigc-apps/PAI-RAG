@@ -241,7 +241,12 @@ def create_chat_tab() -> Dict[str, Any]:
                         step=1,
                         elem_id="search_count",
                     )
-                    search_lang = gr.Radio(label="Language", choices=["zh-CN", "en-US"])
+                    search_lang = gr.Radio(
+                        label="Language",
+                        choices=["zh-CN", "en-US"],
+                        value="zh-CN",
+                        elem_id="search_lang",
+                    )
                 search_args = {search_api_key, search_count, search_lang}
 
             with gr.Column(visible=True) as lc_col:

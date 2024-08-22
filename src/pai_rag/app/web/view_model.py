@@ -607,5 +607,4 @@ class ViewModel(BaseModel):
         settings["search_api_key"] = {"value": self.search_api_key}
         settings["search_lang"] = {"value": self.search_lang}
         settings["search_count"] = {"value": self.search_count}
-        print(settings)
         return settings

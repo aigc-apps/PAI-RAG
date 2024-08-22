@@ -1,4 +1,3 @@
-from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.app.api.models import (
     RagQuery,
@@ -124,7 +123,7 @@ class RagApplication:
 
         sessioned_config = self.config
 
-        searcher: BingSearchTool = module_registry.get_module_with_config(
+        searcher = module_registry.get_module_with_config(
             "SearchModule", sessioned_config
         )
         if not searcher:

@@ -1,8 +1,8 @@
 import numpy as np
 import requests
 from typing import Any, List, Optional, cast
-from llama_index.readers.web import ReadabilityWebPageReader
-from llama_index.core.schema import NodeWithScore, BaseNode
+from llama_index.readers.web import BeautifulSoupWebReader
+from llama_index.core.schema import NodeWithScore, BaseNode, Document
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.response_synthesizers import BaseSynthesizer
@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
-DEFAULT_SEARCH_COUNT = 5
+DEFAULT_SEARCH_COUNT = 10
 DEFAULT_LANG = "zh-CN"
 
 
@@ -36,7 +36,7 @@ class BingSearchTool:
         self.search_lang = search_lang
 
         self.endpoint = endpoint
-        self.html_reader = ReadabilityWebPageReader(wait_until="domcontentloaded")
+        self.html_reader = BeautifulSoupWebReader()
 
     def _search(
         self,
@@ -54,19 +54,28 @@ class BingSearchTool:
                 "responseFilter": "webpages",
             },
         )
-        return response.json()
+        response_json = response.json()
+        titles = [value["name"] for value in response_json["webPages"]["value"]]
+        snippets = [value["snippet"] for value in response_json["webPages"]["value"]]
+        urls = [value["url"] for value in response_json["webPages"]["value"]]
 
-    async def _aload_urls(self, urls: List[str]):
-        if not urls:
-            return []
+        logger.info(f"Get {len(urls)} url links using Bing Search.")
 
-        # 并行可能会有点问题
         docs = []
-        for url in urls:
-            temp_docs = await self.html_reader.async_load_data(url)
-            for doc in temp_docs:
+        for i, url in enumerate(urls):
+            try:
+                one_doc_list = self.html_reader.load_data(
+                    [url], include_url_in_text=False
+                )
+            except Exception:
+                logger.info(f"Crawle {url} failed. Skipping.")
+                one_doc_list = [Document(text=snippets[i], id_=url, extra_info={})]
+
+            for doc in one_doc_list:
+                doc.metadata = {}
                 doc.metadata["file_name"] = url
-            docs.extend(temp_docs)
+                doc.metadata["title"] = titles[i]
+            docs.extend(one_doc_list)
 
         return docs
 
@@ -101,55 +110,47 @@ class BingSearchTool:
             if idx < 0:
                 continue
             nodes_result.append(NodeWithScore(node=nodes[idx], score=dist))
-
         return nodes_result
 
     async def aquery(
         self,
         query: str,
-        similarity_top_k: int = 10,
-        lang: str = DEFAULT_LANG,
-        search_top_k: int = DEFAULT_SEARCH_COUNT,
+        lang: str = None,
+        search_top_k: Optional[int] = None,
     ):
         query_embedding = self.embed_model.get_query_embedding(query)
 
-        response_json = self._search(query=query, count=search_top_k, lang=lang)
-        urls = [value["url"] for value in response_json["webPages"]["value"]]
-        logger.info(f"Get {len(urls)} url links using Bing Search.")
-
-        docs = await self._aload_urls(urls)
+        docs = self._search(query=query, count=search_top_k, lang=lang)
         logger.info(f"Get {len(docs)} docs from url.")
 
         nodes = self.node_parser.get_nodes_from_documents(docs)
         logger.info(f"Parsed {len(docs)} nodes from doc.")
 
-        nodes_result = self._rank_nodes(nodes, similarity_top_k, query_embedding)
+        nodes_result = self._rank_nodes(nodes, search_top_k, query_embedding)
+        logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
 
         return await self.synthesizer.asynthesize(query=query, nodes=nodes_result)
 
     async def astream_query(
         self,
         query: str,
-        similarity_top_k: int = 10,
-        lang: str = DEFAULT_LANG,
-        search_top_k: int = DEFAULT_SEARCH_COUNT,
+        similarity_top_k: int = 15,
+        lang: str = None,
+        search_top_k: Optional[int] = None,
     ):
         streaming = self.synthesizer._streaming
         self.synthesizer._streaming = True
 
         query_embedding = self.embed_model.get_query_embedding(query)
 
-        response_json = self._search(query=query, count=search_top_k, lang=lang)
-        urls = [value["url"] for value in response_json["webPages"]["value"]]
-        logger.info(f"Get {len(urls)} url links using Bing Search.")
-
-        docs = await self._aload_urls(urls)
+        docs = self._search(query=query, count=search_top_k, lang=lang)
         logger.info(f"Get {len(docs)} docs from url.")
 
         nodes = self.node_parser.get_nodes_from_documents(docs)
         logger.info(f"Parsed {len(docs)} nodes from doc.")
 
         nodes_result = self._rank_nodes(nodes, similarity_top_k, query_embedding)
+        logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
 
         stream_response = await self.synthesizer.asynthesize(
             query=query, nodes=nodes_result

@@ -96,7 +96,7 @@ class RagWebClient:
             return response
         elif is_finished:
             seen_filenames = set()
-            print(docs)
+            file_idx = 1
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
                 if filename and filename not in seen_filenames:
@@ -104,12 +104,11 @@ class RagWebClient:
                     formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
                     title = doc["metadata"].get("title")
                     if not title:
-                        referenced_docs += (
-                            f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                        )
+                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
                     else:
-                        referenced_docs += f'[{i+1}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
 
+                    file_idx += 1
         formatted_answer = ""
         if session_id:
             new_query = response["new_query"]
