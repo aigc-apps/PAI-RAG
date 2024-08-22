@@ -12,7 +12,10 @@ from llama_index.core.indices.query.query_transform import HyDEQueryTransform
 from llama_index.core.query_engine import TransformQueryEngine
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.utils.prompt_template import DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL
+from pai_rag.utils.prompt_template import (
+    DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
+    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -86,12 +89,14 @@ class QueryEngineModule(ConfigurableModule):
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
+                    image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                 )
             elif isinstance(postprocessor, List):
                 multi_modal_query_engine = MySimpleMultiModalQueryEngine(
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
+                    image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                     node_postprocessors=postprocessor,
                 )
             else:
@@ -99,6 +104,7 @@ class QueryEngineModule(ConfigurableModule):
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
+                    image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                     node_postprocessors=[postprocessor],
                 )
             logger.info("SimpleMultiModalQueryEngine instance created")
