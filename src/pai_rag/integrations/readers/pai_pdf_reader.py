@@ -34,6 +34,8 @@ TABLE_SUMMARY_MAX_COL_NUM = 10
 TABLE_SUMMARY_MAX_CELL_TOKEN = 20
 TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
+IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
+IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp)|([a-zA-Z]:)?(/[^\s]*?\.(jpg|jpeg|png|gif|bmp)|[^\s]+/\w+[\s\w.-]*\.(jpg|jpeg|png|gif|bmp)))\)"
 
 
 class PaiPDFReader(BaseReader):
@@ -58,8 +60,12 @@ class PaiPDFReader(BaseReader):
         if self.enable_table_summary:
             logger.info("process with table summary")
 
+    @staticmethod
+    def remove_image_paths(content: str):
+        return re.sub(IMAGE_URL_PATTERN, "", content)
+
     def replace_image_paths(self, pdf_name: str, context: str):
-        combined_pattern = r"!\[.*?\]\((https?://[^\s]+?\.(jpg|jpeg|png|gif|bmp)|([a-zA-Z]:)?(/[^\s]*?\.(jpg|jpeg|png|gif|bmp)|[^\s]+/\w+[\s\w.-]*\.(jpg|jpeg|png|gif|bmp)))\)"
+        combined_pattern = IMAGE_COMBINED_PATTERN
 
         def replace_func(match):
             origin_path = match.group(1) or match.group(3)
@@ -105,7 +111,6 @@ class PaiPDFReader(BaseReader):
     def extract_images(markdown_text):
         # split_markdown_by_title
         title_pattern = r"^(#+)\s*(.*)$"
-        print("markdown_text", markdown_text)
         sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
 
         output = {}
@@ -115,7 +120,7 @@ class PaiPDFReader(BaseReader):
             title_text = sections[i + 1]
             content = sections[i + 2] if i + 2 < len(sections) else ""
 
-            url_pattern = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
+            url_pattern = IMAGE_URL_PATTERN
             images = re.findall(url_pattern, content)
             if title_level:
                 for image in images:
@@ -315,12 +320,6 @@ class PaiPDFReader(BaseReader):
                 md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
-                # with open(
-                #     f"localdata/{pdf_name}.md",
-                #     "w",
-                #     encoding="utf-8",
-                # ) as f:
-                #     f.write(new_md_content)
 
             return new_md_content
 
@@ -363,6 +362,15 @@ class PaiPDFReader(BaseReader):
 
         md_content = self.parse_pdf(file_path, "ocr")
         images_with_content = PaiPDFReader.extract_images(md_content)
+        md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
+
+        with open(
+            "/Users/cecelia/PycharmProjects/PAI-RAG/tests/testdata/data/test_back_data/test.md",
+            "w",
+            encoding="utf-8",
+        ) as f:
+            f.write(md_contend_without_images_url)
+
         docs = []
         image_documents = []
         text_image_documents = []
@@ -387,12 +395,12 @@ class PaiPDFReader(BaseReader):
         if metadata:
             if not extra_info:
                 extra_info = {}
-            doc = Document(text=md_content, extra_info=extra_info)
+            doc = Document(text=md_contend_without_images_url, extra_info=extra_info)
 
             docs.append(doc)
         else:
             doc = Document(
-                text=md_content,
+                text=md_contend_without_images_url,
                 extra_info=dict(),
             )
             docs.append(doc)
