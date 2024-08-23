@@ -366,19 +366,6 @@ class PaiPDFReader(BaseReader):
         images_with_content = PaiPDFReader.combine_images_with_text(md_content)
         md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
 
-        with open(
-            "/Users/cecelia/PycharmProjects/PAI-RAG/tests/testdata/data/test_back_data/test.md",
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write(md_content)
-        with open(
-            "/Users/cecelia/PycharmProjects/PAI-RAG/tests/testdata/data/test_back_data/test_origin.md",
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write(md_contend_without_images_url)
-
         docs = []
         image_documents = []
         text_image_documents = []
