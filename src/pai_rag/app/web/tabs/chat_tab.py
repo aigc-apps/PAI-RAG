@@ -136,7 +136,19 @@ def create_chat_tab() -> Dict[str, Any]:
                             maximum=100,
                             step=1,
                             elem_id="similarity_top_k",
-                            label="Top K (choose between 0 and 100)",
+                            label="Text Top K (choose between 0 and 100)",
+                        )
+                        image_similarity_top_k = gr.Slider(
+                            minimum=0,
+                            maximum=10,
+                            step=1,
+                            elem_id="image_similarity_top_k",
+                            label="Image Top K (choose between 0 and 10)",
+                        )
+                        need_image = gr.Checkbox(
+                            label="Need to display images.",
+                            info="Need to display images.",
+                            elem_id="need_image",
                         )
                         similarity_threshold = gr.Slider(
                             minimum=0,
@@ -196,6 +208,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     vector_weight,
                     keyword_weight,
                     similarity_top_k,
+                    image_similarity_top_k,
+                    need_image,
                     similarity_threshold,
                     reranker_model,
                 }
@@ -351,6 +365,8 @@ def create_chat_tab() -> Dict[str, Any]:
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,
+            image_similarity_top_k.elem_id: image_similarity_top_k,
+            need_image.elem_id: need_image,
             retrieval_mode.elem_id: retrieval_mode,
             reranker_type.elem_id: reranker_type,
             reranker_model.elem_id: reranker_model,

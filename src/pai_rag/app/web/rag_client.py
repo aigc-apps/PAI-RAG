@@ -2,7 +2,6 @@ import json
 from typing import Any
 import requests
 import html
-import markdown
 import httpx
 import os
 import re
@@ -186,11 +185,11 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
-                html_content = markdown.markdown(doc["text"])
+                # html_content = markdown.markdown()
                 media_url = doc.get("metadata", {}).get("image_url", None)
                 if media_url:
                     media_url = f"""<img src="{media_url}"/>"""
-                safe_html_content = html.escape(html_content).replace("\n", "<br>")
+                safe_html_content = html.escape(doc["text"]).replace("\n", "<br>")
                 formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
                     i + 1, doc["score"], safe_html_content, media_url
                 )
