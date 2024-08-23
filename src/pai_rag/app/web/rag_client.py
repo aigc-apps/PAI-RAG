@@ -187,7 +187,14 @@ class RagWebClient:
             for i, doc in enumerate(response["docs"]):
                 # html_content = markdown.markdown()
                 media_url = doc.get("metadata", {}).get("image_url", None)
-                if media_url:
+                if media_url and isinstance(media_url, list):
+                    media_url = "<br>".join(
+                        [
+                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            for j, url in enumerate(media_url)
+                        ]
+                    )
+                elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
                 safe_html_content = html.escape(doc["text"]).replace("\n", "<br>")
                 formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
