@@ -34,9 +34,10 @@ class RetrieverModule(ConfigurableModule):
         image_similarity_top_k = config.get("image_similarity_top_k", 2)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
-
+        need_image = config.get("need_image", False)
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever(
+                need_image=need_image,
                 similarity_top_k=similarity_top_k,
                 image_similarity_top_k=image_similarity_top_k,
             )
