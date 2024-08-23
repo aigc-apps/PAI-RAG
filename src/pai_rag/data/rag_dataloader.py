@@ -12,6 +12,7 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
+from llama_index.core.schema import BaseNode
 
 
 import logging
@@ -73,6 +74,24 @@ class RagDataLoader:
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
+
+    def _filter_text_nodes(self, nodes: List[BaseNode]):
+        filtered_nodes = []
+        text_seen = set()
+        text_seen.update(
+            node.text.strip()
+            for node in nodes
+            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
+        )
+        for node in nodes:
+            if (
+                isinstance(node, TextNode)
+                and node.metadata.get("image_url") is None
+                and node.text.strip() in text_seen
+            ):
+                continue
+            filtered_nodes.append(node)
+        return filtered_nodes
 
     def _get_nodes(
         self,
@@ -141,6 +160,8 @@ class RagDataLoader:
             node.excluded_embed_metadata_keys.append("source")
 
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
+
+        nodes = self._filter_text_nodes(nodes)
 
         # QA metadata extraction
         if enable_qa_extraction:
