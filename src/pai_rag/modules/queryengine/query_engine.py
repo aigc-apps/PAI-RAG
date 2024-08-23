@@ -28,6 +28,7 @@ class QueryEngineModule(ConfigurableModule):
             "RetrieverModule",
             "SynthesizerModule",
             "PostprocessorModule",
+            "LlmModule",
             "MultiModalLlmModule",
         ]
 
@@ -36,6 +37,7 @@ class QueryEngineModule(ConfigurableModule):
         retriever = new_params["RetrieverModule"]
         synthesizer = new_params["SynthesizerModule"]
         postprocessor = new_params["PostprocessorModule"]
+        llm = new_params["LlmModule"]
         multi_modal_llm = new_params["MultiModalLlmModule"]
 
         if config["type"] == "RetrieverQueryEngine":
@@ -88,6 +90,7 @@ class QueryEngineModule(ConfigurableModule):
                 multi_modal_query_engine = MySimpleMultiModalQueryEngine(
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
+                    llm=llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
                     image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                 )
@@ -95,6 +98,7 @@ class QueryEngineModule(ConfigurableModule):
                 multi_modal_query_engine = MySimpleMultiModalQueryEngine(
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
+                    llm=llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
                     image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                     node_postprocessors=postprocessor,
@@ -103,6 +107,7 @@ class QueryEngineModule(ConfigurableModule):
                 multi_modal_query_engine = MySimpleMultiModalQueryEngine(
                     retriever=retriever,
                     multi_modal_llm=multi_modal_llm,
+                    llm=llm,
                     text_qa_template=DEFAULT_MULTI_MODAL_TEXT_QA_PROMPT_TMPL,
                     image_qa_template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
                     node_postprocessors=[postprocessor],
