@@ -77,6 +77,12 @@ asyncpg = "^0.29.0"
 pgvector = "^0.3.2"
 pre-commit = "^3.8.0"
 llama-index-llms-paieas = "^0.1.0"
+detectron2 = [
+  {markers = "sys_platform == 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.2.2cu121-cp311-cp311-linux_x86_64.whl"},
+  {markers = "sys_platform == 'win32'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.2.2cu121-cp311-cp311-win_amd64.whl"},
+  {markers = "sys_platform != 'win32' and sys_platform != 'linux' ", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.2.2cpu-cp311-cp311-macosx_11_0_universal2.whl"}
+]
+magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

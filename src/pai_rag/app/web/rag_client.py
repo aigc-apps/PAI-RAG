@@ -1,7 +1,6 @@
 import json
 from typing import Any
 import requests
-import html
 import httpx
 import os
 import re
@@ -188,11 +187,18 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
-                media_url = doc.get("metadata", {}).get("image_url", None)
                 file_url = doc.get("metadata", {}).get("file_url", None)
-                if media_url:
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url and isinstance(media_url, list):
+                    media_url = "<br>".join(
+                        [
+                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            for j, url in enumerate(media_url)
+                        ]
+                    )
+                elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
-                safe_html_content = html.escape(doc["text"]).replace("\n", "<br>")
+                safe_html_content = doc["text"]
                 if file_url:
                     safe_html_content = (
                         f"""<a href="{file_url}">{safe_html_content}</a>"""

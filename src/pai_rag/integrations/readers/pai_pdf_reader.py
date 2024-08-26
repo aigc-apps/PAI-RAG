@@ -108,7 +108,7 @@ class PaiPDFReader(BaseReader):
         return updated_content
 
     @staticmethod
-    def extract_images(markdown_text):
+    def combine_images_with_text(markdown_text):
         # split_markdown_by_title
         title_pattern = r"^(#+)\s*(.*)$"
         sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
@@ -124,12 +124,11 @@ class PaiPDFReader(BaseReader):
             url_pattern = IMAGE_URL_PATTERN
             images = re.findall(url_pattern, content)
             if title_level:
-                for image in images:
-                    image_url = image[0]
-                    if len(image_url) > 0:
-                        output[
-                            image_url
-                        ] = f"{title_text}: {content_without_images_url.strip()}"
+                images_url_list = [image[0] for image in images if len(image[0]) > 0]
+                if len(images_url_list) > 0:
+                    output[
+                        f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
+                    ] = images_url_list
         return output
 
     @staticmethod
@@ -280,6 +279,7 @@ class PaiPDFReader(BaseReader):
         """
         try:
             pdf_name = os.path.basename(pdf_path).split(".")[0]
+            pdf_name = pdf_name.replace(" ", "_")
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = os.path.join(temp_dir, pdf_name)
                 pdf_bytes = open(pdf_path, "rb").read()  # 读取 pdf 文件的二进制数据
@@ -364,7 +364,7 @@ class PaiPDFReader(BaseReader):
             raise TypeError("file_path must be a string or Path.")
 
         md_content = self.parse_pdf(file_path, "auto")
-        images_with_content = PaiPDFReader.extract_images(md_content)
+        images_with_content = PaiPDFReader.combine_images_with_text(md_content)
         md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
         print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
@@ -375,21 +375,24 @@ class PaiPDFReader(BaseReader):
                 raise TypeError("extra_info must be a dictionary.")
         if self.enable_multimodal:
             print("[PaiPDFReader] Using multimodal.")
-            for image_url, content in images_with_content.items():
-                image_documents.append(
-                    ImageDocument(
-                        image_url=image_url,
-                        image_mimetype="image/jpeg",
-                        extra_info={"image_url": image_url, **extra_info},
-                    )
-                )
+            images_url_set = set()
+            for content, image_urls in images_with_content.items():
+                images_url_set.update(image_urls)
                 text_image_documents.append(
                     Document(
                         text=content,
-                        extra_info={"image_url": image_url, **extra_info},
+                        extra_info={"image_url": image_urls, **extra_info},
                     )
                 )
             print("[PaiPDFReader] successfully loaded images with multimodal.")
+            image_documents.extend(
+                ImageDocument(
+                    image_url=image_url,
+                    image_mimetype="image/jpeg",
+                    extra_info={"image_url": image_url, **extra_info},
+                )
+                for image_url in images_url_set
+            )
         if metadata:
             if not extra_info:
                 extra_info = {}
