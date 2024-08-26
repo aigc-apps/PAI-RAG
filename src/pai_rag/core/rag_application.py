@@ -11,6 +11,7 @@ from llama_index.core.schema import QueryBundle
 import json
 import logging
 import os
+import copy
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
@@ -61,7 +62,7 @@ class RagApplication:
     ):
         sessioned_config = self.config
         if faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update({"persist_path": faiss_path})
             self.logger.info(
                 f"Update rag_application config with faiss_persist_path: {faiss_path}"
@@ -74,13 +75,37 @@ class RagApplication:
             input_files, filter_pattern, enable_qa_extraction, enable_raptor
         )
 
+    async def aload_knowledge_from_oss(
+        self,
+        filter_pattern=None,
+        faiss_path=None,
+        enable_qa_extraction=False,
+        enable_raptor=False,
+    ):
+        sessioned_config = copy.copy(self.config)
+        sessioned_config.rag.data_loader.update({"type": "Oss"})
+        self.logger.info("Update rag_application config with data_loader type: Oss")
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", sessioned_config
+        )
+        if faiss_path:
+            sessioned_config.rag.index.update({"persist_path": faiss_path})
+            self.logger.info(
+                f"Update rag_application config with faiss_persist_path: {faiss_path}"
+            )
+        await data_loader.aload(
+            filter_pattern=filter_pattern,
+            enable_qa_extraction=enable_qa_extraction,
+            enable_raptor=enable_raptor,
+        )
+
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RetrievalResponse(docs=[])
 
         sessioned_config = self.config
         if query.vector_db and query.vector_db.faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )
@@ -123,7 +148,7 @@ class RagApplication:
 
         sessioned_config = self.config
         if query.vector_db and query.vector_db.faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )

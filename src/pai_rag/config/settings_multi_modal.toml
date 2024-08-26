@@ -25,6 +25,9 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
+[rag.data_loader]
+type = "Local" # [Local, Oss]
+
 [rag.data_reader]
 type = "SimpleDirectoryReader"
 enable_multimodal = true
@@ -80,8 +83,9 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.oss_store]
-bucket = ""
-endpoint = ""
+bucket = "pai-rag"
+endpoint = "oss-cn-hangzhou.aliyuncs.com"
+prefix = "reader_file_test"
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
