@@ -50,11 +50,15 @@ def _get_image_and_text_nodes(
             text_nodes.append(res_node)
             if res_node.node.metadata.get("image_url", None):
                 for image_url in res_node.node.metadata["image_url"]:
+                    extra_info = {
+                        "image_url": image_url,
+                        "file_name": res_node.node.metadata.get("file_name", ""),
+                    }
                     image_nodes.append(
                         NodeWithScore(
                             node=ImageNode(
                                 image_url=image_url,
-                                extra_info=res_node.node.metadata,
+                                extra_info=extra_info,
                             ),
                             score=res_node.score,
                         )

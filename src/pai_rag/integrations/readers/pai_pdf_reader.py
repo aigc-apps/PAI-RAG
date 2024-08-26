@@ -279,6 +279,7 @@ class PaiPDFReader(BaseReader):
         """
         try:
             pdf_name = os.path.basename(pdf_path).split(".")[0]
+            pdf_name = pdf_name.replace(" ", "_")
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = os.path.join(temp_dir, pdf_name)
                 pdf_bytes = open(pdf_path, "rb").read()  # 读取 pdf 文件的二进制数据
