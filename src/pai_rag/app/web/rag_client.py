@@ -7,6 +7,8 @@ import re
 import markdown
 import html
 import mimetypes
+import markdown
+import html
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
