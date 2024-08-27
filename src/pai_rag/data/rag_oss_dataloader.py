@@ -107,6 +107,10 @@ class OssDataLoader:
         filter_pattern: str,
         enable_qa_extraction: bool,
     ):
+        tmp_index_doc = self.index.vector_index._docstore.docs
+        seen_files = set(
+            [_doc.metadata.get("file_name") for _, _doc in tmp_index_doc.items()]
+        )
         filter_pattern = filter_pattern or "*"
         if isinstance(file_path, list):
             input_files = [f for f in file_path if os.path.isfile(f)]
@@ -123,7 +127,20 @@ class OssDataLoader:
         if len(input_files) == 0:
             return
 
-        data_reader = self.datareader_factory.get_reader(input_files)
+        # 检查文件名是否已经在seen_files中，如果在，则跳过当前文件
+        new_input_files = []
+        for input_file in input_files:
+            if os.path.basename(input_file) in seen_files:
+                print(
+                    f"[RagOssDataLoader] {os.path.basename(input_file)} already exists, skip it."
+                )
+                continue
+            new_input_files.append(input_file)
+        if len(new_input_files) == 0:
+            return
+        print(f"[RagOssDataLoader] {len(new_input_files)} files will be loaded.")
+
+        data_reader = self.datareader_factory.get_reader(new_input_files)
         docs = data_reader.load_data()
         logger.info(f"[DataReader] Loaded {len(docs)} docs.")
         nodes = []

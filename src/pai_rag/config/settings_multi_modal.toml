@@ -83,9 +83,9 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.oss_store]
-bucket = "pai-rag"
-endpoint = "oss-cn-hangzhou.aliyuncs.com"
-prefix = "reader_file_test"
+bucket = ""
+endpoint = ""
+prefix = ""
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]

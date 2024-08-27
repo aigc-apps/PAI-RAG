@@ -61,6 +61,7 @@ class RagApplication:
         enable_raptor=False,
     ):
         sessioned_config = self.config
+        sessioned_config.rag.data_loader.update({"type": "Local"})
         if faiss_path:
             sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update({"persist_path": faiss_path})
