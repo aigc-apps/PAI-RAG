@@ -12,7 +12,6 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
-from llama_index.core.schema import BaseNode
 
 
 import logging
@@ -32,9 +31,9 @@ IMAGE_URL_REGEX = re.compile(
 )
 
 
-class RagDataLoader:
+class OssDataLoader:
     """
-    RagDataLoader:
+    OssDataLoader:
     Load data with corresponding data readers according to config.
     """
 
@@ -69,29 +68,36 @@ class RagDataLoader:
 
         self.extractors = [html_extractor, txt_extractor]
 
-        logger.info("RagDataLoader initialized.")
+        logger.info("OssDataLoader initialized.")
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
 
-    def _filter_text_nodes(self, nodes: List[BaseNode]):
-        filtered_nodes = []
-        text_seen = set()
-        text_seen.update(
-            node.text.strip()
-            for node in nodes
-            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
-        )
-        for node in nodes:
-            if (
-                isinstance(node, TextNode)
-                and node.metadata.get("image_url") is None
-                and node.text.strip() in text_seen
-            ):
-                continue
-            filtered_nodes.append(node)
-        return filtered_nodes
+    def _get_oss_files(self):
+        files = []
+        if self.oss_cache:
+            object_list = self.oss_cache.list_objects()
+            oss_file_path_dir = "localdata/oss_tmp"
+            if not os.path.exists(oss_file_path_dir):
+                os.makedirs(oss_file_path_dir)
+            for oss_obj in object_list:
+                if oss_obj.key[:-1] != self.oss_cache.prefix:
+                    try:
+                        set_public = self.oss_cache.put_object_acl(
+                            oss_obj.key, "public-read"
+                        )
+                    except Exception:
+                        logger.error(f"Failed to set_public document {oss_obj.key}")
+                    if set_public:
+                        save_filename = os.path.join(oss_file_path_dir, oss_obj.key)
+                        self.oss_cache.get_object_to_file(
+                            key=oss_obj.key, filename=save_filename
+                        )
+                        files.append(save_filename)
+                    else:
+                        logger.error(f"Failed to load document {oss_obj.key}")
+        return files
 
     def _get_nodes(
         self,
@@ -103,7 +109,6 @@ class RagDataLoader:
         seen_files = set(
             [_doc.metadata.get("file_name") for _, _doc in tmp_index_doc.items()]
         )
-
         filter_pattern = filter_pattern or "*"
         if isinstance(file_path, list):
             input_files = [f for f in file_path if os.path.isfile(f)]
@@ -125,23 +130,26 @@ class RagDataLoader:
         for input_file in input_files:
             if os.path.basename(input_file) in seen_files:
                 print(
-                    f"[RagDataLoader] {os.path.basename(input_file)} already exists, skip it."
+                    f"[RagOssDataLoader] {os.path.basename(input_file)} already exists, skip it."
                 )
                 continue
             new_input_files.append(input_file)
         if len(new_input_files) == 0:
             return
-        print(f"[RagDataLoader] {len(new_input_files)} files will be loaded.")
+        print(f"[RagOssDataLoader] {len(new_input_files)} files will be loaded.")
 
-        data_reader = self.datareader_factory.get_reader(input_files=new_input_files)
+        data_reader = self.datareader_factory.get_reader(new_input_files)
         docs = data_reader.load_data()
-        print(f"[DataReader] Loaded {len(docs)} docs.")
+        logger.info(f"[DataReader] Loaded {len(docs)} docs.")
         nodes = []
 
         doc_cnt_map = {}
         for doc in docs:
             doc_type = self._extract_file_type(doc.metadata)
-            doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])[33:]
+            doc.metadata["file_path"] = os.path.basename(doc.metadata["file_path"])
+            doc.metadata["file_url"] = self.oss_cache.get_obj_key_url(
+                doc.metadata["file_path"]
+            )
             doc_key = f"""{doc.metadata.get("file_path", "dummy")}"""
             if doc_key not in doc_cnt_map:
                 doc_cnt_map[doc_key] = 0
@@ -179,8 +187,6 @@ class RagDataLoader:
 
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
 
-        nodes = self._filter_text_nodes(nodes)
-
         # QA metadata extraction
         if enable_qa_extraction:
             qa_nodes = []
@@ -210,11 +216,11 @@ class RagDataLoader:
 
     def load(
         self,
-        file_path: str | List[str],
         filter_pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
     ):
+        file_path = self._get_oss_files()
         nodes = self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
 
         if not nodes:
@@ -249,11 +255,11 @@ class RagDataLoader:
 
     async def aload(
         self,
-        file_path: str | List[str],
         filter_pattern: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
     ):
+        file_path = self._get_oss_files()
         nodes = await run_in_threadpool(
             lambda: self._get_nodes(file_path, filter_pattern, enable_qa_extraction)
         )

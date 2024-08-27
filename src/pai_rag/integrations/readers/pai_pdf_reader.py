@@ -366,7 +366,7 @@ class PaiPDFReader(BaseReader):
         md_content = self.parse_pdf(file_path, "auto")
         images_with_content = PaiPDFReader.combine_images_with_text(md_content)
         md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
-
+        print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
         image_documents = []
         text_image_documents = []
@@ -374,6 +374,7 @@ class PaiPDFReader(BaseReader):
             if not isinstance(extra_info, dict):
                 raise TypeError("extra_info must be a dictionary.")
         if self.enable_multimodal:
+            print("[PaiPDFReader] Using multimodal.")
             images_url_set = set()
             for content, image_urls in images_with_content.items():
                 images_url_set.update(image_urls)
@@ -383,6 +384,7 @@ class PaiPDFReader(BaseReader):
                         extra_info={"image_url": image_urls, **extra_info},
                     )
                 )
+            print("[PaiPDFReader] successfully loaded images with multimodal.")
             image_documents.extend(
                 ImageDocument(
                     image_url=image_url,
@@ -406,4 +408,5 @@ class PaiPDFReader(BaseReader):
 
         docs.extend(image_documents)
         docs.extend(text_image_documents)
+        print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

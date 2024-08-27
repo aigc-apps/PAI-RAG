@@ -19,10 +19,13 @@ class OssCacheModule(ConfigurableModule):
         if cache_config:
             oss_bucket = cache_config.get("bucket", None)
             oss_endpoint = cache_config.get("endpoint", None)
+            oss_prefix = cache_config.get("prefix", None)
 
         if oss_bucket:
             logger.info(f"Using OSS bucket {oss_bucket} for caching objects.")
-            return OssClient(bucket_name=oss_bucket, endpoint=oss_endpoint)
+            return OssClient(
+                bucket_name=oss_bucket, endpoint=oss_endpoint, prefix=oss_prefix
+            )
         else:
             logger.info("No OSS config provided. Will not cache objects.")
             return None

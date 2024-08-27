@@ -1,7 +1,6 @@
 import json
 from typing import Any
 import requests
-import html
 import httpx
 import os
 import re
@@ -92,10 +91,13 @@ class RagWebClient:
         elif is_finished:
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
+                file_url = doc["metadata"].get("file_url", None)
                 if filename:
                     formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    if file_url:
+                        formatted_file_name = f"""[{formatted_file_name}]({file_url})"""
                     referenced_docs += (
-                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]}\n'
                     )
 
         formatted_answer = ""
@@ -185,7 +187,7 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
-                # html_content = markdown.markdown()
+                file_url = doc.get("metadata", {}).get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
                 if media_url and isinstance(media_url, list):
                     media_url = "<br>".join(
@@ -196,7 +198,11 @@ class RagWebClient:
                     )
                 elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
-                safe_html_content = html.escape(doc["text"]).replace("\n", "<br>")
+                safe_html_content = doc["text"]
+                if file_url:
+                    safe_html_content = (
+                        f"""<a href="{file_url}">{safe_html_content}</a>"""
+                    )
                 formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
                     i + 1, doc["score"], safe_html_content, media_url
                 )
