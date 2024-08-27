@@ -79,13 +79,18 @@ class RagApplication:
     async def aload_knowledge_from_oss(
         self,
         filter_pattern=None,
+        oss_prefix=None,
         faiss_path=None,
         enable_qa_extraction=False,
         enable_raptor=False,
     ):
         sessioned_config = copy.copy(self.config)
         sessioned_config.rag.data_loader.update({"type": "Oss"})
-        self.logger.info("Update rag_application config with data_loader type: Oss")
+        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
+        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
+        self.logger.info(
+            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
+        )
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )

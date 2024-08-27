@@ -1,6 +1,7 @@
 import logging
 import hashlib
 import oss2
+import os
 from oss2.credentials import EnvironmentVariableCredentialsProvider
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,8 @@ class OssClient:
         self.bucket_name = bucket_name
         self.endpoint = endpoint
         self.base_url = self._make_url()
-        self.prefix = prefix
+        # 去除prefix可能存在的前后空格，并去除最后的斜杠
+        self.prefix = prefix.strip().rstrip("/")
 
         """
         确认上面的参数都填写正确了,如果任何一个参数包含 '<'，意味着这个参数可能没有被正确设置，而是保留了一个占位符或默认值（
@@ -34,6 +36,8 @@ class OssClient:
             return None
 
     def get_object_to_file(self, key, filename):
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
         self.bucket.get_object_to_file(key=key, filename=filename)
 
     def put_object(self, key: str, data: bytes, headers=None) -> None:

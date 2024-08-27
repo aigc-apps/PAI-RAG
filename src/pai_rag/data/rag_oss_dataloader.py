@@ -90,9 +90,7 @@ class OssDataLoader:
                     except Exception:
                         logger.error(f"Failed to set_public document {oss_obj.key}")
                     if set_public:
-                        save_filename = os.path.join(
-                            oss_file_path_dir, os.path.basename(oss_obj.key)
-                        )
+                        save_filename = os.path.join(oss_file_path_dir, oss_obj.key)
                         self.oss_cache.get_object_to_file(
                             key=oss_obj.key, filename=save_filename
                         )

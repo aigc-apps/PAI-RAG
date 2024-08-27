@@ -101,6 +101,7 @@ class RagService:
         task_id: str,
         input_files: List[str] = None,
         filter_pattern: str = None,
+        oss_prefix: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
@@ -121,6 +122,7 @@ class RagService:
             else:
                 await self.rag.aload_knowledge_from_oss(
                     filter_pattern,
+                    oss_prefix,
                     faiss_path,
                     enable_qa_extraction,
                     enable_raptor,
