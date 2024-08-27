@@ -14,11 +14,11 @@ from magic_pdf.pipe.TXTPipe import TXTPipe
 import magic_pdf.model as model_config
 import tempfile
 import re
+import math
 import requests
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
-
 
 import logging
 import os
@@ -29,6 +29,7 @@ model_config.__use_inside_model__ = True
 
 logger = logging.getLogger(__name__)
 
+IMAGE_MAX_PIXELS = 512 * 512
 TABLE_SUMMARY_MAX_ROW_NUM = 5
 TABLE_SUMMARY_MAX_COL_NUM = 10
 TABLE_SUMMARY_MAX_CELL_TOKEN = 20
@@ -81,6 +82,18 @@ class PaiPDFReader(BaseReader):
                     # Check image size
                 if image.width <= 50 or image.height <= 50:
                     return None
+
+                current_pixels = image.width * image.height
+
+                # 检查像素总数是否超过限制
+                if current_pixels > IMAGE_MAX_PIXELS:
+                    # 计算缩放比例以适应最大像素数
+                    scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
+                    new_width = int(image.width * scale)
+                    new_height = int(image.height * scale)
+
+                    # 调整图片大小
+                    image = image.resize((new_width, new_height), Image.LANCZOS)
 
                 image_stream = BytesIO()
                 image.save(image_stream, format="jpeg")

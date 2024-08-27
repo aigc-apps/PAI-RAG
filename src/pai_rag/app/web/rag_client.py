@@ -5,6 +5,8 @@ import httpx
 import os
 import re
 import mimetypes
+import markdown
+import html
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
@@ -187,6 +189,7 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
+                html_content = markdown.markdown(doc["text"])
                 file_url = doc.get("metadata", {}).get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
                 if media_url and isinstance(media_url, list):
@@ -198,7 +201,7 @@ class RagWebClient:
                     )
                 elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
-                safe_html_content = doc["text"]
+                safe_html_content = html.escape(html_content).replace("\n", "<br>")
                 if file_url:
                     safe_html_content = (
                         f"""<a href="{file_url}">{safe_html_content}</a>"""

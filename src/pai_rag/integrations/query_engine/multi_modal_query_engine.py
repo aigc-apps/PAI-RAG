@@ -26,6 +26,8 @@ from llama_index.core.base.response.schema import (
     Response,
 )
 
+IMAGE_MAX_PIECES = 5
+
 if TYPE_CHECKING:
     from llama_index.core.indices.multi_modal import MultiModalVectorIndexRetriever
 
@@ -42,7 +44,12 @@ def _get_image_and_text_nodes(
     nodes: List[NodeWithScore],
 ) -> Tuple[List[NodeWithScore], List[NodeWithScore]]:
     image_nodes = []
+    text_image_nodes = []
     text_nodes = []
+    image_urls = set()
+    for res_node in nodes:
+        if isinstance(res_node.node, ImageNode):
+            image_urls.add(res_node.node.image_url)
     for res_node in nodes:
         if isinstance(res_node.node, ImageNode):
             image_nodes.append(res_node)
@@ -50,11 +57,13 @@ def _get_image_and_text_nodes(
             text_nodes.append(res_node)
             if res_node.node.metadata.get("image_url", None):
                 for image_url in res_node.node.metadata["image_url"]:
+                    if image_url in image_urls:
+                        continue
                     extra_info = {
                         "image_url": image_url,
                         "file_name": res_node.node.metadata.get("file_name", ""),
                     }
-                    image_nodes.append(
+                    text_image_nodes.append(
                         NodeWithScore(
                             node=ImageNode(
                                 image_url=image_url,
@@ -63,6 +72,10 @@ def _get_image_and_text_nodes(
                             score=res_node.score,
                         )
                     )
+    image_nodes.sort(key=lambda x: x.score, reverse=True)
+    text_image_nodes.sort(key=lambda x: x.score, reverse=True)
+    image_nodes.extend(text_image_nodes)
+    image_nodes = image_nodes[:IMAGE_MAX_PIECES]
     return image_nodes, text_nodes
 
 
