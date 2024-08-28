@@ -27,6 +27,8 @@ from llama_index.core.base.response.schema import (
 )
 
 IMAGE_MAX_PIECES = 5
+TEXT_IMAGE_WEIGHT = 0.5
+
 
 if TYPE_CHECKING:
     from llama_index.core.indices.multi_modal import MultiModalVectorIndexRetriever
@@ -74,6 +76,8 @@ def _get_image_and_text_nodes(
                     )
     image_nodes.sort(key=lambda x: x.score, reverse=True)
     text_image_nodes.sort(key=lambda x: x.score, reverse=True)
+    for text_image_node in text_image_nodes:
+        text_image_node.score *= TEXT_IMAGE_WEIGHT
     image_nodes.extend(text_image_nodes)
     image_nodes = image_nodes[:IMAGE_MAX_PIECES]
     return image_nodes, text_nodes
