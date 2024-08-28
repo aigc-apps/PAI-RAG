@@ -115,6 +115,7 @@ class ViewModel(BaseModel):
     similarity_top_k: int = 5
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
+    data_analysis_file_path: str = None
 
     # postprocessor
     reranker_type: str = (
@@ -266,6 +267,10 @@ class ViewModel(BaseModel):
             view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
+        elif config["retriever"]["retrieval_mode"] == "data_analysis":
+            view_model.retrieval_mode = "data_analysis"
+
+        view_model.data_analysis_file_path = config["retriever"].get("file_path", None)
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
@@ -395,6 +400,10 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
+        elif self.retrieval_mode == "data_analysis":
+            config["retriever"]["retrieval_mode"] = "data_analysis"
+
+        config["retriever"]["file_path"] = self.data_analysis_file_path
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model

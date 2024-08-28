@@ -88,7 +88,7 @@ class MySQLRetriever(BaseRetriever):
             nodes.append(NodeWithScore(node=text_node, score=1.0))
         return nodes
 
-    def _check_limit_value(self, sql_query: str, max_limit=100):
+    def _limit_check(self, sql_query: str, max_limit=100):
         limit_pattern = r"\bLIMIT\s+(\d+)(?:\s+OFFSET\s+\d+)?\b"
         match = re.search(limit_pattern, sql_query, re.IGNORECASE)
 
@@ -118,20 +118,24 @@ class MySQLRetriever(BaseRetriever):
             query_bundle = str_or_query_bundle
 
         # constrain LIMIT in sql_query
+        if ("INSERT" in query_bundle.query_str) or ("CREATE" in query_bundle.query_str):
+            raise ValueError("ONLY QUERY ALLOWED")
         if "limit" not in query_bundle.query_str.lower():
             query_bundle.query_str = query_bundle.query_str + " limit 100"
         else:
-            query_bundle.query_str = self._check_limit_value(query_bundle.query_str)
+            query_bundle.query_str = self._limit_check(query_bundle.query_str)
+        logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
         # set timeout to 5s
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(5)  # start
+        signal.alarm(10)  # start
         try:
             raw_response_str, metadata = self._sql_database.run_sql(
                 query_bundle.query_str
             )
         except TimeoutError:
             logger.info("SQL Query Timed Out (>10s)")
+            raw_response_str = "SQL Query Timed Out (>10s)"
         finally:
             signal.alarm(0)  # cancel
 
@@ -346,8 +350,6 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         )
         # assume that it's a valid SQL query
         logger.info(f"> Predicted SQL query: {sql_query_str}\n")
-        if self._verbose:
-            print(f"> Predicted SQL query: {sql_query_str}\n")
 
         if self._sql_only:
             sql_only_node = TextNode(text=f"{sql_query_str}")
@@ -355,21 +357,41 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             metadata = {"result": sql_query_str}
         else:
             try:
-                retrieved_nodes, metadata = self._sql_retriever.retrieve_with_metadata(
-                    sql_query_str
-                )
+                (
+                    retrieved_nodes,
+                    metadata,
+                ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
                 logger.info(
-                    f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}"
+                    f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
+                if retrieved_nodes[0].metadata["query_output"] == []:
+                    new_sql_query_str = self._sql_query_modification(sql_query_str)
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
-                    err_node = TextNode(text=f"Error: {e!s}")
-                    logger.info(f"error_node info: {err_node}")
-                    retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                    metadata = {}
-                else:
-                    raise
+                    logger.info(f"async error info: {e}\n")
+
+                new_sql_query_str = self._sql_query_modification(sql_query_str)
+                (
+                    retrieved_nodes,
+                    metadata,
+                ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                logger.info(
+                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                )
+                # err_node = TextNode(text=f"Error: {e!s}")
+                # logger.info(f"async error_node info: {err_node}\n")
+                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
+                # metadata = {}
+                # else:
+                #     raise
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
 
@@ -410,16 +432,50 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
+                if retrieved_nodes[0].metadata["query_output"] == []:
+                    new_sql_query_str = self._sql_query_modification(sql_query_str)
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = await self._sql_retriever.aretrieve_with_metadata(
+                        new_sql_query_str
+                    )
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
+
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
-                    err_node = TextNode(text=f"Error: {e!s}")
-                    logger.info(f"async error_node info: {err_node}\n")
-                    retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                    metadata = {}
-                else:
-                    raise
+                    logger.info(f"async error info: {e}\n")
+
+                new_sql_query_str = self._sql_query_modification(sql_query_str)
+                (
+                    retrieved_nodes,
+                    metadata,
+                ) = await self._sql_retriever.aretrieve_with_metadata(new_sql_query_str)
+                logger.info(
+                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                )
+                # err_node = TextNode(text=f"Error: {e!s}")
+                # logger.info(f"async error_node info: {err_node}\n")
+                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
+                # metadata = {}
+                # else:
+                #     raise
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+
+    def _sql_query_modification(self, sql_query_str):
+        table_pattern = r"FROM\s+(\w+)"
+        match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
+        if match:
+            first_table = match.group(1)
+            new_sql_query_str = f"SELECT * FROM {first_table}"
+            logger.info(f"use the whole table {first_table} instead if possible")
+        else:
+            raise ValueError("No table is matched")
+
+        return new_sql_query_str
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""

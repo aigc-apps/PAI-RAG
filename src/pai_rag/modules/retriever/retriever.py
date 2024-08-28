@@ -1,6 +1,7 @@
 """retriever factory, used to generate retriever instance based on customer config and index"""
 
 import os
+import glob
 import logging
 from typing import Dict, List, Any
 
@@ -235,22 +236,41 @@ class RetrieverModule(ConfigurableModule):
 
     def get_dataframe(self, config):
         file_path = config.get("file_path", None)
-        if file_path is None:
-            raise ValueError("Please provide your file_path")
-        _, file_extension = os.path.splitext(file_path)  # get the extension type
-        if file_extension == ".csv":
-            try:
-                df = pd.read_csv(file_path)
-                return df
-            except Exception as e:
-                logger.info(f"Cannot load the csv file, {e}")
-            return
-        elif file_extension == ".xlsx":
-            try:
-                df = pd.read_excel(file_path)
-                return df
-            except Exception as e:
-                logger.info(f"Cannot load the csv file, {e}")
-                return
+
+        # 判断路径类型
+        if os.path.isfile(file_path):
+            # 如果是文件，直接读取
+            return self._read_file(file_path)
+        elif os.path.isdir(file_path):
+            # 如果是文件夹，找到第一个 .csv 或 .xlsx 文件并读取
+            first_file_path = self._find_first_csv_or_xlsx_in_directory(file_path)
+            if first_file_path:
+                return self._read_file(first_file_path)
+            else:
+                raise FileExistsError("No .csv or .xlsx files found in the directory.")
         else:
-            raise ValueError(f"Unsupported file extensions: {file_extension}\n")
+            raise FileExistsError(
+                f"{file_path} does not exist or is neither a file nor a directory."
+            )
+
+    def _find_first_csv_or_xlsx_in_directory(self, directory_path):
+        # 使用 glob 模块查找第一个 .csv 或 .xlsx 文件
+        files = glob.glob(os.path.join(directory_path, "*.csv")) + glob.glob(
+            os.path.join(directory_path, "*.xlsx")
+        )
+        if files:
+            # 返回第一个文件的路径
+            return files[0]
+        else:
+            return None
+
+    def _read_file(self, file_path):
+        # 根据文件类型读取文件
+        if file_path.endswith(".csv"):
+            df = pd.read_csv(file_path)
+            return df
+        elif file_path.endswith(".xlsx"):
+            df = pd.read_excel(file_path)
+            return df
+        else:
+            raise TypeError("Unsupported file type.")

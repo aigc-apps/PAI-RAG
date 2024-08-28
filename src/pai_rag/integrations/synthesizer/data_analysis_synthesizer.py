@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List, Generator, Optional, Sequence, cast, AsyncGenerator
 
 from llama_index.core.callbacks.base import CallbackManager
@@ -22,6 +23,8 @@ from llama_index.core.instrumentation.events.synthesis import (
 )
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 import llama_index.core.instrumentation as instrument
+
+logger = logging.getLogger(__name__)
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -102,6 +105,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             prompt=partial_prompt_tmpl,
             text_chunks=["\n".join(query_df_output)],
         )
+        logger.info(f"truncated_df_output: {str(truncated_df_output)}")
 
         response: RESPONSE_TEXT_TYPE
         if not self._streaming:
@@ -150,6 +154,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             prompt=partial_prompt_tmpl,
             text_chunks=["\n".join(query_df_output)],
         )
+        logger.info(f"truncated_df_output: {truncated_df_output}")
 
         response: RESPONSE_TEXT_TYPE
         if not self._streaming:
