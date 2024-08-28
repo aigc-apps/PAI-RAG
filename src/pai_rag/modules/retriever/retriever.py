@@ -237,12 +237,9 @@ class RetrieverModule(ConfigurableModule):
     def get_dataframe(self, config):
         file_path = config.get("file_path", None)
 
-        # 判断路径类型
         if os.path.isfile(file_path):
-            # 如果是文件，直接读取
             return self._read_file(file_path)
         elif os.path.isdir(file_path):
-            # 如果是文件夹，找到第一个 .csv 或 .xlsx 文件并读取
             first_file_path = self._find_first_csv_or_xlsx_in_directory(file_path)
             if first_file_path:
                 return self._read_file(first_file_path)
@@ -259,13 +256,11 @@ class RetrieverModule(ConfigurableModule):
             os.path.join(directory_path, "*.xlsx")
         )
         if files:
-            # 返回第一个文件的路径
             return files[0]
         else:
             return None
 
     def _read_file(self, file_path):
-        # 根据文件类型读取文件
         if file_path.endswith(".csv"):
             df = pd.read_csv(file_path)
             return df
