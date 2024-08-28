@@ -5,6 +5,9 @@ from llama_index.multi_modal_llms.dashscope import (
     DashScopeMultiModalModels,
 )
 
+from pai_rag.integrations.llms.multimodal.open_ai_alike_multi_modal import (
+    OpenAIAlikeMultiModal,
+)
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 
@@ -21,6 +24,13 @@ class MultiModalLlmModule(ConfigurableModule):
         if llm_config.source.lower() == "dashscope":
             logger.info("Using DashScope Multi-Modal-LLM.")
             return DashScopeMultiModal(model_name=DashScopeMultiModalModels.QWEN_VL_MAX)
+        elif llm_config.source.lower() == "paieas" and llm_config.get("endpoint"):
+            logger.info("Using PAI-EAS Multi-Modal-LLM.")
+            return OpenAIAlikeMultiModal(
+                model="/model_repository/MiniCPM-V-2_6",  # TODO: change model path
+                api_base=llm_config.endpoint,
+                api_key=llm_config.token,
+            )
         else:
             logger.info("Don't use Multi-Modal-LLM.")
             return None

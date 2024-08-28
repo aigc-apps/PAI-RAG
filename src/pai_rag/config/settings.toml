@@ -63,7 +63,9 @@ name = "qwen-turbo"
 source = ""
 
 [rag.llm.multi_modal]
-source = "DashScope"
+source = "PaiEas"
+endpoint = ""
+token = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
