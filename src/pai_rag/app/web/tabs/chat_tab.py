@@ -325,7 +325,14 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
+            css = """
+            .text{
+                white-space: normal !important;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                display: -webkit-box;
+            }"""
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot", css=css)
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
