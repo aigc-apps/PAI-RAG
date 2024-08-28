@@ -79,6 +79,7 @@ pre-commit = "^3.8.0"
 llama-index-llms-paieas = "^0.1.0"
 pymysql = "^1.1.1"
 llama-index-experimental = "^0.2.0"
+llama-index-readers-web = "^0.1.23"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

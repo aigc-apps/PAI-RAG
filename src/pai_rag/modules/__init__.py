@@ -22,6 +22,7 @@ from pai_rag.modules.index.bm25_index import BM25IndexModule
 from pai_rag.modules.nodesenhance.nodes_enhancement import NodesEnhancementModule
 from pai_rag.modules.intentdetection.intent_detection import IntentDetectionModule
 from pai_rag.modules.customconfig.custom_config import CustomConfigModule
+from pai_rag.modules.search.search import SearchModule
 
 ALL_MODULES = [
     "EmbeddingModule",
@@ -48,6 +49,7 @@ ALL_MODULES = [
     "NodesEnhancementModule",
     "IntentDetectionModule",
     "CustomConfigModule",
+    "SearchModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]
