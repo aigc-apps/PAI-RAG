@@ -22,6 +22,8 @@ from llama_index.core.prompts.mixin import PromptMixinType
 from llama_index.core.schema import ImageNode, NodeWithScore, MetadataMode
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
+    StreamingResponse,
+    AsyncStreamingResponse,
     Response,
 )
 
@@ -35,6 +37,16 @@ def empty_response_generator() -> Generator[str, None, None]:
 
 async def empty_response_agenerator() -> AsyncGenerator[str, None]:
     yield "Empty Response"
+
+
+async def get_token_gen(response_gen):
+    for response in response_gen:
+        yield response.delta
+
+
+async def aget_token_gen(response_gen):
+    async for response in response_gen:
+        yield response.delta
 
 
 def _get_image_and_text_nodes(
@@ -108,7 +120,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         self._image_qa_template = image_qa_template or DEFAULT_TEXT_QA_PROMPT
 
         self._node_postprocessors = node_postprocessors or []
-        self._stream = stream
+        self._stream = True  # TODO: Modify stream parameter.
         callback_manager = callback_manager or CallbackManager([])
         for node_postprocessor in self._node_postprocessors:
             node_postprocessor.callback_manager = callback_manager
@@ -158,15 +170,25 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
             context_str=context_str, query_str=query_bundle.query_str
         )
 
-        llm_response = self._multi_modal_llm.complete(
-            prompt=fmt_prompt,
-            image_documents=[image_node.node for image_node in image_nodes],
-        )
-        return Response(
-            response=str(llm_response),
-            source_nodes=nodes,
-            metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
-        )
+        if self._stream:
+            completion_response_gen = self._multi_modal_llm.stream_complete(
+                prompt=fmt_prompt,
+                image_documents=[image_node.node for image_node in image_nodes],
+            )
+            return StreamingResponse(
+                response_gen=get_token_gen(completion_response_gen),
+                source_nodes=nodes,
+            )
+        else:
+            llm_response = self._multi_modal_llm.complete(
+                prompt=fmt_prompt,
+                image_documents=[image_node.node for image_node in image_nodes],
+            )
+
+            return Response(
+                response=str(llm_response),
+                source_nodes=nodes,
+            )
 
     def _get_response_with_images(
         self,
@@ -203,16 +225,26 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         fmt_prompt = self._text_qa_template.format(
             context_str=context_str, query_str=query_bundle.query_str
         )
-        llm_response = await self._multi_modal_llm.acomplete(
-            prompt=fmt_prompt,
-            image_documents=[image_node.node for image_node in image_nodes],
-        )
 
-        return Response(
-            response=str(llm_response),
-            source_nodes=nodes,
-            metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
-        )
+        if self._stream:
+            completion_response_gen = await self._multi_modal_llm.astream_complete(
+                prompt=fmt_prompt,
+                image_documents=[image_node.node for image_node in image_nodes],
+            )
+            return AsyncStreamingResponse(
+                response_gen=aget_token_gen(completion_response_gen),
+                source_nodes=nodes,
+            )
+        else:
+            llm_response = await self._multi_modal_llm.acomplete(
+                prompt=fmt_prompt,
+                image_documents=[image_node.node for image_node in image_nodes],
+            )
+
+            return Response(
+                response=str(llm_response),
+                source_nodes=nodes,
+            )
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""

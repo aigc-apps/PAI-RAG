@@ -63,7 +63,9 @@ name = "qwen-turbo"
 source = ""
 
 [rag.llm.multi_modal]
-source = "DashScope"
+source = "PaiEas"
+endpoint = ""
+token = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
@@ -91,7 +93,7 @@ similarity_threshold = 0.5
 top_n = 2
 
 [rag.query_engine]
-type = "RetrieverQueryEngine"
+type = "SimpleMultiModalQueryEngine"
 
 [rag.retriever]
 similarity_top_k = 3
