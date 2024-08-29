@@ -65,7 +65,7 @@ class LlmModule(ConfigurableModule):
             )
         elif source == "paieas":
             model_name = config.get("name", "PAI-EAS-LLM")
-            endpoint = config["endpoint"]
+            endpoint = config["endpoint"] + "/"
             token = config["token"]
             logger.info(
                 f"""
@@ -75,7 +75,7 @@ class LlmModule(ConfigurableModule):
                     token = {token}
                 """
             )
-            llm = PaiEas(api_key=token, api_base=endpoint)
+            llm = PaiEas(api_key=token, api_base=endpoint, max_tokens=2000)
         else:
             raise ValueError(f"Unknown LLM source: '{config['llm']['source']}'")
 
