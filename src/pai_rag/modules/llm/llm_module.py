@@ -4,7 +4,8 @@ from typing import Dict, List, Any
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.azure_openai import AzureOpenAI
-from llama_index.llms.paieas import PaiEas, DEFAULT_MODEL_NAME
+from llama_index.llms.paieas import PaiEas
+from llama_index.llms.paieas.base import DEFAULT_MODEL_NAME
 from llama_index.llms.openai_like import OpenAILike
 
 from pai_rag.modules.base.configurable_module import ConfigurableModule
