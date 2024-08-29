@@ -111,7 +111,6 @@ class RagWebClient:
             formatted_answer += f"**Reference**:\n {referenced_docs}"
 
         response["result"] = formatted_answer
-        print("response: ", response)
         return response
 
     def query(
@@ -124,15 +123,11 @@ class RagWebClient:
         q = dict(
             question=text, session_id=session_id, stream=stream, with_intent=with_intent
         )
-        print("#### HEART BEAT0")
         r = requests.post(self.query_url, json=q, stream=True)
-        print("#### HEART BEAT1", r.status_code)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
-        print("#### HEART BEAT2")
         if not stream:
             response = dotdict(json.loads(r.text))
-            print("chunk re:", response)
             yield self._format_rag_response(
                 text, response, session_id=session_id, stream=stream
             )
@@ -142,7 +137,6 @@ class RagWebClient:
                 chunk_response = dotdict(json.loads(chunk))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
-                print("chunk re:", chunk_response)
                 yield self._format_rag_response(
                     text, chunk_response, session_id=session_id, stream=stream
                 )

@@ -67,7 +67,6 @@ def respond(input_elements: List[Any]):
 
         for resp in response_gen:
             chatbot[-1] = (msg, resp.result)
-            print("chatbot:", chatbot)
             yield chatbot
 
     except RagApiError as api_error:
