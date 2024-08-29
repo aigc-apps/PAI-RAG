@@ -7,15 +7,6 @@ version = "0.1.1"
 [rag.agent]
 type = "react"
 
-[rag.agent.custom_config]
-agent_file_path = ""
-
-[rag.agent.intent_detection]
-type = ""
-
-[rag.agent.tool]
-type = "" # [built-in", "python", "api"]
-
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
 
@@ -25,8 +16,12 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
+[rag.data_loader]
+type = "local"
+
 [rag.data_reader]
 type = "SimpleDirectoryReader"
+enable_multimodal = true
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
@@ -46,6 +41,9 @@ retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
 
+[rag.function_calling_llm]
+source = ""
+
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
@@ -58,9 +56,6 @@ vector_store.type = "FAISS"
 [rag.llm]
 source = "DashScope"
 name = "qwen-turbo"
-
-[rag.llm.function_calling_llm]
-source = ""
 
 [rag.llm.multi_modal]
 source = "PaiEas"
@@ -83,6 +78,7 @@ chunk_overlap = 10
 [rag.oss_store]
 bucket = ""
 endpoint = ""
+prefix = ""
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
@@ -93,7 +89,7 @@ similarity_threshold = 0.5
 top_n = 2
 
 [rag.query_engine]
-type = "RetrieverQueryEngine"
+type = "SimpleMultiModalQueryEngine"
 
 [rag.retriever]
 similarity_top_k = 3
@@ -106,3 +102,7 @@ search_api_key = ""
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
+
+[rag.tool]
+type = ["calculator", "weather"]
+weather_api_key = ""
