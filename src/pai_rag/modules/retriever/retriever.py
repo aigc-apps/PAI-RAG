@@ -235,7 +235,9 @@ class RetrieverModule(ConfigurableModule):
         return sql_database, tables, table_descriptions
 
     def get_dataframe(self, config):
-        file_path = config.get("file_path", None)
+        file_path = config.get("file_path", "./localdata/data_analysis/")
+        if not file_path:
+            file_path = "./localdata/data_analysis/"
 
         if os.path.isfile(file_path):
             return self._read_file(file_path)
@@ -246,9 +248,11 @@ class RetrieverModule(ConfigurableModule):
             else:
                 raise FileExistsError("No .csv or .xlsx files found in the directory.")
         else:
-            raise FileExistsError(
-                f"{file_path} does not exist or is neither a file nor a directory."
-            )
+            # raise FileExistsError(
+            #     f"{file_path} does not exist or is neither a file nor a directory."
+            # )
+            logger.info("Please provide a valid file")
+            return
 
     def _find_first_csv_or_xlsx_in_directory(self, directory_path):
         # 使用 glob 模块查找第一个 .csv 或 .xlsx 文件

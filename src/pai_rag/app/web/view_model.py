@@ -116,6 +116,14 @@ class ViewModel(BaseModel):
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
     data_analysis_file_path: str = None
+    db_dialect: str = None
+    db_username: str = None
+    db_password: str = None
+    db_host: str = None
+    db_port: int = 3306
+    db_name: str = None
+    db_tables: list = []
+    db_descriptions: dict = {}
 
     # websearch
     search_api_key: str = None
@@ -272,10 +280,21 @@ class ViewModel(BaseModel):
             view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
+
         elif config["retriever"]["retrieval_mode"] == "data_analysis":
             view_model.retrieval_mode = "data_analysis"
+        elif config["retriever"]["retrieval_mode"] == "nl2sql":
+            view_model.retrieval_mode = "nl2sql"
 
         view_model.data_analysis_file_path = config["retriever"].get("file_path", None)
+        view_model.db_dialect = config["retriever"].get("dialect", None)
+        view_model.db_username = config["retriever"].get("user", None)
+        view_model.db_password = config["retriever"].get("password", None)
+        view_model.db_host = config["retriever"].get("host", None)
+        view_model.db_port = config["retriever"].get("port", 3306)
+        view_model.db_name = config["retriever"].get("dbname", None)
+        view_model.db_tables = config["retriever"].get("tables", [])
+        view_model.db_descriptions = config["retriever"].get("descriptions", {})
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
@@ -412,10 +431,21 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
+
         elif self.retrieval_mode == "data_analysis":
             config["retriever"]["retrieval_mode"] = "data_analysis"
+        elif self.retrieval_mode == "nl2sql":
+            config["retriever"]["retrieval_mode"] = "nl2sql"
 
         config["retriever"]["file_path"] = self.data_analysis_file_path
+        config["retriever"]["dialect"] = self.db_dialect
+        config["retriever"]["user"] = self.db_username
+        config["retriever"]["password"] = self.db_password
+        config["retriever"]["host"] = self.db_host
+        config["retriever"]["port"] = self.db_port
+        config["retriever"]["dbname"] = self.db_name
+        config["retriever"]["tables"] = self.db_tables
+        config["retriever"]["descriptions"] = self.db_descriptions
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model

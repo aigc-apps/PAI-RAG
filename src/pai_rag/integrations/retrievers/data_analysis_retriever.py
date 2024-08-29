@@ -103,7 +103,12 @@ class PandasQueryRetriever(BaseRetriever):
 
     def _get_table_context(self) -> str:
         """Get table context."""
-        return str(self._df.head(self._head))
+        try:
+            res = str(self._df.head(self._head))
+        except Exception as e:
+            logger.info(f"No dataframe provided, {e}")
+            res = None
+        return res
 
     def _retrieve(self, query_bundle: QueryType) -> List[NodeWithScore]:
         """Retrieve pandas instruction and pandas output."""
