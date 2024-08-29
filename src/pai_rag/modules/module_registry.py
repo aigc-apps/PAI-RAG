@@ -29,6 +29,7 @@ MODULE_CONFIG_KEY_MAP = {
     "OssCacheModule": "rag.oss_store",
     "EvaluationModule": "rag.evaluation",
     "BM25IndexModule": "rag.bm25",
+    "SearchModule": "rag.search",
     "NodesEnhancementModule": "rag.node_enhancement",
 }
 
