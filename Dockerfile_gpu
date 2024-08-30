@@ -12,7 +12,7 @@ COPY . .
 RUN mv pyproject_gpu.toml pyproject.toml \
     && rm poetry.lock
 
-RUN poetry install && pip3 install --upgrade pip && pip3 install git+https://github.com/facebookresearch/detectron2.git && rm -rf $POETRY_CACHE_DIR
+RUN poetry install && pip3 install https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.3.0cpu-cp311-cp311-linux_x86_64.whl && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 

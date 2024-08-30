@@ -10,8 +10,7 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN poetry install
-RUN /app/.venv/lib/python3.11/site-packages/pip install git+https://github.com/facebookresearch/detectron2.git && rm -rf $POETRY_CACHE_DIR
+RUN poetry install && pip3 install https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.3.0cpu-cp311-cp311-linux_x86_64.whl && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 
