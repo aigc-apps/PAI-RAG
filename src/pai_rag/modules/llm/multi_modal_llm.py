@@ -1,7 +1,6 @@
 import logging
 import os
 from typing import Dict, List, Any
-
 from pai_rag.integrations.llms.multimodal.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
@@ -23,7 +22,7 @@ class MultiModalLlmModule(ConfigurableModule):
         if llm_config.source.lower() == "dashscope":
             logger.info("Using DashScope Multi-Modal-LLM.")
             return OpenAIAlikeMultiModal(
-                model=llm_config.get("model_name", "qwen-vl-max"),
+                model="qwen-vl-max",
                 api_base=DEFAULT_DASHSCOPE_API_BASE,
                 api_key=os.environ.get("DASHSCOPE_API_KEY"),
             )

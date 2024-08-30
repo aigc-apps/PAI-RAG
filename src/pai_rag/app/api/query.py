@@ -146,7 +146,7 @@ async def upload_data(
         input_files.append(save_file)
 
     background_tasks.add_task(
-        rag_service.add_knowledge_async,
+        rag_service.add_knowledge,
         task_id=task_id,
         input_files=input_files,
         filter_pattern=None,
