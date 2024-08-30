@@ -118,6 +118,11 @@ class ViewModel(BaseModel):
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
 
+    # websearch
+    search_api_key: str = None
+    search_count: int = 10
+    search_lang: str = "zh-CN"
+
     # postprocessor
     reranker_type: str = (
         "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
@@ -303,6 +308,13 @@ class ViewModel(BaseModel):
             "text_qa_template", None
         )
 
+        search_config = config.get("search") or {}
+        view_model.search_api_key = search_config.get(
+            "search_api_key"
+        ) or os.environ.get("BING_SEARCH_KEY")
+        view_model.search_lang = search_config.get("search_lang", "zh-CN")
+        view_model.search_count = search_config.get("search_count", 10)
+
         return view_model
 
     def to_app_config(self):
@@ -413,6 +425,12 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+
+        config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
+            "BING_SEARCH_KEY"
+        )
+        config["search"]["search_lang"] = self.search_lang
+        config["search"]["search_count"] = self.search_count
 
         return _transform_to_dict(config)
 
@@ -595,4 +613,8 @@ class ViewModel(BaseModel):
                 "value": self.get_local_evaluation_result_file(type="response")
             }
 
+        # search
+        settings["search_api_key"] = {"value": self.search_api_key}
+        settings["search_lang"] = {"value": self.search_lang}
+        settings["search_count"] = {"value": self.search_count}
         return settings

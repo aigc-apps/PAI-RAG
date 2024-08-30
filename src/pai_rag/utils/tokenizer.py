@@ -14,7 +14,7 @@ stop_trie = TrieTree(stopword_list)
 ## PUT in utils file and add stopword in TRIE structure.
 def jieba_tokenizer(text: str) -> List[str]:
     tokens = []
-    for w in jieba.lcut(text):
+    for w in jieba.cut(text):
         token = w.lower()
         if not stop_trie.match(token):
             tokens.append(token)

@@ -166,6 +166,14 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
+    async def aquery_search(self, query: RagQuery):
+        try:
+            self.check_updates()
+            return await self.rag.aquery_search(query)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query Search failed: {ex}")
+
     async def aquery_llm(self, query: RagQuery):
         try:
             self.check_updates()
