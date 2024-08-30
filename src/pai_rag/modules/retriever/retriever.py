@@ -246,7 +246,9 @@ class RetrieverModule(ConfigurableModule):
             if first_file_path:
                 return self._read_file(first_file_path)
             else:
-                raise FileExistsError("No .csv or .xlsx files found in the directory.")
+                # raise FileExistsError("No .csv or .xlsx files found in the directory.")
+                logger.info("No .csv or .xlsx files found in the directory.")
+                return
         else:
             # raise FileExistsError(
             #     f"{file_path} does not exist or is neither a file nor a directory."
