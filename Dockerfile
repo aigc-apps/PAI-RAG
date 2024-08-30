@@ -12,7 +12,7 @@ COPY . .
 
 RUN poetry install
 RUN pip3 cache purge
-RUN git clone https://github.com/facebookresearch/detectron2.git && python -m pip install -e detectron2
+RUN pip3 install https://miropsota.github.io/torch_packages_builder/detectron2/#:~:text=detectron2%2D0.6%2B2a420edpt2.3.0cpu%2Dcp311%2Dcp311%2Dlinux_x86_64.whl
 RUN rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
