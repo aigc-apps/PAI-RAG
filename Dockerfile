@@ -11,7 +11,7 @@ WORKDIR /app
 COPY . .
 
 RUN poetry install
-RUN RUN pip3 cache purge
+RUN pip3 cache purge
 RUN /app/.venv/bin/python3.11 -m pip3 install git+https://github.com/facebookresearch/detectron2.git && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
