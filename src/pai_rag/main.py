@@ -185,7 +185,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
     if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
         logger.info("Start to download models.")
         ModelScopeDownloader().load_basic_models()
-        ModelScopeDownloader.load_mineru_config()
+        ModelScopeDownloader().load_mineru_config()
         logger.info("Finished downloading models.")
     else:
         logger.info("Start to loading minerU config file.")
