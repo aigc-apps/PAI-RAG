@@ -168,7 +168,7 @@ async def upload_oss_data(
 ):
     task_id = uuid.uuid4().hex
     background_tasks.add_task(
-        rag_service.add_knowledge_async,
+        rag_service.add_knowledge,
         task_id=task_id,
         input_files=None,
         filter_pattern=None,
