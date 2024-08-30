@@ -1,6 +1,8 @@
 FROM python:3.11 AS builder
 
-RUN pip3 install poetry
+RUN bash -c "source /app/.venv/bin/activate"
+
+RUN pip install poetry
 
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
@@ -10,8 +12,9 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-# RUN poetry install
-RUN /app/.venv/bin/python3.11 -m pip3 install git+https://github.com/facebookresearch/detectron2.git && rm -rf $POETRY_CACHE_DIR
+RUN poetry install
+RUN pip install git+https://github.com/facebookresearch/detectron2.git
+RUN rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 
