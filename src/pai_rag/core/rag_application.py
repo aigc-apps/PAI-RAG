@@ -251,7 +251,7 @@ class RagApplication:
         if not query.stream:
             response = await query_chat_engine.achat(query.question)
         else:
-            response = await query_chat_engine.astream_chat(query.qumakeestion)
+            response = await query_chat_engine.astream_chat(query.question)
 
         node_results = response.sources[0].raw_output.source_nodes
         new_query = response.sources[0].raw_input["query"]
