@@ -46,7 +46,6 @@ class ModelScopeDownloader:
     def load_basic_models(self):
         for model_name in self.model_info["basic_models"].keys():
             self.load_model(model_name)
-        self.load_mineru_config()
 
     def load_mineru_config(self):
         source_path = "magic-pdf.template.json"
@@ -83,7 +82,6 @@ class ModelScopeDownloader:
                 self.load_model(model_name)
         else:
             self.load_model(model_name)
-        self.load_mineru_config()
 
 
 @click.command()
@@ -98,3 +96,4 @@ class ModelScopeDownloader:
 def load_models(model_name):
     download_models = ModelScopeDownloader()
     download_models.load_models(model_name)
+    download_models.load_mineru_config()
