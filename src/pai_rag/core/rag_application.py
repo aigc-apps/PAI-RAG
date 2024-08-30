@@ -51,7 +51,7 @@ class RagApplication:
         self.initialize(config)
         self.logger.info("RagApplication reloaded successfully.")
 
-    async def aload_knowledge(
+    def load_knowledge(
         self,
         input_files,
         filter_pattern=None,
@@ -70,7 +70,7 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        await data_loader.aload(
+        data_loader.load(
             input_files, filter_pattern, enable_qa_extraction, enable_raptor
         )
 
