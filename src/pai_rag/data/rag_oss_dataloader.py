@@ -12,7 +12,7 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
-
+from llama_index.core.schema import BaseNode
 
 import logging
 import re
@@ -98,6 +98,24 @@ class OssDataLoader:
                     else:
                         logger.error(f"Failed to load document {oss_obj.key}")
         return files
+
+    def _filter_text_nodes(self, nodes: List[BaseNode]):
+        filtered_nodes = []
+        text_seen = set()
+        text_seen.update(
+            node.text.strip()
+            for node in nodes
+            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
+        )
+        for node in nodes:
+            if (
+                isinstance(node, TextNode)
+                and node.metadata.get("image_url") is None
+                and node.text.strip() in text_seen
+            ):
+                continue
+            filtered_nodes.append(node)
+        return filtered_nodes
 
     def _get_nodes(
         self,
@@ -187,6 +205,7 @@ class OssDataLoader:
 
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
 
+        nodes = self._filter_text_nodes(nodes)
         # QA metadata extraction
         if enable_qa_extraction:
             qa_nodes = []

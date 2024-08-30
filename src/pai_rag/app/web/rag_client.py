@@ -4,9 +4,9 @@ import requests
 import httpx
 import os
 import re
-import mimetypes
 import markdown
 import html
+import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
@@ -95,16 +95,39 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
         elif is_finished:
+            content_list = []
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
                 file_url = doc["metadata"].get("file_url", None)
-                if filename:
-                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    if file_url:
-                        formatted_file_name = f"""[{formatted_file_name}]({file_url})"""
-                    referenced_docs += (
-                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]}\n'
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url and doc["text"] == "":
+                    formatted_image_name = re.sub(
+                        "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
                     )
+                    content = f"""
+<span>
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc["score"]}
+</span>
+<br>
+"""
+                elif filename:
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    html_content = html.escape(
+                        re.sub(r"<.*?>", "", doc["text"])
+                    ).replace("\n", " ")
+                    if file_url:
+                        formatted_file_name = (
+                            f'<a href="{file_url}"> {formatted_file_name} </a>'
+                        )
+                    content = f"""
+<span class="text" title="{html_content}">
+    [{i+1}]: {formatted_file_name} Score:{doc["score"]}
+    <span style='color: blue; font-size: 12px; background-color: #FFCCCB'> ( {html_content[:40]}... ) </span>
+</span>
+<br>
+"""
+                content_list.append(content)
+            referenced_docs = "".join(content_list)
 
         formatted_answer = ""
         if session_id:
