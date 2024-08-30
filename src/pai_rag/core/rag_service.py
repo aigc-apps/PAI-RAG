@@ -96,7 +96,7 @@ class RagService:
         else:
             logger.debug("No configuration updates")
 
-    async def add_knowledge_async(
+    def add_knowledge(
         self,
         task_id: str,
         input_files: List[str] = None,
@@ -112,7 +112,7 @@ class RagService:
             f.write(f"{task_id}\tprocessing\n")
         try:
             if not from_oss:
-                await self.rag.aload_knowledge(
+                self.rag.load_knowledge(
                     input_files,
                     filter_pattern,
                     faiss_path,
@@ -120,7 +120,7 @@ class RagService:
                     enable_raptor,
                 )
             else:
-                await self.rag.aload_knowledge_from_oss(
+                self.rag.load_knowledge_from_oss(
                     filter_pattern,
                     oss_prefix,
                     faiss_path,

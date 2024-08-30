@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 from pai_rag.app.api.models import RagQuery
@@ -13,7 +14,7 @@ EXPECTED_EMPTY_RESPONSE = """Empty query. Please input your question."""
 
 
 @pytest.fixture
-async def rag_app():
+def rag_app():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
 
@@ -25,52 +26,52 @@ async def rag_app():
     rag_app.initialize(config)
 
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    await rag_app.aload_knowledge(data_dir)
+    rag_app.load_knowledge(data_dir)
 
     return rag_app
 
 
 # Test rag query
-async def test_query(rag_app: RagApplication):
+def test_query(rag_app: RagApplication):
     query = RagQuery(question="Why did he decide to learn AI?")
-    response = await rag_app.aquery(query)
+    response = asyncio.run(rag_app.aquery(query))
     assert len(response.answer) > 10
 
     query = RagQuery(question="")
-    response = await rag_app.aquery(query)
+    response = asyncio.run(rag_app.aquery(query))
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
 
 # Test llm query
-async def test_llm(rag_app: RagApplication):
+def test_llm(rag_app: RagApplication):
     query = RagQuery(question="What is the result of 15+22?")
-    response = await rag_app.aquery_llm(query)
+    response = asyncio.run(rag_app.aquery_llm(query))
     assert "37" in response.answer
 
     query = RagQuery(question="")
-    response = await rag_app.aquery_llm(query)
+    response = asyncio.run(rag_app.aquery_llm(query))
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
 
 # Test retrieval query
-async def test_retrieval(rag_app: RagApplication):
+def test_retrieval(rag_app: RagApplication):
     retrieval_query = RagQuery(question="Why did he decide to learn AI?")
-    response = await rag_app.aquery_retrieval(retrieval_query)
+    response = asyncio.run(rag_app.aquery_retrieval(retrieval_query))
     assert len(response.docs) > 0
 
-    query = RagQuery(question="")
-    response = await rag_app.aquery_retrieval(query)
+    empty_query = RagQuery(question="")
+    response = asyncio.run(rag_app.aquery_retrieval(empty_query))
     assert len(response.docs) == 0
 
 
 # Test agent query
-async def test_agent(rag_app: RagApplication):
+def test_agent(rag_app: RagApplication):
     query = RagQuery(question="What is the result of 15+22?")
-    response = await rag_app.aquery_agent(query)
+    response = asyncio.run(rag_app.aquery_agent(query))
     assert "37" in response.answer
 
     query = RagQuery(question="")
-    response = await rag_app.aquery_agent(query)
+    response = asyncio.run(rag_app.aquery_agent(query))
     assert response.answer == EXPECTED_EMPTY_RESPONSE
 
 
@@ -79,6 +80,6 @@ async def test_agent(rag_app: RagApplication):
 #     print('eval_res_avg', eval_res_avg)
 
 
-async def test_load_evaluation_qa_dataset(rag_app: RagApplication):
-    qa_dataset = await rag_app.aload_evaluation_qa_dataset()
+def test_load_evaluation_qa_dataset(rag_app: RagApplication):
+    qa_dataset = asyncio.run(rag_app.aload_evaluation_qa_dataset())
     print(qa_dataset)
