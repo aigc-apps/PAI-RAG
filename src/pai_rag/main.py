@@ -186,6 +186,10 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
         logger.info("Start to download models.")
         ModelScopeDownloader().load_basic_models()
         logger.info("Finished downloading models.")
+    else:
+        logger.info("Start to loading minerU config file.")
+        ModelScopeDownloader().load_mineru_config()
+        logger.info("Finished loading minerU config file.")
 
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
