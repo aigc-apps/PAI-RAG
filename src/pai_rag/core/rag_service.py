@@ -96,7 +96,7 @@ class RagService:
         else:
             logger.debug("No configuration updates")
 
-    async def add_knowledge_async(
+    def add_knowledge(
         self,
         task_id: str,
         input_files: List[str],
@@ -109,7 +109,7 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
-            await self.rag.aload_knowledge(
+            self.rag.load_knowledge(
                 input_files,
                 filter_pattern,
                 faiss_path,
