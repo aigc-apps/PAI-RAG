@@ -23,14 +23,16 @@ class MultiModalLlmModule(ConfigurableModule):
         if llm_config.source.lower() == "dashscope":
             logger.info("Using DashScope Multi-Modal-LLM.")
             return OpenAIAlikeMultiModal(
-                model="qwen-vl-max",
+                model=llm_config.get("model_name", "qwen-vl-max"),
                 api_base=DEFAULT_DASHSCOPE_API_BASE,
                 api_key=os.environ.get("DASHSCOPE_API_KEY"),
             )
         elif llm_config.source.lower() == "paieas" and llm_config.get("endpoint"):
             logger.info("Using PAI-EAS Multi-Modal-LLM.")
             return OpenAIAlikeMultiModal(
-                model="/model_repository/MiniCPM-V-2_6",  # TODO: change model path
+                model=llm_config.get(
+                    "model_name", "/model_repository/MiniCPM-V-2_6"
+                ),  # TODO: change model path
                 api_base=llm_config.endpoint,
                 api_key=llm_config.token,
             )
