@@ -51,23 +51,22 @@ class ModelScopeDownloader:
         source_path = "magic-pdf.template.json"
         destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
 
-        # 拷贝文件
-        shutil.copy(source_path, destination_path)
+        if os.path.exists(destination_path):
+            print("magic-pdf.json already exists, skip modifying ~/magic-pdf.json.")
+            return
 
-        # 修改 magic-pdf.template.json 文件中的值
-        with open(destination_path, "r") as file:
-            data = json.load(file)
+        # 读取 source_path 文件的内容
+        with open(source_path, "r") as source_file:
+            data = json.load(source_file)  # 加载 JSON 数据
 
-        # 修改models-dir, 指向MinerU模型目录
-        key_to_modify = "models-dir"
-        new_value = str(self.download_directory_path) + "/PDF-Extract-Kit/models"
+        if "models-dir" in data:
+            data["models-dir"] = (
+                str(self.download_directory_path) + "/PDF-Extract-Kit/models"
+            )
 
-        if key_to_modify in data:
-            data[key_to_modify] = new_value
-
-        # 将修改后的数据写回新的 JSON 文件
-        with open(destination_path, "w") as file:
-            json.dump(data, file, indent=4)
+        # 将修改后的内容写入destination_path
+        with open(destination_path, "w") as destination_file:
+            json.dump(data, destination_file, indent=4)
 
         print(
             "Copy magic-pdf.template.json to ~/magic-pdf.json and modify models-dir to model path."
