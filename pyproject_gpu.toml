@@ -88,6 +88,7 @@ detectron2 = [
   {markers = "sys_platform != 'win32' and sys_platform != 'linux' ", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.2.2cpu-cp311-cp311-macosx_11_0_universal2.whl"}
 ]
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
+httpx = "0.27.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
