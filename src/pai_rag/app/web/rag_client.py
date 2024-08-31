@@ -60,6 +60,10 @@ class RagWebClient:
         return f"{self.endpoint}service/upload_data"
 
     @property
+    def load_datasheet_url(self):
+        return f"{self.endpoint}service/upload_datasheet"
+
+    @property
     def load_agent_cfg_url(self):
         return f"{self.endpoint}service/config/agent"
 
@@ -262,6 +266,30 @@ class RagWebClient:
         finally:
             for file_obj in file_obj_list:
                 file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def add_datasheet(
+        self,
+        input_file: str,
+    ):
+        file_obj = open(input_file, "rb")
+        mimetype = mimetypes.guess_type(input_file)[0]
+        files = {"file": (input_file, file_obj, mimetype)}
+        try:
+            r = requests.post(
+                self.load_datasheet_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        except Exception as e:
+            print(f"add_datasheet failed: {e}")
+        finally:
+            file_obj.close()
 
         response = dotdict(json.loads(r.text))
         return response

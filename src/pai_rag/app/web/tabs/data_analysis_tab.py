@@ -1,49 +1,36 @@
-import os
+import json
 from typing import Dict, Any
 import gradio as gr
-from pai_rag.app.web.rag_client import rag_client
 import pandas as pd
-import shutil
+from pai_rag.app.web.rag_client import rag_client
 
 
 def upload_file_fn(input_file):
     if input_file is None:
         return None
 
-    persist_path = "./localdata/data_analysis"
-    if not os.path.exists(persist_path):
-        os.mkdir(persist_path)
-    else:
-        # 清空目录中的文件
-        for filename in os.listdir(persist_path):
-            file_path = os.path.join(persist_path, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-            except Exception as e:
-                print(f"Failed to delete {file_path}. Reason: {e}")
-
-    # 指定持久化存储位置
-    file_name = os.path.basename(input_file.name)
-    destination_path = os.path.join(persist_path, file_name)
-    # 复制文件
-    shutil.copy(input_file.name, destination_path)
+    res = rag_client.add_datasheet(input_file.name)
 
     update_dict = {
-        # "retrieval_mode": "data_analysis",
-        "data_analysis_file_path": destination_path,
+        "data_analysis_file_path": res["destination_path"],
     }
-    # "synthesizer_type": "DataAnalysis"}
+
     rag_client.patch_config(update_dict)
 
-    if input_file.name.endswith(".csv"):
-        df = pd.read_csv(input_file.name)
-    elif input_file.name.endswith(".xlsx"):
-        df = pd.read_excel(input_file.name)
-    else:
-        return "Unsupported file type."
+    # if input_file.name.endswith(".csv"):
+    #     df = pd.read_csv(input_file.name)
+    # elif input_file.name.endswith(".xlsx"):
+    #     df = pd.read_excel(input_file.name)
+    # else:
+    #     return "Unsupported file type."
 
-    return df.head(10)  # .to_markdown()
+    json_str = res["data_preview"]
+    # 将json字符串加载为列表
+    data_list = json.loads(json_str)
+    # 将列表转换为 DataFrame
+    df = pd.DataFrame(data_list)
+
+    return df
 
 
 def respond(question, chatbot):

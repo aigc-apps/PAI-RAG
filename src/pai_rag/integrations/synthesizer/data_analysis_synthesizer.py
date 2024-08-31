@@ -61,7 +61,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         # deprecated
         service_context: Optional[ServiceContext] = None,
     ) -> None:
-        print("DataAnalysisSynthesizer initialized")
+        logger.info("DataAnalysisSynthesizer initialized")
         if service_context is not None:
             prompt_helper = service_context.prompt_helper
 
