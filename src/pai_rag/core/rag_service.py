@@ -127,6 +127,7 @@ class RagService:
                     enable_qa_extraction,
                     enable_raptor,
                 )
+
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
