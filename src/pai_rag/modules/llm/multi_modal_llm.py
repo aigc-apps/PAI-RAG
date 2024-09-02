@@ -20,9 +20,15 @@ class MultiModalLlmModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         llm_config = new_params[MODULE_PARAM_CONFIG]
         if llm_config.source.lower() == "dashscope":
-            logger.info("Using DashScope Multi-Modal-LLM.")
+            model_name = llm_config.get("name", "qwen-vl-max")
+            logger.info(
+                f"""
+                            [Parameters][Multi-Modal-LLM:DashScope]
+                                model = {model_name}
+                            """
+            )
             return OpenAIAlikeMultiModal(
-                model="qwen-vl-max",
+                model=model_name,
                 api_base=DEFAULT_DASHSCOPE_API_BASE,
                 api_key=os.environ.get("DASHSCOPE_API_KEY"),
             )
