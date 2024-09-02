@@ -138,7 +138,10 @@ async def fetch_url(url):
     """
     Asynchronous function to fetch a URL.
     """
-    async with httpx.AsyncClient() as client:
+    timeout = httpx.Timeout(
+        connect=5.0, read=5.0, write=5.0, pool=6.0  # 连接超时  # 读取超时  # 写入超时  # 连接池超时
+    )
+    async with httpx.AsyncClient(timeout=timeout) as client:
         try:
             response = await client.get(url)
             return response
