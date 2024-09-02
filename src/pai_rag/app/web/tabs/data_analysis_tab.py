@@ -1,4 +1,3 @@
-import json
 from typing import Dict, Any
 import gradio as gr
 import pandas as pd
@@ -17,20 +16,22 @@ def upload_file_fn(input_file):
 
     rag_client.patch_config(update_dict)
 
-    # if input_file.name.endswith(".csv"):
-    #     df = pd.read_csv(input_file.name)
-    # elif input_file.name.endswith(".xlsx"):
-    #     df = pd.read_excel(input_file.name)
-    # else:
-    #     return "Unsupported file type."
+    if input_file.name.endswith(".csv"):
+        df = pd.read_csv(input_file.name)
+    elif input_file.name.endswith(".xlsx"):
+        df = pd.read_excel(input_file.name)
+    else:
+        return "Unsupported file type."
 
-    json_str = res["data_preview"]
-    # 将json字符串加载为列表
-    data_list = json.loads(json_str)
-    # 将列表转换为 DataFrame
-    df = pd.DataFrame(data_list)
+    # json_str = res["data_preview"]
+    # # 将json字符串加载为列表
+    # # data_list = json.loads(json_str)
+    # # # 将列表转换为 DataFrame
+    # # df = pd.DataFrame(data_list)
 
-    return df
+    # df = pd.read_json(json_str)
+
+    return df.head(10)
 
 
 def respond(question, chatbot):
