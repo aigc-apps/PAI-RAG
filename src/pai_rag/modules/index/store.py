@@ -76,7 +76,7 @@ class RagStore:
 
             logger.info("initialized FAISS vector & image store.")
         elif vector_store_type == "hologres":
-            self.vector_store = self._get_or_create_hologres()
+            self.vector_store, self.image_store = self._get_or_create_hologres()
             logger.info("initialized Hologres vector store.")
         elif vector_store_type == "analyticdb":
             self.vector_store = self._get_or_create_adb()
@@ -85,7 +85,7 @@ class RagStore:
             self.vector_store = self._get_or_create_es()
             logger.info("initialized ElasticSearch vector store.")
         elif vector_store_type == "milvus":
-            self.vector_store = self._get_or_create_milvus()
+            self.vector_store, self.image_store = self._get_or_create_milvus()
         elif vector_store_type == "opensearch":
             self.vector_store = self._get_or_create_open_search_store()
         elif vector_store_type == "postgresql":
@@ -141,7 +141,7 @@ class RagStore:
 
     def _get_or_create_hologres(self):
         hologres_config = self.store_config["vector_store"]
-        hologres = HologresVectorStore.from_param(
+        hologres_test_store = HologresVectorStore.from_param(
             host=hologres_config["host"],
             port=hologres_config["port"],
             user=hologres_config["user"],
@@ -151,7 +151,17 @@ class RagStore:
             embedding_dimension=self.embed_dims,
             pre_delete_table=hologres_config["pre_delete_table"],
         )
-        return hologres
+        hologres_image_store = HologresVectorStore.from_param(
+            host=hologres_config["host"],
+            port=hologres_config["port"],
+            user=hologres_config["user"],
+            password=hologres_config["password"],
+            database=hologres_config["database"],
+            table_name=hologres_config["table_name"] + "_for_image",
+            embedding_dimension=self.multi_modal_embed_dims,
+            pre_delete_table=hologres_config["pre_delete_table"],
+        )
+        return hologres_test_store, hologres_image_store
 
     def _get_or_create_adb(self):
         adb_config = self.store_config["vector_store"]
@@ -202,7 +212,7 @@ class RagStore:
                 weights.append(item.keyword_weight)
                 print("weighted_reranker", weighted_reranker, weights)
                 break
-        return MyMilvusVectorStore(
+        milvus_text_store = MyMilvusVectorStore(
             uri=milvus_url,
             token=token,
             collection_name=milvus_config["collection_name"],
@@ -213,6 +223,15 @@ class RagStore:
             hybrid_ranker="WeightedRanker",
             hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
         )
+        milvus_image_store = MyMilvusVectorStore(
+            uri=milvus_url,
+            token=token,
+            collection_name=milvus_config["collection_name"] + "_for_image",
+            dim=self.multi_modal_embed_dims,
+            enable_sparse=False,
+            similarity_metric="cosine",
+        )
+        return milvus_text_store, milvus_image_store
 
     def _get_or_create_open_search_store(self):
         from llama_index.vector_stores.alibabacloud_opensearch import (

@@ -86,6 +86,7 @@ pre-commit = "^3.8.0"
 cn-clip = "^1.5.1"
 llama-index-llms-paieas = "^0.1.0"
 llama-index-readers-web = "^0.1.23"
+milvus-lite = "^2.4.9"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
