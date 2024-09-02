@@ -10,7 +10,7 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN poetry install && pip3 install https://pai-rag.oss-cn-hangzhou.aliyuncs.com/reader_file_test/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-linux_x86_64.whl && rm -rf $POETRY_CACHE_DIR
+RUN poetry install && poetry run pip install https://pai-rag.oss-cn-hangzhou.aliyuncs.com/reader_file_test/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-linux_x86_64.whl && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 
