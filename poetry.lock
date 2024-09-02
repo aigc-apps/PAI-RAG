@@ -550,17 +550,6 @@ test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypo
 trio = ["trio (>=0.23)"]
 
 [[package]]
-name = "appdirs"
-version = "1.4.4"
-description = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
-optional = false
-python-versions = "*"
-files = [
-    {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
-    {file = "appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41"},
-]
-
-[[package]]
 name = "asgi-correlation-id"
 version = "4.3.2"
 description = "Middleware correlating project logs to individual requests"
@@ -841,30 +830,6 @@ chardet = ["chardet"]
 charset-normalizer = ["charset-normalizer"]
 html5lib = ["html5lib"]
 lxml = ["lxml"]
-
-[[package]]
-name = "black"
-version = "21.4b2"
-description = "The uncompromising code formatter."
-optional = false
-python-versions = ">=3.6.2"
-files = [
-    {file = "black-21.4b2-py3-none-any.whl", hash = "sha256:bff7067d8bc25eb21dcfdbc8c72f2baafd9ec6de4663241a52fb904b304d391f"},
-    {file = "black-21.4b2.tar.gz", hash = "sha256:fc9bcf3b482b05c1f35f6a882c079dc01b9c7795827532f4cc43c0ec88067bbc"},
-]
-
-[package.dependencies]
-appdirs = "*"
-click = ">=7.1.2"
-mypy-extensions = ">=0.4.3"
-pathspec = ">=0.8.1,<1"
-regex = ">=2020.1.8"
-toml = ">=0.10.1"
-
-[package.extras]
-colorama = ["colorama (>=0.4.3)"]
-d = ["aiohttp (>=3.3.2)", "aiohttp-cors"]
-python2 = ["typed-ast (>=1.4.2)"]
 
 [[package]]
 name = "black"
@@ -2009,26 +1974,25 @@ url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detec
 
 [[package]]
 name = "detectron2"
-version = "0.6+pt2.3.0cpu"
+version = "0.6+864913fpt2.3.0cpu"
 description = "Detectron2 is FAIR's next-generation research platform for object detection and segmentation."
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "detectron2-0.6+pt2.3.0cpu-cp311-cp311-linux_x86_64.whl", hash = "sha256:9b3fcb8e14c49ef63f413b9d2cf75b488790fae873ff732f9b52cec8c941494f"},
+    {file = "detectron2-0.6+864913fpt2.3.0cpu-cp311-cp311-linux_x86_64.whl", hash = "sha256:6a6ae1275c5b8e5aba8e7bc9f371cdb28305ab3546d99afa00b4c256193cfefa"},
 ]
 
 [package.dependencies]
-black = "21.4b2"
+black = "*"
 cloudpickle = "*"
-future = "*"
 fvcore = ">=0.1.5,<0.1.6"
 hydra-core = ">=1.1"
 iopath = ">=0.1.7,<0.1.10"
 matplotlib = "*"
-omegaconf = ">=2.1"
+omegaconf = ">=2.1,<2.4"
+packaging = "*"
 Pillow = ">=7.1"
 pycocotools = ">=2.0.2"
-pydot = "*"
 tabulate = "*"
 tensorboard = "*"
 termcolor = ">=1.1"
@@ -2036,35 +2000,34 @@ tqdm = ">4.29.0"
 yacs = ">=0.1.8"
 
 [package.extras]
-all = ["panopticapi @ https://github.com/cocodataset/panopticapi/archive/master.zip", "psutil", "pygments (>=2.2)", "shapely"]
-dev = ["flake8 (==3.8.1)", "flake8-bugbear", "flake8-comprehensions", "isort (==4.3.21)"]
+all = ["fairscale", "panopticapi @ https://github.com/cocodataset/panopticapi/archive/master.zip", "psutil", "pygments (>=2.2)", "scipy (>1.5.1)", "shapely", "timm"]
+dev = ["black (==22.3.0)", "flake8 (==3.8.1)", "flake8-bugbear", "flake8-comprehensions", "isort (==4.3.21)"]
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.3.0cpu-cp311-cp311-linux_x86_64.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-linux_x86_64.whl"
 
 [[package]]
 name = "detectron2"
-version = "0.6+pt2.3.0cpu"
+version = "0.6+864913fpt2.3.0cpu"
 description = "Detectron2 is FAIR's next-generation research platform for object detection and segmentation."
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.7"
 files = [
-    {file = "detectron2-0.6+pt2.3.0cpu-cp311-cp311-win_amd64.whl", hash = "sha256:f3b0111b39c80bdddb9f0af74dcb10cec640b5147910325ea41300b3c9575a1b"},
+    {file = "detectron2-0.6+864913fpt2.3.0cpu-cp311-cp311-win_amd64.whl", hash = "sha256:8775c2760a953cb51174802f409c045870964f406f32fb1804f64ebfd2a98726"},
 ]
 
 [package.dependencies]
-black = "21.4b2"
+black = "*"
 cloudpickle = "*"
-future = "*"
 fvcore = ">=0.1.5,<0.1.6"
 hydra-core = ">=1.1"
 iopath = ">=0.1.7,<0.1.10"
 matplotlib = "*"
-omegaconf = ">=2.1"
+omegaconf = ">=2.1,<2.4"
+packaging = "*"
 Pillow = ">=7.1"
 pycocotools = ">=2.0.2"
-pydot = "*"
 tabulate = "*"
 tensorboard = "*"
 termcolor = ">=1.1"
@@ -2072,12 +2035,12 @@ tqdm = ">4.29.0"
 yacs = ">=0.1.8"
 
 [package.extras]
-all = ["panopticapi @ https://github.com/cocodataset/panopticapi/archive/master.zip", "psutil", "pygments (>=2.2)", "shapely"]
-dev = ["flake8 (==3.8.1)", "flake8-bugbear", "flake8-comprehensions", "isort (==4.3.21)"]
+all = ["fairscale", "panopticapi @ https://github.com/cocodataset/panopticapi/archive/master.zip", "psutil", "pygments (>=2.2)", "scipy (>1.5.1)", "shapely", "timm"]
+dev = ["black (==22.3.0)", "flake8 (==3.8.1)", "flake8-bugbear", "flake8-comprehensions", "isort (==4.3.21)"]
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2Bpt2.3.0cpu-cp311-cp311-win_amd64.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-win_amd64.whl"
 
 [[package]]
 name = "dill"
@@ -7729,25 +7692,6 @@ files = [
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
-name = "pydot"
-version = "3.0.1"
-description = "Python interface to Graphviz's Dot"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "pydot-3.0.1-py3-none-any.whl", hash = "sha256:43f1e878dc1ff7c1c2e3470a6999d4e9e97771c5c862440c2f0af0ba844c231f"},
-    {file = "pydot-3.0.1.tar.gz", hash = "sha256:e18cf7f287c497d77b536a3d20a46284568fea390776dface6eabbdf1b1b5efc"},
-]
-
-[package.dependencies]
-pyparsing = ">=3.0.9"
-
-[package.extras]
-dev = ["chardet", "parameterized", "ruff"]
-release = ["zest.releaser[recommended]"]
-tests = ["chardet", "parameterized", "ruff", "tox", "unittest-parallel"]
-
-[[package]]
 name = "pydub"
 version = "0.25.1"
 description = "Manipulate audio with an simple and easy high level interface"
@@ -10005,17 +9949,6 @@ docs = ["setuptools-rust", "sphinx", "sphinx-rtd-theme"]
 testing = ["black (==22.3)", "datasets", "numpy", "pytest", "requests", "ruff"]
 
 [[package]]
-name = "toml"
-version = "0.10.2"
-description = "Python Library for Tom's Obvious, Minimal Language"
-optional = false
-python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-files = [
-    {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
-    {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
-]
-
-[[package]]
 name = "torch"
 version = "2.2.2"
 description = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
@@ -11537,4 +11470,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "f02d328843e8166ab0e59d6a3c23ca6a365490b03a6d9fab4bd1578336414e20"
+content-hash = "206936bf48890ed1d64e6949ca35b7601803ea5e0855178c62b1e22ae41e5c56"
