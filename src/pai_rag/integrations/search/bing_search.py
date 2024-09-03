@@ -73,13 +73,16 @@ class BingSearchTool:
         query_embedding: Any,
     ) -> List[NodeWithScore]:
         faiss_index = faiss.IndexFlatIP(self.embed_dims)
+        logger.info("Calculate doc embedding.")
         embeddings = self.embed_model.get_text_embedding_batch(
             [node.text for node in nodes]
         )
+        logger.info("Insert to index.")
         for embedding in embeddings:
             text_embedding_np = np.array(embedding, dtype="float32")[np.newaxis, :]
             faiss_index.add(text_embedding_np)
 
+        logger.info("Start search.")
         query_embedding = cast(List[float], query_embedding)
         query_embedding_np = np.array(query_embedding, dtype="float32")[np.newaxis, :]
         dists, indices = faiss_index.search(query_embedding_np, self.search_count)
