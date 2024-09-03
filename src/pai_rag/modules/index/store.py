@@ -82,7 +82,7 @@ class RagStore:
             self.vector_store = self._get_or_create_adb()
             logger.info("initialized AnalyticDB vector store.")
         elif vector_store_type == "elasticsearch":
-            self.vector_store = self._get_or_create_es()
+            self.vector_store, self.image_store = self._get_or_create_es()
             logger.info("initialized ElasticSearch vector store.")
         elif vector_store_type == "milvus":
             self.vector_store, self.image_store = self._get_or_create_milvus()
@@ -182,7 +182,7 @@ class RagStore:
     def _get_or_create_es(self):
         es_config = self.store_config["vector_store"]
 
-        return MyElasticsearchStore(
+        es_text_store = MyElasticsearchStore(
             index_name=es_config["es_index"],
             es_url=es_config["es_url"],
             es_user=es_config["es_user"],
@@ -192,6 +192,15 @@ class RagStore:
                 hybrid=True, rrf={"window_size": 50}
             ),
         )
+        es_image_store = MyElasticsearchStore(
+            index_name=es_config["es_index"] + "_for_image",
+            es_url=es_config["es_url"],
+            es_user=es_config["es_user"],
+            es_password=es_config["es_password"],
+            embedding_dimension=self.multi_modal_embed_dims,
+            retrieval_strategy=AsyncDenseVectorStrategy(hybrid=False),
+        )
+        return es_text_store, es_image_store
 
     def _get_or_create_milvus(self):
         milvus_config = self.store_config["vector_store"]
