@@ -7,6 +7,15 @@ version = "0.1.1"
 [rag.agent]
 type = "react"
 
+[rag.agent.custom_config]
+agent_file_path = ""
+
+[rag.agent.intent_detection]
+type = ""
+
+[rag.agent.tool]
+type = ""
+
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
 
@@ -56,6 +65,9 @@ vector_store.type = "FAISS"
 [rag.llm]
 source = "DashScope"
 name = "qwen-turbo"
+
+[rag.llm.function_calling_llm]
+source = ""
 
 [rag.llm.multi_modal]
 source = "PaiEas"
