@@ -14,6 +14,7 @@ def test_pai_pdf_reader():
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
     reader_config = config["rag"]["data_reader"]
+    ModelScopeDownloader().load_basic_models()
     ModelScopeDownloader().load_mineru_config()
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/pdf_data",
