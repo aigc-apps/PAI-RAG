@@ -3,6 +3,7 @@ from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+from pai_rag.utils.download_models import ModelScopeDownloader
 from llama_index.core import SimpleDirectoryReader
 
 BASE_DIR = Path(__file__).parent.parent.parent
@@ -13,6 +14,7 @@ def test_pai_pdf_reader():
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
     reader_config = config["rag"]["data_reader"]
+    ModelScopeDownloader().load_mineru_config()
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/pdf_data",
         file_extractor={
