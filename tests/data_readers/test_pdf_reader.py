@@ -13,16 +13,11 @@ def test_pai_pdf_reader():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfiguration.from_file(config_file).get_value()
     module_registry.init_modules(config)
-    reader_config = config["rag"]["data_reader"]
     ModelScopeDownloader().load_basic_models()
     ModelScopeDownloader().load_mineru_config()
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/pdf_data",
-        file_extractor={
-            ".pdf": PaiPDFReader(
-                enable_multimodal=reader_config.get("enable_multimodal", False)
-            )
-        },
+        file_extractor={".pdf": PaiPDFReader(enable_multimodal=True)},
     )
     documents = directory_reader.load_data()
     assert len(documents) > 0
