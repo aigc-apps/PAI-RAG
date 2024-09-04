@@ -33,7 +33,6 @@ type = "local"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
-enable_multimodal = true
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
@@ -44,9 +43,6 @@ enable_multimodal = true
 [rag.embedding]
 source = "DashScope"
 embed_batch_size = 10
-
-[rag.embedding.multi_modal]
-source = "cnclip"
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
@@ -63,6 +59,7 @@ vector_store.type = "FAISS"
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
 # source = "PaiEas"
+# name = ""
 # endpoint = ""
 # token = ""
 [rag.llm]
@@ -71,11 +68,6 @@ name = "qwen-turbo"
 
 [rag.llm.function_calling_llm]
 source = ""
-
-[rag.llm.multi_modal]
-source = "PaiEas"
-endpoint = ""
-token = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"

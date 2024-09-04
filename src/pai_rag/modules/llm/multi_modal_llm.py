@@ -19,6 +19,9 @@ class MultiModalLlmModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         llm_config = new_params[MODULE_PARAM_CONFIG]
+        if llm_config is None:
+            logger.info("Don't use Multi-Modal-LLM.")
+            return None
         if llm_config.source.lower() == "dashscope":
             model_name = llm_config.get("name", "qwen-vl-max")
             logger.info(
@@ -36,7 +39,7 @@ class MultiModalLlmModule(ConfigurableModule):
             logger.info("Using PAI-EAS Multi-Modal-LLM.")
             return OpenAIAlikeMultiModal(
                 model=llm_config.get(
-                    "model_name", "/model_repository/MiniCPM-V-2_6"
+                    "name", "/model_repository/MiniCPM-V-2_6"
                 ),  # TODO: change model path
                 api_base=llm_config.endpoint,
                 api_key=llm_config.token,

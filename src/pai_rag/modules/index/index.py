@@ -27,6 +27,8 @@ class RagIndex:
             self.multi_modal_embed_dims = self._get_embed_vec_dim(
                 self.multi_modal_embed_model
             )
+        else:
+            self.multi_modal_embed_dims = 0
         persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
         folder_name = get_store_persist_directory_name(config, self.embed_dims)
         self.persist_path = os.path.join(persist_path, folder_name)
