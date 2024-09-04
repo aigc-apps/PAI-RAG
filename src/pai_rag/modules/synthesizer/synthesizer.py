@@ -163,3 +163,5 @@ class SynthesizerModule(ConfigurableModule):
                 # deprecated
                 service_context=service_context,
             )
+        else:
+            raise ValueError(f"Unknown mode: {response_mode}")

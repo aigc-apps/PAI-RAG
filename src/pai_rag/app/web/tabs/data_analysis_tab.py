@@ -1,3 +1,4 @@
+import os
 import json
 import datetime
 import re
@@ -5,6 +6,9 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 from pai_rag.app.web.rag_client import rag_client, RagApiError
+
+
+DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def upload_file_fn(input_file):
@@ -61,9 +65,9 @@ def connect_database(input_db: List[Any]):
                 if isinstance(value, dict):
                     print(f"Valid input: {value}")
                 else:
-                    return "Invalid input: Input must be a list of dictionary."
+                    return "Invalid input: Input must be a dictionary."
             update_dict[element.elem_id] = value
-        print("db_config:", update_dict)
+        # print("db_config:", update_dict)
 
         rag_client.patch_config(update_dict)
         return f"[{datetime.datetime.now()}] Connect database success!"
@@ -71,7 +75,7 @@ def connect_database(input_db: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def respond(question, chatbot):
+def analysis_respond(question, chatbot):
     response_gen = rag_client.query_data_analysis(question, stream=True)
     content = ""
     chatbot.append((question, content))
@@ -99,13 +103,16 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "database",
                     "datafile",
                 ],
-                # value="datafile",
+                value="datafile",
                 label="Please choose data analysis type",
                 elem_id="data_analysis_type",
+                interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
             )
 
             # datafile
-            with gr.Column(visible=(data_analysis_type == "datafile")) as file_col:
+            with gr.Column(
+                visible=(data_analysis_type.value == "datafile")
+            ) as file_col:
                 upload_file = gr.File(
                     label="Upload csv/xlsx file for data analysis",
                     file_count="single",
@@ -124,16 +131,18 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 fn=upload_file_fn,
                 inputs=upload_file,
                 outputs=output_text,
-                api_name="upload_file_fn",
+                api_name="upload_analysis_file_fn",
             )
 
             # database
-            with gr.Column(visible=(data_analysis_type == "database")) as db_col:
+            with gr.Column(visible=(data_analysis_type.value == "database")) as db_col:
                 dialect = gr.Textbox(
                     label="Dialect", elem_id="db_dialect", value="mysql"
                 )
                 user = gr.Textbox(label="Username", elem_id="db_username")
-                password = gr.Textbox(label="Password", elem_id="db_password")
+                password = gr.Textbox(
+                    label="Password", elem_id="db_password", type="password"
+                )
                 host = gr.Textbox(label="Host", elem_id="db_host")
                 port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
                 dbname = gr.Textbox(label="DBname", elem_id="db_name")
@@ -200,39 +209,47 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
         submitBtn.click(
-            fn=respond,
+            fn=analysis_respond,
             inputs=[question, chatbot],
             outputs=[chatbot],
-            api_name="respond_clk",
+            api_name="analysis_respond_clk",
         )
 
         # 绑定Textbox提交事件，当按下Enter，调用respond函数
         question.submit(
-            respond,
+            analysis_respond,
             inputs=[question, chatbot],
             outputs=[chatbot],
-            api_name="respond_q",
+            api_name="analysis_respond_q",
         )
 
         submitBtn.click(
             fn=reset_textbox,
             inputs=[],
             outputs=[question],
-            api_name="reset_clk",
+            api_name="analysis_reset_clk",
         )
         question.submit(
             fn=reset_textbox,
             inputs=[],
             outputs=[question],
-            api_name="reset_q",
+            api_name="analysis_reset_q",
         )
         clearBtn.click(
             fn=clear_history,
             inputs=[chatbot],
             outputs=[chatbot],
-            api_name="clear_history",
+            api_name="analysi_clear_history",
         )
 
         return {
             upload_file.elem_id: upload_file,
+            dialect.elem_id: dialect,
+            user.elem_id: user,
+            password.elem_id: password,
+            host.elem_id: host,
+            port.elem_id: port,
+            dbname.elem_id: dbname,
+            tables.elem_id: tables,
+            descriptions.elem_id: descriptions,
         }
