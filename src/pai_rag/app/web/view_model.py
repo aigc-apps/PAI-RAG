@@ -113,6 +113,8 @@ class ViewModel(BaseModel):
 
     # retriever
     similarity_top_k: int = 5
+    image_similarity_top_k: int = 2
+    need_image: bool = False
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
 
@@ -264,6 +266,10 @@ class ViewModel(BaseModel):
         )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
+        view_model.image_similarity_top_k = config["retriever"].get(
+            "image_similarity_top_k", 2
+        )
+        view_model.need_image = config["retriever"].get("need_image", False)
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
@@ -400,6 +406,8 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
+        config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+        config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
@@ -529,6 +537,8 @@ class ViewModel(BaseModel):
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
         settings["reranker_type"] = {"value": self.reranker_type}
         settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["image_similarity_top_k"] = {"value": self.image_similarity_top_k}
+        settings["need_image"] = {"value": self.need_image}
         settings["reranker_model"] = {"value": self.reranker_model}
         settings["vector_weight"] = {"value": self.vector_weight}
         settings["keyword_weight"] = {"value": self.keyword_weight}

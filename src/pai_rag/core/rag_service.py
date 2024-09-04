@@ -99,23 +99,35 @@ class RagService:
     def add_knowledge(
         self,
         task_id: str,
-        input_files: List[str],
+        input_files: List[str] = None,
         filter_pattern: str = None,
+        oss_prefix: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
+        from_oss: bool = False,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
-            self.rag.load_knowledge(
-                input_files,
-                filter_pattern,
-                faiss_path,
-                enable_qa_extraction,
-                enable_raptor,
-            )
+            if not from_oss:
+                self.rag.load_knowledge(
+                    input_files,
+                    filter_pattern,
+                    faiss_path,
+                    enable_qa_extraction,
+                    enable_raptor,
+                )
+            else:
+                self.rag.load_knowledge_from_oss(
+                    filter_pattern,
+                    oss_prefix,
+                    faiss_path,
+                    enable_qa_extraction,
+                    enable_raptor,
+                )
+
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:

@@ -15,6 +15,7 @@ from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.indices.query.base import BaseQueryEngine
 from llama_index.core.indices.query.schema import QueryBundle, QueryType
 from llama_index.core.multi_modal_llms.base import MultiModalLLM
+from llama_index.core.llms.llm import LLM
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.prompts import BasePromptTemplate
 from llama_index.core.prompts.default_prompts import DEFAULT_TEXT_QA_PROMPT
@@ -22,10 +23,13 @@ from llama_index.core.prompts.mixin import PromptMixinType
 from llama_index.core.schema import ImageNode, NodeWithScore, MetadataMode
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
-    StreamingResponse,
     AsyncStreamingResponse,
     Response,
 )
+
+IMAGE_MAX_PIECES = 5
+TEXT_IMAGE_WEIGHT = 0.5
+
 
 if TYPE_CHECKING:
     from llama_index.core.indices.multi_modal import MultiModalVectorIndexRetriever
@@ -53,22 +57,40 @@ def _get_image_and_text_nodes(
     nodes: List[NodeWithScore],
 ) -> Tuple[List[NodeWithScore], List[NodeWithScore]]:
     image_nodes = []
+    text_image_nodes = []
     text_nodes = []
+    image_urls = set()
+    for res_node in nodes:
+        if isinstance(res_node.node, ImageNode):
+            image_urls.add(res_node.node.image_url)
     for res_node in nodes:
         if isinstance(res_node.node, ImageNode):
             image_nodes.append(res_node)
         else:
             text_nodes.append(res_node)
             if res_node.node.metadata.get("image_url", None):
-                image_nodes.append(
-                    NodeWithScore(
-                        node=ImageNode(
-                            image_url=res_node.node.metadata["image_url"],
-                            extra_info=res_node.node.metadata,
-                        ),
-                        score=res_node.score,
+                for image_url in res_node.node.metadata["image_url"]:
+                    if image_url in image_urls:
+                        continue
+                    extra_info = {
+                        "image_url": image_url,
+                        "file_name": res_node.node.metadata.get("file_name", ""),
+                    }
+                    text_image_nodes.append(
+                        NodeWithScore(
+                            node=ImageNode(
+                                image_url=image_url,
+                                extra_info=extra_info,
+                            ),
+                            score=res_node.score,
+                        )
                     )
-                )
+    image_nodes.sort(key=lambda x: x.score, reverse=True)
+    text_image_nodes.sort(key=lambda x: x.score, reverse=True)
+    for text_image_node in text_image_nodes:
+        text_image_node.score *= TEXT_IMAGE_WEIGHT
+    image_nodes.extend(text_image_nodes)
+    image_nodes = image_nodes[:IMAGE_MAX_PIECES]
     return image_nodes, text_nodes
 
 
@@ -92,6 +114,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         self,
         retriever: "MultiModalVectorIndexRetriever",
         multi_modal_llm: Optional[MultiModalLLM] = None,
+        llm: Optional[LLM] = None,
         text_qa_template: Optional[BasePromptTemplate] = None,
         image_qa_template: Optional[BasePromptTemplate] = None,
         node_postprocessors: Optional[List[BaseNodePostprocessor]] = None,
@@ -116,6 +139,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
                     "`llama-index-multi-modal-llms-openai` package cannot be found. "
                     "Please install it by using `pip install `llama-index-multi-modal-llms-openai`"
                 )
+        self._llm = llm
         self._text_qa_template = text_qa_template or DEFAULT_TEXT_QA_PROMPT
         self._image_qa_template = image_qa_template or DEFAULT_TEXT_QA_PROMPT
 
@@ -151,7 +175,10 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = await self._retriever.aretrieve(query_bundle)
-        return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        if self._retriever._need_image:
+            return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
+        else:
+            return nodes
 
     def synthesize(
         self,
@@ -166,28 +193,61 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         images_str = "\n\n".join([r.node.image_url for r in image_nodes])
         context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
 
-        fmt_prompt = self._text_qa_template.format(
-            context_str=context_str, query_str=query_bundle.query_str
-        )
-
         if self._stream:
-            completion_response_gen = self._multi_modal_llm.stream_complete(
-                prompt=fmt_prompt,
-                image_documents=[image_node.node for image_node in image_nodes],
-            )
-            return StreamingResponse(
-                response_gen=get_token_gen(completion_response_gen),
+            if self._retriever._need_image:
+                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                fmt_prompt = self._image_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print(
+                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                )
+                completion_response_gen = self._multi_modal_llm.stream_complete(
+                    prompt=fmt_prompt,
+                    image_documents=[image_node.node for image_node in image_nodes],
+                )
+            else:
+                fmt_prompt = self._text_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                completion_response_gen = self._llm.acomplete.stream_complete(
+                    prompt=fmt_prompt,
+                )
+
+            return AsyncStreamingResponse(
+                response_gen=aget_token_gen(completion_response_gen),
                 source_nodes=nodes,
             )
+
         else:
-            llm_response = self._multi_modal_llm.complete(
-                prompt=fmt_prompt,
-                image_documents=[image_node.node for image_node in image_nodes],
-            )
+            if self._retriever._need_image:
+                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                fmt_prompt = self._image_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print(
+                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                )
+                llm_response = self._multi_modal_llm.complete(
+                    prompt=fmt_prompt,
+                    image_documents=[image_node.node for image_node in image_nodes],
+                )
+            else:
+                fmt_prompt = self._text_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                llm_response = self._llm.complete(
+                    prompt=fmt_prompt,
+                )
 
             return Response(
                 response=str(llm_response),
                 source_nodes=nodes,
+                metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
             )
 
     def _get_response_with_images(
@@ -219,31 +279,65 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         context_str = "\n\n".join(
             [r.get_content(metadata_mode=MetadataMode.LLM) for r in text_nodes]
         )
-        images_str = "\n\n".join([r.node.image_url for r in image_nodes])
-        context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
-
-        fmt_prompt = self._text_qa_template.format(
-            context_str=context_str, query_str=query_bundle.query_str
-        )
-
         if self._stream:
-            completion_response_gen = await self._multi_modal_llm.astream_complete(
-                prompt=fmt_prompt,
-                image_documents=[image_node.node for image_node in image_nodes],
-            )
+            if self._retriever._need_image:
+                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                fmt_prompt = self._image_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print(
+                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                )
+                completion_response_gen = await self._multi_modal_llm.astream_complete(
+                    prompt=fmt_prompt,
+                    image_documents=[image_node.node for image_node in image_nodes],
+                )
+            else:
+                fmt_prompt = self._text_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                completion_response_gen = await self._llm.astream_complete(
+                    prompt=fmt_prompt,
+                )
+                print(
+                    "[MySimpleMultiModalQueryEngine] completion_response_gen",
+                    completion_response_gen,
+                )
+
             return AsyncStreamingResponse(
                 response_gen=aget_token_gen(completion_response_gen),
                 source_nodes=nodes,
             )
+
         else:
-            llm_response = await self._multi_modal_llm.acomplete(
-                prompt=fmt_prompt,
-                image_documents=[image_node.node for image_node in image_nodes],
-            )
+            if self._retriever._need_image:
+                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                fmt_prompt = self._image_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print(
+                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                )
+                llm_response = await self._multi_modal_llm.acomplete(
+                    prompt=fmt_prompt,
+                    image_documents=[image_node.node for image_node in image_nodes],
+                )
+            else:
+                fmt_prompt = self._text_qa_template.format(
+                    context_str=context_str, query_str=query_bundle.query_str
+                )
+                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                llm_response = await self._llm.acomplete(
+                    prompt=fmt_prompt,
+                )
 
             return Response(
                 response=str(llm_response),
                 source_nodes=nodes,
+                metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
             )
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:

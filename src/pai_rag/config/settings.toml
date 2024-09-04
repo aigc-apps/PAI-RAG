@@ -14,7 +14,7 @@ agent_file_path = ""
 type = ""
 
 [rag.agent.tool]
-type = "" # [built-in", "python", "api"]
+type = ""
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
@@ -25,8 +25,12 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
+[rag.data_loader]
+type = "local"
+
 [rag.data_reader]
 type = "SimpleDirectoryReader"
+enable_multimodal = true
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
@@ -45,6 +49,9 @@ source = "cnclip"
 retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
+
+[rag.function_calling_llm]
+source = ""
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -83,6 +90,7 @@ chunk_overlap = 10
 [rag.oss_store]
 bucket = ""
 endpoint = ""
+prefix = ""
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]

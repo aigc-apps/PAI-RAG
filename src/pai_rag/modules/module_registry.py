@@ -65,7 +65,7 @@ class ModuleRegistry:
         return hashlib.sha256(repr_str).hexdigest()
 
     def get_module_with_config(self, module_key, config):
-        key = repr(config)
+        key = repr(config.to_dict())
         if key in self._cache_by_config and module_key in self._cache_by_config[key]:
             return self._cache_by_config[key][module_key]
 
@@ -78,7 +78,7 @@ class ModuleRegistry:
             return mod
 
     def init_modules(self, config):
-        key = repr(config)
+        key = repr(config.to_dict())
 
         mod_cache = {}
         mod_stack = []
