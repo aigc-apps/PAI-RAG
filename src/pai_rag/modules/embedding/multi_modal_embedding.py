@@ -16,6 +16,9 @@ class MultiModalEmbeddingModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
+        if config is None:
+            logger.info("Don't use Multi-Modal.")
+            return None
         source = config["source"].lower()
         embed_batch_size = config.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE)
 
