@@ -155,9 +155,33 @@ async def upload_data(
         task_id=task_id,
         input_files=input_files,
         filter_pattern=None,
+        oss_prefix=None,
         faiss_path=faiss_path,
         enable_qa_extraction=False,
         enable_raptor=enable_raptor,
+    )
+
+    return {"task_id": task_id}
+
+
+@router.post("/upload_data_from_oss")
+async def upload_oss_data(
+    oss_prefix: str = None,
+    faiss_path: str = None,
+    enable_raptor: bool = False,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    task_id = uuid.uuid4().hex
+    background_tasks.add_task(
+        rag_service.add_knowledge,
+        task_id=task_id,
+        input_files=None,
+        filter_pattern=None,
+        oss_prefix=oss_prefix,
+        faiss_path=faiss_path,
+        enable_qa_extraction=False,
+        enable_raptor=enable_raptor,
+        from_oss=True,
     )
 
     return {"task_id": task_id}

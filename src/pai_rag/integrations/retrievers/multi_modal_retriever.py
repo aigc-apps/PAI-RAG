@@ -56,6 +56,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         index: "MultiModalVectorStoreIndex",
         similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
         image_similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
+        need_image: bool = False,
         vector_store_query_mode: VectorStoreQueryMode = VectorStoreQueryMode.DEFAULT,
         filters: Optional[MetadataFilters] = None,
         alpha: Optional[float] = None,
@@ -80,6 +81,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
 
         self._similarity_top_k = similarity_top_k
         self._image_similarity_top_k = image_similarity_top_k
+        self._need_image = need_image
         self._vector_store_query_mode = VectorStoreQueryMode(vector_store_query_mode)
         self._alpha = alpha
         self._node_ids = node_ids
@@ -360,14 +362,16 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         similarity_top_k: int,
         vector_store: BasePydanticVectorStore,
     ) -> List[NodeWithScore]:
-        query = self._build_vector_store_query(
-            query_bundle_with_embeddings, similarity_top_k
-        )
-        query_result = await vector_store.aquery(query, **self._kwargs)
-
-        return self._build_node_list_from_query_result(
-            query_result, vector_store is self._image_vector_store
-        )
+        if similarity_top_k > 0:
+            query = self._build_vector_store_query(
+                query_bundle_with_embeddings, similarity_top_k
+            )
+            query_result = await vector_store.aquery(query, **self._kwargs)
+            return self._build_node_list_from_query_result(
+                query_result, vector_store is self._image_vector_store
+            )
+        else:
+            return []
 
     async def _aimage_to_image_retrieve(
         self,

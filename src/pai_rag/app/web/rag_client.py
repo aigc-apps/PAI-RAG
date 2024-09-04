@@ -1,11 +1,11 @@
 import json
 from typing import Any
 import requests
-import html
-import markdown
 import httpx
 import os
 import re
+import markdown
+import html
 import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
@@ -103,20 +103,40 @@ class RagWebClient:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
         elif is_finished:
-            seen_filenames = set()
-            file_idx = 1
+            content_list = []
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
-                if filename and filename not in seen_filenames:
-                    seen_filenames.add(filename)
+                file_url = doc["metadata"].get("file_url", None)
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url and doc["text"] == "":
+                    formatted_image_name = re.sub(
+                        "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
+                    )
+                    content = f"""
+<span>
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc["score"]}
+</span>
+<br>
+"""
+                elif filename:
                     formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    title = doc["metadata"].get("title")
-                    if not title:
-                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                    else:
-                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+                    html_content = html.escape(
+                        re.sub(r"<.*?>", "", doc["text"])
+                    ).replace("\n", " ")
+                    if file_url:
+                        formatted_file_name = (
+                            f'<a href="{file_url}"> {formatted_file_name} </a>'
+                        )
+                    content = f"""
+<span class="text" title="{html_content}">
+    [{i+1}]: {formatted_file_name} Score:{doc["score"]}
+    <span style='color: blue; font-size: 12px; background-color: #FFCCCB'> ( {html_content[:40]}... ) </span>
+</span>
+<br>
+"""
+                content_list.append(content)
+            referenced_docs = "".join(content_list)
 
-                    file_idx += 1
         formatted_answer = ""
         if session_id:
             new_query = response["new_query"]
@@ -259,10 +279,22 @@ class RagWebClient:
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
+                file_url = doc.get("metadata", {}).get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
-                if media_url:
+                if media_url and isinstance(media_url, list):
+                    media_url = "<br>".join(
+                        [
+                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            for j, url in enumerate(media_url)
+                        ]
+                    )
+                elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
                 safe_html_content = html.escape(html_content).replace("\n", "<br>")
+                if file_url:
+                    safe_html_content = (
+                        f"""<a href="{file_url}">{safe_html_content}</a>"""
+                    )
                 formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
                     i + 1, doc["score"], safe_html_content, media_url
                 )

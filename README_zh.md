@@ -50,26 +50,24 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    conda activate rag_env
    ```
 
-   为了将pdf转化为图片，你需要使用pdf2image，请先参考这个链接下载poppler: https://github.com/Belval/pdf2image
+   ### (1) CPU环境
 
-- (1) CPU环境
+   直接使用poetry安装项目依赖包：
 
-  直接使用poetry安装项目依赖包：
+   ```bash
+    pip install poetry
+    poetry install
+   ```
 
-  ```bash
-  pip install poetry
-  poetry install
-  ```
+### (2) GPU环境
 
-- (2) GPU环境
+首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
 
-  首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
-
-  ```bash
-  mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-  pip install poetry
-  poetry install
-  ```
+```bash
+mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+pip install poetry
+poetry install
+```
 
 - 常见网络超时问题
 

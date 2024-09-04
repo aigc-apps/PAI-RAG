@@ -1,13 +1,14 @@
 import numpy as np
 import requests
 from typing import Any, List, Optional, cast
-from llama_index.readers.web import BeautifulSoupWebReader
-from llama_index.core.schema import NodeWithScore, BaseNode, Document
+from llama_index.core.schema import NodeWithScore, BaseNode
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.response_synthesizers import BaseSynthesizer
 import faiss
 import logging
+
+from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class BingSearchTool:
         self.search_lang = search_lang
 
         self.endpoint = endpoint
-        self.html_reader = BeautifulSoupWebReader()
+        self.html_reader = ParallelBeautifulSoupWebReader()
 
     def _search(
         self,
@@ -55,26 +56,14 @@ class BingSearchTool:
         )
         response_json = response.json()
         titles = [value["name"] for value in response_json["webPages"]["value"]]
-        snippets = [value["snippet"] for value in response_json["webPages"]["value"]]
         urls = [value["url"] for value in response_json["webPages"]["value"]]
-
+        url2titles = dict(zip(urls, titles))
         logger.info(f"Get {len(urls)} url links using Bing Search.")
 
-        docs = []
-        for i, url in enumerate(urls):
-            try:
-                one_doc_list = self.html_reader.load_data(
-                    [url], include_url_in_text=False
-                )
-            except Exception:
-                logger.info(f"Crawle {url} failed. Skipping.")
-                one_doc_list = [Document(text=snippets[i], id_=url, extra_info={})]
-
-            for doc in one_doc_list:
-                doc.metadata = {}
-                doc.metadata["file_name"] = url
-                doc.metadata["title"] = titles[i]
-            docs.extend(one_doc_list)
+        docs = self.html_reader.load_data(urls, include_url_in_text=False)
+        for doc in docs:
+            doc.metadata["file_url"] = doc.metadata["URL"]
+            doc.metadata["file_name"] = url2titles[doc.metadata["URL"]]
 
         return docs
 
@@ -84,13 +73,16 @@ class BingSearchTool:
         query_embedding: Any,
     ) -> List[NodeWithScore]:
         faiss_index = faiss.IndexFlatIP(self.embed_dims)
+        logger.info("Calculate doc embedding.")
         embeddings = self.embed_model.get_text_embedding_batch(
             [node.text for node in nodes]
         )
+        logger.info("Insert to index.")
         for embedding in embeddings:
             text_embedding_np = np.array(embedding, dtype="float32")[np.newaxis, :]
             faiss_index.add(text_embedding_np)
 
+        logger.info("Start search.")
         query_embedding = cast(List[float], query_embedding)
         query_embedding_np = np.array(query_embedding, dtype="float32")[np.newaxis, :]
         dists, indices = faiss_index.search(query_embedding_np, self.search_count)
