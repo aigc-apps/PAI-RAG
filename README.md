@@ -119,11 +119,33 @@ poetry install
    export DASHSCOPE_API_KEY=""
    ```
 
+   To utilize Object Storage Service (OSS) for file storage, particularly when operating in multimodal mode, you must first configure settings in both the src/pai_rag/config/settings.toml and src/pai_rag/config/settings_multi_modal.toml configuration files. Append the following TOML configuration snippet within these files:
+
+   ```toml
+   [rag.oss_store]
+   bucket = ""
+   endpoint = ""
+   prefix = ""
+   ```
+
+   Additionally, you need to introduce environment variables:
+
+   ```bash
+   export OSS_ACCESS_KEY_ID=""
+   export OSS_ACCESS_KEY_SECRET=""
+   ```
+
    ```bash
    # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
    # Download [bge-small-zh-v1.5, easyocr] by default, you can skip it by setting --skip-download-models.
    # you can use tool "load_model" to download other models including [bge-small-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
+   ```
+
+   The default configuration file is src/pai_rag/config/settings.yaml. However, if you require the multimodal llm module, you should switch to the src/pai_rag/config/settings_multi_modal.yaml file instead.
+
+   ```bash
+   pai_rag serve -c src/pai_rag/config/settings_multi_modal.yaml
    ```
 
 5. Download provided models to local directory

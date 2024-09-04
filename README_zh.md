@@ -119,11 +119,35 @@ poetry install
    export DASHSCOPE_API_KEY=""
    ```
 
+   使用OSS存储文件(使用多模态模式时必须提前配置)，在配置文件src/pai_rag/config/settings.toml和src/pai_rag/config/settings_multi_modal.toml中添加以下配置:
+
+   ```toml
+   [rag.oss_store]
+   bucket = ""
+   endpoint = ""
+   prefix = ""
+   ```
+
+   并需要在命令行引入环境变量
+
+   ```bash
+   export OSS_ACCESS_KEY_ID=""
+   export OSS_ACCESS_KEY_SECRET=""
+   ```
+
+   启动RAG服务
+
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
    # 默认启动时下载模型 [bge-small-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
    # 可使用命令行 "load_model" 下载模型 including [bge-small-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
+   ```
+
+   启动默认配置文件为src/pai_rag/config/settings.yaml，若需要使用多模态，请切换到src/pai_rag/config/settings_multi_modal.yaml
+
+   ```bash
+   pai_rag serve -c src/pai_rag/config/settings_multi_modal.yaml
    ```
 
 5. 下载其他模型到本地
