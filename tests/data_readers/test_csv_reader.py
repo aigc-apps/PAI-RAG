@@ -25,7 +25,7 @@ def test_csv_reader():
     documents = directory_reader.load_data()
     for doc in documents:
         print(doc)
-    assert len(documents) == 7
+    assert len(documents) == 897
 
 
 def test_pandas_csv_reader():
@@ -45,4 +45,4 @@ def test_pandas_csv_reader():
     documents = directory_reader.load_data()
     for doc in documents:
         print(doc)
-    assert len(documents) == 7
+    assert len(documents) == 897

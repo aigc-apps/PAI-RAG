@@ -131,3 +131,57 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "问题: {query_str}\n请返回文字和展示图片，不需要标明图片顺序"
     "答案: "
 )
+
+
+DEFAULT_TEXT_TO_SQL_TMPL = PromptTemplate(
+    "Given an input question, first create a syntactically correct {dialect} "
+    "query to run, then look at the results of the query and return the answer. "
+    "You can order the results by a relevant column to return the most "
+    "interesting examples in the database.\n\n"
+    "Never query for all the columns from a specific table, only ask for a "
+    "few relevant columns given the question.\n\n"
+    "Pay attention to use only the column names that you can see in the schema "
+    "description. "
+    "Be careful to not query for columns that do not exist. "
+    "Pay attention to which column is in which table. "
+    "Also, qualify column names with the table name when needed. "
+    "You are required to use the following format, each taking one line:\n\n"
+    "Question: Question here\n"
+    "SQLQuery: SQL Query to run\n"
+    "SQLResult: Result of the SQLQuery\n"
+    "Answer: Final answer here\n\n"
+    "Only use tables listed below.\n"
+    "{schema}\n\n"
+    "Question: {query_str}\n"
+    "SQLQuery: "
+)
+
+
+DEFAULT_INSTRUCTION_STR = (
+    "1. Convert the query to executable Python code using Pandas.\n"
+    "2. The final line of code should be a Python expression that can be called with the `eval()` function.\n"
+    "3. The code should represent a solution to the query.\n"
+    "4. PRINT ONLY THE EXPRESSION.\n"
+    "5. Do not quote the expression.\n"
+)
+
+
+DEFAULT_PANDAS_PROMPT = PromptTemplate(
+    "You are working with a pandas dataframe in Python.\n"
+    "The name of the dataframe is `df`.\n"
+    "This is the result of `print(df.head())`:\n"
+    "{df_str}\n\n"
+    "Follow these instructions:\n"
+    "{instruction_str}\n"
+    "Query: {query_str}\n\n"
+    "Expression:"
+)
+
+
+DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
+    "Given an input question, synthesize a response in Chinese from the query results.\n"
+    "Query: {query_str}\n\n"
+    "SQL or Python Code Instructions (optional):\n{query_code_instruction}\n\n"
+    "Code Query Output: {query_output}\n\n"
+    "Response: "
+)

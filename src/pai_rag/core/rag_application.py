@@ -414,3 +414,57 @@ class RagApplication:
                 None,
                 f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
             )
+
+    async def aquery_analysis(self, query: RagQuery):
+        """Query answer from RAG App asynchronously.
+
+        Generate answer from Data Analysis interface.
+
+        Args:
+            query: RagQuery
+
+        Returns:
+            RagResponse
+        """
+        session_id = query.session_id or uuid_generator()
+        self.logger.debug(f"Get session ID: {session_id}.")
+        if not query.question:
+            return RagResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
+        sessioned_config = self.config
+
+        analyst = module_registry.get_module_with_config(
+            "DataAnalysisModule", sessioned_config
+        )
+        if not analyst:
+            raise ValueError("Data Analysis not enabled. Please specify analysis type.")
+
+        if not query.stream:
+            response = await analyst.aquery(query.question)
+        else:
+            response = await analyst.astream_query(query.question)
+
+        node_results = response.source_nodes
+        new_query = query.question
+
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+
+        result_info = {
+            "session_id": session_id,
+            "docs": reference_docs,
+            "new_query": new_query,
+        }
+
+        if not query.stream:
+            return RagResponse(answer=response.response, **result_info)
+        else:
+            return event_generator_async(response=response, extra_info=result_info)

@@ -25,6 +25,9 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
+[rag.data_analysis]
+analysis_type = "nl2pandas"
+
 [rag.data_loader]
 type = "local"
 
