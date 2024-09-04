@@ -7,9 +7,6 @@ from typing import Dict, List, Any
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
-
-# from llama_index.core.retrievers import NLSQLRetriever
-# from llama_index.core import SQLDatabase
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.core.indices.list.base import SummaryIndex
 
@@ -23,13 +20,6 @@ from pai_rag.utils.prompt_template import (
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 from pai_rag.integrations.retrievers.fusion_retriever import MyQueryFusionRetriever
 
-# from pai_rag.integrations.data_analysis.nl2sql_retriever import MyNLSQLRetriever
-# from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
-
-# from sqlalchemy import create_engine, inspect
-# from sqlalchemy.engine import URL
-# from sqlalchemy.pool import QueuePool
-# import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -47,28 +37,6 @@ class RetrieverModule(ConfigurableModule):
         similarity_top_k = config.get("similarity_top_k", 5)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
-
-        # if retrieval_mode == "nl2sql":
-        #     sql_database, tables, table_descriptions = self.db_connection(config)
-        #     nl2sql_retriever = MyNLSQLRetriever(
-        #         sql_database=sql_database,
-        #         text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
-        #         tables=tables,
-        #         context_query_kwargs=table_descriptions,
-        #         sql_only=False,
-        #     )
-        #     logger.info("NL2SQLRetriever used")
-        #     return nl2sql_retriever
-
-        # if retrieval_mode == "data_analysis":
-        #     df = self.get_dataframe(config)
-        #     analysis_retriever = PandasQueryRetriever(
-        #         df=df,
-        #         instruction_str=DEFAULT_INSTRUCTION_STR,
-        #         pandas_prompt=DEFAULT_PANDAS_PROMPT,
-        #     )
-        #     logger.info("PandasQueryRetriever used")
-        #     return analysis_retriever
 
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever()
@@ -180,102 +148,3 @@ class RetrieverModule(ConfigurableModule):
 
             else:
                 raise ValueError("Not supported retrieval type.")
-
-    # def db_connection(self, config):
-    #     # get rds_db config
-    #     dialect = config.get("dialect", "sqlite")
-    #     user = config.get("user", "")
-    #     password = config.get("password", "")
-    #     host = config.get("host", "")
-    #     port = config.get("port", "")
-    #     path = config.get("path", "")
-    #     dbname = config.get("dbname", "")
-    #     desired_tables = config.get("tables", [])
-    #     table_descriptions = config.get("descriptions", {})
-
-    #     if dialect == "sqlite":
-    #         db_path = os.path.join(path, dbname)
-    #         database_uri = f"{dialect}:///{db_path}"
-    #     elif dialect == "mysql":
-    #         dd_prefix = f"{dialect}+pymysql"
-    #         database_uri = URL.create(
-    #             dd_prefix,
-    #             username=user,
-    #             password=password,
-    #             host=host,
-    #             port=port,
-    #             database=dbname,
-    #         )
-    #     else:
-    #         raise ValueError(f"not supported SQL dialect: {dialect}")
-
-    #     # use sqlalchemy engine for db connection
-    #     # engine = create_engine(database_uri, echo=False)
-    #     engine = create_engine(database_uri,
-    #                            echo=False,
-    #                            pool_size=5,
-    #                            max_overflow=10,
-    #                            pool_timeout=30,
-    #                            pool_recycle=360,
-    #                            poolclass=QueuePool)
-    #     inspector = inspect(engine)
-    #     db_tables = inspector.get_table_names()
-    #     if len(db_tables) == 0:
-    #         raise ValueError("No database tables")
-
-    #     if len(desired_tables) > 0:
-    #         tables = desired_tables
-    #     else:
-    #         tables = db_tables
-
-    #     # create an sqldatabase instance including desired table info
-    #     sql_database = SQLDatabase(engine, include_tables=tables)
-
-    #     if len(table_descriptions) > 0:
-    #         table_descriptions = table_descriptions
-    #     else:
-    #         table_descriptions = {}
-
-    #     return sql_database, tables, table_descriptions
-
-    # def get_dataframe(self, config):
-    #     file_path = config.get("file_path", "./localdata/data_analysis/")
-    #     if not file_path:
-    #         file_path = "./localdata/data_analysis/"
-
-    #     if os.path.isfile(file_path):
-    #         return self._read_file(file_path)
-    #     elif os.path.isdir(file_path):
-    #         first_file_path = self._find_first_csv_or_xlsx_in_directory(file_path)
-    #         if first_file_path:
-    #             return self._read_file(first_file_path)
-    #         else:
-    #             # raise FileExistsError("No .csv or .xlsx files found in the directory.")
-    #             logger.info("No .csv or .xlsx files found in the directory.")
-    #             return
-    #     else:
-    #         # raise FileExistsError(
-    #         #     f"{file_path} does not exist or is neither a file nor a directory."
-    #         # )
-    #         logger.info("Please provide a valid file")
-    #         return
-
-    # def _find_first_csv_or_xlsx_in_directory(self, directory_path):
-    #     # 使用 glob 模块查找第一个 .csv 或 .xlsx 文件
-    #     files = glob.glob(os.path.join(directory_path, "*.csv")) + glob.glob(
-    #         os.path.join(directory_path, "*.xlsx")
-    #     )
-    #     if files:
-    #         return files[0]
-    #     else:
-    #         return None
-
-    # def _read_file(self, file_path):
-    #     if file_path.endswith(".csv"):
-    #         df = pd.read_csv(file_path)
-    #         return df
-    #     elif file_path.endswith(".xlsx"):
-    #         df = pd.read_excel(file_path)
-    #         return df
-    #     else:
-    #         raise TypeError("Unsupported file type.")

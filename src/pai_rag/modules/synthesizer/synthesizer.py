@@ -40,9 +40,6 @@ from pai_rag.utils.prompt_template import (
 )
 from pai_rag.integrations.synthesizer.my_simple_synthesizer import MySimpleSummarize
 
-# from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
-#     DataAnalysisSynthesizer,
-# )
 
 logger = logging.getLogger(__name__)
 
@@ -166,16 +163,3 @@ class SynthesizerModule(ConfigurableModule):
                 # deprecated
                 service_context=service_context,
             )
-        # elif response_mode == "DataAnalysis":
-        #     logger.info("DataAnalysis synthesizer used")
-        #     return DataAnalysisSynthesizer(
-        #         llm=llm,
-        #         callback_manager=callback_manager,
-        #         prompt_helper=prompt_helper,
-        #         streaming=streaming,
-        #         response_synthesis_prompt=DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
-        #         # deprecated
-        #         service_context=service_context,
-        #     )
-        # else:
-        #     raise ValueError(f"Unknown mode: {response_mode}")
