@@ -82,12 +82,16 @@ class RagStore:
             self.vector_store = self._get_or_create_adb()
             logger.info("initialized AnalyticDB vector store.")
         elif vector_store_type == "elasticsearch":
+            ## TODO: verify the config here
             self.vector_store, self.image_store = self._get_or_create_es()
             logger.info("initialized ElasticSearch vector store.")
         elif vector_store_type == "milvus":
             self.vector_store, self.image_store = self._get_or_create_milvus()
         elif vector_store_type == "opensearch":
-            self.vector_store = self._get_or_create_open_search_store()
+            (
+                self.vector_store,
+                self.image_store,
+            ) = self._get_or_create_open_search_store()
         elif vector_store_type == "postgresql":
             self.vector_store = self._get_or_create_postgresql_store()
         else:
@@ -250,7 +254,7 @@ class RagStore:
 
         open_search_config = self.store_config["vector_store"]
         output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
-        db_config = AlibabaCloudOpenSearchConfig(
+        text_db_config = AlibabaCloudOpenSearchConfig(
             endpoint=open_search_config["endpoint"],
             instance_id=open_search_config["instance_id"],
             username=open_search_config["username"],
@@ -260,7 +264,19 @@ class RagStore:
             field_mapping=dict(zip(output_fields, output_fields)),
         )
 
-        return AlibabaCloudOpenSearchStore(config=db_config)
+        image_db_config = AlibabaCloudOpenSearchConfig(
+            endpoint=open_search_config["endpoint"],
+            instance_id=open_search_config["instance_id"],
+            username=open_search_config["username"],
+            password=open_search_config["password"],
+            table_name=open_search_config["table_name"] + "_for_image",
+            # OpenSearch constructor has bug in dealing with output fields
+            field_mapping=dict(zip(output_fields, output_fields)),
+        )
+
+        return AlibabaCloudOpenSearchStore(
+            config=text_db_config
+        ), AlibabaCloudOpenSearchStore(config=image_db_config)
 
     def _get_or_create_postgresql_store(self):
         pg_config = self.store_config["vector_store"]
