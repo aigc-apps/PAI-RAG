@@ -10,7 +10,7 @@ from llama_index.core import Settings
 from llama_index.core import SQLDatabase
 
 from pai_rag.utils.prompt_template import DEFAULT_TEXT_TO_SQL_TMPL
-from pai_rag.modules.retriever.my_nl2sql_retriever import (
+from pai_rag.integrations.data_analysis.nl2sql_retriever import (
     MyNLSQLRetriever,
     MySQLRetriever,
 )

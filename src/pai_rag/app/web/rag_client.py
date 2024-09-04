@@ -44,6 +44,10 @@ class RagWebClient:
         return f"{self.endpoint}service/query/search"
 
     @property
+    def data_analysis_url(self):
+        return f"{self.endpoint}service/query/data_analysis"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}service/query/llm"
 
@@ -160,6 +164,35 @@ class RagWebClient:
     ):
         q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
         r = requests.post(self.search_url, json=q, stream=True)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            yield self._format_rag_response(
+                text, response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    text, chunk_response, session_id=session_id, stream=stream
+                )
+
+    def query_data_analysis(
+        self,
+        text: str,
+        session_id: str = None,
+        stream: bool = False,
+    ):
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+        )
+        r = requests.post(self.data_analysis_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:

@@ -209,3 +209,15 @@ async def upload_datasheet(
         "destination_path": destination_path,
         "data_preview": df.head(10).to_json(orient="records", lines=False),
     }
+
+
+@router.post("/query/data_analysis")
+async def aquery_analysis(query: RagQuery):
+    response = await rag_service.aquery_analysis(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )

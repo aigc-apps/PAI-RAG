@@ -7,8 +7,8 @@ from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from pai_rag.integrations.retrievers.data_analysis_retriever import PandasQueryRetriever
-from pai_rag.integrations.synthesizer.data_analysis_synthesizer import (
+from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
+from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
 
