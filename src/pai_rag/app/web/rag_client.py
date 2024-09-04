@@ -134,6 +134,8 @@ class RagWebClient:
 </span>
 <br>
 """
+                else:
+                    content = ""
                 content_list.append(content)
             referenced_docs = "".join(content_list)
 
@@ -436,6 +438,47 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
         print("evaluate_for_response_stage response", response)
+
+    def _format_data_analysis_rag_response(
+        self, question, response, session_id: str = None, stream: bool = False
+    ):
+        if stream:
+            text = response["delta"]
+        else:
+            text = response["answer"]
+
+        docs = response.get("docs", []) or []
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        if is_finished and len(docs) == 0 and not text:
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
+            return response
+        elif is_finished:
+            seen_filenames = set()
+            file_idx = 1
+            for i, doc in enumerate(docs):
+                filename = doc["metadata"].get("file_name", None)
+                if filename and filename not in seen_filenames:
+                    seen_filenames.add(filename)
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    title = doc["metadata"].get("title")
+                    if not title:
+                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                    else:
+                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+
+                    file_idx += 1
+        formatted_answer = ""
+        if session_id:
+            new_query = response["new_query"]
+            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
+        formatted_answer += f"**Answer**: {text} \n\n"
+        if referenced_docs:
+            formatted_answer += f"**Reference**:\n {referenced_docs}"
+
+        response["result"] = formatted_answer
+        return response
 
 
 rag_client = RagWebClient()
