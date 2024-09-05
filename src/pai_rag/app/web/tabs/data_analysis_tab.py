@@ -162,6 +162,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="connect_db_button",
                     variant="primary",
                 )  # 点击功能中更新analysis_type
+
                 connection_info = gr.Textbox(
                     label="Connection Info", elem_id="db_connection_info"
                 )
