@@ -14,6 +14,8 @@ from openinference.instrumentation import using_attributes
 from typing import Any, List
 import logging
 
+from pai_rag.core.rag_trace import init_trace
+
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,8 @@ class RagService:
 
         if os.path.exists(TASK_STATUS_FILE):
             open(TASK_STATUS_FILE, "w").close()
+
+        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
 
     def get_config(self):
         try:
