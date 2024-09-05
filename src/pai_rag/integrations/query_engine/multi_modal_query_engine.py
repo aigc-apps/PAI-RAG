@@ -279,66 +279,77 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
         context_str = "\n\n".join(
             [r.get_content(metadata_mode=MetadataMode.LLM) for r in text_nodes]
         )
-        if self._stream:
-            if self._retriever._need_image:
-                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
-                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
-                fmt_prompt = self._image_qa_template.format(
-                    context_str=context_str, query_str=query_bundle.query_str
+        with self.callback_manager.event(
+            CBEventType.SYNTHESIZE,
+            payload={EventPayload.QUERY_STR: query_bundle.query_str},
+        ) as event:
+            if self._stream:
+                if self._retriever._need_image:
+                    images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                    context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                    fmt_prompt = self._image_qa_template.format(
+                        context_str=context_str, query_str=query_bundle.query_str
+                    )
+                    print(
+                        "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                    )
+                    completion_response_gen = (
+                        await self._multi_modal_llm.astream_complete(
+                            prompt=fmt_prompt,
+                            image_documents=[
+                                image_node.node for image_node in image_nodes
+                            ],
+                        )
+                    )
+                else:
+                    fmt_prompt = self._text_qa_template.format(
+                        context_str=context_str, query_str=query_bundle.query_str
+                    )
+                    print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                    completion_response_gen = await self._llm.astream_complete(
+                        prompt=fmt_prompt,
+                    )
+                    print(
+                        "[MySimpleMultiModalQueryEngine] completion_response_gen",
+                        completion_response_gen,
+                    )
+
+                response = AsyncStreamingResponse(
+                    response_gen=aget_token_gen(completion_response_gen),
+                    source_nodes=nodes,
                 )
-                print(
-                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
-                )
-                completion_response_gen = await self._multi_modal_llm.astream_complete(
-                    prompt=fmt_prompt,
-                    image_documents=[image_node.node for image_node in image_nodes],
-                )
+                event.on_end(payload={EventPayload.RESPONSE: response})
+                return response
             else:
-                fmt_prompt = self._text_qa_template.format(
-                    context_str=context_str, query_str=query_bundle.query_str
-                )
-                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
-                completion_response_gen = await self._llm.astream_complete(
-                    prompt=fmt_prompt,
-                )
-                print(
-                    "[MySimpleMultiModalQueryEngine] completion_response_gen",
-                    completion_response_gen,
-                )
+                if self._retriever._need_image:
+                    images_str = "\n\n".join([r.node.image_url for r in image_nodes])
+                    context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
+                    fmt_prompt = self._image_qa_template.format(
+                        context_str=context_str, query_str=query_bundle.query_str
+                    )
+                    print(
+                        "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                    )
+                    llm_response = await self._multi_modal_llm.acomplete(
+                        prompt=fmt_prompt,
+                        image_documents=[image_node.node for image_node in image_nodes],
+                    )
+                else:
+                    fmt_prompt = self._text_qa_template.format(
+                        context_str=context_str, query_str=query_bundle.query_str
+                    )
+                    print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
+                    llm_response = await self._llm.acomplete(
+                        prompt=fmt_prompt,
+                    )
 
-            return AsyncStreamingResponse(
-                response_gen=aget_token_gen(completion_response_gen),
-                source_nodes=nodes,
-            )
-
-        else:
-            if self._retriever._need_image:
-                images_str = "\n\n".join([r.node.image_url for r in image_nodes])
-                context_str = f"{context_str}\n\n图片链接列表: \n\n{images_str}\n\n"
-                fmt_prompt = self._image_qa_template.format(
-                    context_str=context_str, query_str=query_bundle.query_str
+                response = Response(
+                    response=str(llm_response),
+                    source_nodes=nodes,
+                    metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
                 )
-                print(
-                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
-                )
-                llm_response = await self._multi_modal_llm.acomplete(
-                    prompt=fmt_prompt,
-                    image_documents=[image_node.node for image_node in image_nodes],
-                )
-            else:
-                fmt_prompt = self._text_qa_template.format(
-                    context_str=context_str, query_str=query_bundle.query_str
-                )
-                print("[MySimpleMultiModalQueryEngine] asynthesize using llm")
-                llm_response = await self._llm.acomplete(
-                    prompt=fmt_prompt,
-                )
-
-            return Response(
-                response=str(llm_response),
-                source_nodes=nodes,
-                metadata={"text_nodes": text_nodes, "image_nodes": image_nodes},
-            )
+                event.on_end(payload={EventPayload.RESPONSE: response.response})
+                return response
 
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""

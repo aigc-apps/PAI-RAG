@@ -1,14 +1,17 @@
 from pai.llm_trace.instrumentation import init_opentelemetry
 from pai.llm_trace.instrumentation.llama_index import LlamaIndexInstrumentor
+from llama_index.core import set_global_handler
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def init_trace(trace_config):
-    if trace_config is None or trace_config.token is None:
-        logger.info("Trace disabled.")
-    else:
+    if (
+        trace_config is not None
+        and trace_config.type == "pai-llm-trace"
+        and trace_config.token
+    ):
         init_opentelemetry(
             LlamaIndexInstrumentor,
             grpc_endpoint=trace_config.endpoint,
@@ -20,4 +23,7 @@ def init_trace(trace_config):
             service_owner_id="",
             service_owner_sub_id="",
         )
-        logger.info(f"Trace enabled to endpoint: '{trace_config.endpoint}'.")
+        logger.info(f"Pai-LLM-Trace enabled with endpoint: '{trace_config.endpoint}'.")
+    else:
+        set_global_handler("arize_phoenix")
+        logger.info("Arize trace enabled.")

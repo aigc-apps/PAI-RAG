@@ -42,7 +42,7 @@ flagembedding = "^1.2.10"
 sentencepiece = "^0.2.0"
 oss2 = "^2.18.5"
 asgi-correlation-id = "^4.3.1"
-openinference-instrumentation-llama-index = "1.4.2"
+openinference-instrumentation-llama-index = "^2.2.1"
 torch = "2.2.2"
 torchvision = "0.17.2"
 transformers = "4.40.0"
@@ -92,6 +92,7 @@ detectron2 = [
 ]
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 pai-llm-trace = {url = "https://pai-llm-trace.oss-cn-zhangjiakou.aliyuncs.com/sdk_package/pai_llm_trace-1.0.0-py3-none-any.whl"}
+llama-index-callbacks-arize-phoenix = "0.1.6"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
