@@ -98,15 +98,14 @@ def reset_textbox():
 def create_data_analysis_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
-            data_analysis_type = gr.Dropdown(
+            data_analysis_type = gr.Radio(
                 choices=[
-                    "database",
                     "datafile",
+                    "database",
                 ],
                 value="datafile",
                 label="Please choose data analysis type",
                 elem_id="data_analysis_type",
-                interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
             )
 
             # datafile
@@ -159,8 +158,10 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 )
 
                 connect_db_button = gr.Button(
-                    "Connect Database"
-                )  # 点击功能中增加retriever type的选择（如果连接成功的话）
+                    "Connect Database",
+                    elem_id="connect_db_button",
+                    variant="primary",
+                )  # 点击功能中更新analysis_type
                 connection_info = gr.Textbox(
                     label="Connection Info", elem_id="db_connection_info"
                 )
