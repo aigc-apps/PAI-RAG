@@ -13,14 +13,13 @@ def create_vector_db_panel(
     components = []
     with gr.Column():
         with gr.Column():
-            _ = gr.Markdown(value="**Please check your Vector Store.**")
-            vectordb_type = gr.Dropdown(
+            _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **Vector Store**")
+            vectordb_type = gr.Radio(
                 [
-                    "Hologres",
-                    "Milvus",
-                    "ElasticSearch",
-                    "AnalyticDB",
                     "FAISS",
+                    "ElasticSearch",
+                    "Milvus",
+                    "Hologres",
                     "OpenSearch",
                     "PostgreSQL",
                 ],
@@ -34,11 +33,13 @@ def create_vector_db_panel(
                     label="access-key-id",
                     type="password",
                     elem_id="adb_ak",
+                    interactive=True,
                 )
                 adb_sk = gr.Textbox(
                     label="access-key-secret",
                     type="password",
                     elem_id="adb_sk",
+                    interactive=True,
                 )
                 adb_region_id = gr.Dropdown(
                     [
@@ -56,240 +57,306 @@ def create_vector_db_panel(
                 adb_instance_id = gr.Textbox(
                     label="InstanceId",
                     elem_id="adb_instance_id",
+                    interactive=True,
                 )
-                adb_account = gr.Textbox(label="Account", elem_id="adb_account")
+                adb_account = gr.Textbox(
+                    label="Account",
+                    elem_id="adb_account",
+                    interactive=True,
+                )
                 adb_account_password = gr.Textbox(
                     label="Password",
                     type="password",
                     elem_id="adb_account_password",
+                    interactive=True,
                 )
                 adb_namespace = gr.Textbox(
                     label="Namespace",
                     elem_id="adb_namespace",
+                    interactive=True,
                 )
                 adb_collection = gr.Textbox(
                     label="CollectionName",
                     elem_id="adb_collection",
+                    interactive=True,
                 )
 
-                connect_btn_adb = gr.Button("Connect AnalyticDB", variant="primary")
-                con_state_adb = gr.Textbox(label="Connection Info: ")
-                inputs_adb = input_elements.union(
-                    {
-                        vectordb_type,
-                        adb_ak,
-                        adb_sk,
-                        adb_region_id,
-                        adb_instance_id,
-                        adb_account,
-                        adb_account_password,
-                        adb_namespace,
-                        adb_collection,
-                    }
-                )
-                connect_btn_adb.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_adb,
-                    outputs=con_state_adb,
-                    api_name="connect_adb",
-                )
+                # connect_btn_adb = gr.Button("Connect AnalyticDB", variant="primary")
+                # con_state_adb = gr.Textbox(label="Connection Info: ")
+                # inputs_adb = input_elements.union(
+                #     {
+                #         vectordb_type,
+                #         adb_ak,
+                #         adb_sk,
+                #         adb_region_id,
+                #         adb_instance_id,
+                #         adb_account,
+                #         adb_account_password,
+                #         adb_namespace,
+                #         adb_collection,
+                #     }
+                # )
+                # connect_btn_adb.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_adb,
+                #     outputs=con_state_adb,
+                #     api_name="connect_adb",
+                # )
             # Hologres
             with gr.Column(visible=(vectordb_type == "Hologres")) as holo_col:
-                hologres_host = gr.Textbox(
-                    label="Host",
-                    elem_id="hologres_host",
-                )
-                hologres_port = gr.Textbox(
-                    label="Port",
-                    elem_id="hologres_port",
-                )
-                hologres_database = gr.Textbox(
-                    label="Database",
-                    elem_id="hologres_database",
-                )
-                hologres_user = gr.Textbox(
-                    label="User",
-                    elem_id="hologres_user",
-                )
-                hologres_password = gr.Textbox(
-                    label="Password",
-                    type="password",
-                    elem_id="hologres_password",
-                )
-                hologres_table = gr.Textbox(
-                    label="Table",
-                    elem_id="hologres_table",
-                )
+                with gr.Row():
+                    hologres_host = gr.Textbox(
+                        label="Host",
+                        elem_id="hologres_host",
+                        interactive=True,
+                    )
+                    hologres_port = gr.Textbox(
+                        label="Port",
+                        elem_id="hologres_port",
+                        interactive=True,
+                    )
+                with gr.Row():
+                    hologres_user = gr.Textbox(
+                        label="User",
+                        elem_id="hologres_user",
+                        interactive=True,
+                    )
+                    hologres_password = gr.Textbox(
+                        label="Password",
+                        type="password",
+                        elem_id="hologres_password",
+                        interactive=True,
+                    )
+                with gr.Row():
+                    hologres_database = gr.Textbox(
+                        label="Database",
+                        elem_id="hologres_database",
+                        interactive=True,
+                    )
+                    hologres_table = gr.Textbox(
+                        label="Table",
+                        elem_id="hologres_table",
+                        interactive=True,
+                    )
                 hologres_pre_delete = gr.Checkbox(
                     label="Yes",
                     info="Clear hologres table on connection.",
                     elem_id="hologres_pre_delete",
                 )
 
-                connect_btn_hologres = gr.Button("Connect Hologres", variant="primary")
-                con_state_hologres = gr.Textbox(label="Connection Info: ")
-                inputs_hologres = input_elements.union(
-                    {
-                        vectordb_type,
-                        hologres_host,
-                        hologres_user,
-                        hologres_database,
-                        hologres_password,
-                        hologres_table,
-                        hologres_pre_delete,
-                    }
-                )
-                connect_btn_hologres.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_hologres,
-                    outputs=con_state_hologres,
-                    api_name="connect_hologres",
-                )
+                # connect_btn_hologres = gr.Button("Connect Hologres", variant="primary")
+                # con_state_hologres = gr.Textbox(label="Connection Info: ")
+                # inputs_hologres = input_elements.union(
+                #     {
+                #         vectordb_type,
+                #         hologres_host,
+                #         hologres_user,
+                #         hologres_database,
+                #         hologres_password,
+                #         hologres_table,
+                #         hologres_pre_delete,
+                #     }
+                # )
+                # connect_btn_hologres.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_hologres,
+                #     outputs=con_state_hologres,
+                #     api_name="connect_hologres",
+                # )
 
             with gr.Column(visible=(vectordb_type == "ElasticSearch")) as es_col:
-                es_url = gr.Textbox(label="ElasticSearch Url", elem_id="es_url")
-                es_index = gr.Textbox(label="Index Name", elem_id="es_index")
-                es_user = gr.Textbox(label="ES User", elem_id="es_user")
-                es_password = gr.Textbox(
-                    label="ES password",
-                    type="password",
-                    elem_id="es_password",
-                )
+                with gr.Row():
+                    es_url = gr.Textbox(
+                        label="ElasticSearch Url", elem_id="es_url", interactive=True
+                    )
+                    es_index = gr.Textbox(
+                        label="Index Name", elem_id="es_index", interactive=True
+                    )
+                with gr.Row():
+                    es_user = gr.Textbox(
+                        label="ES User", elem_id="es_user", interactive=True
+                    )
+                    es_password = gr.Textbox(
+                        label="ES password",
+                        type="password",
+                        elem_id="es_password",
+                        interactive=True,
+                    )
 
-                inputs_es = input_elements.union(
-                    {vectordb_type, es_url, es_index, es_user, es_password}
-                )
-                connect_btn_es = gr.Button("Connect ElasticSearch", variant="primary")
-                con_state_es = gr.Textbox(label="Connection Info: ")
-                connect_btn_es.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_es,
-                    outputs=con_state_es,
-                    api_name="connect_elasticsearch",
-                )
+                # inputs_es = input_elements.union(
+                #     {vectordb_type, es_url, es_index, es_user, es_password}
+                # )
+                # connect_btn_es = gr.Button("Connect ElasticSearch", variant="primary")
+                # con_state_es = gr.Textbox(label="Connection Info: ")
+                # connect_btn_es.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_es,
+                #     outputs=con_state_es,
+                #     api_name="connect_elasticsearch",
+                # )
 
             with gr.Column(visible=(vectordb_type == "Milvus")) as milvus_col:
-                milvus_host = gr.Textbox(label="Host", elem_id="milvus_host")
-                milvus_port = gr.Textbox(label="Port", elem_id="milvus_port")
+                with gr.Row():
+                    milvus_host = gr.Textbox(
+                        label="Host", elem_id="milvus_host", interactive=True
+                    )
+                    milvus_port = gr.Textbox(
+                        label="Port", elem_id="milvus_port", interactive=True
+                    )
+                with gr.Row():
+                    milvus_user = gr.Textbox(
+                        label="User", elem_id="milvus_user", interactive=True
+                    )
+                    milvus_password = gr.Textbox(
+                        label="Password",
+                        type="password",
+                        elem_id="milvus_password",
+                        interactive=True,
+                    )
+                with gr.Row():
+                    milvus_database = gr.Textbox(
+                        label="Database",
+                        elem_id="milvus_database",
+                        interactive=True,
+                    )
+                    milvus_collection_name = gr.Textbox(
+                        label="Collection name",
+                        elem_id="milvus_collection_name",
+                        interactive=True,
+                    )
 
-                milvus_user = gr.Textbox(label="User", elem_id="milvus_user")
-                milvus_password = gr.Textbox(
-                    label="Password",
-                    type="password",
-                    elem_id="milvus_password",
-                )
-                milvus_database = gr.Textbox(
-                    label="Database",
-                    elem_id="milvus_database",
-                )
-                milvus_collection_name = gr.Textbox(
-                    label="Collection name",
-                    elem_id="milvus_collection_name",
-                )
-
-                inputs_milvus = input_elements.union(
-                    {
-                        vectordb_type,
-                        milvus_host,
-                        milvus_port,
-                        milvus_user,
-                        milvus_password,
-                        milvus_database,
-                        milvus_collection_name,
-                    }
-                )
-                connect_btn_milvus = gr.Button("Connect Milvus", variant="primary")
-                con_state_milvus = gr.Textbox(label="Connection Info: ")
-                connect_btn_milvus.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_milvus,
-                    outputs=con_state_milvus,
-                    api_name="connect_milvus",
-                )
+                # inputs_milvus = input_elements.union(
+                #     {
+                #         vectordb_type,
+                #         milvus_host,
+                #         milvus_port,
+                #         milvus_user,
+                #         milvus_password,
+                #         milvus_database,
+                #         milvus_collection_name,
+                #     }
+                # )
+                # connect_btn_milvus = gr.Button("Connect Milvus", variant="primary")
+                # con_state_milvus = gr.Textbox(label="Connection Info: ")
+                # connect_btn_milvus.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_milvus,
+                #     outputs=con_state_milvus,
+                #     api_name="connect_milvus",
+                # )
 
             with gr.Column(visible=(vectordb_type == "FAISS")) as faiss_col:
-                faiss_path = gr.Textbox(label="Path", elem_id="faiss_path")
-                connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
-                con_state_faiss = gr.Textbox(label="Connection Info: ")
-                inputs_faiss = input_elements.union({vectordb_type, faiss_path})
-                connect_btn_faiss.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_faiss,
-                    outputs=con_state_faiss,
-                    api_name="connect_faiss",
+                faiss_path = gr.Textbox(
+                    label="Path", elem_id="faiss_path", interactive=True
                 )
+                # connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
+                # con_state_faiss = gr.Textbox(label="Connection Info: ")
+                # inputs_faiss = input_elements.union({vectordb_type, faiss_path})
+                # connect_btn_faiss.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_faiss,
+                #     outputs=con_state_faiss,
+                #     api_name="connect_faiss",
+                # )
 
             with gr.Column(visible=(vectordb_type == "OpenSearch")) as opensearch_col:
-                opensearch_endpoint = gr.Textbox(
-                    label="Endpoint", elem_id="opensearch_endpoint"
-                )
-                opensearch_instance_id = gr.Textbox(
-                    label="InstanceId", elem_id="opensearch_instance_id"
-                )
-                opensearch_username = gr.Textbox(
-                    label="UserName", elem_id="opensearch_username"
-                )
-                opensearch_password = gr.Textbox(
-                    label="Password", type="password", elem_id="opensearch_password"
-                )
+                with gr.Row():
+                    opensearch_endpoint = gr.Textbox(
+                        label="Endpoint",
+                        elem_id="opensearch_endpoint",
+                        interactive=True,
+                    )
+                    opensearch_instance_id = gr.Textbox(
+                        label="InstanceId",
+                        elem_id="opensearch_instance_id",
+                        interactive=True,
+                    )
+                with gr.Row():
+                    opensearch_username = gr.Textbox(
+                        label="UserName",
+                        elem_id="opensearch_username",
+                        interactive=True,
+                    )
+                    opensearch_password = gr.Textbox(
+                        label="Password",
+                        type="password",
+                        elem_id="opensearch_password",
+                        interactive=True,
+                    )
                 opensearch_table_name = gr.Textbox(
-                    label="TableName", elem_id="opensearch_table_name"
+                    label="TableName", elem_id="opensearch_table_name", interactive=True
                 )
 
-                connect_btn_opensearch = gr.Button(
-                    "Connect OpenSearch", variant="primary"
-                )
-                con_state_opensearch = gr.Textbox(label="Connection Info: ")
-                inputs_opensearch = input_elements.union(
-                    {
-                        vectordb_type,
-                        opensearch_endpoint,
-                        opensearch_instance_id,
-                        opensearch_username,
-                        opensearch_password,
-                        opensearch_table_name,
-                    }
-                )
-                connect_btn_opensearch.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_opensearch,
-                    outputs=con_state_opensearch,
-                    api_name="connect_opensearch",
-                )
+                # connect_btn_opensearch = gr.Button(
+                #     "Connect OpenSearch", variant="primary"
+                # )
+                # con_state_opensearch = gr.Textbox(label="Connection Info: ")
+                # inputs_opensearch = input_elements.union(
+                #     {
+                #         vectordb_type,
+                #         opensearch_endpoint,
+                #         opensearch_instance_id,
+                #         opensearch_username,
+                #         opensearch_password,
+                #         opensearch_table_name,
+                #     }
+                # )
+                # connect_btn_opensearch.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_opensearch,
+                #     outputs=con_state_opensearch,
+                #     api_name="connect_opensearch",
+                # )
             with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
-                postgresql_host = gr.Textbox(label="Host", elem_id="postgresql_host")
-                postgresql_port = gr.Textbox(label="Port", elem_id="postgresql_port")
-                postgresql_username = gr.Textbox(
-                    label="UserName", elem_id="postgresql_username"
-                )
-                postgresql_password = gr.Textbox(
-                    label="Password", type="password", elem_id="postgresql_password"
-                )
-                postgresql_database = gr.Textbox(
-                    label="Database", elem_id="postgresql_database"
-                )
-                postgresql_table_name = gr.Textbox(
-                    label="TableName", elem_id="postgresql_table_name"
-                )
-                connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
-                con_state_pg = gr.Textbox(label="Connection Info: ")
-                inputs_pg = input_elements.union(
-                    {
-                        vectordb_type,
-                        postgresql_host,
-                        postgresql_port,
-                        postgresql_database,
-                        postgresql_table_name,
-                        postgresql_username,
-                        postgresql_password,
-                    }
-                )
-                connect_btn_pg.click(
-                    fn=connect_vector_func,
-                    inputs=inputs_pg,
-                    outputs=con_state_pg,
-                    api_name="connect_pg",
-                )
+                with gr.Row():
+                    postgresql_host = gr.Textbox(
+                        label="Host", elem_id="postgresql_host", interactive=True
+                    )
+                    postgresql_port = gr.Textbox(
+                        label="Port", elem_id="postgresql_port", interactive=True
+                    )
+                with gr.Row():
+                    postgresql_username = gr.Textbox(
+                        label="UserName",
+                        elem_id="postgresql_username",
+                        interactive=True,
+                    )
+                    postgresql_password = gr.Textbox(
+                        label="Password",
+                        type="password",
+                        elem_id="postgresql_password",
+                        interactive=True,
+                    )
+                with gr.Row():
+                    postgresql_database = gr.Textbox(
+                        label="Database",
+                        elem_id="postgresql_database",
+                        interactive=True,
+                    )
+                    postgresql_table_name = gr.Textbox(
+                        label="TableName",
+                        elem_id="postgresql_table_name",
+                        interactive=True,
+                    )
+                # connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
+                # con_state_pg = gr.Textbox(label="Connection Info: ")
+                # inputs_pg = input_elements.union(
+                #     {
+                #         vectordb_type,
+                #         postgresql_host,
+                #         postgresql_port,
+                #         postgresql_database,
+                #         postgresql_table_name,
+                #         postgresql_username,
+                #         postgresql_password,
+                #     }
+                # )
+                # connect_btn_pg.click(
+                #     fn=connect_vector_func,
+                #     inputs=inputs_pg,
+                #     outputs=con_state_pg,
+                #     api_name="connect_pg",
+                # )
 
             def change_vectordb_conn(vectordb_type):
                 adb_visible = False

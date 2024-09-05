@@ -3,7 +3,9 @@ import gradio as gr
 import os
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_client import rag_client
-from pai_rag.app.web.tabs.settings_tab import create_setting_tab
+
+# from pai_rag.app.web.tabs.settings_tab import create_setting_tab
+from pai_rag.app.web.tabs.settings_tab_1 import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.agent_tab import create_agent_tab
