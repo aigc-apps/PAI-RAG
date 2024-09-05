@@ -44,6 +44,10 @@ class RagWebClient:
         return f"{self.endpoint}service/query/search"
 
     @property
+    def data_analysis_url(self):
+        return f"{self.endpoint}service/query/data_analysis"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}service/query/llm"
 
@@ -58,6 +62,10 @@ class RagWebClient:
     @property
     def load_data_url(self):
         return f"{self.endpoint}service/upload_data"
+
+    @property
+    def load_datasheet_url(self):
+        return f"{self.endpoint}service/upload_datasheet"
 
     @property
     def load_agent_cfg_url(self):
@@ -126,6 +134,8 @@ class RagWebClient:
 </span>
 <br>
 """
+                else:
+                    content = ""
                 content_list.append(content)
             referenced_docs = "".join(content_list)
 
@@ -176,6 +186,35 @@ class RagWebClient:
     ):
         q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
         r = requests.post(self.search_url, json=q, stream=True)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            yield self._format_rag_response(
+                text, response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    text, chunk_response, session_id=session_id, stream=stream
+                )
+
+    def query_data_analysis(
+        self,
+        text: str,
+        session_id: str = None,
+        stream: bool = False,
+    ):
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+        )
+        r = requests.post(self.data_analysis_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
@@ -298,6 +337,30 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
+    def add_datasheet(
+        self,
+        input_file: str,
+    ):
+        file_obj = open(input_file, "rb")
+        mimetype = mimetypes.guess_type(input_file)[0]
+        files = {"file": (input_file, file_obj, mimetype)}
+        try:
+            r = requests.post(
+                self.load_datasheet_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        except Exception as e:
+            print(f"add_datasheet failed: {e}")
+        finally:
+            file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
     async def get_knowledge_state(self, task_id: str):
         async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
@@ -375,6 +438,47 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
         print("evaluate_for_response_stage response", response)
+
+    def _format_data_analysis_rag_response(
+        self, question, response, session_id: str = None, stream: bool = False
+    ):
+        if stream:
+            text = response["delta"]
+        else:
+            text = response["answer"]
+
+        docs = response.get("docs", []) or []
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        if is_finished and len(docs) == 0 and not text:
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
+            return response
+        elif is_finished:
+            seen_filenames = set()
+            file_idx = 1
+            for i, doc in enumerate(docs):
+                filename = doc["metadata"].get("file_name", None)
+                if filename and filename not in seen_filenames:
+                    seen_filenames.add(filename)
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    title = doc["metadata"].get("title")
+                    if not title:
+                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                    else:
+                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+
+                    file_idx += 1
+        formatted_answer = ""
+        if session_id:
+            new_query = response["new_query"]
+            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
+        formatted_answer += f"**Answer**: {text} \n\n"
+        if referenced_docs:
+            formatted_answer += f"**Reference**:\n {referenced_docs}"
+
+        response["result"] = formatted_answer
+        return response
 
 
 rag_client = RagWebClient()

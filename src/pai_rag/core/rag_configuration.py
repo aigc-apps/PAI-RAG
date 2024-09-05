@@ -51,15 +51,17 @@ class RagConfiguration:
     def update(self, new_value: Dynaconf):
         if self.config.get("rag", None):
             if not new_value.get("llm").get("multi_modal"):
-                new_value["llm"]["multi_modal"] = self.config["rag.llm.multi_modal"]
+                new_value["llm"]["multi_modal"] = self.config.get(
+                    "rag.llm.multi_modal", None
+                )
             if not new_value.get("llm").get("function_calling_llm"):
-                new_value["llm"]["function_calling_llm"] = self.config[
-                    "rag.llm.function_calling_llm"
-                ]
+                new_value["llm"]["function_calling_llm"] = self.config.get(
+                    "rag.llm.function_calling_llm", None
+                )
             if not new_value.get("embedding").get("multi_modal"):
-                new_value["embedding"]["multi_modal"] = self.config[
-                    "rag.embedding.multi_modal"
-                ]
+                new_value["embedding"]["multi_modal"] = self.config.get(
+                    "rag.embedding.multi_modal", None
+                )
 
             self.config.rag.update(new_value, tomlfy=True, merge=True)
 
@@ -67,7 +69,7 @@ class RagConfiguration:
         """Save configuration to file."""
         data = self.config.as_dict()
         os.makedirs("localdata", exist_ok=True)
-        loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict(), merge=True)
+        loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())
 
     def get_config_mtime(self):
         try:

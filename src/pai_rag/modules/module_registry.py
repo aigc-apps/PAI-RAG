@@ -31,6 +31,7 @@ MODULE_CONFIG_KEY_MAP = {
     "BM25IndexModule": "rag.bm25",
     "SearchModule": "rag.search",
     "NodesEnhancementModule": "rag.node_enhancement",
+    "DataAnalysisModule": "rag.data_analysis",
 }
 
 

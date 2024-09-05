@@ -123,6 +123,18 @@ class ViewModel(BaseModel):
     search_count: int = 10
     search_lang: str = "zh-CN"
 
+    # data_analysis
+    analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
+    analysis_file_path: str = None
+    db_dialect: str = "mysql"
+    db_username: str = None
+    db_password: str = None
+    db_host: str = None
+    db_port: int = 3306
+    db_name: str = None
+    db_tables: list = []
+    db_descriptions: dict = {}
+
     # postprocessor
     reranker_type: str = (
         "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
@@ -278,6 +290,23 @@ class ViewModel(BaseModel):
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
 
+        if config["data_analysis"]["analysis_type"] == "nl2pandas":
+            view_model.analysis_type = "nl2pandas"
+        elif config["data_analysis"]["analysis_type"] == "nl2sql":
+            view_model.analysis_type = "nl2sql"
+
+        view_model.analysis_file_path = config["data_analysis"].get(
+            "analysis_file_path", None
+        )
+        view_model.db_dialect = config["data_analysis"].get("dialect", "mysql")
+        view_model.db_username = config["data_analysis"].get("user", None)
+        view_model.db_password = config["data_analysis"].get("password", None)
+        view_model.db_host = config["data_analysis"].get("host", None)
+        view_model.db_port = config["data_analysis"].get("port", 3306)
+        view_model.db_name = config["data_analysis"].get("dbname", None)
+        view_model.db_tables = config["data_analysis"].get("tables", None)
+        view_model.db_descriptions = config["data_analysis"].get("descriptions", None)
+
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
         )
@@ -415,6 +444,21 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
+
+        if self.analysis_type == "nl2pandas":
+            config["data_analysis"]["analysis_type"] = "nl2pandas"
+        elif self.analysis_type == "nl2sql":
+            config["data_analysis"]["analysis_type"] = "nl2sql"
+
+        config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
+        config["data_analysis"]["dialect"] = self.db_dialect
+        config["data_analysis"]["user"] = self.db_username
+        config["data_analysis"]["password"] = self.db_password
+        config["data_analysis"]["host"] = self.db_host
+        config["data_analysis"]["port"] = self.db_port
+        config["data_analysis"]["dbname"] = self.db_name
+        config["data_analysis"]["tables"] = self.db_tables
+        config["data_analysis"]["descriptions"] = self.db_descriptions
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
@@ -617,4 +661,17 @@ class ViewModel(BaseModel):
         settings["search_api_key"] = {"value": self.search_api_key}
         settings["search_lang"] = {"value": self.search_lang}
         settings["search_count"] = {"value": self.search_count}
+
+        # data_analysis
+        settings["analysis_type"] = {"value": self.analysis_type}
+        settings["analysis_file_path"] = {"value": self.analysis_file_path}
+        settings["db_dialect"] = {"value": self.db_dialect}
+        settings["db_username"] = {"value": self.db_username}
+        settings["db_password"] = {"value": self.db_password}
+        settings["db_host"] = {"value": self.db_host}
+        settings["db_port"] = {"value": self.db_port}
+        settings["db_name"] = {"value": self.db_name}
+        settings["db_tables"] = {"value": self.db_tables}
+        settings["db_descriptions"] = {"value": self.db_descriptions}
+
         return settings
