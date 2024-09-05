@@ -10,6 +10,7 @@ from pai_rag.app.web.ui_constants import (
 )
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import tempfile
 import json
@@ -304,8 +305,22 @@ class ViewModel(BaseModel):
         view_model.db_host = config["data_analysis"].get("host", None)
         view_model.db_port = config["data_analysis"].get("port", 3306)
         view_model.db_name = config["data_analysis"].get("dbname", None)
-        view_model.db_tables = config["data_analysis"].get("tables", None)
-        view_model.db_descriptions = config["data_analysis"].get("descriptions", None)
+
+        if config["data_analysis"].get("tables", None):
+            view_model.db_tables = ", ".join(
+                config["data_analysis"].get("tables", None)
+            )
+        else:
+            view_model.db_tables = None
+        if config["data_analysis"].get("descriptions", None):
+            view_model.db_descriptions = re.sub(
+                r"'", '"', str(config["data_analysis"].get("descriptions", None))
+            )  # str(dict)
+        else:
+            view_model.db_descriptions = None
+        # view_model.db_descriptions = json.dumps(config["data_analysis"].get("descriptions", None))
+        # if view_model.db_descriptions == '""':
+        #     view_model.db_descriptions = None
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"

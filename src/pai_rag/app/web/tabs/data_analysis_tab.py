@@ -154,7 +154,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     label="Descriptions",
                     lines=5,
                     elem_id="db_descriptions",
-                    placeholder="A dict of table descriptions, e.g. {'table_A': 'text_description_A', 'table_B': 'text_description_B'}",
+                    placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
 
                 connect_db_button = gr.Button(
