@@ -198,18 +198,14 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
-            )
+            yield self._format_rag_response(text, response, stream=stream)
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
                 chunk_response = dotdict(json.loads(chunk))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
-                yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
-                )
+                yield self._format_rag_response(text, chunk_response, stream=stream)
 
     def query_data_analysis(
         self,
@@ -228,18 +224,14 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
-            )
+            yield self._format_rag_response(text, response, stream=stream)
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
                 chunk_response = dotdict(json.loads(chunk))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
-                yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
-                )
+                yield self._format_rag_response(text, chunk_response, stream=stream)
 
     def query_llm(
         self,
