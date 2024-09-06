@@ -1,14 +1,14 @@
 import gradio as gr
-from typing import Any, Set, Callable, Dict
+from typing import Any, Set, Dict
 from pai_rag.app.web.utils import components_to_dict
 import os
+import pai_rag.app.web.event_listeners as ev_listeners
 
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def create_vector_db_panel(
     input_elements: Set[Any],
-    connect_vector_func: Callable[[Any], str],
 ) -> Dict[str, Any]:
     components = []
     with gr.Column():
@@ -81,27 +81,6 @@ def create_vector_db_panel(
                     interactive=True,
                 )
 
-                # connect_btn_adb = gr.Button("Connect AnalyticDB", variant="primary")
-                # con_state_adb = gr.Textbox(label="Connection Info: ")
-                # inputs_adb = input_elements.union(
-                #     {
-                #         vectordb_type,
-                #         adb_ak,
-                #         adb_sk,
-                #         adb_region_id,
-                #         adb_instance_id,
-                #         adb_account,
-                #         adb_account_password,
-                #         adb_namespace,
-                #         adb_collection,
-                #     }
-                # )
-                # connect_btn_adb.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_adb,
-                #     outputs=con_state_adb,
-                #     api_name="connect_adb",
-                # )
             # Hologres
             with gr.Column(visible=(vectordb_type == "Hologres")) as holo_col:
                 with gr.Row():
@@ -144,26 +123,6 @@ def create_vector_db_panel(
                     elem_id="hologres_pre_delete",
                 )
 
-                # connect_btn_hologres = gr.Button("Connect Hologres", variant="primary")
-                # con_state_hologres = gr.Textbox(label="Connection Info: ")
-                # inputs_hologres = input_elements.union(
-                #     {
-                #         vectordb_type,
-                #         hologres_host,
-                #         hologres_user,
-                #         hologres_database,
-                #         hologres_password,
-                #         hologres_table,
-                #         hologres_pre_delete,
-                #     }
-                # )
-                # connect_btn_hologres.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_hologres,
-                #     outputs=con_state_hologres,
-                #     api_name="connect_hologres",
-                # )
-
             with gr.Column(visible=(vectordb_type == "ElasticSearch")) as es_col:
                 with gr.Row():
                     es_url = gr.Textbox(
@@ -182,18 +141,6 @@ def create_vector_db_panel(
                         elem_id="es_password",
                         interactive=True,
                     )
-
-                # inputs_es = input_elements.union(
-                #     {vectordb_type, es_url, es_index, es_user, es_password}
-                # )
-                # connect_btn_es = gr.Button("Connect ElasticSearch", variant="primary")
-                # con_state_es = gr.Textbox(label="Connection Info: ")
-                # connect_btn_es.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_es,
-                #     outputs=con_state_es,
-                #     api_name="connect_elasticsearch",
-                # )
 
             with gr.Column(visible=(vectordb_type == "Milvus")) as milvus_col:
                 with gr.Row():
@@ -225,39 +172,10 @@ def create_vector_db_panel(
                         interactive=True,
                     )
 
-                # inputs_milvus = input_elements.union(
-                #     {
-                #         vectordb_type,
-                #         milvus_host,
-                #         milvus_port,
-                #         milvus_user,
-                #         milvus_password,
-                #         milvus_database,
-                #         milvus_collection_name,
-                #     }
-                # )
-                # connect_btn_milvus = gr.Button("Connect Milvus", variant="primary")
-                # con_state_milvus = gr.Textbox(label="Connection Info: ")
-                # connect_btn_milvus.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_milvus,
-                #     outputs=con_state_milvus,
-                #     api_name="connect_milvus",
-                # )
-
             with gr.Column(visible=(vectordb_type == "FAISS")) as faiss_col:
                 faiss_path = gr.Textbox(
                     label="Path", elem_id="faiss_path", interactive=True
                 )
-                # connect_btn_faiss = gr.Button("Connect Faiss", variant="primary")
-                # con_state_faiss = gr.Textbox(label="Connection Info: ")
-                # inputs_faiss = input_elements.union({vectordb_type, faiss_path})
-                # connect_btn_faiss.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_faiss,
-                #     outputs=con_state_faiss,
-                #     api_name="connect_faiss",
-                # )
 
             with gr.Column(visible=(vectordb_type == "OpenSearch")) as opensearch_col:
                 with gr.Row():
@@ -287,26 +205,6 @@ def create_vector_db_panel(
                     label="TableName", elem_id="opensearch_table_name", interactive=True
                 )
 
-                # connect_btn_opensearch = gr.Button(
-                #     "Connect OpenSearch", variant="primary"
-                # )
-                # con_state_opensearch = gr.Textbox(label="Connection Info: ")
-                # inputs_opensearch = input_elements.union(
-                #     {
-                #         vectordb_type,
-                #         opensearch_endpoint,
-                #         opensearch_instance_id,
-                #         opensearch_username,
-                #         opensearch_password,
-                #         opensearch_table_name,
-                #     }
-                # )
-                # connect_btn_opensearch.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_opensearch,
-                #     outputs=con_state_opensearch,
-                #     api_name="connect_opensearch",
-                # )
             with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
                 with gr.Row():
                     postgresql_host = gr.Textbox(
@@ -338,114 +236,67 @@ def create_vector_db_panel(
                         elem_id="postgresql_table_name",
                         interactive=True,
                     )
-                # connect_btn_pg = gr.Button("Connect PostgreSQL", variant="primary")
-                # con_state_pg = gr.Textbox(label="Connection Info: ")
-                # inputs_pg = input_elements.union(
-                #     {
-                #         vectordb_type,
-                #         postgresql_host,
-                #         postgresql_port,
-                #         postgresql_database,
-                #         postgresql_table_name,
-                #         postgresql_username,
-                #         postgresql_password,
-                #     }
-                # )
-                # connect_btn_pg.click(
-                #     fn=connect_vector_func,
-                #     inputs=inputs_pg,
-                #     outputs=con_state_pg,
-                #     api_name="connect_pg",
-                # )
-
-            def change_vectordb_conn(vectordb_type):
-                adb_visible = False
-                hologres_visible = False
-                faiss_visible = False
-                es_visible = False
-                milvus_visible = False
-                opensearch_visible = False
-                postgresql_visible = False
-                if vectordb_type == "AnalyticDB":
-                    adb_visible = True
-                elif vectordb_type == "Hologres":
-                    hologres_visible = True
-                elif vectordb_type == "ElasticSearch":
-                    es_visible = True
-                elif vectordb_type == "Milvus":
-                    milvus_visible = True
-                elif vectordb_type == "FAISS":
-                    faiss_visible = True
-                elif vectordb_type == "OpenSearch":
-                    opensearch_visible = True
-                elif vectordb_type == "PostgreSQL":
-                    postgresql_visible = True
-
-                return {
-                    adb_col: gr.update(visible=adb_visible),
-                    holo_col: gr.update(visible=hologres_visible),
-                    es_col: gr.update(visible=es_visible),
-                    faiss_col: gr.update(visible=faiss_visible),
-                    milvus_col: gr.update(visible=milvus_visible),
-                    opensearch_col: gr.update(visible=opensearch_visible),
-                    postgresql_col: gr.update(visible=postgresql_visible),
-                }
 
             vectordb_type.change(
-                fn=change_vectordb_conn,
+                fn=ev_listeners.change_vectordb_conn,
                 inputs=vectordb_type,
                 outputs=[
                     adb_col,
                     holo_col,
-                    faiss_col,
                     es_col,
+                    faiss_col,
                     milvus_col,
                     opensearch_col,
                     postgresql_col,
                 ],
             )
-
-            components.extend(
-                [
-                    vectordb_type,
-                    adb_ak,
-                    adb_sk,
-                    adb_region_id,
-                    adb_instance_id,
-                    adb_collection,
-                    adb_account,
-                    adb_account_password,
-                    adb_namespace,
-                    hologres_host,
-                    hologres_port,
-                    hologres_database,
-                    hologres_user,
-                    hologres_password,
-                    hologres_table,
-                    hologres_pre_delete,
-                    milvus_host,
-                    milvus_port,
-                    milvus_database,
-                    milvus_collection_name,
-                    milvus_user,
-                    milvus_password,
-                    faiss_path,
-                    es_url,
-                    es_index,
-                    es_user,
-                    es_password,
-                    opensearch_endpoint,
-                    opensearch_instance_id,
-                    opensearch_username,
-                    opensearch_password,
-                    opensearch_table_name,
-                    postgresql_host,
-                    postgresql_port,
-                    postgresql_database,
-                    postgresql_table_name,
-                    postgresql_username,
-                    postgresql_password,
-                ]
-            )
-
-    return components_to_dict(components)
+            db_related_elements = [
+                vectordb_type,
+                # faiss
+                faiss_path,
+                # hologres
+                hologres_host,
+                hologres_port,
+                hologres_user,
+                hologres_database,
+                hologres_password,
+                hologres_table,
+                hologres_pre_delete,
+                # elasticsearch
+                es_url,
+                es_index,
+                es_user,
+                es_password,
+                # milvus
+                milvus_host,
+                milvus_port,
+                milvus_user,
+                milvus_password,
+                milvus_database,
+                milvus_collection_name,
+                # opensearch
+                opensearch_endpoint,
+                opensearch_instance_id,
+                opensearch_username,
+                opensearch_password,
+                opensearch_table_name,
+                # postgresql
+                postgresql_host,
+                postgresql_port,
+                postgresql_database,
+                postgresql_table_name,
+                postgresql_username,
+                postgresql_password,
+                # analytic db
+                adb_ak,
+                adb_sk,
+                adb_region_id,
+                adb_instance_id,
+                adb_collection,
+                adb_account,
+                adb_account_password,
+                adb_namespace,
+            ]
+            union_input_elements = input_elements.union(db_related_elements)
+            components.extend(db_related_elements)
+    return union_input_elements, components_to_dict(components)

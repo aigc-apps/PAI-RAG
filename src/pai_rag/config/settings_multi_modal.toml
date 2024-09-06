@@ -25,6 +25,9 @@ host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
+[rag.data_analysis]
+analysis_type = "nl2pandas"
+
 [rag.data_loader]
 type = "Local" # [Local, Oss]
 
@@ -68,6 +71,7 @@ name = "qwen-turbo"
 source = ""
 
 [rag.llm.multi_modal]
+enable = true
 source = "DashScope"
 name = "qwen-vl-max"
 
@@ -85,6 +89,7 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.oss_store]
+enable = true
 bucket = ""
 endpoint = ""
 prefix = ""

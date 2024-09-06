@@ -75,13 +75,13 @@ class RagService:
                 logger.debug("No snapshot found, not reload")
                 return
             if self.config_dict_value != new_dict_value:
-                logger.debug("Config changed, reload")
+                logger.info("Config changed, reload")
                 self.rag.reload(config_snapshot)
                 self.config_dict_value = new_dict_value
                 self.rag_configuration = rag_snapshot
                 self.rag_configuration.persist()
             else:
-                logger.debug("Config not changed, not reload")
+                logger.info("Config not changed, not reload")
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Update RAG configuration failed: {ex}")
