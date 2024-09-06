@@ -1,4 +1,4 @@
-FROM python:3.10-slim AS builder
+FROM python:3.11 AS builder
 
 RUN pip3 install poetry
 
@@ -12,7 +12,7 @@ COPY . .
 
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
 
-FROM python:3.10-slim AS prod
+FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 

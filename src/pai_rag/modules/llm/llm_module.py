@@ -1,16 +1,20 @@
 import logging
+import os
 from typing import Dict, List, Any
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.azure_openai import AzureOpenAI
+from llama_index.llms.paieas import PaiEas
+from llama_index.llms.paieas.base import DEFAULT_MODEL_NAME
+from llama_index.llms.openai_like import OpenAILike
 
-# from llama_index.llms.dashscope import DashScope
-from pai_rag.integrations.llms.dashscope.base import MyDashScope
-from pai_rag.integrations.llms.paieas.base import PaiEAS
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+DASHSCOPE_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 class LlmModule(ConfigurableModule):
@@ -59,14 +63,17 @@ class LlmModule(ConfigurableModule):
                     model = {model_name}
                 """
             )
-            llm = MyDashScope(
-                model_name=model_name,
+            llm = OpenAILike(
+                model=model_name,
+                api_base=DASHSCOPE_API_BASE,
                 temperature=config.get("temperature", 0.1),
+                is_chat_model=True,
+                api_key=os.environ.get("DASHSCOPE_API_KEY"),
                 max_tokens=2000,
             )
         elif source == "paieas":
-            model_name = config.get("name", "PAI-EAS-LLM")
-            endpoint = config["endpoint"]
+            model_name = config.get("name", DEFAULT_MODEL_NAME)
+            endpoint = config["endpoint"] + "/"
             token = config["token"]
             logger.info(
                 f"""
@@ -76,9 +83,9 @@ class LlmModule(ConfigurableModule):
                     token = {token}
                 """
             )
-            from urllib.parse import urljoin
-
-            llm = PaiEAS(api_key=token, api_base=urljoin(endpoint, "v1"))
+            llm = PaiEas(
+                api_key=token, api_base=endpoint, max_tokens=2000, model=model_name
+            )
         else:
             raise ValueError(f"Unknown LLM source: '{config['llm']['source']}'")
 

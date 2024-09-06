@@ -1,4 +1,5 @@
 from pai_rag.modules.embedding.embedding import EmbeddingModule
+from pai_rag.modules.embedding.multi_modal_embedding import MultiModalEmbeddingModule
 from pai_rag.modules.llm.llm_module import LlmModule
 from pai_rag.modules.llm.multi_modal_llm import MultiModalLlmModule
 from pai_rag.modules.llm.function_calling_llm import FunctionCallingLlmModule
@@ -19,10 +20,14 @@ from pai_rag.modules.cache.oss_cache import OssCacheModule
 from pai_rag.modules.evaluation.evaluation import EvaluationModule
 from pai_rag.modules.index.bm25_index import BM25IndexModule
 from pai_rag.modules.nodesenhance.nodes_enhancement import NodesEnhancementModule
-
+from pai_rag.modules.intentdetection.intent_detection import IntentDetectionModule
+from pai_rag.modules.customconfig.custom_config import CustomConfigModule
+from pai_rag.modules.search.search import SearchModule
+from pai_rag.modules.dataanalysis.data_analysis import DataAnalysisModule
 
 ALL_MODULES = [
     "EmbeddingModule",
+    "MultiModalEmbeddingModule",
     "MultiModalLlmModule",
     "LlmModule",
     "FunctionCallingLlmModule",
@@ -43,6 +48,10 @@ ALL_MODULES = [
     "EvaluationModule",
     "BM25IndexModule",
     "NodesEnhancementModule",
+    "IntentDetectionModule",
+    "CustomConfigModule",
+    "SearchModule",
+    "DataAnalysisModule",
 ]
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]

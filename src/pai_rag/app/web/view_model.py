@@ -10,6 +10,7 @@ from pai_rag.app.web.ui_constants import (
 )
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import tempfile
 import json
@@ -52,7 +53,7 @@ class ViewModel(BaseModel):
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
-    enable_ocr: bool = False
+    enable_multimodal: bool = False
     enable_table_summary: bool = False
 
     config_file: str = None
@@ -113,8 +114,27 @@ class ViewModel(BaseModel):
 
     # retriever
     similarity_top_k: int = 5
+    image_similarity_top_k: int = 2
+    need_image: bool = False
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
+
+    # websearch
+    search_api_key: str = None
+    search_count: int = 10
+    search_lang: str = "zh-CN"
+
+    # data_analysis
+    analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
+    analysis_file_path: str = None
+    db_dialect: str = "mysql"
+    db_username: str = None
+    db_password: str = None
+    db_host: str = None
+    db_port: int = 3306
+    db_name: str = None
+    db_tables: str = None
+    db_descriptions: str = None
 
     # postprocessor
     reranker_type: str = (
@@ -125,7 +145,7 @@ class ViewModel(BaseModel):
     vector_weight: float = 0.7
     similarity_threshold: float = None
 
-    query_engine_type: str = "RetrieverQueryEngine"
+    query_engine_type: str = None
 
     synthesizer_type: str = None
 
@@ -251,14 +271,18 @@ class ViewModel(BaseModel):
         view_model.enable_raptor = config["data_reader"].get(
             "enable_raptor", view_model.enable_raptor
         )
-        view_model.enable_ocr = config["data_reader"].get(
-            "enable_ocr", view_model.enable_ocr
+        view_model.enable_multimodal = config["data_reader"].get(
+            "enable_multimodal", view_model.enable_multimodal
         )
         view_model.enable_table_summary = config["data_reader"].get(
             "enable_table_summary", view_model.enable_table_summary
         )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
+        view_model.image_similarity_top_k = config["retriever"].get(
+            "image_similarity_top_k", 2
+        )
+        view_model.need_image = config["retriever"].get("need_image", False)
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
@@ -266,6 +290,35 @@ class ViewModel(BaseModel):
             view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
+
+        if config["data_analysis"]["analysis_type"] == "nl2pandas":
+            view_model.analysis_type = "nl2pandas"
+        elif config["data_analysis"]["analysis_type"] == "nl2sql":
+            view_model.analysis_type = "nl2sql"
+
+        view_model.analysis_file_path = config["data_analysis"].get(
+            "analysis_file_path", None
+        )
+        view_model.db_dialect = config["data_analysis"].get("dialect", "mysql")
+        view_model.db_username = config["data_analysis"].get("user", None)
+        view_model.db_password = config["data_analysis"].get("password", None)
+        view_model.db_host = config["data_analysis"].get("host", None)
+        view_model.db_port = config["data_analysis"].get("port", 3306)
+        view_model.db_name = config["data_analysis"].get("dbname", None)
+
+        # from list to string
+        if config["data_analysis"].get("tables", None):
+            view_model.db_tables = ",".join(config["data_analysis"].get("tables", None))
+        else:
+            view_model.db_tables = None
+
+        # from dict to string
+        if config["data_analysis"].get("descriptions", None):
+            view_model.db_descriptions = json.dumps(
+                config["data_analysis"].get("descriptions", None), ensure_ascii=False
+            )
+        else:
+            view_model.db_descriptions = None
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
@@ -297,10 +350,12 @@ class ViewModel(BaseModel):
             "text_qa_template", None
         )
 
-        if config["query_engine"]["type"] == "TransformQueryEngine":
-            view_model.query_engine_type = "TransformQueryEngine"
-        else:
-            view_model.query_engine_type = "RetrieverQueryEngine"
+        search_config = config.get("search") or {}
+        view_model.search_api_key = search_config.get(
+            "search_api_key"
+        ) or os.environ.get("BING_SEARCH_KEY")
+        view_model.search_lang = search_config.get("search_lang", "zh-CN")
+        view_model.search_count = search_config.get("search_count", 10)
 
         return view_model
 
@@ -331,7 +386,7 @@ class ViewModel(BaseModel):
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["enable_raptor"] = self.enable_raptor
-        config["data_reader"]["enable_ocr"] = self.enable_ocr
+        config["data_reader"]["enable_multimodal"] = self.enable_multimodal
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
@@ -393,6 +448,8 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
+        config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+        config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
@@ -400,6 +457,33 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
+
+        if self.analysis_type == "nl2pandas":
+            config["data_analysis"]["analysis_type"] = "nl2pandas"
+        elif self.analysis_type == "nl2sql":
+            config["data_analysis"]["analysis_type"] = "nl2sql"
+
+        config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
+        config["data_analysis"]["dialect"] = self.db_dialect
+        config["data_analysis"]["user"] = self.db_username
+        config["data_analysis"]["password"] = self.db_password
+        config["data_analysis"]["host"] = self.db_host
+        config["data_analysis"]["port"] = self.db_port
+        config["data_analysis"]["dbname"] = self.db_name
+        # string to list
+        if self.db_tables:
+            # 去掉首位空格和末尾逗号
+            value = self.db_tables.strip().rstrip(",")
+            # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
+            value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
+            config["data_analysis"]["tables"] = value
+        else:
+            config["data_analysis"]["tables"] = None
+        # string to dict
+        if self.db_descriptions:
+            config["data_analysis"]["descriptions"] = json.loads(self.db_descriptions)
+        else:
+            config["data_analysis"]["descriptions"] = None
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
@@ -410,10 +494,12 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
-        if self.query_engine_type == "TransformQueryEngine":
-            config["query_engine"]["type"] = "TransformQueryEngine"
-        else:
-            config["query_engine"]["type"] = "RetrieverQueryEngine"
+
+        config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
+            "BING_SEARCH_KEY"
+        )
+        config["search"]["search_lang"] = self.search_lang
+        config["search"]["search_count"] = self.search_count
 
         return _transform_to_dict(config)
 
@@ -513,13 +599,15 @@ class ViewModel(BaseModel):
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
         settings["enable_raptor"] = {"value": self.enable_raptor}
-        settings["enable_ocr"] = {"value": self.enable_ocr}
+        settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_table_summary"] = {"value": self.enable_table_summary}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
         settings["reranker_type"] = {"value": self.reranker_type}
         settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["image_similarity_top_k"] = {"value": self.image_similarity_top_k}
+        settings["need_image"] = {"value": self.need_image}
         settings["reranker_model"] = {"value": self.reranker_model}
         settings["vector_weight"] = {"value": self.vector_weight}
         settings["keyword_weight"] = {"value": self.keyword_weight}
@@ -593,5 +681,22 @@ class ViewModel(BaseModel):
             settings["eval_response_res"] = {
                 "value": self.get_local_evaluation_result_file(type="response")
             }
+
+        # search
+        settings["search_api_key"] = {"value": self.search_api_key}
+        settings["search_lang"] = {"value": self.search_lang}
+        settings["search_count"] = {"value": self.search_count}
+
+        # data_analysis
+        settings["analysis_type"] = {"value": self.analysis_type}
+        settings["analysis_file_path"] = {"value": self.analysis_file_path}
+        settings["db_dialect"] = {"value": self.db_dialect}
+        settings["db_username"] = {"value": self.db_username}
+        settings["db_password"] = {"value": self.db_password}
+        settings["db_host"] = {"value": self.db_host}
+        settings["db_port"] = {"value": self.db_port}
+        settings["db_name"] = {"value": self.db_name}
+        settings["db_tables"] = {"value": self.db_tables}
+        settings["db_descriptions"] = {"value": self.db_descriptions}
 
         return settings

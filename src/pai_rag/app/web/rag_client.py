@@ -1,11 +1,11 @@
 import json
 from typing import Any
 import requests
-import html
-import markdown
 import httpx
 import os
 import re
+import markdown
+import html
 import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
@@ -44,6 +44,14 @@ class RagWebClient:
         return f"{self.endpoint}service/query"
 
     @property
+    def search_url(self):
+        return f"{self.endpoint}service/query/search"
+
+    @property
+    def data_analysis_url(self):
+        return f"{self.endpoint}service/query/data_analysis"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}service/query/llm"
 
@@ -58,6 +66,14 @@ class RagWebClient:
     @property
     def load_data_url(self):
         return f"{self.endpoint}service/upload_data"
+
+    @property
+    def load_datasheet_url(self):
+        return f"{self.endpoint}service/upload_datasheet"
+
+    @property
+    def load_agent_cfg_url(self):
+        return f"{self.endpoint}service/config/agent"
 
     @property
     def get_load_state_url(self):
@@ -83,45 +99,74 @@ class RagWebClient:
         else:
             text = response["answer"]
 
-        docs = response.get("docs", [])
+        docs = response.get("docs", []) or []
         session_id = response.get("session_id", None)
         is_finished = response.get("is_finished", True)
 
         referenced_docs = ""
-        images = ""
-
         if is_finished and len(docs) == 0 and not text:
             response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
             return response
         elif is_finished:
+            content_list = []
             self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
-                if filename:
-                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    referenced_docs += (
-                        f'[{i+1}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                file_url = doc["metadata"].get("file_url", None)
+                media_url = doc.get("metadata", {}).get("image_url", None)
+                if media_url and doc["text"] == "":
+                    formatted_image_name = re.sub(
+                        "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
                     )
-                image_url = doc["metadata"].get("image_url", None)
-                if image_url:
-                    images += f"""<img src="{image_url}"/>"""
+                    content = f"""
+<span>
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc["score"]}
+</span>
+<br>
+"""
+                elif filename:
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    html_content = html.escape(
+                        re.sub(r"<.*?>", "", doc["text"])
+                    ).replace("\n", " ")
+                    if file_url:
+                        formatted_file_name = (
+                            f'<a href="{file_url}"> {formatted_file_name} </a>'
+                        )
+                    content = f"""
+<span class="text" title="{html_content}">
+    [{i+1}]: {formatted_file_name} Score:{doc["score"]}
+    <span style='color: blue; font-size: 12px; background-color: #FFCCCB'> ( {html_content[:40]}... ) </span>
+</span>
+<br>
+"""
+                else:
+                    content = ""
+                content_list.append(content)
+            referenced_docs = "".join(content_list)
 
         formatted_answer = ""
         if with_history and "new_query" in response:
             new_query = response["new_query"]
             formatted_answer += f"**Query Transformation**: {new_query} \n\n"
         formatted_answer += f"**Answer**: {text} \n\n"
-        if images:
-            formatted_answer += f"{images} \n\n"
         if referenced_docs:
             formatted_answer += f"**Reference**:\n {referenced_docs}"
 
         response["result"] = formatted_answer
         return response
 
-    def query(self, text: str, with_history: bool = False, stream: bool = False):
+    def query(
+        self,
+        text: str,
+        with_history: bool = False,
+        stream: bool = False,
+        with_intent: bool = False,
+    ):
         session_id = self.session_id if with_history else None
-        q = dict(question=text, session_id=session_id, stream=stream)
+        q = dict(
+            question=text, session_id=session_id, stream=stream, with_intent=with_intent
+        )
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -138,6 +183,62 @@ class RagWebClient:
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
                     text, chunk_response, with_history=with_history, stream=stream
+                )
+
+    def query_search(
+        self,
+        text: str,
+        with_history: bool = False,
+        stream: bool = False,
+    ):
+        session_id = self.session_id if with_history else None
+        q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
+        r = requests.post(self.search_url, json=q, stream=True)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            yield self._format_rag_response(
+                text, response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    text, chunk_response, session_id=session_id, stream=stream
+                )
+
+    def query_data_analysis(
+        self,
+        text: str,
+        with_history: bool = False,
+        stream: bool = False,
+    ):
+        session_id = self.session_id if with_history else None
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+        )
+        r = requests.post(self.data_analysis_url, json=q, stream=True)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        if not stream:
+            response = dotdict(json.loads(r.text))
+            yield self._format_rag_response(
+                text, response, session_id=session_id, stream=stream
+            )
+        else:
+            full_content = ""
+            for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
+                chunk_response = dotdict(json.loads(chunk))
+                full_content += chunk_response.delta
+                chunk_response.delta = full_content
+                yield self._format_rag_response(
+                    text, chunk_response, session_id=session_id, stream=stream
                 )
 
     def query_llm(
@@ -190,10 +291,22 @@ class RagWebClient:
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
+                file_url = doc.get("metadata", {}).get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
-                if media_url:
+                if media_url and isinstance(media_url, list):
+                    media_url = "<br>".join(
+                        [
+                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            for j, url in enumerate(media_url)
+                        ]
+                    )
+                elif media_url:
                     media_url = f"""<img src="{media_url}"/>"""
                 safe_html_content = html.escape(html_content).replace("\n", "<br>")
+                if file_url:
+                    safe_html_content = (
+                        f"""<a href="{file_url}">{safe_html_content}</a>"""
+                    )
                 formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
                     i + 1, doc["score"], safe_html_content, media_url
                 )
@@ -234,6 +347,30 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
+    def add_datasheet(
+        self,
+        input_file: str,
+    ):
+        file_obj = open(input_file, "rb")
+        mimetype = mimetypes.guess_type(input_file)[0]
+        files = {"file": (input_file, file_obj, mimetype)}
+        try:
+            r = requests.post(
+                self.load_datasheet_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        except Exception as e:
+            print(f"add_datasheet failed: {e}")
+        finally:
+            file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
     async def get_knowledge_state(self, task_id: str):
         async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
@@ -260,6 +397,25 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
+        return response
+
+    def load_agent_config(self, file_name: str):
+        files = []
+        file_obj = open(file_name, "rb")
+        mimetype = mimetypes.guess_type(file_name)[0]
+        files.append(("file", (os.path.basename(file_name), file_obj, mimetype)))
+        try:
+            r = requests.post(
+                self.load_agent_cfg_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = json.loads(r.text)
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        finally:
+            file_obj.close()
+
         return response
 
     def evaluate_for_generate_qa(self, overwrite):
@@ -292,6 +448,47 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
         print("evaluate_for_response_stage response", response)
+
+    def _format_data_analysis_rag_response(
+        self, question, response, session_id: str = None, stream: bool = False
+    ):
+        if stream:
+            text = response["delta"]
+        else:
+            text = response["answer"]
+
+        docs = response.get("docs", []) or []
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        if is_finished and len(docs) == 0 and not text:
+            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
+            return response
+        elif is_finished:
+            seen_filenames = set()
+            file_idx = 1
+            for i, doc in enumerate(docs):
+                filename = doc["metadata"].get("file_name", None)
+                if filename and filename not in seen_filenames:
+                    seen_filenames.add(filename)
+                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
+                    title = doc["metadata"].get("title")
+                    if not title:
+                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
+                    else:
+                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
+
+                    file_idx += 1
+        formatted_answer = ""
+        if session_id:
+            new_query = response["new_query"]
+            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
+        formatted_answer += f"**Answer**: {text} \n\n"
+        if referenced_docs:
+            formatted_answer += f"**Reference**:\n {referenced_docs}"
+
+        response["result"] = formatted_answer
+        return response
 
 
 rag_client = RagWebClient()

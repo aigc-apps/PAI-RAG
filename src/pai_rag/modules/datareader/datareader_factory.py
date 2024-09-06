@@ -19,20 +19,22 @@ logger = logging.getLogger(__name__)
 class DataReaderFactoryModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["MultiModalLlmModule"]
+        return ["MultiModalLlmModule", "OssCacheModule"]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         self.reader_config = new_params[MODULE_PARAM_CONFIG]
         self.multi_modal_llm = new_params["MultiModalLlmModule"]
+        self.oss_cache = new_params["OssCacheModule"]
+
         self.file_readers = {
             ".html": HtmlReader(),
             ".htm": HtmlReader(),
             ".pdf": PaiPDFReader(
-                enable_image_ocr=self.reader_config.get("enable_ocr", False),
+                enable_multimodal=self.reader_config.get("enable_multimodal", False),
                 enable_table_summary=self.reader_config.get(
                     "enable_table_summary", False
                 ),
-                model_dir=self.reader_config.get("easyocr_model_dir", None),
+                oss_cache=self.oss_cache,
             ),
             ".csv": PaiPandasCSVReader(
                 concat_rows=self.reader_config.get("concat_rows", False),
@@ -48,11 +50,17 @@ class DataReaderFactoryModule(ConfigurableModule):
         }
 
         if self.multi_modal_llm:
-            self.file_readers[".imagelist"] = PaiImageReader(self.multi_modal_llm)
+            image_reader = PaiImageReader(
+                self.multi_modal_llm, oss_cache=self.oss_cache
+            )
+            self.file_readers[".imagelist"] = image_reader
+            self.file_readers[".jpg"] = image_reader
+            self.file_readers[".jpeg"] = image_reader
+            self.file_readers[".png"] = image_reader
 
         return self
 
-    def get_reader(self, input_files: str):
+    def get_reader(self, input_files: str = None):
         if self.reader_config["type"] == "SimpleDirectoryReader":
             return SimpleDirectoryReader(
                 input_files=input_files,

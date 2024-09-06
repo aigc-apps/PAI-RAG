@@ -14,11 +14,16 @@ class FunctionCallingLlmModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         llm_config = new_params[MODULE_PARAM_CONFIG]
-        print("llm_config", llm_config)
         if llm_config and llm_config.source.lower() == "dashscope":
             model_name = llm_config.get("name", "qwen2-7b-instruct")
             logger.info(
                 f"Using DashScope for Function-Calling-LLM with model: {model_name}."
+            )
+            return MyFCDashScope(model_name=model_name)
+        elif llm_config and llm_config.source.lower() == "openai":
+            model_name = llm_config.get("name", "gpt-3.5-turbo")
+            logger.info(
+                f"Using OpenAI for Function-Calling-LLM with model: {model_name}."
             )
             return MyFCDashScope(model_name=model_name)
         else:

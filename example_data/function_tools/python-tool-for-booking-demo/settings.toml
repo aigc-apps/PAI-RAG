@@ -1,0 +1,100 @@
+dynaconf_merge = true
+
+[rag]
+name = "pai_rag"
+version = "0.1.1"
+
+[rag.agent]
+type = "function_calling"
+
+[rag.agent.custom_config]
+agent_file_path = "example_data/function_tools/python-tool-for-booking-demo"
+
+[rag.agent.intent_detection]
+type = "single"
+
+[rag.agent.tool]
+type = "python"
+
+[rag.chat_engine]
+type = "CondenseQuestionChatEngine"
+
+[rag.chat_store]
+type = "Local" # [Local, Aliyun-Redis]
+host = "Aliyun-Redis host"
+password = "Aliyun-Redis user:pwd"
+persist_path = "localdata/storage"
+
+[rag.data_reader]
+type = "SimpleDirectoryReader"
+
+# embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# eg.
+# source = "HuggingFace"
+# model_name = "bge-small-zh-v1.5"
+# embed_batch_size = 10
+[rag.embedding]
+source = "DashScope"
+embed_batch_size = 10
+
+[rag.embedding.multi_modal]
+source = "cnclip"
+
+[rag.evaluation]
+retrieval = ["mrr", "hit_rate"]
+response_label = true
+response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
+
+[rag.index]
+persist_path = "localdata/storage"
+vector_store.type = "FAISS"
+
+# llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
+# eg.
+# source = "PaiEas"
+# endpoint = ""
+# token = ""
+[rag.llm]
+source = "DashScope"
+name = "qwen-turbo"
+
+[rag.llm.function_calling_llm]
+source = "DashScope"
+name = "qwen2-7b-instruct"
+
+[rag.llm.multi_modal]
+source = ""
+
+[rag.llm_chat_engine]
+type = "SimpleChatEngine"
+
+[rag.node_enhancement]
+tree_depth = 3
+max_clusters = 52
+proba_threshold = 0.10
+
+[rag.node_parser]
+type = "Sentence"
+chunk_size = 500
+chunk_overlap = 10
+
+[rag.postprocessor]
+reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
+reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
+keyword_weight = 0.3
+vector_weight = 0.7
+similarity_threshold = 0.5
+top_n = 2
+
+[rag.query_engine]
+type = "RetrieverQueryEngine"
+
+[rag.retriever]
+similarity_top_k = 3
+retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
+query_rewrite_n = 1 # set to 1 to disable query generation
+
+[rag.synthesizer]
+type = "SimpleSummarize"
+text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"

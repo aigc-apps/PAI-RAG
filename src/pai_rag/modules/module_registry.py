@@ -6,27 +6,32 @@ import pai_rag.modules as modules
 import logging
 
 MODULE_CONFIG_KEY_MAP = {
-    "IndexModule": "index",
-    "EmbeddingModule": "embedding",
-    "LlmModule": "llm",
-    "MultiModalLlmModule": "multi_modal_llm",
-    "FunctionCallingLlmModule": "function_calling_llm",
-    "NodeParserModule": "node_parser",
-    "RetrieverModule": "retriever",
-    "PostprocessorModule": "postprocessor",
-    "SynthesizerModule": "synthesizer",
-    "QueryEngineModule": "query_engine",
-    "ChatStoreModule": "chat_store",
-    "ChatEngineFactoryModule": "chat_engine",
-    "LlmChatEngineFactoryModule": "llm_chat_engine",
-    "DataReaderFactoryModule": "data_reader",
-    "AgentModule": "agent",
-    "ToolModule": "tool",
-    "DataLoaderModule": "data_loader",
-    "OssCacheModule": "cache",
-    "EvaluationModule": "evaluation",
-    "BM25IndexModule": "bm25",
-    "NodesEnhancementModule": "node_enhancement",
+    "IndexModule": "rag.index",
+    "EmbeddingModule": "rag.embedding",
+    "MultiModalEmbeddingModule": "rag.embedding.multi_modal",
+    "LlmModule": "rag.llm",
+    "MultiModalLlmModule": "rag.llm.multi_modal",
+    "FunctionCallingLlmModule": "rag.llm.function_calling_llm",
+    "NodeParserModule": "rag.node_parser",
+    "RetrieverModule": "rag.retriever",
+    "PostprocessorModule": "rag.postprocessor",
+    "SynthesizerModule": "rag.synthesizer",
+    "QueryEngineModule": "rag.query_engine",
+    "ChatStoreModule": "rag.chat_store",
+    "ChatEngineFactoryModule": "rag.chat_engine",
+    "LlmChatEngineFactoryModule": "rag.llm_chat_engine",
+    "DataReaderFactoryModule": "rag.data_reader",
+    "AgentModule": "rag.agent",
+    "ToolModule": "rag.agent.tool",
+    "CustomConfigModule": "rag.agent.custom_config",
+    "IntentDetectionModule": "rag.agent.intent_detection",
+    "DataLoaderModule": "rag.data_loader",
+    "OssCacheModule": "rag.oss_store",
+    "EvaluationModule": "rag.evaluation",
+    "BM25IndexModule": "rag.bm25",
+    "SearchModule": "rag.search",
+    "NodesEnhancementModule": "rag.node_enhancement",
+    "DataAnalysisModule": "rag.data_analysis",
 }
 
 
@@ -61,7 +66,7 @@ class ModuleRegistry:
         return hashlib.sha256(repr_str).hexdigest()
 
     def get_module_with_config(self, module_key, config):
-        key = repr(config)
+        key = repr(config.to_dict())
         if key in self._cache_by_config and module_key in self._cache_by_config[key]:
             return self._cache_by_config[key][module_key]
 
@@ -74,7 +79,7 @@ class ModuleRegistry:
             return mod
 
     def init_modules(self, config):
-        key = repr(config)
+        key = repr(config.to_dict())
 
         mod_cache = {}
         mod_stack = []
@@ -117,7 +122,6 @@ class ModuleRegistry:
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
         mod_cls = self._mod_cls_map[mod_name]
-
         params = {MODULE_PARAM_CONFIG: config.get(mod_config_key, None)}
         for dep in mod_deps:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)

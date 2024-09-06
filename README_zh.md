@@ -43,31 +43,31 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 2. 配置开发环境
 
-   本项目使用poetry进行管理，若在本地环境下使用，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.10。
+   本项目使用poetry进行管理，若在本地环境下使用，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.11。
 
    ```bash
-   conda create -n rag_env python==3.10
+   conda create -n rag_env python==3.11
    conda activate rag_env
    ```
 
-- (1) CPU环境
+   ### (1) CPU环境
 
-  直接使用poetry安装项目依赖包：
+   直接使用poetry安装项目依赖包：
 
-  ```bash
-  pip install poetry
-  poetry install
-  ```
+   ```bash
+    pip install poetry
+    poetry install
+   ```
 
-- (2) GPU环境
+### (2) GPU环境
 
-  首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
+首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
 
-  ```bash
-  mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-  pip install poetry
-  poetry install
-  ```
+```bash
+mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+pip install poetry
+poetry install
+```
 
 - 常见网络超时问题
 
@@ -119,11 +119,35 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    export DASHSCOPE_API_KEY=""
    ```
 
+   使用OSS存储文件(使用多模态模式时必须提前配置)，在配置文件src/pai_rag/config/settings.toml和src/pai_rag/config/settings_multi_modal.toml中添加以下配置:
+
+   ```toml
+   [rag.oss_store]
+   bucket = ""
+   endpoint = ""
+   prefix = ""
+   ```
+
+   并需要在命令行引入环境变量
+
+   ```bash
+   export OSS_ACCESS_KEY_ID=""
+   export OSS_ACCESS_KEY_SECRET=""
+   ```
+
+   启动RAG服务
+
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
    # 默认启动时下载模型 [bge-small-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
    # 可使用命令行 "load_model" 下载模型 including [bge-small-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
+   ```
+
+   启动默认配置文件为src/pai_rag/config/settings.yaml，若需要使用多模态，请切换到src/pai_rag/config/settings_multi_modal.yaml
+
+   ```bash
+   pai_rag serve -c src/pai_rag/config/settings_multi_modal.yaml
    ```
 
 5. 下载其他模型到本地
@@ -275,11 +299,14 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
 curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
-# Function Calling
+# Agentic RAG
 
-您也可以在PAI-RAG中使用function calling功能，请参考文档：
+您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
+[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
 
-[Function Calling 使用说明](./docs/function_calling/readme.md)
+# Data Analysis
+
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[Data Analysis](./docs/data_analysis_doc.md)
 
 # 参数配置
 

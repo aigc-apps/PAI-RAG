@@ -1,185 +1,190 @@
 """Read PDF files."""
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union, TypedDict, Any
+from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
-from llama_index.core.schema import Document
-import PyPDF2
-from PyPDF2 import PageObject
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import (
-    LTRect,
-    LTFigure,
-    LTTextBoxHorizontal,
-    LTTextLineHorizontal,
-    LTLine,
-)
-import pdfplumber
-from pdf2image import convert_from_path
-import easyocr
+from llama_index.core.schema import Document, ImageDocument
+from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
+from bs4 import BeautifulSoup
 from llama_index.core import Settings
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
-import json
-import unicodedata
-import logging
+
+from magic_pdf.pipe.UNIPipe import UNIPipe
+from magic_pdf.pipe.OCRPipe import OCRPipe
+from magic_pdf.pipe.TXTPipe import TXTPipe
+import magic_pdf.model as model_config
 import tempfile
-import cv2
+import re
+import math
+import requests
+from PIL import Image
+from rapidocr_onnxruntime import RapidOCR
+from rapid_table import RapidTable
+
+import logging
 import os
-from tqdm import tqdm
+from io import BytesIO
+import json
+
+model_config.__use_inside_model__ = True
 
 logger = logging.getLogger(__name__)
 
+IMAGE_MAX_PIXELS = 512 * 512
 TABLE_SUMMARY_MAX_ROW_NUM = 5
 TABLE_SUMMARY_MAX_COL_NUM = 10
 TABLE_SUMMARY_MAX_CELL_TOKEN = 20
 TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
-
-
-class PageItem(TypedDict):
-    page_number: int
-    index_id: int
-    item_type: str
-    element: Any
-    table_num: int
-    text: str
+IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
+IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
 
 
 class PaiPDFReader(BaseReader):
     """Read PDF files including texts, tables, images.
 
     Args:
-        enable_image_ocr (bool): whether load ocr model to process images
-        model_dir: (str): ocr model path
+        enable_multimodal (bool):  whether to use multimodal to process images
+        enable_table_summary (bool):  whether to use table_summary to process tables
     """
 
     def __init__(
         self,
-        enable_image_ocr: bool = False,
+        enable_multimodal: bool = False,
         enable_table_summary: bool = False,
-        model_dir: str = DEFAULT_MODEL_DIR,
+        oss_cache: Any = None,
     ) -> None:
-        self.enable_image_ocr = enable_image_ocr
         self.enable_table_summary = enable_table_summary
+        self.enable_multimodal = enable_multimodal
+        self._oss_cache = oss_cache
+        if self.enable_multimodal:
+            logger.info("process with multimodal")
         if self.enable_table_summary:
             logger.info("process with table summary")
-        if self.enable_image_ocr:
-            self.model_dir = model_dir or os.path.join(DEFAULT_MODEL_DIR, "easyocr")
-            logger.info("start loading ocr model")
-            self.image_reader = easyocr.Reader(
-                ["ch_sim", "en"],
-                model_storage_directory=self.model_dir,
-                download_enabled=True,
-                detector=True,
-                recognizer=True,
+
+    @staticmethod
+    def remove_image_paths(content: str):
+        return re.sub(IMAGE_URL_PATTERN, "", content)
+
+    def replace_image_paths(self, pdf_name: str, context: str):
+        combined_pattern = IMAGE_COMBINED_PATTERN
+
+        def replace_func(match):
+            origin_path = match.group(1) or match.group(3)
+            print(f"origin_path: {origin_path}")
+            try:
+                if origin_path.startswith(("http://", "https://")):
+                    response = requests.get(origin_path)
+                    response.raise_for_status()
+                    image = Image.open(BytesIO(response.content))
+                else:
+                    image = Image.open(origin_path)
+
+                    # Check image size
+                if image.width <= 50 or image.height <= 50:
+                    return None
+
+                current_pixels = image.width * image.height
+
+                # 检查像素总数是否超过限制
+                if current_pixels > IMAGE_MAX_PIXELS:
+                    # 计算缩放比例以适应最大像素数
+                    scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
+                    new_width = int(image.width * scale)
+                    new_height = int(image.height * scale)
+
+                    # 调整图片大小
+                    image = image.resize((new_width, new_height), Image.LANCZOS)
+
+                image_stream = BytesIO()
+                image.save(image_stream, format="jpeg")
+
+                image_stream.seek(0)
+                data = image_stream.getvalue()
+
+                image_url = self._oss_cache.put_object_if_not_exists(
+                    data=data,
+                    file_ext=".jpeg",
+                    headers={
+                        "x-oss-object-acl": "public-read"
+                    },  # set public read to make image accessible
+                    path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
+                )
+                print(
+                    f"Cropped image {image_url} with width={image.width}, height={image.height}."
+                )
+                return image_url
+            except Exception as e:
+                print(f"无法打开图片 '{origin_path}': {e}")
+
+        updated_content = re.sub(combined_pattern, replace_func, context)
+
+        return updated_content
+
+    @staticmethod
+    def combine_images_with_text(markdown_text):
+        # split_markdown_by_title
+        title_pattern = r"^(#+)\s*(.*)$"
+        sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
+
+        output = {}
+
+        for i in range(1, len(sections), 3):
+            title_level = sections[i]
+            title_text = sections[i + 1]
+            content = sections[i + 2] if i + 2 < len(sections) else ""
+            content_without_images_url = PaiPDFReader.remove_image_paths(content)
+
+            url_pattern = IMAGE_URL_PATTERN
+            images = re.findall(url_pattern, content)
+            if title_level:
+                images_url_list = [image[0] for image in images if len(image[0]) > 0]
+                if len(images_url_list) > 0:
+                    output[
+                        f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
+                    ] = images_url_list
+        return output
+
+    @staticmethod
+    def perform_ocr(img_path: str) -> str:
+        table_engine = RapidTable()
+        ocr_engine = RapidOCR()
+        ocr_result, _ = ocr_engine(img_path)
+        table_html_str, table_cell_bboxes, elapse = table_engine(img_path, ocr_result)
+        return table_html_str
+
+    @staticmethod
+    def html_table_to_list_of_lists(html):
+        soup = BeautifulSoup(html, "lxml")
+        table = soup.find("table")
+        if not table:
+            return []
+        table_data = []
+        for row in table.find_all("tr"):
+            cols = row.find_all(["td", "th"])
+            table_data.append([col.get_text(strip=True) for col in cols])
+        return table_data
+
+    @staticmethod
+    def replace_image_with_ocr_content(
+        markdown_content: str, image_path: str, ocr_content: str
+    ) -> str:
+        image_pattern = f"!\\[.*?\\]\\({re.escape(image_path)}\\)"
+        matches = list(re.finditer(image_pattern, markdown_content))
+        offset = 0  # 用于记录已插入文本导致的偏移量
+        for match in matches:
+            start, end = match.span()
+            # 考虑到之前插入可能导致的偏移，计算新的插入位置
+            new_start = start + offset
+            ocr_content = f"\n\n{ocr_content}\n\n"
+            markdown_content = (
+                markdown_content[:new_start]
+                + ocr_content
+                + markdown_content[new_start:]
             )
-            logger.info("finished loading ocr model")
+            # 更新偏移量，因为刚刚插入了新文本
+            offset += len(ocr_content)
 
-    def process_pdf_image(self, element: LTFigure, page_object: PageObject) -> str:
-        """
-        Processes an image element from a PDF, crops it out, and performs OCR on the result.
-
-        Args:
-            element (LTFigure): An LTFigure object representing the image in the PDF, containing its coordinates.
-            page_object (PageObject): A PageObject representing the page in the PDF to be cropped.
-
-        Returns:
-            str: The OCR-processed text from the cropped image.
-        """
-        # Retrieve the image's coordinates
-        [image_left, image_top, image_right, image_bottom] = [
-            element.x0,
-            element.y0,
-            element.x1,
-            element.y1,
-        ]
-        # Adjust the page's media box to crop the image based on the coordinates
-        page_object.mediabox.lower_left = (image_left, image_bottom)
-        page_object.mediabox.upper_right = (image_right, image_top)
-        # Save the cropped page as a new PDF file and perform OCR
-        cropped_pdf_writer = PyPDF2.PdfWriter()
-        with tempfile.NamedTemporaryFile(
-            delete=True, suffix=".pdf"
-        ) as cropped_pdf_file:
-            cropped_pdf_writer.add_page(page_object)
-            cropped_pdf_writer.write(cropped_pdf_file)
-            cropped_pdf_file.flush()
-            # Return the OCR-processed text
-            return self.ocr_pdf(cropped_pdf_file.name)
-
-    def ocr_pdf(self, input_file: str) -> str:
-        """
-        Function to convert PDF content into an image and then perform OCR (Optical Character Recognition)
-
-        Args:
-            input_file (str): input file path.
-
-        Returns:
-             str: text from ocr.
-        """
-        images = convert_from_path(input_file)
-        image = images[0]
-        with tempfile.NamedTemporaryFile(
-            delete=True, suffix=".png"
-        ) as output_image_file:
-            image.save(output_image_file, "PNG")
-            output_image_file.flush()
-            return self.image_to_text(output_image_file.name)
-
-    def image_to_text(self, image_path: str) -> str:
-        """
-        Function to perform OCR to extract text from image
-
-        Args:
-            image_path (str): input image path.
-
-        Returns:
-            str: text from ocr.
-        """
-        image = cv2.imread(image_path)
-        if image is None or image.shape[0] <= 1 or image.shape[1] <= 1:
-            return ""
-
-        result = self.image_reader.readtext(image_path)
-        predictions = "".join([item[1] for item in result])
-        return predictions
-
-    """Function to extract content from table
-    """
-
-    @staticmethod
-    def extract_table(pdf: pdfplumber.PDF, page_num: int, table_num: int) -> List[Any]:
-        table_page = pdf.pages[page_num]
-        table = table_page.extract_tables()[table_num]
-        return table
-
-    """Function to merge paginated tables
-    """
-
-    @staticmethod
-    def merge_page_tables(total_tables: List[PageItem]) -> List[PageItem]:
-        i = len(total_tables) - 1
-        while i - 1 >= 0:
-            table = total_tables[i]
-            pre_table = total_tables[i - 1]
-            if table["page_number"] == pre_table["page_number"]:
-                i -= 1
-                continue
-            if table["page_number"] - pre_table["page_number"] > 1:
-                i -= 1
-                continue
-            if (
-                table["index_id"] <= 1
-                and abs(table["element"].bbox[0] - pre_table["element"].bbox[0]) < 1
-                and abs(table["element"].bbox[2] - pre_table["element"].bbox[2]) < 1
-            ):
-                total_tables[i - 1]["text"].extend(total_tables[i]["text"])
-                del total_tables[i]
-            i -= 1
-        return total_tables
-
-    """Function to summarize table
-    """
+        return markdown_content
 
     @staticmethod
     def limit_cell_size(cell: str, max_chars: int) -> str:
@@ -194,23 +199,6 @@ class PaiPDFReader(BaseReader):
             ]
             for row in table
         ]
-
-    @staticmethod
-    def tables_summarize(table: List[List]) -> str:
-        table = PaiPDFReader.limit_table_content(table)
-        if not PaiPDFReader.is_horizontal_table(table):
-            table = list(zip(*table))
-        table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
-        table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
-
-        prompt_text = f"请为以下表格生成一个摘要: {table}"
-        response = Settings.llm.complete(
-            prompt_text,
-            max_tokens=200,
-            n=1,
-        )
-        summarized_text = response
-        return summarized_text
 
     @staticmethod
     def is_horizontal_table(table: List[List]) -> bool:
@@ -244,69 +232,116 @@ class PaiPDFReader(BaseReader):
             or horizontal_value_all_count > 0 >= vertical_value_all_count
         )
 
-    """Function to convert table data to json
-       """
-
     @staticmethod
-    def table_to_json(table: List[List]) -> str:
-        table_info = []
+    def tables_summarize(table: List[List]) -> str:
+        table = PaiPDFReader.limit_table_content(table)
         if not PaiPDFReader.is_horizontal_table(table):
             table = list(zip(*table))
-        column_name = table[0]
-        for row in range(1, len(table)):
-            single_line_dict = {}
-            for column in range(len(column_name)):
-                if (
-                    column_name[column]
-                    and len(column_name[column]) > 0
-                    and column < len(table[row])
-                ):
-                    single_line_dict[column_name[column]] = table[row][column]
-            table_info.append(single_line_dict)
+        table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
+        table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
 
-        return json.dumps(table_info, ensure_ascii=False)
+        prompt_text = f"请为以下表格生成一个摘要: {table}"
+        response = Settings.llm.complete(
+            prompt_text,
+            max_tokens=200,
+            n=1,
+        )
+        summarized_text = response
+        return summarized_text.text
 
-    """Function to process text in pdf
-    """
+    def process_table(self, markdown_content, json_data):
+        ocr_count = 0
 
-    @staticmethod
-    def text_extraction(elements: List[LTTextBoxHorizontal]) -> List[str]:
+        for item in json_data:
+            if item["type"] == "table" and "img_path" in item:
+                img_path = item["img_path"]
+                if os.path.exists(img_path):
+                    ocr_count += 1
+                    ocr_content = PaiPDFReader.perform_ocr(img_path)
+                    if self.enable_table_summary:
+                        table_list_data = PaiPDFReader.html_table_to_list_of_lists(
+                            ocr_content
+                        )
+                        summarized_table_text = PaiPDFReader.tables_summarize(
+                            table_list_data
+                        )[:TABLE_SUMMARY_MAX_TOKEN]
+                        ocr_content += f"\n\n{summarized_table_text}\n\n"
+                        markdown_content = PaiPDFReader.replace_image_with_ocr_content(
+                            markdown_content, item["img_path"], ocr_content
+                        )
+                    else:
+                        markdown_content = PaiPDFReader.replace_image_with_ocr_content(
+                            markdown_content, item["img_path"], ocr_content
+                        )
+                else:
+                    print(f"警告：图片文件不存在 {img_path}")
+        return markdown_content
+
+    def parse_pdf(
+        self,
+        pdf_path: str,
+        parse_method: str = "auto",
+        model_json_path: str = None,
+    ):
         """
-        Extracts text lines from a list of text boxes and handles line breaks under specific conditions.
+        执行从 pdf 转换到 json、md 的过程，输出 md 和 json 文件到 pdf 文件所在的目录
 
-        Args:
-            elements: A list of LTTextBoxHorizontal objects representing text boxes on a page.
-
-        Returns:
-            A list containing the extracted text lines with line breaks removed as per defined conditions.
+        :param pdf_path: .pdf 文件的路径，可以是相对路径，也可以是绝对路径
+        :param parse_method: 解析方法， 共 auto、ocr、txt 三种，默认 auto，如果效果不好，可以尝试 ocr
+        :param model_json_path: 已经存在的模型数据文件，如果为空则使用内置模型，pdf 和 model_json 务必对应
         """
-        boxes, texts = [], []
-        # Initialize the start and end coordinates of the page text
-        max_x1 = 0
-        min_x0 = float("inf")
-        for text_box_h in elements:
-            if isinstance(text_box_h, LTTextBoxHorizontal):
-                for text_box_h_l in text_box_h:
-                    if isinstance(text_box_h_l, LTTextLineHorizontal):
-                        # Process each text line's coordinates and content
-                        x0, y0, x1, y1 = text_box_h_l.bbox
-                        text = text_box_h_l.get_text()
-                        # Check if the line ends with punctuation and requires special handling
-                        if not (
-                            text[-1] == "\n"
-                            and len(text) >= 2
-                            and unicodedata.category(text[-2]).startswith("P")
-                        ):
-                            max_x1 = max(max_x1, x1)
-                        min_x0 = min(min_x0, x0)
-                        texts.append(text)
-                        boxes.append((x0, x1))
-        # Remove line breaks based on defined conditions
-        for cur in range(len(boxes) - 1):
-            if boxes[cur][1] >= int(max_x1) and boxes[cur + 1][0] <= int(min_x0) + 1:
-                texts[cur] = texts[cur].replace("\n", "")
+        try:
+            pdf_name = os.path.basename(pdf_path).split(".")[0]
+            pdf_name = pdf_name.replace(" ", "_")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file_path = os.path.join(temp_dir, pdf_name)
+                pdf_bytes = open(pdf_path, "rb").read()  # 读取 pdf 文件的二进制数据
 
-        return texts
+                if model_json_path:
+                    model_json = json.loads(
+                        open(model_json_path, "r", encoding="utf-8").read()
+                    )
+                else:
+                    model_json = []
+
+                # 执行解析步骤
+                image_writer = DiskReaderWriter(temp_file_path)
+
+                # 选择解析方式
+                if parse_method == "auto":
+                    jso_useful_key = {"_pdf_type": "", "model_list": model_json}
+                    pipe = UNIPipe(pdf_bytes, jso_useful_key, image_writer)
+                elif parse_method == "txt":
+                    pipe = TXTPipe(pdf_bytes, model_json, image_writer)
+                elif parse_method == "ocr":
+                    pipe = OCRPipe(pdf_bytes, model_json, image_writer)
+                else:
+                    logger("unknown parse method, only auto, ocr, txt allowed")
+                    exit(1)
+
+                # 执行分类
+                pipe.pipe_classify()
+
+                # 如果没有传入模型数据，则使用内置模型解析
+                if not model_json:
+                    if model_config.__use_inside_model__:
+                        pipe.pipe_analyze()  # 解析
+                    else:
+                        logger("need model list input")
+                        exit(1)
+
+                # 执行解析
+                pipe.pipe_parse()
+                content_list = pipe.pipe_mk_uni_format(temp_file_path, drop_mode="none")
+                md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
+                md_content = self.process_table(md_content, content_list)
+                new_md_content = self.replace_image_paths(pdf_name, md_content)
+
+            return new_md_content
+
+        except Exception as e:
+            print(e)
+            return None
 
     def load_data(
         self,
@@ -338,175 +373,53 @@ class PaiPDFReader(BaseReader):
             List[Document]: list of documents.
         """
 
-        # check if file_path is a string or Path
         if not isinstance(file_path, str) and not isinstance(file_path, Path):
             raise TypeError("file_path must be a string or Path.")
-        # open PDF file
 
-        pdfFileObj = open(file_path, "rb")
-        # Create a PDF reader object
-        pdf_read = PyPDF2.PdfReader(pdfFileObj)
-
-        total_tables = []
-        page_items = []
-        # Open the PDF and extract pages
-        pdf = pdfplumber.open(file_path)
-        pages = tqdm(
-            extract_pages(file_path), desc="processing pages in pdf", unit="page"
-        )
-        for pagenum, page in enumerate(pages):
-            # Initialize variables for extracting text from the page
-            page_object = pdf_read.pages[pagenum]
-            text_elements = []
-            text_from_images = []
-            # Initialize table count
-            table_num = 0
-            first_element = True
-            # Find the checked page
-            page_tables = pdf.pages[pagenum]
-            # Find the number of tables on the page
-            tables = page_tables.find_tables()
-
-            # Find all elements on the page
-            page_elements = [(element.y1, element) for element in page._objs]
-            # Sort the elements on the page by their y1 coordinate
-            page_elements.sort(key=lambda a: a[0], reverse=True)
-
-            # Iterate through the page's elements
-            for i, component in enumerate(page_elements):
-                # Extract text elements
-                element = component[1]
-
-                # Check if the element is a text box
-                if isinstance(element, LTTextBoxHorizontal):
-                    text_elements.append(element)
-
-                # Check for images and extract text from them if OCR is enabled
-                elif isinstance(element, LTFigure) and self.enable_image_ocr:
-                    # Extract text from the PDF image
-                    image_texts = self.process_pdf_image(element, page_object)
-                    text_from_images.append(image_texts)
-
-                # Check for table elements
-                elif isinstance(element, LTRect) or isinstance(element, LTLine):
-                    lower_side = float("inf")
-                    upper_side = 0
-
-                    # If it's the first rectangle element
-                    if first_element is True and (table_num + 1) <= len(tables):
-                        # Find the bounding box of the table
-                        lower_side = page.bbox[3] - tables[table_num].bbox[3]
-                        upper_side = element.y1
-                        # Extract the table data
-                        table_text = PaiPDFReader.extract_table(pdf, pagenum, table_num)
-
-                        item = PageItem(
-                            page_number=pagenum,
-                            index_id=i,
-                            item_type="table",
-                            element=element,
-                            table_num=table_num,
-                            text=table_text,
-                        )
-                        total_tables.append(item)
-                        # Move to the next element
-                        first_element = False
-
-                    # Check if we've extracted a table from the page
-                    if element.y0 >= lower_side and element.y1 <= upper_side:
-                        pass
-                    elif i + 1 < len(page_elements) and not isinstance(
-                        page_elements[i + 1][1], LTRect
-                    ):
-                        first_element = True
-                        table_num += 1
-
-            # Text extraction from text elements
-            text_from_texts = PaiPDFReader.text_extraction(text_elements)
-            page_plain_text = "".join(text_from_texts)
-            # Image text extraction
-            page_image_text = "".join(text_from_images)
-
-            page_items.append(
-                (
-                    PageItem(
-                        page_number=pagenum, item_type="text", text=page_plain_text
-                    ),
-                    PageItem(
-                        page_number=pagenum,
-                        item_type="image_text",
-                        text=page_image_text,
-                    ),
-                )
-            )
-
-        # Merge tables across pages
-        total_tables = PaiPDFReader.merge_page_tables(total_tables)
-
-        # Construct the returned data
+        md_content = self.parse_pdf(file_path, "auto")
+        images_with_content = PaiPDFReader.combine_images_with_text(md_content)
+        md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
+        print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
-        page_items = tqdm(page_items, desc="processing tables in pages", unit="page")
-        for pagenum, item in enumerate(page_items):
-            page_tables_summaries = []
-            page_tables_json = []
-            for table in total_tables:
-                # If the page number matches
-                if pagenum == table["page_number"]:
-                    if self.enable_table_summary:
-                        summarized_table_text = PaiPDFReader.tables_summarize(
-                            table["text"]
-                        )
-                        page_tables_summaries.append(
-                            summarized_table_text.text[:TABLE_SUMMARY_MAX_TOKEN]
-                        )
-                    json_data = PaiPDFReader.table_to_json(table["text"])
-                    page_tables_json.append(json_data)
-            page_table_summary = "\n".join(page_tables_summaries)
-            page_table_json = "\n".join(page_tables_json)
-
-            page_info_text = item[0]["text"] + item[1]["text"] + page_table_json
-
-            # if `extra_info` is not None, check if it is a dictionary
-            if extra_info:
-                if not isinstance(extra_info, dict):
-                    raise TypeError("extra_info must be a dictionary.")
-
-            if metadata:
-                if not extra_info:
-                    extra_info = {}
-                extra_info["total_pages"] = len(pdf_read.pages)
-                extra_info["file_path"] = f"_page_{pagenum + 1}".join(
-                    os.path.splitext(file_path)
+        image_documents = []
+        text_image_documents = []
+        if extra_info:
+            if not isinstance(extra_info, dict):
+                raise TypeError("extra_info must be a dictionary.")
+        if self.enable_multimodal:
+            print("[PaiPDFReader] Using multimodal.")
+            images_url_set = set()
+            for content, image_urls in images_with_content.items():
+                images_url_set.update(image_urls)
+                text_image_documents.append(
+                    Document(
+                        text=content,
+                        extra_info={"image_url": image_urls, **extra_info},
+                    )
                 )
-                file_name = os.path.basename(file_path)
-                extra_info["file_name"] = f"_page_{pagenum + 1}".join(
-                    os.path.splitext(file_name)
+            print("[PaiPDFReader] successfully loaded images with multimodal.")
+            image_documents.extend(
+                ImageDocument(
+                    image_url=image_url,
+                    image_mimetype="image/jpeg",
+                    extra_info={"image_url": image_url, **extra_info},
                 )
-                extra_info["table_summary"] = page_table_summary[
-                    :PAGE_TABLE_SUMMARY_MAX_TOKEN
-                ]
+                for image_url in images_url_set
+            )
+        if metadata:
+            if not extra_info:
+                extra_info = {}
+            doc = Document(text=md_contend_without_images_url, extra_info=extra_info)
 
-                doc = Document(
-                    text=page_info_text,
-                    extra_info=dict(
-                        extra_info,
-                        **{
-                            "source": f"{pagenum + 1}",
-                        },
-                    ),
-                )
+            docs.append(doc)
+        else:
+            doc = Document(
+                text=md_contend_without_images_url,
+                extra_info=dict(),
+            )
+            docs.append(doc)
 
-                docs.append(doc)
-            else:
-                doc = Document(
-                    text=page_info_text,
-                    extra_info=dict(
-                        extra_info,
-                        **{
-                            "source": f"{pagenum + 1}",
-                        },
-                    ),
-                )
-                docs.append(doc)
-        # return list of documents
+        docs.extend(image_documents)
+        docs.extend(text_image_documents)
+        print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

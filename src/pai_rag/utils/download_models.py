@@ -8,6 +8,7 @@ import os
 import time
 import logging
 import click
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,31 @@ class ModelScopeDownloader:
         for model_name in self.model_info["basic_models"].keys():
             self.load_model(model_name)
 
+    def load_mineru_config(self):
+        source_path = "magic-pdf.template.json"
+        destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
+
+        if os.path.exists(destination_path):
+            print("magic-pdf.json already exists, skip modifying ~/magic-pdf.json.")
+            return
+
+        # 读取 source_path 文件的内容
+        with open(source_path, "r") as source_file:
+            data = json.load(source_file)  # 加载 JSON 数据
+
+        if "models-dir" in data:
+            data["models-dir"] = (
+                str(self.download_directory_path) + "/PDF-Extract-Kit/models"
+            )
+
+        # 将修改后的内容写入destination_path
+        with open(destination_path, "w") as destination_file:
+            json.dump(data, destination_file, indent=4)
+
+        print(
+            "Copy magic-pdf.template.json to ~/magic-pdf.json and modify models-dir to model path."
+        )
+
     def load_models(self, model_name):
         if model_name is None:
             model_names = [
@@ -69,3 +95,4 @@ class ModelScopeDownloader:
 def load_models(model_name):
     download_models = ModelScopeDownloader()
     download_models.load_models(model_name)
+    download_models.load_mineru_config()
