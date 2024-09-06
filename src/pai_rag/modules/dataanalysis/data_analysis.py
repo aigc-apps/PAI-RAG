@@ -119,7 +119,7 @@ class DataAnalysisModule(ConfigurableModule):
         inspector = inspect(engine)
         db_tables = inspector.get_table_names()
         if len(db_tables) == 0:
-            raise ValueError("No database tables")
+            raise ValueError(f"No table found in db {dbname}.")
 
         if desired_tables and len(desired_tables) > 0:
             tables = desired_tables
