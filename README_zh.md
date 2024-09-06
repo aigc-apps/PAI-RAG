@@ -304,6 +304,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
 [Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
 
+# Data Analysis
+
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[Data Analysis](./docs/data_analysis_doc.md)
+
 # 参数配置
 
 如需实现更多个性化配置，请参考文档：

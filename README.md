@@ -352,6 +352,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 You can use agent with function calling api-tools in PAI-RAG, please refer to the documentation:
 [Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
 
+# Data Analysis
+
+You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc.md)
+
 # Parameter Configuration
 
 For more customization options, please refer to the documentation:

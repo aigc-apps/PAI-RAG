@@ -315,7 +315,7 @@ class ViewModel(BaseModel):
         # from dict to string
         if config["data_analysis"].get("descriptions", None):
             view_model.db_descriptions = json.dumps(
-                config["data_analysis"].get("descriptions", None)
+                config["data_analysis"].get("descriptions", None), ensure_ascii=False
             )
         else:
             view_model.db_descriptions = None
