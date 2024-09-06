@@ -44,6 +44,9 @@ def respond(input_elements: List[Any]):
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
 
+    if chatbot is not None:
+        chatbot.append((msg, ""))
+
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
@@ -69,6 +72,8 @@ def respond(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
     except Exception as e:
         raise gr.Error(f"Error: {e}")
+    finally:
+        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
