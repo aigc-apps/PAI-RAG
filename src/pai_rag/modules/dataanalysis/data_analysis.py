@@ -121,7 +121,7 @@ class DataAnalysisModule(ConfigurableModule):
         if len(db_tables) == 0:
             raise ValueError(f"No table found in db {dbname}.")
 
-        if len(desired_tables) > 0:
+        if desired_tables and len(desired_tables) > 0:
             tables = desired_tables
         else:
             tables = db_tables
@@ -129,7 +129,7 @@ class DataAnalysisModule(ConfigurableModule):
         # create an sqldatabase instance including desired table info
         sql_database = SQLDatabase(engine, include_tables=tables)
 
-        if len(table_descriptions) > 0:
+        if table_descriptions and len(table_descriptions) > 0:
             table_descriptions = table_descriptions
         else:
             table_descriptions = {}

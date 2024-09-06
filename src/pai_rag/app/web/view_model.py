@@ -10,6 +10,7 @@ from pai_rag.app.web.ui_constants import (
 )
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import tempfile
 import json
@@ -132,8 +133,8 @@ class ViewModel(BaseModel):
     db_host: str = None
     db_port: int = 3306
     db_name: str = None
-    db_tables: list = []
-    db_descriptions: dict = {}
+    db_tables: str = None
+    db_descriptions: str = None
 
     # postprocessor
     reranker_type: str = (
@@ -304,8 +305,20 @@ class ViewModel(BaseModel):
         view_model.db_host = config["data_analysis"].get("host", None)
         view_model.db_port = config["data_analysis"].get("port", 3306)
         view_model.db_name = config["data_analysis"].get("dbname", None)
-        view_model.db_tables = config["data_analysis"].get("tables", None)
-        view_model.db_descriptions = config["data_analysis"].get("descriptions", None)
+
+        # from list to string
+        if config["data_analysis"].get("tables", None):
+            view_model.db_tables = ",".join(config["data_analysis"].get("tables", None))
+        else:
+            view_model.db_tables = None
+
+        # from dict to string
+        if config["data_analysis"].get("descriptions", None):
+            view_model.db_descriptions = json.dumps(
+                config["data_analysis"].get("descriptions", None)
+            )
+        else:
+            view_model.db_descriptions = None
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
@@ -457,8 +470,20 @@ class ViewModel(BaseModel):
         config["data_analysis"]["host"] = self.db_host
         config["data_analysis"]["port"] = self.db_port
         config["data_analysis"]["dbname"] = self.db_name
-        config["data_analysis"]["tables"] = self.db_tables
-        config["data_analysis"]["descriptions"] = self.db_descriptions
+        # string to list
+        if self.db_tables:
+            # 去掉首位空格和末尾逗号
+            value = self.db_tables.strip().rstrip(",")
+            # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
+            value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
+            config["data_analysis"]["tables"] = value
+        else:
+            config["data_analysis"]["tables"] = None
+        # string to dict
+        if self.db_descriptions:
+            config["data_analysis"]["descriptions"] = json.loads(self.db_descriptions)
+        else:
+            config["data_analysis"]["descriptions"] = None
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
