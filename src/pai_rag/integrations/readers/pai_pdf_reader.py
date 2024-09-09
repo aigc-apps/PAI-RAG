@@ -38,6 +38,7 @@ TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
 IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
+DEFAULT_HEADING_DIFF_THRESHOLD = 2
 
 
 class PaiPDFReader(BaseReader):
@@ -279,7 +280,7 @@ class PaiPDFReader(BaseReader):
         return markdown_content
 
     def post_process_multi_level_headings(self, json_data, md_content):
-        print(
+        logger.info(
             "*****************************start process headings*****************************"
         )
         pages_list = json_data["pdf_info"]
@@ -321,7 +322,7 @@ class PaiPDFReader(BaseReader):
         for diff, index in sorted_diff:
             # 标题差的绝对值超过2，则认为是下一级标题
             # markdown 中，# 表示一级标题，## 表示二级标题，以此类推，最多有6级标题，最多能有5次切分
-            if diff > 2 and len(slice_index) <= 5:
+            if diff >= DEFAULT_HEADING_DIFF_THRESHOLD and len(slice_index) <= 5:
                 slice_index.append(index)
         slice_index.sort(reverse=True)
         rank = 1
@@ -336,7 +337,9 @@ class PaiPDFReader(BaseReader):
                 else:
                     cur_index = len(sorted_list) - 1
             title_level = "#" * rank + " "
-            if int(text_height_min) <= title_height <= int(text_height_max):
+            if text_height_min <= text_height_max and int(
+                text_height_min
+            ) <= title_height <= int(text_height_max):
                 title_level = ""
             old_title = "# " + title_text
             new_title = title_level + title_text

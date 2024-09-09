@@ -1,7 +1,20 @@
 import json
-import re
+from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 
 json_str = r"""{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "type": "title",
+                    "bbox": [
+                        59,
+                        67,
+                        196,
+                        89
+                    ],
+                    "lines": [
+                        {
                             "bbox": [
                                 57,
                                 70,
@@ -21,20 +34,21 @@ json_str = r"""{
                                     "type": "inline_equation"
                                 }
                             ]
-                        }"""
+                        }
+                    ]
+                }
+            ]
+        }
+        ]
+}"""
 
 md_str = """#  $\leftarrow$  """
 
 
-def test_json_to_md():
+def test_post_process_multi_level_headings():
+    pdf_process = PaiPDFReader()
     json_content = json.loads(json_str)
-    title_text = ""
-    for span in json_content["spans"]:
-        if span["type"] == "inline_equation":
-            span["content"] = " $" + span["content"] + "$ "
-        title_text += span["content"]
-    title_text_escape = title_text.replace("\\", "\\\\")
-    new_title_escape = "##" + " " + title_text_escape
-    md_content_escape = re.sub(re.escape(md_str), new_title_escape, md_str)
-    assert title_text == " $\leftarrow$ "
-    assert md_content_escape == "##  $\leftarrow$ "
+    md_content_escape = pdf_process.post_process_multi_level_headings(
+        json_content, md_str
+    )
+    assert md_content_escape == "#  $\leftarrow$  "
