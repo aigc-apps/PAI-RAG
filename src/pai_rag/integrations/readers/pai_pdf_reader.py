@@ -404,8 +404,6 @@ class PaiPDFReader(BaseReader):
                 md_content = self.post_process_multi_level_headings(
                     pipe.pdf_mid_data, md_content
                 )
-                # with open(f"tests/testdata/data/md_data/{pdf_name}_change_heading.md", "w") as f:
-                #     f.write(md_content)
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
 
