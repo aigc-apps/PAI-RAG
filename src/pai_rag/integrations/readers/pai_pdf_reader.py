@@ -19,6 +19,7 @@ import requests
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
+from operator import itemgetter
 
 import logging
 import os
@@ -37,6 +38,7 @@ TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
 IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
+DEFAULT_HEADING_DIFF_THRESHOLD = 2
 
 
 class PaiPDFReader(BaseReader):
@@ -277,6 +279,74 @@ class PaiPDFReader(BaseReader):
                     print(f"警告：图片文件不存在 {img_path}")
         return markdown_content
 
+    def post_process_multi_level_headings(self, json_data, md_content):
+        logger.info(
+            "*****************************start process headings*****************************"
+        )
+        pages_list = json_data["pdf_info"]
+        if not pages_list:
+            return md_content
+        text_height_min = float("inf")
+        text_height_max = 0
+        title_list = []
+        for page in pages_list:
+            page_infos = page["preproc_blocks"]
+            for item in page_infos:
+                if not item.get("lines", None) or len(item["lines"]) <= 0:
+                    continue
+                x0, y0, x1, y1 = item["lines"][0]["bbox"]
+                content_height = y1 - y0
+                if item["type"] == "title":
+                    title_height = int(content_height)
+                    title_text = ""
+                    for line in item["lines"]:
+                        for span in line["spans"]:
+                            if span["type"] == "inline_equation":
+                                span["content"] = " $" + span["content"] + "$ "
+                            title_text += span["content"]
+                    title_text = title_text.replace("\\", "\\\\")
+                    title_list.append((title_text, title_height))
+                elif item["type"] == "text":
+                    if content_height < text_height_min:
+                        text_height_min = content_height
+                    if content_height > text_height_max:
+                        text_height_max = content_height
+
+        sorted_list = sorted(title_list, key=itemgetter(1), reverse=True)
+        diff_list = [
+            (sorted_list[i][1] - sorted_list[i + 1][1], i)
+            for i in range(len(sorted_list) - 1)
+        ]
+        sorted_diff = sorted(diff_list, key=itemgetter(0), reverse=True)
+        slice_index = []
+        for diff, index in sorted_diff:
+            # 标题差的绝对值超过2，则认为是下一级标题
+            # markdown 中，# 表示一级标题，## 表示二级标题，以此类推，最多有6级标题，最多能有5次切分
+            if diff >= DEFAULT_HEADING_DIFF_THRESHOLD and len(slice_index) <= 5:
+                slice_index.append(index)
+        slice_index.sort(reverse=True)
+        rank = 1
+        cur_index = 0
+        if len(slice_index) > 0:
+            cur_index = slice_index.pop()
+        for index, (title_text, title_height) in enumerate(sorted_list):
+            if index > cur_index:
+                rank += 1
+                if len(slice_index) > 0:
+                    cur_index = slice_index.pop()
+                else:
+                    cur_index = len(sorted_list) - 1
+            title_level = "#" * rank + " "
+            if text_height_min <= text_height_max and int(
+                text_height_min
+            ) <= title_height <= int(text_height_max):
+                title_level = ""
+            old_title = "# " + title_text
+            new_title = title_level + title_text
+            md_content = re.sub(re.escape(old_title), new_title, md_content)
+
+        return md_content
+
     def parse_pdf(
         self,
         pdf_path: str,
@@ -334,6 +404,9 @@ class PaiPDFReader(BaseReader):
                 pipe.pipe_parse()
                 content_list = pipe.pipe_mk_uni_format(temp_file_path, drop_mode="none")
                 md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
+                md_content = self.post_process_multi_level_headings(
+                    pipe.pdf_mid_data, md_content
+                )
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
 
