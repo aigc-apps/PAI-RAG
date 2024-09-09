@@ -146,7 +146,7 @@ class MySQLRetriever(BaseRetriever):
                         text=raw_response_str,
                         metadata={
                             "query_code_instruction": query_bundle.query_str,
-                            "query_output": metadata["result"],
+                            "query_output": str(metadata["result"]),
                             "col_keys": metadata["col_keys"],
                         },
                         excluded_embed_metadata_keys=[

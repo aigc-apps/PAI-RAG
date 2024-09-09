@@ -1,7 +1,5 @@
 import os
-import json
 import datetime
-import re
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
@@ -49,23 +47,6 @@ def connect_database(input_db: List[Any]):
     try:
         update_dict = {"analysis_type": "nl2sql"}
         for element, value in input_db.items():
-            if (element.elem_id == "db_tables") and (value != ""):
-                # 去掉首位空格和末尾逗号
-                value = value.strip().rstrip(",")
-                # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
-                value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
-                # 检查是否为列表
-                if isinstance(value, list):
-                    print(f"Valid input: {value}")
-                else:
-                    return "Invalid input: Input must be table_A, table_B,..."
-            if (element.elem_id == "db_descriptions") and (value != ""):
-                value = json.loads(value)
-                # 检查是否为字典
-                if isinstance(value, dict):
-                    print(f"Valid input: {value}")
-                else:
-                    return "Invalid input: Input must be a dictionary."
             update_dict[element.elem_id] = value
         # print("db_config:", update_dict)
 
@@ -85,9 +66,8 @@ def analysis_respond(question, chatbot):
 
 
 def clear_history(chatbot):
+    rag_client.clear_history()
     chatbot = []
-    global current_session_id
-    current_session_id = None
     return chatbot
 
 
@@ -154,7 +134,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     label="Descriptions",
                     lines=5,
                     elem_id="db_descriptions",
-                    placeholder="A dict of table descriptions, e.g. {'table_A': 'text_description_A', 'table_B': 'text_description_B'}",
+                    placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
 
                 connect_db_button = gr.Button(
