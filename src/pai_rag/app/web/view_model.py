@@ -315,7 +315,7 @@ class ViewModel(BaseModel):
         # from dict to string
         if config["data_analysis"].get("descriptions", None):
             view_model.db_descriptions = json.dumps(
-                config["data_analysis"].get("descriptions", None)
+                config["data_analysis"].get("descriptions", None), ensure_ascii=False
             )
         else:
             view_model.db_descriptions = None
@@ -587,9 +587,18 @@ class ViewModel(BaseModel):
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
         settings["llm"] = {"value": self.llm}
-        settings["llm_eas_url"] = {"value": self.llm_eas_url}
-        settings["llm_eas_token"] = {"value": self.llm_eas_token}
-        settings["llm_eas_model_name"] = {"value": self.llm_eas_model_name}
+        settings["llm_eas_url"] = {
+            "value": self.llm_eas_url,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_token"] = {
+            "value": self.llm_eas_token,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_model_name"] = {
+            "value": self.llm_eas_model_name,
+            "visible": self.llm.lower() == "paieas",
+        }
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),

@@ -92,25 +92,23 @@ def create_setting_tab() -> Dict[str, Any]:
                     elem_id="llm",
                     interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
-                with gr.Column(visible=(llm == "PaiEas")) as eas_col:
-                    llm_eas_url = gr.Textbox(
-                        label="EAS Url",
-                        elem_id="llm_eas_url",
-                    )
-                    llm_eas_token = gr.Textbox(
-                        label="EAS Token",
-                        elem_id="llm_eas_token",
-                        type="password",
-                    )
-                    llm_eas_model_name = gr.Textbox(
-                        label="EAS Model name",
-                        elem_id="llm_eas_model_name",
-                    )
-                with gr.Column(visible=(llm != "PaiEas")) as api_llm_col:
-                    llm_api_model_name = gr.Dropdown(
-                        label="LLM Model Name",
-                        elem_id="llm_api_model_name",
-                    )
+                llm_eas_url = gr.Textbox(
+                    label="EAS Url",
+                    elem_id="llm_eas_url",
+                )
+                llm_eas_token = gr.Textbox(
+                    label="EAS Token",
+                    elem_id="llm_eas_token",
+                    type="password",
+                )
+                llm_eas_model_name = gr.Textbox(
+                    label="EAS Model name",
+                    elem_id="llm_eas_model_name",
+                )
+                llm_api_model_name = gr.Dropdown(
+                    label="LLM Model Name",
+                    elem_id="llm_api_model_name",
+                )
 
                 components.extend(
                     [
@@ -128,17 +126,23 @@ def create_setting_tab() -> Dict[str, Any]:
                     model_options = LLM_MODEL_KEY_DICT.get(value, [])
                     cur_model = model_options[0] if model_options else ""
                     return {
-                        eas_col: gr.update(visible=eas_visible),
-                        api_llm_col: gr.update(visible=api_visible),
+                        llm_eas_url: gr.update(visible=eas_visible),
+                        llm_eas_token: gr.update(visible=eas_visible),
+                        llm_eas_model_name: gr.update(visible=eas_visible),
                         llm_api_model_name: gr.update(
-                            choices=model_options, value=cur_model
+                            choices=model_options, value=cur_model, visible=api_visible
                         ),
                     }
 
                 llm.input(
                     fn=change_llm,
                     inputs=llm,
-                    outputs=[eas_col, api_llm_col, llm_api_model_name],
+                    outputs=[
+                        llm_eas_url,
+                        llm_eas_token,
+                        llm_eas_model_name,
+                        llm_api_model_name,
+                    ],
                 )
             """
             with gr.Column():

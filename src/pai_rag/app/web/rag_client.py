@@ -31,9 +31,13 @@ class dotdict(dict):
 class RagWebClient:
     def __init__(self):
         self.endpoint = "http://127.0.0.1:8000/"  # default link
+        self.session_id = None
 
     def set_endpoint(self, endpoint: str):
         self.endpoint = endpoint if endpoint.endswith("/") else f"{endpoint}/"
+
+    def clear_history(self):
+        self.session_id = None
 
     @property
     def query_url(self):
@@ -88,7 +92,7 @@ class RagWebClient:
         return f"{self.endpoint}service/evaluate/response"
 
     def _format_rag_response(
-        self, question, response, session_id: str = None, stream: bool = False
+        self, question, response, with_history: bool = False, stream: bool = False
     ):
         if stream:
             text = response["delta"]
@@ -96,6 +100,7 @@ class RagWebClient:
             text = response["answer"]
 
         docs = response.get("docs", []) or []
+        session_id = response.get("session_id", None)
         is_finished = response.get("is_finished", True)
 
         referenced_docs = ""
@@ -104,6 +109,7 @@ class RagWebClient:
             return response
         elif is_finished:
             content_list = []
+            self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
                 file_url = doc["metadata"].get("file_url", None)
@@ -140,7 +146,7 @@ class RagWebClient:
             referenced_docs = "".join(content_list)
 
         formatted_answer = ""
-        if session_id:
+        if with_history and "new_query" in response:
             new_query = response["new_query"]
             formatted_answer += f"**Query Transformation**: {new_query} \n\n"
         formatted_answer += f"**Answer**: {text} \n\n"
@@ -153,10 +159,11 @@ class RagWebClient:
     def query(
         self,
         text: str,
-        session_id: str = None,
+        with_history: bool = False,
         stream: bool = False,
         with_intent: bool = False,
     ):
+        session_id = self.session_id if with_history else None
         q = dict(
             question=text, session_id=session_id, stream=stream, with_intent=with_intent
         )
@@ -166,7 +173,7 @@ class RagWebClient:
         if not stream:
             response = dotdict(json.loads(r.text))
             yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
+                text, response, with_history=with_history, stream=stream
             )
         else:
             full_content = ""
@@ -175,40 +182,38 @@ class RagWebClient:
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
+                    text, chunk_response, with_history=with_history, stream=stream
                 )
 
     def query_search(
         self,
         text: str,
-        session_id: str = None,
+        with_history: bool = False,
         stream: bool = False,
     ):
+        session_id = self.session_id if with_history else None
         q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
         r = requests.post(self.search_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
-            )
+            yield self._format_rag_response(text, response, stream=stream)
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
                 chunk_response = dotdict(json.loads(chunk))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
-                yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
-                )
+                yield self._format_rag_response(text, chunk_response, stream=stream)
 
     def query_data_analysis(
         self,
         text: str,
-        session_id: str = None,
+        with_history: bool = False,
         stream: bool = False,
     ):
+        session_id = self.session_id if with_history else None
         q = dict(
             question=text,
             session_id=session_id,
@@ -219,26 +224,23 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=r.text)
         if not stream:
             response = dotdict(json.loads(r.text))
-            yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
-            )
+            yield self._format_rag_response(text, response, stream=stream)
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
                 chunk_response = dotdict(json.loads(chunk))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
-                yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
-                )
+                yield self._format_rag_response(text, chunk_response, stream=stream)
 
     def query_llm(
         self,
         text: str,
-        session_id: str = None,
+        with_history: bool = False,
         temperature: float = 0.1,
         stream: bool = False,
     ):
+        session_id = self.session_id if with_history else None
         q = dict(
             question=text,
             temperature=temperature,
@@ -254,7 +256,7 @@ class RagWebClient:
         if not stream:
             response = dotdict(json.loads(r.text))
             yield self._format_rag_response(
-                text, response, session_id=session_id, stream=stream
+                text, response, with_history=with_history, stream=stream
             )
         else:
             full_content = ""
@@ -263,7 +265,7 @@ class RagWebClient:
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
-                    text, chunk_response, session_id=session_id, stream=stream
+                    text, chunk_response, with_history=with_history, stream=stream
                 )
 
     def query_vector(self, text: str):

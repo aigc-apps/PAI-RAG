@@ -8,13 +8,10 @@ from pai_rag.app.web.ui_constants import (
     ACCURATE_CONTENT_PROMPTS,
 )
 
-current_session_id = None
-
 
 def clear_history(chatbot):
+    rag_client.clear_history()
     chatbot = []
-    global current_session_id
-    current_session_id = None
     return chatbot, 0
 
 
@@ -23,8 +20,8 @@ def reset_textbox():
 
 
 def respond(input_elements: List[Any]):
-    global current_session_id
     update_dict = {}
+
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
@@ -34,7 +31,8 @@ def respond(input_elements: List[Any]):
 
     # empty input.
     if not update_dict["question"]:
-        yield "", update_dict["chatbot"], 0
+        yield update_dict["chatbot"]
+        return
 
     try:
         rag_client.patch_config(update_dict)
@@ -46,27 +44,24 @@ def respond(input_elements: List[Any]):
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
 
-    if not update_dict["include_history"]:
-        current_session_id = None
-
-    content = ""
-    chatbot.append((msg, content))
+    if chatbot is not None:
+        chatbot.append((msg, ""))
 
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(msg)
 
         elif query_type == "WebSearch":
             response_gen = rag_client.query_search(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
         else:
             response_gen = rag_client.query(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
 
         for resp in response_gen:
@@ -77,6 +72,8 @@ def respond(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
     except Exception as e:
         raise gr.Error(f"Error: {e}")
+    finally:
+        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -329,8 +326,6 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
             def change_query_radio(query_type):
-                global current_session_id
-                current_session_id = None
                 if query_type == "Retrieval":
                     return {
                         vs_col: gr.update(visible=True),
