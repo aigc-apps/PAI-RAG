@@ -20,7 +20,6 @@ from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
 from operator import itemgetter
-from itertools import groupby
 
 import logging
 import os
@@ -304,7 +303,6 @@ class PaiPDFReader(BaseReader):
                             if span["type"] == "inline_equation":
                                 span["content"] = " $" + span["content"] + "$ "
                             title_text += span["content"]
-                    # title_text = ''.join(span["content"] for line in item["lines"] for span in line["spans"])
                     title_text = title_text.replace("\\", "\\\\")
                     title_list.append((title_text, title_height))
                 elif item["type"] == "text":
@@ -314,14 +312,29 @@ class PaiPDFReader(BaseReader):
                         text_height_max = content_height
 
         sorted_list = sorted(title_list, key=itemgetter(1), reverse=True)
-        ranked_list = []
-        current_rank = 0
-        for _, group in groupby(sorted_list, key=itemgetter(1)):
-            current_rank += 1
-            for item in group:
-                ranked_list.append(item + (current_rank,))
-
-        for title_text, title_height, rank in ranked_list:
+        diff_list = [
+            (sorted_list[i][1] - sorted_list[i + 1][1], i)
+            for i in range(len(sorted_list) - 1)
+        ]
+        sorted_diff = sorted(diff_list, key=itemgetter(0), reverse=True)
+        slice_index = []
+        for diff, index in sorted_diff:
+            # 标题差的绝对值超过2，则认为是下一级标题
+            # markdown 中，# 表示一级标题，## 表示二级标题，以此类推，最多有6级标题，最多能有5次切分
+            if diff > 2 and len(slice_index) <= 5:
+                slice_index.append(index)
+        slice_index.sort(reverse=True)
+        rank = 1
+        cur_index = 0
+        if len(slice_index) > 0:
+            cur_index = slice_index.pop()
+        for index, (title_text, title_height) in enumerate(sorted_list):
+            if index > cur_index:
+                rank += 1
+                if len(slice_index) > 0:
+                    cur_index = slice_index.pop()
+                else:
+                    cur_index = len(sorted_list) - 1
             title_level = "#" * rank + " "
             if int(text_height_min) <= title_height <= int(text_height_max):
                 title_level = ""
@@ -391,6 +404,8 @@ class PaiPDFReader(BaseReader):
                 md_content = self.post_process_multi_level_headings(
                     pipe.pdf_mid_data, md_content
                 )
+                # with open(f"tests/testdata/data/md_data/{pdf_name}_change_heading.md", "w") as f:
+                #     f.write(md_content)
                 md_content = self.process_table(md_content, content_list)
                 new_md_content = self.replace_image_paths(pdf_name, md_content)
 
