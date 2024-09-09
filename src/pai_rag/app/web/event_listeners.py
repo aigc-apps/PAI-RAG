@@ -103,8 +103,26 @@ def save_config(input_elements: List[Any]):
     try:
         update_dict = {}
         for element, value in input_elements.items():
+            if element.elem_id == "oss_ak":
+                value_ak = value
+            if element.elem_id == "oss_sk":
+                value_sk = value
             update_dict[element.elem_id] = value
         rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] Snapshot configuration saved successfully!"
+        return [
+            gr.update(
+                value=input_oss_ak_sk(value_ak), type="text" if value_ak else "password"
+            ),
+            gr.update(
+                value=input_oss_ak_sk(value_sk), type="text" if value_sk else "password"
+            ),
+            gr.update(
+                value=f"[{datetime.datetime.now()}] Snapshot configuration saved successfully!"
+            ),
+        ]
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def input_oss_ak_sk(input):
+    return (input[:2] + "*" * (len(input) - 4) + input[-2:]) if input else input

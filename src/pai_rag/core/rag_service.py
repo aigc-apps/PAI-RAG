@@ -5,6 +5,7 @@ from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.core.rag_application import RagApplication
 from pai_rag.core.rag_configuration import RagConfiguration
+from pai_rag.utils.oss_utils import check_and_set_oss_auth, get_oss_auth
 from pai_rag.app.api.models import (
     RagQuery,
     RetrievalQuery,
@@ -60,13 +61,16 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise ServiceError(f"Get RAG configuration failed: {ex}")
-        return self.config_dict_value.get("RAG")
+        new_config_dict_value = get_oss_auth(self.config_dict_value)
+        return new_config_dict_value.get("RAG")
 
     def reload(self, new_config: Any = None):
         try:
             rag_snapshot = RagConfiguration.from_snapshot()
             if new_config:
                 # 多worker模式，读取最新的setting
+                # 检查OSS Auth配置，并配置环境变量
+                new_config = check_and_set_oss_auth(new_config)
                 rag_snapshot.update(new_config)
             config_snapshot = rag_snapshot.get_value()
             if config_snapshot:

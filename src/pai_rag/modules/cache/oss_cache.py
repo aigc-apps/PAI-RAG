@@ -16,25 +16,22 @@ class OssCacheModule(ConfigurableModule):
     def _create_new_instance(self, new_params: Dict[str, Any]):
         cache_config = new_params[MODULE_PARAM_CONFIG]
         use_oss = cache_config.get("enable", False)
-        oss_bucket, oss_endpoint = None, None
+        oss_ak = os.getenv("OSS_ACCESS_KEY_ID", None)
+        oss_sk = os.getenv("OSS_ACCESS_KEY_SECRET", None)
+        oss_bucket = cache_config.get("bucket", None)
+        oss_endpoint = cache_config.get("endpoint", None)
+        oss_prefix = cache_config.get("prefix", None)
+
         if use_oss:
-            if not os.getenv("OSS_ACCESS_KEY_ID", None) and cache_config.get(
-                "ak", None
-            ):
-                os.environ["OSS_ACCESS_KEY_ID"] = cache_config.get("ak")
-            if not os.getenv("OSS_ACCESS_KEY_SECRET", None) and cache_config.get(
-                "sk", None
-            ):
-                os.environ["OSS_ACCESS_KEY_SECRET"] = cache_config.get("sk")
-
-            oss_bucket = cache_config.get("bucket", None)
-            oss_endpoint = cache_config.get("endpoint", None)
-            oss_prefix = cache_config.get("prefix", None)
-
-            logger.info(f"Using OSS bucket {oss_bucket} for caching objects.")
-            return OssClient(
-                bucket_name=oss_bucket, endpoint=oss_endpoint, prefix=oss_prefix
-            )
+            if oss_ak and oss_sk and oss_bucket and oss_endpoint:
+                logger.info(f"Using OSS bucket {oss_bucket} for caching objects.")
+                return OssClient(
+                    bucket_name=oss_bucket, endpoint=oss_endpoint, prefix=oss_prefix
+                )
+            else:
+                logger.warning(
+                    "OSS config is incomplete. Will not cache objects. Please provide OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_BUCKET, OSS_ENDPOINT."
+                )
         else:
             logger.info("No OSS config provided. Will not cache objects.")
             return None

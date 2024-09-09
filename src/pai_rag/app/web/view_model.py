@@ -236,10 +236,8 @@ class ViewModel(BaseModel):
             )
 
         view_model.use_oss = config["oss_store"].get("enable", view_model.use_oss)
-        print("view model from app cfg", os.getenv("OSS_ACCESS_KEY_ID"))
-        view_model.oss_ak = os.getenv("OSS_ACCESS_KEY_ID", view_model.oss_ak)
-        view_model.oss_sk = os.getenv("OSS_ACCESS_KEY_SECRET", view_model.oss_sk)
-        print("view model from app cfg", view_model.oss_ak)
+        view_model.oss_ak = config["oss_store"].get("ak", view_model.oss_ak)
+        view_model.oss_sk = config["oss_store"].get("sk", view_model.oss_sk)
         view_model.oss_endpoint = config["oss_store"].get(
             "endpoint", view_model.oss_endpoint
         )
@@ -433,12 +431,14 @@ class ViewModel(BaseModel):
             config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
 
         config["oss_store"]["enable"] = self.use_oss
-        config["oss_store"]["ak"] = self.oss_ak
-        config["oss_store"]["sk"] = self.oss_sk
-        os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
-        os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
-        config["oss_store"]["ak"] = self.oss_ak
-        config["oss_store"]["sk"] = self.oss_sk
+        if os.getenv("OSS_ACCESS_KEY_ID") is None:
+            os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
+        if os.getenv("OSS_ACCESS_KEY_SECRET") is None:
+            os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
+        if "***" not in self.oss_ak:
+            config["oss_store"]["ak"] = self.oss_ak
+        if "***" not in self.oss_sk:
+            config["oss_store"]["sk"] = self.oss_sk
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
         config["oss_store"]["prefix"] = self.oss_prefix
@@ -662,8 +662,18 @@ class ViewModel(BaseModel):
         }
 
         settings["use_oss"] = {"value": self.use_oss}
-        settings["oss_ak"] = {"value": self.oss_ak}
-        settings["oss_sk"] = {"value": self.oss_sk}
+        settings["oss_ak"] = {
+            "value": (self.oss_ak[:2] + "*" * (len(self.oss_ak) - 4) + self.oss_ak[-2:])
+            if self.oss_ak
+            else self.oss_ak,
+            "type": "text" if self.oss_ak else "password",
+        }
+        settings["oss_sk"] = {
+            "value": (self.oss_sk[:2] + "*" * (len(self.oss_sk) - 4) + self.oss_sk[-2:])
+            if self.oss_sk
+            else self.oss_sk,
+            "type": "text" if self.oss_sk else "password",
+        }
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
         settings["oss_prefix"] = {"value": self.oss_prefix}
