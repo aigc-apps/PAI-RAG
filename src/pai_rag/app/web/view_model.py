@@ -444,9 +444,9 @@ class ViewModel(BaseModel):
             config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
 
         config["oss_store"]["enable"] = self.use_oss
-        if os.getenv("OSS_ACCESS_KEY_ID") is None:
+        if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
-        if os.getenv("OSS_ACCESS_KEY_SECRET") is None:
+        if os.getenv("OSS_ACCESS_KEY_SECRET") is None and self.oss_sk:
             os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
         if self.oss_ak and "***" not in self.oss_ak:
             config["oss_store"]["ak"] = self.oss_ak

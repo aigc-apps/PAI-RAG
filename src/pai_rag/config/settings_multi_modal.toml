@@ -71,7 +71,7 @@ name = "qwen-turbo"
 source = ""
 
 [rag.llm.multi_modal]
-enable = true
+enable = false
 source = "DashScope"
 name = "qwen-vl-max"
 
@@ -89,7 +89,7 @@ chunk_size = 500
 chunk_overlap = 10
 
 [rag.oss_store]
-enable = true
+enable = false
 bucket = ""
 endpoint = ""
 prefix = ""
