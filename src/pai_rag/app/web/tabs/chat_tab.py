@@ -155,8 +155,8 @@ def create_chat_tab() -> Dict[str, Any]:
                             label="Image Top K (choose between 0 and 10)",
                         )
                         need_image = gr.Checkbox(
-                            label="Need to display images.",
-                            info="Need to display images.",
+                            label="Inference with multi-modal LLM",
+                            info="Inference with multi-modal LLM.",
                             elem_id="need_image",
                         )
                         similarity_threshold = gr.Slider(

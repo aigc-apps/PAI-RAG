@@ -127,10 +127,11 @@ class ModuleRegistry:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)
 
         instance_key = self._get_param_hash(params)
-        if mod_name == "IndexModule":
-            logger.debug(instance_key, params)
 
-        if instance_key not in self._mod_instance_map[mod_name]:
+        if (
+            instance_key not in self._mod_instance_map[mod_name]
+            or mod_name == "OssCacheModule"
+        ):
             logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params
