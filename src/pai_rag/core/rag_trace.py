@@ -24,6 +24,8 @@ def init_trace(trace_config):
             service_owner_sub_id="",
         )
         logger.info(f"Pai-LLM-Trace enabled with endpoint: '{trace_config.endpoint}'.")
-    else:
+    elif trace_config is not None and trace_config.type == "arize_phoenix":
         set_global_handler("arize_phoenix")
         logger.info("Arize trace enabled.")
+    else:
+        logger.warning("No trace used.")
