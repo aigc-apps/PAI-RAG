@@ -27,9 +27,8 @@ def respond(agent_question, agent_chatbot):
 
 
 def clear_history(chatbot):
+    rag_client.clear_history()
     chatbot = []
-    global current_session_id
-    current_session_id = None
     return chatbot
 
 

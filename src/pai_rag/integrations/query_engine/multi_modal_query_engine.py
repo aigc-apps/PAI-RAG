@@ -201,7 +201,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
                     context_str=context_str, query_str=query_bundle.query_str
                 )
                 print(
-                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                    f"[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm: {self._multi_modal_llm.api_base}"
                 )
                 completion_response_gen = self._multi_modal_llm.stream_complete(
                     prompt=fmt_prompt,
@@ -229,7 +229,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
                     context_str=context_str, query_str=query_bundle.query_str
                 )
                 print(
-                    "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                    f"[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm: {self._multi_modal_llm.api_base}"
                 )
                 llm_response = self._multi_modal_llm.complete(
                     prompt=fmt_prompt,
@@ -291,7 +291,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
                         context_str=context_str, query_str=query_bundle.query_str
                     )
                     print(
-                        "[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm"
+                        f"[MySimpleMultiModalQueryEngine] asynthesize using multi_modal_llm: {self._multi_modal_llm.api_base}"
                     )
                     completion_response_gen = (
                         await self._multi_modal_llm.astream_complete(

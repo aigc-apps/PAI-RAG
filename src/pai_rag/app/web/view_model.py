@@ -6,6 +6,7 @@ from pai_rag.app.web.ui_constants import (
     DEFAULT_EMBED_SIZE,
     DEFAULT_HF_EMBED_MODEL,
     LLM_MODEL_KEY_DICT,
+    MLLM_MODEL_KEY_DICT,
     PROMPT_MAP,
 )
 import pandas as pd
@@ -39,10 +40,27 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = "PAI-EAS-LLM"
+    llm_eas_model_name: str = "model_name"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1
+
+    # mllm
+    use_mllm: bool = False
+    mllm: str = None
+    mllm_eas_url: str = None
+    mllm_eas_token: str = None
+    mllm_eas_model_name: str = "model_name"
+    mllm_api_key: str = None
+    mllm_api_model_name: str = None
+
+    # oss
+    use_oss: bool = False
+    oss_ak: str = None
+    oss_sk: str = None
+    oss_endpoint: str = None
+    oss_bucket: str = None
+    oss_prefix: str = None
 
     # chunking
     parser_type: str = "Sentence"
@@ -188,6 +206,44 @@ class ViewModel(BaseModel):
             view_model.llm_api_model_name = config["llm"].get(
                 "name", view_model.llm_api_model_name
             )
+
+        view_model.use_mllm = config["llm"]["multi_modal"].get(
+            "enable", view_model.use_mllm
+        )
+        view_model.mllm = config["llm"]["multi_modal"].get("source", view_model.mllm)
+        view_model.mllm_eas_url = config["llm"]["multi_modal"].get(
+            "endpoint", view_model.mllm_eas_url
+        )
+        view_model.mllm_eas_token = config["llm"]["multi_modal"].get(
+            "token", view_model.mllm_eas_token
+        )
+        view_model.mllm_api_key = config["llm"]["multi_modal"].get(
+            "api_key", view_model.mllm_api_key
+        )
+
+        if view_model.mllm.lower() == "paieas":
+            print(
+                "view_model.mllm_eas_model_name",
+                view_model.mllm_eas_model_name,
+                "2",
+                config["llm"]["multi_modal"]["name"],
+            )
+            view_model.mllm_eas_model_name = config["llm"]["multi_modal"].get(
+                "name", view_model.mllm_eas_model_name
+            )
+        else:
+            view_model.mllm_api_model_name = config["llm"]["multi_modal"].get(
+                "name", view_model.mllm_api_model_name
+            )
+
+        view_model.use_oss = config["oss_store"].get("enable", view_model.use_oss)
+        view_model.oss_ak = config["oss_store"].get("ak", view_model.oss_ak)
+        view_model.oss_sk = config["oss_store"].get("sk", view_model.oss_sk)
+        view_model.oss_endpoint = config["oss_store"].get(
+            "endpoint", view_model.oss_endpoint
+        )
+        view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
+        view_model.oss_prefix = config["oss_store"].get("prefix", view_model.oss_prefix)
 
         view_model.vectordb_type = config["index"]["vector_store"].get(
             "type", view_model.vectordb_type
@@ -376,6 +432,29 @@ class ViewModel(BaseModel):
             config["llm"]["name"] = self.llm_eas_model_name
         else:
             config["llm"]["name"] = self.llm_api_model_name
+
+        config["llm"]["multi_modal"]["enable"] = self.use_mllm
+        config["llm"]["multi_modal"]["source"] = self.mllm
+        config["llm"]["multi_modal"]["endpoint"] = self.mllm_eas_url
+        config["llm"]["multi_modal"]["token"] = self.mllm_eas_token
+        config["llm"]["multi_modal"]["api_key"] = self.mllm_api_key
+        if self.mllm.lower() == "paieas":
+            config["llm"]["multi_modal"]["name"] = self.mllm_eas_model_name
+        else:
+            config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
+
+        config["oss_store"]["enable"] = self.use_oss
+        if os.getenv("OSS_ACCESS_KEY_ID") is None:
+            os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
+        if os.getenv("OSS_ACCESS_KEY_SECRET") is None:
+            os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
+        if "***" not in self.oss_ak:
+            config["oss_store"]["ak"] = self.oss_ak
+        if "***" not in self.oss_sk:
+            config["oss_store"]["sk"] = self.oss_sk
+        config["oss_store"]["endpoint"] = self.oss_endpoint
+        config["oss_store"]["bucket"] = self.oss_bucket
+        config["oss_store"]["prefix"] = self.oss_prefix
 
         config["index"]["vector_store"]["type"] = self.vectordb_type
         config["index"]["persist_path"] = self.faiss_path
@@ -587,14 +666,52 @@ class ViewModel(BaseModel):
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
         settings["llm"] = {"value": self.llm}
-        settings["llm_eas_url"] = {"value": self.llm_eas_url}
-        settings["llm_eas_token"] = {"value": self.llm_eas_token}
-        settings["llm_eas_model_name"] = {"value": self.llm_eas_model_name}
+        settings["llm_eas_url"] = {
+            "value": self.llm_eas_url,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_token"] = {
+            "value": self.llm_eas_token,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_model_name"] = {
+            "value": self.llm_eas_model_name,
+            "visible": self.llm.lower() == "paieas",
+        }
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
             "visible": self.llm.lower() != "paieas",
         }
+
+        settings["use_mllm"] = {"value": self.use_mllm}
+        settings["mllm"] = {"value": self.mllm}
+        settings["mllm_eas_url"] = {"value": self.mllm_eas_url}
+        settings["mllm_eas_token"] = {"value": self.mllm_eas_token}
+        settings["mllm_eas_model_name"] = {"value": self.mllm_eas_model_name}
+        settings["mllm_api_model_name"] = {
+            "value": self.mllm_api_model_name,
+            "choices": MLLM_MODEL_KEY_DICT.get(self.mllm, []),
+            "visible": self.mllm.lower() != "paieas",
+        }
+
+        settings["use_oss"] = {"value": self.use_oss}
+        settings["oss_ak"] = {
+            "value": (self.oss_ak[:2] + "*" * (len(self.oss_ak) - 4) + self.oss_ak[-2:])
+            if self.oss_ak
+            else self.oss_ak,
+            "type": "text" if self.oss_ak else "password",
+        }
+        settings["oss_sk"] = {
+            "value": (self.oss_sk[:2] + "*" * (len(self.oss_sk) - 4) + self.oss_sk[-2:])
+            if self.oss_sk
+            else self.oss_sk,
+            "type": "text" if self.oss_sk else "password",
+        }
+        settings["oss_endpoint"] = {"value": self.oss_endpoint}
+        settings["oss_bucket"] = {"value": self.oss_bucket}
+        settings["oss_prefix"] = {"value": self.oss_prefix}
+
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
