@@ -4,6 +4,8 @@ import uuid
 import hashlib
 import os
 import tempfile
+import shutil
+import pandas as pd
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
@@ -11,6 +13,9 @@ from pai_rag.app.api.models import (
     LlmResponse,
 )
 from fastapi.responses import StreamingResponse
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -150,9 +155,93 @@ async def upload_data(
         task_id=task_id,
         input_files=input_files,
         filter_pattern=None,
+        oss_prefix=None,
         faiss_path=faiss_path,
         enable_qa_extraction=False,
         enable_raptor=enable_raptor,
     )
 
     return {"task_id": task_id}
+
+
+@router.post("/upload_data_from_oss")
+async def upload_oss_data(
+    oss_prefix: str = None,
+    faiss_path: str = None,
+    enable_raptor: bool = False,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    task_id = uuid.uuid4().hex
+    background_tasks.add_task(
+        rag_service.add_knowledge,
+        task_id=task_id,
+        input_files=None,
+        filter_pattern=None,
+        oss_prefix=oss_prefix,
+        faiss_path=faiss_path,
+        enable_qa_extraction=False,
+        enable_raptor=enable_raptor,
+        from_oss=True,
+    )
+
+    return {"task_id": task_id}
+
+
+@router.post("/upload_datasheet")
+async def upload_datasheet(
+    file: UploadFile,
+):
+    task_id = uuid.uuid4().hex
+    if not file:
+        return None
+
+    persist_path = "./localdata/data_analysis"
+
+    os.makedirs(name=persist_path, exist_ok=True)
+
+    # 清空目录中的文件
+    for filename in os.listdir(persist_path):
+        file_path = os.path.join(persist_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            logger.info(f"Failed to delete {file_path}. Reason: {e}")
+
+    # 指定持久化存储位置
+    file_name = os.path.basename(file.filename)  # 获取文件名
+    destination_path = os.path.join(persist_path, file_name)
+    # 写入文件
+    try:
+        # shutil.copy(file.filename, destination_path)
+        with open(destination_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        logger.info("data analysis file saved successfully")
+
+        if destination_path.endswith(".csv"):
+            df = pd.read_csv(destination_path)
+        elif destination_path.endswith(".xlsx"):
+            df = pd.read_excel(destination_path)
+        else:
+            raise TypeError("Unsupported file type.")
+
+    except Exception as e:
+        return StreamingResponse(status_code=500, content={"message": str(e)})
+
+    return {
+        "task_id": task_id,
+        "destination_path": destination_path,
+        "data_preview": df.head(10).to_json(orient="records", lines=False),
+    }
+
+
+@router.post("/query/data_analysis")
+async def aquery_analysis(query: RagQuery):
+    response = await rag_service.aquery_analysis(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )

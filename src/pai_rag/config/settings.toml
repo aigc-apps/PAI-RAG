@@ -14,7 +14,7 @@ agent_file_path = ""
 type = ""
 
 [rag.agent.tool]
-type = "" # [built-in", "python", "api"]
+type = ""
 
 [rag.chat_engine]
 type = "CondenseQuestionChatEngine"
@@ -24,6 +24,12 @@ type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
+
+[rag.data_analysis]
+analysis_type = "nl2pandas"
+
+[rag.data_loader]
+type = "local"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
@@ -38,13 +44,13 @@ type = "SimpleDirectoryReader"
 source = "DashScope"
 embed_batch_size = 10
 
-[rag.embedding.multi_modal]
-source = "cnclip"
-
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
+
+[rag.function_calling_llm]
+source = ""
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -53,6 +59,7 @@ vector_store.type = "FAISS"
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
 # source = "PaiEas"
+# name = ""
 # endpoint = ""
 # token = ""
 [rag.llm]
@@ -61,11 +68,6 @@ name = "qwen-turbo"
 
 [rag.llm.function_calling_llm]
 source = ""
-
-[rag.llm.multi_modal]
-source = "PaiEas"
-endpoint = ""
-token = ""
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
@@ -83,6 +85,7 @@ chunk_overlap = 10
 [rag.oss_store]
 bucket = ""
 endpoint = ""
+prefix = ""
 
 [rag.postprocessor]
 reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
@@ -106,3 +109,8 @@ search_api_key = ""
 [rag.synthesizer]
 type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
+
+[rag.trace]
+type = "pai-llm-trace"
+endpoint = "http://tracing-analysis-dc-hz.aliyuncs.com:8090"
+token = ""

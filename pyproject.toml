@@ -13,7 +13,7 @@ readme = "README.md"
 python = ">=3.11.0,<3.12"
 fastapi = "^0.110.1"
 uvicorn = "^0.29.0"
-llama-index-core = "^0.10.57"
+llama-index-core = "0.10.62"
 llama-index-embeddings-openai = "^0.1.7"
 llama-index-embeddings-azure-openai = "^0.1.7"
 llama-index-embeddings-dashscope = "^0.1.3"
@@ -42,23 +42,22 @@ flagembedding = "^1.2.10"
 sentencepiece = "^0.2.0"
 oss2 = "^2.18.5"
 asgi-correlation-id = "^4.3.1"
-openinference-instrumentation-llama-index = "^1.3.0"
+openinference-instrumentation-llama-index = "^2.2.1"
 torch = [
-  {version = "2.3.0+cpu", source = "pytorch_cpu", platform = "linux"},
-  {version = "2.3.0+cpu", source = "pytorch_cpu", platform = "win32"},
-  {version = "2.2.2", platform = "darwin"}
+  {version = "2.3.0+cpu", source = "pytorch_cpu", markers = "sys_platform != 'darwin'"},
+  {version = "2.2.2", markers = "sys_platform == 'darwin'"}
 ]
 torchvision = [
-  {version = "0.18.0+cpu", source = "pytorch_cpu", platform = "linux"},
-  {version = "0.18.0+cpu", source = "pytorch_cpu", platform = "win32"},
-  {version = "0.17.2", platform = "darwin"}
+  {version = "0.18.0+cpu", source = "pytorch_cpu", markers = "sys_platform != 'darwin'"},
+  {version = "0.17.2", markers = "sys_platform == 'darwin'"}
 ]
+transformers = "4.40.0"
 openpyxl = "^3.1.2"
 pdf2image = "^1.17.0"
 llama-index-storage-chat-store-redis = "^0.1.3"
 python-bidi = "0.4.2"
 easyocr = "^1.7.1"
-opencv-python = "^4.9.0.80"
+opencv-python = "^4.6.0.66"
 llama-parse = "0.4.2"
 pypdf2 = "^3.0.1"
 pdfplumber = "^0.11.0"
@@ -76,7 +75,7 @@ chardet = "^5.2.0"
 locust = "^2.29.0"
 gunicorn = "^22.0.0"
 umap-learn = "^0.5.6"
-protobuf = "3.20.0"
+protobuf = "3.20.2"
 modelscope = "^1.16.0"
 llama-index-multi-modal-llms-dashscope = "^0.1.2"
 llama-index-vector-stores-alibabacloud-opensearch = "^0.1.0"
@@ -85,8 +84,22 @@ pgvector = "^0.3.2"
 pre-commit = "^3.8.0"
 cn-clip = "^1.5.1"
 llama-index-llms-paieas = "^0.1.0"
+pymysql = "^1.1.1"
+llama-index-experimental = "^0.2.0"
 llama-index-readers-web = "^0.1.23"
 milvus-lite = "^2.4.9"
+rapidocr-onnxruntime = "^1.3.24"
+rapid-table = "^0.1.3"
+bs4 = "^0.0.2"
+httpx = "0.27.0"
+detectron2 = [
+  {markers = "sys_platform == 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-linux_x86_64.whl"},
+  {markers = "sys_platform == 'win32'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cpu-cp311-cp311-win_amd64.whl"},
+  {markers = "sys_platform != 'win32' and sys_platform != 'linux' ", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.2.2cpu-cp311-cp311-macosx_10_9_universal2.whl"}
+]
+magic-pdf = {version = "0.7.0b1", extras = ["full"]}
+pai-llm-trace = {url = "https://pai-llm-trace.oss-cn-zhangjiakou.aliyuncs.com/sdk_package/pai_llm_trace-1.0.0-py3-none-any.whl"}
+llama-index-callbacks-arize-phoenix = "0.1.6"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

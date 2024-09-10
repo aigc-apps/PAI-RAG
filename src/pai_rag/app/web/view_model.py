@@ -6,10 +6,12 @@ from pai_rag.app.web.ui_constants import (
     DEFAULT_EMBED_SIZE,
     DEFAULT_HF_EMBED_MODEL,
     LLM_MODEL_KEY_DICT,
+    MLLM_MODEL_KEY_DICT,
     PROMPT_MAP,
 )
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import tempfile
 import json
@@ -38,10 +40,27 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = "PAI-EAS-LLM"
+    llm_eas_model_name: str = "model_name"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1
+
+    # mllm
+    use_mllm: bool = False
+    mllm: str = None
+    mllm_eas_url: str = None
+    mllm_eas_token: str = None
+    mllm_eas_model_name: str = "model_name"
+    mllm_api_key: str = None
+    mllm_api_model_name: str = None
+
+    # oss
+    use_oss: bool = False
+    oss_ak: str = None
+    oss_sk: str = None
+    oss_endpoint: str = None
+    oss_bucket: str = None
+    oss_prefix: str = None
 
     # chunking
     parser_type: str = "Sentence"
@@ -113,6 +132,8 @@ class ViewModel(BaseModel):
 
     # retriever
     similarity_top_k: int = 5
+    image_similarity_top_k: int = 2
+    need_image: bool = False
     retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
     query_rewrite_n: int = 1
 
@@ -120,6 +141,18 @@ class ViewModel(BaseModel):
     search_api_key: str = None
     search_count: int = 10
     search_lang: str = "zh-CN"
+
+    # data_analysis
+    analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
+    analysis_file_path: str = None
+    db_dialect: str = "mysql"
+    db_username: str = None
+    db_password: str = None
+    db_host: str = None
+    db_port: int = 3306
+    db_name: str = None
+    db_tables: str = None
+    db_descriptions: str = None
 
     # postprocessor
     reranker_type: str = (
@@ -173,6 +206,44 @@ class ViewModel(BaseModel):
             view_model.llm_api_model_name = config["llm"].get(
                 "name", view_model.llm_api_model_name
             )
+
+        view_model.use_mllm = config["llm"]["multi_modal"].get(
+            "enable", view_model.use_mllm
+        )
+        view_model.mllm = config["llm"]["multi_modal"].get("source", view_model.mllm)
+        view_model.mllm_eas_url = config["llm"]["multi_modal"].get(
+            "endpoint", view_model.mllm_eas_url
+        )
+        view_model.mllm_eas_token = config["llm"]["multi_modal"].get(
+            "token", view_model.mllm_eas_token
+        )
+        view_model.mllm_api_key = config["llm"]["multi_modal"].get(
+            "api_key", view_model.mllm_api_key
+        )
+
+        if view_model.mllm.lower() == "paieas":
+            print(
+                "view_model.mllm_eas_model_name",
+                view_model.mllm_eas_model_name,
+                "2",
+                config["llm"]["multi_modal"]["name"],
+            )
+            view_model.mllm_eas_model_name = config["llm"]["multi_modal"].get(
+                "name", view_model.mllm_eas_model_name
+            )
+        else:
+            view_model.mllm_api_model_name = config["llm"]["multi_modal"].get(
+                "name", view_model.mllm_api_model_name
+            )
+
+        view_model.use_oss = config["oss_store"].get("enable", view_model.use_oss)
+        view_model.oss_ak = config["oss_store"].get("ak", view_model.oss_ak)
+        view_model.oss_sk = config["oss_store"].get("sk", view_model.oss_sk)
+        view_model.oss_endpoint = config["oss_store"].get(
+            "endpoint", view_model.oss_endpoint
+        )
+        view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
+        view_model.oss_prefix = config["oss_store"].get("prefix", view_model.oss_prefix)
 
         view_model.vectordb_type = config["index"]["vector_store"].get(
             "type", view_model.vectordb_type
@@ -264,6 +335,10 @@ class ViewModel(BaseModel):
         )
 
         view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
+        view_model.image_similarity_top_k = config["retriever"].get(
+            "image_similarity_top_k", 2
+        )
+        view_model.need_image = config["retriever"].get("need_image", False)
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
@@ -271,6 +346,35 @@ class ViewModel(BaseModel):
             view_model.retrieval_mode = "Embedding Only"
         elif config["retriever"]["retrieval_mode"] == "keyword":
             view_model.retrieval_mode = "Keyword Only"
+
+        if config["data_analysis"]["analysis_type"] == "nl2pandas":
+            view_model.analysis_type = "nl2pandas"
+        elif config["data_analysis"]["analysis_type"] == "nl2sql":
+            view_model.analysis_type = "nl2sql"
+
+        view_model.analysis_file_path = config["data_analysis"].get(
+            "analysis_file_path", None
+        )
+        view_model.db_dialect = config["data_analysis"].get("dialect", "mysql")
+        view_model.db_username = config["data_analysis"].get("user", None)
+        view_model.db_password = config["data_analysis"].get("password", None)
+        view_model.db_host = config["data_analysis"].get("host", None)
+        view_model.db_port = config["data_analysis"].get("port", 3306)
+        view_model.db_name = config["data_analysis"].get("dbname", None)
+
+        # from list to string
+        if config["data_analysis"].get("tables", None):
+            view_model.db_tables = ",".join(config["data_analysis"].get("tables", None))
+        else:
+            view_model.db_tables = None
+
+        # from dict to string
+        if config["data_analysis"].get("descriptions", None):
+            view_model.db_descriptions = json.dumps(
+                config["data_analysis"].get("descriptions", None), ensure_ascii=False
+            )
+        else:
+            view_model.db_descriptions = None
 
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
@@ -328,6 +432,29 @@ class ViewModel(BaseModel):
             config["llm"]["name"] = self.llm_eas_model_name
         else:
             config["llm"]["name"] = self.llm_api_model_name
+
+        config["llm"]["multi_modal"]["enable"] = self.use_mllm
+        config["llm"]["multi_modal"]["source"] = self.mllm
+        config["llm"]["multi_modal"]["endpoint"] = self.mllm_eas_url
+        config["llm"]["multi_modal"]["token"] = self.mllm_eas_token
+        config["llm"]["multi_modal"]["api_key"] = self.mllm_api_key
+        if self.mllm.lower() == "paieas":
+            config["llm"]["multi_modal"]["name"] = self.mllm_eas_model_name
+        else:
+            config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
+
+        config["oss_store"]["enable"] = self.use_oss
+        if os.getenv("OSS_ACCESS_KEY_ID") is None:
+            os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
+        if os.getenv("OSS_ACCESS_KEY_SECRET") is None:
+            os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
+        if "***" not in self.oss_ak:
+            config["oss_store"]["ak"] = self.oss_ak
+        if "***" not in self.oss_sk:
+            config["oss_store"]["sk"] = self.oss_sk
+        config["oss_store"]["endpoint"] = self.oss_endpoint
+        config["oss_store"]["bucket"] = self.oss_bucket
+        config["oss_store"]["prefix"] = self.oss_prefix
 
         config["index"]["vector_store"]["type"] = self.vectordb_type
         config["index"]["persist_path"] = self.faiss_path
@@ -400,6 +527,8 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
+        config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+        config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
             config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
@@ -407,6 +536,33 @@ class ViewModel(BaseModel):
             config["retriever"]["retrieval_mode"] = "embedding"
         elif self.retrieval_mode == "Keyword Only":
             config["retriever"]["retrieval_mode"] = "keyword"
+
+        if self.analysis_type == "nl2pandas":
+            config["data_analysis"]["analysis_type"] = "nl2pandas"
+        elif self.analysis_type == "nl2sql":
+            config["data_analysis"]["analysis_type"] = "nl2sql"
+
+        config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
+        config["data_analysis"]["dialect"] = self.db_dialect
+        config["data_analysis"]["user"] = self.db_username
+        config["data_analysis"]["password"] = self.db_password
+        config["data_analysis"]["host"] = self.db_host
+        config["data_analysis"]["port"] = self.db_port
+        config["data_analysis"]["dbname"] = self.db_name
+        # string to list
+        if self.db_tables:
+            # 去掉首位空格和末尾逗号
+            value = self.db_tables.strip().rstrip(",")
+            # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
+            value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
+            config["data_analysis"]["tables"] = value
+        else:
+            config["data_analysis"]["tables"] = None
+        # string to dict
+        if self.db_descriptions:
+            config["data_analysis"]["descriptions"] = json.loads(self.db_descriptions)
+        else:
+            config["data_analysis"]["descriptions"] = None
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
@@ -510,14 +666,52 @@ class ViewModel(BaseModel):
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
         settings["llm"] = {"value": self.llm}
-        settings["llm_eas_url"] = {"value": self.llm_eas_url}
-        settings["llm_eas_token"] = {"value": self.llm_eas_token}
-        settings["llm_eas_model_name"] = {"value": self.llm_eas_model_name}
+        settings["llm_eas_url"] = {
+            "value": self.llm_eas_url,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_token"] = {
+            "value": self.llm_eas_token,
+            "visible": self.llm.lower() == "paieas",
+        }
+        settings["llm_eas_model_name"] = {
+            "value": self.llm_eas_model_name,
+            "visible": self.llm.lower() == "paieas",
+        }
         settings["llm_api_model_name"] = {
             "value": self.llm_api_model_name,
             "choices": LLM_MODEL_KEY_DICT.get(self.llm, []),
             "visible": self.llm.lower() != "paieas",
         }
+
+        settings["use_mllm"] = {"value": self.use_mllm}
+        settings["mllm"] = {"value": self.mllm}
+        settings["mllm_eas_url"] = {"value": self.mllm_eas_url}
+        settings["mllm_eas_token"] = {"value": self.mllm_eas_token}
+        settings["mllm_eas_model_name"] = {"value": self.mllm_eas_model_name}
+        settings["mllm_api_model_name"] = {
+            "value": self.mllm_api_model_name,
+            "choices": MLLM_MODEL_KEY_DICT.get(self.mllm, []),
+            "visible": self.mllm.lower() != "paieas",
+        }
+
+        settings["use_oss"] = {"value": self.use_oss}
+        settings["oss_ak"] = {
+            "value": (self.oss_ak[:2] + "*" * (len(self.oss_ak) - 4) + self.oss_ak[-2:])
+            if self.oss_ak
+            else self.oss_ak,
+            "type": "text" if self.oss_ak else "password",
+        }
+        settings["oss_sk"] = {
+            "value": (self.oss_sk[:2] + "*" * (len(self.oss_sk) - 4) + self.oss_sk[-2:])
+            if self.oss_sk
+            else self.oss_sk,
+            "type": "text" if self.oss_sk else "password",
+        }
+        settings["oss_endpoint"] = {"value": self.oss_endpoint}
+        settings["oss_bucket"] = {"value": self.oss_bucket}
+        settings["oss_prefix"] = {"value": self.oss_prefix}
+
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
@@ -529,6 +723,8 @@ class ViewModel(BaseModel):
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
         settings["reranker_type"] = {"value": self.reranker_type}
         settings["similarity_top_k"] = {"value": self.similarity_top_k}
+        settings["image_similarity_top_k"] = {"value": self.image_similarity_top_k}
+        settings["need_image"] = {"value": self.need_image}
         settings["reranker_model"] = {"value": self.reranker_model}
         settings["vector_weight"] = {"value": self.vector_weight}
         settings["keyword_weight"] = {"value": self.keyword_weight}
@@ -607,4 +803,17 @@ class ViewModel(BaseModel):
         settings["search_api_key"] = {"value": self.search_api_key}
         settings["search_lang"] = {"value": self.search_lang}
         settings["search_count"] = {"value": self.search_count}
+
+        # data_analysis
+        settings["analysis_type"] = {"value": self.analysis_type}
+        settings["analysis_file_path"] = {"value": self.analysis_file_path}
+        settings["db_dialect"] = {"value": self.db_dialect}
+        settings["db_username"] = {"value": self.db_username}
+        settings["db_password"] = {"value": self.db_password}
+        settings["db_host"] = {"value": self.db_host}
+        settings["db_port"] = {"value": self.db_port}
+        settings["db_name"] = {"value": self.db_name}
+        settings["db_tables"] = {"value": self.db_tables}
+        settings["db_descriptions"] = {"value": self.db_descriptions}
+
         return settings

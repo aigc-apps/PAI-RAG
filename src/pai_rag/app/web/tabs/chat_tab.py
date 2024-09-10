@@ -8,13 +8,10 @@ from pai_rag.app.web.ui_constants import (
     ACCURATE_CONTENT_PROMPTS,
 )
 
-current_session_id = None
-
 
 def clear_history(chatbot):
+    rag_client.clear_history()
     chatbot = []
-    global current_session_id
-    current_session_id = None
     return chatbot, 0
 
 
@@ -23,14 +20,19 @@ def reset_textbox():
 
 
 def respond(input_elements: List[Any]):
-    global current_session_id
     update_dict = {}
+
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
+    if update_dict["retrieval_mode"] == "data_analysis":
+        update_dict["retrieval_mode"] = "hybrid"
+    update_dict["synthesizer_type"] = "SimpleSummarize"
+
     # empty input.
     if not update_dict["question"]:
-        yield "", update_dict["chatbot"], 0
+        yield update_dict["chatbot"]
+        return
 
     try:
         rag_client.patch_config(update_dict)
@@ -42,34 +44,36 @@ def respond(input_elements: List[Any]):
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
 
-    if not update_dict["include_history"]:
-        current_session_id = None
-
-    content = ""
-    chatbot.append((msg, content))
+    if chatbot is not None:
+        chatbot.append((msg, ""))
 
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(msg)
 
         elif query_type == "WebSearch":
             response_gen = rag_client.query_search(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
         else:
             response_gen = rag_client.query(
-                msg, session_id=current_session_id, stream=is_streaming
+                msg, with_history=update_dict["include_history"], stream=is_streaming
             )
+
         for resp in response_gen:
             chatbot[-1] = (msg, resp.result)
             yield chatbot
 
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+    except Exception as e:
+        raise gr.Error(f"Error: {e}")
+    finally:
+        yield chatbot
 
 
 def create_chat_tab() -> Dict[str, Any]:
@@ -141,7 +145,19 @@ def create_chat_tab() -> Dict[str, Any]:
                             maximum=100,
                             step=1,
                             elem_id="similarity_top_k",
-                            label="Top K (choose between 0 and 100)",
+                            label="Text Top K (choose between 0 and 100)",
+                        )
+                        image_similarity_top_k = gr.Slider(
+                            minimum=0,
+                            maximum=10,
+                            step=1,
+                            elem_id="image_similarity_top_k",
+                            label="Image Top K (choose between 0 and 10)",
+                        )
+                        need_image = gr.Checkbox(
+                            label="Inference with multi-modal LLM",
+                            info="Inference with multi-modal LLM.",
+                            elem_id="need_image",
                         )
                         similarity_threshold = gr.Slider(
                             minimum=0,
@@ -201,6 +217,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     vector_weight,
                     keyword_weight,
                     similarity_top_k,
+                    image_similarity_top_k,
+                    need_image,
                     similarity_threshold,
                     reranker_model,
                 }
@@ -308,8 +326,6 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
             def change_query_radio(query_type):
-                global current_session_id
-                current_session_id = None
                 if query_type == "Retrieval":
                     return {
                         vs_col: gr.update(visible=True),
@@ -366,7 +382,14 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
+            css = """
+            .text{
+                white-space: normal !important;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                display: -webkit-box;
+            }"""
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot", css=css)
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
@@ -407,6 +430,8 @@ def create_chat_tab() -> Dict[str, Any]:
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
             similarity_top_k.elem_id: similarity_top_k,
+            image_similarity_top_k.elem_id: image_similarity_top_k,
+            need_image.elem_id: need_image,
             retrieval_mode.elem_id: retrieval_mode,
             reranker_type.elem_id: reranker_type,
             reranker_model.elem_id: reranker_model,

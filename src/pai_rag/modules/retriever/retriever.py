@@ -2,20 +2,24 @@
 
 import logging
 from typing import Dict, List, Any
-from llama_index.core.indices.list.base import SummaryIndex
 
 # from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.selectors import LLMSingleSelector
 from llama_index.core.retrievers import RouterRetriever
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from llama_index.core.indices.list.base import SummaryIndex
+
 from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
 from pai_rag.integrations.retrievers.bm25 import BM25Retriever
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
-from pai_rag.utils.prompt_template import QUERY_GEN_PROMPT
+from pai_rag.utils.prompt_template import (
+    QUERY_GEN_PROMPT,
+)
 from pai_rag.modules.retriever.my_vector_index_retriever import MyVectorIndexRetriever
 from pai_rag.integrations.retrievers.fusion_retriever import MyQueryFusionRetriever
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +35,16 @@ class RetrieverModule(ConfigurableModule):
         bm25_index = new_params["BM25IndexModule"]
 
         similarity_top_k = config.get("similarity_top_k", 5)
+        image_similarity_top_k = config.get("image_similarity_top_k", 2)
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
-
+        need_image = config.get("need_image", False)
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
-            return index.vector_index.as_retriever()
+            return index.vector_index.as_retriever(
+                need_image=need_image,
+                similarity_top_k=similarity_top_k,
+                image_similarity_top_k=image_similarity_top_k,
+            )
         # Special handle elastic search
         elif index.vectordb_type == "milvus":
             if retrieval_mode == "embedding":

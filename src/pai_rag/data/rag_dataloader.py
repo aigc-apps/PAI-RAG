@@ -12,6 +12,7 @@ from pai_rag.integrations.extractors.html_qa_extractor import HtmlQAExtractor
 from pai_rag.integrations.extractors.text_qa_extractor import TextQAExtractor
 from pai_rag.modules.nodeparser.node_parser import node_id_hash
 from pai_rag.data.open_dataset import MiraclOpenDataSet, DuRetrievalDataSet
+from llama_index.core.schema import BaseNode
 
 
 import logging
@@ -74,12 +75,35 @@ class RagDataLoader:
         file_name = metadata.get("file_name", "dummy.txt")
         return os.path.splitext(file_name)[1]
 
+    def _filter_text_nodes(self, nodes: List[BaseNode]):
+        filtered_nodes = []
+        text_seen = set()
+        text_seen.update(
+            node.text.strip()
+            for node in nodes
+            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
+        )
+        for node in nodes:
+            if (
+                isinstance(node, TextNode)
+                and node.metadata.get("image_url") is None
+                and node.text.strip() in text_seen
+            ):
+                continue
+            filtered_nodes.append(node)
+        return filtered_nodes
+
     def _get_nodes(
         self,
         file_path: str | List[str],
         filter_pattern: str,
         enable_qa_extraction: bool,
     ):
+        tmp_index_doc = self.index.vector_index._docstore.docs
+        seen_files = set(
+            [_doc.metadata.get("file_name") for _, _doc in tmp_index_doc.items()]
+        )
+
         filter_pattern = filter_pattern or "*"
         if isinstance(file_path, list):
             input_files = [f for f in file_path if os.path.isfile(f)]
@@ -96,9 +120,22 @@ class RagDataLoader:
         if len(input_files) == 0:
             return
 
-        data_reader = self.datareader_factory.get_reader(input_files)
+        # 检查文件名是否已经在seen_files中，如果在，则跳过当前文件
+        new_input_files = []
+        for input_file in input_files:
+            if os.path.basename(input_file) in seen_files:
+                print(
+                    f"[RagDataLoader] {os.path.basename(input_file)} already exists, skip it."
+                )
+                continue
+            new_input_files.append(input_file)
+        if len(new_input_files) == 0:
+            return
+        print(f"[RagDataLoader] {len(new_input_files)} files will be loaded.")
+
+        data_reader = self.datareader_factory.get_reader(input_files=new_input_files)
         docs = data_reader.load_data()
-        logger.info(f"[DataReader] Loaded {len(docs)} docs.")
+        print(f"[DataReader] Loaded {len(docs)} docs.")
         nodes = []
 
         doc_cnt_map = {}
@@ -124,9 +161,13 @@ class RagDataLoader:
                 nodes.append(
                     TextNode(id_=node_id, text=doc.text, metadata=doc.metadata)
                 )
-            elif doc_type == ".md":
+            elif doc_type == ".md" or doc_type == ".pdf":
                 md_node_parser = MarkdownNodeParser(id_func=node_id_hash)
-                nodes.extend(md_node_parser.get_nodes_from_documents([doc]))
+                tmp_nodes = md_node_parser.get_nodes_from_documents([doc])
+                for node in tmp_nodes:
+                    node.id_ = node_id_hash(doc_cnt_map[doc_key], doc)
+                    doc_cnt_map[doc_key] += 1
+                    nodes.append(node)
             else:
                 nodes.extend(self.node_parser.get_nodes_from_documents([doc]))
 
@@ -137,6 +178,8 @@ class RagDataLoader:
             node.excluded_embed_metadata_keys.append("source")
 
         logger.info(f"[DataReader] Split into {len(nodes)} nodes.")
+
+        nodes = self._filter_text_nodes(nodes)
 
         # QA metadata extraction
         if enable_qa_extraction:

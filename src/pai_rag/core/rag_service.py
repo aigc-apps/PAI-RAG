@@ -5,6 +5,7 @@ from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.core.rag_application import RagApplication
 from pai_rag.core.rag_configuration import RagConfiguration
+from pai_rag.utils.oss_utils import check_and_set_oss_auth, get_oss_auth
 from pai_rag.app.api.models import (
     RagQuery,
     RetrievalQuery,
@@ -13,6 +14,8 @@ from pai_rag.app.api.models import (
 from openinference.instrumentation import using_attributes
 from typing import Any, List
 import logging
+
+from pai_rag.core.rag_trace import init_trace
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 logger = logging.getLogger(__name__)
@@ -54,19 +57,24 @@ class RagService:
         if os.path.exists(TASK_STATUS_FILE):
             open(TASK_STATUS_FILE, "w").close()
 
+        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
+
     def get_config(self):
         try:
             self.check_updates()
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise ServiceError(f"Get RAG configuration failed: {ex}")
-        return self.config_dict_value.get("RAG")
+        new_config_dict_value = get_oss_auth(self.config_dict_value)
+        return new_config_dict_value.get("RAG")
 
     def reload(self, new_config: Any = None):
         try:
             rag_snapshot = RagConfiguration.from_snapshot()
             if new_config:
                 # 多worker模式，读取最新的setting
+                # 检查OSS Auth配置，并配置环境变量
+                new_config = check_and_set_oss_auth(new_config)
                 rag_snapshot.update(new_config)
             config_snapshot = rag_snapshot.get_value()
             if config_snapshot:
@@ -75,13 +83,13 @@ class RagService:
                 logger.debug("No snapshot found, not reload")
                 return
             if self.config_dict_value != new_dict_value:
-                logger.debug("Config changed, reload")
+                logger.info("Config changed, reload")
                 self.rag.reload(config_snapshot)
                 self.config_dict_value = new_dict_value
                 self.rag_configuration = rag_snapshot
                 self.rag_configuration.persist()
             else:
-                logger.debug("Config not changed, not reload")
+                logger.info("Config not changed, not reload")
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Update RAG configuration failed: {ex}")
@@ -99,23 +107,35 @@ class RagService:
     def add_knowledge(
         self,
         task_id: str,
-        input_files: List[str],
+        input_files: List[str] = None,
         filter_pattern: str = None,
+        oss_prefix: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
+        from_oss: bool = False,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
-            self.rag.load_knowledge(
-                input_files,
-                filter_pattern,
-                faiss_path,
-                enable_qa_extraction,
-                enable_raptor,
-            )
+            if not from_oss:
+                self.rag.load_knowledge(
+                    input_files,
+                    filter_pattern,
+                    faiss_path,
+                    enable_qa_extraction,
+                    enable_raptor,
+                )
+            else:
+                self.rag.load_knowledge_from_oss(
+                    filter_pattern,
+                    oss_prefix,
+                    faiss_path,
+                    enable_qa_extraction,
+                    enable_raptor,
+                )
+
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
@@ -210,6 +230,14 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
+
+    async def aquery_analysis(self, query: RagQuery):
+        try:
+            self.check_updates()
+            return await self.rag.aquery_analysis(query)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query Analysis failed: {ex}")
 
 
 rag_service = RagService()

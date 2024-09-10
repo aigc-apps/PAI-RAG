@@ -10,13 +10,19 @@ PROMPT_MAP = {
     ACCURATE_CONTENT_PROMPTS: "Accurate Content",
 }
 
+# WELCOME_MESSAGE = """
+#             # \N{fire} Chatbot with RAG on PAI !
+#             ### \N{rocket} Build your own personalized knowledge base question-answering chatbot.
+
+#             #### \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Milvus](https://www.aliyun.com/product/bigdata/emapreduce/milvus) / [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss) / [OpenSearch](https://help.aliyun.com/zh/open-search/vector-search-edition/product-overview/)
+
+#             #### \N{fire} <a href='/docs'>API Docs</a> &emsp; \N{rocket} \N{fire}  欢迎加入【PAI】RAG答疑群 27370042974
+#             """
+
 WELCOME_MESSAGE = """
-            # \N{fire} Chatbot with RAG on PAI !
-            ### \N{rocket} Build your own personalized knowledge base question-answering chatbot.
+            # \N{fire} PAI-RAG Dashboard
 
-            #### \N{fire} Platform: [PAI](https://help.aliyun.com/zh/pai)  /  [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)  / [PAI-DSW](https://pai.console.aliyun.com/notebook) &emsp;  \N{rocket} Supported VectorStores:  [Milvus](https://www.aliyun.com/product/bigdata/emapreduce/milvus) / [Hologres](https://www.aliyun.com/product/bigdata/hologram)  /  [ElasticSearch](https://www.aliyun.com/product/bigdata/elasticsearch)  /  [AnalyticDB](https://www.aliyun.com/product/apsaradb/gpdb)  /  [FAISS](https://python.langchain.com/docs/integrations/vectorstores/faiss) / [OpenSearch](https://help.aliyun.com/zh/open-search/vector-search-edition/product-overview/)
-
-            #### \N{fire} <a href='/docs'>API Docs</a> &emsp; \N{rocket} \N{fire}  欢迎加入【PAI】RAG答疑群 27370042974
+            #### \N{rocket} Join the DingTalk Q&A Group: 27370042974
             """
 
 DEFAULT_CSS_STYPE = """
@@ -51,6 +57,13 @@ LLM_MODEL_KEY_DICT = {
         "gpt-3.5-turbo",
         "gpt-4-turbo",
     ],
+}
+
+MLLM_MODEL_KEY_DICT = {
+    "DashScope": [
+        "qwen-vl-max",
+        "qwen-vl-turbo",
+    ]
 }
 
 EMPTY_KNOWLEDGEBASE_MESSAGE = "We couldn't find any documents related to your question: {query_str}. \n\n You may try lowering the similarity_threshold or uploading relevant knowledge files."

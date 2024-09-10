@@ -60,7 +60,7 @@ class DataReaderFactoryModule(ConfigurableModule):
 
         return self
 
-    def get_reader(self, input_files: str):
+    def get_reader(self, input_files: str = None):
         if self.reader_config["type"] == "SimpleDirectoryReader":
             return SimpleDirectoryReader(
                 input_files=input_files,

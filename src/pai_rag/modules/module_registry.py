@@ -31,6 +31,7 @@ MODULE_CONFIG_KEY_MAP = {
     "BM25IndexModule": "rag.bm25",
     "SearchModule": "rag.search",
     "NodesEnhancementModule": "rag.node_enhancement",
+    "DataAnalysisModule": "rag.data_analysis",
 }
 
 
@@ -65,7 +66,7 @@ class ModuleRegistry:
         return hashlib.sha256(repr_str).hexdigest()
 
     def get_module_with_config(self, module_key, config):
-        key = repr(config)
+        key = repr(config.to_dict())
         if key in self._cache_by_config and module_key in self._cache_by_config[key]:
             return self._cache_by_config[key][module_key]
 
@@ -78,7 +79,7 @@ class ModuleRegistry:
             return mod
 
     def init_modules(self, config):
-        key = repr(config)
+        key = repr(config.to_dict())
 
         mod_cache = {}
         mod_stack = []
@@ -126,10 +127,11 @@ class ModuleRegistry:
             params[dep] = self._create_mod_lazily(dep, config, mod_cache)
 
         instance_key = self._get_param_hash(params)
-        if mod_name == "IndexModule":
-            logger.debug(instance_key, params)
 
-        if instance_key not in self._mod_instance_map[mod_name]:
+        if (
+            instance_key not in self._mod_instance_map[mod_name]
+            or mod_name == "OssCacheModule"
+        ):
             logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params

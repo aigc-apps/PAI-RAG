@@ -11,6 +11,7 @@ from llama_index.core.schema import QueryBundle
 import json
 import logging
 import os
+import copy
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
@@ -60,8 +61,9 @@ class RagApplication:
         enable_raptor=False,
     ):
         sessioned_config = self.config
+        sessioned_config.rag.data_loader.update({"type": "Local"})
         if faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update({"persist_path": faiss_path})
             self.logger.info(
                 f"Update rag_application config with faiss_persist_path: {faiss_path}"
@@ -74,13 +76,71 @@ class RagApplication:
             input_files, filter_pattern, enable_qa_extraction, enable_raptor
         )
 
+    def load_knowledge_from_oss(
+        self,
+        filter_pattern=None,
+        oss_prefix=None,
+        faiss_path=None,
+        enable_qa_extraction=False,
+        enable_raptor=False,
+    ):
+        sessioned_config = copy.copy(self.config)
+        sessioned_config.rag.data_loader.update({"type": "Oss"})
+        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
+        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
+        self.logger.info(
+            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
+        )
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", sessioned_config
+        )
+        if faiss_path:
+            sessioned_config.rag.index.update({"persist_path": faiss_path})
+            self.logger.info(
+                f"Update rag_application config with faiss_persist_path: {faiss_path}"
+            )
+        data_loader.load(
+            filter_pattern=filter_pattern,
+            enable_qa_extraction=enable_qa_extraction,
+            enable_raptor=enable_raptor,
+        )
+
+    async def aload_knowledge_from_oss(
+        self,
+        filter_pattern=None,
+        oss_prefix=None,
+        faiss_path=None,
+        enable_qa_extraction=False,
+        enable_raptor=False,
+    ):
+        sessioned_config = copy.copy(self.config)
+        sessioned_config.rag.data_loader.update({"type": "Oss"})
+        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
+        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
+        self.logger.info(
+            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
+        )
+        data_loader = module_registry.get_module_with_config(
+            "DataLoaderModule", sessioned_config
+        )
+        if faiss_path:
+            sessioned_config.rag.index.update({"persist_path": faiss_path})
+            self.logger.info(
+                f"Update rag_application config with faiss_persist_path: {faiss_path}"
+            )
+        await data_loader.aload(
+            filter_pattern=filter_pattern,
+            enable_qa_extraction=enable_qa_extraction,
+            enable_raptor=enable_raptor,
+        )
+
     async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RetrievalResponse(docs=[])
 
         sessioned_config = self.config
         if query.vector_db and query.vector_db.faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )
@@ -177,7 +237,7 @@ class RagApplication:
         sessioned_config = self.config
 
         if query.vector_db and query.vector_db.faiss_path:
-            sessioned_config = self.config.copy()
+            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )
@@ -246,7 +306,8 @@ class RagApplication:
             return LlmResponse(answer=response.response, session_id=session_id)
         else:
             response = await llm_chat_engine.astream_chat(query.question)
-            return event_generator_async(response=response)
+            result_info = {"session_id": session_id}
+            return event_generator_async(response=response, extra_info=result_info)
 
     async def aquery_agent(self, query: RagQuery) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
@@ -354,3 +415,57 @@ class RagApplication:
                 None,
                 f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
             )
+
+    async def aquery_analysis(self, query: RagQuery):
+        """Query answer from RAG App asynchronously.
+
+        Generate answer from Data Analysis interface.
+
+        Args:
+            query: RagQuery
+
+        Returns:
+            RagResponse
+        """
+        session_id = query.session_id or uuid_generator()
+        self.logger.debug(f"Get session ID: {session_id}.")
+        if not query.question:
+            return RagResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
+        sessioned_config = self.config
+
+        analyst = module_registry.get_module_with_config(
+            "DataAnalysisModule", sessioned_config
+        )
+        if not analyst:
+            raise ValueError("Data Analysis not enabled. Please specify analysis type.")
+
+        if not query.stream:
+            response = await analyst.aquery(query.question)
+        else:
+            response = await analyst.astream_query(query.question)
+
+        node_results = response.source_nodes
+        new_query = query.question
+
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+
+        result_info = {
+            "session_id": session_id,
+            "docs": reference_docs,
+            "new_query": new_query,
+        }
+
+        if not query.stream:
+            return RagResponse(answer=response.response, **result_info)
+        else:
+            return event_generator_async(response=response, extra_info=result_info)
