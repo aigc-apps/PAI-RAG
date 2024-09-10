@@ -448,9 +448,9 @@ class ViewModel(BaseModel):
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
         if os.getenv("OSS_ACCESS_KEY_SECRET") is None:
             os.environ["OSS_ACCESS_KEY_SECRET"] = self.oss_sk
-        if "***" not in self.oss_ak:
+        if self.oss_ak and "***" not in self.oss_ak:
             config["oss_store"]["ak"] = self.oss_ak
-        if "***" not in self.oss_sk:
+        if self.oss_sk and "***" not in self.oss_sk:
             config["oss_store"]["sk"] = self.oss_sk
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
