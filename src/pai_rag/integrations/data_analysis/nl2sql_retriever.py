@@ -261,6 +261,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         self._get_tables = self._load_get_tables_fn(
             sql_database, tables, context_query_kwargs, table_retriever
         )
+        self._tables = tables
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
@@ -393,6 +394,12 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 # else:
                 #     raise
 
+            # add query_tables into metadata
+            query_tables = self._get_table_from_sql(
+                self._tables, retrieved_nodes[0].metadata["query_code_instruction"]
+            )
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
+
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
 
     async def aretrieve_with_metadata(
@@ -463,7 +470,20 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 # metadata = {}
                 # else:
                 #     raise
+            # add query_tables into metadata
+            query_tables = self._get_table_from_sql(
+                self._tables, retrieved_nodes[0].metadata["query_code_instruction"]
+            )
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
+
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+
+    def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
+        table_collection = list()
+        for table in table_list:
+            if table.lower() in sql_query.lower():
+                table_collection.append(table)
+        return table_collection
 
     def _sql_query_modification(self, sql_query_str):
         table_pattern = r"FROM\s+(\w+)"
@@ -473,7 +493,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             new_sql_query_str = f"SELECT * FROM {first_table}"
             logger.info(f"use the whole table {first_table} instead if possible")
         else:
-            raise ValueError("No table is matched")
+            # raise ValueError("No table is matched")
+            new_sql_query_str = sql_query_str
+            logger.info("No table is matched")
 
         return new_sql_query_str
 
