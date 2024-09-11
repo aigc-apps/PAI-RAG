@@ -112,6 +112,8 @@ class RagWebClient:
             self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
+                ref_table = doc["metadata"].get("query_tables", None)
+                invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
                 if media_url and doc["text"] == "":
@@ -140,6 +142,33 @@ class RagWebClient:
 </span>
 <br>
 """
+                elif ref_table:
+                    ref_table_format = ", ".join([i for i in ref_table])
+                    formatted_table_name = f"查询数据库中相关表名包括： <b>{ref_table_format}</b>"
+
+                    if invalid_flag == 0:
+                        run_flag = " ✓ "
+                        ref_sql = doc["metadata"].get("query_code_instruction", None)
+                        formatted_sql_query = f"生成的sql语句为：<b>{ref_sql}</b>"
+                        # content = f"""{formatted_table_name} \n\n {formatted_sql_query}"""
+                        content = (
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> """
+                            """\n"""
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_sql_query} \n sql查询是否有效：</span>"""
+                            f"""<span style="color:green; font-size: 14px;">{run_flag}"""
+                        )
+                    else:
+                        run_flag = " ✗ "
+                        ref_sql = doc["metadata"].get(
+                            "generated_query_code_instruction", None
+                        )
+                        formatted_sql_query = f"生成的sql语句为：<b>{ref_sql}</b>"
+                        content = (
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> """
+                            """\n"""
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_sql_query} \n sql查询是否有效：</span>"""
+                            f"""<span style="color:red; font-size: 14px;">{run_flag}"""
+                        )
                 else:
                     content = ""
                 content_list.append(content)
@@ -440,47 +469,6 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
         print("evaluate_for_response_stage response", response)
-
-    def _format_data_analysis_rag_response(
-        self, question, response, session_id: str = None, stream: bool = False
-    ):
-        if stream:
-            text = response["delta"]
-        else:
-            text = response["answer"]
-
-        docs = response.get("docs", []) or []
-        is_finished = response.get("is_finished", True)
-
-        referenced_docs = ""
-        if is_finished and len(docs) == 0 and not text:
-            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
-            return response
-        elif is_finished:
-            seen_filenames = set()
-            file_idx = 1
-            for i, doc in enumerate(docs):
-                filename = doc["metadata"].get("file_name", None)
-                if filename and filename not in seen_filenames:
-                    seen_filenames.add(filename)
-                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    title = doc["metadata"].get("title")
-                    if not title:
-                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                    else:
-                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
-
-                    file_idx += 1
-        formatted_answer = ""
-        if session_id:
-            new_query = response["new_query"]
-            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
-        formatted_answer += f"**Answer**: {text} \n\n"
-        if referenced_docs:
-            formatted_answer += f"**Reference**:\n {referenced_docs}"
-
-        response["result"] = formatted_answer
-        return response
 
 
 rag_client = RagWebClient()
