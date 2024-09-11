@@ -89,6 +89,8 @@ repos:
             "./data/tokenization/qwen.tiktoken",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
+            "docs/vectordb/opensearch_image.json",
+            "docs/vectordb/opensearch_image.json",
           ]
   - repo: https://github.com/srstevenson/nb-clean
     rev: 3.1.0

@@ -467,7 +467,10 @@ class PaiPDFReader(BaseReader):
                 text_image_documents.append(
                     Document(
                         text=content,
-                        extra_info={"image_url": image_urls, **extra_info},
+                        extra_info={
+                            "image_url_list_str": json.dumps(image_urls),
+                            **extra_info,
+                        },
                     )
                 )
             print("[PaiPDFReader] successfully loaded images with multimodal.")

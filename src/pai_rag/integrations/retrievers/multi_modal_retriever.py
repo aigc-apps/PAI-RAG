@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from llama_index.core.base.base_multi_modal_retriever import (
     MultiModalRetriever,
 )
+from llama_index.core.schema import ImageNode
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
@@ -14,7 +15,6 @@ from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.indices.utils import log_vector_store_query_result
 from llama_index.core.schema import (
     NodeWithScore,
-    ObjectType,
     QueryBundle,
     QueryType,
 )
@@ -248,7 +248,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
     ) -> List[NodeWithScore]:
         if query_result.nodes is None:
             # NOTE: vector store does not keep text and returns node indices.
-            # Need to recover all nodes from docstore
+            # Need to recover all nodes from docstore, i.e. FaissVectorStore
             if query_result.ids is None:
                 raise ValueError(
                     "Vector store query result should return at "
@@ -263,19 +263,32 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
             query_result.nodes = nodes
         else:
             # NOTE: vector store keeps text, returns nodes.
-            # Only need to recover image or index nodes from docstore
+            # Only need to recover image or index nodes from docstore, i.e. Hologres
             for i in range(len(query_result.nodes)):
-                source_node = query_result.nodes[i].source_node
-                if (not self._vector_store.stores_text) or (
-                    source_node is not None and source_node.node_type != ObjectType.TEXT
-                ):
-                    node_id = query_result.nodes[i].node_id
-                    if self._docstore.document_exists(node_id):
-                        query_result.nodes[
-                            i
-                        ] = self._docstore.get_node(  # type: ignore[index]
-                            node_id
-                        )
+                node = query_result.nodes[i]
+                node.embedding = None
+                if is_image:
+                    node = ImageNode(
+                        id_=node.id_,
+                        image_url=node.metadata["image_url"],
+                        metadata=node.metadata,
+                    )
+                query_result.nodes[i] = node
+        # else:
+        #     # NOTE: vector store keeps text, returns nodes.
+        #     # Only need to recover image or index nodes from docstore
+        #     for i in range(len(query_result.nodes)):
+        #         source_node = query_result.nodes[i].source_node
+        #         if (not self._vector_store.stores_text) or (
+        #             source_node is not None and source_node.node_type != ObjectType.TEXT
+        #         ):
+        #             node_id = query_result.nodes[i].node_id
+        #             if self._docstore.document_exists(node_id):
+        #                 query_result.nodes[
+        #                     i
+        #                 ] = self._docstore.get_node(  # type: ignore[index]
+        #                     node_id
+        #                 )
 
         log_vector_store_query_result(query_result)
 

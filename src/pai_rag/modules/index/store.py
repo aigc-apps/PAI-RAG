@@ -66,34 +66,37 @@ class RagStore:
             self.store_config["vector_store"].get("type", "faiss").lower()
         )
 
-        if vector_store_type == "chroma":
-            self.vector_store = self._get_or_create_chroma()
-            logger.info("initialized Chroma vector store.")
-        elif vector_store_type == "faiss":
+        if vector_store_type == "faiss":
             self.doc_store = self._get_or_create_simple_doc_store()
             self.index_store = self._get_or_create_simple_index_store()
             self.vector_store, self.image_store = self._get_or_create_faiss()
-
             logger.info("initialized FAISS vector & image store.")
         elif vector_store_type == "hologres":
             self.vector_store, self.image_store = self._get_or_create_hologres()
-            logger.info("initialized Hologres vector store.")
-        elif vector_store_type == "analyticdb":
-            self.vector_store = self._get_or_create_adb()
-            logger.info("initialized AnalyticDB vector store.")
+            logger.info("initialized Hologres vector & image store.")
+        # TODO: not supported yet, need more tests
         elif vector_store_type == "elasticsearch":
-            ## TODO: verify the config here
             self.vector_store, self.image_store = self._get_or_create_es()
-            logger.info("initialized ElasticSearch vector store.")
+            logger.info("initialized ElasticSearch vector & image store.")
         elif vector_store_type == "milvus":
             self.vector_store, self.image_store = self._get_or_create_milvus()
+            logger.info("initialized Milvus vector & image store.")
         elif vector_store_type == "opensearch":
             (
                 self.vector_store,
                 self.image_store,
             ) = self._get_or_create_open_search_store()
+            logger.info("initialized OpenSearch vector & image store.")
         elif vector_store_type == "postgresql":
-            self.vector_store = self._get_or_create_postgresql_store()
+            self.vector_store, self.image_store = self._get_or_create_postgresql_store()
+            logger.info("initialized Postgresql vector & image store.")
+        # Not used yet
+        elif vector_store_type == "chroma":
+            self.vector_store = self._get_or_create_chroma()
+            logger.info("initialized Chroma vector store.")
+        elif vector_store_type == "analyticdb":
+            self.vector_store = self._get_or_create_adb()
+            logger.info("initialized AnalyticDB vector store.")
         else:
             raise ValueError(f"Unknown vector_store type '{vector_store_type}'.")
 
@@ -253,7 +256,14 @@ class RagStore:
         )
 
         open_search_config = self.store_config["vector_store"]
-        output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
+        text_output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url_list_str",
+            "text",
+            "doc_id",
+        ]
         text_db_config = AlibabaCloudOpenSearchConfig(
             endpoint=open_search_config["endpoint"],
             instance_id=open_search_config["instance_id"],
@@ -261,9 +271,16 @@ class RagStore:
             password=open_search_config["password"],
             table_name=open_search_config["table_name"],
             # OpenSearch constructor has bug in dealing with output fields
-            field_mapping=dict(zip(output_fields, output_fields)),
+            field_mapping=dict(zip(text_output_fields, text_output_fields)),
         )
-
+        image_output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
         image_db_config = AlibabaCloudOpenSearchConfig(
             endpoint=open_search_config["endpoint"],
             instance_id=open_search_config["instance_id"],
@@ -271,7 +288,7 @@ class RagStore:
             password=open_search_config["password"],
             table_name=open_search_config["table_name"] + "_for_image",
             # OpenSearch constructor has bug in dealing with output fields
-            field_mapping=dict(zip(output_fields, output_fields)),
+            field_mapping=dict(zip(image_output_fields, image_output_fields)),
         )
 
         return AlibabaCloudOpenSearchStore(
@@ -280,7 +297,7 @@ class RagStore:
 
     def _get_or_create_postgresql_store(self):
         pg_config = self.store_config["vector_store"]
-        pg = PGVectorStore.from_params(
+        text_pg = PGVectorStore.from_params(
             host=pg_config["host"],
             port=pg_config["port"],
             database=pg_config["database"],
@@ -293,7 +310,20 @@ class RagStore:
             hybrid_search=True,
             text_search_config="jiebacfg",
         )
-        return pg
+        image_pg = PGVectorStore.from_params(
+            host=pg_config["host"],
+            port=pg_config["port"],
+            database=pg_config["database"],
+            table_name=pg_config["table_name"] + "_for_image"
+            if pg_config["table_name"].strip()
+            else "default_for_image",
+            user=pg_config["username"],
+            password=pg_config["password"],
+            embed_dim=self.multi_modal_embed_dims,
+            hybrid_search=False,
+            text_search_config="jiebacfg",
+        )
+        return text_pg, image_pg
 
     def _get_or_create_simple_doc_store(self):
         if self.is_empty:
