@@ -130,20 +130,33 @@ class PaiPDFReader(BaseReader):
 
         output = {}
 
-        for i in range(1, len(sections), 3):
-            title_level = sections[i]
-            title_text = sections[i + 1]
-            content = sections[i + 2] if i + 2 < len(sections) else ""
+        # 没有标题的情况
+        if len(sections) == 1:
+            content = sections[0]
             content_without_images_url = PaiPDFReader.remove_image_paths(content)
-
             url_pattern = IMAGE_URL_PATTERN
             images = re.findall(url_pattern, content)
-            if title_level:
-                images_url_list = [image[0] for image in images if len(image[0]) > 0]
-                if len(images_url_list) > 0:
-                    output[
-                        f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
-                    ] = images_url_list
+            images_url_list = [image[0] for image in images if len(image[0]) > 0]
+            if len(images_url_list) > 0:
+                output[f"{content_without_images_url.strip()}"] = images_url_list
+        # 有标题的情况
+        else:
+            for i in range(1, len(sections), 3):
+                title_level = sections[i]
+                title_text = sections[i + 1]
+                content = sections[i + 2] if i + 2 < len(sections) else ""
+                content_without_images_url = PaiPDFReader.remove_image_paths(content)
+
+                url_pattern = IMAGE_URL_PATTERN
+                images = re.findall(url_pattern, content)
+                if title_level:
+                    images_url_list = [
+                        image[0] for image in images if len(image[0]) > 0
+                    ]
+                    if len(images_url_list) > 0:
+                        output[
+                            f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
+                        ] = images_url_list
         return output
 
     @staticmethod
