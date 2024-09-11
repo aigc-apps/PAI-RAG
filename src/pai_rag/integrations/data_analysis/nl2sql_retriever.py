@@ -126,7 +126,7 @@ class MySQLRetriever(BaseRetriever):
             query_bundle.query_str = self._limit_check(query_bundle.query_str)
         logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
-        # set timeout to 5s
+        # set timeout to 10s
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(10)  # start
         try:
@@ -362,18 +362,21 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     retrieved_nodes,
                     metadata,
                 ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
-                if retrieved_nodes[0].metadata["query_output"] == []:
-                    new_sql_query_str = self._sql_query_modification(sql_query_str)
-                    (
-                        retrieved_nodes,
-                        metadata,
-                    ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
+                # 如果生成的sql语句执行后无结果，待bad case补充
+                # if retrieved_nodes[0].metadata["query_output"] == "":
+
+                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
+                #     (
+                #         retrieved_nodes,
+                #         metadata,
+                #     ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                #     logger.info(
+                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                #     )
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
@@ -384,6 +387,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     retrieved_nodes,
                     metadata,
                 ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 1
+                retrieved_nodes[0].metadata[
+                    "generated_query_code_instruction"
+                ] = sql_query_str
                 logger.info(
                     f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
@@ -395,9 +402,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 #     raise
 
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(
-                self._tables, retrieved_nodes[0].metadata["query_code_instruction"]
-            )
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
@@ -436,20 +441,21 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     retrieved_nodes,
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
-                if retrieved_nodes[0].metadata["query_output"] == []:
-                    new_sql_query_str = self._sql_query_modification(sql_query_str)
-                    (
-                        retrieved_nodes,
-                        metadata,
-                    ) = await self._sql_retriever.aretrieve_with_metadata(
-                        new_sql_query_str
-                    )
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
+                # if retrieved_nodes[0].metadata["query_output"] == "":
+                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
+                #     (
+                #         retrieved_nodes,
+                #         metadata,
+                #     ) = await self._sql_retriever.aretrieve_with_metadata(
+                #         new_sql_query_str
+                #     )
+                #     logger.info(
+                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                #     )
 
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
@@ -461,6 +467,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     retrieved_nodes,
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(new_sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 1
+                retrieved_nodes[0].metadata[
+                    "generated_query_code_instruction"
+                ] = sql_query_str
                 logger.info(
                     f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
@@ -471,9 +481,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 # else:
                 #     raise
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(
-                self._tables, retrieved_nodes[0].metadata["query_code_instruction"]
-            )
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
