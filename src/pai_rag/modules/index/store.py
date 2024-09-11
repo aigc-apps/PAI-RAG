@@ -148,7 +148,7 @@ class RagStore:
 
     def _get_or_create_hologres(self):
         hologres_config = self.store_config["vector_store"]
-        hologres_test_store = HologresVectorStore.from_param(
+        hologres_text_store = HologresVectorStore.from_param(
             host=hologres_config["host"],
             port=hologres_config["port"],
             user=hologres_config["user"],
@@ -168,7 +168,7 @@ class RagStore:
             embedding_dimension=self.multi_modal_embed_dims,
             pre_delete_table=hologres_config["pre_delete_table"],
         )
-        return hologres_test_store, hologres_image_store
+        return hologres_text_store, hologres_image_store
 
     def _get_or_create_adb(self):
         adb_config = self.store_config["vector_store"]
