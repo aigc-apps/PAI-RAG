@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 from pai_rag.app.web.rag_client import rag_client, RagApiError
+from pai_rag.app.web.ui_constants import DA_GENERAL_PROMPTS, DA_SQL_PROMPTS
 
 
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
@@ -51,7 +52,17 @@ def connect_database(input_db: List[Any]):
         # print("db_config:", update_dict)
 
         rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] Connect database success!"
+        return f"[{datetime.datetime.now()}] success!"
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def nl2sql_prompt_update(input_prompt):
+    try:
+        update_dict = {"db_nl2sql_prompt": input_prompt}
+        # print('update_dict:', update_dict)
+        rag_client.patch_config(update_dict)
+        return f"[{datetime.datetime.now()}] success!"
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
@@ -84,7 +95,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "database",
                 ],
                 value="datafile",
-                label="Please choose data analysis type",
+                label="Please choose the data analysis type",
                 elem_id="data_analysis_type",
             )
 
@@ -115,37 +126,91 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
             # database
             with gr.Column(visible=(data_analysis_type.value == "database")) as db_col:
-                dialect = gr.Textbox(
-                    label="Dialect", elem_id="db_dialect", value="mysql"
-                )
-                user = gr.Textbox(label="Username", elem_id="db_username")
-                password = gr.Textbox(
-                    label="Password", elem_id="db_password", type="password"
-                )
-                host = gr.Textbox(label="Host", elem_id="db_host")
-                port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
-                dbname = gr.Textbox(label="DBname", elem_id="db_name")
-                tables = gr.Textbox(
-                    label="Tables",
-                    elem_id="db_tables",
-                    placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
-                )
+                with gr.Row():
+                    dialect = gr.Textbox(
+                        label="Dialect", elem_id="db_dialect", value="mysql"
+                    )
+                    port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
+                    host = gr.Textbox(label="Host", elem_id="db_host")
+                with gr.Row():
+                    user = gr.Textbox(label="Username", elem_id="db_username")
+                    password = gr.Textbox(
+                        label="Password", elem_id="db_password", type="password"
+                    )
+                with gr.Row():
+                    dbname = gr.Textbox(label="DBname", elem_id="db_name")
+                    tables = gr.Textbox(
+                        label="Tables",
+                        elem_id="db_tables",
+                        placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
+                    )
                 descriptions = gr.Textbox(
                     label="Descriptions",
-                    lines=5,
+                    lines=3,
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+                with gr.Row():
+                    connect_db_button = gr.Button(
+                        "Connect Database",
+                        elem_id="connect_db_button",
+                        variant="primary",
+                    )  # 点击功能中更新 analysis_type 和 相关nl2sql 参数
 
-                connect_db_button = gr.Button(
-                    "Connect Database",
-                    elem_id="connect_db_button",
-                    variant="primary",
-                )  # 点击功能中更新analysis_type
+                    connection_info = gr.Textbox(
+                        label="Connection Info", elem_id="db_connection_info"
+                    )
 
-                connection_info = gr.Textbox(
-                    label="Connection Info", elem_id="db_connection_info"
+                prompt_type = gr.Radio(
+                    [
+                        "general",
+                        "sql",
+                        "custom",
+                    ],
+                    value="general",
+                    label="\N{rocket} Please choose the prompt template type",
+                    elem_id="nl2sql_prompt_type",
                 )
+
+                prompt_template = gr.Textbox(
+                    label="prompt template",
+                    elem_id="db_nl2sql_prompt",
+                    value=DA_GENERAL_PROMPTS,
+                    lines=4,
+                )
+
+                with gr.Row():
+                    prompt_update_button = gr.Button(
+                        "prompt update",
+                        elem_id="prompt_update",
+                        variant="primary",
+                    )  # 点击功能中更新 nl2sql prompt
+
+                    update_info = gr.Textbox(
+                        label="Update Info", elem_id="prompt_update_info"
+                    )
+
+            def change_prompt_template(prompt_type):
+                if prompt_type == "general":
+                    return {
+                        prompt_template: gr.update(
+                            value=DA_GENERAL_PROMPTS, interactive=False
+                        )
+                    }
+                elif prompt_type == "sql":
+                    return {
+                        prompt_template: gr.update(
+                            value=DA_SQL_PROMPTS, interactive=False
+                        )
+                    }
+                else:
+                    return {prompt_template: gr.update(value="", interactive=True)}
+
+            prompt_type.input(
+                fn=change_prompt_template,
+                inputs=prompt_type,
+                outputs=[prompt_template],
+            )
 
             inputs_db = {
                 dialect,
@@ -163,6 +228,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 inputs=inputs_db,
                 outputs=connection_info,
                 api_name="connect_db",
+            )
+
+            prompt_update_button.click(
+                fn=nl2sql_prompt_update,
+                inputs=prompt_template,
+                outputs=update_info,
+                api_name="update_nl2sql_prompt",
             )
 
             def data_analysis_type_change(type_value):
@@ -234,4 +306,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             dbname.elem_id: dbname,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
+            prompt_type.elem_id: prompt_type,
+            prompt_template.elem_id: prompt_template,
         }

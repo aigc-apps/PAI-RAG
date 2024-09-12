@@ -153,6 +153,7 @@ class ViewModel(BaseModel):
     db_name: str = None
     db_tables: str = None
     db_descriptions: str = None
+    db_nl2sql_prompt: str = None
 
     # postprocessor
     reranker_type: str = (
@@ -376,6 +377,8 @@ class ViewModel(BaseModel):
         else:
             view_model.db_descriptions = None
 
+        view_model.db_nl2sql_prompt = config["data_analysis"].get("nl2sql_prompt", None)
+
         reranker_type = config["postprocessor"].get(
             "reranker_type", "simple-weighted-reranker"
         )
@@ -549,6 +552,7 @@ class ViewModel(BaseModel):
         config["data_analysis"]["host"] = self.db_host
         config["data_analysis"]["port"] = self.db_port
         config["data_analysis"]["dbname"] = self.db_name
+        config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
         # string to list
         if self.db_tables:
             # 去掉首位空格和末尾逗号
@@ -815,5 +819,6 @@ class ViewModel(BaseModel):
         settings["db_name"] = {"value": self.db_name}
         settings["db_tables"] = {"value": self.db_tables}
         settings["db_descriptions"] = {"value": self.db_descriptions}
+        settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
 
         return settings

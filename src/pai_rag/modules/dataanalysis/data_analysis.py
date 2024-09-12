@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import URL
 from sqlalchemy.pool import QueuePool
 from llama_index.core import SQLDatabase
+from llama_index.core.prompts import PromptTemplate
 
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -36,6 +37,11 @@ class DataAnalysisModule(ConfigurableModule):
         llm = new_params["LlmModule"]
         embed_model = new_params["EmbeddingModule"]
         data_analysis_type = config.get("analysis_type", "nl2pandas")
+        nl2sql_prompt = config.get("nl2sql_prompt", None)
+        if nl2sql_prompt:
+            nl2sql_prompt = PromptTemplate(nl2sql_prompt)
+        else:
+            nl2sql_prompt = DEFAULT_TEXT_TO_SQL_TMPL
 
         if data_analysis_type == "nl2pandas":
             df = self.get_dataframe(config)
@@ -51,7 +57,7 @@ class DataAnalysisModule(ConfigurableModule):
             sql_database, tables, table_descriptions = self.db_connection(config)
             analysis_retriever = MyNLSQLRetriever(
                 sql_database=sql_database,
-                text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
+                text_to_sql_prompt=nl2sql_prompt,
                 tables=tables,
                 context_query_kwargs=table_descriptions,
                 sql_only=False,
@@ -59,6 +65,7 @@ class DataAnalysisModule(ConfigurableModule):
                 llm=llm,
             )
             logger.info("DataAnalysis NL2SQLRetriever used")
+            # logger.info(f"nl2sql prompt: {nl2sql_prompt}")
 
         else:
             raise ValueError(
