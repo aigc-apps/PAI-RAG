@@ -72,7 +72,8 @@ source = ""
 
 [rag.llm.multi_modal]
 enable = false
-source = ""
+source = "DashScope"
+name = "qwen-vl-max"
 
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
