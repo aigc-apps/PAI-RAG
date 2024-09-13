@@ -66,6 +66,10 @@ name = "qwen-turbo"
 [rag.llm.function_calling_llm]
 source = ""
 
+[rag.llm.multi_modal]
+enable = false
+source = ""
+
 [rag.llm_chat_engine]
 type = "SimpleChatEngine"
 
