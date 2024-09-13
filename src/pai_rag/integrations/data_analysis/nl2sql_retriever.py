@@ -127,6 +127,7 @@ class MySQLRetriever(BaseRetriever):
         logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
         # set timeout to 10s
+        # set timeout to 10s
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(10)  # start
         try:
@@ -264,6 +265,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             sql_database, tables, context_query_kwargs, table_retriever
         )
         self._tables = tables
+        self._tables = tables
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
@@ -365,9 +367,21 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     metadata,
                 ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
                 retrieved_nodes[0].metadata["invalid_flag"] = 0
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
+                # 如果生成的sql语句执行后无结果，待bad case补充
+                # if retrieved_nodes[0].metadata["query_output"] == "":
+
+                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
+                #     (
+                #         retrieved_nodes,
+                #         metadata,
+                #     ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                #     logger.info(
+                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                #     )
                 # 如果生成的sql语句执行后无结果，待bad case补充
                 # if retrieved_nodes[0].metadata["query_output"] == "":
 
@@ -393,6 +407,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 retrieved_nodes[0].metadata[
                     "generated_query_code_instruction"
                 ] = sql_query_str
+                retrieved_nodes[0].metadata["invalid_flag"] = 1
+                retrieved_nodes[0].metadata[
+                    "generated_query_code_instruction"
+                ] = sql_query_str
                 logger.info(
                     f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
@@ -402,6 +420,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 # metadata = {}
                 # else:
                 #     raise
+
+            # add query_tables into metadata
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
 
             # add query_tables into metadata
             query_tables = self._get_table_from_sql(self._tables, sql_query_str)
@@ -443,6 +465,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     retrieved_nodes,
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
@@ -509,7 +532,18 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
+            # add query_tables into metadata
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
+
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+
+    def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
+        table_collection = list()
+        for table in table_list:
+            if table.lower() in sql_query.lower():
+                table_collection.append(table)
+        return table_collection
 
     def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
         table_collection = list()
@@ -526,6 +560,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             new_sql_query_str = f"SELECT * FROM {first_table}"
             logger.info(f"use the whole table {first_table} instead if possible")
         else:
+            # raise ValueError("No table is matched")
+            new_sql_query_str = sql_query_str
+            logger.info("No table is matched")
             # raise ValueError("No table is matched")
             new_sql_query_str = sql_query_str
             logger.info("No table is matched")

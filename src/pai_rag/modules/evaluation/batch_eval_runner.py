@@ -7,7 +7,6 @@ from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.base.response.schema import RESPONSE_TYPE, Response
 from llama_index.core.evaluation.base import BaseEvaluator, EvaluationResult
 from pai_rag.integrations.evaluation.retrieval.evaluator import MyRetrievalEvalResult
-from fastapi.concurrency import run_in_threadpool
 
 
 async def eval_response_worker(
@@ -277,14 +276,12 @@ class BatchEvalRunner:
             response_jobs.append(response_worker(self.semaphore, query_engine, query))
         responses = await self.asyncio_mod.gather(*response_jobs)
 
-        return await run_in_threadpool(
-            lambda: self.aevaluate_responses(
-                queries=queries,
-                node_ids=node_ids,
-                responses=responses,
-                references=reference_answers,
-                **eval_kwargs_lists,
-            )
+        return await self.aevaluate_responses(
+            queries=queries,
+            node_ids=node_ids,
+            responses=responses,
+            references=reference_answers,
+            **eval_kwargs_lists,
         )
 
     async def aevaluate_queries_for_retrieval(

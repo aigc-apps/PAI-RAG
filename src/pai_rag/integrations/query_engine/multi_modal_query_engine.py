@@ -9,7 +9,7 @@ from typing import (
     Generator,
     AsyncGenerator,
 )
-
+import json
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.indices.query.base import BaseQueryEngine
@@ -68,8 +68,11 @@ def _get_image_and_text_nodes(
             image_nodes.append(res_node)
         else:
             text_nodes.append(res_node)
-            if res_node.node.metadata.get("image_url", None):
-                for image_url in res_node.node.metadata["image_url"]:
+            if res_node.node.metadata.get("image_url_list_str", None):
+                image_url_list = json.loads(
+                    res_node.node.metadata["image_url_list_str"]
+                )
+                for image_url in image_url_list:
                     if image_url in image_urls:
                         continue
                     extra_info = {
@@ -167,7 +170,10 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
             text_nodes = node_postprocessor.postprocess_nodes(
                 text_nodes, query_bundle=query_bundle
             )
-        return image_nodes + text_nodes
+        if self._retriever._need_image:
+            return image_nodes + text_nodes
+        else:
+            return text_nodes
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = self._retriever.retrieve(query_bundle)
@@ -175,10 +181,7 @@ class MySimpleMultiModalQueryEngine(BaseQueryEngine):
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = await self._retriever.aretrieve(query_bundle)
-        if self._retriever._need_image:
-            return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
-        else:
-            return nodes
+        return self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
 
     def synthesize(
         self,

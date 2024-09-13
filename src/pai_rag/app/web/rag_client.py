@@ -114,6 +114,8 @@ class RagWebClient:
                 filename = doc["metadata"].get("file_name", None)
                 ref_table = doc["metadata"].get("query_tables", None)
                 invalid_flag = doc["metadata"].get("invalid_flag", 0)
+                ref_table = doc["metadata"].get("query_tables", None)
+                invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)
                 media_url = doc.get("metadata", {}).get("image_url", None)
                 if media_url and doc["text"] == "":
@@ -465,7 +467,7 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
-        print("evaluate_for_response_stage response", response)
+        return response
 
 
 rag_client = RagWebClient()
