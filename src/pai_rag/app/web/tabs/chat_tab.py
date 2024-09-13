@@ -25,10 +25,6 @@ def respond(input_elements: List[Any]):
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
-    if update_dict["retrieval_mode"] == "data_analysis":
-        update_dict["retrieval_mode"] = "hybrid"
-    update_dict["synthesizer_type"] = "SimpleSummarize"
-
     # empty input.
     if not update_dict["question"]:
         yield update_dict["chatbot"]
