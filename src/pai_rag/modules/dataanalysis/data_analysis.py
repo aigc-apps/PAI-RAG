@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import glob
@@ -83,7 +84,6 @@ class DataAnalysisModule(ConfigurableModule):
         )
 
     def db_connection(self, config):
-        # get rds_db config
         dialect = config.get("dialect", "sqlite")
         user = config.get("user", "")
         password = config.get("password", "")
@@ -94,6 +94,37 @@ class DataAnalysisModule(ConfigurableModule):
         desired_tables = config.get("tables", [])
         table_descriptions = config.get("descriptions", {})
 
+        return self.inspect_db_connection(
+            dialect=dialect,
+            user=user,
+            password=password,
+            host=host,
+            port=port,
+            path=path,
+            dbname=dbname,
+            desired_tables=tuple(desired_tables) if desired_tables else None,
+            table_descriptions=tuple(table_descriptions.items())
+            if table_descriptions
+            else None,
+        )
+
+    @functools.cache
+    def inspect_db_connection(
+        self,
+        dialect,
+        user,
+        password,
+        host,
+        port,
+        path,
+        dbname,
+        desired_tables,
+        table_descriptions,
+    ):
+        desired_tables = list(desired_tables) if desired_tables else None
+        table_descriptions = dict(table_descriptions) if table_descriptions else None
+
+        # get rds_db config
         logger.info(f"desired_tables from ui input: {desired_tables}")
         logger.info(f"table_descriptions from ui input: {table_descriptions}")
 
