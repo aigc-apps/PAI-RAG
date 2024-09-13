@@ -44,7 +44,7 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def connect_database(input_db: List[Any]):
+def update_setting(input_db: List[Any]):
     try:
         update_dict = {"analysis_type": "nl2sql"}
         for element, value in input_db.items():
@@ -57,14 +57,14 @@ def connect_database(input_db: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def nl2sql_prompt_update(input_prompt):
-    try:
-        update_dict = {"db_nl2sql_prompt": input_prompt}
-        # print('update_dict:', update_dict)
-        rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] success!"
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+# def nl2sql_prompt_update(input_prompt):
+#     try:
+#         update_dict = {"db_nl2sql_prompt": input_prompt}
+#         # print('update_dict:', update_dict)
+#         rag_client.patch_config(update_dict)
+#         return f"[{datetime.datetime.now()}] success!"
+#     except RagApiError as api_error:
+#         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
 def analysis_respond(question, chatbot):
@@ -150,16 +150,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
-                with gr.Row():
-                    connect_db_button = gr.Button(
-                        "Connect Database",
-                        elem_id="connect_db_button",
-                        variant="primary",
-                    )  # 点击功能中更新 analysis_type 和 相关nl2sql 参数
-
-                    connection_info = gr.Textbox(
-                        label="Connection Info", elem_id="db_connection_info"
-                    )
 
                 prompt_type = gr.Radio(
                     [
@@ -179,16 +169,24 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     lines=4,
                 )
 
-                with gr.Row():
-                    prompt_update_button = gr.Button(
-                        "prompt update",
-                        elem_id="prompt_update",
-                        variant="primary",
-                    )  # 点击功能中更新 nl2sql prompt
+                update_button = gr.Button(
+                    "Update Settings",
+                    elem_id="update_settings",
+                    variant="primary",
+                )  # 点击功能中更新 analysis_type, nl2sql参数以及prompt
 
-                    update_info = gr.Textbox(
-                        label="Update Info", elem_id="prompt_update_info"
-                    )
+                update_info = gr.Textbox(label="Update Info", elem_id="update_info")
+
+                # with gr.Row():
+                #     prompt_update_button = gr.Button(
+                #         "prompt update",
+                #         elem_id="prompt_update",
+                #         variant="primary",
+                #     )  # 点击功能中更新 nl2sql prompt
+
+                #     update_info = gr.Textbox(
+                #         label="Update Info", elem_id="prompt_update_info"
+                #     )
 
             def change_prompt_template(prompt_type):
                 if prompt_type == "general":
@@ -221,21 +219,22 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 dbname,
                 tables,
                 descriptions,
+                prompt_template,
             }
 
-            connect_db_button.click(
-                fn=connect_database,
+            update_button.click(
+                fn=update_setting,
                 inputs=inputs_db,
-                outputs=connection_info,
-                api_name="connect_db",
+                outputs=update_info,
+                api_name="update_info_clk",
             )
 
-            prompt_update_button.click(
-                fn=nl2sql_prompt_update,
-                inputs=prompt_template,
-                outputs=update_info,
-                api_name="update_nl2sql_prompt",
-            )
+            # prompt_update_button.click(
+            #     fn=nl2sql_prompt_update,
+            #     inputs=prompt_template,
+            #     outputs=update_info,
+            #     api_name="update_nl2sql_prompt",
+            # )
 
             def data_analysis_type_change(type_value):
                 if type_value == "datafile":

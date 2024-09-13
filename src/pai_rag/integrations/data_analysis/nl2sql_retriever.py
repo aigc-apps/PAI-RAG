@@ -133,10 +133,11 @@ class MySQLRetriever(BaseRetriever):
             raw_response_str, metadata = self._sql_database.run_sql(
                 query_bundle.query_str
             )
-        except (TimeoutError, NotImplementedError) as e:
+        except (TimeoutError, NotImplementedError) as error:
             logger.info("Invalid SQL or SQL Query Timed Out (>10s)")
-            raw_response_str = "Invalid SQL or SQL Query Timed Out (>10s)"
-            metadata = {"result": {e}, "col_keys": []}
+            raise error
+            # raw_response_str = "Invalid SQL or SQL Query Timed Out (>10s)"
+            # metadata = {"result": {e}, "col_keys": []}
         finally:
             signal.alarm(0)  # cancel
 
