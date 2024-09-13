@@ -66,30 +66,37 @@ class RagStore:
             self.store_config["vector_store"].get("type", "faiss").lower()
         )
 
-        if vector_store_type == "chroma":
-            self.vector_store = self._get_or_create_chroma()
-            logger.info("initialized Chroma vector store.")
-        elif vector_store_type == "faiss":
+        if vector_store_type == "faiss":
             self.doc_store = self._get_or_create_simple_doc_store()
             self.index_store = self._get_or_create_simple_index_store()
             self.vector_store, self.image_store = self._get_or_create_faiss()
-
             logger.info("initialized FAISS vector & image store.")
         elif vector_store_type == "hologres":
-            self.vector_store = self._get_or_create_hologres()
-            logger.info("initialized Hologres vector store.")
+            self.vector_store, self.image_store = self._get_or_create_hologres()
+            logger.info("initialized Hologres vector & image store.")
+        # TODO: not supported yet, need more tests
+        elif vector_store_type == "elasticsearch":
+            self.vector_store, self.image_store = self._get_or_create_es()
+            logger.info("initialized ElasticSearch vector & image store.")
+        elif vector_store_type == "milvus":
+            self.vector_store, self.image_store = self._get_or_create_milvus()
+            logger.info("initialized Milvus vector & image store.")
+        elif vector_store_type == "opensearch":
+            (
+                self.vector_store,
+                self.image_store,
+            ) = self._get_or_create_open_search_store()
+            logger.info("initialized OpenSearch vector & image store.")
+        elif vector_store_type == "postgresql":
+            self.vector_store, self.image_store = self._get_or_create_postgresql_store()
+            logger.info("initialized Postgresql vector & image store.")
+        # Not used yet
+        elif vector_store_type == "chroma":
+            self.vector_store = self._get_or_create_chroma()
+            logger.info("initialized Chroma vector store.")
         elif vector_store_type == "analyticdb":
             self.vector_store = self._get_or_create_adb()
             logger.info("initialized AnalyticDB vector store.")
-        elif vector_store_type == "elasticsearch":
-            self.vector_store = self._get_or_create_es()
-            logger.info("initialized ElasticSearch vector store.")
-        elif vector_store_type == "milvus":
-            self.vector_store = self._get_or_create_milvus()
-        elif vector_store_type == "opensearch":
-            self.vector_store = self._get_or_create_open_search_store()
-        elif vector_store_type == "postgresql":
-            self.vector_store = self._get_or_create_postgresql_store()
         else:
             raise ValueError(f"Unknown vector_store type '{vector_store_type}'.")
 
@@ -141,7 +148,7 @@ class RagStore:
 
     def _get_or_create_hologres(self):
         hologres_config = self.store_config["vector_store"]
-        hologres = HologresVectorStore.from_param(
+        hologres_text_store = HologresVectorStore.from_param(
             host=hologres_config["host"],
             port=hologres_config["port"],
             user=hologres_config["user"],
@@ -151,7 +158,17 @@ class RagStore:
             embedding_dimension=self.embed_dims,
             pre_delete_table=hologres_config["pre_delete_table"],
         )
-        return hologres
+        hologres_image_store = HologresVectorStore.from_param(
+            host=hologres_config["host"],
+            port=hologres_config["port"],
+            user=hologres_config["user"],
+            password=hologres_config["password"],
+            database=hologres_config["database"],
+            table_name=hologres_config["table_name"] + "__image",
+            embedding_dimension=self.multi_modal_embed_dims,
+            pre_delete_table=hologres_config["pre_delete_table"],
+        )
+        return hologres_text_store, hologres_image_store
 
     def _get_or_create_adb(self):
         adb_config = self.store_config["vector_store"]
@@ -172,7 +189,7 @@ class RagStore:
     def _get_or_create_es(self):
         es_config = self.store_config["vector_store"]
 
-        return MyElasticsearchStore(
+        es_text_store = MyElasticsearchStore(
             index_name=es_config["es_index"],
             es_url=es_config["es_url"],
             es_user=es_config["es_user"],
@@ -182,6 +199,15 @@ class RagStore:
                 hybrid=True, rrf={"window_size": 50}
             ),
         )
+        es_image_store = MyElasticsearchStore(
+            index_name=es_config["es_index"] + "__image",
+            es_url=es_config["es_url"],
+            es_user=es_config["es_user"],
+            es_password=es_config["es_password"],
+            embedding_dimension=self.multi_modal_embed_dims,
+            retrieval_strategy=AsyncDenseVectorStrategy(hybrid=False),
+        )
+        return es_text_store, es_image_store
 
     def _get_or_create_milvus(self):
         milvus_config = self.store_config["vector_store"]
@@ -202,7 +228,7 @@ class RagStore:
                 weights.append(item.keyword_weight)
                 print("weighted_reranker", weighted_reranker, weights)
                 break
-        return MyMilvusVectorStore(
+        milvus_text_store = MyMilvusVectorStore(
             uri=milvus_url,
             token=token,
             collection_name=milvus_config["collection_name"],
@@ -213,6 +239,15 @@ class RagStore:
             hybrid_ranker="WeightedRanker",
             hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
         )
+        milvus_image_store = MyMilvusVectorStore(
+            uri=milvus_url,
+            token=token,
+            collection_name=milvus_config["collection_name"] + "__image",
+            dim=self.multi_modal_embed_dims,
+            enable_sparse=False,
+            similarity_metric="cosine",
+        )
+        return milvus_text_store, milvus_image_store
 
     def _get_or_create_open_search_store(self):
         from llama_index.vector_stores.alibabacloud_opensearch import (
@@ -221,22 +256,48 @@ class RagStore:
         )
 
         open_search_config = self.store_config["vector_store"]
-        output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
-        db_config = AlibabaCloudOpenSearchConfig(
+        text_output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url_list_str",
+            "text",
+            "doc_id",
+        ]
+        text_db_config = AlibabaCloudOpenSearchConfig(
             endpoint=open_search_config["endpoint"],
             instance_id=open_search_config["instance_id"],
             username=open_search_config["username"],
             password=open_search_config["password"],
             table_name=open_search_config["table_name"],
             # OpenSearch constructor has bug in dealing with output fields
-            field_mapping=dict(zip(output_fields, output_fields)),
+            field_mapping=dict(zip(text_output_fields, text_output_fields)),
+        )
+        image_output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
+        image_db_config = AlibabaCloudOpenSearchConfig(
+            endpoint=open_search_config["endpoint"],
+            instance_id=open_search_config["instance_id"],
+            username=open_search_config["username"],
+            password=open_search_config["password"],
+            table_name=open_search_config["table_name"] + "__image",
+            # OpenSearch constructor has bug in dealing with output fields
+            field_mapping=dict(zip(image_output_fields, image_output_fields)),
         )
 
-        return AlibabaCloudOpenSearchStore(config=db_config)
+        return AlibabaCloudOpenSearchStore(
+            config=text_db_config
+        ), AlibabaCloudOpenSearchStore(config=image_db_config)
 
     def _get_or_create_postgresql_store(self):
         pg_config = self.store_config["vector_store"]
-        pg = PGVectorStore.from_params(
+        text_pg = PGVectorStore.from_params(
             host=pg_config["host"],
             port=pg_config["port"],
             database=pg_config["database"],
@@ -249,7 +310,20 @@ class RagStore:
             hybrid_search=True,
             text_search_config="jiebacfg",
         )
-        return pg
+        image_pg = PGVectorStore.from_params(
+            host=pg_config["host"],
+            port=pg_config["port"],
+            database=pg_config["database"],
+            table_name=pg_config["table_name"] + "__image"
+            if pg_config["table_name"].strip()
+            else "default__image",
+            user=pg_config["username"],
+            password=pg_config["password"],
+            embed_dim=self.multi_modal_embed_dims,
+            hybrid_search=False,
+            text_search_config="jiebacfg",
+        )
+        return text_pg, image_pg
 
     def _get_or_create_simple_doc_store(self):
         if self.is_empty:

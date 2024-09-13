@@ -1,0 +1,232 @@
+{
+  "schema": {
+    "summarys": {
+      "parameter": {
+        "file_compressor": "zstd"
+      },
+      "summary_fields": [
+        "id",
+        "embedding",
+        "file_path",
+        "file_name",
+        "file_type",
+        "node_content",
+        "node_type",
+        "image_url",
+        "doc_id",
+        "text",
+        "source_type"
+      ]
+    },
+    "file_compress": [
+      {
+        "name": "file_compressor",
+        "type": "zstd"
+      },
+      {
+        "name": "no_compressor",
+        "type": ""
+      }
+    ],
+    "indexs": [
+      {
+        "index_fields": [
+          {
+            "boost": 1,
+            "field_name": "id"
+          },
+          {
+            "boost": 1,
+            "field_name": "embedding"
+          }
+        ],
+        "indexer": "aitheta2_indexer",
+        "index_name": "embedding",
+        "parameters": {
+          "enable_rt_build": "true",
+          "min_scan_doc_cnt": "20000",
+          "vector_index_type": "Qc",
+          "major_order": "col",
+          "builder_name": "QcBuilder",
+          "distance_type": "SquaredEuclidean",
+          "embedding_delimiter": ",",
+          "enable_recall_report": "true",
+          "ignore_invalid_doc": "true",
+          "is_embedding_saved": "false",
+          "linear_build_threshold": "5000",
+          "dimension": "768",
+          "rt_index_params": "{\"proxima.oswg.streamer.segment_size\":2048}",
+          "search_index_params": "{\"proxima.qc.searcher.scan_ratio\":0.01}",
+          "searcher_name": "QcSearcher",
+          "build_index_params": "{\"proxima.qc.builder.quantizer_class\":\"Int8QuantizerConverter\",\"proxima.qc.builder.quantize_by_centroid\":true,\"proxima.qc.builder.optimizer_class\":\"BruteForceBuilder\",\"proxima.qc.builder.thread_count\":10,\"proxima.qc.builder.optimizer_params\":{\"proxima.linear.builder.column_major_order\":true},\"proxima.qc.builder.store_original_features\":false,\"proxima.qc.builder.train_sample_count\":3000000,\"proxima.qc.builder.train_sample_ratio\":0.5}"
+        },
+        "index_type": "CUSTOMIZED"
+      },
+      {
+        "has_primary_key_attribute": true,
+        "index_fields": "id",
+        "is_primary_key_sorted": false,
+        "index_name": "id",
+        "index_type": "PRIMARYKEY64"
+      },
+      {
+        "index_fields": "file_path",
+        "index_name": "file_path",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "file_name",
+        "index_name": "file_name",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "file_type",
+        "index_name": "file_type",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "image_url",
+        "index_name": "image_url",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "node_content",
+        "index_name": "node_content",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "node_type",
+        "index_name": "node_type",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "doc_id",
+        "index_name": "doc_id",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "text",
+        "index_name": "text",
+        "index_type": "STRING"
+      },
+      {
+        "index_fields": "source_type",
+        "index_name": "source_type",
+        "index_type": "STRING"
+      }
+    ],
+    "attributes": [
+      {
+        "file_compress": "no_compressor",
+        "field_name": "id"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "embedding"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "file_path"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "file_name"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "file_type"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "image_url"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "node_content"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "node_type"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "doc_id"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "text"
+      },
+      {
+        "file_compress": "no_compressor",
+        "field_name": "source_type"
+      }
+    ],
+    "fields": [
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "id"
+      },
+      {
+        "user_defined_param": {
+          "multi_value_sep": ","
+        },
+        "multi_value": true,
+        "compress_type": "uniq",
+        "field_type": "FLOAT",
+        "field_name": "embedding"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "file_path"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "file_name"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "file_type"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "image_url"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "node_content"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "node_type"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "doc_id"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "text"
+      },
+      {
+        "compress_type": "uniq",
+        "field_type": "STRING",
+        "field_name": "source_type"
+      }
+    ],
+    "table_name": "abc"
+  },
+  "extend": {
+    "description": [],
+    "vector": ["embedding"],
+    "embeding": []
+  }
+}

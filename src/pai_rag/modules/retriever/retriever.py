@@ -39,6 +39,7 @@ class RetrieverModule(ConfigurableModule):
 
         retrieval_mode = config.get("retrieval_mode", "hybrid").lower()
         need_image = config.get("need_image", False)
+        print("index.vector_index", index.vector_index, type(index.vector_index))
         if isinstance(index.vector_index, MyMultiModalVectorStoreIndex):
             return index.vector_index.as_retriever(
                 need_image=need_image,

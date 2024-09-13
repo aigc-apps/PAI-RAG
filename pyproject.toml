@@ -87,6 +87,7 @@ llama-index-llms-paieas = "^0.1.0"
 pymysql = "^1.1.1"
 llama-index-experimental = "^0.2.0"
 llama-index-readers-web = "^0.1.23"
+milvus-lite = "^2.4.9"
 rapidocr-onnxruntime = "^1.3.24"
 rapid-table = "^0.1.3"
 bs4 = "^0.0.2"
@@ -99,6 +100,7 @@ detectron2 = [
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 pai-llm-trace = {url = "https://pai-llm-trace.oss-cn-zhangjiakou.aliyuncs.com/sdk_package/pai_llm_trace-1.0.0-py3-none-any.whl"}
 llama-index-callbacks-arize-phoenix = "0.1.6"
+peft = "^0.12.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"

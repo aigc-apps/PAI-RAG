@@ -87,6 +87,8 @@ repos:
           [
             "--exclude",
             "./data/tokenization/qwen.tiktoken",
+            "--skip",
+            "*.json",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
           ]
