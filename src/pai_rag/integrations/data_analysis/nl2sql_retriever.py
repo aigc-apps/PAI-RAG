@@ -465,17 +465,40 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     logger.info(f"async error info: {e}\n")
 
                 new_sql_query_str = self._sql_query_modification(sql_query_str)
-                (
-                    retrieved_nodes,
-                    metadata,
-                ) = await self._sql_retriever.aretrieve_with_metadata(new_sql_query_str)
-                retrieved_nodes[0].metadata["invalid_flag"] = 1
-                retrieved_nodes[0].metadata[
-                    "generated_query_code_instruction"
-                ] = sql_query_str
-                logger.info(
-                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                )
+
+                # 如果找到table，生成新的sql_query
+                if new_sql_query_str != sql_query_str:
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = await self._sql_retriever.aretrieve_with_metadata(
+                        new_sql_query_str
+                    )
+                    retrieved_nodes[0].metadata["invalid_flag"] = 1
+                    retrieved_nodes[0].metadata[
+                        "generated_query_code_instruction"
+                    ] = sql_query_str
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
+                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
+                else:
+                    logger.info(f"[{new_sql_query_str}] is not even a SQL")
+                    retrieved_nodes = [
+                        NodeWithScore(
+                            node=TextNode(
+                                text=new_sql_query_str,
+                                metadata={
+                                    "query_code_instruction": new_sql_query_str,
+                                    "generated_query_code_instruction": sql_query_str,
+                                    "query_output": "",
+                                    "invalid_flag": 1,
+                                },
+                            ),
+                            score=1.0,
+                        ),
+                    ]
+                    metadata = {}
                 # err_node = TextNode(text=f"Error: {e!s}")
                 # logger.info(f"async error_node info: {err_node}\n")
                 # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
