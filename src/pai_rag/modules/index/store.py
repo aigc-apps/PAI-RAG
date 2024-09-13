@@ -164,7 +164,7 @@ class RagStore:
             user=hologres_config["user"],
             password=hologres_config["password"],
             database=hologres_config["database"],
-            table_name=hologres_config["table_name"] + "_for_image",
+            table_name=hologres_config["table_name"] + "__image",
             embedding_dimension=self.multi_modal_embed_dims,
             pre_delete_table=hologres_config["pre_delete_table"],
         )
@@ -200,7 +200,7 @@ class RagStore:
             ),
         )
         es_image_store = MyElasticsearchStore(
-            index_name=es_config["es_index"] + "_for_image",
+            index_name=es_config["es_index"] + "__image",
             es_url=es_config["es_url"],
             es_user=es_config["es_user"],
             es_password=es_config["es_password"],
@@ -242,7 +242,7 @@ class RagStore:
         milvus_image_store = MyMilvusVectorStore(
             uri=milvus_url,
             token=token,
-            collection_name=milvus_config["collection_name"] + "_for_image",
+            collection_name=milvus_config["collection_name"] + "__image",
             dim=self.multi_modal_embed_dims,
             enable_sparse=False,
             similarity_metric="cosine",
@@ -286,7 +286,7 @@ class RagStore:
             instance_id=open_search_config["instance_id"],
             username=open_search_config["username"],
             password=open_search_config["password"],
-            table_name=open_search_config["table_name"] + "_for_image",
+            table_name=open_search_config["table_name"] + "__image",
             # OpenSearch constructor has bug in dealing with output fields
             field_mapping=dict(zip(image_output_fields, image_output_fields)),
         )
@@ -314,9 +314,9 @@ class RagStore:
             host=pg_config["host"],
             port=pg_config["port"],
             database=pg_config["database"],
-            table_name=pg_config["table_name"] + "_for_image"
+            table_name=pg_config["table_name"] + "__image"
             if pg_config["table_name"].strip()
-            else "default_for_image",
+            else "default__image",
             user=pg_config["username"],
             password=pg_config["password"],
             embed_dim=self.multi_modal_embed_dims,
