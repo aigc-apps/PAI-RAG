@@ -468,7 +468,7 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
-        print("evaluate_for_response_stage response", response)
+        return response
 
 
 rag_client = RagWebClient()
