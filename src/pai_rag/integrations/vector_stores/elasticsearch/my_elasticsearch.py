@@ -204,11 +204,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
     retrieval_strategy: AsyncRetrievalStrategy
 
     _local_storage = PrivateAttr()
-    _es_url = PrivateAttr()
-    _es_cloud_id = PrivateAttr()
-    _es_api_key = PrivateAttr()
-    _es_user = PrivateAttr()
-    _es_password = PrivateAttr()
 
     def __init__(
         self,
@@ -229,12 +224,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
         nest_asyncio.apply()
 
         self._local_storage = threading.local()
-
-        self._es_url = es_url
-        self._es_cloud_id = es_cloud_id
-        self._es_api_key = es_api_key
-        self._es_user = es_user
-        self._es_password = es_password
 
         if retrieval_strategy is None:
             retrieval_strategy = AsyncDenseVectorStrategy(
@@ -268,11 +257,11 @@ class MyElasticsearchStore(BasePydanticVectorStore):
 
         if not hasattr(self._local_storage, "es_client"):
             self._local_storage.es_client = get_elasticsearch_client(
-                url=self._es_url,
-                cloud_id=self._es_cloud_id,
-                api_key=self._es_api_key,
-                username=self._es_user,
-                password=self._es_password,
+                url=self.es_url,
+                cloud_id=self.es_cloud_id,
+                api_key=self.es_api_key,
+                username=self.es_user,
+                password=self.es_password,
             )
         return self._local_storage.es_client
 
