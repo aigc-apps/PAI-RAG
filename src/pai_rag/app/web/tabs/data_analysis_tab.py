@@ -1,5 +1,4 @@
 import os
-import datetime
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
@@ -42,28 +41,6 @@ def upload_file_fn(input_file):
             return "Unsupported file type."
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-
-def update_setting(input_db: List[Any]):
-    try:
-        update_dict = {"analysis_type": "nl2sql"}
-        for element, value in input_db.items():
-            update_dict[element.elem_id] = value
-        # print("db_config:", update_dict)
-
-        rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] DB settings updated successfully!"
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-
-def analysis_respond(question, chatbot):
-    response_gen = rag_client.query_data_analysis(question, stream=True)
-    content = ""
-    chatbot.append((question, content))
-    for resp in response_gen:
-        chatbot[-1] = (question, resp.result)
-        yield chatbot
 
 
 def respond(input_elements: List[Any]):
@@ -199,16 +176,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     lines=4,
                 )
 
-                update_button = gr.Button(
-                    "Update Settings",
-                    elem_id="update_settings",
-                    variant="primary",
-                )  # 点击功能中更新 analysis_type, nl2sql参数以及prompt
-
-                update_info = gr.Textbox(
-                    label="Update Info", elem_id="update_info", container=False
-                )
-
             def change_prompt_template(prompt_type):
                 if prompt_type == "general":
                     return {
@@ -229,25 +196,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 fn=change_prompt_template,
                 inputs=prompt_type,
                 outputs=[prompt_template],
-            )
-
-            inputs_db = {
-                dialect,
-                user,
-                password,
-                host,
-                port,
-                dbname,
-                tables,
-                descriptions,
-                prompt_template,
-            }
-
-            update_button.click(
-                fn=update_setting,
-                inputs=inputs_db,
-                outputs=update_info,
-                api_name="update_info_clk",
             )
 
             def data_analysis_type_change(type_value):
@@ -290,20 +238,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             chatbot,
         }
 
-        # submitBtn.click(
-        #     fn=analysis_respond,
-        #     inputs=[question, chatbot],
-        #     outputs=[chatbot],
-        #     api_name="analysis_respond_clk",
-        # )
-
-        # # 绑定Textbox提交事件，当按下Enter，调用respond函数
-        # question.submit(
-        #     analysis_respond,
-        #     inputs=[question, chatbot],
-        #     outputs=[chatbot],
-        #     api_name="analysis_respond_q",
-        # )
         submitBtn.click(
             fn=respond,
             inputs=chat_args,
