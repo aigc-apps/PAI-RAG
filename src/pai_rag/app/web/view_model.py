@@ -678,6 +678,9 @@ class ViewModel(BaseModel):
             "value": self.llm_eas_token,
             "visible": self.llm.lower() == "paieas",
         }
+        if self.llm.lower() == "paieas" and not self.llm_eas_model_name:
+            self.llm_eas_model_name = "model_name"
+
         settings["llm_eas_model_name"] = {
             "value": self.llm_eas_model_name,
             "visible": self.llm.lower() == "paieas",

@@ -113,30 +113,27 @@ def create_setting_tab() -> Dict[str, Any]:
                     elem_id="llm",
                     interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
-                with gr.Column(visible=(llm == "PaiEas")) as eas_col:
-                    with gr.Row():
-                        llm_eas_url = gr.Textbox(
-                            label="EAS Url",
-                            elem_id="llm_eas_url",
-                            interactive=True,
-                        )
-                        llm_eas_token = gr.Textbox(
-                            label="EAS Token",
-                            elem_id="llm_eas_token",
-                            type="password",
-                            interactive=True,
-                        )
-                        llm_eas_model_name = gr.Textbox(
-                            label="EAS Model name",
-                            placeholder="Not Required",
-                            elem_id="llm_eas_model_name",
-                            interactive=True,
-                        )
-                with gr.Column(visible=(llm != "PaiEas")) as api_llm_col:
-                    llm_api_model_name = gr.Dropdown(
-                        label="LLM Model Name",
-                        elem_id="llm_api_model_name",
-                    )
+                llm_eas_url = gr.Textbox(
+                    label="EAS Url",
+                    elem_id="llm_eas_url",
+                    interactive=True,
+                )
+                llm_eas_token = gr.Textbox(
+                    label="EAS Token",
+                    elem_id="llm_eas_token",
+                    type="password",
+                    interactive=True,
+                )
+                llm_eas_model_name = gr.Textbox(
+                    label="EAS Model name",
+                    placeholder="Not Required",
+                    elem_id="llm_eas_model_name",
+                    interactive=True,
+                )
+                llm_api_model_name = gr.Dropdown(
+                    label="LLM Model Name",
+                    elem_id="llm_api_model_name",
+                )
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
                     value="\N{WHITE MEDIUM STAR} **(Optional) Multi-Modal Large Language Model**"
@@ -203,7 +200,12 @@ def create_setting_tab() -> Dict[str, Any]:
                 llm.change(
                     fn=ev_listeners.change_llm,
                     inputs=llm,
-                    outputs=[eas_col, api_llm_col, llm_api_model_name],
+                    outputs=[
+                        llm_eas_url,
+                        llm_eas_token,
+                        llm_eas_model_name,
+                        llm_api_model_name,
+                    ],
                 )
 
                 mllm.change(

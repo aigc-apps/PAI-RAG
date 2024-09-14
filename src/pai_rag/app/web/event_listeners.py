@@ -45,11 +45,14 @@ def change_llm(value):
     eas_visible = value == "PaiEas"
     api_visible = value != "PaiEas"
     model_options = LLM_MODEL_KEY_DICT.get(value, [])
+
     cur_model = model_options[0] if model_options else ""
+
     return [
         gr.update(visible=eas_visible),
-        gr.update(visible=api_visible),
-        gr.update(choices=model_options, value=cur_model),
+        gr.update(visible=eas_visible),
+        gr.update(visible=eas_visible),
+        gr.update(choices=model_options, value=cur_model, visible=api_visible),
     ]
 
 
