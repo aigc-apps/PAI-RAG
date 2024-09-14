@@ -34,14 +34,14 @@ from llama_index.core.vector_stores.simple import (
     SimpleVectorStore,
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
-from pai_rag.integrations.retrievers.multi_modal_retriever import (
-    MyMultiModalVectorIndexRetriever,
+from pai_rag.integrations.index.pai.multimodal.multimodal_retriever import (
+    PaiMultiModalVectorIndexRetriever,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class MyMultiModalVectorStoreIndex(VectorStoreIndex):
+class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
     """Multi-Modal Vector Store Index.
 
     Args:
@@ -60,6 +60,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         index_struct: Optional[MultiModelIndexDict] = None,
         embed_model: Optional[BaseEmbedding] = None,
         storage_context: Optional[StorageContext] = None,
+        enable_multimodal: bool = False,
         use_async: bool = False,
         store_nodes_override: bool = False,
         show_progress: bool = False,
@@ -78,29 +79,37 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
-        image_embed_model = resolve_embed_model(
-            image_embed_model, callback_manager=kwargs.get("callback_manager", None)
-        )
-        assert isinstance(image_embed_model, MultiModalEmbedding)
-        self._image_embed_model = image_embed_model
-        self._is_image_to_text = is_image_to_text
+        self._enable_multimodal = enable_multimodal
+        if self._enable_multimodal:
+            image_embed_model = resolve_embed_model(
+                image_embed_model, callback_manager=kwargs.get("callback_manager", None)
+            )
+            assert isinstance(image_embed_model, MultiModalEmbedding)
+            self._image_embed_model = image_embed_model
+            self._is_image_to_text = is_image_to_text
+            if image_vector_store is not None:
+                if self.image_namespace not in storage_context.vector_stores:
+                    storage_context.add_vector_store(
+                        image_vector_store, self.image_namespace
+                    )
+                else:
+                    # overwrite image_store from storage_context
+                    storage_context.vector_stores[
+                        self.image_namespace
+                    ] = image_vector_store
+
+            if self.image_namespace not in storage_context.vector_stores:
+                storage_context.add_vector_store(
+                    SimpleVectorStore(), self.image_namespace
+                )
+
+            self._image_vector_store = storage_context.vector_stores[
+                self.image_namespace
+            ]
+
         self._is_image_vector_store_empty = is_image_vector_store_empty
         self._is_text_vector_store_empty = is_text_vector_store_empty
         storage_context = storage_context or StorageContext.from_defaults()
-
-        if image_vector_store is not None:
-            if self.image_namespace not in storage_context.vector_stores:
-                storage_context.add_vector_store(
-                    image_vector_store, self.image_namespace
-                )
-            else:
-                # overwrite image_store from storage_context
-                storage_context.vector_stores[self.image_namespace] = image_vector_store
-
-        if self.image_namespace not in storage_context.vector_stores:
-            storage_context.add_vector_store(SimpleVectorStore(), self.image_namespace)
-
-        self._image_vector_store = storage_context.vector_stores[self.image_namespace]
 
         super().__init__(
             nodes=nodes,
@@ -130,9 +139,10 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
     def is_text_vector_store_empty(self) -> bool:
         return self._is_text_vector_store_empty
 
-    def as_retriever(self, **kwargs: Any) -> MyMultiModalVectorIndexRetriever:
-        return MyMultiModalVectorIndexRetriever(
+    def as_retriever(self, **kwargs: Any) -> PaiMultiModalVectorIndexRetriever:
+        return PaiMultiModalVectorIndexRetriever(
             self,
+            enable_multimodal=self._enable_multimodal,
             node_ids=list(self.index_struct.nodes_dict.values()),
             **kwargs,
         )
@@ -142,7 +152,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         llm: Optional[LLMType] = None,
         **kwargs: Any,
     ) -> SimpleMultiModalQueryEngine:
-        retriever = cast(MyMultiModalVectorIndexRetriever, self.as_retriever(**kwargs))
+        retriever = cast(PaiMultiModalVectorIndexRetriever, self.as_retriever(**kwargs))
 
         llm = llm or llm_from_settings_or_context(Settings, self._service_context)
         assert isinstance(llm, MultiModalLLM)
@@ -164,18 +174,20 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         image_vector_store: Optional[BasePydanticVectorStore] = None,
         image_embed_model: EmbedType = "clip",
         **kwargs: Any,
-    ) -> "MyMultiModalVectorStoreIndex":
+    ) -> "PaiMultiModalVectorStoreIndex":
         if not vector_store.stores_text:
             raise ValueError(
                 "Cannot initialize from a vector store that does not store text."
             )
 
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        storage_context = StorageContext.from_defaults(
+            vector_store=vector_store, image_store=image_vector_store
+        )
+
         return cls(
             nodes=[],
             service_context=service_context,
             storage_context=storage_context,
-            image_vector_store=image_vector_store,
             image_embed_model=image_embed_model,
             embed_model=(
                 resolve_embed_model(
@@ -334,7 +346,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
             ].async_add(image_nodes, **insert_kwargs)
 
             # TODO: Fix for FAISS
-            new_img_ids = [f"image_{i}" for i in new_img_ids]
+            new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
         else:
             self._is_image_vector_store_empty = True
 
@@ -383,7 +395,6 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
             new_text_ids = self.storage_context.vector_stores[DEFAULT_VECTOR_STORE].add(
                 text_nodes, **insert_kwargs
             )
-
         else:
             self._is_text_vector_store_empty = True
 
@@ -398,7 +409,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
             new_img_ids = self.storage_context.vector_stores[self.image_namespace].add(
                 image_nodes, **insert_kwargs
             )
-            new_img_ids = [f"image_{i}" for i in new_img_ids]
+            new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
         else:
             self._is_image_vector_store_empty = True
 

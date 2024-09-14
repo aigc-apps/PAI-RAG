@@ -60,10 +60,8 @@ class RagApplication:
         enable_qa_extraction=False,
         enable_raptor=False,
     ):
-        sessioned_config = self.config
-        sessioned_config.rag.data_loader.update({"type": "Local"})
+        sessioned_config = copy.copy(self.config)
         if faiss_path:
-            sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update({"persist_path": faiss_path})
             self.logger.info(
                 f"Update rag_application config with faiss_persist_path: {faiss_path}"
@@ -72,8 +70,10 @@ class RagApplication:
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        data_loader.load(
-            input_files, filter_pattern, enable_qa_extraction, enable_raptor
+        data_loader.load_data(
+            file_path_or_directory=input_files,
+            filter_pattern=filter_pattern,
+            enable_raptor=enable_raptor,
         )
 
     def load_knowledge_from_oss(

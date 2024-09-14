@@ -58,7 +58,7 @@ class ViewModel(BaseModel):
 
     config_file: str = None
 
-    vectordb_type: str = "FAISS"
+    vectordb_type: str = "faiss"
 
     # AnalyticDB
     adb_ak: str = None
@@ -189,13 +189,15 @@ class ViewModel(BaseModel):
                 "name", view_model.llm_api_model_name
             )
 
-        view_model.vectordb_type = config["index"]["vector_store"].get(
-            "type", view_model.vectordb_type
+        view_model.vectordb_type = (
+            config["index"]["vector_store"]
+            .get("type", view_model.vectordb_type)
+            .lower()
         )
         view_model.faiss_path = config["index"].get(
             "persist_path", view_model.faiss_path
         )
-        if view_model.vectordb_type == "AnalyticDB":
+        if view_model.vectordb_type.lower() == "analyticdb":
             view_model.adb_ak = config["index"]["vector_store"]["ak"]
             view_model.adb_sk = config["index"]["vector_store"]["sk"]
             view_model.adb_region_id = config["index"]["vector_store"]["region_id"]
@@ -210,7 +212,7 @@ class ViewModel(BaseModel):
                 "metrics", "cosine"
             )
 
-        elif view_model.vectordb_type == "Hologres":
+        elif view_model.vectordb_type.lower() == "hologres":
             view_model.hologres_host = config["index"]["vector_store"]["host"]
             view_model.hologres_port = config["index"]["vector_store"]["port"]
             view_model.hologres_user = config["index"]["vector_store"]["user"]
@@ -221,13 +223,13 @@ class ViewModel(BaseModel):
                 "pre_delete_table", False
             )
 
-        elif view_model.vectordb_type == "ElasticSearch":
+        elif view_model.vectordb_type.lower() == "elasticsearch":
             view_model.es_index = config["index"]["vector_store"]["es_index"]
             view_model.es_url = config["index"]["vector_store"]["es_url"]
             view_model.es_user = config["index"]["vector_store"]["es_user"]
             view_model.es_password = config["index"]["vector_store"]["es_password"]
 
-        elif view_model.vectordb_type == "Milvus":
+        elif view_model.vectordb_type.lower() == "milvus":
             view_model.milvus_host = config["index"]["vector_store"]["host"]
             view_model.milvus_port = config["index"]["vector_store"]["port"]
             view_model.milvus_user = config["index"]["vector_store"]["user"]
@@ -379,6 +381,7 @@ class ViewModel(BaseModel):
 
         config["index"]["vector_store"]["type"] = self.vectordb_type
         config["index"]["persist_path"] = self.faiss_path
+        config["index"]["enable_multimodal"] = self.enable_multimodal
 
         config["node_parser"]["type"] = self.parser_type
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
@@ -390,7 +393,7 @@ class ViewModel(BaseModel):
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
-        if self.vectordb_type == "Hologres":
+        if self.vectordb_type.lower() == "hologres":
             config["index"]["vector_store"]["host"] = self.hologres_host
             config["index"]["vector_store"]["port"] = self.hologres_port
             config["index"]["vector_store"]["user"] = self.hologres_user
@@ -401,7 +404,7 @@ class ViewModel(BaseModel):
                 "pre_delete_table"
             ] = self.hologres_pre_delete
 
-        elif self.vectordb_type == "AnalyticDB":
+        elif self.vectordb_type.lower() == "analyticdb":
             config["index"]["vector_store"]["ak"] = self.adb_ak
             config["index"]["vector_store"]["sk"] = self.adb_sk
             config["index"]["vector_store"]["region_id"] = self.adb_region_id
@@ -414,13 +417,13 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["collection"] = self.adb_collection
             config["index"]["vector_store"]["metrics"] = self.adb_metrics
 
-        elif self.vectordb_type == "ElasticSearch":
+        elif self.vectordb_type.lower() == "elasticsearch":
             config["index"]["vector_store"]["es_index"] = self.es_index
             config["index"]["vector_store"]["es_url"] = self.es_url
             config["index"]["vector_store"]["es_user"] = self.es_user
             config["index"]["vector_store"]["es_password"] = self.es_password
 
-        elif self.vectordb_type == "Milvus":
+        elif self.vectordb_type.lower() == "milvus":
             config["index"]["vector_store"]["host"] = self.milvus_host
             config["index"]["vector_store"]["port"] = self.milvus_port
             config["index"]["vector_store"]["user"] = self.milvus_user
@@ -501,6 +504,7 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
+        print(config)
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -680,7 +684,7 @@ class ViewModel(BaseModel):
         settings["postgresql_password"] = {"value": self.postgresql_password}
 
         # evaluation
-        if self.vectordb_type == "FAISS":
+        if self.vectordb_type.lower() == "faiss":
             qa_dataset_path, qa_dataset_res = self.get_local_generated_qa_file()
             settings["qa_dataset_file"] = {"value": qa_dataset_path}
             settings["qa_dataset_json_text"] = {"value": qa_dataset_res}

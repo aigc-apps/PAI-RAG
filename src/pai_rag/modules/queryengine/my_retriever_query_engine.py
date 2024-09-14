@@ -2,7 +2,7 @@ from typing import List
 
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode
 from llama_index.core.query_engine import RetrieverQueryEngine
 import llama_index.core.instrumentation as instrument
 import logging
@@ -23,19 +23,35 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = self._retriever.retrieve(query_bundle)
-        nodes = self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
-        return [n for n in nodes if n.score > 0]
+        text_nodes, image_nodes = [], []
+        for node in nodes:
+            if isinstance(node.node, ImageNode):
+                image_nodes.append(node)
+            else:
+                text_nodes.append(node)
+
+        text_nodes = self._apply_node_postprocessors(
+            text_nodes, query_bundle=query_bundle
+        )
+        return [n for n in text_nodes if n.score > 0] + image_nodes
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         nodes = await self._retriever.aretrieve(query_bundle)
+        text_nodes, image_nodes = [], []
+        for node in nodes:
+            if isinstance(node.node, ImageNode):
+                image_nodes.append(node)
+            else:
+                text_nodes.append(node)
+
         for node_postprocessor in self._node_postprocessors:
-            nodes = node_postprocessor.postprocess_nodes(
-                nodes,
+            text_nodes = node_postprocessor.postprocess_nodes(
+                text_nodes,
                 query_bundle=query_bundle,
             )
 
-        return [n for n in nodes if n.score > 0]
+        return [n for n in text_nodes if n.score > 0] + image_nodes
 
     @dispatcher.span
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:

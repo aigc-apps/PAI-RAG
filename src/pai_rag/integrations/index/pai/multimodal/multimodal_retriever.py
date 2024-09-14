@@ -1,7 +1,7 @@
 """Base vector store index query."""
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from llama_index.core.base.base_multi_modal_retriever import (
     MultiModalRetriever,
@@ -17,6 +17,7 @@ from llama_index.core.schema import (
     ObjectType,
     QueryBundle,
     QueryType,
+    ImageNode,
 )
 from llama_index.core.settings import (
     Settings,
@@ -29,12 +30,12 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryMode,
     VectorStoreQueryResult,
 )
+from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 
-if TYPE_CHECKING:
-    from llama_index.core.indices.multi_modal.base import MultiModalVectorStoreIndex
+DEFAULT_IMAGE_STORE = "image"
 
 
-class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
+class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
     """Multi Modal Vector index retriever.
 
     Args:
@@ -53,16 +54,20 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
 
     def __init__(
         self,
-        index: "MultiModalVectorStoreIndex",
+        index: Any,
+        enable_multimodal: bool = True,
         similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
         image_similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
-        need_image: bool = False,
         vector_store_query_mode: VectorStoreQueryMode = VectorStoreQueryMode.DEFAULT,
         filters: Optional[MetadataFilters] = None,
         alpha: Optional[float] = None,
         node_ids: Optional[List[str]] = None,
         doc_ids: Optional[List[str]] = None,
         sparse_top_k: Optional[int] = None,
+        search_image=False,
+        supports_hybrid_search=True,
+        local_bm25_index: LocalBm25IndexStore = None,
+        hybrid_fusion_weights: List[float] = None,
         callback_manager: Optional[CallbackManager] = None,
         **kwargs: Any,
     ) -> None:
@@ -70,10 +75,15 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         self._index = index
         self._vector_store = self._index.vector_store
         # separate image vector store for image retrieval
-        self._image_vector_store = self._index.image_vector_store
+        self._enable_multimodal = enable_multimodal
 
-        assert isinstance(self._index.image_embed_model, BaseEmbedding)
-        self._image_embed_model = index._image_embed_model
+        self._image_vector_store = None
+
+        if self._enable_multimodal:
+            self._image_vector_store = self._index.image_vector_store
+
+            assert isinstance(self._index.image_embed_model, BaseEmbedding)
+            self._image_embed_model = index._image_embed_model
         self._embed_model = index._embed_model
 
         self._service_context = self._index.service_context
@@ -81,13 +91,25 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
 
         self._similarity_top_k = similarity_top_k
         self._image_similarity_top_k = image_similarity_top_k
-        self._need_image = need_image
         self._vector_store_query_mode = VectorStoreQueryMode(vector_store_query_mode)
         self._alpha = alpha
         self._node_ids = node_ids
         self._doc_ids = doc_ids
         self._filters = filters
         self._sparse_top_k = sparse_top_k
+        self._search_image = self._enable_multimodal & search_image
+
+        # Hybrid search parameters
+        self._supports_hybrid_search = supports_hybrid_search
+        self._local_bm25_index = local_bm25_index
+        if not hybrid_fusion_weights:
+            self._hybrid_fusion_weights = [0.5, 0.5]
+        else:
+            # Sum of retriever_weights must be 1
+            total_weight = sum(hybrid_fusion_weights)
+            self._hybrid_fusion_weights = [
+                w / total_weight for w in hybrid_fusion_weights
+            ]
 
         self._kwargs: Dict[str, Any] = kwargs.get("vector_store_kwargs", {})
         self.callback_manager = (
@@ -136,37 +158,128 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
-        res = []
+        text_nodes, image_nodes = [], []
         # If text vector store is not empty, retrieve text nodes
         # If text vector store is empty, please create index without text vector store
         if self._vector_store is not None:
-            res.extend(self._text_retrieve(query_bundle))
+            text_nodes = self._text_retrieve(query_bundle)
 
         # If image vector store is not empty, retrieve text nodes
         # If image vector store is empty, please create index without image vector store
-        if self._image_vector_store is not None:
-            res.extend(self._text_to_image_retrieve(query_bundle))
-        return res
+        if self._enable_multimodal and self._image_vector_store is not None:
+            image_nodes = self._text_to_image_retrieve(query_bundle)
+
+        seen_images = set([node.node.image_url for node in image_nodes])
+        # 从文本中召回图片
+        if self._search_image and len(image_nodes) < self._image_similarity_top_k:
+            for node in text_nodes:
+                image_urls = node.node.metadata.get("image_url")
+                for image_url in image_urls:
+                    if image_url not in seen_images:
+                        image_nodes.extend(
+                            NodeWithScore(
+                                ImageNode(image_url=image_url),
+                                score=node.score
+                                * 0.5,  # discount the score from text nodes
+                            )
+                        )
+                        seen_images.add(image_url)
+                if len(image_nodes) >= self._image_similarity_top_k:
+                    break
+
+        results = text_nodes + image_nodes
+        return results
+
+    def _text_retrieve_from_vector_store(
+        self,
+        query_bundle: QueryBundle,
+    ) -> List[NodeWithScore]:
+        if self._vector_store.is_embedding_query:
+            if query_bundle.embedding is None and len(query_bundle.embedding_strs) > 0:
+                query_bundle.embedding = (
+                    self._embed_model.get_agg_embedding_from_queries(
+                        query_bundle.embedding_strs
+                    )
+                )
+
+        return self._get_nodes_with_embeddings(
+            query_bundle, self._similarity_top_k, self._vector_store
+        )
+
+    async def _atext_retrieve_from_vector_store(
+        self,
+        query_bundle: QueryBundle,
+    ) -> List[NodeWithScore]:
+        if self._vector_store.is_embedding_query:
+            if query_bundle.embedding is None and len(query_bundle.embedding_strs) > 0:
+                query_bundle.embedding = (
+                    await self._embed_model.aget_agg_embedding_from_queries(
+                        query_bundle.embedding_strs
+                    )
+                )
+
+        return await self._aget_nodes_with_embeddings(
+            query_bundle, self._similarity_top_k, self._vector_store
+        )
+
+    def _fusion_nodes(
+        self,
+        vector_nodes: List[NodeWithScore],
+        keyword_nodes: List[NodeWithScore],
+        similarity_top_k: int,
+    ):
+        for node_with_score in vector_nodes:
+            node_with_score.score *= self._hybrid_fusion_weights[0]
+
+        for node_with_score in keyword_nodes:
+            node_with_score.score *= self._hybrid_fusion_weights[1]
+
+        # Use a dict to de-duplicate nodes
+        all_nodes: Dict[str, NodeWithScore] = {}
+
+        # Sum scores for each node
+        for nodes_with_scores in [vector_nodes, keyword_nodes]:
+            for node_with_score in nodes_with_scores:
+                key = node_with_score.node.node_id
+                if key in all_nodes:
+                    all_nodes[key].score += node_with_score.score
+                else:
+                    all_nodes[key] = node_with_score
+
+        return sorted(all_nodes.values(), key=lambda x: x.score or 0.0, reverse=True)[
+            :similarity_top_k
+        ]
 
     def _text_retrieve(
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
         if not self._index.is_text_vector_store_empty:
-            if self._vector_store.is_embedding_query:
-                if (
-                    query_bundle.embedding is None
-                    and len(query_bundle.embedding_strs) > 0
-                ):
-                    query_bundle.embedding = (
-                        self._embed_model.get_agg_embedding_from_queries(
-                            query_bundle.embedding_strs
-                        )
-                    )
+            if (
+                self._supports_hybrid_search
+                or self._vector_store_query_mode == VectorStoreQueryMode.DEFAULT
+            ):
+                return self._text_retrieve_from_vector_store(query_bundle)
+            elif (
+                self._vector_store_query_mode == VectorStoreQueryMode.TEXT_SEARCH
+                or self._vector_store_query_mode == VectorStoreQueryMode.SPARSE
+            ):
+                return self._local_bm25_index.query(
+                    query_str=query_bundle.query_str,
+                    top_n=self.similarity_top_k,
+                    normalize=True,
+                )
+            else:
+                vector_nodes = self._text_retrieve_from_vector_store(query_bundle)
+                keyword_nodes = self._local_bm25_index.query(
+                    query_str=query_bundle.query_str,
+                    top_n=self.similarity_top_k,
+                    normalize=True,
+                )
 
-            return self._get_nodes_with_embeddings(
-                query_bundle, self._similarity_top_k, self._vector_store
-            )
+                return self._fusion_nodes(
+                    vector_nodes, keyword_nodes, self._similarity_top_k
+                )
         else:
             return []
 
@@ -179,7 +292,7 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
-        if not self._index.is_image_vector_store_empty:
+        if self._search_image and not self._index.is_image_vector_store_empty:
             if self._image_vector_store.is_embedding_query:
                 # change the embedding for query bundle to Multi Modal Text encoder
                 query_bundle.embedding = (
@@ -237,9 +350,10 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
             query_bundle_with_embeddings, similarity_top_k
         )
         query_result = vector_store.query(query, **self._kwargs)
-        return self._build_node_list_from_query_result(
-            query_result, vector_store is self._image_vector_store
+        is_image_store = (
+            self._image_vector_store and vector_store is self._image_vector_store
         )
+        return self._build_node_list_from_query_result(query_result, is_image_store)
 
     def _build_node_list_from_query_result(
         self,
@@ -256,7 +370,9 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
                 )
             assert isinstance(self._index.index_struct, IndexDict)
             node_ids = [
-                self._index.index_struct.nodes_dict[f"image_{idx}" if is_image else idx]
+                self._index.index_struct.nodes_dict[
+                    f"{DEFAULT_IMAGE_STORE}_{idx}" if is_image else f"{idx}"
+                ]
                 for idx in query_result.ids
             ]
             nodes = self._docstore.get_nodes(node_ids)
@@ -300,8 +416,27 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
 
         task_results = await asyncio.gather(*tasks)
 
-        for task_result in task_results:
-            results.extend(task_result)
+        text_nodes, image_nodes = task_results[0], task_results[1]
+
+        seen_images = set([node.node.image_url for node in image_nodes])
+        # 从文本中召回图片
+        if self._search_image and len(image_nodes) < self._image_similarity_top_k:
+            for node in text_nodes:
+                image_urls = node.node.metadata.get("image_url")
+                for image_url in image_urls:
+                    if image_url not in seen_images:
+                        image_nodes.extend(
+                            NodeWithScore(
+                                ImageNode(image_url=image_url),
+                                score=node.score
+                                * 0.5,  # discount the score from text nodes
+                            )
+                        )
+                        seen_images.add(image_url)
+                if len(image_nodes) >= self._image_similarity_top_k:
+                    break
+
+        results = text_nodes + image_nodes
         return results
 
     async def _atext_retrieve(
@@ -309,19 +444,33 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
         if not self._index.is_text_vector_store_empty:
-            if self._vector_store.is_embedding_query:
-                # change the embedding for query bundle to Multi Modal Text encoder
-                query_bundle.embedding = (
-                    await self._embed_model.aget_agg_embedding_from_queries(
-                        query_bundle.embedding_strs
-                    )
+            if (
+                self._supports_hybrid_search
+                or self._vector_store_query_mode == VectorStoreQueryMode.DEFAULT
+            ):
+                return await self._atext_retrieve_from_vector_store(query_bundle)
+            elif (
+                self._vector_store_query_mode == VectorStoreQueryMode.TEXT_SEARCH
+                or self._vector_store_query_mode == VectorStoreQueryMode.SPARSE
+            ):
+                return self._local_bm25_index.query(
+                    query_str=query_bundle.query_str,
+                    top_n=self.similarity_top_k,
+                    normalize=True,
                 )
-            print("Text vecdb: ", self._vector_store)
-            return await self._aget_nodes_with_embeddings(
-                query_bundle, self._similarity_top_k, self._vector_store
-            )
-        else:
-            return []
+            else:
+                vector_nodes = await self._atext_retrieve_from_vector_store(
+                    query_bundle
+                )
+                keyword_nodes = self._local_bm25_index.query(
+                    query_str=query_bundle.query_str,
+                    top_n=self.similarity_top_k,
+                    normalize=True,
+                )
+
+                return self._fusion_nodes(
+                    vector_nodes, keyword_nodes, self.similarity_top_k
+                )
 
     async def atext_retrieve(
         self, str_or_query_bundle: QueryType
@@ -334,7 +483,11 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
-        if not self._index.is_image_vector_store_empty:
+        if (
+            self._enable_multimodal
+            and self._search_image
+            and not self._index.is_image_vector_store_empty
+        ):
             if self._image_vector_store.is_embedding_query:
                 # change the embedding for query bundle to Multi Modal Text encoder
                 query_bundle.embedding = (
@@ -362,16 +515,15 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
         similarity_top_k: int,
         vector_store: BasePydanticVectorStore,
     ) -> List[NodeWithScore]:
-        if similarity_top_k > 0:
-            query = self._build_vector_store_query(
-                query_bundle_with_embeddings, similarity_top_k
-            )
-            query_result = await vector_store.aquery(query, **self._kwargs)
-            return self._build_node_list_from_query_result(
-                query_result, vector_store is self._image_vector_store
-            )
-        else:
-            return []
+        query = self._build_vector_store_query(
+            query_bundle_with_embeddings, similarity_top_k
+        )
+        query_result = await vector_store.aquery(query, **self._kwargs)
+
+        is_image_store = (
+            self._image_vector_store and vector_store is self._image_vector_store
+        )
+        return self._build_node_list_from_query_result(query_result, is_image_store)
 
     async def _aimage_to_image_retrieve(
         self,

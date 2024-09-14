@@ -4,26 +4,16 @@ from typing import List, Optional
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
-from llama_index.core.indices.keyword_table.utils import simple_extract_keywords
 from llama_index.core.schema import IndexNode, NodeWithScore, QueryBundle
-from nltk.stem import PorterStemmer
-from pai_rag.modules.index.pai_bm25_index import PaiBm25Index
+from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 
 logger = logging.getLogger(__name__)
 
 
-def tokenize_remove_stopwords(text: str) -> List[str]:
-    # lowercase and stem words
-    text = text.lower()
-    stemmer = PorterStemmer()
-    words = list(simple_extract_keywords(text))
-    return [stemmer.stem(word) for word in words]
-
-
-class BM25Retriever(BaseRetriever):
+class LocalBM25Retriever(BaseRetriever):
     def __init__(
         self,
-        bm25_index: PaiBm25Index,
+        bm25_index: LocalBm25IndexStore,
         similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
         callback_manager: Optional[CallbackManager] = None,
         objects: Optional[List[IndexNode]] = None,
@@ -42,10 +32,10 @@ class BM25Retriever(BaseRetriever):
     @classmethod
     def from_defaults(
         cls,
-        bm25_index: PaiBm25Index = None,
+        bm25_index: LocalBm25IndexStore = None,
         similarity_top_k: int = DEFAULT_SIMILARITY_TOP_K,
         verbose: bool = False,
-    ) -> "BM25Retriever":
+    ) -> "LocalBM25Retriever":
         return cls(
             bm25_index=bm25_index,
             similarity_top_k=similarity_top_k,

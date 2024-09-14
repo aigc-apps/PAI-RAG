@@ -122,6 +122,8 @@ class PaiPandasCSVReader(BaseReader):
         concat_rows: bool = True,
         row_joiner: str = "\n",
         pandas_config: dict = {},
+        format_sheet_data_to_json: bool = False,
+        sheet_column_filters: List[str] = None,
         **kwargs: Any,
     ) -> None:
         """Init params."""
@@ -129,6 +131,8 @@ class PaiPandasCSVReader(BaseReader):
         self._concat_rows = concat_rows
         self._row_joiner = row_joiner
         self._pandas_config = pandas_config
+        self._format_sheet_data_to_json = format_sheet_data_to_json
+        self._sheet_column_filters = sheet_column_filters
 
     def load_data(
         self,
@@ -165,9 +169,18 @@ class PaiPandasCSVReader(BaseReader):
                     )
                     raise
 
-        text_list = df.apply(
-            lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
-        ).tolist()
+        if self._sheet_column_filters:
+            df = df[self._sheet_column_filters]
+
+        if self._format_sheet_data_to_json:
+            text_list = df.apply(
+                lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
+            ).tolist()
+        else:
+            text_list = [
+                "\n".join([f"{k}:{v}" for k, v in record.items()])
+                for record in df.to_dict("records")
+            ]
 
         if self._concat_rows:
             return [

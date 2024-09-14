@@ -63,7 +63,8 @@ class RagConfiguration:
                     "rag.embedding.multi_modal", None
                 )
 
-            self.config.rag.update(new_value, tomlfy=True, merge=True)
+            self.config.rag.update(new_value, merge=True)
+            print("RAG CONFIGURATION: ", self.config.rag)
 
     def persist(self):
         """Save configuration to file."""
