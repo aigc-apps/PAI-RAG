@@ -151,10 +151,10 @@ class RagWebClient:
                     if invalid_flag == 0:
                         run_flag = " ✓ "
                         ref_sql = doc["metadata"].get("query_code_instruction", None)
-                        formatted_sql_query = f"生成的sql语句为：<b>{ref_sql}</b>"
+                        formatted_sql_query = f"<b>{ref_sql}</b>"
                         content = (
                             f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
-                            f"""<span style="color:grey; font-size: 14px;">{formatted_sql_query}</span> \n"""
+                            f"""<span style="color:grey; font-size: 14px;">生成的sql语句为：</span> <pre style="color:grey; font-size: 12px;">{formatted_sql_query}</pre> """
                             f"""<span style="color:grey; font-size: 14px;">sql查询是否有效：</span> <span style="color:green; font-size: 14px;">{run_flag}</span>"""
                         )
                     else:
@@ -162,10 +162,10 @@ class RagWebClient:
                         ref_sql = doc["metadata"].get(
                             "generated_query_code_instruction", None
                         )
-                        formatted_sql_query = f"生成的sql语句为：<b>{ref_sql}</b>"
+                        formatted_sql_query = f"<b>{ref_sql}</b>"
                         content = (
                             f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
-                            f"""<span style="color:grey; font-size: 14px;">{formatted_sql_query}</span> \n"""
+                            f"""<span style="color:grey; font-size: 14px;">生成的sql语句为：</span> <pre style="color:grey; font-size: 12px;">{formatted_sql_query}</pre> """
                             f"""<span style="color:grey; font-size: 14px;">sql查询是否有效：</span> <span style="color:red; font-size: 14px;">{run_flag}</span>"""
                         )
                 else:
