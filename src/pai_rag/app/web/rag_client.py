@@ -151,6 +151,7 @@ class RagWebClient:
                     if invalid_flag == 0:
                         run_flag = " ✓ "
                         ref_sql = doc["metadata"].get("query_code_instruction", None)
+                        ref_sql = ref_sql.replace("`", "")
                         formatted_sql_query = f"生成的sql语句为：<b>{ref_sql}</b>"
                         content = (
                             f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
