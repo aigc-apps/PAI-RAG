@@ -174,8 +174,10 @@ def create_milvus(
         token=token,
         collection_name=collection_name,
         dim=embed_dims,
-        enable_sparse=True,
-        sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
+        enable_sparse=True if not is_image_store else False,
+        sparse_embedding_function=BGEM3SparseEmbeddingFunction()
+        if not is_image_store
+        else None,
         similarity_metric="cosine",
         hybrid_ranker="WeightedRanker",
         # TODO: add weighted reranker config
@@ -199,7 +201,25 @@ def create_opensearch(
     if is_image_store:
         table_name = f"{table_name}__image"
 
-    output_fields = ["file_name", "file_path", "file_type", "text", "doc_id"]
+    if is_image_store:
+        output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
+    else:
+        output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url_list_str",
+            "text",
+            "doc_id",
+        ]
+
     db_config = AlibabaCloudOpenSearchConfig(
         endpoint=opensearch_config.endpoint,
         instance_id=opensearch_config.instance_id,

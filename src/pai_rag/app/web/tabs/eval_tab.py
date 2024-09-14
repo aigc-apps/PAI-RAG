@@ -44,7 +44,6 @@ def eval_response_stage():
         response_res = rag_client.evaluate_for_response_stage()
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
     formatted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pd_results = {
         "Metrics": ["Faithfulness", "Correctness", "Similarity", "LastModified"],

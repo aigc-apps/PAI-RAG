@@ -25,10 +25,6 @@ def respond(input_elements: List[Any]):
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
-    if update_dict["retrieval_mode"] == "data_analysis":
-        update_dict["retrieval_mode"] = "hybrid"
-    update_dict["synthesizer_type"] = "SimpleSummarize"
-
     # empty input.
     if not update_dict["question"]:
         yield update_dict["chatbot"]
@@ -155,8 +151,8 @@ def create_chat_tab() -> Dict[str, Any]:
                             label="Image Top K (choose between 0 and 10)",
                         )
                         need_image = gr.Checkbox(
-                            label="Need to display images.",
-                            info="Need to display images.",
+                            label="Inference with multi-modal LLM",
+                            info="Inference with multi-modal LLM.",
                             elem_id="need_image",
                         )
                         similarity_threshold = gr.Slider(

@@ -108,7 +108,7 @@ class PostgreSQLVectorStoreConfig(BaseVectorStoreConfig):
     host: str
     port: int
     database: str
-    table_name: str
+    table_name: str = "default"
     user_name: str
     password: str
 

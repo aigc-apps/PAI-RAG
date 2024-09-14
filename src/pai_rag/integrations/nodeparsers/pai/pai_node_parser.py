@@ -119,12 +119,13 @@ class PaiNodeParser(TransformComponent):
         text_seen.update(
             node.text.strip()
             for node in nodes
-            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
+            if isinstance(node, TextNode)
+            and node.metadata.get("image_url_list_str") is not None
         )
         for node in nodes:
             if (
                 isinstance(node, TextNode)
-                and node.metadata.get("image_url") is None
+                and node.metadata.get("image_url_list_str") is None
                 and node.text.strip() in text_seen
             ):
                 continue
