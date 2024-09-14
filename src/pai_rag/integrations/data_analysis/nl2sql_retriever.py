@@ -360,6 +360,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata = {"result": sql_query_str}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
@@ -384,7 +385,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
+                )
 
                 # 如果找到table，生成新的sql_query
                 if new_sql_query_str != sql_query_str:
@@ -419,7 +422,6 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     metadata = {}
 
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
@@ -453,6 +455,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata: Dict[str, Any] = {}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
@@ -479,7 +482,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
+                )
 
                 # 如果找到table，生成新的sql_query
                 if new_sql_query_str != sql_query_str:
@@ -516,7 +521,6 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                     metadata = {}
 
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
@@ -528,13 +532,15 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 table_collection.append(table)
         return table_collection
 
-    def _sql_query_modification(self, sql_query_str):
-        table_pattern = r"FROM\s+(\w+)"
-        match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
-        if match:
-            first_table = match.group(1)
+    def _sql_query_modification(self, query_tables: list, sql_query_str: str):
+        # table_pattern = r"FROM\s+(\w+)"
+        # match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
+        # if match:
+        # 改用已知table匹配，否则match中FROM逻辑也可能匹配到无效的table
+        if len(query_tables) != 0:
+            first_table = query_tables[0]
             new_sql_query_str = f"SELECT * FROM {first_table}"
-            logger.info(f"use the whole table {first_table} instead if possible")
+            logger.info(f"use the whole table named {first_table} instead if possible")
         else:
             # raise ValueError("No table is matched")
             new_sql_query_str = sql_query_str
