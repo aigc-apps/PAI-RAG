@@ -75,13 +75,17 @@ class MyModelBasedReranker(BaseNodePostprocessor):
         if len(nodes) == 0:
             return []
 
-        query_and_nodes = [
-            (
-                query_bundle.query_str,
-                node.node.get_content(metadata_mode=MetadataMode.EMBED),
-            )
-            for node in nodes
-        ]
+        filtered_nodes = []
+        query_and_nodes = []
+        seen_texts = set()
+        for node in nodes:
+            node_content = node.node.get_content(metadata_mode=MetadataMode.EMBED)
+            if node_content not in seen_texts:
+                filtered_nodes.append(node)
+                seen_texts.add(node_content)
+                query_and_nodes.append((query_bundle.query_str, node_content))
+
+        nodes = filtered_nodes
 
         with self.callback_manager.event(
             CBEventType.RERANKING,

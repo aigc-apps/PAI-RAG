@@ -284,13 +284,10 @@ class MyQueryFusionRetriever(BaseRetriever):
     ) -> List[MyNodeWithScore]:
         """Apply simple fusion."""
         # Use a dict to de-duplicate nodes
-        all_nodes: Dict[str, NodeWithScore] = {}
+        all_nodes: List[NodeWithScore] = []
         for nodes_with_scores in results.values():
-            for node_with_score in nodes_with_scores:
-                text = node_with_score.node.get_content()
-                if text not in all_nodes:
-                    all_nodes[text] = node_with_score
-        return sorted(all_nodes.values(), key=lambda x: x.score or 0.0, reverse=True)
+            all_nodes.extend(nodes_with_scores)
+        return sorted(all_nodes, key=lambda x: x.score or 0.0, reverse=True)
 
     def _run_nested_async_queries(
         self, queries: List[QueryBundle]

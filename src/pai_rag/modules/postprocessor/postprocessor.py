@@ -60,7 +60,7 @@ class PostprocessorModule(ConfigurableModule):
         elif reranker_type == "model-based-reranker":
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
             similarity_threshold = config.get(
-                "similarity_threshold", DEFAULT_RANK_TOP_N
+                "similarity_threshold", DEFAULT_RANK_SIMILARITY_THRES
             )
             reranker_model = config.get("reranker_model", DEFAULT_RANK_TOP_N)
             if (

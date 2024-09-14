@@ -143,6 +143,28 @@ class RagDataLoader:
                 node.excluded_llm_metadata_keys.append("question")
             nodes.extend(qa_nodes)
 
+        for node in nodes:
+            node.excluded_embed_metadata_keys.append("file_path")
+            node.excluded_embed_metadata_keys.append("file_size")
+            node.excluded_embed_metadata_keys.append("file_name")
+            node.excluded_embed_metadata_keys.append("row_number")
+            node.excluded_embed_metadata_keys.append("creation_date")
+            node.excluded_embed_metadata_keys.append("last_modified_date")
+            node.excluded_embed_metadata_keys.append("retrieval_type")
+            node.excluded_embed_metadata_keys.append("image_url")
+            node.excluded_embed_metadata_keys.append("header")
+            node.excluded_embed_metadata_keys.append("parent_id")
+            node.excluded_embed_metadata_keys.append("raw_text")
+
+            node.excluded_llm_metadata_keys.append("creation_date")
+            node.excluded_llm_metadata_keys.append("last_modified_date")
+            node.excluded_llm_metadata_keys.append("file_size")
+            node.excluded_llm_metadata_keys.append("file_path")
+            node.excluded_llm_metadata_keys.append("retrieval_type")
+            node.excluded_llm_metadata_keys.append("header")
+            node.excluded_llm_metadata_keys.append("parent_id")
+            node.excluded_llm_metadata_keys.append("raw_text")
+
         return nodes
 
     def load(

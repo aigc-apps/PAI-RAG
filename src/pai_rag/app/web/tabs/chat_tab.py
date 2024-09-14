@@ -139,8 +139,8 @@ def create_chat_tab() -> Dict[str, Any]:
                             label="Top K (choose between 0 and 100)",
                         )
                         similarity_threshold = gr.Slider(
-                            minimum=0,
-                            maximum=1,
+                            minimum=-10,
+                            maximum=10,
                             step=0.01,
                             elem_id="similarity_threshold",
                             label="Similarity Score Threshold (The more similar the items, the bigger the value.)",
