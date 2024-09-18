@@ -23,6 +23,10 @@ class QueryTransformModule(ConfigurableModule):
         config = new_params[MODULE_PARAM_CONFIG]
         chat_store = new_params["ChatStoreModule"]
 
+        if not config:
+            logger.info("No Query Transform Configuration found")
+            return None
+
         if config["type"] == "HyDEQueryTransform":
             logger.info("Query Transform: HyDEQueryTransform")
             return PaiHyDEQueryTransform(include_original=True)
