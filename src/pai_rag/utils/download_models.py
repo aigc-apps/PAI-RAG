@@ -18,9 +18,13 @@ class ModelScopeDownloader:
         self.download_directory_path = Path(DEFAULT_MODEL_DIR)
         if not os.path.exists(self.download_directory_path):
             os.makedirs(self.download_directory_path)
-        response = requests.get(OSS_URL)
-        response.raise_for_status()
-        self.model_info = response.json()
+            logger.info(
+                f"Create model directory: {self.download_directory_path} and get model info from oss {OSS_URL}."
+            )
+            response = requests.get(OSS_URL)
+            response.raise_for_status()
+            self.model_info = response.json()
+            logger.info(f"Model info loaded {self.model_info}.")
 
     def load_model(self, model_name):
         model_path = os.path.join(self.download_directory_path, model_name)
