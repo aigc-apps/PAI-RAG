@@ -4,11 +4,12 @@ from typing import List, Optional
 
 from llama_index.core.data_structs.data_structs import IndexDict
 from llama_index.core.indices.utils import log_vector_store_query_result
-from llama_index.core.schema import ObjectType
 from llama_index.core.vector_stores.types import (
     VectorStoreQueryResult,
+    VectorStoreQueryMode,
 )
 import llama_index.core.instrumentation as instrument
+from llama_index.core.schema import NodeWithScore, ObjectType, QueryBundle
 
 from llama_index.core.retrievers import (
     VectorIndexRetriever,
@@ -38,6 +39,38 @@ class MyVectorIndexRetriever(VectorIndexRetriever):
             through to the vector store at query time.
 
     """
+
+    @dispatcher.span
+    def _retrieve(
+        self,
+        query_bundle: QueryBundle,
+    ) -> List[NodeWithScore]:
+        if self._vector_store.is_embedding_query:
+            if query_bundle.embedding is None and len(query_bundle.embedding_strs) > 0:
+                query_bundle.embedding = (
+                    self._embed_model.get_agg_embedding_from_queries(
+                        query_bundle.embedding_strs
+                    )
+                )
+        return self._get_nodes_with_embeddings(query_bundle)
+
+    @dispatcher.span
+    async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        embedding = query_bundle.embedding
+        if (
+            self._vector_store.is_embedding_query
+            and self._vector_store_query_mode != VectorStoreQueryMode.SPARSE
+            and self._vector_store_query_mode != VectorStoreQueryMode.TEXT_SEARCH
+        ):
+            if query_bundle.embedding is None and len(query_bundle.embedding_strs) > 0:
+                embed_model = self._embed_model
+                embedding = await embed_model.aget_agg_embedding_from_queries(
+                    query_bundle.embedding_strs
+                )
+
+        return await self._aget_nodes_with_embeddings(
+            QueryBundle(query_str=query_bundle.query_str, embedding=embedding)
+        )
 
     def _build_node_list_from_query_result(
         self, query_result: VectorStoreQueryResult

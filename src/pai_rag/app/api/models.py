@@ -25,6 +25,7 @@ class LlmQuery(BaseModel):
 
 class RetrievalQuery(BaseModel):
     question: str
+    include_metadata: bool | None = True
     vector_db: VectorDbConfig | None = None
 
 
