@@ -117,8 +117,7 @@ class ModuleRegistry:
         if mod_cache and mod_name in mod_cache:
             return mod_cache[mod_name]
 
-        logger.debug(f"Get module {mod_name}.")
-
+        logger.info(f"Get module {mod_name}.")
         mod_config_key = MODULE_CONFIG_KEY_MAP[mod_name]
         mod_deps = self._mod_deps_map[mod_name]
         mod_cls = self._mod_cls_map[mod_name]
@@ -132,10 +131,12 @@ class ModuleRegistry:
             instance_key not in self._mod_instance_map[mod_name]
             or mod_name == "OssCacheModule"
         ):
-            logger.debug(f"Creating new instance for module {mod_name} {instance_key}.")
+            logger.info(f"Creating new instance for module {mod_name} {instance_key}.")
             self._mod_instance_map[mod_name][instance_key] = mod_cls.get_or_create(
                 params
             )
+        else:
+            logger.info(f"skip create {mod_name} {instance_key}.")
         return self._mod_instance_map[mod_name][instance_key]
 
     def get_mod_instances(self, mod_name: str):

@@ -131,5 +131,4 @@ class IndexModule(ConfigurableModule):
         embed_model = new_params["EmbeddingModule"]
         postprocessor = new_params["PostprocessorModule"]
         multi_modal_embed_model = new_params["MultiModalEmbeddingModule"]
-        print("multi_modal_embed_model", multi_modal_embed_model)
         return RagIndex(config, embed_model, multi_modal_embed_model, postprocessor)

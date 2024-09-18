@@ -55,6 +55,9 @@ class MyModelBasedReranker(BaseNodePostprocessor):
     def class_name(cls) -> str:
         return "MyModelBasedReranker"
 
+    def __repr__(self):
+        return f"MyModelBasedReranker: top_n={self.top_n}, model={self.model}, similarity_threshold={self.similarity_threshold})"
+
     def _postprocess_nodes(
         self,
         nodes: List[NodeWithScore],
