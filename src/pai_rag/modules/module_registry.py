@@ -13,6 +13,7 @@ MODULE_CONFIG_KEY_MAP = {
     "MultiModalLlmModule": "rag.llm.multi_modal",
     "FunctionCallingLlmModule": "rag.llm.function_calling_llm",
     "NodeParserModule": "rag.node_parser",
+    "QueryTransformModule": "rag.query_transform",
     "RetrieverModule": "rag.retriever",
     "PostprocessorModule": "rag.postprocessor",
     "SynthesizerModule": "rag.synthesizer",
