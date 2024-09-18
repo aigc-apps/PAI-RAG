@@ -42,7 +42,6 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
         )
 
         super().__init__(
-            service_context=service_context,
             top_n=top_n,
             vector_weight=vector_weight,
             keyword_weight=keyword_weight,
@@ -52,6 +51,9 @@ class MySimpleWeightedRerank(BaseNodePostprocessor):
     @classmethod
     def class_name(cls) -> str:
         return "MySimpleWeightedRerank"
+
+    def __repr__(self):
+        return f"MySimpleWeightedRerank: top_n={self.top_n}, vector_weight={self.vector_weight}, keyword_weight={self.keyword_weight}, similarity_threshold={self.similarity_threshold})"
 
     def filter_threshhold(self, nodes):
         if self.similarity_threshold:

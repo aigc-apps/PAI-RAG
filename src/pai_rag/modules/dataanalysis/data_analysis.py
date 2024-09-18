@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import glob
@@ -7,6 +8,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import URL
 from sqlalchemy.pool import QueuePool
 from llama_index.core import SQLDatabase
+from llama_index.core.prompts import PromptTemplate
 
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
@@ -36,6 +38,11 @@ class DataAnalysisModule(ConfigurableModule):
         llm = new_params["LlmModule"]
         embed_model = new_params["EmbeddingModule"]
         data_analysis_type = config.get("analysis_type", "nl2pandas")
+        nl2sql_prompt = config.get("nl2sql_prompt", None)
+        if nl2sql_prompt:
+            nl2sql_prompt = PromptTemplate(nl2sql_prompt)
+        else:
+            nl2sql_prompt = DEFAULT_TEXT_TO_SQL_TMPL
 
         if data_analysis_type == "nl2pandas":
             df = self.get_dataframe(config)
@@ -51,7 +58,7 @@ class DataAnalysisModule(ConfigurableModule):
             sql_database, tables, table_descriptions = self.db_connection(config)
             analysis_retriever = MyNLSQLRetriever(
                 sql_database=sql_database,
-                text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
+                text_to_sql_prompt=nl2sql_prompt,
                 tables=tables,
                 context_query_kwargs=table_descriptions,
                 sql_only=False,
@@ -59,6 +66,7 @@ class DataAnalysisModule(ConfigurableModule):
                 llm=llm,
             )
             logger.info("DataAnalysis NL2SQLRetriever used")
+            # logger.info(f"nl2sql prompt: {nl2sql_prompt}")
 
         else:
             raise ValueError(
@@ -76,7 +84,6 @@ class DataAnalysisModule(ConfigurableModule):
         )
 
     def db_connection(self, config):
-        # get rds_db config
         dialect = config.get("dialect", "sqlite")
         user = config.get("user", "")
         password = config.get("password", "")
@@ -87,6 +94,37 @@ class DataAnalysisModule(ConfigurableModule):
         desired_tables = config.get("tables", [])
         table_descriptions = config.get("descriptions", {})
 
+        return self.inspect_db_connection(
+            dialect=dialect,
+            user=user,
+            password=password,
+            host=host,
+            port=port,
+            path=path,
+            dbname=dbname,
+            desired_tables=tuple(desired_tables) if desired_tables else None,
+            table_descriptions=tuple(table_descriptions.items())
+            if table_descriptions
+            else None,
+        )
+
+    @functools.cache
+    def inspect_db_connection(
+        self,
+        dialect,
+        user,
+        password,
+        host,
+        port,
+        path,
+        dbname,
+        desired_tables,
+        table_descriptions,
+    ):
+        desired_tables = list(desired_tables) if desired_tables else None
+        table_descriptions = dict(table_descriptions) if table_descriptions else None
+
+        # get rds_db config
         logger.info(f"desired_tables from ui input: {desired_tables}")
         logger.info(f"table_descriptions from ui input: {table_descriptions}")
 

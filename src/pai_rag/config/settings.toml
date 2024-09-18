@@ -27,6 +27,7 @@ persist_path = "localdata/storage"
 
 [rag.data_analysis]
 analysis_type = "nl2pandas"
+nl2sql_prompt = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行，不要从特定的表中查询所有列，只根据问题查询几个相关的列。请注意只使用你在schema descriptions 中看到的列名。\n=====\n 小心不要查询不存在的列。请注意哪个列位于哪个表中。必要时，请使用表名限定列名。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "
 
 [rag.data_loader]
 type = "local"
@@ -49,9 +50,6 @@ retrieval = ["mrr", "hit_rate"]
 response_label = true
 response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
 
-[rag.function_calling_llm]
-source = ""
-
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
@@ -67,6 +65,10 @@ source = "DashScope"
 name = "qwen-turbo"
 
 [rag.llm.function_calling_llm]
+source = ""
+
+[rag.llm.multi_modal]
+enable = false
 source = ""
 
 [rag.llm_chat_engine]

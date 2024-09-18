@@ -81,12 +81,13 @@ class RagDataLoader:
         text_seen.update(
             node.text.strip()
             for node in nodes
-            if isinstance(node, TextNode) and node.metadata.get("image_url") is not None
+            if isinstance(node, TextNode)
+            and node.metadata.get("image_url_list_str") is not None
         )
         for node in nodes:
             if (
                 isinstance(node, TextNode)
-                and node.metadata.get("image_url") is None
+                and node.metadata.get("image_url_list_str") is None
                 and node.text.strip() in text_seen
             ):
                 continue
@@ -173,7 +174,9 @@ class RagDataLoader:
 
         for node in nodes:
             node.excluded_embed_metadata_keys.append("file_path")
-            node.excluded_embed_metadata_keys.append("image_url")
+            node.excluded_embed_metadata_keys.append(
+                "image_url" if isinstance(node, ImageNode) else "image_url_list_str"
+            )
             node.excluded_embed_metadata_keys.append("total_pages")
             node.excluded_embed_metadata_keys.append("source")
 

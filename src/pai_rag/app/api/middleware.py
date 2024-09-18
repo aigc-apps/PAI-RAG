@@ -3,6 +3,9 @@ from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from asgi_correlation_id import CorrelationIdMiddleware
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CustomMiddleWare(BaseHTTPMiddleware):
@@ -16,6 +19,9 @@ class CustomMiddleWare(BaseHTTPMiddleware):
         host = request.client.host
         response.headers["X-Process-Time"] = str(process_time)
         response.headers["X-Client-IP"] = host
+        logger.info(
+            f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
+        )
         return response
 
 

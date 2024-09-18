@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Dict, List, Any
 from llama_index.vector_stores.faiss import FaissVectorStore
-from llama_index.core.embeddings import MultiModalEmbedding
 from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
 from pai_rag.modules.index.index_utils import load_index_from_storage
 from pai_rag.modules.base.configurable_module import ConfigurableModule
@@ -81,7 +80,7 @@ class RagIndex:
                 image_embed_model=self.multi_modal_embed_model,
             )
         else:
-            if isinstance(embed_model, MultiModalEmbedding):
+            if self.multi_modal_embed_model:
                 self.vector_index = MyMultiModalVectorStoreIndex(
                     nodes=[],
                     storage_context=storage_context,
@@ -132,5 +131,4 @@ class IndexModule(ConfigurableModule):
         embed_model = new_params["EmbeddingModule"]
         postprocessor = new_params["PostprocessorModule"]
         multi_modal_embed_model = new_params["MultiModalEmbeddingModule"]
-
         return RagIndex(config, embed_model, multi_modal_embed_model, postprocessor)
