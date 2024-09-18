@@ -90,14 +90,24 @@ class RagApplication:
         )
         node_results = await query_engine.aretrieve(query_bundle)
 
-        docs = [
-            ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-            )
-            for score_node in node_results
-        ]
+        if query.include_metadata:
+            docs = [
+                ContextDoc(
+                    text=score_node.node.get_content(),
+                    metadata=score_node.node.metadata,
+                    score=score_node.score,
+                )
+                for score_node in node_results
+            ]
+        else:
+            docs = [
+                ContextDoc(
+                    text=score_node.node.get_content(),
+                    metadata={},
+                    score=score_node.score,
+                )
+                for score_node in node_results
+            ]
 
         return RetrievalResponse(docs=docs)
 
