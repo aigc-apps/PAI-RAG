@@ -68,6 +68,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self._enable_multimodal = enable_multimodal
         self._image_store = None
 
+        multi_modal_embed_dims = -1  # multimodal not enabled
         # assert multi_modal_embed_model is not None, "Multi-modal embedding model must be provided."
         if self._enable_multimodal:
             multi_modal_embed_dims = len(
@@ -116,6 +117,8 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 Vector store path: {self._persist_path}
                 Embedding model: {self._embed_model.model_name}
                 Enable multimodal: {self._enable_multimodal}
+                Text embedding dims: {embed_dims}
+                Image embedding dims: {multi_modal_embed_dims}
                 Enable local keyword index: {self._enable_local_keyword_index}
             """
         )

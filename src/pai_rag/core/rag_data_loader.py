@@ -60,7 +60,7 @@ class RagDataLoader:
 
         image_docs = [doc for doc in documents if isinstance(doc, ImageDocument)]
         image_ingestion_pipeline = IngestionPipeline(
-            transformations=[self._node_parser, self._embed_model]
+            transformations=[self._node_parser, self._multi_modal_embed_modal]
         )
         image_nodes = image_ingestion_pipeline.run(documents=image_docs)
         logger.info(f"[DataLoader] parsed {len(image_nodes)} image nodes.")

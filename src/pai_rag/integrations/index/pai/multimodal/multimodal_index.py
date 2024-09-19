@@ -69,7 +69,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         # keep image_vector_store here for backward compatibility
         image_vector_store: Optional[BasePydanticVectorStore] = None,
         image_embed_model: EmbedType = "clip:ViT-B/32",
-        is_image_to_text: bool = False,
         # is_image_vector_store_empty is used to indicate whether image_vector_store is empty
         # those flags are used for cases when only one vector store is used
         is_image_vector_store_empty: bool = False,
@@ -86,7 +85,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             )
             assert isinstance(image_embed_model, MultiModalEmbedding)
             self._image_embed_model = image_embed_model
-            self._is_image_to_text = is_image_to_text
             if image_vector_store is not None:
                 if self.image_namespace not in storage_context.vector_stores:
                     storage_context.add_vector_store(
@@ -211,25 +209,12 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         Embeddings are called in batches.
 
         """
-        id_to_text_embed_map = None
-
         if is_image:
             id_to_embed_map = embed_image_nodes(
                 nodes,
                 embed_model=self._image_embed_model,
                 show_progress=show_progress,
             )
-
-            # text field is populate, so embed them
-            if self._is_image_to_text:
-                id_to_text_embed_map = embed_nodes(
-                    nodes,
-                    embed_model=self._embed_model,
-                    show_progress=show_progress,
-                )
-                # TODO: refactor this change of image embed model to same as text
-                self._image_embed_model = self._embed_model
-
         else:
             id_to_embed_map = embed_nodes(
                 nodes,
@@ -240,15 +225,10 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         results = []
         for node in nodes:
             embedding = id_to_embed_map[node.node_id]
+            print("===", is_image, node.node_id, len(embedding))
+
             result = node.copy()
             result.embedding = embedding
-            if is_image and id_to_text_embed_map:
-                text_embedding = id_to_text_embed_map[node.node_id]
-                result.text_embedding = text_embedding
-                result.embedding = (
-                    text_embedding  # TODO: re-factor to make use of both embeddings
-                )
-            results.append(result)
         return results
 
     async def _aget_node_with_embedding(
@@ -271,16 +251,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 embed_model=self._image_embed_model,
                 show_progress=show_progress,
             )
-
-            if self._is_image_to_text:
-                id_to_text_embed_map = await async_embed_nodes(
-                    nodes,
-                    embed_model=self._embed_model,
-                    show_progress=show_progress,
-                )
-                # TODO: refactor this change of image embed model to same as text
-                self._image_embed_model = self._embed_model
-
         else:
             id_to_embed_map = await async_embed_nodes(
                 nodes,
