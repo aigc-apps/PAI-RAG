@@ -127,7 +127,6 @@ class MySQLRetriever(BaseRetriever):
         logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
         # set timeout to 10s
-        # set timeout to 10s
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(10)  # start
         try:
@@ -361,28 +360,16 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata = {"result": sql_query_str}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
                     metadata,
                 ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
                 retrieved_nodes[0].metadata["invalid_flag"] = 0
-                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
-                # 如果生成的sql语句执行后无结果，待bad case补充
-                # if retrieved_nodes[0].metadata["query_output"] == "":
-
-                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
-                #     (
-                #         retrieved_nodes,
-                #         metadata,
-                #     ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
-                #     logger.info(
-                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                #     )
-                # 如果生成的sql语句执行后无结果，待bad case补充
                 # if retrieved_nodes[0].metadata["query_output"] == "":
 
                 #     new_sql_query_str = self._sql_query_modification(sql_query_str)
@@ -398,35 +385,43 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
-                (
-                    retrieved_nodes,
-                    metadata,
-                ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
-                retrieved_nodes[0].metadata["invalid_flag"] = 1
-                retrieved_nodes[0].metadata[
-                    "generated_query_code_instruction"
-                ] = sql_query_str
-                retrieved_nodes[0].metadata["invalid_flag"] = 1
-                retrieved_nodes[0].metadata[
-                    "generated_query_code_instruction"
-                ] = sql_query_str
-                logger.info(
-                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
                 )
-                # err_node = TextNode(text=f"Error: {e!s}")
-                # logger.info(f"async error_node info: {err_node}\n")
-                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                # metadata = {}
-                # else:
-                #     raise
+
+                # 如果找到table，生成新的sql_query
+                if new_sql_query_str != sql_query_str:
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                    retrieved_nodes[0].metadata["invalid_flag"] = 1
+                    retrieved_nodes[0].metadata[
+                        "generated_query_code_instruction"
+                    ] = sql_query_str
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
+                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
+                else:
+                    logger.info(f"[{new_sql_query_str}] is not even a SQL")
+                    retrieved_nodes = [
+                        NodeWithScore(
+                            node=TextNode(
+                                text=new_sql_query_str,
+                                metadata={
+                                    "query_code_instruction": new_sql_query_str,
+                                    "generated_query_code_instruction": sql_query_str,
+                                    "query_output": "",
+                                    "invalid_flag": 1,
+                                },
+                            ),
+                            score=1.0,
+                        ),
+                    ]
+                    metadata = {}
 
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-            retrieved_nodes[0].metadata["query_tables"] = query_tables
-
-            # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
@@ -460,12 +455,12 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata: Dict[str, Any] = {}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
-                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
@@ -487,7 +482,9 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
+                )
 
                 # 如果找到table，生成新的sql_query
                 if new_sql_query_str != sql_query_str:
@@ -522,18 +519,8 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                         ),
                     ]
                     metadata = {}
-                # err_node = TextNode(text=f"Error: {e!s}")
-                # logger.info(f"async error_node info: {err_node}\n")
-                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                # metadata = {}
-                # else:
-                #     raise
-            # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-            retrieved_nodes[0].metadata["query_tables"] = query_tables
 
             # add query_tables into metadata
-            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
@@ -545,24 +532,16 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 table_collection.append(table)
         return table_collection
 
-    def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
-        table_collection = list()
-        for table in table_list:
-            if table.lower() in sql_query.lower():
-                table_collection.append(table)
-        return table_collection
-
-    def _sql_query_modification(self, sql_query_str):
-        table_pattern = r"FROM\s+(\w+)"
-        match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
-        if match:
-            first_table = match.group(1)
+    def _sql_query_modification(self, query_tables: list, sql_query_str: str):
+        # table_pattern = r"FROM\s+(\w+)"
+        # match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
+        # if match:
+        # 改用已知table匹配，否则match中FROM逻辑也可能匹配到无效的table
+        if len(query_tables) != 0:
+            first_table = query_tables[0]
             new_sql_query_str = f"SELECT * FROM {first_table}"
-            logger.info(f"use the whole table {first_table} instead if possible")
+            logger.info(f"use the whole table named {first_table} instead if possible")
         else:
-            # raise ValueError("No table is matched")
-            new_sql_query_str = sql_query_str
-            logger.info("No table is matched")
             # raise ValueError("No table is matched")
             new_sql_query_str = sql_query_str
             logger.info("No table is matched")

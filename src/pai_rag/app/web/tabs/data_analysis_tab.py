@@ -1,5 +1,4 @@
 import os
-import datetime
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
@@ -44,35 +43,43 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def update_setting(input_db: List[Any]):
-    try:
-        update_dict = {"analysis_type": "nl2sql"}
-        for element, value in input_db.items():
-            update_dict[element.elem_id] = value
-        # print("db_config:", update_dict)
+def respond(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
 
+    if update_dict["analysis_type"] == "datafile":
+        update_dict["analysis_type"] = "nl2pandas"
+    else:
+        update_dict["analysis_type"] = "nl2sql"
+
+    # empty input.
+    if not update_dict["question"]:
+        yield update_dict["chatbot"]
+        return
+
+    # update snapshot
+    try:
         rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] success!"
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
+    question = update_dict["question"]
+    chatbot = update_dict["chatbot"]
 
-# def nl2sql_prompt_update(input_prompt):
-#     try:
-#         update_dict = {"db_nl2sql_prompt": input_prompt}
-#         # print('update_dict:', update_dict)
-#         rag_client.patch_config(update_dict)
-#         return f"[{datetime.datetime.now()}] success!"
-#     except RagApiError as api_error:
-#         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+    if chatbot is not None:
+        chatbot.append((question, ""))
 
-
-def analysis_respond(question, chatbot):
-    response_gen = rag_client.query_data_analysis(question, stream=True)
-    content = ""
-    chatbot.append((question, content))
-    for resp in response_gen:
-        chatbot[-1] = (question, resp.result)
+    try:
+        response_gen = rag_client.query_data_analysis(question, stream=True)
+        for resp in response_gen:
+            chatbot[-1] = (question, resp.result)
+            yield chatbot
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+    except Exception as e:
+        raise gr.Error(f"Error: {e}")
+    finally:
         yield chatbot
 
 
@@ -96,7 +103,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 ],
                 value="datafile",
                 label="Please choose the data analysis type",
-                elem_id="data_analysis_type",
+                elem_id="analysis_type",
             )
 
             # datafile
@@ -169,25 +176,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     lines=4,
                 )
 
-                update_button = gr.Button(
-                    "Update Settings",
-                    elem_id="update_settings",
-                    variant="primary",
-                )  # 点击功能中更新 analysis_type, nl2sql参数以及prompt
-
-                update_info = gr.Textbox(label="Update Info", elem_id="update_info")
-
-                # with gr.Row():
-                #     prompt_update_button = gr.Button(
-                #         "prompt update",
-                #         elem_id="prompt_update",
-                #         variant="primary",
-                #     )  # 点击功能中更新 nl2sql prompt
-
-                #     update_info = gr.Textbox(
-                #         label="Update Info", elem_id="prompt_update_info"
-                #     )
-
             def change_prompt_template(prompt_type):
                 if prompt_type == "general":
                     return {
@@ -210,32 +198,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 outputs=[prompt_template],
             )
 
-            inputs_db = {
-                dialect,
-                user,
-                password,
-                host,
-                port,
-                dbname,
-                tables,
-                descriptions,
-                prompt_template,
-            }
-
-            update_button.click(
-                fn=update_setting,
-                inputs=inputs_db,
-                outputs=update_info,
-                api_name="update_info_clk",
-            )
-
-            # prompt_update_button.click(
-            #     fn=nl2sql_prompt_update,
-            #     inputs=prompt_template,
-            #     outputs=update_info,
-            #     api_name="update_nl2sql_prompt",
-            # )
-
             def data_analysis_type_change(type_value):
                 if type_value == "datafile":
                     return {
@@ -255,23 +217,38 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=6):
-            chatbot = gr.Chatbot(height=500, elem_id="data_analysis_chatbot")
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
+        chat_args = {
+            data_analysis_type,
+            dialect,
+            user,
+            password,
+            host,
+            port,
+            dbname,
+            tables,
+            descriptions,
+            prompt_template,
+            question,
+            chatbot,
+        }
+
         submitBtn.click(
-            fn=analysis_respond,
-            inputs=[question, chatbot],
+            fn=respond,
+            inputs=chat_args,
             outputs=[chatbot],
             api_name="analysis_respond_clk",
         )
 
         # 绑定Textbox提交事件，当按下Enter，调用respond函数
         question.submit(
-            analysis_respond,
-            inputs=[question, chatbot],
+            respond,
+            inputs=chat_args,
             outputs=[chatbot],
             api_name="analysis_respond_q",
         )

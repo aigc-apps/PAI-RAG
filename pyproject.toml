@@ -101,6 +101,7 @@ magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 pai-llm-trace = {url = "https://pai-llm-trace.oss-cn-zhangjiakou.aliyuncs.com/sdk_package/pai_llm_trace-1.0.0-py3-none-any.whl"}
 llama-index-callbacks-arize-phoenix = "0.1.6"
 peft = "^0.12.0"
+duckduckgo-search = "6.2.12"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:main"
