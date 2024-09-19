@@ -2,7 +2,7 @@
 
 This is the java client SDK to call PAI-RAG APIs.
 
-The client code is packaged to [pairag-client-0.1.0.jar](target/pairag-client-0.1.0.jar).
+The client code is packaged to [pairag-client-0.1.0.jar](artifacts/pairag-client-0.1.0.jar).
 
 For detailed API usage, please refer to the [API doc](docs/RagQueryApi.md)
 
