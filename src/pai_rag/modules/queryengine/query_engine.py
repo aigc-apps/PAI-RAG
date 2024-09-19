@@ -7,9 +7,9 @@ from typing import Dict, List, Any
 from pai_rag.integrations.query_engine.multi_modal_query_engine import (
     MySimpleMultiModalQueryEngine,
 )
-from pai_rag.modules.queryengine.my_retriever_query_engine import MyRetrieverQueryEngine
-from llama_index.core.indices.query.query_transform import HyDEQueryTransform
-from llama_index.core.query_engine import TransformQueryEngine
+from pai_rag.modules.queryengine.pai_retriever_query_engine import (
+    PaiRetrieverQueryEngine,
+)
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 from pai_rag.utils.prompt_template import (
@@ -25,6 +25,7 @@ class QueryEngineModule(ConfigurableModule):
     @staticmethod
     def get_dependencies() -> List[str]:
         return [
+            "QueryTransformModule",
             "RetrieverModule",
             "SynthesizerModule",
             "PostprocessorModule",
@@ -34,6 +35,7 @@ class QueryEngineModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
+        query_transform = new_params["QueryTransformModule"]
         retriever = new_params["RetrieverModule"]
         synthesizer = new_params["SynthesizerModule"]
         postprocessor = new_params["PostprocessorModule"]
@@ -45,48 +47,27 @@ class QueryEngineModule(ConfigurableModule):
                 "NLSQLRetriever" or "PandasQueryRetriever" in retriever.__repr__()
             ):
                 logger.info("Query_engine without postprocess created")
-                my_query_engine = MyRetrieverQueryEngine(
-                    retriever=retriever, response_synthesizer=synthesizer
+                my_query_engine = PaiRetrieverQueryEngine(
+                    query_transform=query_transform,
+                    retriever=retriever,
+                    response_synthesizer=synthesizer,
                 )
             elif isinstance(postprocessor, List):
-                my_query_engine = MyRetrieverQueryEngine(
+                my_query_engine = PaiRetrieverQueryEngine(
+                    query_transform=query_transform,
                     retriever=retriever,
                     response_synthesizer=synthesizer,
                     node_postprocessors=postprocessor,
                 )
             else:
-                my_query_engine = MyRetrieverQueryEngine(
+                my_query_engine = PaiRetrieverQueryEngine(
+                    query_transform=query_transform,
                     retriever=retriever,
                     response_synthesizer=synthesizer,
                     node_postprocessors=[postprocessor],
                 )
             logger.info("Query_engine instance created")
             return my_query_engine
-
-        elif config["type"] == "TransformQueryEngine":
-            hyde = HyDEQueryTransform(include_original=True)
-            if not postprocessor:
-                my_query_engine = MyRetrieverQueryEngine(
-                    retriever=retriever, response_synthesizer=synthesizer
-                )
-                hyde_query_engine = TransformQueryEngine(my_query_engine, hyde)
-            elif isinstance(postprocessor, List):
-                my_query_engine = MyRetrieverQueryEngine(
-                    retriever=retriever,
-                    response_synthesizer=synthesizer,
-                    node_postprocessors=postprocessor,
-                )
-                hyde_query_engine = TransformQueryEngine(my_query_engine, hyde)
-            else:
-                my_query_engine = MyRetrieverQueryEngine(
-                    retriever=retriever,
-                    response_synthesizer=synthesizer,
-                    node_postprocessors=[postprocessor],
-                )
-                hyde_query_engine = TransformQueryEngine(my_query_engine, hyde)
-
-            logger.info("HyDE_query_engine instance created")
-            return hyde_query_engine
 
         elif config["type"] == "SimpleMultiModalQueryEngine":
             if not postprocessor:
