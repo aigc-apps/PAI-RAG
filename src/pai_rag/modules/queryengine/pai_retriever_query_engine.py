@@ -73,10 +73,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
     @dispatcher.span
     def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
-        if self._query_transform:
-            query_bundle = self._query_transform.run(
-                query_bundle, metadata=self._transform_metadata
-            )
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
@@ -92,10 +88,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
     @dispatcher.span
     async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
-        if self._query_transform:
-            query_bundle = await self._query_transform.arun(
-                query_bundle, metadata=self._transform_metadata
-            )
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:

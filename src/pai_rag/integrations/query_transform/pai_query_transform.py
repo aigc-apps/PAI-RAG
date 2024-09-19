@@ -19,6 +19,8 @@ from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.utils.messages_utils import parse_chat_messages
 
+DEFAULT_FUSION_NUM_QUERIES = 4
+
 
 class PaiBaseQueryTransform(BaseQueryTransform):
     @abstractmethod
@@ -48,7 +50,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         self,
         llm: Optional[LLMType] = None,
         fusion_transform_prompt: Optional[BasePromptTemplate] = None,
-        num_queries: int = 4,
+        num_queries: int = DEFAULT_FUSION_NUM_QUERIES,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
         """ """
@@ -79,6 +81,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         response = self._llm.complete(prompt_str)
 
         # assume LLM proper put each query on a newline
+        # TODO: query改写的结构化输出
         queries = response.text.split("\n")
         queries = [q.strip() for q in queries if q.strip()]
         if self._verbose:
