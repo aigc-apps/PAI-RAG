@@ -22,7 +22,6 @@ class IndexModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        print(config)
         config["vector_store"]["persist_path"] = config["persist_path"]
         config["vector_store"]["type"] = config["vector_store"]["type"].lower()
         index_config = PaiVectorIndexConfig.model_validate(config)

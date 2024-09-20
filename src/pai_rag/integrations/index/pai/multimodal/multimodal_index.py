@@ -224,11 +224,15 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
 
         results = []
         for node in nodes:
-            embedding = id_to_embed_map[node.node_id]
-            print("===", is_image, node.node_id, len(embedding))
+            if node.embedding is None:
+                embedding = id_to_embed_map[node.node_id]
+                result = node.copy()
+                result.embedding = embedding
+            else:
+                result = node.copy()
 
-            result = node.copy()
-            result.embedding = embedding
+            print("===", is_image, node.node_id, len(result.embedding))
+            results.append(result)
         return results
 
     async def _aget_node_with_embedding(
@@ -243,8 +247,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         Embeddings are called in batches.
 
         """
-        id_to_text_embed_map = None
-
         if is_image:
             id_to_embed_map = await async_embed_image_nodes(
                 nodes,
@@ -260,15 +262,13 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
 
         results = []
         for node in nodes:
-            embedding = id_to_embed_map[node.node_id]
-            result = node.copy()
-            result.embedding = embedding
-            if is_image and id_to_text_embed_map:
-                text_embedding = id_to_text_embed_map[node.node_id]
-                result.text_embedding = text_embedding
-                result.embedding = (
-                    text_embedding  # TODO: re-factor to make use of both embeddings
-                )
+            if node.embedding is None:
+                embedding = id_to_embed_map[node.node_id]
+                result = node.copy()
+                result.embedding = embedding
+            else:
+                result = node.copy()
+
             results.append(result)
         return results
 
@@ -362,11 +362,18 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             text_nodes = self._get_node_with_embedding(
                 text_nodes, show_progress, is_image=False
             )
+            logger.info(f"Added {len(text_nodes)} text nodes to index.")
             new_text_ids = self.storage_context.vector_stores[DEFAULT_VECTOR_STORE].add(
                 text_nodes, **insert_kwargs
             )
+            origin_text_ids = [node.node_id for node in text_nodes]
+            logger.info(
+                f"Added {len(text_nodes)} TextNodes to index. NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}."
+            )
+
         else:
             self._is_text_vector_store_empty = True
+            logger.info("No text nodes to insert.")
 
         if len(image_nodes) > 0:
             # embed image nodes as images directly
@@ -380,8 +387,14 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 image_nodes, **insert_kwargs
             )
             new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
+            origin_img_ids = [node.node_id for node in image_nodes]
+            logger.info(
+                f"Added {len(image_nodes)} ImageNodes to index. NodeIds: {origin_img_ids}, new NodeIds: {new_img_ids}."
+            )
+
         else:
             self._is_image_vector_store_empty = True
+            logger.info("No image nodes to insert.")
 
         # if the vector store doesn't store text, we need to add the nodes to the
         # index struct and document store

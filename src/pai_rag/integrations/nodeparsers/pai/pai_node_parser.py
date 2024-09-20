@@ -51,7 +51,7 @@ IMAGE_URL_REGEX = re.compile(
 
 
 def node_id_hash(i: int, doc: BaseNode) -> str:
-    encoded_raw_text = f"""<<{i}>>{doc.metadata["file_name"]}""".encode()
+    encoded_raw_text = f"""<<{i}>>{doc.metadata}""".encode()
     hash = hashlib.sha256(encoded_raw_text).hexdigest()
     return hash
 
@@ -168,9 +168,7 @@ class PaiNodeParser(TransformComponent):
             else:
                 if doc_type == ".md" or doc_type == ".pdf":
                     md_node_parser = MarkdownNodeParser(id_func=node_id_hash)
-                    tmp_nodes = splitted_nodes.extend(
-                        md_node_parser.get_nodes_from_documents([doc_node])
-                    )
+                    tmp_nodes = md_node_parser.get_nodes_from_documents([doc_node])
                 else:
                     tmp_nodes = self._parser.get_nodes_from_documents([doc_node])
                 if tmp_nodes:

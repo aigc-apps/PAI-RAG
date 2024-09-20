@@ -130,7 +130,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             vector_index = load_index_from_storage(
                 storage_context=self.storage_context,
                 embed_model=self._embed_model,
-                multi_modal_embed_model=self._multi_modal_embed_model,
+                image_embed_model=self._multi_modal_embed_model,
                 enable_multimodal=self._enable_multimodal,
                 enable_local_keyword_index=self._enable_local_keyword_index,
                 vector_index_retrieval_type=self._vector_index_retrieval_type,

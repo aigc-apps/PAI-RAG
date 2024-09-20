@@ -64,7 +64,6 @@ class RagConfiguration:
                 )
 
             self.config.rag.update(new_value, merge=True)
-            print("RAG CONFIGURATION: ", self.config.rag)
 
     def persist(self):
         """Save configuration to file."""
