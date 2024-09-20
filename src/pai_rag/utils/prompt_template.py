@@ -102,6 +102,14 @@ QUERY_GEN_PROMPT = (
     "Queries:\n"
 )
 
+DEFAULT_FUSION_TRANSFORM_PROMPT = (
+    "You are a helpful assistant that generates multiple search queries based on a "
+    "single input query. Generate {num_queries} search queries, one on each line, "
+    "related to the following input query:\n"
+    "Query: {query}\n"
+    "Queries:\n"
+)
+
 
 DEFAULT_SUMMARY_PROMPT = (
     "Summarize the provided text in Chinese, including as many key details as needed."

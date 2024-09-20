@@ -1,27 +1,57 @@
-from typing import List
-
+from typing import List, Optional
+from llama_index.core.base.base_retriever import BaseRetriever
+from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
+from llama_index.core.callbacks.base import CallbackManager
 import llama_index.core.instrumentation as instrument
+from llama_index.core.response_synthesizers import BaseSynthesizer
 import logging
 
 dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
 
 
-class MyRetrieverQueryEngine(RetrieverQueryEngine):
-    """Modified retriever query engine, modify retrieve/aretrieve func to identify routered retriever type, 0 indicates summary_retriever, 1 indicates fusion_retriever
+class PaiRetrieverQueryEngine(RetrieverQueryEngine):
+    """Retriever query engine.
+
+        pplies a query transform to a query bundle before passing
+        it to a query engine.
 
     Args:
-        retriever (BaseRetriever): A retriever object.
-        response_synthesizer (Optional[BaseSynthesizer]): A BaseSynthesizer
-            object.
+        query_transform (BaseQueryTransform): A query transform object.
+        transform_metadata (Optional[dict]): metadata to pass to the
+            query transform.
         callback_manager (Optional[CallbackManager]): A callback manager.
+
     """
 
+    def __init__(
+        self,
+        retriever: BaseRetriever,
+        query_transform: Optional[BaseQueryTransform] = None,
+        response_synthesizer: Optional[BaseSynthesizer] = None,
+        node_postprocessors: Optional[List[BaseNodePostprocessor]] = None,
+        transform_metadata: Optional[dict] = None,
+        callback_manager: Optional[CallbackManager] = None,
+    ) -> None:
+        self._query_transform = query_transform
+        self._transform_metadata = transform_metadata
+        super().__init__(
+            retriever=retriever,
+            response_synthesizer=response_synthesizer,
+            node_postprocessors=node_postprocessors,
+            callback_manager=callback_manager,
+        )
+
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        if self._query_transform:
+            query_bundle = self._query_transform.run(
+                query_bundle, metadata=self._transform_metadata
+            )
         nodes = self._retriever.retrieve(query_bundle)
         text_nodes, image_nodes = [], []
         for node in nodes:
@@ -37,6 +67,10 @@ class MyRetrieverQueryEngine(RetrieverQueryEngine):
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        if self._query_transform:
+            query_bundle = await self._query_transform.arun(
+                query_bundle, metadata=self._transform_metadata
+            )
         nodes = await self._retriever.aretrieve(query_bundle)
         text_nodes, image_nodes = [], []
         for node in nodes:

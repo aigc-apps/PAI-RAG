@@ -7,6 +7,7 @@ from pai_rag.modules.dataloader.data_loader import DataLoaderModule
 from pai_rag.modules.datareader.data_reader import DataReaderModule
 from pai_rag.modules.index.index import IndexModule
 from pai_rag.modules.nodeparser.node_parser import NodeParserModule
+from pai_rag.modules.querytransform.query_transform import QueryTransformModule
 from pai_rag.modules.retriever.retriever import RetrieverModule
 from pai_rag.modules.postprocessor.postprocessor import PostprocessorModule
 from pai_rag.modules.synthesizer.synthesizer import SynthesizerModule
@@ -34,6 +35,7 @@ ALL_MODULES = [
     "DataReaderModule",
     "IndexModule",
     "NodeParserModule",
+    "QueryTransformModule",
     "RetrieverModule",
     "PostprocessorModule",
     "SynthesizerModule",

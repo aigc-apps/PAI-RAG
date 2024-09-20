@@ -105,6 +105,9 @@ top_n = 2
 [rag.query_engine]
 type = "RetrieverQueryEngine"
 
+[rag.query_transform]
+type = ""
+
 [rag.retriever]
 similarity_top_k = 3
 retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
