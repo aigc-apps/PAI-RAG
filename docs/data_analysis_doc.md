@@ -1,8 +1,8 @@
 # 模型配置
 
-在web界面 Settings 中，左侧下方选择需要的LLM，如果选择DashScope（通义API），推荐使用qwen-max模型；如果选择PaiEas开源部署，推荐使用qwen2-72b-instruct模型
+在web界面 Settings 中，选择需要的LLM，如果选择DashScope（通义API），推荐使用qwen-max模型；如果选择PaiEas开源部署，推荐使用qwen2-72b-instruct模型
 
-点击右侧button更新使用的模型
+点击下方Save更新使用的模型
 
 ![llm_selection](/docs/figures/data_analysis/llm_selection.png)
 
@@ -26,14 +26,19 @@
 - DBname为需要分析的目标数据库名称
 - Tables为需要分析的数据表，格式为：table_A, table_B,... ，默认为空，使用目标数据库中所有数据表
 - Descriptions为针对目标数据库中每张表的补充描述，比如对表中字段的进一步解释，可以提升数据分析效果，格式为：{"table_A":"字段a表示xxx，字段b数据的格式为yyy","table_B":"这张表主要用于zzz"}，注意：需要使用英文输入法下的字典格式（英文双引号，冒号，逗号），默认为空
+- 支持三种prompt template用于生成sql查询，点击选项后可以看到具体的prompt template，也可在custom中自定义
 
-填好以上信息后，点击左侧下方Connect Database按钮，看到Connection info如下图，表示连接成功，可以在右侧chatbot中进行提问
+**注意：** 如自定义prompt，请尽量参考template修改，其中中大括号{}的内容为输入参数，需要保留
 
-![db_connect](/docs/figures/data_analysis/db_connect.png)
+确认输入无误后，可直接在右侧chatbot中开始提问，回答结果的Reference中可以看到查询的数据库表名称，生成的sql语句，以及该sql语句是否有效执行。**注意：** 这里有效执行是指sql语句语法有效，不代表业务逻辑一定正确
 
-如果需要更新数据库，重新填写以上信息，点击Connect Dtabase即可
+Reference可以作为查询效果优化的"debug"工具
+
+![db_chat](/docs/figures/data_analysis/db_chat.png)
 
 ## 查询效果优化
+
+### Description
 
 针对数据表中字段含义不清晰，或者字段存储内容格式不清晰等问题，可以在Descriptions中增加相应描述，帮助llm更准确提取数据表内容，此处以公开数据集Spider中my_pets数据库为例，其中pets表数据如下：
 
@@ -45,11 +50,18 @@
 
 ![db_query_no_desc](/docs/figures/data_analysis/db_query_no_desc.png)
 
-增加简单描述后，生成的sql查询语句为：SELECT COUNT(\*) FROM pets WHERE PetType = 'Dog'，可以准确回答
+增加简单描述后，生成的sql查询语句为：SELECT COUNT(\*) FROM pets WHERE PetType = 'dog'，可以准确回答
 
 ![db_query_desc](/docs/figures/data_analysis/db_query_desc.png)
 
 如果查询效果有明显改善，可以将相应的补充描述在数据库中作为相应table或column的comment持久化添加
+
+### Prompt
+
+此外，还可以通过调整prompt template，优化查询效果
+
+- Reference观察到生成的sql语句包含了非sql的其他内容，如开头多了"sql"等（部分小模型可能会发生），可以在prompt中增加简单限制
+- Reference观察到生成的sql语句不满足某些业务逻辑，可以在prompt中给出示例，通过few-shot learning，也可以很快提升效果
 
 # 表格文件分析配置
 
