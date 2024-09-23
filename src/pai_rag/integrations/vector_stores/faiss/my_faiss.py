@@ -60,7 +60,7 @@ class MyFaissVectorStore(FaissVectorStore):
             query_embedding_np, query.similarity_top_k
         )
         dists = list(dists[0])
-        logger.info("FAISS search: ", dists, indices, self._faiss_index.ntotal)
+        logger.debug(f"FAISS search: {dists}, {indices}, {self._faiss_index.ntotal}")
         # if empty, then return an empty response
         if len(indices) == 0:
             return VectorStoreQueryResult(similarities=[], ids=[])
