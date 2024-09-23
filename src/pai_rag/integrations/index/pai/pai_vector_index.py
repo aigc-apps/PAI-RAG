@@ -201,7 +201,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         return self._vector_index.as_retriever(
             supports_hybrid_search=not self._enable_local_keyword_index,
             local_bm25_index=self._local_bm25_index,
-            hybrid_fusion_weights=None,
             **kwargs,
         )
 

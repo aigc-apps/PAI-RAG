@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import List, Optional
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -13,6 +14,11 @@ import logging
 
 dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PaiQueryBundle(QueryBundle):
+    stream: bool = False
 
 
 class PaiRetrieverQueryEngine(RetrieverQueryEngine):
@@ -88,7 +94,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         return [n for n in text_nodes if n.score > 0] + image_nodes
 
     @dispatcher.span
-    def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+    def _query(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
@@ -103,7 +109,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         return response
 
     @dispatcher.span
-    async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+    async def _aquery(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}

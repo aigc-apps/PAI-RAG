@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cast
 
 from llama_index.core.callbacks.base import CallbackManager
@@ -42,6 +43,13 @@ dispatcher = instrument.get_dispatcher(__name__)
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LLM_CHAT_TMPL = (
+    "You are a helpful assistant."
+    "Please answer the following question. \n\n"
+    "Question: {query_str}\n\n"
+    "Answer:"
+)
+
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "结合上面给出的图片和下面给出的参考材料来回答用户的问题。材料中包含一组图片链接，分别对应到前面给出的图片的地址。\n\n"
     "材料:"
@@ -63,6 +71,12 @@ def empty_response_generator() -> Generator[str, None, None]:
 
 async def empty_response_agenerator() -> AsyncGenerator[str, None]:
     yield "Empty Response"
+
+
+@dataclass
+class PaiQueryBundle(QueryBundle):
+    stream: bool = False
+    no_retrieval: bool = False
 
 
 """
@@ -93,6 +107,7 @@ class PaiSynthesizer(BaseSynthesizer):
         self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
             template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
         )
+        self._llm_only_template = PromptTemplate(template=DEFAULT_LLM_CHAT_TMPL)
         self._multimodal_llm = multimodal_llm
 
     def _get_prompts(self) -> PromptDictType:
@@ -107,10 +122,9 @@ class PaiSynthesizer(BaseSynthesizer):
     @dispatcher.span
     def synthesize(
         self,
-        query: QueryTextType,
+        query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
-        streaming: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
         dispatcher.event(
@@ -119,8 +133,8 @@ class PaiSynthesizer(BaseSynthesizer):
             )
         )
 
-        if len(nodes) == 0:
-            if streaming:
+        if not query.no_retrieval and len(nodes) == 0:
+            if query.stream:
                 empty_response = StreamingResponse(
                     response_gen=empty_response_generator()
                 )
@@ -155,16 +169,23 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            response_str = self.get_response(
-                query_str=query.query_str,
-                text_chunks=[
-                    n.node.get_content(metadata_mode=MetadataMode.LLM)
-                    for n in text_nodes
-                ],
-                image_urls=[n.node.image_url for n in image_nodes],
-                streaming=streaming,
-                **response_kwargs,
-            )
+            if query.no_retrieval:
+                response_str = self.get_llm_only_response(
+                    query_str=query.query_str,
+                    streaming=query.stream,
+                    **response_kwargs,
+                )
+            else:
+                response_str = self.get_response(
+                    query_str=query.query_str,
+                    text_chunks=[
+                        n.node.get_content(metadata_mode=MetadataMode.LLM)
+                        for n in text_nodes
+                    ],
+                    image_urls=[n.node.image_url for n in image_nodes],
+                    streaming=query.stream,
+                    **response_kwargs,
+                )
 
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
@@ -184,10 +205,9 @@ class PaiSynthesizer(BaseSynthesizer):
     @dispatcher.span
     async def asynthesize(
         self,
-        query: QueryTextType,
+        query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
-        streaming: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
         dispatcher.event(
@@ -195,8 +215,8 @@ class PaiSynthesizer(BaseSynthesizer):
                 query=query,
             )
         )
-        if len(nodes) == 0:
-            if streaming:
+        if not query.no_retrieval and len(nodes) == 0:
+            if query.stream:
                 empty_response = AsyncStreamingResponse(
                     response_gen=empty_response_agenerator()
                 )
@@ -230,16 +250,23 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            response_str = await self.aget_response(
-                query_str=query.query_str,
-                text_chunks=[
-                    n.node.get_content(metadata_mode=MetadataMode.LLM)
-                    for n in text_nodes
-                ],
-                image_urls=[n.node.image_url for n in image_nodes],
-                streaming=streaming,
-                **response_kwargs,
-            )
+            if query.no_retrieval:
+                response_str = await self.aget_llm_only_response(
+                    query_str=query.query_str,
+                    streaming=query.stream,
+                    **response_kwargs,
+                )
+            else:
+                response_str = await self.aget_response(
+                    query_str=query.query_str,
+                    text_chunks=[
+                        n.node.get_content(metadata_mode=MetadataMode.LLM)
+                        for n in text_nodes
+                    ],
+                    image_urls=[n.node.image_url for n in image_nodes],
+                    streaming=query.stream,
+                    **response_kwargs,
+                )
 
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
@@ -412,6 +439,60 @@ class PaiSynthesizer(BaseSynthesizer):
             response = self._llm.stream(
                 text_qa_template,
                 context_str=truncated_chunks,
+                **kwargs,
+            )
+
+        if isinstance(response, str):
+            response = response or "Empty Response"
+        else:
+            response = cast(Generator, response)
+
+        return response
+
+    async def aget_llm_only_response(
+        self,
+        query_str: str,
+        streaming: bool = False,
+        **kwargs: Any,
+    ) -> RESPONSE_TEXT_TYPE:
+        response: RESPONSE_TEXT_TYPE
+        if not streaming:
+            response = await self._llm.apredict(
+                self._llm_only_template,
+                query_str=query_str,
+                **kwargs,
+            )
+        else:
+            response = await self._llm.astream(
+                self._llm_only_template,
+                query_str=query_str,
+                **kwargs,
+            )
+
+        if isinstance(response, str):
+            response = response or "Empty Response"
+        else:
+            response = cast(Generator, response)
+
+        return response
+
+    def get_llm_only_response(
+        self,
+        query_str: str,
+        streaming: bool = False,
+        **kwargs: Any,
+    ) -> RESPONSE_TEXT_TYPE:
+        response: RESPONSE_TEXT_TYPE
+        if not streaming:
+            response = self._llm.predict(
+                self._llm_only_template,
+                query_str=query_str,
+                **kwargs,
+            )
+        else:
+            response = self._llm.stream(
+                self._llm_only_template,
+                query_str=query_str,
                 **kwargs,
             )
 

@@ -340,6 +340,11 @@ class ViewModel(BaseModel):
             "image_similarity_top_k", 2
         )
         view_model.need_image = config["retriever"].get("need_image", False)
+        vector_weight = config["retriever"].get("vector_weight", 0.7)
+        view_model.vector_weight = float(vector_weight)
+        keyword_weight = config["retriever"].get("keyword_weight", 0.3)
+        view_model.keyword_weight = float(keyword_weight)
+
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
@@ -391,10 +396,6 @@ class ViewModel(BaseModel):
 
         if reranker_type == "simple-weighted-reranker":
             view_model.reranker_type = "simple-weighted-reranker"
-            vector_weight = config["postprocessor"].get("vector_weight", 0.7)
-            view_model.vector_weight = float(vector_weight)
-            keyword_weight = config["postprocessor"].get("keyword_weight", 0.3)
-            view_model.keyword_weight = float(keyword_weight)
 
         elif reranker_type == "model-based-reranker":
             view_model.reranker_type = "model-based-reranker"
@@ -534,6 +535,11 @@ class ViewModel(BaseModel):
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+        config["retriever"]["vector_weight"] = self.vector_weight
+        config["retriever"]["keyword_weight"] = self.keyword_weight
+
+        config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+
         config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
@@ -573,8 +579,6 @@ class ViewModel(BaseModel):
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        config["postprocessor"]["keyword_weight"] = self.keyword_weight
-        config["postprocessor"]["vector_weight"] = self.vector_weight
         config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 

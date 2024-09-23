@@ -8,12 +8,12 @@ from llama_index.core.indices.query.query_transform import HyDEQueryTransform
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.base.llms.generic_utils import messages_to_history_str
+from llama_index.core.storage.chat_store.base import BaseChatStore
 
 from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
 )
-from pai_rag.modules.chat.chat_store import ChatStoreModule
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
@@ -145,7 +145,7 @@ class PaiHyDEQueryTransform(PaiBaseQueryTransform, HyDEQueryTransform):
 class PaiCondenseQueryTransform(PaiBaseQueryTransform):
     def __init__(
         self,
-        chat_store: ChatStoreModule = None,
+        chat_store: BaseChatStore = None,
         llm: Optional[LLMType] = None,
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
@@ -178,12 +178,12 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         Generate standalone question from conversation context and last message."""
         query_str = query_bundle.query_str
 
-        chat_memory = self._chat_store.get_chat_memory_buffer(session_id)
         if chat_history is not None:
             history_messages = parse_chat_messages(chat_history)
             for hist_mes in history_messages:
-                chat_memory.put(hist_mes)
-        chat_history = chat_memory.get(input=query_str)
+                self._chat_store.add_message(hist_mes)
+
+        chat_history = self._chat_store.get_messages(session_id)
         if not chat_history:
             # Keep the question as is if there's no conversation context.
             return query_bundle
@@ -213,22 +213,20 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
 
         return self._run(query_bundle, session_id=session_id, chat_history=chat_history)
 
-    async def _arun(
-        self, query_bundle: QueryBundle, session_id, chat_history
-    ) -> List[QueryBundle]:
+    async def _arun(self, query_bundle: QueryBundle, session_id, chat_history) -> str:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
         query_str = query_bundle.query_str
 
-        chat_memory = self._chat_store.get_chat_memory_buffer(session_id)
         if chat_history is not None:
             history_messages = parse_chat_messages(chat_history)
             for hist_mes in history_messages:
-                chat_memory.put(hist_mes)
-        chat_history = chat_memory.get(input=query_str)
+                self._chat_store.add_message(hist_mes)
+
+        chat_history = self._chat_store.get_messages(session_id)
         if not chat_history:
             # Keep the question as is if there's no conversation context.
-            return query_bundle
+            return query_bundle.query_str
 
         chat_history_str = messages_to_history_str(chat_history)
 
@@ -243,7 +241,7 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         query_bundle_or_str: QueryType,
         session_id: str | None = None,
         chat_history: List[Dict[str, str]] | None = None,
-    ) -> QueryBundle:
+    ) -> str:
         """Run query transform."""
         if isinstance(query_bundle_or_str, str):
             query_bundle = QueryBundle(
@@ -253,4 +251,6 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         else:
             query_bundle = query_bundle_or_str
 
-        return self._run(query_bundle, session_id=session_id, chat_history=chat_history)
+        return await self._arun(
+            query_bundle, session_id=session_id, chat_history=chat_history
+        )

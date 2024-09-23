@@ -3,7 +3,7 @@ import os
 import traceback
 from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import ServiceError, UserInputError
-from pai_rag.core.rag_application import RagApplication
+from pai_rag.core.rag_application import RagApplication, RagChatType
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.utils.oss_utils import check_and_set_oss_auth, get_oss_auth
 from pai_rag.app.api.models import (
@@ -173,7 +173,7 @@ class RagService:
     async def aquery(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery(query)
+            return await self.rag.aquery(query, RagChatType.RAG)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
@@ -181,7 +181,7 @@ class RagService:
     async def aquery_search(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_search(query)
+            return await self.rag.aquery(query, RagChatType.WEB)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Search failed: {ex}")
@@ -189,7 +189,7 @@ class RagService:
     async def aquery_llm(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_llm(query)
+            return await self.rag.aquery(query, RagChatType.LLM)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
@@ -197,7 +197,7 @@ class RagService:
     async def aquery_retrieval(self, query: RetrievalQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_retrieval(query)
+            return await self.rag.aretrieve(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

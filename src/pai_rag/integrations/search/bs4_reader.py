@@ -1,6 +1,7 @@
 """Beautiful Soup Web scraper."""
 
 import asyncio
+import nest_asyncio
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
@@ -153,6 +154,7 @@ def fetch_multiple(urls):
     """
     Concurrently fetches a list of URLs.
     """
+    nest_asyncio.apply()
     tasks = [fetch_url(url) for url in urls]
     results = asyncio.run(asyncio.gather(*tasks))
     print(results)
