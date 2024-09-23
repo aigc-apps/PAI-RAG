@@ -43,6 +43,7 @@ class RagStore:
         is_empty,
         embed_dims,
         multi_modal_embed_dims,
+        enable_evaluate,
     ):
         self.store_config = config
         self.postprocessor = postprocessor
@@ -50,6 +51,7 @@ class RagStore:
         self.persist_dir = persist_dir
         self.is_empty = is_empty
         self.multi_modal_embed_dims = multi_modal_embed_dims
+        self.enable_evaluate = enable_evaluate
 
     def get_storage_context(self):
         storage_context = self._get_or_create_storage_context()
@@ -73,6 +75,8 @@ class RagStore:
             logger.info("initialized FAISS vector & image store.")
         elif vector_store_type == "hologres":
             self.vector_store, self.image_store = self._get_or_create_hologres()
+            if self.enable_evaluate:
+                self.doc_store = self._get_or_create_simple_doc_store()
             logger.info("initialized Hologres vector & image store.")
         # TODO: not supported yet, need more tests
         elif vector_store_type == "elasticsearch":

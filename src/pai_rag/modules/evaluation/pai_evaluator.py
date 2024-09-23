@@ -22,17 +22,21 @@ DEFAULT_QA_DATASET_DIR = "localdata/evaluation"
 class PaiEvaluator:
     def __init__(
         self,
+        data_loader,
         llm,
         index,
         query_engine,
         retriever,
+        evaluation_dataset,
         retrieval_metrics,
         response_metrics,
     ):
+        self.data_loader = data_loader
         self.llm = llm
         self.index = index
         self.query_engine = query_engine
         self.retriever = retriever
+        self.evaluation_dataset = evaluation_dataset
         self.retrieval_metrics = retrieval_metrics
         self.retrieval_evaluator = MyRetrieverEvaluator.from_metric_names(
             self.retrieval_metrics, retriever=self.retriever
@@ -46,9 +50,18 @@ class PaiEvaluator:
 
         if not os.path.exists(DEFAULT_QA_DATASET_DIR):
             os.makedirs(DEFAULT_QA_DATASET_DIR, exist_ok=True)
-        self.dataset_path = os.path.join(DEFAULT_QA_DATASET_DIR, "qa_dataset.json")
+        self.dataset_path = os.path.join(
+            DEFAULT_QA_DATASET_DIR, f"qa_dataset_{self.index.folder_name}.json"
+        )
 
         logger.info("PaiEvaluator initialized.")
+
+    def load_evaluation_dataset(self):
+        if os.path.exists(self.evaluation_dataset):
+            self.data_loader.load(self.evaluation_dataset, None, None, None)
+            print(
+                f"Loaded evlaution dataset from path {self.evaluation_dataset} successfully."
+            )
 
     async def aload_question_answer_pairs_json(
         self, overwrite: bool = False, dataset_name=None

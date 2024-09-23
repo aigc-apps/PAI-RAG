@@ -75,6 +75,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         is_text_vector_store_empty: bool = False,
         # deprecated
         service_context: Optional[ServiceContext] = None,
+        enable_evaluate: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
@@ -86,6 +87,7 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         self._is_image_to_text = is_image_to_text
         self._is_image_vector_store_empty = is_image_vector_store_empty
         self._is_text_vector_store_empty = is_text_vector_store_empty
+        self.enable_evaluate = enable_evaluate
         storage_context = storage_context or StorageContext.from_defaults()
 
         if image_vector_store is not None:
@@ -406,7 +408,10 @@ class MyMultiModalVectorStoreIndex(VectorStoreIndex):
         # index struct and document store
         all_nodes = text_nodes + image_nodes
         all_new_ids = new_text_ids + new_img_ids
-        if not self._vector_store.stores_text or self._store_nodes_override:
+
+        if (self.enable_evaluate) or (
+            not self._vector_store.stores_text or self._store_nodes_override
+        ):
             for node, new_id in zip(all_nodes, all_new_ids):
                 # NOTE: remove embedding from node to avoid duplication
                 node_without_embedding = node.copy()

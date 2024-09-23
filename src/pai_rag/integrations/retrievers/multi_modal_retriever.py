@@ -329,7 +329,6 @@ class MyMultiModalVectorIndexRetriever(MultiModalRetriever):
                         query_bundle.embedding_strs
                     )
                 )
-            print("Text vecdb: ", self._vector_store)
             return await self._aget_nodes_with_embeddings(
                 query_bundle, self._similarity_top_k, self._vector_store
             )

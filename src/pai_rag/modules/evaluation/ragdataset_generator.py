@@ -58,8 +58,9 @@ class ModifiedRagDatasetGenerator(RagDatasetGenerator):
             )
             query_tasks.append(task)
             summary_indices.append(index)
-
+        print("summary_indices", summary_indices)
         responses = await run_jobs(query_tasks, self._show_progress, self._workers)
+        print("responses", responses)
         for idx, response in enumerate(responses):
             result = str(response).strip().split("\n")
             cleaned_questions = [

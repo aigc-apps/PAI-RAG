@@ -28,9 +28,16 @@ class RagIndex:
             )
         else:
             self.multi_modal_embed_dims = 0
-        persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
-        folder_name = get_store_persist_directory_name(config, self.embed_dims)
-        self.persist_path = os.path.join(persist_path, folder_name)
+        self.enable_evaluate = config.get("enable_evaluate", False)
+        if self.enable_evaluate:
+            persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR) + "_eval"
+        else:
+            persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
+        self.folder_name = get_store_persist_directory_name(config, self.embed_dims)
+        self.persist_path = os.path.join(persist_path, self.folder_name)
+        logging.info(
+            f"Persist path: {self.persist_path} with enable_evaluate: {self.enable_evaluate}"
+        )
         self.postprocessor = postprocessor
         index_entry.register(self.persist_path)
 
@@ -42,10 +49,12 @@ class RagIndex:
             is_empty,
             self.embed_dims,
             self.multi_modal_embed_dims,
+            self.enable_evaluate,
         )
         self.storage_context = rag_store.get_storage_context()
 
         self.vectordb_type = config["vector_store"].get("type", "faiss").lower()
+
         if is_empty:
             self.create_indices(self.storage_context, embed_model)
         else:
@@ -64,6 +73,7 @@ class RagIndex:
                 storage_context=storage_context,
                 embed_model=embed_model,
                 image_embed_model=self.multi_modal_embed_model,
+                enable_evaluate=self.enable_evaluate,
             )
         else:
             self.vector_index = MyVectorStoreIndex(
@@ -78,6 +88,7 @@ class RagIndex:
                 storage_context=storage_context,
                 embed_model=embed_model,
                 image_embed_model=self.multi_modal_embed_model,
+                enable_evaluate=self.enable_evaluate,
             )
         else:
             if self.multi_modal_embed_model:

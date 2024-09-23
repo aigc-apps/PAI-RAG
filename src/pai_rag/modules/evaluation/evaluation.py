@@ -14,23 +14,33 @@ class EvaluationModule(ConfigurableModule):
 
     @staticmethod
     def get_dependencies() -> List[str]:
-        return ["LlmModule", "IndexModule", "RetrieverModule", "QueryEngineModule"]
+        return [
+            "DataLoaderModule",
+            "LlmModule",
+            "IndexModule",
+            "RetrieverModule",
+            "QueryEngineModule",
+        ]
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
+        data_loader = new_params["DataLoaderModule"]
         llm = new_params["LlmModule"]
         index = new_params["IndexModule"]
         retriever = new_params["RetrieverModule"]
         query_engine = new_params["QueryEngineModule"]
 
+        evaluation_dataset = config.get("dataset_path", None)
         retrieval_metrics = config.get("retrieval", None)
         response_metrics = config.get("response", None)
 
         return PaiEvaluator(
+            data_loader=data_loader,
             llm=llm,
             index=index,
             query_engine=query_engine,
             retriever=retriever,
+            evaluation_dataset=evaluation_dataset,
             retrieval_metrics=retrieval_metrics,
             response_metrics=response_metrics,
         )
