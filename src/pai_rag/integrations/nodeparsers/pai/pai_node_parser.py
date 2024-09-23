@@ -49,9 +49,18 @@ IMAGE_URL_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
+
+
+def format_temp_file_path(temp_file_path):
+    path_components = temp_file_path.split(f"{COMMON_FILE_PATH_FODER_NAME}/")
+    return path_components[-1]
+
 
 def node_id_hash(i: int, doc: BaseNode) -> str:
-    encoded_raw_text = f"""<<{i}>>{doc.metadata}""".encode()
+    encoded_raw_text = (
+        f"""<<{i}>>{doc.metadata.get("file_name", "DUMMY_FILE_NAME")}""".encode()
+    )
     hash = hashlib.sha256(encoded_raw_text).hexdigest()
     return hash
 
@@ -136,10 +145,13 @@ class PaiNodeParser(TransformComponent):
         self, nodes: List[BaseNode], **kwargs: Any
     ) -> List[BaseNode]:
         # Accumulate node index for doc
-        self._doc_cnt_map = {}
         splitted_nodes = []
+        self._doc_cnt_map = {}
 
         for doc_node in nodes:
+            doc_node.metadata["file_path"] = format_temp_file_path(
+                doc_node.metadata["file_path"]
+            )
             doc_type = self._extract_file_type(doc_node.metadata)
             doc_key = f"""{doc_node.metadata.get("file_path", "dummy")}"""
             if isinstance(doc_node, ImageDocument):

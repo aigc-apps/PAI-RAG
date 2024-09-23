@@ -51,13 +51,13 @@ class RagService:
 
         self.rag_configuration.persist()
 
+        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
+
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())
 
         if os.path.exists(TASK_STATUS_FILE):
             open(TASK_STATUS_FILE, "w").close()
-
-        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
 
     def get_config(self):
         try:
@@ -114,6 +114,7 @@ class RagService:
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
         from_oss: bool = False,
+        temp_file_dir: str = None,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
@@ -148,6 +149,8 @@ class RagService:
                 )
                 f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
+        finally:
+            os.rmdir(temp_file_dir)
 
     def get_task_status(self, task_id: str) -> str:
         self.check_updates()

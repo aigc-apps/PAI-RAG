@@ -249,7 +249,7 @@ class ViewModel(BaseModel):
         view_model.vectordb_type = config["index"]["vector_store"].get(
             "type", view_model.vectordb_type
         )
-        view_model.faiss_path = config["index"].get(
+        view_model.faiss_path = config["index"]["vector_store"].get(
             "persist_path", view_model.faiss_path
         )
         if view_model.vectordb_type.lower() == "analyticdb":
@@ -459,8 +459,10 @@ class ViewModel(BaseModel):
         config["oss_store"]["bucket"] = self.oss_bucket
         config["oss_store"]["prefix"] = self.oss_prefix
 
-        config["index"]["vector_store"]["type"] = self.vectordb_type
+        config["index"]["vector_store"]["type"] = self.vectordb_type.lower()
         config["index"]["persist_path"] = self.faiss_path
+        config["index"]["vector_store"]["persist_path"] = self.faiss_path
+
         config["index"]["enable_multimodal"] = self.enable_multimodal
 
         config["node_parser"]["type"] = self.parser_type

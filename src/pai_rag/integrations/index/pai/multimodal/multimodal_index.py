@@ -351,7 +351,13 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         new_text_ids: List[str] = []
         new_img_ids: List[str] = []
 
+        seen_node_ids = set(self.index_struct.nodes_dict.values())
         for node in nodes:
+            if not self.vector_store.stores_text and node.node_id in seen_node_ids:
+                logger.info(
+                    f"Skipping insert {node.node_id} since it already exists in index."
+                )
+                continue
             if isinstance(node, ImageNode):
                 image_nodes.append(node)
             if node.text:

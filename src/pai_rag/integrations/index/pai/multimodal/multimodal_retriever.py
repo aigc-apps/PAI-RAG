@@ -173,6 +173,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
                 image_urls = node.node.metadata.get("image_url")
+                if not image_urls:
+                    continue
                 for image_url in image_urls:
                     if image_url not in seen_images:
                         image_nodes.extend(
@@ -186,6 +188,10 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                 if len(image_nodes) >= self._image_similarity_top_k:
                     break
 
+        if not text_nodes:
+            text_nodes = []
+        if not image_nodes:
+            image_nodes = []
         results = text_nodes + image_nodes
         return results
 
@@ -227,11 +233,17 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         keyword_nodes: List[NodeWithScore],
         similarity_top_k: int,
     ):
+        print("Fusion weights: ", self._hybrid_fusion_weights)
+
         for node_with_score in vector_nodes:
+            print("vector score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[0]
+            print("vector score 1", node_with_score.node_id, node_with_score.score)
 
         for node_with_score in keyword_nodes:
+            print("keyword score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[1]
+            print("keyword score 1", node_with_score.node_id, node_with_score.score)
 
         # Use a dict to de-duplicate nodes
         all_nodes: Dict[str, NodeWithScore] = {}
@@ -435,6 +447,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
                 image_urls = node.node.metadata.get("image_url")
+                if not image_urls:
+                    continue
                 for image_url in image_urls:
                     if image_url not in seen_images:
                         image_nodes.extend(
@@ -448,6 +462,10 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                 if len(image_nodes) >= self._image_similarity_top_k:
                     break
 
+        if not text_nodes:
+            text_nodes = []
+        if not image_nodes:
+            image_nodes = []
         results = text_nodes + image_nodes
         return results
 

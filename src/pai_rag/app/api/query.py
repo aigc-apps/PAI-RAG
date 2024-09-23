@@ -15,6 +15,10 @@ from pai_rag.app.api.models import (
 from fastapi.responses import StreamingResponse
 import logging
 
+from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
+    COMMON_FILE_PATH_FODER_NAME,
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -143,7 +147,11 @@ async def upload_data(
         fn = file.filename
         data = await file.read()
         file_hash = hashlib.md5(data).hexdigest()
-        save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
+        tmp_file_dir = os.path.join(
+            tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
+        )
+        os.makedirs(tmp_file_dir, exist_ok=True)
+        save_file = os.path.join(tmp_file_dir, fn)
 
         with open(save_file, "wb") as f:
             f.write(data)
@@ -159,6 +167,7 @@ async def upload_data(
         faiss_path=faiss_path,
         enable_qa_extraction=False,
         enable_raptor=enable_raptor,
+        temp_file_dir=tmpdir,
     )
 
     return {"task_id": task_id}

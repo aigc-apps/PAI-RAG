@@ -1,5 +1,5 @@
 from typing import Any
-from llama_index.core.schema import ImageDocument, TransformComponent
+from llama_index.core.schema import TransformComponent
 from llama_index.core.indices import VectorStoreIndex
 from llama_index.core.ingestion import IngestionPipeline
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
@@ -40,32 +40,30 @@ class RagDataLoader:
         )
         logger.info(f"Loaded {len(documents)} documents from {file_path_or_directory}")
 
-        text_docs = [doc for doc in documents if not isinstance(doc, ImageDocument)]
         if enable_raptor:
             assert self._raptor_processor is not None, "Raptor processor is not set."
-            text_ingestion_pipeline = IngestionPipeline(
+            ingestion_pipeline = IngestionPipeline(
                 transformations=[
                     self._node_parser,
                     self._embed_model,
+                    self._multi_modal_embed_modal,
                     self._raptor_processor,
                 ]
             )
         else:
-            text_ingestion_pipeline = IngestionPipeline(
-                transformations=[self._node_parser, self._embed_model]
+            ingestion_pipeline = IngestionPipeline(
+                transformations=[
+                    self._node_parser,
+                    self._embed_model,
+                    self._multi_modal_embed_modal,
+                ]
             )
 
-        text_nodes = text_ingestion_pipeline.run(documents=text_docs)
-        logger.info(f"[DataLoader] parsed {len(text_nodes)} text nodes.")
-
-        image_docs = [doc for doc in documents if isinstance(doc, ImageDocument)]
-        image_ingestion_pipeline = IngestionPipeline(
-            transformations=[self._node_parser, self._multi_modal_embed_modal]
+        nodes = ingestion_pipeline.run(documents=documents)
+        logger.info(
+            f"[DataLoader] parsed {len(documents)} documents into {len(nodes)} nodes."
         )
-        image_nodes = image_ingestion_pipeline.run(documents=image_docs)
-        logger.info(f"[DataLoader] parsed {len(image_nodes)} image nodes.")
 
-        nodes = text_nodes + image_nodes
         self._vector_index.insert_nodes(nodes)
         logger.info(f"[DataLoader] Inserted {len(nodes)} nodes.")
         logger.info("[DataLoader] Ingestion Completed!")

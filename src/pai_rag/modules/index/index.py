@@ -22,12 +22,9 @@ class IndexModule(ConfigurableModule):
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
         config = new_params[MODULE_PARAM_CONFIG]
-        config["vector_store"]["persist_path"] = config["persist_path"]
-        config["vector_store"]["type"] = config["vector_store"]["type"].lower()
         index_config = PaiVectorIndexConfig.model_validate(config)
         embed_model = new_params["EmbeddingModule"]
         multi_modal_embed_model = new_params["MultiModalEmbeddingModule"]
-
         return PaiVectorStoreIndex(
             vector_store_config=index_config.vector_store,
             embed_model=embed_model,
