@@ -48,6 +48,10 @@ class ModelScopeDownloader:
                 )
 
     def load_basic_models(self):
+        if not hasattr(self, "model_info"):
+            response = requests.get(OSS_URL)
+            response.raise_for_status()
+            self.model_info = response.json()
         for model_name in self.model_info["basic_models"].keys():
             self.load_model(model_name)
 
