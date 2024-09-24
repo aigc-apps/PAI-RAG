@@ -86,6 +86,8 @@ class RagApplication:
         filter_pattern=None,
         faiss_path=None,
         enable_qa_extraction=False,
+        from_oss=False,
+        oss_path=None,
         enable_raptor=False,
     ):
         sessioned_config = copy.copy(self.config)
@@ -101,64 +103,8 @@ class RagApplication:
         data_loader.load_data(
             file_path_or_directory=input_files,
             filter_pattern=filter_pattern,
-            enable_raptor=enable_raptor,
-        )
-
-    def load_knowledge_from_oss(
-        self,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=None,
-        enable_qa_extraction=False,
-        enable_raptor=False,
-    ):
-        sessioned_config = copy.copy(self.config)
-        sessioned_config.rag.data_loader.update({"type": "Oss"})
-        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
-        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
-        self.logger.info(
-            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
-        )
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", sessioned_config
-        )
-        if faiss_path:
-            sessioned_config.rag.index.update({"persist_path": faiss_path})
-            self.logger.info(
-                f"Update rag_application config with faiss_persist_path: {faiss_path}"
-            )
-        data_loader.load(
-            filter_pattern=filter_pattern,
-            enable_qa_extraction=enable_qa_extraction,
-            enable_raptor=enable_raptor,
-        )
-
-    async def aload_knowledge_from_oss(
-        self,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=None,
-        enable_qa_extraction=False,
-        enable_raptor=False,
-    ):
-        sessioned_config = copy.copy(self.config)
-        sessioned_config.rag.data_loader.update({"type": "Oss"})
-        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
-        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
-        self.logger.info(
-            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
-        )
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", sessioned_config
-        )
-        if faiss_path:
-            sessioned_config.rag.index.update({"persist_path": faiss_path})
-            self.logger.info(
-                f"Update rag_application config with faiss_persist_path: {faiss_path}"
-            )
-        await data_loader.aload(
-            filter_pattern=filter_pattern,
-            enable_qa_extraction=enable_qa_extraction,
+            from_oss=from_oss,
+            oss_path=oss_path,
             enable_raptor=enable_raptor,
         )
 
@@ -213,6 +159,19 @@ class RagApplication:
         )
         new_question = new_query_bundle.query_str
         self.logger.info(f"Querying with question '{new_question}'.")
+
+        if query.with_intent:
+            intent_detector = module_registry.get_module_with_config(
+                "IntentDetectionModule", self.config
+            )
+            intent = await intent_detector.aselect(
+                intent_detector._choices, query=query.question
+            )
+            self.logger.info(f"[IntentDetection] Routing query to {intent.intent}.")
+            if intent.intent == "agent":
+                return await self.aquery_agent(query)
+            elif intent.intent != "retrieval":
+                return ValueError(f"Invalid intent {intent.intent}")
 
         query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)
         self.chat_store.add_message(
@@ -284,33 +243,6 @@ class RagApplication:
         agent = module_registry.get_module_with_config("AgentModule", self.config)
         response = await agent.achat(query.question)
         return RagResponse(answer=response.response)
-
-    async def aquery_with_intent(self, query: RagQuery):
-        """Query answer from RAG App asynchronously.
-
-        Generate answer from Query Engine's or Chat Engine's achat interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            RagResponse
-        """
-        if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
-        intent_detector = module_registry.get_module_with_config(
-            "IntentDetectionModule", self.config
-        )
-        intent = await intent_detector.aselect(
-            intent_detector._choices, query=query.question
-        )
-        self.logger.info(f"[IntentDetection] Routing query to {intent.intent}.")
-        if intent.intent == "agent":
-            return await self.aquery_agent(query)
-        elif intent.intent == "retrieval":
-            return await self.aquery_rag(query)
-        else:
-            return ValueError(f"Invalid intent {intent.intent}")
 
     # async def aquery(self, query: RagQuery):
     #    if query.with_intent:

@@ -64,34 +64,52 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
     return file_readers
 
 
-def get_oss_files(oss_cache: Any):
+def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = None):
     files = []
-    if oss_cache:
-        object_list = oss_cache.list_objects()
+    if oss_store:
+        prefix = oss_store.parse_oss_prefix(oss_path)
+        object_list = oss_store.list_objects(prefix)
         oss_file_path_dir = "localdata/oss_tmp"
         if not os.path.exists(oss_file_path_dir):
             os.makedirs(oss_file_path_dir)
         for oss_obj in object_list:
-            if oss_obj.key[:-1] != oss_cache.prefix:
+            if not oss_obj.key.endswith("/"):  # 不是目录
+                logger.info("Downloading oss object: ", oss_obj.key)
                 try:
-                    set_public = oss_cache.put_object_acl(oss_obj.key, "public-read")
+                    set_public = oss_store.put_object_acl(oss_obj.key, "public-read")
                 except Exception:
                     logger.error(f"Failed to set_public document {oss_obj.key}")
                 if set_public:
                     save_filename = os.path.join(oss_file_path_dir, oss_obj.key)
-                    oss_cache.get_object_to_file(
+                    oss_store.get_object_to_file(
                         key=oss_obj.key, filename=save_filename
                     )
                     files.append(save_filename)
+                    logger.info("Downloaded oss object: ", oss_obj.key)
                 else:
                     logger.error(f"Failed to load document {oss_obj.key}")
+    else:
+        raise ValueError("OSS must be provided to upload file.")
+
+    if not files:
+        raise ValueError(f"No file found at OSS path '{oss_path}'.")
+
     return files
 
 
 def get_input_files(
-    file_path_or_directory: str | List[str], filter_pattern: str = None
+    file_path_or_directory: str | List[str],
+    from_oss: bool = False,
+    oss_path: str = None,
+    filter_pattern: str = None,
+    oss_store: Any = None,
 ):
     filter_pattern = filter_pattern or "*"
+    if from_oss:
+        return get_oss_files(
+            oss_path=oss_path, filter_pattern=filter_pattern, oss_store=oss_store
+        )
+
     if isinstance(file_path_or_directory, list):
         # file list
         input_files = [f for f in file_path_or_directory if os.path.isfile(f)]
@@ -117,14 +135,23 @@ class PaiDataReader(BaseReader):
         oss_store: Any = None,
     ):
         self.file_readers = get_file_readers(reader_config, oss_store)
+        self.oss_store = oss_store
 
     def load_data(
         self,
         file_path_or_directory: str | List[str],
         filter_pattern: str = None,
+        from_oss: bool = False,
+        oss_path: str = None,
         show_progress: bool = False,
     ) -> List[Document]:
-        input_files = get_input_files(file_path_or_directory, filter_pattern)
+        input_files = get_input_files(
+            file_path_or_directory=file_path_or_directory,
+            from_oss=from_oss,
+            oss_path=oss_path,
+            filter_pattern=filter_pattern,
+            oss_store=self.oss_store,
+        )
         directory_reader = SimpleDirectoryReader(
             input_files=input_files,
             file_extractor=self.file_readers,

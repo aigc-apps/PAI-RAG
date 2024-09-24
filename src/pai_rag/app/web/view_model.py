@@ -60,7 +60,6 @@ class ViewModel(BaseModel):
     oss_sk: str = None
     oss_endpoint: str = None
     oss_bucket: str = None
-    oss_prefix: str = None
 
     # chunking
     parser_type: str = "Sentence"
@@ -244,7 +243,6 @@ class ViewModel(BaseModel):
             "endpoint", view_model.oss_endpoint
         )
         view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
-        view_model.oss_prefix = config["oss_store"].get("prefix", view_model.oss_prefix)
 
         view_model.vectordb_type = config["index"]["vector_store"].get(
             "type", view_model.vectordb_type
@@ -458,7 +456,6 @@ class ViewModel(BaseModel):
             config["oss_store"]["sk"] = self.oss_sk
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
-        config["oss_store"]["prefix"] = self.oss_prefix
 
         config["index"]["vector_store"]["type"] = self.vectordb_type.lower()
         config["index"]["persist_path"] = self.faiss_path
@@ -725,7 +722,6 @@ class ViewModel(BaseModel):
         }
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
-        settings["oss_prefix"] = {"value": self.oss_prefix}
 
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}

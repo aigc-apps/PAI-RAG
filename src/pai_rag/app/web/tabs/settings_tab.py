@@ -69,10 +69,6 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="OSS Bucket",
                         elem_id="oss_bucket",
                     )
-                    # oss_prefix = gr.Textbox(
-                    #     label="OSS Prefix",
-                    #     elem_id="oss_prefix",
-                    # )
 
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
@@ -100,7 +96,6 @@ def create_setting_tab() -> Dict[str, Any]:
                     oss_sk,
                     oss_endpoint,
                     oss_bucket,
-                    # oss_prefix,
                 ]
             )
 
@@ -236,7 +231,6 @@ def create_setting_tab() -> Dict[str, Any]:
                 oss_sk,
                 oss_endpoint,
                 oss_bucket,
-                # oss_prefix,
             }
         )
     save_btn = gr.Button("Save", variant="primary")

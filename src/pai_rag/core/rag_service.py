@@ -109,7 +109,7 @@ class RagService:
         task_id: str,
         input_files: List[str] = None,
         filter_pattern: str = None,
-        oss_prefix: str = None,
+        oss_path: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
@@ -120,37 +120,27 @@ class RagService:
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
-            if not from_oss:
-                self.rag.load_knowledge(
-                    input_files,
-                    filter_pattern,
-                    faiss_path,
-                    enable_qa_extraction,
-                    enable_raptor,
-                )
-            else:
-                self.rag.load_knowledge_from_oss(
-                    filter_pattern,
-                    oss_prefix,
-                    faiss_path,
-                    enable_qa_extraction,
-                    enable_raptor,
-                )
-
+            self.rag.load_knowledge(
+                input_files=input_files,
+                filter_pattern=filter_pattern,
+                faiss_path=faiss_path,
+                enable_qa_extraction=enable_qa_extraction,
+                from_oss=from_oss,
+                oss_path=oss_path,
+                enable_raptor=enable_raptor,
+            )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
-            logger.error(
-                f"Upload failed: {ex} {str(ex.__cause__)} {traceback.format_exc()}"
-            )
+            logger.error(f"Upload failed: {ex} {traceback.format_exc()}")
             with open(TASK_STATUS_FILE, "a") as f:
-                detail = f"{ex}: {str(ex.__cause__)}".replace("\t", " ").replace(
-                    "\n", " "
-                )
+                detail = f"{ex}".replace("\t", " ").replace("\n", " ")
+                print("====", detail)
                 f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
         finally:
-            os.rmdir(temp_file_dir)
+            if temp_file_dir:
+                os.rmdir(temp_file_dir)
 
     def get_task_status(self, task_id: str) -> str:
         self.check_updates()

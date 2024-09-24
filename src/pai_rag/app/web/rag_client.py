@@ -338,18 +338,23 @@ class RagWebClient:
 
     def add_knowledge(
         self,
-        input_files: str,
-        enable_qa_extraction: bool,
-        enable_raptor: bool,
+        oss_path: str = None,
+        input_files: str = None,
+        enable_qa_extraction: bool = False,
+        enable_raptor: bool = False,
     ):
         files = []
         file_obj_list = []
-        for file_name in input_files:
-            file_obj = open(file_name, "rb")
-            mimetype = mimetypes.guess_type(file_name)[0]
-            files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
-            file_obj_list.append(file_obj)
-        para = {"enable_raptor": enable_raptor}
+        if input_files:
+            for file_name in input_files:
+                file_obj = open(file_name, "rb")
+                mimetype = mimetypes.guess_type(file_name)[0]
+                files.append(
+                    ("files", (os.path.basename(file_name), file_obj, mimetype))
+                )
+                file_obj_list.append(file_obj)
+
+        para = {"enable_raptor": enable_raptor, "oss_path": oss_path}
         try:
             r = requests.post(
                 self.load_data_url,

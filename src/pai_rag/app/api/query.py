@@ -132,66 +132,57 @@ async def generate_qa_dataset(overwrite: bool = False):
 
 @router.post("/upload_data")
 async def upload_data(
-    files: List[UploadFile],
+    files: List[UploadFile] = Body(None),
+    oss_path: str = Form(None),
     faiss_path: str = Form(None),
     enable_raptor: bool = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
-    if not files:
-        return {"message": "No upload file sent"}
 
-    tmpdir = tempfile.mkdtemp()
-    input_files = []
-    for file in files:
-        fn = file.filename
-        data = await file.read()
-        file_hash = hashlib.md5(data).hexdigest()
-        tmp_file_dir = os.path.join(
-            tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
+    if oss_path:
+        background_tasks.add_task(
+            rag_service.add_knowledge,
+            task_id=task_id,
+            filter_pattern=None,
+            oss_path=oss_path,
+            from_oss=True,
+            faiss_path=faiss_path,
+            enable_qa_extraction=False,
+            enable_raptor=enable_raptor,
         )
-        os.makedirs(tmp_file_dir, exist_ok=True)
-        save_file = os.path.join(tmp_file_dir, fn)
+    else:
+        if not files:
+            return {"message": "No upload file sent"}
 
-        with open(save_file, "wb") as f:
-            f.write(data)
-            f.close()
-        input_files.append(save_file)
+        tmpdir = tempfile.mkdtemp()
+        input_files = []
+        for file in files:
+            fn = file.filename
+            data = await file.read()
+            file_hash = hashlib.md5(data).hexdigest()
+            tmp_file_dir = os.path.join(
+                tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
+            )
+            os.makedirs(tmp_file_dir, exist_ok=True)
+            save_file = os.path.join(tmp_file_dir, fn)
 
-    background_tasks.add_task(
-        rag_service.add_knowledge,
-        task_id=task_id,
-        input_files=input_files,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=faiss_path,
-        enable_qa_extraction=False,
-        enable_raptor=enable_raptor,
-        temp_file_dir=tmpdir,
-    )
+            with open(save_file, "wb") as f:
+                f.write(data)
+                f.close()
+            input_files.append(save_file)
 
-    return {"task_id": task_id}
-
-
-@router.post("/upload_data_from_oss")
-async def upload_oss_data(
-    oss_prefix: str = None,
-    faiss_path: str = None,
-    enable_raptor: bool = False,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-):
-    task_id = uuid.uuid4().hex
-    background_tasks.add_task(
-        rag_service.add_knowledge,
-        task_id=task_id,
-        input_files=None,
-        filter_pattern=None,
-        oss_prefix=oss_prefix,
-        faiss_path=faiss_path,
-        enable_qa_extraction=False,
-        enable_raptor=enable_raptor,
-        from_oss=True,
-    )
+        background_tasks.add_task(
+            rag_service.add_knowledge,
+            task_id=task_id,
+            input_files=input_files,
+            filter_pattern=None,
+            oss_path=None,
+            faiss_path=faiss_path,
+            enable_qa_extraction=False,
+            enable_raptor=enable_raptor,
+            temp_file_dir=tmpdir,
+        )
 
     return {"task_id": task_id}
 

@@ -30,6 +30,8 @@ class RagDataLoader:
     def load_data(
         self,
         file_path_or_directory: str,
+        from_oss: bool = False,
+        oss_path: str = None,
         filter_pattern: str = None,
         enable_raptor: bool = False,
     ):
@@ -37,6 +39,8 @@ class RagDataLoader:
         documents = self._data_reader.load_data(
             file_path_or_directory=file_path_or_directory,
             filter_pattern=filter_pattern,
+            oss_path=oss_path,
+            from_oss=from_oss,
         )
         logger.info(f"Loaded {len(documents)} documents from {file_path_or_directory}")
 
