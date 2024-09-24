@@ -233,17 +233,17 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         keyword_nodes: List[NodeWithScore],
         similarity_top_k: int,
     ):
-        print("Fusion weights: ", self._hybrid_fusion_weights)
+        # print("Fusion weights: ", self._hybrid_fusion_weights)
 
         for node_with_score in vector_nodes:
-            print("vector score 0", node_with_score.node_id, node_with_score.score)
+            # print("vector score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[0]
-            print("vector score 1", node_with_score.node_id, node_with_score.score)
+            # print("vector score 1", node_with_score.node_id, node_with_score.score)
 
         for node_with_score in keyword_nodes:
-            print("keyword score 0", node_with_score.node_id, node_with_score.score)
+            # print("keyword score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[1]
-            print("keyword score 1", node_with_score.node_id, node_with_score.score)
+            # print("keyword score 1", node_with_score.node_id, node_with_score.score)
 
         # Use a dict to de-duplicate nodes
         all_nodes: Dict[str, NodeWithScore] = {}

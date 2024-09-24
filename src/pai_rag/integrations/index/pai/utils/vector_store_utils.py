@@ -1,6 +1,8 @@
+import hashlib
 import faiss
 import logging
 import os
+import json
 from llama_index.core.vector_stores.simple import DEFAULT_VECTOR_STORE, NAMESPACE_SEP
 from llama_index.core.vector_stores.types import DEFAULT_PERSIST_FNAME
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
@@ -255,3 +257,30 @@ def create_postgresql(
         text_search_config="jiebacfg",
     )
     return pg
+
+
+# change persist path to sub folders in the persist_path to separate different vector index
+def resolve_store_path(store_config: BaseVectorStoreConfig, ndims: int = 1536):
+    if isinstance(store_config, FaissVectorStoreConfig):
+        raw_text = {"type": "faiss"}
+    elif isinstance(store_config, HologresVectorStoreConfig):
+        json_data = {
+            "host": store_config.host,
+            "port": store_config.port,
+            "database": store_config.database,
+            "table_name": store_config.table_name,
+        }
+        raw_text = json.dumps(json_data)
+    elif isinstance(store_config, OpenSearchVectorStoreConfig):
+        json_data = {
+            "endpoint": store_config.endpoint,
+            "instance_id": store_config.instance_id,
+            "table_name": store_config.table_name,
+        }
+        raw_text = json.dumps(json_data)
+    else:
+        raw_text = repr(store_config)
+
+    encoded_raw_text = f"{raw_text}_{ndims}".encode()
+    hash = hashlib.sha256(encoded_raw_text).hexdigest()
+    return os.path.join(store_config.persist_path, hash)

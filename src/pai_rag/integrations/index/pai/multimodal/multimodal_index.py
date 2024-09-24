@@ -231,7 +231,7 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             else:
                 result = node.copy()
 
-            print("===", is_image, node.node_id, len(result.embedding))
+            # print("===", is_image, node.node_id, len(result.embedding))
             results.append(result)
         return results
 

@@ -19,8 +19,6 @@ MODULE_CONFIG_KEY_MAP = {
     "SynthesizerModule": "rag.synthesizer",
     "QueryEngineModule": "rag.query_engine",
     "ChatStoreModule": "rag.chat_store",
-    "ChatEngineFactoryModule": "rag.chat_engine",
-    "LlmChatEngineFactoryModule": "rag.llm_chat_engine",
     "DataReaderModule": "rag.data_reader",
     "AgentModule": "rag.agent",
     "ToolModule": "rag.agent.tool",

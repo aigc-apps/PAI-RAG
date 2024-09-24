@@ -12,8 +12,6 @@ from pai_rag.modules.retriever.retriever import RetrieverModule
 from pai_rag.modules.postprocessor.postprocessor import PostprocessorModule
 from pai_rag.modules.synthesizer.synthesizer import SynthesizerModule
 from pai_rag.modules.queryengine.query_engine import QueryEngineModule
-from pai_rag.modules.chat.chat_engine_factory import ChatEngineFactoryModule
-from pai_rag.modules.chat.llm_chat_engine_factory import LlmChatEngineFactoryModule
 from pai_rag.modules.chat.chat_store import ChatStoreModule
 from pai_rag.modules.agent.agent import AgentModule
 from pai_rag.modules.tool.tool import ToolModule
@@ -41,8 +39,6 @@ ALL_MODULES = [
     "SynthesizerModule",
     "QueryEngineModule",
     "ChatStoreModule",
-    "ChatEngineFactoryModule",
-    "LlmChatEngineFactoryModule",
     "AgentModule",
     "ToolModule",
     "OssCacheModule",

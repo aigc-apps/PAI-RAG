@@ -256,19 +256,6 @@ type = "RetrieverQueryEngine"
 
 Query engine is a generic interface that allows you to ask question over your data. It takes in a natural language query, and returns a rich response.
 
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-Chat engine is a high-level interface for having a conversation with your data (multiple back-and-forth instead of a single question & answer). It is a stateful analogy of a query engine.
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question is a simple chat mode built on top of a query engine over your data. For each chat interaction:
-first generate a standalone question from conversation context and last message, then query the query engine with the condensed question for a response.
-
 ## rag.chat_store
 
 type = [Local, Aliyun-Redis]

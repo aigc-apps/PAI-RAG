@@ -67,4 +67,3 @@ class RagDataLoader:
         self._vector_index.insert_nodes(nodes)
         logger.info(f"[DataLoader] Inserted {len(nodes)} nodes.")
         logger.info("[DataLoader] Ingestion Completed!")
-        print("Ingestion complete")

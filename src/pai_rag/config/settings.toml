@@ -16,9 +16,6 @@ type = ""
 [rag.agent.tool]
 type = ""
 
-[rag.chat_engine]
-type = "CondenseQuestionChatEngine"
-
 [rag.chat_store]
 type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
@@ -75,9 +72,6 @@ source = ""
 [rag.llm.multi_modal]
 enable = false
 source = ""
-
-[rag.llm_chat_engine]
-type = "SimpleChatEngine"
 
 [rag.node_enhancement]
 tree_depth = 3

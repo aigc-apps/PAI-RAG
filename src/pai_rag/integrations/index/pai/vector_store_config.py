@@ -37,9 +37,6 @@ class BaseVectorStoreConfig(BaseModel):
     def get_subclasses(cls):
         return tuple(cls.__subclasses__())
 
-    class Config:
-        frozen = True
-
 
 class FaissVectorStoreConfig(BaseVectorStoreConfig):
     type: Literal[SupportedVectorStoreType.faiss] = SupportedVectorStoreType.faiss

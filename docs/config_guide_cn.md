@@ -252,18 +252,6 @@ type = "RetrieverQueryEngine"
 
 查询引擎（query engine）是一个通用接口，接收自然语言查询，并返回丰富的响应。
 
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-基于 query engine 之上的一个高级接口，用于与数据进行对话（而不是单一的问答），可类比为状态化的查询引擎。
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question 是建立在查询引擎query engine之上的简易聊天模式。每次聊天交互中：首先从对话上下文和最后一条消息生成一个独立的问题，然后用这个简化的问题查询查询引擎以获取回复。
-
 ## rag.chat_store
 
 type = [Local, Aliyun-Redis]

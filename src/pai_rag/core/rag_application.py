@@ -205,13 +205,13 @@ class RagApplication:
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )
-
         # Condense question
-        new_question = await self.condense_query_transform.arun(
+        new_query_bundle = await self.condense_query_transform.arun(
             query_bundle_or_str=query.question,
             session_id=session_id,
             chat_history=query.chat_history,
         )
+        new_question = new_query_bundle.query_str
         self.logger.info(f"Querying with question '{new_question}'.")
 
         query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)

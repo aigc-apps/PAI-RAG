@@ -20,7 +20,10 @@ from llama_index.core import StorageContext
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.bridge.pydantic import PrivateAttr
-from pai_rag.integrations.index.pai.utils.vector_store_utils import create_vector_store
+from pai_rag.integrations.index.pai.utils.vector_store_utils import (
+    create_vector_store,
+    resolve_store_path,
+)
 from pai_rag.integrations.index.pai.vector_store_config import (
     VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH,
     VectorIndexRetrievalType,
@@ -68,6 +71,18 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self._enable_multimodal = enable_multimodal
         self._image_store = None
 
+        embed_dims = len(embed_model.get_text_embedding("0"))
+        self._embed_model = embed_model
+
+        # change persist path to subfolder
+        self.vector_store_config.persist_path = resolve_store_path(
+            vector_store_config, ndims=embed_dims
+        )
+        self._persist_path = self.vector_store_config.persist_path
+
+        self._vector_store = create_vector_store(
+            vector_store_config, embed_dims=embed_dims
+        )
         multi_modal_embed_dims = -1  # multimodal not enabled
         # assert multi_modal_embed_model is not None, "Multi-modal embedding model must be provided."
         if self._enable_multimodal:
@@ -82,12 +97,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 is_image_store=True,
             )
 
-        embed_dims = len(embed_model.get_text_embedding("0"))
-        self._vector_store = create_vector_store(
-            vector_store_config, embed_dims=embed_dims
-        )
-        self._persist_path = vector_store_config.persist_path
-        self._embed_model = embed_model
         self._storage_context = self._create_storage_context()
 
         self._vector_index_retrieval_type = vector_index_retrieval_type

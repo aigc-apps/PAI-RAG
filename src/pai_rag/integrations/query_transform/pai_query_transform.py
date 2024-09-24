@@ -231,7 +231,7 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         chat_history = self._chat_store.get_messages(session_id)
         if not chat_history:
             # Keep the question as is if there's no conversation context.
-            return query_bundle.query_str
+            return query_bundle
 
         chat_history_str = messages_to_history_str(chat_history)
         query_bundle_str = await self._llm.apredict(
