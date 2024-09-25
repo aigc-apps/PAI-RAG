@@ -76,19 +76,19 @@ def change_vectordb_conn(vectordb_type):
     milvus_visible = False
     opensearch_visible = False
     postgresql_visible = False
-    if vectordb_type == "AnalyticDB":
+    if vectordb_type.lower() == "analyticdb":
         adb_visible = True
-    elif vectordb_type == "Hologres":
+    elif vectordb_type.lower() == "hologres":
         hologres_visible = True
-    elif vectordb_type == "ElasticSearch":
+    elif vectordb_type.lower() == "elasticsearch":
         es_visible = True
-    elif vectordb_type == "Milvus":
+    elif vectordb_type.lower() == "milvus":
         milvus_visible = True
-    elif vectordb_type == "FAISS":
+    elif vectordb_type.lower() == "faiss":
         faiss_visible = True
-    elif vectordb_type == "OpenSearch":
+    elif vectordb_type.lower() == "opensearch":
         opensearch_visible = True
-    elif vectordb_type == "PostgreSQL":
+    elif vectordb_type.lower() == "postgresql":
         postgresql_visible = True
 
     return [

@@ -25,15 +25,12 @@ class IndexDaemon:
             )
 
     async def refresh_async(self):
-        while True:
+        while False:
             logger.debug(f"{datetime.datetime.now()} Start scan.")
-            bm25_indexes = list(
-                module_registry.get_mod_instances("BM25IndexModule").values()
-            )
 
             index_map = module_registry.get_mod_instances("IndexModule")
             for _, index in index_map.items():
-                index_path = index.persist_path
+                index_path = index.vector_store_config.persist_path
                 if index_path not in index_entry.index_entries:
                     continue
 
@@ -45,13 +42,6 @@ class IndexDaemon:
                     logger.info(f"{datetime.datetime.now()} Reloading index.")
 
                     index.reload()
-
-                    for bm25_index in bm25_indexes:
-                        if bm25_index and bm25_index.persist_path == index_path:
-                            logger.info(
-                                f"{datetime.datetime.now()} Reloading bm25 index."
-                            )
-                            bm25_index.reload()
 
                     index_entry.index_entries[index_path] = lastUpdated
                     logger.info(f"{datetime.datetime.now()} Reloaded index.")

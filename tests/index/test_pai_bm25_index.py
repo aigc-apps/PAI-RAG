@@ -1,4 +1,4 @@
-from pai_rag.modules.index.pai_bm25_index import PaiBm25Index
+from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 from llama_index.core.schema import TextNode
 
 texts = [
@@ -16,7 +16,7 @@ texts = [
 def test_bm25():
     persist_path = "./tmp/bm25_test"
 
-    bm25 = PaiBm25Index(persist_path)
+    bm25 = LocalBm25IndexStore(persist_path)
 
     nodes = [TextNode(id_=i, text=text) for i, text in enumerate(texts)]
     bm25.add_docs(nodes)

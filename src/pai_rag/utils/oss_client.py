@@ -8,13 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 class OssClient:
-    def __init__(self, bucket_name: str, endpoint: str, prefix: str = None):
+    def __init__(self, bucket_name: str, endpoint: str):
         auth = oss2.ProviderAuth(EnvironmentVariableCredentialsProvider())
         self.bucket_name = bucket_name
         self.endpoint = endpoint
         self.base_url = self._make_url()
-        # 去除prefix可能存在的前后空格，并去除最后的斜杠
-        self.prefix = prefix.strip().rstrip("/")
 
         """
         确认上面的参数都填写正确了,如果任何一个参数包含 '<'，意味着这个参数可能没有被正确设置，而是保留了一个占位符或默认值（
@@ -60,8 +58,8 @@ class OssClient:
 
         return f"{self.base_url}{key}"
 
-    def get_obj_key_url(self, filename: str):
-        return f"{self.base_url}{self.prefix}/{filename}"
+    def get_obj_key_url(self, file_path: str):
+        return f"{self.base_url}{file_path}"
 
     def _make_url(self):
         base_endpoint = (
@@ -69,7 +67,7 @@ class OssClient:
         )
         return f"https://{self.bucket_name}.{base_endpoint}/"
 
-    def list_objects(self):
+    def list_objects(self, prefix: str):
         """
         列出存储桶中指定前缀的对象列表。
 
@@ -82,7 +80,7 @@ class OssClient:
         - list: 包含满足前缀条件的所有对象的列表。
         """
         # 调用bucket的list_objects方法，传入前缀参数
-        res = self.bucket.list_objects(prefix=self.prefix)
+        res = self.bucket.list_objects(prefix=prefix)
         # 返回查询到的对象列表
         return res.object_list
 
@@ -95,3 +93,13 @@ class OssClient:
         res = self.bucket.put_object_acl(key=key, permission=permission)
 
         return res.status == 200
+
+    def parse_oss_prefix(self, oss_path):
+        oss_path = oss_path.strip()
+        assert oss_path.startswith(
+            f"oss://{self.bucket_name}/"
+        ), f"OSS path should start with oss://{self.bucket_name}/"
+        oss_prefix = oss_path[len(f"oss://{self.bucket_name}/") :]
+        assert len(oss_prefix) > 0, "Must provide a oss prefix to download data."
+
+        return oss_prefix

@@ -48,7 +48,7 @@ class LocalBm25Index:
         self.node_id_map: Dict[str, int] = {}
 
 
-class PaiBm25Index:
+class LocalBm25IndexStore:
     def __init__(
         self,
         persist_path: str,
@@ -260,8 +260,10 @@ class PaiBm25Index:
 
         return [self.doc_cache[i] for i in doc_indexes]
 
-    def query(self, query_str: str, top_n: int = 5) -> List[NodeWithScore]:
-        results = []
+    def query(
+        self, query_str: str, top_n: int = 5, normalize: bool = False
+    ) -> List[NodeWithScore]:
+        results: List[NodeWithScore] = []
         if self.index_matrix is None:
             return results
 
@@ -272,15 +274,20 @@ class PaiBm25Index:
                 query_vec[self.index.token_map[token]] += 1
         doc_scores = self.index_matrix.multiply(query_vec).sum(axis=1).getA1()
         doc_indexes = doc_scores.argsort()[::-1][:top_n]
-        text_nodes = self.load_docs_with_index(doc_indexes)
+        text_nodes: List[TextNode] = self.load_docs_with_index(doc_indexes)
         for i, node in enumerate(text_nodes):
-            node.metadata["retrieval_type"] = "keyword"
             results.append(
                 NodeWithScore(
                     node=node,
                     score=doc_scores[doc_indexes[i]],
                 )
             )
+
+        if normalize:
+            bm25_scores = [node.score for node in results]
+            max_score = max(bm25_scores)
+            for node_with_score in results:
+                node_with_score.score = node_with_score.score / max_score
 
         return results
 

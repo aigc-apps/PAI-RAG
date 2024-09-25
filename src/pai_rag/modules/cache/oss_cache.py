@@ -20,14 +20,11 @@ class OssCacheModule(ConfigurableModule):
         oss_sk = os.getenv("OSS_ACCESS_KEY_SECRET", None)
         oss_bucket = cache_config.get("bucket", None)
         oss_endpoint = cache_config.get("endpoint", None)
-        oss_prefix = cache_config.get("prefix", None)
 
         if use_oss:
             if oss_ak and oss_sk and oss_bucket and oss_endpoint:
                 logger.info(f"Using OSS bucket {oss_bucket} for caching objects.")
-                return OssClient(
-                    bucket_name=oss_bucket, endpoint=oss_endpoint, prefix=oss_prefix
-                )
+                return OssClient(bucket_name=oss_bucket, endpoint=oss_endpoint)
             else:
                 logger.warning(
                     "OSS config is incomplete. Will not cache objects. Please provide OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_BUCKET, OSS_ENDPOINT."

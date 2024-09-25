@@ -72,7 +72,7 @@ class PaiPDFReader(BaseReader):
 
         def replace_func(match):
             origin_path = match.group(1) or match.group(3)
-            print(f"origin_path: {origin_path}")
+            logger.info(f"origin_path: {origin_path}")
             try:
                 if origin_path.startswith(("http://", "https://")):
                     response = requests.get(origin_path)
@@ -111,12 +111,12 @@ class PaiPDFReader(BaseReader):
                     },  # set public read to make image accessible
                     path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
                 )
-                print(
+                logger.info(
                     f"Cropped image {image_url} with width={image.width}, height={image.height}."
                 )
                 return image_url
             except Exception as e:
-                print(f"无法打开图片 '{origin_path}': {e}")
+                logger.warn(f"无法打开图片 '{origin_path}': {e}")
 
         updated_content = re.sub(combined_pattern, replace_func, context)
 
@@ -149,6 +149,7 @@ class PaiPDFReader(BaseReader):
 
                 url_pattern = IMAGE_URL_PATTERN
                 images = re.findall(url_pattern, content)
+
                 if title_level:
                     images_url_list = [
                         image[0] for image in images if len(image[0]) > 0
@@ -289,7 +290,7 @@ class PaiPDFReader(BaseReader):
                             markdown_content, item["img_path"], ocr_content
                         )
                 else:
-                    print(f"警告：图片文件不存在 {img_path}")
+                    logger.info(f"警告：图片文件不存在 {img_path}")
         return markdown_content
 
     def post_process_multi_level_headings(self, json_data, md_content):
@@ -399,7 +400,7 @@ class PaiPDFReader(BaseReader):
                 elif parse_method == "ocr":
                     pipe = OCRPipe(pdf_bytes, model_json, image_writer)
                 else:
-                    logger("unknown parse method, only auto, ocr, txt allowed")
+                    logger.error("unknown parse method, only auto, ocr, txt allowed")
                     exit(1)
 
                 # 执行分类
@@ -410,8 +411,11 @@ class PaiPDFReader(BaseReader):
                     if model_config.__use_inside_model__:
                         pipe.pipe_analyze()  # 解析
                     else:
-                        logger("need model list input")
+                        logger.error("need model list input")
                         exit(1)
+
+                # Some dirty code from mineru modified log level to warning
+                logging.getLogger().setLevel(logging.INFO)
 
                 # 执行解析
                 pipe.pipe_parse()
@@ -426,7 +430,7 @@ class PaiPDFReader(BaseReader):
             return new_md_content
 
         except Exception as e:
-            print(e)
+            logger.warn(e)
             return None
 
     def load_data(
@@ -458,22 +462,17 @@ class PaiPDFReader(BaseReader):
         Returns:
             List[Document]: list of documents.
         """
-
-        if not isinstance(file_path, str) and not isinstance(file_path, Path):
-            raise TypeError("file_path must be a string or Path.")
+        logger.info(f"[PaiPDFReader] start parsing {file_path}.")
 
         md_content = self.parse_pdf(file_path, "auto")
         images_with_content = PaiPDFReader.combine_images_with_text(md_content)
         md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
-        print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
+        logger.info(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
         image_documents = []
         text_image_documents = []
-        if extra_info:
-            if not isinstance(extra_info, dict):
-                raise TypeError("extra_info must be a dictionary.")
         if self.enable_multimodal:
-            print("[PaiPDFReader] Using multimodal.")
+            logger.info("[PaiPDFReader] Using multimodal.")
             images_url_set = set()
             for content, image_urls in images_with_content.items():
                 images_url_set.update(image_urls)
@@ -486,7 +485,7 @@ class PaiPDFReader(BaseReader):
                         },
                     )
                 )
-            print("[PaiPDFReader] successfully loaded images with multimodal.")
+            logger.info("[PaiPDFReader] successfully loaded images with multimodal.")
             image_documents.extend(
                 ImageDocument(
                     image_url=image_url,
@@ -510,5 +509,5 @@ class PaiPDFReader(BaseReader):
 
         docs.extend(image_documents)
         docs.extend(text_image_documents)
-        print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

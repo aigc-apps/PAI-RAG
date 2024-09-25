@@ -1,3 +1,7 @@
+from pai_rag.integrations.query_transform.pai_query_transform import (
+    PaiCondenseQueryTransform,
+)
+from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 from pai_rag.modules.module_registry import module_registry
 from pai_rag.app.api.models import (
     RagQuery,
@@ -7,11 +11,15 @@ from pai_rag.app.api.models import (
     ContextDoc,
     RetrievalResponse,
 )
+from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
+from llama_index.core.storage.chat_store.base import BaseChatStore
+from llama_index.core.base.llms.types import ChatMessage, MessageRole
 import json
 import logging
 import os
 import copy
+from enum import Enum
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
@@ -21,13 +29,26 @@ def uuid_generator() -> str:
     return uuid4().hex
 
 
-async def event_generator_async(response, extra_info=None):
+class RagChatType(str, Enum):
+    LLM = "llm"
+    RAG = "rag"
+    WEB = "web"
+
+
+async def event_generator_async(
+    response, extra_info=None, chat_store=None, session_id=None
+):
     content = ""
     async for token in response.async_response_gen():
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
             yield json.dumps(chunk) + "\n"
+
+    if chat_store:
+        chat_store.add_message(
+            session_id, ChatMessage(role=MessageRole.ASSISTANT, content=content)
+        )
 
     if extra_info:
         # 返回
@@ -46,6 +67,13 @@ class RagApplication:
     def initialize(self, config):
         self.config = config
         module_registry.init_modules(self.config)
+        self.chat_store: BaseChatStore = module_registry.get_module_with_config(
+            "ChatStoreModule", config
+        )
+        self.condense_query_transform = PaiCondenseQueryTransform(
+            chat_store=self.chat_store
+        )
+        self._llm = Settings.llm
         self.logger.info("RagApplication initialized successfully.")
 
     def reload(self, config):
@@ -58,83 +86,29 @@ class RagApplication:
         filter_pattern=None,
         faiss_path=None,
         enable_qa_extraction=False,
-        enable_raptor=False,
-    ):
-        sessioned_config = self.config
-        sessioned_config.rag.data_loader.update({"type": "Local"})
-        if faiss_path:
-            sessioned_config = copy.copy(self.config)
-            sessioned_config.rag.index.update({"persist_path": faiss_path})
-            self.logger.info(
-                f"Update rag_application config with faiss_persist_path: {faiss_path}"
-            )
-
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", sessioned_config
-        )
-        data_loader.load(
-            input_files, filter_pattern, enable_qa_extraction, enable_raptor
-        )
-
-    def load_knowledge_from_oss(
-        self,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=None,
-        enable_qa_extraction=False,
+        from_oss=False,
+        oss_path=None,
         enable_raptor=False,
     ):
         sessioned_config = copy.copy(self.config)
-        sessioned_config.rag.data_loader.update({"type": "Oss"})
-        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
-        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
-        self.logger.info(
-            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
-        )
-        data_loader = module_registry.get_module_with_config(
-            "DataLoaderModule", sessioned_config
-        )
         if faiss_path:
             sessioned_config.rag.index.update({"persist_path": faiss_path})
             self.logger.info(
                 f"Update rag_application config with faiss_persist_path: {faiss_path}"
             )
-        data_loader.load(
-            filter_pattern=filter_pattern,
-            enable_qa_extraction=enable_qa_extraction,
-            enable_raptor=enable_raptor,
-        )
 
-    async def aload_knowledge_from_oss(
-        self,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=None,
-        enable_qa_extraction=False,
-        enable_raptor=False,
-    ):
-        sessioned_config = copy.copy(self.config)
-        sessioned_config.rag.data_loader.update({"type": "Oss"})
-        sessioned_config.rag.oss_store.update({"prefix": oss_prefix})
-        _ = module_registry.get_module_with_config("OssCacheModule", sessioned_config)
-        self.logger.info(
-            f"Update rag_application config with data_loader type: Oss and Oss Bucket prefix: {oss_prefix}"
-        )
         data_loader = module_registry.get_module_with_config(
             "DataLoaderModule", sessioned_config
         )
-        if faiss_path:
-            sessioned_config.rag.index.update({"persist_path": faiss_path})
-            self.logger.info(
-                f"Update rag_application config with faiss_persist_path: {faiss_path}"
-            )
-        await data_loader.aload(
+        data_loader.load_data(
+            file_path_or_directory=input_files,
             filter_pattern=filter_pattern,
-            enable_qa_extraction=enable_qa_extraction,
+            from_oss=from_oss,
+            oss_path=oss_path,
             enable_raptor=enable_raptor,
         )
 
-    async def aquery_retrieval(self, query: RetrievalQuery) -> RetrievalResponse:
+    async def aretrieve(self, query: RetrievalQuery) -> RetrievalResponse:
         if not query.question:
             return RetrievalResponse(docs=[])
 
@@ -163,17 +137,7 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery_search(self, query: RagQuery):
-        """Query answer from RAG App asynchronously.
-
-        Generate answer from Query Engine's or Chat Engine's achat interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            RagResponse
-        """
+    async def aquery(self, query: RagQuery, chat_type: RagChatType = RagChatType.RAG):
         session_id = query.session_id or uuid_generator()
         self.logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
@@ -182,80 +146,57 @@ class RagApplication:
             )
 
         sessioned_config = self.config
-
-        searcher = module_registry.get_module_with_config(
-            "SearchModule", sessioned_config
-        )
-        if not searcher:
-            raise ValueError("AI search not enabled. Please add search API key.")
-        if not query.stream:
-            response = await searcher.aquery(query.question)
-        else:
-            response = await searcher.astream_query(query.question)
-
-        node_results = response.source_nodes
-        new_query = query.question
-
-        reference_docs = [
-            ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-            )
-            for score_node in node_results
-        ]
-
-        result_info = {
-            "session_id": session_id,
-            "docs": reference_docs,
-            "new_query": new_query,
-        }
-
-        if not query.stream:
-            return RagResponse(answer=response.response, **result_info)
-        else:
-            return event_generator_async(response=response, extra_info=result_info)
-
-    async def aquery_rag(self, query: RagQuery):
-        """Query answer from RAG App asynchronously.
-
-        Generate answer from Query Engine's or Chat Engine's achat interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            RagResponse
-        """
-        session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
-        if not query.question:
-            return RagResponse(
-                answer="Empty query. Please input your question.", session_id=session_id
-            )
-
-        sessioned_config = self.config
-
         if query.vector_db and query.vector_db.faiss_path:
             sessioned_config = copy.copy(self.config)
             sessioned_config.rag.index.update(
                 {"persist_path": query.vector_db.faiss_path}
             )
-
-        chat_engine_factory = module_registry.get_module_with_config(
-            "ChatEngineFactoryModule", sessioned_config
+        # Condense question
+        new_query_bundle = await self.condense_query_transform.arun(
+            query_bundle_or_str=query.question,
+            session_id=session_id,
+            chat_history=query.chat_history,
         )
-        query_chat_engine = chat_engine_factory.get_chat_engine(
-            session_id, query.chat_history
+        new_question = new_query_bundle.query_str
+        self.logger.info(f"Querying with question '{new_question}'.")
+
+        if query.with_intent:
+            intent_detector = module_registry.get_module_with_config(
+                "IntentDetectionModule", self.config
+            )
+            intent = await intent_detector.aselect(
+                intent_detector._choices, query=query.question
+            )
+            self.logger.info(f"[IntentDetection] Routing query to {intent.intent}.")
+            if intent.intent == "agent":
+                return await self.aquery_agent(query)
+            elif intent.intent != "retrieval":
+                return ValueError(f"Invalid intent {intent.intent}")
+
+        query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)
+        self.chat_store.add_message(
+            session_id, ChatMessage(role=MessageRole.USER, content=query.question)
         )
-        if not query.stream:
-            response = await query_chat_engine.achat(query.question)
-        else:
-            response = await query_chat_engine.astream_chat(query.question)
+        if chat_type == RagChatType.RAG:
+            query_engine = module_registry.get_module_with_config(
+                "QueryEngineModule", self.config
+            )
+            response = await query_engine.aquery(query_bundle)
+        elif chat_type == RagChatType.WEB:
+            search_engine = module_registry.get_module_with_config(
+                "SearchModule", sessioned_config
+            )
+            if not search_engine:
+                raise ValueError("AI search not enabled. Please add search API key.")
+            response = await search_engine.aquery(query_bundle)
+        elif chat_type == RagChatType.LLM:
+            query_engine = module_registry.get_module_with_config(
+                "QueryEngineModule", self.config
+            )
+            query_bundle.no_retrieval = True
+            response = await query_engine.asynthesize(query_bundle, nodes=[])
 
-        node_results = response.sources[0].raw_output.source_nodes
-        new_query = response.sources[0].raw_input["query"]
-
+        node_results = response.source_nodes
         reference_docs = [
             ContextDoc(
                 text=score_node.node.get_content(),
@@ -268,46 +209,22 @@ class RagApplication:
         result_info = {
             "session_id": session_id,
             "docs": reference_docs,
-            "new_query": new_query,
+            "new_query": new_question,
         }
 
         if not query.stream:
+            self.chat_store.add_message(
+                session_id,
+                ChatMessage(role=MessageRole.ASSISTANT, content=response.response),
+            )
             return RagResponse(answer=response.response, **result_info)
         else:
-            return event_generator_async(response=response, extra_info=result_info)
-
-    async def aquery_llm(self, query: RagQuery):
-        """Query answer from LLM response asynchronously.
-
-        Generate answer from LLM's or LLM Chat Engine's achat interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            LlmResponse
-        """
-        session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
-
-        if not query.question:
-            return LlmResponse(
-                answer="Empty query. Please input your question.", session_id=session_id
+            return event_generator_async(
+                response=response,
+                extra_info=result_info,
+                chat_store=self.chat_store,
+                session_id=session_id,
             )
-
-        llm_chat_engine_factory = module_registry.get_module_with_config(
-            "LlmChatEngineFactoryModule", self.config
-        )
-        llm_chat_engine = llm_chat_engine_factory.get_chat_engine(
-            session_id, query.chat_history
-        )
-        if not query.stream:
-            response = await llm_chat_engine.achat(query.question)
-            return LlmResponse(answer=response.response, session_id=session_id)
-        else:
-            response = await llm_chat_engine.astream_chat(query.question)
-            result_info = {"session_id": session_id}
-            return event_generator_async(response=response, extra_info=result_info)
 
     async def aquery_agent(self, query: RagQuery) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
@@ -327,38 +244,11 @@ class RagApplication:
         response = await agent.achat(query.question)
         return RagResponse(answer=response.response)
 
-    async def aquery_with_intent(self, query: RagQuery):
-        """Query answer from RAG App asynchronously.
-
-        Generate answer from Query Engine's or Chat Engine's achat interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            RagResponse
-        """
-        if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
-        intent_detector = module_registry.get_module_with_config(
-            "IntentDetectionModule", self.config
-        )
-        intent = await intent_detector.aselect(
-            intent_detector._choices, query=query.question
-        )
-        self.logger.info(f"[IntentDetection] Routing query to {intent.intent}.")
-        if intent.intent == "agent":
-            return await self.aquery_agent(query)
-        elif intent.intent == "retrieval":
-            return await self.aquery_rag(query)
-        else:
-            return ValueError(f"Invalid intent {intent.intent}")
-
-    async def aquery(self, query: RagQuery):
-        if query.with_intent:
-            return await self.aquery_with_intent(query)
-        else:
-            return await self.aquery_rag(query)
+    # async def aquery(self, query: RagQuery):
+    #    if query.with_intent:
+    #        return await self.aquery_with_intent(query)
+    #    else:
+    #        return await self.aquery_rag(query)
 
     async def aload_agent_config(self, agent_cfg_path: str):
         if os.path.exists(agent_cfg_path):
@@ -443,7 +333,7 @@ class RagApplication:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")
 
         if not query.stream:
-            response = await analyst.aquery(query.question)
+            response = await analyst.aquery(query.question, streaming=query.stream)
         else:
             response = await analyst.astream_query(query.question)
 
