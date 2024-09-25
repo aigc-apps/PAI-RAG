@@ -81,18 +81,26 @@ class RagStore:
         # TODO: not supported yet, need more tests
         elif vector_store_type == "elasticsearch":
             self.vector_store, self.image_store = self._get_or_create_es()
+            if self.enable_evaluate:
+                self.doc_store = self._get_or_create_simple_doc_store()
             logger.info("initialized ElasticSearch vector & image store.")
         elif vector_store_type == "milvus":
             self.vector_store, self.image_store = self._get_or_create_milvus()
+            if self.enable_evaluate:
+                self.doc_store = self._get_or_create_simple_doc_store()
             logger.info("initialized Milvus vector & image store.")
         elif vector_store_type == "opensearch":
             (
                 self.vector_store,
                 self.image_store,
             ) = self._get_or_create_open_search_store()
+            if self.enable_evaluate:
+                self.doc_store = self._get_or_create_simple_doc_store()
             logger.info("initialized OpenSearch vector & image store.")
         elif vector_store_type == "postgresql":
             self.vector_store, self.image_store = self._get_or_create_postgresql_store()
+            if self.enable_evaluate:
+                self.doc_store = self._get_or_create_simple_doc_store()
             logger.info("initialized Postgresql vector & image store.")
         # Not used yet
         elif vector_store_type == "chroma":

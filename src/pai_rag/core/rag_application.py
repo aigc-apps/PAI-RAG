@@ -76,6 +76,41 @@ class RagApplication:
             input_files, filter_pattern, enable_qa_extraction, enable_raptor
         )
 
+    def load_knowledge_for_evaluation(
+        self,
+        input_files,
+        filter_pattern=None,
+        enable_qa_extraction=False,
+        enable_raptor=False,
+        eval_exp_id=None,
+    ):
+        sessioned_config = self.config
+        sessioned_config.rag.index.update({"enable_evaluate": True})
+        db_type = sessioned_config.rag.index.vector_store.get("type", "faiss").lower()
+        if db_type == "faiss":
+            sessioned_config.rag.index.vector_store.update({"index_name": eval_exp_id})
+        elif db_type == "milvus":
+            sessioned_config.rag.index.vector_store.update(
+                {"collection_name": eval_exp_id}
+            )
+        elif db_type == "hologres":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "elasticsearch":
+            sessioned_config.rag.index.vector_store.update({"es_index": eval_exp_id})
+        elif db_type == "opensearch":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "postgresql":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+
+        evaluator = module_registry.get_module_with_config(
+            "EvaluationModule", sessioned_config
+        )
+
+        evaluator.data_loader.load(
+            input_files, filter_pattern, enable_qa_extraction, enable_raptor
+        )
+        print(f"Loaded evlaution dataset files {len(input_files)} successfully.")
+
     def load_knowledge_from_oss(
         self,
         filter_pattern=None,
@@ -384,37 +419,65 @@ class RagApplication:
         else:
             return f"The agent config path {agent_cfg_path} not exists."
 
-    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
-        vector_store_type = (
-            self.config.rag.get("index").get("vector_store").get("type", None)
-        )
-        if vector_store_type == "FAISS":
-            evaluation = module_registry.get_module_with_config(
-                "EvaluationModule", self.config
-            )
-            qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
-            return qa_dataset
-        else:
-            return f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now."
+    async def aload_evaluation_qa_dataset(
+        self, overwrite: bool = False, eval_exp_id: str = None
+    ):
+        sessioned_config = self.config
+        sessioned_config.rag.index.update({"enable_evaluate": True})
 
-    async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
-        vector_store_type = (
-            self.config.rag.get("index").get("vector_store").get("type", None)
-        )
-        if vector_store_type == "FAISS":
-            evaluation = module_registry.get_module_with_config(
-                "EvaluationModule", self.config
+        db_type = sessioned_config.rag.index.vector_store.get("type", "faiss").lower()
+        if db_type == "faiss":
+            sessioned_config.rag.index.vector_store.update({"index_name": eval_exp_id})
+        elif db_type == "milvus":
+            sessioned_config.rag.index.vector_store.update(
+                {"collection_name": eval_exp_id}
             )
-            df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
-                type=type, workers=4, overwrite=overwrite
-            )
+        elif db_type == "hologres":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "elasticsearch":
+            sessioned_config.rag.index.vector_store.update({"es_index": eval_exp_id})
+        elif db_type == "opensearch":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "postgresql":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
 
-            return df, eval_res_avg
-        else:
-            return (
-                None,
-                f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
+        evaluator = module_registry.get_module_with_config(
+            "EvaluationModule", sessioned_config
+        )
+
+        qa_dataset = await evaluator.aload_question_answer_pairs_json(overwrite)
+        return qa_dataset
+
+    async def aevaluate_retrieval_and_response(
+        self, type, overwrite: bool = False, eval_exp_id: str = None
+    ):
+        sessioned_config = self.config
+        sessioned_config.rag.index.update({"enable_evaluate": True})
+
+        db_type = sessioned_config.rag.index.vector_store.get("type", "faiss").lower()
+        if db_type == "faiss":
+            sessioned_config.rag.index.vector_store.update({"index_name": eval_exp_id})
+        elif db_type == "milvus":
+            sessioned_config.rag.index.vector_store.update(
+                {"collection_name": eval_exp_id}
             )
+        elif db_type == "hologres":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "elasticsearch":
+            sessioned_config.rag.index.vector_store.update({"es_index": eval_exp_id})
+        elif db_type == "opensearch":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+        elif db_type == "postgresql":
+            sessioned_config.rag.index.vector_store.update({"table_name": eval_exp_id})
+
+        evaluator = module_registry.get_module_with_config(
+            "EvaluationModule", sessioned_config
+        )
+        df, eval_res_avg = await evaluator.abatch_retrieval_response_aevaluation(
+            type=type, workers=4, overwrite=overwrite
+        )
+
+        return df, eval_res_avg
 
     async def aquery_analysis(self, query: RagQuery):
         """Query answer from RAG App asynchronously.

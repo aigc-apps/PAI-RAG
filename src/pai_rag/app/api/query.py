@@ -97,32 +97,73 @@ def task_status(task_id: str):
 
 
 @router.post("/evaluate")
-async def batch_evaluate(overwrite: bool = False):
+async def batch_evaluate(overwrite: bool = False, eval_exp_id: str = None):
     df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="all", overwrite=overwrite
+        type="all", overwrite=overwrite, eval_exp_id=eval_exp_id
     )
     return {"status": 200, "result": eval_results}
 
 
+@router.post("/evaluate/upload_data")
+async def upload_data_for_evaluation(
+    files: List[UploadFile],
+    faiss_path: str = Form(None),
+    enable_raptor: bool = Form(False),
+    eval_exp_id: str = Form(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    task_id = uuid.uuid4().hex
+    if not files:
+        return {"message": "No upload file sent"}
+
+    tmpdir = tempfile.mkdtemp()
+    input_files = []
+    for file in files:
+        fn = file.filename
+        data = await file.read()
+        file_hash = hashlib.md5(data).hexdigest()
+        save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
+
+        with open(save_file, "wb") as f:
+            f.write(data)
+            f.close()
+        input_files.append(save_file)
+
+    background_tasks.add_task(
+        rag_service.add_knowledge,
+        task_id=task_id,
+        input_files=input_files,
+        filter_pattern=None,
+        oss_prefix=None,
+        faiss_path=faiss_path,
+        enable_qa_extraction=False,
+        enable_raptor=enable_raptor,
+        enable_eval=True,
+        eval_exp_id=eval_exp_id,
+    )
+
+    return {"task_id": task_id}
+
+
 @router.post("/evaluate/retrieval")
-async def batch_retrieval_evaluate(overwrite: bool = False):
+async def batch_retrieval_evaluate(overwrite: bool = False, eval_exp_id: str = None):
     df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="retrieval", overwrite=overwrite
+        type="retrieval", overwrite=overwrite, eval_exp_id=eval_exp_id
     )
     return {"status": 200, "result": eval_results}
 
 
 @router.post("/evaluate/response")
-async def batch_response_evaluate(overwrite: bool = False):
+async def batch_response_evaluate(overwrite: bool = False, eval_exp_id: str = None):
     df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="response", overwrite=overwrite
+        type="response", overwrite=overwrite, eval_exp_id=eval_exp_id
     )
     return {"status": 200, "result": eval_results}
 
 
 @router.post("/evaluate/generate")
-async def generate_qa_dataset(overwrite: bool = False):
-    qa_datase = await rag_service.aload_evaluation_qa_dataset(overwrite)
+async def generate_qa_dataset(overwrite: bool = False, eval_exp_id: str = None):
+    qa_datase = await rag_service.aload_evaluation_qa_dataset(overwrite, eval_exp_id)
     return {"status": 200, "result": qa_datase}
 
 

@@ -29,12 +29,16 @@ class RagIndex:
         else:
             self.multi_modal_embed_dims = 0
         self.enable_evaluate = config.get("enable_evaluate", False)
+        self.vectordb_type = config["vector_store"].get("type", "faiss").lower()
         if self.enable_evaluate:
             persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR) + "_eval"
         else:
             persist_path = config.get("persist_path", DEFAULT_PERSIST_DIR)
+
         self.folder_name = get_store_persist_directory_name(config, self.embed_dims)
-        self.persist_path = os.path.join(persist_path, self.folder_name)
+        self.persist_path = os.path.join(
+            persist_path, self.vectordb_type, self.folder_name
+        )
         logging.info(
             f"Persist path: {self.persist_path} with enable_evaluate: {self.enable_evaluate}"
         )
@@ -52,8 +56,6 @@ class RagIndex:
             self.enable_evaluate,
         )
         self.storage_context = rag_store.get_storage_context()
-
-        self.vectordb_type = config["vector_store"].get("type", "faiss").lower()
 
         if is_empty:
             self.create_indices(self.storage_context, embed_model)
@@ -112,6 +114,7 @@ class RagIndex:
                 False,
                 self.embed_dims,
                 self.multi_modal_embed_dims,
+                self.enable_evaluate,
             )
             self.storage_context = rag_store.get_storage_context()
 

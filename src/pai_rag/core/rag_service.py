@@ -114,19 +114,30 @@ class RagService:
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
         from_oss: bool = False,
+        enable_eval: bool = False,
+        eval_exp_id: str = None,
     ):
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
             if not from_oss:
-                self.rag.load_knowledge(
-                    input_files,
-                    filter_pattern,
-                    faiss_path,
-                    enable_qa_extraction,
-                    enable_raptor,
-                )
+                if not enable_eval:
+                    self.rag.load_knowledge(
+                        input_files,
+                        filter_pattern,
+                        faiss_path,
+                        enable_qa_extraction,
+                        enable_raptor,
+                    )
+                else:
+                    self.rag.load_knowledge_for_evaluation(
+                        input_files,
+                        filter_pattern,
+                        enable_qa_extraction,
+                        enable_raptor,
+                        eval_exp_id,
+                    )
             else:
                 self.rag.load_knowledge_from_oss(
                     filter_pattern,
@@ -215,18 +226,22 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Load agent config: {ex}")
 
-    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
+    async def aload_evaluation_qa_dataset(
+        self, overwrite: bool = False, eval_exp_id: str = None
+    ):
         try:
-            return await self.rag.aload_evaluation_qa_dataset(overwrite)
+            return await self.rag.aload_evaluation_qa_dataset(overwrite, eval_exp_id)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
     async def aevaluate_retrieval_and_response(
-        self, type: str = "all", overwrite: bool = False
+        self, type: str = "all", overwrite: bool = False, eval_exp_id: str = None
     ):
         try:
-            return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
+            return await self.rag.aevaluate_retrieval_and_response(
+                type, overwrite, eval_exp_id
+            )
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

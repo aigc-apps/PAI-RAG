@@ -27,6 +27,7 @@ class PaiEvaluator:
         index,
         query_engine,
         retriever,
+        node_postprocessors,
         evaluation_dataset,
         retrieval_metrics,
         response_metrics,
@@ -35,11 +36,15 @@ class PaiEvaluator:
         self.llm = llm
         self.index = index
         self.query_engine = query_engine
+        self.query_engine._stream = False
         self.retriever = retriever
+        self.node_postprocessors = node_postprocessors
         self.evaluation_dataset = evaluation_dataset
         self.retrieval_metrics = retrieval_metrics
         self.retrieval_evaluator = MyRetrieverEvaluator.from_metric_names(
-            self.retrieval_metrics, retriever=self.retriever
+            self.retrieval_metrics,
+            retriever=self.retriever,
+            node_postprocessors=self.node_postprocessors,
         )
         # TODO: if exists in list
         self.response_metrics = response_metrics
@@ -51,7 +56,9 @@ class PaiEvaluator:
         if not os.path.exists(DEFAULT_QA_DATASET_DIR):
             os.makedirs(DEFAULT_QA_DATASET_DIR, exist_ok=True)
         self.dataset_path = os.path.join(
-            DEFAULT_QA_DATASET_DIR, f"qa_dataset_{self.index.folder_name}.json"
+            DEFAULT_QA_DATASET_DIR,
+            self.index.vectordb_type,
+            f"qa_dataset_{self.index.folder_name}.json",
         )
 
         logger.info("PaiEvaluator initialized.")

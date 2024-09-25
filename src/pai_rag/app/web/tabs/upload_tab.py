@@ -18,6 +18,8 @@ def upload_knowledge(
     enable_raptor,
     enable_multimodal,
     enable_table_summary,
+    enable_eval: bool = False,
+    eval_exp_id: str = None,
 ):
     if not upload_files:
         return
@@ -42,9 +44,12 @@ def upload_knowledge(
                 value="No file selected. Please choose at least one file.",
             ),
         ]
-
     response = rag_client.add_knowledge(
-        [file.name for file in upload_files], enable_qa_extraction, enable_raptor
+        [file.name for file in upload_files],
+        enable_qa_extraction,
+        enable_raptor,
+        enable_eval,
+        eval_exp_id,
     )
     my_upload_files = []
     for file in upload_files:

@@ -15,7 +15,8 @@ def get_store_persist_directory_name(storage_config, ndims):
     if vector_store_type == "chroma":
         raw_text = json.dumps(storage_config["vector_store"], sort_keys=True)
     elif vector_store_type == "faiss":
-        raw_text = {"type": "faiss"}
+        index_name = storage_config["vector_store"].get("index_name", "default")
+        raw_text = {"type": "faiss", "index_name": index_name}
     elif vector_store_type == "hologres":
         keywords = ["host", "port", "database", "table_name"]
         json_data = {k: storage_config["vector_store"][k] for k in keywords}

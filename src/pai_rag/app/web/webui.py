@@ -8,8 +8,7 @@ from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
-
-# from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
+from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager
 from pai_rag.app.web.ui_constants import (
     DEFAULT_CSS_STYPE,
@@ -37,10 +36,6 @@ def resume_ui():
             elem = elem_manager.get_elem_by_id(elem_id=elem_id)
             # For gradio version 3.41.0, we can remove .value for latest gradio here.
             outputs[elem] = gr.update(**elem_attr)
-            # if elem_id == "qa_dataset_file":
-            #     outputs[elem] = elem_attr["value"]
-            # else:
-            #     outputs[elem] = elem.__class__(**elem_attr).value
 
     return outputs
 
@@ -64,9 +59,9 @@ def make_homepage():
         with gr.Tab("\N{bar chart} Data Analysis"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
-        # with gr.Tab("\N{rocket} Evaluation"):
-        #     eval_elements = create_evaluation_tab()
-        #     elem_manager.add_elems(eval_elements)
+        with gr.Tab("\N{rocket} Evaluation"):
+            eval_elements = create_evaluation_tab()
+            elem_manager.add_elems(eval_elements)
         homepage.load(
             resume_ui, outputs=elem_manager.get_elem_list(), concurrency_limit=None
         )

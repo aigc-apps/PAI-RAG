@@ -11,7 +11,7 @@ from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 
-DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_CLIENT_TIME_OUT = 6000
 
 
 class RagApiError(Exception):
@@ -66,6 +66,10 @@ class RagWebClient:
     @property
     def load_data_url(self):
         return f"{self.endpoint}service/upload_data"
+
+    @property
+    def load_data_for_eval_url(self):
+        return f"{self.endpoint}service/evaluate/upload_data"
 
     @property
     def load_datasheet_url(self):
@@ -341,6 +345,8 @@ class RagWebClient:
         input_files: str,
         enable_qa_extraction: bool,
         enable_raptor: bool,
+        enable_eval: bool = False,
+        eval_exp_id: str = None,
     ):
         files = []
         file_obj_list = []
@@ -349,10 +355,10 @@ class RagWebClient:
             mimetype = mimetypes.guess_type(file_name)[0]
             files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
             file_obj_list.append(file_obj)
-        para = {"enable_raptor": enable_raptor}
+        para = {"enable_raptor": enable_raptor, "eval_exp_id": eval_exp_id}
         try:
             r = requests.post(
-                self.load_data_url,
+                self.load_data_url if not enable_eval else self.load_data_for_eval_url,
                 files=files,
                 data=para,
                 timeout=DEFAULT_CLIENT_TIME_OUT,
@@ -438,10 +444,10 @@ class RagWebClient:
 
         return response
 
-    def evaluate_for_generate_qa(self, overwrite):
+    def evaluate_for_generate_qa(self, overwrite, eval_exp_id):
         r = requests.post(
             self.get_evaluate_generate_url,
-            params={"overwrite": overwrite},
+            params={"overwrite": overwrite, "eval_exp_id": eval_exp_id},
             timeout=DEFAULT_CLIENT_TIME_OUT,
         )
         response = dotdict(json.loads(r.text))
@@ -449,9 +455,11 @@ class RagWebClient:
             raise RagApiError(code=r.status_code, msg=response.message)
         return response
 
-    def evaluate_for_retrieval_stage(self):
+    def evaluate_for_retrieval_stage(self, eval_exp_id):
         r = requests.post(
-            self.get_evaluate_retrieval_url, timeout=DEFAULT_CLIENT_TIME_OUT
+            self.get_evaluate_retrieval_url,
+            params={"eval_exp_id": eval_exp_id},
+            timeout=DEFAULT_CLIENT_TIME_OUT,
         )
         response = dotdict(json.loads(r.text))
 
@@ -460,9 +468,11 @@ class RagWebClient:
 
         return response
 
-    def evaluate_for_response_stage(self):
+    def evaluate_for_response_stage(self, eval_exp_id):
         r = requests.post(
-            self.get_evaluate_response_url, timeout=DEFAULT_CLIENT_TIME_OUT
+            self.get_evaluate_response_url,
+            params={"eval_exp_id": eval_exp_id},
+            timeout=DEFAULT_CLIENT_TIME_OUT,
         )
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:

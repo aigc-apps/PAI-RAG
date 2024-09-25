@@ -41,7 +41,9 @@ class EvalDatasetPipeline:
         print("eval_res_avg", eval_res_avg)
         return df, eval_res_avg
 
-    async def eval_open_dataset(self, overwrite: bool, type: str, dataset_name: None):
+    async def eval_qa_from_open_dataset(
+        self, overwrite: bool, type: str, dataset_name: str = None
+    ):
         _ = await self.evaluation.aload_question_answer_pairs_json(
             overwrite, dataset_name
         )
