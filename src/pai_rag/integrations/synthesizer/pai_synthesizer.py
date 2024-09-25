@@ -182,7 +182,7 @@ class PaiSynthesizer(BaseSynthesizer):
                         n.node.get_content(metadata_mode=MetadataMode.LLM)
                         for n in text_nodes
                     ],
-                    image_urls=[n.node.image_url for n in image_nodes],
+                    image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     **response_kwargs,
                 )
@@ -246,6 +246,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 image_nodes.append(node)
             else:
                 text_nodes.append(node)
+
         with self._callback_manager.event(
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
@@ -263,7 +264,7 @@ class PaiSynthesizer(BaseSynthesizer):
                         n.node.get_content(metadata_mode=MetadataMode.LLM)
                         for n in text_nodes
                     ],
-                    image_urls=[n.node.image_url for n in image_nodes],
+                    image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     **response_kwargs,
                 )
@@ -326,6 +327,7 @@ class PaiSynthesizer(BaseSynthesizer):
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         image_documents = load_image_urls(image_url_list)
+
         image_context_str = "\n\n".join(image_url_list)
         text_context_str = "\n\n".join(text_chunks)
         context_str = f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n"
@@ -364,6 +366,10 @@ class PaiSynthesizer(BaseSynthesizer):
             assert (
                 self._multimodal_llm is not None
             ), "Multi-modal LLM must be provided to understand image documents."
+
+            logger.info(
+                f"Synthsize using Multi-modal LLM with images {image_url_list}."
+            )
             return await self._aget_multi_modal_response(
                 query_str=query_str,
                 text_chunks=text_chunks,
@@ -372,6 +378,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 **response_kwargs,
             )
 
+        logger.info("Synthsize using LLM with no image inputs.")
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
         single_text_chunk = "\n".join(text_chunks)
         truncated_chunks = self._prompt_helper.truncate(

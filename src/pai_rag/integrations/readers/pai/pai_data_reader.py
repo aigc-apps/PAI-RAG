@@ -16,6 +16,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
+
 
 class BaseDataReaderConfig(BaseModel):
     enable_multimodal: bool = False
@@ -74,18 +76,20 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
             os.makedirs(oss_file_path_dir)
         for oss_obj in object_list:
             if not oss_obj.key.endswith("/"):  # 不是目录
-                logger.info("Downloading oss object: ", oss_obj.key)
+                logger.info(f"Downloading oss object: {oss_obj.key}")
                 try:
                     set_public = oss_store.put_object_acl(oss_obj.key, "public-read")
                 except Exception:
                     logger.error(f"Failed to set_public document {oss_obj.key}")
                 if set_public:
-                    save_filename = os.path.join(oss_file_path_dir, oss_obj.key)
+                    save_filename = os.path.join(
+                        oss_file_path_dir, COMMON_FILE_PATH_FODER_NAME, oss_obj.key
+                    )
                     oss_store.get_object_to_file(
                         key=oss_obj.key, filename=save_filename
                     )
                     files.append(save_filename)
-                    logger.info("Downloaded oss object: ", oss_obj.key)
+                    logger.info(f"Downloaded oss object: {oss_obj.key}")
                 else:
                     logger.error(f"Failed to load document {oss_obj.key}")
     else:
@@ -93,7 +97,7 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
 
     if not files:
         raise ValueError(f"No file found at OSS path '{oss_path}'.")
-
+    print(files)
     return files
 
 

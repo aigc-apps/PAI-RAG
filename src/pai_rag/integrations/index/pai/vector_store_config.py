@@ -64,7 +64,7 @@ class HologresVectorStoreConfig(BaseVectorStoreConfig):
     password: str
     database: str
     table_name: str
-    pre_delete_table: bool
+    pre_delete_table: bool = False
 
 
 class ElasticSearchVectorStoreConfig(BaseVectorStoreConfig):
@@ -106,7 +106,7 @@ class PostgreSQLVectorStoreConfig(BaseVectorStoreConfig):
     port: int
     database: str
     table_name: str = "default"
-    user_name: str
+    username: str
     password: str
 
 
@@ -129,12 +129,12 @@ if __name__ == "__main__":
     json_data = {
         "vector_store": {
             "persist_path": "./1234",
-            "type": "postgresql",
+            "type": "Postgresql",
             "host": "abc.com",
             "port": 123,
             "database": "test",
             "table_name": "table",
-            "user_name": "jim",
+            "username": "jim",
             "password": "123xx",
         }
     }
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         "port": 123,
         "database": "test",
         "table_name": "table",
-        "user_name": "jim",
+        "username": "jim",
         "password": "123xx",
     }
     config2 = BaseVectorStoreConfig.model_validate(json_data)

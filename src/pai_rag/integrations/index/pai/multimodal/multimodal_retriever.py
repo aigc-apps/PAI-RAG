@@ -30,6 +30,9 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryResult,
 )
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
+import logging
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_IMAGE_STORE = "image"
 
@@ -139,15 +142,25 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         self._image_similarity_top_k = image_similarity_top_k
 
     def _build_vector_store_query(
-        self, query_bundle_with_embeddings: QueryBundle, similarity_top_k: int
+        self,
+        query_bundle_with_embeddings: QueryBundle,
+        similarity_top_k: int,
+        is_image_store: bool = False,
     ) -> VectorStoreQuery:
+        query_mode = self._vector_store_query_mode
+
+        if is_image_store:
+            # image store does not apply hybrid/keyword search
+            query_mode = VectorStoreQueryMode.DEFAULT
+
+        print(is_image_store, query_mode)
         return VectorStoreQuery(
             query_embedding=query_bundle_with_embeddings.embedding,
             similarity_top_k=similarity_top_k,
             node_ids=self._node_ids,
             doc_ids=self._doc_ids,
             query_str=query_bundle_with_embeddings.query_str,
-            mode=self._vector_store_query_mode,
+            mode=query_mode,
             alpha=self._alpha,
             filters=self._filters,
             sparse_top_k=self._sparse_top_k,
@@ -357,13 +370,14 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         similarity_top_k: int,
         vector_store: BasePydanticVectorStore,
     ) -> List[NodeWithScore]:
-        query = self._build_vector_store_query(
-            query_bundle_with_embeddings, similarity_top_k
-        )
-        query_result = vector_store.query(query, **self._kwargs)
         is_image_store = (
             self._image_vector_store and vector_store is self._image_vector_store
         )
+        print("is image", is_image_store)
+        query = self._build_vector_store_query(
+            query_bundle_with_embeddings, similarity_top_k, is_image_store
+        )
+        query_result = vector_store.query(query, **self._kwargs)
         return self._build_node_list_from_query_result(query_result, is_image_store)
 
     def _build_node_list_from_query_result(
@@ -437,10 +451,11 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             self._atext_retrieve(query_bundle),
             self._atext_to_image_retrieve(query_bundle),
         ]
-
         task_results = await asyncio.gather(*tasks)
 
         text_nodes, image_nodes = task_results[0], task_results[1]
+        logger.info(f"Retrieved text nodes: {text_nodes}")
+        logger.info(f"Retrieved image nodes: {image_nodes}")
 
         seen_images = set([node.node.image_url for node in image_nodes])
         # 从文本中召回图片
@@ -545,14 +560,14 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         similarity_top_k: int,
         vector_store: BasePydanticVectorStore,
     ) -> List[NodeWithScore]:
-        query = self._build_vector_store_query(
-            query_bundle_with_embeddings, similarity_top_k
-        )
-        query_result = await vector_store.aquery(query, **self._kwargs)
-
         is_image_store = (
             self._image_vector_store and vector_store is self._image_vector_store
         )
+        query = self._build_vector_store_query(
+            query_bundle_with_embeddings, similarity_top_k, is_image_store
+        )
+        query_result = await vector_store.aquery(query, **self._kwargs)
+
         return self._build_node_list_from_query_result(query_result, is_image_store)
 
     async def _aimage_to_image_retrieve(

@@ -392,7 +392,10 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             new_img_ids = self.storage_context.vector_stores[self.image_namespace].add(
                 image_nodes, **insert_kwargs
             )
-            new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
+
+            # FAISS
+            if not self.storage_context.vector_store.stores_text:
+                new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
             origin_img_ids = [node.node_id for node in image_nodes]
             logger.info(
                 f"Added {len(image_nodes)} ImageNodes to index. NodeIds: {origin_img_ids}, new NodeIds: {new_img_ids}."

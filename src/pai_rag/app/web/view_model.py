@@ -244,9 +244,12 @@ class ViewModel(BaseModel):
         )
         view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
 
-        view_model.vectordb_type = config["index"]["vector_store"].get(
-            "type", view_model.vectordb_type
+        view_model.vectordb_type = (
+            config["index"]["vector_store"]
+            .get("type", view_model.vectordb_type)
+            .lower()
         )
+
         view_model.faiss_path = config["index"]["vector_store"].get(
             "persist_path", view_model.faiss_path
         )

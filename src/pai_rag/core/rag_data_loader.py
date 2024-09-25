@@ -42,7 +42,12 @@ class RagDataLoader:
             oss_path=oss_path,
             from_oss=from_oss,
         )
-        logger.info(f"Loaded {len(documents)} documents from {file_path_or_directory}")
+        if from_oss:
+            logger.info(
+                f"Loaded {len(documents)} documents from {file_path_or_directory}"
+            )
+        else:
+            logger.info(f"Loaded {len(documents)} documents from {oss_path}")
 
         if enable_raptor:
             assert self._raptor_processor is not None, "Raptor processor is not set."

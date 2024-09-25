@@ -201,7 +201,7 @@ def create_opensearch(
 
     table_name = opensearch_config.table_name
     if is_image_store:
-        table_name = f"{table_name}__image"
+        table_name = f"{table_name}_image"  # opensearch does not support __ in naming
 
     if is_image_store:
         output_fields = [
@@ -227,7 +227,7 @@ def create_opensearch(
         instance_id=opensearch_config.instance_id,
         username=opensearch_config.username,
         password=opensearch_config.password,
-        table_name=opensearch_config.table_name,
+        table_name=table_name,
         # OpenSearch constructor has bug in dealing with output fields
         field_mapping=dict(zip(output_fields, output_fields)),
     )
@@ -249,8 +249,8 @@ def create_postgresql(
         host=pg_config.host,
         port=pg_config.port,
         database=pg_config.database,
-        table_name=pg_config.table_name,
-        user=pg_config.user_name,
+        table_name=table_name,
+        user=pg_config.username,
         password=pg_config.password,
         embed_dim=embed_dims,
         hybrid_search=True,

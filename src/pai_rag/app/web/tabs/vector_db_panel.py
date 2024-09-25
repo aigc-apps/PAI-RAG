@@ -123,7 +123,7 @@ def create_vector_db_panel(
                     elem_id="hologres_pre_delete",
                 )
 
-            with gr.Column(visible=(vectordb_type == "ElasticSearch")) as es_col:
+            with gr.Column(visible=(vectordb_type == "elasticsearch")) as es_col:
                 with gr.Row():
                     es_url = gr.Textbox(
                         label="ElasticSearch Url", elem_id="es_url", interactive=True
@@ -142,7 +142,7 @@ def create_vector_db_panel(
                         interactive=True,
                     )
 
-            with gr.Column(visible=(vectordb_type == "Milvus")) as milvus_col:
+            with gr.Column(visible=(vectordb_type == "milvus")) as milvus_col:
                 with gr.Row():
                     milvus_host = gr.Textbox(
                         label="Host", elem_id="milvus_host", interactive=True
@@ -172,12 +172,12 @@ def create_vector_db_panel(
                         interactive=True,
                     )
 
-            with gr.Column(visible=(vectordb_type == "FAISS")) as faiss_col:
+            with gr.Column(visible=(vectordb_type == "faiss")) as faiss_col:
                 faiss_path = gr.Textbox(
                     label="Path", elem_id="faiss_path", interactive=True
                 )
 
-            with gr.Column(visible=(vectordb_type == "OpenSearch")) as opensearch_col:
+            with gr.Column(visible=(vectordb_type == "opensearch")) as opensearch_col:
                 with gr.Row():
                     opensearch_endpoint = gr.Textbox(
                         label="Endpoint",
@@ -205,7 +205,7 @@ def create_vector_db_panel(
                     label="TableName", elem_id="opensearch_table_name", interactive=True
                 )
 
-            with gr.Column(visible=(vectordb_type == "PostgreSQL")) as postgresql_col:
+            with gr.Column(visible=(vectordb_type == "postgresql")) as postgresql_col:
                 with gr.Row():
                     postgresql_host = gr.Textbox(
                         label="Host", elem_id="postgresql_host", interactive=True
