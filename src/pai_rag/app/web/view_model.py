@@ -517,6 +517,10 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"][
                 "collection_name"
             ] = self.milvus_collection_name
+            config["index"]["vector_store"]["reranker_weights"] = [
+                self.vector_weight,
+                self.keyword_weight,
+            ]
 
         elif self.vectordb_type.lower() == "opensearch":
             config["index"]["vector_store"]["endpoint"] = self.opensearch_endpoint

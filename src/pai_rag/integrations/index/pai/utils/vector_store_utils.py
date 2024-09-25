@@ -169,8 +169,6 @@ def create_milvus(
 
     milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}/{milvus_config.database}"
     token = f"{milvus_config.user}:{milvus_config.password}"
-    weighted_reranker = False
-    weights = []
     milvus_store = MyMilvusVectorStore(
         uri=milvus_url,
         token=token,
@@ -183,7 +181,7 @@ def create_milvus(
         similarity_metric="cosine",
         hybrid_ranker="WeightedRanker",
         # TODO: add weighted reranker config
-        hybrid_ranker_params={"weights": weights} if weighted_reranker else {},
+        hybrid_ranker_params={"weights": milvus_config.reranker_weights},
     )
 
     return milvus_store
