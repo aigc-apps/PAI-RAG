@@ -18,7 +18,6 @@ class EvaluationModule(ConfigurableModule):
             "DataLoaderModule",
             "LlmModule",
             "IndexModule",
-            "RetrieverModule",
             "PostprocessorModule",
             "QueryEngineModule",
         ]
@@ -28,7 +27,6 @@ class EvaluationModule(ConfigurableModule):
         data_loader = new_params["DataLoaderModule"]
         llm = new_params["LlmModule"]
         index = new_params["IndexModule"]
-        retriever = new_params["RetrieverModule"]
         node_postprocessors = new_params["PostprocessorModule"]
         query_engine = new_params["QueryEngineModule"]
 
@@ -41,7 +39,6 @@ class EvaluationModule(ConfigurableModule):
             llm=llm,
             index=index,
             query_engine=query_engine,
-            retriever=retriever,
             node_postprocessors=node_postprocessors,
             evaluation_dataset=evaluation_dataset,
             retrieval_metrics=retrieval_metrics,

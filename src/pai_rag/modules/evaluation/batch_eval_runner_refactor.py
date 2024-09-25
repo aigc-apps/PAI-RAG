@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 from llama_index.core.async_utils import asyncio_module
 from llama_index.core.base.base_query_engine import BaseQueryEngine
-from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.base.response.schema import RESPONSE_TYPE, Response
 from llama_index.core.evaluation.base import BaseEvaluator, EvaluationResult
 from pai_rag.integrations.evaluation.retrieval.evaluator import MyRetrievalEvalResult
@@ -67,21 +66,6 @@ async def response_worker(
     """Get aquery tasks with semaphore."""
     async with semaphore:
         return await query_engine.aquery(query)
-
-
-@retry(
-    reraise=True,
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10),
-)
-async def response_worker_for_retriever(
-    semaphore: asyncio.Semaphore,
-    retriever: BaseRetriever,
-    query: str,
-) -> RESPONSE_TYPE:
-    """Get aquery tasks with semaphore."""
-    async with semaphore:
-        return await retriever.aretrieve(query)
 
 
 class BatchEvalRunner:
@@ -164,10 +148,65 @@ class BatchEvalRunner:
         """
         return {k: v[idx] for k, v in eval_kwargs_lists.items()}
 
-    async def aevaluate_responses(
+    async def aevaluate_queries_for_response_refactor(
+        self,
+        query_engine,
+        queries: Optional[List[str]] = None,
+        reference_answers: Optional[List[str]] = None,
+        **eval_kwargs_lists: Dict[str, Any],
+    ) -> Dict[str, List]:
+        """Evaluate queries.
+
+        Args:
+            query_engine (BaseQueryEngine): Query engine.
+            queries (Optional[List[str]]): List of query strings. Defaults to None.
+            **eval_kwargs_lists (Dict[str, Any]): Dict of lists of kwargs to
+                pass to evaluator. Defaults to None.
+
+        """
+        if queries is None:
+            raise ValueError("`queries` must be provided")
+
+        # gather responses
+        response_jobs = []
+        for query in queries:
+            response_jobs.append(response_worker(self.semaphore, query_engine, query))
+        responses = await self.asyncio_mod.gather(*response_jobs)
+
+        return await self.aevaluate_responses_refactor(
+            queries=queries,
+            responses=responses,
+            references=reference_answers,
+            **eval_kwargs_lists,
+        )
+
+    async def aevaluate_queries_for_retrieval_refactor(
         self,
         queries: Optional[List[str]] = None,
         node_ids: Optional[List[str]] = None,
+        **eval_kwargs_lists: Dict[str, Any],
+    ) -> Dict[str, List]:
+        """Evaluate queries.
+
+        Args:
+            query_engine (BaseQueryEngine): Query engine.
+            queries (Optional[List[str]]): List of query strings. Defaults to None.
+            **eval_kwargs_lists (Dict[str, Any]): Dict of lists of kwargs to
+                pass to evaluator. Defaults to None.
+
+        """
+        if queries is None:
+            raise ValueError("`queries` must be provided")
+
+        return await self.aevaluate_retrieval_refactor(
+            queries=queries,
+            node_ids=node_ids,
+            **eval_kwargs_lists,
+        )
+
+    async def aevaluate_responses_refactor(
+        self,
+        queries: Optional[List[str]] = None,
         responses: Optional[List[Response]] = None,
         references: Optional[List[str]] = None,
         **eval_kwargs_lists: Dict[str, Any],
@@ -196,16 +235,6 @@ class BatchEvalRunner:
         # run evaluations
         eval_jobs = []
         for idx, query in enumerate(cast(List[str], queries)):
-            for name, evaluator in self.retrieval_evaluators.items():
-                eval_jobs.append(
-                    eval_retriever_worker(
-                        self.semaphore,
-                        evaluator,
-                        name,
-                        query=query,
-                        expected_ids=node_ids[idx],
-                    )
-                )
             response = cast(List, responses)[idx]
             eval_kwargs = self._get_eval_kwargs(eval_kwargs_lists, idx)
             for name, evaluator in self.response_evaluators.items():
@@ -225,11 +254,10 @@ class BatchEvalRunner:
         # Format results
         return self._format_results(results)
 
-    async def aevaluate_retrieval_res(
+    async def aevaluate_retrieval_refactor(
         self,
         queries: Optional[List[str]] = None,
         node_ids: Optional[List[str]] = None,
-        responses: Optional[List[Response]] = None,
         **eval_kwargs_lists: Dict[str, Any],
     ) -> Dict[str, List]:
         """Evaluate query, response pairs.
@@ -244,7 +272,7 @@ class BatchEvalRunner:
                 pass to evaluator. Defaults to None.
 
         """
-        queries, responses = self._validate_and_clean_inputs(queries, responses)
+        queries = self._validate_and_clean_inputs(queries)[0]
         for k in eval_kwargs_lists:
             v = eval_kwargs_lists[k]
             if not isinstance(v, list):
@@ -270,71 +298,3 @@ class BatchEvalRunner:
 
         # Format results
         return self._format_results(results)
-
-    async def aevaluate_queries(
-        self,
-        query_engine,
-        queries: Optional[List[str]] = None,
-        node_ids: Optional[List[str]] = None,
-        reference_answers: Optional[List[str]] = None,
-        **eval_kwargs_lists: Dict[str, Any],
-    ) -> Dict[str, List]:
-        """Evaluate queries.
-
-        Args:
-            query_engine (BaseQueryEngine): Query engine.
-            queries (Optional[List[str]]): List of query strings. Defaults to None.
-            **eval_kwargs_lists (Dict[str, Any]): Dict of lists of kwargs to
-                pass to evaluator. Defaults to None.
-
-        """
-        if queries is None:
-            raise ValueError("`queries` must be provided")
-
-        # gather responses
-        response_jobs = []
-        for query in queries:
-            response_jobs.append(response_worker(self.semaphore, query_engine, query))
-        responses = await self.asyncio_mod.gather(*response_jobs)
-
-        return await self.aevaluate_responses(
-            queries=queries,
-            node_ids=node_ids,
-            responses=responses,
-            references=reference_answers,
-            **eval_kwargs_lists,
-        )
-
-    async def aevaluate_queries_for_retrieval(
-        self,
-        retriever,
-        queries: Optional[List[str]] = None,
-        node_ids: Optional[List[str]] = None,
-        **eval_kwargs_lists: Dict[str, Any],
-    ) -> Dict[str, List]:
-        """Evaluate queries.
-
-        Args:
-            query_engine (BaseQueryEngine): Query engine.
-            queries (Optional[List[str]]): List of query strings. Defaults to None.
-            **eval_kwargs_lists (Dict[str, Any]): Dict of lists of kwargs to
-                pass to evaluator. Defaults to None.
-
-        """
-        if queries is None:
-            raise ValueError("`queries` must be provided")
-
-        # gather responses
-        response_jobs = []
-        for query in queries:
-            response_jobs.append(
-                response_worker_for_retriever(self.semaphore, retriever, query)
-            )
-        responses = await self.asyncio_mod.gather(*response_jobs)
-
-        return await self.aevaluate_retrieval_res(
-            queries=queries,
-            node_ids=node_ids,
-            responses=responses,
-            **eval_kwargs_lists,
-        )

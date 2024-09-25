@@ -4,7 +4,6 @@ from typing import Optional
 import json
 import pandas as pd
 
-# from llama_index.core.evaluation import RetrieverEvaluator
 from llama_index.core.evaluation import (
     AnswerRelevancyEvaluator,
     FaithfulnessEvaluator,
@@ -12,7 +11,9 @@ from llama_index.core.evaluation import (
     SemanticSimilarityEvaluator,
 )
 from pai_rag.modules.evaluation.ragdataset_generator import GenerateDatasetPipeline
-from pai_rag.modules.evaluation.batch_eval_runner import BatchEvalRunner
+
+# from pai_rag.modules.evaluation.batch_eval_runner import BatchEvalRunner
+from pai_rag.modules.evaluation.batch_eval_runner_refactor import BatchEvalRunner
 from pai_rag.integrations.evaluation.retrieval.evaluator import MyRetrieverEvaluator
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,6 @@ class PaiEvaluator:
         llm,
         index,
         query_engine,
-        retriever,
         node_postprocessors,
         evaluation_dataset,
         retrieval_metrics,
@@ -37,7 +37,7 @@ class PaiEvaluator:
         self.index = index
         self.query_engine = query_engine
         self.query_engine._stream = False
-        self.retriever = retriever
+        self.retriever = self.query_engine._retriever
         self.node_postprocessors = node_postprocessors
         self.evaluation_dataset = evaluation_dataset
         self.retrieval_metrics = retrieval_metrics
@@ -148,18 +148,15 @@ class PaiEvaluator:
             show_progress=True,
         )
         if type in ["response", "all"]:
-            eval_results = await runner.aevaluate_queries(
+            eval_results = await runner.aevaluate_queries_for_response_refactor(
                 query_engine=self.query_engine,
                 queries=queries,
-                node_ids=reference_node_ids,
                 reference_answers=reference_answers,
             )
         else:
-            eval_results = await runner.aevaluate_queries_for_retrieval(
-                retriever=self.retriever,
+            eval_results = await runner.aevaluate_queries_for_retrieval_refactor(
                 queries=queries,
                 node_ids=reference_node_ids,
-                reference_answers=reference_answers,
             )
 
         if type in ["retrieval", "all"]:
