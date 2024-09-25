@@ -15,6 +15,7 @@ from llama_index.core.postprocessor import SimilarityPostprocessor
 
 DEFAULT_RANK_MODEL = "bge-reranker-base"
 DEFAULT_RANK_SIMILARITY_THRESHOLD = None
+DEFAULT_RERANK_SIMILARITY_THRESHOLD = 0
 DEFAULT_RANK_TOP_N = 2
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class PostprocessorModule(ConfigurableModule):
 
         reranker_type = config.get("reranker_type", "")
 
-        if reranker_type == "simple-weighted-reranker":
+        if reranker_type == "no-reranker":
             similarity_threshold = config.get(
                 "similarity_threshold", DEFAULT_RANK_SIMILARITY_THRESHOLD
             )
@@ -46,7 +47,7 @@ class PostprocessorModule(ConfigurableModule):
         elif reranker_type == "model-based-reranker":
             top_n = config.get("top_n", DEFAULT_RANK_TOP_N)
             similarity_threshold = config.get(
-                "similarity_threshold", DEFAULT_RANK_SIMILARITY_THRESHOLD
+                "reranker_similarity_threshold", DEFAULT_RERANK_SIMILARITY_THRESHOLD
             )
             reranker_model = config.get("reranker_model", DEFAULT_RANK_TOP_N)
             if (
@@ -56,7 +57,10 @@ class PostprocessorModule(ConfigurableModule):
                 model_dir = config.get("rerank_model_dir", DEFAULT_MODEL_DIR)
                 model = os.path.join(model_dir, reranker_model)
                 logger.info(
-                    f"[PostProcessor]: Reranker model used with model-based-reranker: {reranker_model}, top_n: {top_n}, and similarity_threshold: {similarity_threshold}."
+                    f"""[PostProcessor]: Reranker model inited
+                        model_name: {reranker_model}
+                        top_n: {top_n},
+                        similarity_threshold: {similarity_threshold}"""
                 )
                 post_processors.append(
                     MyModelBasedReranker(

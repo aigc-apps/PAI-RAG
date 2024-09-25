@@ -162,6 +162,7 @@ class ViewModel(BaseModel):
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
     similarity_threshold: float = None
+    reranker_similarity_threshold: float = None
 
     query_engine_type: str = None
 
@@ -394,6 +395,10 @@ class ViewModel(BaseModel):
             if similarity_threshold and similarity_threshold > 0
             else None
         )
+        reranker_similarity_threshold = config["postprocessor"].get(
+            "reranker_similarity_threshold", 0
+        )
+        view_model.reranker_similarity_threshold = reranker_similarity_threshold
 
         if reranker_type == "simple-weighted-reranker":
             view_model.reranker_type = "simple-weighted-reranker"
@@ -584,6 +589,9 @@ class ViewModel(BaseModel):
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
         config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
+        config["postprocessor"][
+            "reranker_similarity_threshold"
+        ] = self.reranker_similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
@@ -744,9 +752,18 @@ class ViewModel(BaseModel):
         settings["image_similarity_top_k"] = {"value": self.image_similarity_top_k}
         settings["need_image"] = {"value": self.need_image}
         settings["reranker_model"] = {"value": self.reranker_model}
-        settings["vector_weight"] = {"value": self.vector_weight}
-        settings["keyword_weight"] = {"value": self.keyword_weight}
+        settings["vector_weight"] = {
+            "value": self.vector_weight,
+            "visible": self.retrieval_mode == "Hybrid",
+        }
+        settings["keyword_weight"] = {
+            "value": self.keyword_weight,
+            "visible": self.retrieval_mode == "Hybrid",
+        }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
+        settings["reranker_similarity_threshold"] = {
+            "value": self.reranker_similarity_threshold
+        }
 
         prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
         settings["prm_type"] = {"value": prm_type}

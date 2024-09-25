@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, List, Any
 
-from pai_rag.modules.queryengine.pai_retriever_query_engine import (
+from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
 from pai_rag.modules.base.configurable_module import ConfigurableModule

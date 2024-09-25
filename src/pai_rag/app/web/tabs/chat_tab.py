@@ -51,7 +51,7 @@ def respond(input_elements: List[Any]):
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(msg)
 
-        elif query_type == "WebSearch":
+        elif query_type == "RAG (Search Web)":
             response_gen = rag_client.query_search(
                 msg, with_history=update_dict["include_history"], stream=is_streaming
             )
@@ -76,7 +76,7 @@ def create_chat_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
             query_type = gr.Radio(
-                ["Retrieval", "LLM", "WebSearch", "RAG (Retrieval + LLM)"],
+                ["Retrieval", "LLM", "RAG (Search Web)", "RAG (Retrieval + LLM)"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
                 value="RAG (Retrieval + LLM)",
@@ -87,6 +87,17 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="is_streaming",
                 value=True,
             )
+            need_image = gr.Checkbox(
+                label="Display Image",
+                info="Inference with multi-modal LLM.",
+                elem_id="need_image",
+            )
+            include_history = gr.Checkbox(
+                label="Chat history",
+                info="Query with chat history.",
+                elem_id="include_history",
+            )
+
             with gr.Column(visible=True) as vs_col:
                 vec_model_argument = gr.Accordion(
                     "Parameters of Vector Retrieval", open=False
@@ -98,30 +109,29 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="retrieval_mode",
                     )
 
+                    vector_weight = gr.Slider(
+                        minimum=0,
+                        maximum=1,
+                        value=0.7,
+                        elem_id="vector_weight",
+                        label="Weight of embedding retrieval results",
+                        visible=(retrieval_mode == "Hybrid"),
+                    )
+                    keyword_weight = gr.Slider(
+                        minimum=0,
+                        maximum=1,
+                        value=float(1 - vector_weight.value),
+                        elem_id="keyword_weight",
+                        label="Weight of keyword retrieval results",
+                        interactive=False,
+                        visible=(retrieval_mode == "Hybrid"),
+                    )
+
                     reranker_type = gr.Radio(
-                        ["simple-weighted-reranker", "model-based-reranker"],
+                        ["no-reranker", "model-based-reranker"],
                         label="Reranker Type",
                         elem_id="reranker_type",
                     )
-
-                    with gr.Column(
-                        visible=(reranker_type == "simple-weighted-reranker")
-                    ) as simple_reranker_col:
-                        vector_weight = gr.Slider(
-                            minimum=0,
-                            maximum=1,
-                            value=0.7,
-                            elem_id="vector_weight",
-                            label="Weight of embedding retrieval results",
-                        )
-                        keyword_weight = gr.Slider(
-                            minimum=0,
-                            maximum=1,
-                            value=float(1 - vector_weight.value),
-                            elem_id="keyword_weight",
-                            label="Weight of keyword retrieval results",
-                            interactive=False,
-                        )
 
                     with gr.Column(
                         visible=(reranker_type == "model-based-reranker")
@@ -133,6 +143,13 @@ def create_chat_tab() -> Dict[str, Any]:
                             ],
                             label="Re-Ranker Model (Note: It will take a long time to load the model when using it for the first time.)",
                             elem_id="reranker_model",
+                        )
+                        reranker_similarity_threshold = gr.Slider(
+                            minimum=-10,
+                            maximum=10,
+                            step=0.01,
+                            elem_id="reranker_similarity_threshold",
+                            label="Reranker Similarity Score Threshold (The more similar the items, the bigger the value.)",
                         )
 
                     with gr.Column():
@@ -149,11 +166,6 @@ def create_chat_tab() -> Dict[str, Any]:
                             step=1,
                             elem_id="image_similarity_top_k",
                             label="Image Top K (choose between 0 and 10)",
-                        )
-                        need_image = gr.Checkbox(
-                            label="Inference with multi-modal LLM",
-                            info="Inference with multi-modal LLM.",
-                            elem_id="need_image",
                         )
                         similarity_threshold = gr.Slider(
                             minimum=0,
@@ -173,38 +185,41 @@ def create_chat_tab() -> Dict[str, Any]:
                     )
 
                     def change_reranker_type(reranker_type):
-                        if reranker_type == "simple-weighted-reranker":
+                        if reranker_type == "no-reranker":
                             return {
-                                simple_reranker_col: gr.update(visible=True),
                                 model_reranker_col: gr.update(visible=False),
                             }
                         elif reranker_type == "model-based-reranker":
                             return {
-                                simple_reranker_col: gr.update(visible=False),
                                 model_reranker_col: gr.update(visible=True),
                             }
                         else:
                             return {
-                                simple_reranker_col: gr.update(visible=False),
                                 model_reranker_col: gr.update(visible=False),
                             }
 
                     def change_retrieval_mode(retrieval_mode):
                         if retrieval_mode == "Hybrid":
-                            return {simple_reranker_col: gr.update(visible=True)}
+                            return {
+                                vector_weight: gr.update(visible=True),
+                                keyword_weight: gr.update(visible=True),
+                            }
                         else:
-                            return {simple_reranker_col: gr.update(visible=False)}
+                            return {
+                                vector_weight: gr.update(visible=False),
+                                keyword_weight: gr.update(visible=False),
+                            }
 
                     reranker_type.input(
                         fn=change_reranker_type,
                         inputs=reranker_type,
-                        outputs=[simple_reranker_col, model_reranker_col],
+                        outputs=[model_reranker_col],
                     )
 
                     retrieval_mode.input(
                         fn=change_retrieval_mode,
                         inputs=retrieval_mode,
-                        outputs=[simple_reranker_col],
+                        outputs=[vector_weight, keyword_weight],
                     )
 
                 vec_args = {
@@ -214,19 +229,14 @@ def create_chat_tab() -> Dict[str, Any]:
                     keyword_weight,
                     similarity_top_k,
                     image_similarity_top_k,
-                    need_image,
                     similarity_threshold,
+                    reranker_similarity_threshold,
                     reranker_model,
                 }
 
             with gr.Column(visible=True) as llm_col:
                 model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
-                    include_history = gr.Checkbox(
-                        label="Chat history",
-                        info="Query with chat history.",
-                        elem_id="include_history",
-                    )
                     llm_temp = gr.Slider(
                         minimum=0,
                         maximum=1,
@@ -235,7 +245,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="llm_temperature",
                         label="Temperature (choose between 0 and 1)",
                     )
-                llm_args = {llm_temp, include_history}
+                llm_args = {llm_temp}
 
             with gr.Column(visible=True) as search_col:
                 search_model_argument = gr.Accordion(
@@ -342,16 +352,6 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=False),
                     }
-                elif query_type == "WebSearch":
-                    return {
-                        vs_col: gr.update(visible=False),
-                        vec_model_argument: gr.update(open=False),
-                        search_model_argument: gr.update(open=True),
-                        search_col: gr.update(visible=True),
-                        llm_col: gr.update(visible=False),
-                        model_argument: gr.update(open=False),
-                        lc_col: gr.update(visible=False),
-                    }
                 elif query_type == "RAG (Retrieval + LLM)":
                     return {
                         vs_col: gr.update(visible=True),
@@ -361,6 +361,16 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
+                    }
+                elif query_type == "RAG (Search Web)":
+                    return {
+                        vs_col: gr.update(visible=False),
+                        vec_model_argument: gr.update(open=False),
+                        search_model_argument: gr.update(open=True),
+                        search_col: gr.update(visible=True),
+                        llm_col: gr.update(visible=False),
+                        model_argument: gr.update(open=False),
+                        lc_col: gr.update(visible=False),
                     }
 
             query_type.input(
@@ -392,7 +402,15 @@ def create_chat_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
         chat_args = (
-            {text_qa_template, question, query_type, chatbot, is_streaming}
+            {
+                text_qa_template,
+                question,
+                query_type,
+                chatbot,
+                is_streaming,
+                need_image,
+                include_history,
+            }
             .union(vec_args)
             .union(llm_args)
             .union(search_args)
@@ -434,6 +452,7 @@ def create_chat_tab() -> Dict[str, Any]:
             vector_weight.elem_id: vector_weight,
             keyword_weight.elem_id: keyword_weight,
             similarity_threshold.elem_id: similarity_threshold,
+            reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
             prm_type.elem_id: prm_type,
             text_qa_template.elem_id: text_qa_template,
             search_lang.elem_id: search_lang,

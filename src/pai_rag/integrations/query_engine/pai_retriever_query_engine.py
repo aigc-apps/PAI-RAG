@@ -69,7 +69,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         text_nodes = self._apply_node_postprocessors(
             text_nodes, query_bundle=query_bundle
         )
-        return [n for n in text_nodes if n.score > 0] + image_nodes
+        return [n for n in text_nodes] + image_nodes
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
@@ -91,7 +91,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
                 query_bundle=query_bundle,
             )
 
-        return [n for n in text_nodes if n.score > 0] + image_nodes
+        return [n for n in text_nodes] + image_nodes
 
     @dispatcher.span
     def _query(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:

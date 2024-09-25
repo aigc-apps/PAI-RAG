@@ -24,7 +24,7 @@ class RagDataLoader:
         self._raptor_processor = raptor_processor
 
         self._embed_model = embed_model
-        self._multi_modal_embed_modal = multi_modal_embed_modal
+        self._multi_modal_embed_model = multi_modal_embed_modal
         self._vector_index = vector_index
 
     def load_data(
@@ -43,11 +43,11 @@ class RagDataLoader:
             from_oss=from_oss,
         )
         if from_oss:
+            logger.info(f"Loaded {len(documents)} documents from {oss_path}")
+        else:
             logger.info(
                 f"Loaded {len(documents)} documents from {file_path_or_directory}"
             )
-        else:
-            logger.info(f"Loaded {len(documents)} documents from {oss_path}")
 
         if enable_raptor:
             assert self._raptor_processor is not None, "Raptor processor is not set."
@@ -55,7 +55,7 @@ class RagDataLoader:
                 transformations=[
                     self._node_parser,
                     self._embed_model,
-                    self._multi_modal_embed_modal,
+                    self._multi_modal_embed_model,
                     self._raptor_processor,
                 ]
             )
@@ -64,7 +64,7 @@ class RagDataLoader:
                 transformations=[
                     self._node_parser,
                     self._embed_model,
-                    self._multi_modal_embed_modal,
+                    self._multi_modal_embed_model,
                 ]
             )
 
