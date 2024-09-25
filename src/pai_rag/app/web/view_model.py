@@ -605,6 +605,7 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
+        print(config)
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
