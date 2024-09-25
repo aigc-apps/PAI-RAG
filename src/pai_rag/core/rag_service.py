@@ -116,6 +116,13 @@ class RagService:
         from_oss: bool = False,
         temp_file_dir: str = None,
     ):
+        try:
+            asyncio.get_event_loop()
+        except Exception as ex:
+            logger.warn(f"No event loop found, will create new: {ex}")
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
