@@ -7,7 +7,8 @@ from pai_rag.app.web.ui_constants import (
     DEFAULT_HF_EMBED_MODEL,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
-    PROMPT_MAP,
+    DEFAULT_TEXT_QA_PROMPT_TMPL,
+    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
 import pandas as pd
 import os
@@ -155,9 +156,7 @@ class ViewModel(BaseModel):
     db_nl2sql_prompt: str = None
 
     # postprocessor
-    reranker_type: str = (
-        "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
-    )
+    reranker_type: str = "no-reranker"  # no-reranker / model-based-reranker
     reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
@@ -168,7 +167,8 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
-    text_qa_template: str = None
+    text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_TMPL
+    multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -386,9 +386,7 @@ class ViewModel(BaseModel):
 
         view_model.db_nl2sql_prompt = config["data_analysis"].get("nl2sql_prompt", None)
 
-        reranker_type = config["postprocessor"].get(
-            "reranker_type", "simple-weighted-reranker"
-        )
+        reranker_type = config["postprocessor"].get("reranker_type", "no-reranker")
         similarity_threshold = config["postprocessor"].get("similarity_threshold", 0)
         view_model.similarity_threshold = (
             similarity_threshold
@@ -400,8 +398,8 @@ class ViewModel(BaseModel):
         )
         view_model.reranker_similarity_threshold = reranker_similarity_threshold
 
-        if reranker_type == "simple-weighted-reranker":
-            view_model.reranker_type = "simple-weighted-reranker"
+        if reranker_type == "no-reranker":
+            view_model.reranker_type = "no-reranker"
 
         elif reranker_type == "model-based-reranker":
             view_model.reranker_type = "model-based-reranker"
@@ -413,7 +411,10 @@ class ViewModel(BaseModel):
             "type", "SimpleSummarize"
         )
         view_model.text_qa_template = config["synthesizer"].get(
-            "text_qa_template", None
+            "text_qa_template", DEFAULT_TEXT_QA_PROMPT_TMPL
+        )
+        view_model.multimodal_qa_template = config["synthesizer"].get(
+            "multimodal_qa_template", DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
         )
 
         search_config = config.get("search") or {}
@@ -596,6 +597,7 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+        config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
 
         config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
             "BING_SEARCH_KEY"
@@ -603,7 +605,6 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
-        print(config)
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -765,9 +766,8 @@ class ViewModel(BaseModel):
             "value": self.reranker_similarity_threshold
         }
 
-        prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
-        settings["prm_type"] = {"value": prm_type}
         settings["text_qa_template"] = {"value": self.text_qa_template}
+        settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
 
         settings["vectordb_type"] = {"value": self.vectordb_type}
 
