@@ -1,12 +1,6 @@
 from typing import Dict, Any, List
 import gradio as gr
 from pai_rag.app.web.rag_client import RagApiError, rag_client
-from pai_rag.app.web.ui_constants import (
-    SIMPLE_PROMPTS,
-    GENERAL_PROMPTS,
-    EXTRACT_URL_PROMPTS,
-    ACCURATE_CONTENT_PROMPTS,
-)
 
 
 def clear_history(chatbot):
@@ -247,7 +241,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     )
                 llm_args = {llm_temp}
 
-            with gr.Column(visible=True) as search_col:
+            with gr.Column(visible=False) as search_col:
                 search_model_argument = gr.Accordion(
                     "Parameters of Web Search", open=False
                 )
@@ -274,58 +268,20 @@ def create_chat_tab() -> Dict[str, Any]:
                 search_args = {search_api_key, search_count, search_lang}
 
             with gr.Column(visible=True) as lc_col:
-                prm_type = gr.Radio(
-                    [
-                        "Simple",
-                        "General",
-                        "Extract URL",
-                        "Accurate Content",
-                        "Custom",
-                    ],
-                    label="\N{rocket} Please choose the prompt template type",
-                    elem_id="prm_type",
-                )
-                text_qa_template = gr.Textbox(
-                    label="prompt template",
-                    value="",
-                    elem_id="text_qa_template",
-                    lines=4,
-                )
-
-                def change_prompt_template(prm_type):
-                    if prm_type == "Simple":
-                        return {
-                            text_qa_template: gr.update(
-                                value=SIMPLE_PROMPTS, interactive=False
-                            )
-                        }
-                    elif prm_type == "General":
-                        return {
-                            text_qa_template: gr.update(
-                                value=GENERAL_PROMPTS, interactive=False
-                            )
-                        }
-                    elif prm_type == "Extract URL":
-                        return {
-                            text_qa_template: gr.update(
-                                value=EXTRACT_URL_PROMPTS, interactive=False
-                            )
-                        }
-                    elif prm_type == "Accurate Content":
-                        return {
-                            text_qa_template: gr.update(
-                                value=ACCURATE_CONTENT_PROMPTS,
-                                interactive=False,
-                            )
-                        }
-                    else:
-                        return {text_qa_template: gr.update(value="", interactive=True)}
-
-                prm_type.input(
-                    fn=change_prompt_template,
-                    inputs=prm_type,
-                    outputs=[text_qa_template],
-                )
+                with gr.Tab("LLM Prompt"):
+                    text_qa_template = gr.Textbox(
+                        label="Prompt Template",
+                        value="",
+                        elem_id="text_qa_template",
+                        lines=10,
+                    )
+                with gr.Tab("MultiModal LLM Prompt"):
+                    multimodal_qa_template = gr.Textbox(
+                        label="Multi-modal LLM Prompt Template",
+                        value="",
+                        elem_id="multimodal_qa_template",
+                        lines=12,
+                    )
 
             cur_tokens = gr.Textbox(
                 label="\N{fire} Current total count of tokens", visible=False
@@ -404,6 +360,7 @@ def create_chat_tab() -> Dict[str, Any]:
         chat_args = (
             {
                 text_qa_template,
+                multimodal_qa_template,
                 question,
                 query_type,
                 chatbot,
@@ -453,7 +410,7 @@ def create_chat_tab() -> Dict[str, Any]:
             keyword_weight.elem_id: keyword_weight,
             similarity_threshold.elem_id: similarity_threshold,
             reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
-            prm_type.elem_id: prm_type,
+            multimodal_qa_template.elem_id: multimodal_qa_template,
             text_qa_template.elem_id: text_qa_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,
