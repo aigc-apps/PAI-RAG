@@ -1,9 +1,10 @@
+from dataclasses import dataclass
 from typing import List, Optional
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
 from llama_index.core.callbacks.base import CallbackManager
@@ -13,6 +14,11 @@ import logging
 
 dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PaiQueryBundle(QueryBundle):
+    stream: bool = False
 
 
 class PaiRetrieverQueryEngine(RetrieverQueryEngine):
@@ -53,8 +59,17 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
                 query_bundle, metadata=self._transform_metadata
             )
         nodes = self._retriever.retrieve(query_bundle)
-        nodes = self._apply_node_postprocessors(nodes, query_bundle=query_bundle)
-        return [n for n in nodes if n.score > 0]
+        text_nodes, image_nodes = [], []
+        for node in nodes:
+            if isinstance(node.node, ImageNode):
+                image_nodes.append(node)
+            else:
+                text_nodes.append(node)
+
+        text_nodes = self._apply_node_postprocessors(
+            text_nodes, query_bundle=query_bundle
+        )
+        return [n for n in text_nodes] + image_nodes
 
     # 支持异步
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
@@ -63,15 +78,23 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
                 query_bundle, metadata=self._transform_metadata
             )
         nodes = await self._retriever.aretrieve(query_bundle)
+        text_nodes, image_nodes = [], []
+        for node in nodes:
+            if isinstance(node.node, ImageNode):
+                image_nodes.append(node)
+            else:
+                text_nodes.append(node)
+
         for node_postprocessor in self._node_postprocessors:
-            nodes = node_postprocessor.postprocess_nodes(
-                nodes,
+            text_nodes = node_postprocessor.postprocess_nodes(
+                text_nodes,
                 query_bundle=query_bundle,
             )
-        return [n for n in nodes if n.score > 0]
+
+        return [n for n in text_nodes] + image_nodes
 
     @dispatcher.span
-    def _query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+    def _query(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
@@ -86,7 +109,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         return response
 
     @dispatcher.span
-    async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+    async def _aquery(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}

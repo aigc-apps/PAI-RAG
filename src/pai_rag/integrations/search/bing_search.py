@@ -5,6 +5,7 @@ from llama_index.core.schema import NodeWithScore, BaseNode
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.response_synthesizers import BaseSynthesizer
+from llama_index.core.schema import QueryBundle
 import faiss
 import logging
 
@@ -104,7 +105,7 @@ class BingSearchTool:
 
     async def aquery(
         self,
-        query: str,
+        query: QueryBundle,
         lang: str = None,
         search_top_k: Optional[int] = None,
     ):
@@ -113,9 +114,9 @@ class BingSearchTool:
         if search_top_k:
             self.search_count = search_top_k
 
-        query_embedding = self.embed_model.get_query_embedding(query)
+        query_embedding = self.embed_model.get_query_embedding(query.query_str)
 
-        docs = self._search(query=query)
+        docs = self._search(query=query.query_str)
         logger.info(f"Get {len(docs)} docs from url.")
 
         nodes = self.node_parser.get_nodes_from_documents(docs)
@@ -125,35 +126,3 @@ class BingSearchTool:
         logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
 
         return await self.synthesizer.asynthesize(query=query, nodes=nodes_result)
-
-    async def astream_query(
-        self,
-        query: str,
-        lang: str = None,
-        search_top_k: Optional[int] = None,
-    ):
-        if lang:
-            self.search_lang = lang
-        if search_top_k:
-            self.search_count = search_top_k
-
-        streaming = self.synthesizer._streaming
-        self.synthesizer._streaming = True
-
-        query_embedding = self.embed_model.get_query_embedding(query)
-
-        docs = self._search(query=query)
-        logger.info(f"Get {len(docs)} docs from url.")
-
-        nodes = self.node_parser.get_nodes_from_documents(docs)
-        logger.info(f"Parsed {len(docs)} nodes from doc.")
-
-        nodes_result = self._rank_nodes(nodes, query_embedding)
-        logger.info(f"Searched {len(nodes_result)} nodes from web pages.")
-
-        stream_response = await self.synthesizer.asynthesize(
-            query=query, nodes=nodes_result
-        )
-        self.synthesizer._streaming = streaming
-
-        return stream_response

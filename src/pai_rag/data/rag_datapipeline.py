@@ -9,8 +9,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-logging.basicConfig(level=logging.INFO)
-
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
 

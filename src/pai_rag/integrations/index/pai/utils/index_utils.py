@@ -7,17 +7,16 @@ from llama_index.core.indices.registry import INDEX_STRUCT_TYPE_TO_INDEX_CLASS
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.data_structs.struct_type import IndexStructType
 
-from pai_rag.integrations.index.multi_modal_index import MyMultiModalVectorStoreIndex
-from pai_rag.modules.index.my_vector_store_index import MyVectorStoreIndex
+from pai_rag.integrations.index.pai.multimodal.multimodal_index import (
+    PaiMultiModalVectorStoreIndex,
+)
 
 
 MODIFIED_INDEX_STRUCT_TYPE_TO_INDEX_CLASS = INDEX_STRUCT_TYPE_TO_INDEX_CLASS
 MODIFIED_INDEX_STRUCT_TYPE_TO_INDEX_CLASS[
-    IndexStructType.VECTOR_STORE
-] = MyVectorStoreIndex
-MODIFIED_INDEX_STRUCT_TYPE_TO_INDEX_CLASS[
     IndexStructType.MULTIMODAL_VECTOR_STORE
-] = MyMultiModalVectorStoreIndex
+] = PaiMultiModalVectorStoreIndex
+
 logger = logging.getLogger(__name__)
 
 

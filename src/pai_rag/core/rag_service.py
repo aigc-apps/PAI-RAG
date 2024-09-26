@@ -3,7 +3,7 @@ import os
 import traceback
 from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import ServiceError, UserInputError
-from pai_rag.core.rag_application import RagApplication
+from pai_rag.core.rag_application import RagApplication, RagChatType
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.utils.oss_utils import check_and_set_oss_auth, get_oss_auth
 from pai_rag.app.api.models import (
@@ -51,13 +51,13 @@ class RagService:
 
         self.rag_configuration.persist()
 
+        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
+
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())
 
         if os.path.exists(TASK_STATUS_FILE):
             open(TASK_STATUS_FILE, "w").close()
-
-        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
 
     def get_config(self):
         try:
@@ -109,56 +109,47 @@ class RagService:
         task_id: str,
         input_files: List[str] = None,
         filter_pattern: str = None,
-        oss_prefix: str = None,
+        oss_path: str = None,
         faiss_path: str = None,
         enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
         from_oss: bool = False,
+        temp_file_dir: str = None,
         enable_eval: bool = False,
         eval_exp_id: str = None,
     ):
+        try:
+            asyncio.get_event_loop()
+        except Exception as ex:
+            logger.warn(f"No event loop found, will create new: {ex}")
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+
         self.check_updates()
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
-            if not from_oss:
-                if not enable_eval:
-                    self.rag.load_knowledge(
-                        input_files,
-                        filter_pattern,
-                        faiss_path,
-                        enable_qa_extraction,
-                        enable_raptor,
-                    )
-                else:
-                    self.rag.load_knowledge_for_evaluation(
-                        input_files,
-                        filter_pattern,
-                        enable_qa_extraction,
-                        enable_raptor,
-                        eval_exp_id,
-                    )
-            else:
-                self.rag.load_knowledge_from_oss(
-                    filter_pattern,
-                    oss_prefix,
-                    faiss_path,
-                    enable_qa_extraction,
-                    enable_raptor,
-                )
-
+            self.rag.load_knowledge(
+                input_files=input_files,
+                filter_pattern=filter_pattern,
+                faiss_path=faiss_path,
+                enable_qa_extraction=enable_qa_extraction,
+                from_oss=from_oss,
+                oss_path=oss_path,
+                enable_raptor=enable_raptor,
+            )
             with open(TASK_STATUS_FILE, "a") as f:
                 f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
-            logger.error(
-                f"Upload failed: {ex} {str(ex.__cause__)} {traceback.format_exc()}"
-            )
+            logger.error(f"Upload failed: {ex} {traceback.format_exc()}")
             with open(TASK_STATUS_FILE, "a") as f:
-                detail = f"{ex}: {str(ex.__cause__)}".replace("\t", " ").replace(
-                    "\n", " "
-                )
+                detail = f"{ex}".replace("\t", " ").replace("\n", " ")
+                print("====", detail)
                 f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
+        finally:
+            if temp_file_dir:
+                os.rmdir(temp_file_dir)
 
     def get_task_status(self, task_id: str) -> str:
         self.check_updates()
@@ -181,7 +172,7 @@ class RagService:
     async def aquery(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery(query)
+            return await self.rag.aquery(query, RagChatType.RAG)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
@@ -189,7 +180,7 @@ class RagService:
     async def aquery_search(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_search(query)
+            return await self.rag.aquery(query, RagChatType.WEB)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Search failed: {ex}")
@@ -197,7 +188,7 @@ class RagService:
     async def aquery_llm(self, query: RagQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_llm(query)
+            return await self.rag.aquery(query, RagChatType.LLM)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
@@ -205,7 +196,7 @@ class RagService:
     async def aquery_retrieval(self, query: RetrievalQuery):
         try:
             self.check_updates()
-            return await self.rag.aquery_retrieval(query)
+            return await self.rag.aretrieve(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
