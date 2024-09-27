@@ -7,15 +7,25 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_DIM_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
+    EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
 )
 
 
-def change_emb_source(source):
+def change_emb_source(source, model):
     return [
         gr.update(visible=(source == "HuggingFace")),
         EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
         if source == "HuggingFace"
         else DEFAULT_EMBED_SIZE,
+        EMBEDDING_TYPE_DICT.get(model, "Default")
+        if source == "HuggingFace"
+        else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     ]
 
 
@@ -23,7 +33,15 @@ def change_emb_model(source, model):
     return (
         EMBEDDING_DIM_DICT.get(model, DEFAULT_EMBED_SIZE)
         if source == "HuggingFace"
-        else DEFAULT_EMBED_SIZE
+        else DEFAULT_EMBED_SIZE,
+        EMBEDDING_TYPE_DICT.get(model, "Default")
+        if source == "HuggingFace"
+        else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     )
 
 

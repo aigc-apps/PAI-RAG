@@ -48,7 +48,7 @@ class OpenAIEmbeddingConfig(PaiBaseEmbeddingConfig):
 
 class HuggingFaceEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.huggingface] = SupportedEmbedType.huggingface
-    model_name: str | None = "bge-small-zh-v1.5"
+    model_name: str | None = "bge-large-zh-v1.5"
 
 
 class CnClipEmbeddingConfig(PaiBaseEmbeddingConfig):

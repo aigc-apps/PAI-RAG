@@ -191,7 +191,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
         logger.info("Start to loading minerU config file.")
         ModelScopeDownloader().load_mineru_config()
         logger.info("Finished loading minerU config file.")
-
+    os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
     if enable_example:

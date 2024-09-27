@@ -37,7 +37,7 @@ enable_multimodal = true
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
 # eg.
 # source = "HuggingFace"
-# model_name = "bge-small-zh-v1.5"
+# model_name = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
 source = "DashScope"
