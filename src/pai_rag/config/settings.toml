@@ -40,7 +40,8 @@ enable_multimodal = true
 # model_name = "bge-small-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
-source = "DashScope"
+source = "HuggingFace"
+model_name = "bge-large-zh-v1.5"
 embed_batch_size = 10
 
 [rag.embedding.multi_modal]

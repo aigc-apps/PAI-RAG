@@ -32,16 +32,52 @@ DEFAULT_CSS_STYPE = """
         }
         """
 
-DEFAULT_EMBED_SIZE = 1536
+DEFAULT_EMBED_SIZE = 1024
+
+DEFAULT_HF_EMBED_MODEL = "bge-large-zh-v1.5"
+
+
+EMBEDDING_MODEL_DEPRECATED = [
+    "bge-small-zh-v1.5",
+    "SGPT-125M-weightedmean-nli-bitfit",
+    "text2vec-large-chinese",
+    "paraphrase-multilingual-MiniLM-L12-v2",
+]
+
+EMBEDDING_MODEL_LIST = [
+    "bge-large-zh-v1.5",
+    "Chuxin-Embedding",
+    "bge-large-en-v1.5",
+    "gte-large-en-v1.5",
+    "bge-m3",
+    "multilingual-e5-large-instruct",
+]
 
 EMBEDDING_DIM_DICT = {
+    "bge-large-zh-v1.5": 1024,
+    "Chuxin-Embedding": 1024,
+    "bge-large-en-v1.5": 1024,
+    "gte-large-en-v1.5": 1024,
+    "bge-m3": 1024,
+    "multilingual-e5-large-instruct": 1024,
     "bge-small-zh-v1.5": 512,
     "SGPT-125M-weightedmean-nli-bitfit": 768,
     "text2vec-large-chinese": 1024,
     "paraphrase-multilingual-MiniLM-L12-v2": 384,
 }
 
-DEFAULT_HF_EMBED_MODEL = "bge-small-zh-v1.5"
+EMBEDDING_TYPE_DICT = {
+    "bge-large-zh-v1.5": "Chinese",
+    "Chuxin-Embedding": "Chinese",
+    "bge-large-en-v1.5": "English",
+    "gte-large-en-v1.5": "English",
+    "bge-m3": "Multilingual",
+    "multilingual-e5-large-instruct": "Multilingual",
+    "bge-small-zh-v1.5": "Chinese",
+    "SGPT-125M-weightedmean-nli-bitfit": "Multilingual",
+    "text2vec-large-chinese": "Chinese",
+    "paraphrase-multilingual-MiniLM-L12-v2": "Multilingual",
+}
 
 EMBEDDING_API_KEY_DICT = {"HuggingFace": False, "OpenAI": True, "DashScope": True}
 
