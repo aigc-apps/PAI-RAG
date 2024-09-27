@@ -25,7 +25,6 @@ def create_setting_tab() -> Dict[str, Any]:
                     interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
                 embed_model = gr.Dropdown(
-                    # EMBEDDING_MODEL_LIST,
                     label="Embedding Model Name",
                     elem_id="embed_model",
                     visible=False,

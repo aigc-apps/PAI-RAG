@@ -37,7 +37,7 @@ class ViewModel(BaseModel):
     embed_source: str = "HuggingFace"
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
-    embed_type: str = "unknown"
+    embed_type: str = "Default"
     embed_api_key: str = None
     embed_batch_size: int = 10
 
