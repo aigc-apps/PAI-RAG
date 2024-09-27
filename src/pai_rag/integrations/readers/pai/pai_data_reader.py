@@ -129,6 +129,10 @@ def get_input_files(
         # Single file
         input_files = [file_path_or_directory]
 
+    if not input_files:
+        raise ValueError(
+            f"No file found at path '{file_path_or_directory}' with pattern '{filter_pattern}'."
+        )
     return input_files
 
 
