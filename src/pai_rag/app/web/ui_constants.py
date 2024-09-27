@@ -79,6 +79,19 @@ EMBEDDING_TYPE_DICT = {
     "paraphrase-multilingual-MiniLM-L12-v2": "Multilingual",
 }
 
+EMBEDDING_MODEL_LINK_DICT = {
+    "bge-large-zh-v1.5": "https://huggingface.co/BAAI/bge-large-zh-v1.5",
+    "Chuxin-Embedding": "https://huggingface.co/chuxin-llm/Chuxin-Embedding",
+    "bge-large-en-v1.5": "https://huggingface.co/BAAI/bge-large-en-v1.5",
+    "gte-large-en-v1.5": "https://huggingface.co/Alibaba-NLP/gte-large-en-v1.5",
+    "bge-m3": "https://huggingface.co/BAAI/bge-m3",
+    "multilingual-e5-large-instruct": "https://huggingface.co/intfloat/multilingual-e5-large-instruct",
+    "bge-small-zh-v1.5": "https://huggingface.co/BAAI/bge-small-zh-v1.5",
+    "SGPT-125M-weightedmean-nli-bitfit": "https://huggingface.co/Muennighoff/SGPT-125M-weightedmean-nli-bitfit",
+    "text2vec-large-chinese": "https://huggingface.co/GanymedeNil/text2vec-large-chinese",
+    "paraphrase-multilingual-MiniLM-L12-v2": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+}
+
 EMBEDDING_API_KEY_DICT = {"HuggingFace": False, "OpenAI": True, "DashScope": True}
 
 LLM_MODEL_KEY_DICT = {

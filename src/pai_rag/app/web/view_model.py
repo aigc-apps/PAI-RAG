@@ -8,6 +8,7 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_MODEL_DEPRECATED,
     EMBEDDING_DIM_DICT,
     EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
     DEFAULT_TEXT_QA_PROMPT_TMPL,
@@ -38,6 +39,7 @@ class ViewModel(BaseModel):
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
     embed_type: str = "Default"
+    embed_link: str = ""
     embed_api_key: str = None
     embed_batch_size: int = 10
 
@@ -709,6 +711,11 @@ class ViewModel(BaseModel):
             "value": EMBEDDING_TYPE_DICT.get(self.embed_model, "Default")
             if self.embed_source == "HuggingFace"
             else "Default"
+        }
+        settings["embed_link"] = {
+            "value": f"Model Introduction: [{self.embed_model}]({EMBEDDING_MODEL_LINK_DICT.get(self.embed_model, '')})"
+            if self.embed_source == "HuggingFace"
+            else ""
         }
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 

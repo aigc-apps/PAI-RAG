@@ -8,6 +8,7 @@ from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
     EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
 )
 
 
@@ -20,6 +21,11 @@ def change_emb_source(source, model):
         EMBEDDING_TYPE_DICT.get(model, "Default")
         if source == "HuggingFace"
         else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     ]
 
 
@@ -31,6 +37,11 @@ def change_emb_model(source, model):
         EMBEDDING_TYPE_DICT.get(model, "Default")
         if source == "HuggingFace"
         else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     )
 
 

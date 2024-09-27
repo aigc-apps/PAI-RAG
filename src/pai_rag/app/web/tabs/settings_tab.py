@@ -42,6 +42,10 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="Embedding Type",
                         elem_id="embed_type",
                     )
+                    embed_link = gr.Markdown(
+                        label="Model URL Link",
+                        elem_id="embed_link",
+                    )
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **(Optional) OSS Bucket**")
                 use_oss = gr.Checkbox(
@@ -73,12 +77,12 @@ def create_setting_tab() -> Dict[str, Any]:
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_model, embed_dim, embed_type],
+                outputs=[embed_model, embed_dim, embed_type, embed_link],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_dim, embed_type],
+                outputs=[embed_dim, embed_type, embed_link],
             )
             use_oss.change(
                 fn=ev_listeners.change_use_oss,
@@ -90,6 +94,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_source,
                     embed_dim,
                     embed_type,
+                    embed_link,
                     embed_model,
                     embed_batch_size,
                     use_oss,
@@ -227,6 +232,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 embed_model,
                 embed_dim,
                 embed_type,
+                embed_link,
                 embed_batch_size,
                 use_oss,
                 oss_ak,
