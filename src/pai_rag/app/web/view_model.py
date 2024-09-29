@@ -62,16 +62,16 @@ class ViewModel(BaseModel):
     oss_endpoint: str = None
     oss_bucket: str = None
 
-    # chunking
+    # node_parser
     parser_type: str = "Sentence"
     chunk_size: int = 500
     chunk_overlap: int = 20
+    enable_multimodal: bool = False
 
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
-    enable_multimodal: bool = False
     enable_table_summary: bool = False
 
     config_file: str = None
@@ -320,6 +320,9 @@ class ViewModel(BaseModel):
         view_model.parser_type = config["node_parser"]["type"]
         view_model.chunk_size = config["node_parser"]["chunk_size"]
         view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
+        view_model.enable_multimodal = config["node_parser"].get(
+            "enable_multimodal", view_model.enable_multimodal
+        )
 
         view_model.reader_type = config["data_reader"].get(
             "type", view_model.reader_type
@@ -329,9 +332,6 @@ class ViewModel(BaseModel):
         )
         view_model.enable_raptor = config["data_reader"].get(
             "enable_raptor", view_model.enable_raptor
-        )
-        view_model.enable_multimodal = config["data_reader"].get(
-            "enable_multimodal", view_model.enable_multimodal
         )
         view_model.enable_table_summary = config["data_reader"].get(
             "enable_table_summary", view_model.enable_table_summary
@@ -475,10 +475,10 @@ class ViewModel(BaseModel):
         config["node_parser"]["type"] = self.parser_type
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
+        config["node_parser"]["enable_multimodal"] = self.enable_multimodal
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["enable_raptor"] = self.enable_raptor
-        config["data_reader"]["enable_multimodal"] = self.enable_multimodal
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
@@ -605,7 +605,6 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
-        print(config)
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):

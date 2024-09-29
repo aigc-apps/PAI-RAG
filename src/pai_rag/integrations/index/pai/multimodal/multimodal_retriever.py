@@ -2,6 +2,7 @@
 
 import asyncio
 from typing import Any, Dict, List, Optional
+import json
 
 from llama_index.core.base.base_multi_modal_retriever import (
     MultiModalRetriever,
@@ -185,7 +186,7 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         # 从文本中召回图片
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
-                image_urls = node.node.metadata.get("image_url")
+                image_urls = json.loads(node.node.metadata.get("image_url_list_str"))
                 if not image_urls:
                     continue
                 for image_url in image_urls:
@@ -461,7 +462,7 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         # 从文本中召回图片
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
-                image_urls = node.node.metadata.get("image_url")
+                image_urls = json.loads(node.node.metadata.get("image_url_list_str"))
                 if not image_urls:
                     continue
                 for image_url in image_urls:

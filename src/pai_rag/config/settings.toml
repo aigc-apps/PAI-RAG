@@ -31,7 +31,6 @@ type = "local"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
-enable_multimodal = true
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
 # if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
@@ -82,6 +81,7 @@ proba_threshold = 0.10
 type = "Sentence"
 chunk_size = 500
 chunk_overlap = 10
+enable_multimodal = true
 
 [rag.oss_store]
 bucket = ""

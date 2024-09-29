@@ -1,15 +1,26 @@
 """Markdown node parser."""
 from llama_index.core.bridge.pydantic import Field
 from typing import Any, Iterator, List, Optional, Sequence
+import re
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.node_parser.interface import NodeParser
 from llama_index.core.node_parser.node_utils import build_nodes_from_splits
-from llama_index.core.schema import BaseNode, MetadataMode, TextNode
 from llama_index.core.utils import get_tqdm_iterable
-
+from llama_index.core.schema import (
+    BaseNode,
+    ImageNode,
+    TextNode,
+    NodeRelationship,
+    MetadataMode,
+)
+import json
 
 CHUNK_CHAR_SET = set(".?!。？！\n")
+IMAGE_URL_PATTERN = (
+    r"!\[(?P<alt_text>.*?)\]\((https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))\)"
+)
+ALT_REGEX_PATTERN = r"^pai_rag_image_\d{10}(_\w*)?$"
 
 
 class StructuredNodeParser(NodeParser):
@@ -29,6 +40,9 @@ class StructuredNodeParser(NodeParser):
 
     max_chunk_size: int = Field(default=500, description="Max chunk size.")
     chunk_overlap_size: int = Field(default=10, description="Chunk overlap size.")
+    enable_multimodal: bool = Field(
+        default=False, description="whether use multimodal."
+    )
 
     @classmethod
     def from_defaults(
@@ -78,6 +92,9 @@ class StructuredNodeParser(NodeParser):
         """
         return None, 0
 
+    def _remove_image_paths(self, content: str):
+        return re.sub(IMAGE_URL_PATTERN, "", content)
+
     def _check_plain_text(self, text, plain_text_flag):
         """Check whether current text is plain text and we don't extract structure info to these text.
 
@@ -107,27 +124,136 @@ class StructuredNodeParser(NodeParser):
         return
 
     def _cut(self, raw_section: str) -> Iterator[str]:
+        image_urls_positions = []
+        for match in re.finditer(IMAGE_URL_PATTERN, raw_section):
+            alt_text = match.group("alt_text")
+            img_text = match.group(0)
+            alt_text_start_pos, alt_text_end_pos = match.span(1)
+            img_url_start_pos, img_url_end_pos = match.span(2)
+            img_info = {
+                "img_url": img_text,
+                "img_url_start_pos": alt_text_start_pos,
+                "img_url_end_pos": img_url_end_pos,
+            }
+            if re.match(ALT_REGEX_PATTERN, alt_text):
+                image_urls_positions.append(img_info)
+
+        raw_section_without_image = self._remove_image_paths(raw_section)
+        raw_section_with_image = raw_section
+        raw_section = raw_section_without_image
+
         if len(raw_section) <= self.max_chunk_size:
-            yield raw_section
+            # print("raw_section:", raw_section_with_image)
+            yield raw_section_with_image
         else:
+            # 最后一个url的位置信息，避免截断的时候截断在url中间
+            last_image_url_position = (0, 0)
             start = 0
             while start < len(raw_section):
                 end = start + self.max_chunk_size
+                for img_info in image_urls_positions:
+                    if (
+                        img_info["img_url_start_pos"] > start
+                        and img_info["img_url_start_pos"] < end
+                    ):
+                        raw_section = (
+                            raw_section[: img_info["img_url_start_pos"]]
+                            + img_info["img_url"]
+                            + raw_section[img_info["img_url_start_pos"] :]
+                        )
+                        end += len(img_info["img_url"])
+                        last_image_url_position = (
+                            img_info["img_url_start_pos"],
+                            img_info["img_url_end_pos"],
+                        )
+
                 if end >= len(raw_section):
+                    # print("raw_section:", raw_section[start:end])
                     yield raw_section[start:end]
                     start = end
                     continue
 
                 pos = end - 1
-
-                while pos >= start + 200 and raw_section[pos] not in CHUNK_CHAR_SET:
+                while (
+                    pos >= start + 200
+                    and raw_section[pos] not in CHUNK_CHAR_SET
+                    and not (
+                        last_image_url_position[0] <= pos <= last_image_url_position[1]
+                    )
+                ):
                     pos -= 1
-
+                # print("raw_section:", raw_section[start : pos + 1])
                 yield raw_section[start : pos + 1]
-                if raw_section[pos] in CHUNK_CHAR_SET:
-                    start = pos + 1
-                else:
-                    start = pos + 1 - self.chunk_overlap_size
+                start = pos + 1
+
+    def _build_nodes_from_split(
+        self,
+        text_split: str,
+        node: BaseNode,
+        ref_doc: Optional[BaseNode] = None,
+    ) -> List[TextNode]:
+        ref_doc = ref_doc or node
+        relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+        nodes = []
+        section_parts_image_urls = []
+        if self.enable_multimodal:
+            for match in re.finditer(IMAGE_URL_PATTERN, text_split):
+                alt_text = match.group("alt_text")
+                img_text = match.group(0)
+                img_url = match.group(2)
+                alt_text_start_pos, alt_text_end_pos = match.span(1)
+                img_url_start_pos, img_url_end_pos = match.span(2)
+                if re.match(ALT_REGEX_PATTERN, alt_text):
+                    image_node = ImageNode(
+                        embedding=node.embedding,
+                        image_url=img_url,
+                        excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                        excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                        metadata_seperator=node.metadata_seperator,
+                        metadata_template=node.metadata_template,
+                        text_template=node.text_template,
+                        meta_data=node.extra_info,
+                        relationships=relationships,
+                    )
+                    nodes.append(image_node)
+                    img_info = {
+                        "img_text": img_text,
+                        "img_url": img_url,
+                        "img_url_start_pos": alt_text_start_pos,
+                        "img_url_end_pos": img_url_end_pos,
+                    }
+                    section_parts_image_urls.append(img_info)
+            if len(section_parts_image_urls) > 0:
+                text_split = self._remove_image_paths(text_split)
+                text_node = TextNode(
+                    text=text_split,
+                    embedding=node.embedding,
+                    excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                    excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                    metadata_seperator=node.metadata_seperator,
+                    metadata_template=node.metadata_template,
+                    text_template=node.text_template,
+                    meta_data={
+                        "image_url_list_str": json.dumps(section_parts_image_urls),
+                        **node.extra_info,
+                    },
+                    relationships=relationships,
+                )
+                nodes.append(text_node)
+            else:
+                text_node = TextNode(
+                    text=text_split,
+                    embedding=node.embedding,
+                    excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                    excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                    metadata_seperator=node.metadata_seperator,
+                    metadata_template=node.metadata_template,
+                    text_template=node.text_template,
+                    meta_data=node.extra_info,
+                    relationships=relationships,
+                )
+                nodes.append(text_node)
+        return nodes
 
     def get_nodes_from_node(self, node: BaseNode) -> List[TextNode]:
         """Get nodes from document."""
@@ -137,7 +263,7 @@ class StructuredNodeParser(NodeParser):
         section_headers = []  # stack for storing section headers
         current_section = ""
 
-        sections = []
+        nodes = []
         for line in lines:
             plain_text_flag = self._check_plain_text(line, plain_text_flag)
             if not plain_text_flag:
@@ -149,7 +275,8 @@ class StructuredNodeParser(NodeParser):
                     if current_section.strip():
                         current_header = self._format_section_header(section_headers)
                         for section_parts in self._cut(current_section):
-                            sections.append(f"{current_header}: {section_parts}")
+                            node_text = f"{current_header}: {section_parts}"
+                            nodes.extend(self._build_nodes_from_split(node_text, node))
 
                     self._push_current_header(
                         section_headers=section_headers, header=header, rank=rank
@@ -163,10 +290,10 @@ class StructuredNodeParser(NodeParser):
         if current_section.strip():
             current_header = self._format_section_header(section_headers)
             for section_parts in self._cut(current_section):
-                sections.append(f"{current_header}: {section_parts}")
+                node_text = f"{current_header}: {section_parts}"
+                nodes.extend(self._build_nodes_from_split(node_text, node))
 
-        split_nodes = build_nodes_from_splits(sections, node, id_func=self.id_func)
-        return split_nodes
+        return nodes
 
     def _update_metadata(
         self, headers_metadata: dict, new_header: str, new_header_level: int
