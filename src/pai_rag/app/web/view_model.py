@@ -2,9 +2,13 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from collections import defaultdict
 from pai_rag.app.web.ui_constants import (
-    EMBEDDING_DIM_DICT,
     DEFAULT_EMBED_SIZE,
     DEFAULT_HF_EMBED_MODEL,
+    EMBEDDING_MODEL_LIST,
+    EMBEDDING_MODEL_DEPRECATED,
+    EMBEDDING_DIM_DICT,
+    EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
     DEFAULT_TEXT_QA_PROMPT_TMPL,
@@ -34,6 +38,8 @@ class ViewModel(BaseModel):
     embed_source: str = "HuggingFace"
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
+    embed_type: str = "Default"
+    embed_link: str = ""
     embed_api_key: str = None
     embed_batch_size: int = 10
 
@@ -679,14 +685,36 @@ class ViewModel(BaseModel):
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
         settings["embed_source"] = {"value": self.embed_source}
-        settings["embed_model"] = {
-            "value": self.embed_model,
-            "visible": self.embed_source == "HuggingFace",
-        }
+
+        if (self.embed_model in EMBEDDING_MODEL_DEPRECATED) or os.getenv(
+            "USE_DEPRECATED_EMBEDDING_MODEL", "False"
+        ):
+            settings["embed_model"] = {
+                "choices": EMBEDDING_MODEL_LIST + EMBEDDING_MODEL_DEPRECATED,
+                "value": self.embed_model,
+                "visible": self.embed_source == "HuggingFace",
+            }
+        else:
+            settings["embed_model"] = {
+                "choices": EMBEDDING_MODEL_LIST,
+                "value": self.embed_model,
+                "visible": self.embed_source == "HuggingFace",
+            }
+
         settings["embed_dim"] = {
             "value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)
             if self.embed_source == "HuggingFace"
             else DEFAULT_EMBED_SIZE
+        }
+        settings["embed_type"] = {
+            "value": EMBEDDING_TYPE_DICT.get(self.embed_model, "Default")
+            if self.embed_source == "HuggingFace"
+            else "Default"
+        }
+        settings["embed_link"] = {
+            "value": f"Model Introduction: [{self.embed_model}]({EMBEDDING_MODEL_LINK_DICT.get(self.embed_model, '')})"
+            if self.embed_source == "HuggingFace"
+            else ""
         }
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
