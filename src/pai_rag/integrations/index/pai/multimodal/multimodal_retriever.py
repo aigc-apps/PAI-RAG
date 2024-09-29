@@ -455,8 +455,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         task_results = await asyncio.gather(*tasks)
 
         text_nodes, image_nodes = task_results[0], task_results[1]
-        logger.info(f"Retrieved text nodes: {text_nodes}")
-        logger.info(f"Retrieved image nodes: {image_nodes}")
+        logger.info(f"Retrieved text nodes: {len(text_nodes)}")
+        logger.info(f"Retrieved image nodes: {len(image_nodes)}")
 
         seen_images = set([node.node.image_url for node in image_nodes])
         # 从文本中召回图片
@@ -483,6 +483,7 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         if not image_nodes:
             image_nodes = []
         results = text_nodes + image_nodes
+
         return results
 
     async def _atext_retrieve(

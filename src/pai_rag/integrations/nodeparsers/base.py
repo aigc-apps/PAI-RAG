@@ -212,7 +212,7 @@ class StructuredNodeParser(NodeParser):
                         metadata_seperator=node.metadata_seperator,
                         metadata_template=node.metadata_template,
                         text_template=node.text_template,
-                        meta_data=node.extra_info,
+                        metadata={"image_url": img_url, **node.extra_info},
                         relationships=relationships,
                     )
                     nodes.append(image_node)
@@ -233,7 +233,7 @@ class StructuredNodeParser(NodeParser):
                     metadata_seperator=node.metadata_seperator,
                     metadata_template=node.metadata_template,
                     text_template=node.text_template,
-                    meta_data={
+                    metadata={
                         "image_url_list_str": json.dumps(section_parts_image_urls),
                         **node.extra_info,
                     },

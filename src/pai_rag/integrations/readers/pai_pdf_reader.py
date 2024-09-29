@@ -59,10 +59,6 @@ class PaiPDFReader(BaseReader):
         if self.enable_table_summary:
             logger.info("process with table summary")
 
-    @staticmethod
-    def remove_image_paths(content: str):
-        return re.sub(IMAGE_URL_PATTERN, "", content)
-
     def transform_local_to_oss(self, pdf_name: str, local_url: str):
         try:
             image = Image.open(local_url)
@@ -115,43 +111,6 @@ class PaiPDFReader(BaseReader):
             )
 
         return content
-
-    @staticmethod
-    def combine_images_with_text(markdown_text):
-        # split_markdown_by_title
-        title_pattern = r"^(#+)\s*(.*)$"
-        sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
-
-        output = {}
-
-        # 没有标题的情况
-        if len(sections) == 1:
-            content = sections[0]
-            content_without_images_url = PaiPDFReader.remove_image_paths(content)
-            url_pattern = IMAGE_URL_PATTERN
-            images = re.findall(url_pattern, content)
-            images_url_list = [image[0] for image in images if len(image[0]) > 0]
-            if len(images_url_list) > 0:
-                output[f"{content_without_images_url.strip()}"] = images_url_list
-        # 有标题的情况
-        else:
-            for i in range(1, len(sections), 3):
-                title_level = sections[i]
-                title_text = sections[i + 1]
-                content = sections[i + 2] if i + 2 < len(sections) else ""
-                content_without_images_url = PaiPDFReader.remove_image_paths(content)
-
-                url_pattern = IMAGE_URL_PATTERN
-                images = re.findall(url_pattern, content)
-                if title_level:
-                    images_url_list = [
-                        image[0] for image in images if len(image[0]) > 0
-                    ]
-                    if len(images_url_list) > 0:
-                        output[
-                            f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
-                        ] = images_url_list
-        return output
 
     @staticmethod
     def perform_ocr(img_path: str) -> str:
@@ -417,6 +376,9 @@ class PaiPDFReader(BaseReader):
                         logger("need model list input")
                         exit(1)
 
+                # Some dirty code from mineru modified log level to warning
+                logging.getLogger().setLevel(logging.INFO)
+
                 # 执行解析
                 pipe.pipe_parse()
                 content_list = pipe.pipe_mk_uni_format(temp_file_path, drop_mode="none")
@@ -430,7 +392,7 @@ class PaiPDFReader(BaseReader):
             return new_md_content
 
         except Exception as e:
-            print(e)
+            logger(e)
             return None
 
     def load_data(
@@ -463,17 +425,9 @@ class PaiPDFReader(BaseReader):
             List[Document]: list of documents.
         """
 
-        if not isinstance(file_path, str) and not isinstance(file_path, Path):
-            raise TypeError("file_path must be a string or Path.")
-
         md_content = self.parse_pdf(file_path, "auto")
-        with open("tests/testdata/data/md_data/test.md", "w", encoding="utf-8") as f:
-            f.write(md_content)
-        print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
+        logger.info(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
-        if extra_info:
-            if not isinstance(extra_info, dict):
-                raise TypeError("extra_info must be a dictionary.")
         if metadata:
             if not extra_info:
                 extra_info = {}
@@ -486,5 +440,6 @@ class PaiPDFReader(BaseReader):
                 extra_info=dict(),
             )
             docs.append(doc)
+            logger.info(f"processed pdf file {file_path} without metadata")
         print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs
