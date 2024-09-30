@@ -6,6 +6,7 @@ import re
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.node_parser.interface import NodeParser
 from llama_index.core.node_parser.node_utils import build_nodes_from_splits
+from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
@@ -43,7 +44,9 @@ class StructuredNodeParser(NodeParser):
     enable_multimodal: bool = Field(
         default=False, description="whether use multimodal."
     )
-    base_parser: NodeParser = Field(default=False, description="base parser")
+    base_parser: NodeParser = Field(
+        default=SentenceSplitter(), description="base parser"
+    )
 
     @classmethod
     def from_defaults(
@@ -92,9 +95,6 @@ class StructuredNodeParser(NodeParser):
         For markdown text like "## Business Justification", return "Business Justification", 2, (0, 20)
         """
         return None, 0
-
-    def _remove_image_paths(self, content: str):
-        return re.sub(IMAGE_URL_PATTERN, "", content)
 
     def _check_plain_text(self, text, plain_text_flag):
         """Check whether current text is plain text and we don't extract structure info to these text.
