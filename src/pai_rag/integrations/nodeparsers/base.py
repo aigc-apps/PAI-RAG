@@ -125,11 +125,11 @@ class StructuredNodeParser(NodeParser):
 
     def _cut(self, raw_section: str) -> Iterator[str]:
         image_urls_positions = []
+        raw_section_without_image = raw_section
         for match in re.finditer(IMAGE_URL_PATTERN, raw_section):
             alt_text = match.group("alt_text")
             img_text = match.group(0)
-            alt_text_start_pos, alt_text_end_pos = match.span(1)
-            img_url_start_pos, img_url_end_pos = match.span(2)
+            alt_text_start_pos, img_url_end_pos = match.span()
             img_info = {
                 "img_url": img_text,
                 "img_url_start_pos": alt_text_start_pos,
@@ -137,13 +137,15 @@ class StructuredNodeParser(NodeParser):
             }
             if re.match(ALT_REGEX_PATTERN, alt_text):
                 image_urls_positions.append(img_info)
+                raw_section_without_image = (
+                    raw_section_without_image[:alt_text_start_pos]
+                    + raw_section_without_image[img_url_end_pos:]
+                )
 
-        raw_section_without_image = self._remove_image_paths(raw_section)
         raw_section_with_image = raw_section
         raw_section = raw_section_without_image
 
         if len(raw_section) <= self.max_chunk_size:
-            # print("raw_section:", raw_section_with_image)
             yield raw_section_with_image
         else:
             # 最后一个url的位置信息，避免截断的时候截断在url中间
@@ -168,7 +170,6 @@ class StructuredNodeParser(NodeParser):
                         )
 
                 if end >= len(raw_section):
-                    # print("raw_section:", raw_section[start:end])
                     yield raw_section[start:end]
                     start = end
                     continue
@@ -182,7 +183,6 @@ class StructuredNodeParser(NodeParser):
                     )
                 ):
                     pos -= 1
-                # print("raw_section:", raw_section[start : pos + 1])
                 yield raw_section[start : pos + 1]
                 start = pos + 1
 
@@ -201,8 +201,7 @@ class StructuredNodeParser(NodeParser):
                 alt_text = match.group("alt_text")
                 img_text = match.group(0)
                 img_url = match.group(2)
-                alt_text_start_pos, alt_text_end_pos = match.span(1)
-                img_url_start_pos, img_url_end_pos = match.span(2)
+                alt_text_start_pos, img_url_end_pos = match.span()
                 if re.match(ALT_REGEX_PATTERN, alt_text):
                     image_node = ImageNode(
                         embedding=node.embedding,
