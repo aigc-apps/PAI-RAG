@@ -43,6 +43,7 @@ class StructuredNodeParser(NodeParser):
     enable_multimodal: bool = Field(
         default=False, description="whether use multimodal."
     )
+    base_parser: NodeParser = Field(default=False, description="base parser")
 
     @classmethod
     def from_defaults(
@@ -124,27 +125,7 @@ class StructuredNodeParser(NodeParser):
         return
 
     def _cut(self, raw_section: str) -> Iterator[str]:
-        if len(raw_section) <= self.max_chunk_size:
-            yield raw_section
-        else:
-            start = 0
-            while start < len(raw_section):
-                end = start + self.max_chunk_size
-                if end >= len(raw_section):
-                    yield raw_section[start:end]
-                    start = end
-                    continue
-
-                pos = end - 1
-
-                while pos >= start + 200 and raw_section[pos] not in CHUNK_CHAR_SET:
-                    pos -= 1
-
-                yield raw_section[start : pos + 1]
-                if raw_section[pos] in CHUNK_CHAR_SET:
-                    start = pos + 1
-                else:
-                    start = pos + 1 - self.chunk_overlap_size
+        return self.base_parser.split_text(raw_section)
 
     def _build_nodes_from_split(
         self,

@@ -164,6 +164,7 @@ class PaiNodeParser(TransformComponent):
                     md_node_parser = MarkdownNodeParser(
                         id_func=node_id_hash,
                         enable_multimodal=self._parser_config.enable_multimodal,
+                        base_parser=self._parser,
                     )
                     tmp_nodes = md_node_parser.get_nodes_from_documents([doc_node])
                 else:
