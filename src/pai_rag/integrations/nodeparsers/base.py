@@ -124,108 +124,98 @@ class StructuredNodeParser(NodeParser):
         return
 
     def _cut(self, raw_section: str) -> Iterator[str]:
-        image_urls_positions = []
-        raw_section_without_image = raw_section
-        for match in re.finditer(IMAGE_URL_PATTERN, raw_section):
-            alt_text = match.group("alt_text")
-            img_text = match.group(0)
-            alt_text_start_pos, img_url_end_pos = match.span()
-            img_info = {
-                "img_url": img_text,
-                "img_url_start_pos": alt_text_start_pos,
-                "img_url_end_pos": img_url_end_pos,
-            }
-            if re.match(ALT_REGEX_PATTERN, alt_text):
-                image_urls_positions.append(img_info)
-                raw_section_without_image = (
-                    raw_section_without_image[:alt_text_start_pos]
-                    + raw_section_without_image[img_url_end_pos:]
-                )
-
-        raw_section_with_image = raw_section
-        raw_section = raw_section_without_image
-
         if len(raw_section) <= self.max_chunk_size:
-            yield raw_section_with_image
+            yield raw_section
         else:
-            # 最后一个url的位置信息，避免截断的时候截断在url中间
-            last_image_url_position = (0, 0)
             start = 0
             while start < len(raw_section):
                 end = start + self.max_chunk_size
-                for img_info in image_urls_positions:
-                    if (
-                        img_info["img_url_start_pos"] > start
-                        and img_info["img_url_start_pos"] < end
-                    ):
-                        raw_section = (
-                            raw_section[: img_info["img_url_start_pos"]]
-                            + img_info["img_url"]
-                            + raw_section[img_info["img_url_start_pos"] :]
-                        )
-                        end += len(img_info["img_url"])
-                        last_image_url_position = (
-                            img_info["img_url_start_pos"],
-                            img_info["img_url_end_pos"],
-                        )
-
                 if end >= len(raw_section):
                     yield raw_section[start:end]
                     start = end
                     continue
 
                 pos = end - 1
-                while (
-                    pos >= start + 200
-                    and raw_section[pos] not in CHUNK_CHAR_SET
-                    and not (
-                        last_image_url_position[0] <= pos <= last_image_url_position[1]
-                    )
-                ):
+
+                while pos >= start + 200 and raw_section[pos] not in CHUNK_CHAR_SET:
                     pos -= 1
+
                 yield raw_section[start : pos + 1]
-                start = pos + 1
+                if raw_section[pos] in CHUNK_CHAR_SET:
+                    start = pos + 1
+                else:
+                    start = pos + 1 - self.chunk_overlap_size
 
     def _build_nodes_from_split(
         self,
-        text_split: str,
+        current_header: str,
+        current_section: str,
         node: BaseNode,
         ref_doc: Optional[BaseNode] = None,
     ) -> List[TextNode]:
         ref_doc = ref_doc or node
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+        image_urls_positions = []
+        raw_section_without_image = current_section
+        for match in re.finditer(IMAGE_URL_PATTERN, current_section):
+            alt_text = match.group("alt_text")
+            img_url = match.group(2)
+            img_text = match.group(0)
+            alt_text_start_pos, img_url_end_pos = match.span()
+            img_info = {
+                "img_url": img_url,
+                "img_text": img_text,
+                "img_url_start_pos": alt_text_start_pos,
+                "img_url_end_pos": img_url_end_pos,
+            }
+            if re.match(ALT_REGEX_PATTERN, alt_text):
+                image_urls_positions.append(img_info)
+
+                raw_section_without_image = raw_section_without_image.replace(
+                    img_text, ""
+                )
         nodes = []
-        section_parts_image_urls = []
-        if self.enable_multimodal:
-            for match in re.finditer(IMAGE_URL_PATTERN, text_split):
-                alt_text = match.group("alt_text")
-                img_text = match.group(0)
-                img_url = match.group(2)
-                alt_text_start_pos, img_url_end_pos = match.span()
-                if re.match(ALT_REGEX_PATTERN, alt_text):
-                    image_node = ImageNode(
-                        embedding=node.embedding,
-                        image_url=img_url,
-                        excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
-                        excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
-                        metadata_seperator=node.metadata_seperator,
-                        metadata_template=node.metadata_template,
-                        text_template=node.text_template,
-                        metadata={"image_url": img_url, **node.extra_info},
-                        relationships=relationships,
-                    )
-                    nodes.append(image_node)
+        cur_chunk_start_position = 0
+        for section_parts in self._cut(raw_section_without_image):
+            section_image_urls_positions = []
+            node_text = f"{current_header}: {section_parts}"
+            cur_chunk_end_position = cur_chunk_start_position + len(section_parts)
+            for img_info in image_urls_positions:
+                if (
+                    cur_chunk_start_position
+                    <= img_info["img_url_start_pos"]
+                    <= cur_chunk_end_position
+                ):
                     img_info = {
-                        "img_text": img_text,
-                        "img_url": img_url,
-                        "img_url_start_pos": alt_text_start_pos,
-                        "img_url_end_pos": img_url_end_pos,
+                        "img_url": img_info["img_url"],
+                        "img_text": img_info["img_text"],
+                        "img_url_start_pos": img_info["img_url_start_pos"]
+                        - cur_chunk_start_position,
+                        "img_url_end_pos": img_info["img_url_end_pos"]
+                        - cur_chunk_start_position,
                     }
-                    section_parts_image_urls.append(img_info)
-            if len(section_parts_image_urls) > 0:
-                text_split = self._remove_image_paths(text_split)
+                    section_image_urls_positions.append(img_info)
+                    cur_chunk_end_position += len(img_info["img_url"])
+                    if self.enable_multimodal:
+                        image_node = ImageNode(
+                            embedding=node.embedding,
+                            image_url=img_info["img_url"],
+                            excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                            excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                            metadata_seperator=node.metadata_seperator,
+                            metadata_template=node.metadata_template,
+                            text_template=node.text_template,
+                            metadata={
+                                "image_url": img_info["img_url"],
+                                **node.extra_info,
+                            },
+                            relationships=relationships,
+                        )
+                        nodes.append(image_node)
+            cur_chunk_start_position = cur_chunk_end_position
+            if len(section_image_urls_positions) > 0 and self.enable_multimodal:
                 text_node = TextNode(
-                    text=text_split,
+                    text=node_text,
                     embedding=node.embedding,
                     excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
                     excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
@@ -233,7 +223,7 @@ class StructuredNodeParser(NodeParser):
                     metadata_template=node.metadata_template,
                     text_template=node.text_template,
                     metadata={
-                        "image_url_list_str": json.dumps(section_parts_image_urls),
+                        "image_url_list_str": json.dumps(section_image_urls_positions),
                         **node.extra_info,
                     },
                     relationships=relationships,
@@ -241,7 +231,7 @@ class StructuredNodeParser(NodeParser):
                 nodes.append(text_node)
             else:
                 text_node = TextNode(
-                    text=text_split,
+                    text=node_text,
                     embedding=node.embedding,
                     excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
                     excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
@@ -252,6 +242,7 @@ class StructuredNodeParser(NodeParser):
                     relationships=relationships,
                 )
                 nodes.append(text_node)
+
         return nodes
 
     def get_nodes_from_node(self, node: BaseNode) -> List[TextNode]:
@@ -273,9 +264,11 @@ class StructuredNodeParser(NodeParser):
                     current_section += self._wrap_text_line(line[:header_start])
                     if current_section.strip():
                         current_header = self._format_section_header(section_headers)
-                        for section_parts in self._cut(current_section):
-                            node_text = f"{current_header}: {section_parts}"
-                            nodes.extend(self._build_nodes_from_split(node_text, node))
+                        nodes.extend(
+                            self._build_nodes_from_split(
+                                current_header, current_section, node
+                            )
+                        )
 
                     self._push_current_header(
                         section_headers=section_headers, header=header, rank=rank
@@ -288,9 +281,9 @@ class StructuredNodeParser(NodeParser):
 
         if current_section.strip():
             current_header = self._format_section_header(section_headers)
-            for section_parts in self._cut(current_section):
-                node_text = f"{current_header}: {section_parts}"
-                nodes.extend(self._build_nodes_from_split(node_text, node))
+            nodes.extend(
+                self._build_nodes_from_split(current_header, current_section, node)
+            )
 
         return nodes
 
