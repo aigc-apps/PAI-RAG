@@ -180,13 +180,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 if prompt_type == "general":
                     return {
                         prompt_template: gr.update(
-                            value=DA_GENERAL_PROMPTS, interactive=False
+                            value=DA_GENERAL_PROMPTS, interactive=True
                         )
                     }
                 elif prompt_type == "sql":
                     return {
                         prompt_template: gr.update(
-                            value=DA_SQL_PROMPTS, interactive=False
+                            value=DA_SQL_PROMPTS, interactive=True
                         )
                     }
                 else:

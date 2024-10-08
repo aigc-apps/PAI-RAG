@@ -55,8 +55,11 @@ class DataAnalysisModule(ConfigurableModule):
             logger.info("DataAnalysis PandasQueryRetriever used")
 
         elif data_analysis_type == "nl2sql":
-            sql_database, tables, table_descriptions = self.db_connection(config)
+            sql_database, tables, table_descriptions, dialect = self.db_connection(
+                config
+            )
             analysis_retriever = MyNLSQLRetriever(
+                dialect=dialect,
                 sql_database=sql_database,
                 text_to_sql_prompt=nl2sql_prompt,
                 tables=tables,
@@ -172,7 +175,7 @@ class DataAnalysisModule(ConfigurableModule):
         else:
             table_descriptions = {}
 
-        return sql_database, tables, table_descriptions
+        return sql_database, tables, table_descriptions, dialect
 
     def get_dataframe(self, config):
         file_path = config.get("file_path", "./localdata/data_analysis/")

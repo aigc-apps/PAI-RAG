@@ -193,3 +193,29 @@ DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
     "Code Query Output: {query_output}\n\n"
     "Response: "
 )
+
+
+DEFAULT_SHEET_SUMMARY_PROMPT = PromptTemplate(
+    "基于用户文件{file_name}的一部分数据样例，\n"
+    "数据样例: {data_example}, \n\n"
+    "请学习理解该数据的结构和内容，按要求输出解析结果:\n"
+    "分析各列数据的含义和作用，并对专业术语进行简单明了的解释。\n"
+    "如果是时间类型请给出时间格式，类似:yyyy-MM-dd HH:MM:ss或者yyyy-MM等。\n"
+    "将列名作为属性名，分析解释作为属性值,组成json数组，并输出在返回json内容的column_nalysis属性中。\n"
+    "请不要修改或者翻译列名，确保和给出数据列名一致。\n"
+    "针对数据从不同维度提供一些有用的分析思路给用户。\n\n"
+    "请一步一步思考，确保以JSON格式回答。\n"
+    "回答: "
+)
+
+DEFAULT_DB_SUMMARY_PROMPT = PromptTemplate(
+    "下面是用户数据库{db_name}中各个数据表结构信息以及抽样数据样例。\n"
+    "表结构信息及数据样例: {db_schema_info}, \n\n"
+    "请学习理解该数据的结构和内容，按要求输出解析结果: \n"
+    "分析每个数据表中各列数据的含义和作用，并对专业术语进行简单明了的解释。\n"
+    "如果是时间类型请给出时间格式，类似:yyyy-MM-dd HH:MM:ss或者yyyy-MM等。\n"
+    "请不要修改或者翻译列名，确保和给出数据列名一致。\n"
+    "针对数据从不同维度提供一些有用的分析思路给用户。\n\n"
+    "请一步一步思考，以中文回答。\n"
+    "回答: "
+)
