@@ -32,6 +32,7 @@ class NodeParserConfig(BaseModel):
     type: str = DEFAULT_NODE_PARSER_TYPE
     chunk_size: int = DEFAULT_CHUNK_SIZE
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP
+    enable_multimodal: bool = False
     paragraph_separator: str = DEFAULT_PARAGRAPH_SEP
     sentence_window_size: int = DEFAULT_SENTENCE_WINDOW_SIZE
     sentence_chunk_overlap: int = DEFAULT_SENTENCE_CHUNK_OVERLAP
@@ -122,25 +123,6 @@ class PaiNodeParser(TransformComponent):
         self._doc_cnt_map[doc_key] += 1
         return start_id
 
-    def _dedup_text_nodes(self, nodes: List[BaseNode]):
-        filtered_nodes = []
-        text_seen = set()
-        text_seen.update(
-            node.text.strip()
-            for node in nodes
-            if isinstance(node, TextNode)
-            and node.metadata.get("image_url_list_str") is not None
-        )
-        for node in nodes:
-            if (
-                isinstance(node, TextNode)
-                and node.metadata.get("image_url_list_str") is None
-                and node.text.strip() in text_seen
-            ):
-                continue
-            filtered_nodes.append(node)
-        return filtered_nodes
-
     def get_nodes_from_documents(
         self, nodes: List[BaseNode], **kwargs: Any
     ) -> List[BaseNode]:
@@ -179,7 +161,11 @@ class PaiNodeParser(TransformComponent):
                 )
             else:
                 if doc_type == ".md" or doc_type == ".pdf":
-                    md_node_parser = MarkdownNodeParser(id_func=node_id_hash)
+                    md_node_parser = MarkdownNodeParser(
+                        id_func=node_id_hash,
+                        enable_multimodal=self._parser_config.enable_multimodal,
+                        base_parser=self._parser,
+                    )
                     tmp_nodes = md_node_parser.get_nodes_from_documents([doc_node])
                 else:
                     tmp_nodes = self._parser.get_nodes_from_documents([doc_node])
@@ -190,8 +176,6 @@ class PaiNodeParser(TransformComponent):
                         )
                         splitted_nodes.append(tmp_node)
 
-        nodes = self._dedup_text_nodes(nodes)
-
         for node in nodes:
             node.excluded_embed_metadata_keys.append("file_path")
             node.excluded_embed_metadata_keys.append("image_url")
@@ -201,6 +185,7 @@ class PaiNodeParser(TransformComponent):
         logger.info(
             f"[DataReader] Split {len(nodes)} documents into {len(splitted_nodes)} nodes."
         )
+
         return splitted_nodes
 
     async def aget_nodes_from_documents(

@@ -1,15 +1,27 @@
 """Markdown node parser."""
 from llama_index.core.bridge.pydantic import Field
 from typing import Any, Iterator, List, Optional, Sequence
+import re
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.node_parser.interface import NodeParser
 from llama_index.core.node_parser.node_utils import build_nodes_from_splits
-from llama_index.core.schema import BaseNode, MetadataMode, TextNode
+from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
-
+from llama_index.core.schema import (
+    BaseNode,
+    ImageNode,
+    TextNode,
+    NodeRelationship,
+    MetadataMode,
+)
+import json
 
 CHUNK_CHAR_SET = set(".?!。？！\n")
+IMAGE_URL_PATTERN = (
+    r"!\[(?P<alt_text>.*?)\]\((https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))\)"
+)
+ALT_REGEX_PATTERN = r"^pai_rag_image_\d{10}(_\w*)?$"
 
 
 class StructuredNodeParser(NodeParser):
@@ -29,6 +41,12 @@ class StructuredNodeParser(NodeParser):
 
     max_chunk_size: int = Field(default=500, description="Max chunk size.")
     chunk_overlap_size: int = Field(default=10, description="Chunk overlap size.")
+    enable_multimodal: bool = Field(
+        default=False, description="whether use multimodal."
+    )
+    base_parser: NodeParser = Field(
+        default=SentenceSplitter(), description="base parser"
+    )
 
     @classmethod
     def from_defaults(
@@ -107,27 +125,106 @@ class StructuredNodeParser(NodeParser):
         return
 
     def _cut(self, raw_section: str) -> Iterator[str]:
-        if len(raw_section) <= self.max_chunk_size:
-            yield raw_section
-        else:
-            start = 0
-            while start < len(raw_section):
-                end = start + self.max_chunk_size
-                if end >= len(raw_section):
-                    yield raw_section[start:end]
-                    start = end
-                    continue
+        return self.base_parser.split_text(raw_section)
 
-                pos = end - 1
+    def _build_nodes_from_split(
+        self,
+        current_header: str,
+        current_section: str,
+        node: BaseNode,
+        ref_doc: Optional[BaseNode] = None,
+    ) -> List[TextNode]:
+        ref_doc = ref_doc or node
+        relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+        image_urls_positions = []
+        raw_section_without_image = current_section
+        for match in re.finditer(IMAGE_URL_PATTERN, current_section):
+            alt_text = match.group("alt_text")
+            img_url = match.group(2)
+            img_text = match.group(0)
+            alt_text_start_pos, img_url_end_pos = match.span()
+            img_info = {
+                "img_url": img_url,
+                "img_text": img_text,
+                "img_url_start_pos": alt_text_start_pos,
+                "img_url_end_pos": img_url_end_pos,
+            }
+            if re.match(ALT_REGEX_PATTERN, alt_text):
+                image_urls_positions.append(img_info)
 
-                while pos >= start + 200 and raw_section[pos] not in CHUNK_CHAR_SET:
-                    pos -= 1
+                raw_section_without_image = raw_section_without_image.replace(
+                    img_text, ""
+                )
+        nodes = []
+        cur_chunk_start_position = 0
+        for section_parts in self._cut(raw_section_without_image):
+            section_image_urls_positions = []
+            node_text = f"{current_header}: {section_parts}"
+            cur_chunk_end_position = cur_chunk_start_position + len(section_parts)
+            for img_info in image_urls_positions:
+                if (
+                    cur_chunk_start_position
+                    <= img_info["img_url_start_pos"]
+                    <= cur_chunk_end_position
+                ):
+                    img_info = {
+                        "img_url": img_info["img_url"],
+                        "img_text": img_info["img_text"],
+                        "img_url_start_pos": img_info["img_url_start_pos"]
+                        - cur_chunk_start_position,
+                        "img_url_end_pos": img_info["img_url_end_pos"]
+                        - cur_chunk_start_position,
+                    }
+                    section_image_urls_positions.append(img_info)
+                    cur_chunk_end_position += len(img_info["img_url"])
+                    if self.enable_multimodal:
+                        image_node = ImageNode(
+                            embedding=node.embedding,
+                            image_url=img_info["img_url"],
+                            excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                            excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                            metadata_seperator=node.metadata_seperator,
+                            metadata_template=node.metadata_template,
+                            text_template=node.text_template,
+                            metadata={
+                                "image_url": img_info["img_url"],
+                                **node.extra_info,
+                            },
+                            relationships=relationships,
+                        )
+                        nodes.append(image_node)
+            cur_chunk_start_position = cur_chunk_end_position
+            if len(section_image_urls_positions) > 0 and self.enable_multimodal:
+                text_node = TextNode(
+                    text=node_text,
+                    embedding=node.embedding,
+                    excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                    excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                    metadata_seperator=node.metadata_seperator,
+                    metadata_template=node.metadata_template,
+                    text_template=node.text_template,
+                    metadata={
+                        "image_url_list_str": json.dumps(section_image_urls_positions),
+                        **node.extra_info,
+                    },
+                    relationships=relationships,
+                )
+                nodes.append(text_node)
+            else:
+                text_node = TextNode(
+                    text=node_text,
+                    embedding=node.embedding,
+                    excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                    excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                    metadata_seperator=node.metadata_seperator,
+                    metadata_template=node.metadata_template,
+                    text_template=node.text_template,
+                    meta_data=node.extra_info,
+                    relationships=relationships,
+                )
+                nodes.append(text_node)
 
-                yield raw_section[start : pos + 1]
-                if raw_section[pos] in CHUNK_CHAR_SET:
-                    start = pos + 1
-                else:
-                    start = pos + 1 - self.chunk_overlap_size
+        return nodes
 
     def get_nodes_from_node(self, node: BaseNode) -> List[TextNode]:
         """Get nodes from document."""
@@ -137,7 +234,7 @@ class StructuredNodeParser(NodeParser):
         section_headers = []  # stack for storing section headers
         current_section = ""
 
-        sections = []
+        nodes = []
         for line in lines:
             plain_text_flag = self._check_plain_text(line, plain_text_flag)
             if not plain_text_flag:
@@ -148,8 +245,11 @@ class StructuredNodeParser(NodeParser):
                     current_section += self._wrap_text_line(line[:header_start])
                     if current_section.strip():
                         current_header = self._format_section_header(section_headers)
-                        for section_parts in self._cut(current_section):
-                            sections.append(f"{current_header}: {section_parts}")
+                        nodes.extend(
+                            self._build_nodes_from_split(
+                                current_header, current_section, node
+                            )
+                        )
 
                     self._push_current_header(
                         section_headers=section_headers, header=header, rank=rank
@@ -162,11 +262,11 @@ class StructuredNodeParser(NodeParser):
 
         if current_section.strip():
             current_header = self._format_section_header(section_headers)
-            for section_parts in self._cut(current_section):
-                sections.append(f"{current_header}: {section_parts}")
+            nodes.extend(
+                self._build_nodes_from_split(current_header, current_section, node)
+            )
 
-        split_nodes = build_nodes_from_splits(sections, node, id_func=self.id_func)
-        return split_nodes
+        return nodes
 
     def _update_metadata(
         self, headers_metadata: dict, new_header: str, new_header_level: int

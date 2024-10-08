@@ -20,7 +20,6 @@ COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 
 
 class BaseDataReaderConfig(BaseModel):
-    enable_multimodal: bool = False
     concat_csv_rows: bool = False
     enable_table_summary: bool = False
     format_sheet_data_to_json: bool = False
@@ -29,12 +28,12 @@ class BaseDataReaderConfig(BaseModel):
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
     reader_config = reader_config or BaseDataReaderConfig()
+    image_reader = PaiImageReader(oss_cache=oss_store)
 
     file_readers = {
         ".html": HtmlReader(),
         ".htm": HtmlReader(),
         ".pdf": PaiPDFReader(
-            enable_multimodal=reader_config.enable_multimodal,
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pdf images
         ),
@@ -55,13 +54,10 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
         ),
         ".md": MarkdownReader(),
         ".jsonl": PaiJsonLReader(),
+        ".jpg": image_reader,
+        ".jpeg": image_reader,
+        ".png": image_reader,
     }
-
-    if reader_config.enable_multimodal:
-        image_reader = PaiImageReader(oss_cache=oss_store)
-        file_readers[".jpg"] = image_reader
-        file_readers[".jpeg"] = image_reader
-        file_readers[".png"] = image_reader
 
     return file_readers
 

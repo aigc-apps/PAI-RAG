@@ -5,7 +5,6 @@ import uvicorn
 from fastapi import FastAPI
 from pai_rag.app.api.service import configure_app
 from pai_rag.app.web.webui import configure_webapp
-from pai_rag.data.rag_datapipeline import __init_data_pipeline
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR, EAS_DEFAULT_MODEL_DIR
 from logging.config import dictConfig
@@ -194,11 +193,4 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
     os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
     app = FastAPI(lifespan=lifespan)
     configure_app(app, config_file=config_file)
-    if enable_example:
-        data_pipeline = __init_data_pipeline(config_file, False)
-        asyncio.run(
-            data_pipeline.ingest_from_input_path(
-                DEFAULT_APPLICATION_EXAMPLE_DATA_FILE, None, False
-            )
-        )
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
