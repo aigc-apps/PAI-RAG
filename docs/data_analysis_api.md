@@ -34,8 +34,8 @@ Content-Type: application/json
 
 ```json
 {
-   "delta": "数据库",
-   "is_finished": False
+  "delta": "数据库",
+  "is_finished": false
 }
 ```
 
