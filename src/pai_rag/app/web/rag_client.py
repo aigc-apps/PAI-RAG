@@ -316,7 +316,7 @@ class RagWebClient:
                 if media_url and isinstance(media_url, list):
                     media_url = "<br>".join(
                         [
-                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            f'<img src="{url.get("img_url", None)}" alt="Image {j + 1}"/>'
                             for j, url in enumerate(media_url)
                         ]
                     )

@@ -15,7 +15,6 @@ from llama_index.core.schema import (
     NodeRelationship,
     MetadataMode,
 )
-import json
 
 CHUNK_CHAR_SET = set(".?!。？！\n")
 IMAGE_URL_PATTERN = (
@@ -204,7 +203,7 @@ class StructuredNodeParser(NodeParser):
                     metadata_template=node.metadata_template,
                     text_template=node.text_template,
                     metadata={
-                        "image_url_list_str": json.dumps(section_image_urls_positions),
+                        "image_url": section_image_urls_positions,
                         **node.extra_info,
                     },
                     relationships=relationships,
