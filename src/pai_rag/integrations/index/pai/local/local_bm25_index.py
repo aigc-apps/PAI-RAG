@@ -46,6 +46,7 @@ class RenameUnpickler(pickle.Unpickler):
 
         return super(RenameUnpickler, self).find_class(renamed_module, name)
 
+
 def renamed_load(file_obj):
     return RenameUnpickler(file_obj).load()
 
