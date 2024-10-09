@@ -63,6 +63,10 @@ Reference可以作为查询效果优化的"debug"工具
 - Reference观察到生成的sql语句包含了非sql的其他内容，如开头多了"sql"等（部分小模型可能会发生），可以在prompt中增加简单限制
 - Reference观察到生成的sql语句不满足某些业务逻辑，可以在prompt中给出示例，通过few-shot learning，也可以很快提升效果
 
+### API调用
+
+详见[API调用文档](/docs/data_analysis_api.md)
+
 # 表格文件分析配置
 
 表格文件配置相对简单，选择左上方的分析类型为：datafile，出现以下界面

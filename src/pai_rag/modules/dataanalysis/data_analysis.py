@@ -151,8 +151,8 @@ class DataAnalysisModule(ConfigurableModule):
         engine = create_engine(
             database_uri,
             echo=False,
-            pool_size=5,
-            max_overflow=10,
+            pool_size=10,
+            max_overflow=20,
             pool_timeout=30,
             pool_recycle=360,
             poolclass=QueuePool,
