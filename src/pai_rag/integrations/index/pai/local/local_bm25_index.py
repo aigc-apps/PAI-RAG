@@ -37,6 +37,19 @@ DEFAULT_INDEX_FILE = "bm25.index.pkl"
 DEFAULT_INDEX_MATRIX_FILE = "bm25.index.matrix.pkl"
 
 
+# Handle module mismatch issue.
+class RenameUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        renamed_module = module
+        if module == "pai_rag.modules.index.pai_bm25_index":
+            renamed_module = "pai_rag.integrations.index.pai.local.local_bm25_index"
+
+        return super(RenameUnpickler, self).find_class(renamed_module, name)
+
+def renamed_load(file_obj):
+    return RenameUnpickler(file_obj).load()
+
+
 class LocalBm25Index:
     def __init__(self):
         self.doc_count: int = 0
@@ -76,7 +89,7 @@ class LocalBm25IndexStore:
     def reload(self):
         if os.path.exists(self.parts_path):
             with open(self.index_file, "rb") as f:
-                self.index: LocalBm25Index = pickle.load(f)
+                self.index: LocalBm25Index = renamed_load(f)
             with open(self.index_matrix_file, "rb") as f:
                 self.index_matrix = pickle.load(f)
         else:
