@@ -43,7 +43,7 @@ async def event_generator_async(
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
-            yield json.dumps(chunk) + "\n"
+            yield json.dumps(chunk, ensure_ascii=False) + "\n"
 
     if chat_store:
         chat_store.add_message(
@@ -56,7 +56,7 @@ async def event_generator_async(
     else:
         last_chunk = {"delta": "", "is_finished": True}
 
-    yield json.dumps(last_chunk, default=lambda x: x.dict())
+    yield json.dumps(last_chunk, default=lambda x: x.dict(), ensure_ascii=False)
 
 
 class RagApplication:
