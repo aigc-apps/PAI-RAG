@@ -12,7 +12,7 @@
         "file_type",
         "node_content",
         "node_type",
-        "image_url_list_str",
+        "image_url",
         "doc_id",
         "text",
         "source_type"
@@ -85,9 +85,9 @@
         "index_type": "STRING"
       },
       {
-        "index_fields": "image_url_list_str",
-        "index_name": "image_url_list_str",
-        "index_type": "STRING"
+        "index_fields": "image_url",
+        "index_name": "image_url",
+        "index_type": "List"
       },
       {
         "index_fields": "node_content",
@@ -138,7 +138,7 @@
       },
       {
         "file_compress": "no_compressor",
-        "field_name": "image_url_list_str"
+        "field_name": "image_url"
       },
       {
         "file_compress": "no_compressor",
@@ -193,8 +193,8 @@
       },
       {
         "compress_type": "uniq",
-        "field_type": "STRING",
-        "field_name": "image_url_list_str"
+        "field_type": "List",
+        "field_name": "image_url"
       },
       {
         "compress_type": "uniq",

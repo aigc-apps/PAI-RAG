@@ -15,7 +15,6 @@ from llama_index.core.schema import (
     NodeRelationship,
     MetadataMode,
 )
-import json
 
 CHUNK_CHAR_SET = set(".?!。？！\n")
 IMAGE_URL_PATTERN = (
@@ -144,10 +143,10 @@ class StructuredNodeParser(NodeParser):
             img_text = match.group(0)
             alt_text_start_pos, img_url_end_pos = match.span()
             img_info = {
-                "img_url": img_url,
-                "img_text": img_text,
-                "img_url_start_pos": alt_text_start_pos,
-                "img_url_end_pos": img_url_end_pos,
+                "image_url": img_url,
+                "image_text": img_text,
+                "image_url_start_pos": alt_text_start_pos,
+                "image_url_end_pos": img_url_end_pos,
             }
             if re.match(ALT_REGEX_PATTERN, alt_text):
                 image_urls_positions.append(img_info)
@@ -161,35 +160,33 @@ class StructuredNodeParser(NodeParser):
             section_image_urls_positions = []
             node_text = f"{current_header}: {section_parts}"
             cur_chunk_end_position = cur_chunk_start_position + len(section_parts)
+
             for img_info in image_urls_positions:
                 if (
                     cur_chunk_start_position
-                    <= img_info["img_url_start_pos"]
+                    <= img_info["image_url_start_pos"]
                     <= cur_chunk_end_position
                 ):
                     img_info = {
-                        "img_url": img_info["img_url"],
-                        "img_text": img_info["img_text"],
-                        "img_url_start_pos": img_info["img_url_start_pos"]
+                        "image_url": img_info["image_url"],
+                        "image_text": img_info["image_text"],
+                        "image_url_start_pos": img_info["image_url_start_pos"]
                         - cur_chunk_start_position,
-                        "img_url_end_pos": img_info["img_url_end_pos"]
+                        "image_url_end_pos": img_info["image_url_end_pos"]
                         - cur_chunk_start_position,
                     }
                     section_image_urls_positions.append(img_info)
-                    cur_chunk_end_position += len(img_info["img_url"])
+                    cur_chunk_end_position += len(img_info["image_text"])
                     if self.enable_multimodal:
                         image_node = ImageNode(
                             embedding=node.embedding,
-                            image_url=img_info["img_url"],
+                            image_url=img_info["image_url"],
                             excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
                             excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
                             metadata_seperator=node.metadata_seperator,
                             metadata_template=node.metadata_template,
                             text_template=node.text_template,
-                            metadata={
-                                "image_url": img_info["img_url"],
-                                **node.extra_info,
-                            },
+                            metadata=node.extra_info,
                             relationships=relationships,
                         )
                         nodes.append(image_node)
@@ -204,7 +201,7 @@ class StructuredNodeParser(NodeParser):
                     metadata_template=node.metadata_template,
                     text_template=node.text_template,
                     metadata={
-                        "image_url_list_str": json.dumps(section_image_urls_positions),
+                        "image_info_list": section_image_urls_positions,
                         **node.extra_info,
                     },
                     relationships=relationships,
@@ -265,7 +262,6 @@ class StructuredNodeParser(NodeParser):
             nodes.extend(
                 self._build_nodes_from_split(current_header, current_section, node)
             )
-
         return nodes
 
     def _update_metadata(

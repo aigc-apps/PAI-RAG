@@ -258,10 +258,12 @@ def create_upload_tab() -> Dict[str, Any]:
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="clear_file",
             )
+            dummy_component = gr.Textbox(visible=False, value="")
             upload_file_dir.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file_dir,
+                    dummy_component,
                     chunk_size,
                     chunk_overlap,
                     enable_qa_extraction,
