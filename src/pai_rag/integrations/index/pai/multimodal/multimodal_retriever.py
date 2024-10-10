@@ -12,6 +12,11 @@ from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 from llama_index.core.data_structs.data_structs import IndexDict
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.indices.utils import log_vector_store_query_result
+from llama_index.core.callbacks.schema import CBEventType, EventPayload
+from llama_index.core.instrumentation.events.retrieval import (
+    RetrievalEndEvent,
+    RetrievalStartEvent,
+)
 from llama_index.core.schema import (
     NodeWithScore,
     QueryBundle,
@@ -31,7 +36,9 @@ from llama_index.core.vector_stores.types import (
 )
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 import logging
+import llama_index.core.instrumentation as instrument
 
+dispatcher = instrument.get_dispatcher(__name__)
 logger = logging.getLogger(__name__)
 
 DEFAULT_IMAGE_STORE = "image"
@@ -209,6 +216,43 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             image_nodes = []
         results = text_nodes + image_nodes
         return results
+
+    def retrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
+        """Retrieve nodes given query.
+
+        Args:
+            str_or_query_bundle (QueryType): Either a query string or
+                a QueryBundle object.
+
+        """
+        dispatch_event = dispatcher.get_dispatch_event()
+
+        self._check_callback_manager()
+        dispatch_event(
+            RetrievalStartEvent(
+                str_or_query_bundle=str_or_query_bundle,
+            )
+        )
+        if isinstance(str_or_query_bundle, str):
+            query_bundle = QueryBundle(str_or_query_bundle)
+        else:
+            query_bundle = str_or_query_bundle
+        with self.callback_manager.as_trace("query"):
+            with self.callback_manager.event(
+                CBEventType.RETRIEVE,
+                payload={EventPayload.QUERY_STR: query_bundle.query_str},
+            ) as retrieve_event:
+                nodes = self._retrieve(query_bundle)
+                retrieve_event.on_end(
+                    payload={EventPayload.NODES: nodes},
+                )
+        dispatch_event(
+            RetrievalEndEvent(
+                str_or_query_bundle=str_or_query_bundle,
+                nodes=nodes,
+            )
+        )
+        return nodes
 
     def _text_retrieve_from_vector_store(
         self,
@@ -486,6 +530,36 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             image_nodes = []
         results = text_nodes + image_nodes
         return results
+
+    async def aretrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
+        self._check_callback_manager()
+        dispatch_event = dispatcher.get_dispatch_event()
+
+        dispatch_event(
+            RetrievalStartEvent(
+                str_or_query_bundle=str_or_query_bundle,
+            )
+        )
+        if isinstance(str_or_query_bundle, str):
+            query_bundle = QueryBundle(str_or_query_bundle)
+        else:
+            query_bundle = str_or_query_bundle
+        with self.callback_manager.as_trace("query"):
+            with self.callback_manager.event(
+                CBEventType.RETRIEVE,
+                payload={EventPayload.QUERY_STR: query_bundle.query_str},
+            ) as retrieve_event:
+                nodes = await self._aretrieve(query_bundle=query_bundle)
+                retrieve_event.on_end(
+                    payload={EventPayload.NODES: nodes},
+                )
+        dispatch_event(
+            RetrievalEndEvent(
+                str_or_query_bundle=str_or_query_bundle,
+                nodes=nodes,
+            )
+        )
+        return nodes
 
     async def _atext_retrieve(
         self,
