@@ -173,11 +173,11 @@ def parse_llm_config(config_data):
     if "source" not in config_data:
         raise ValueError("Llm config must contain 'source' field")
 
-    embedding_cls = SupporttedLlmClsMap.get(config_data["source"].lower())
-    if embedding_cls is None:
+    llm_cls = SupporttedLlmClsMap.get(config_data["source"].lower())
+    if llm_cls is None:
         raise ValueError(f"Unsupported llm source: {config_data['source']}")
 
-    return embedding_cls(**config_data)
+    return llm_cls(**config_data)
 
 
 if __name__ == "__main__":

@@ -67,13 +67,13 @@ class PaiMultiModalLlm(MultiModalLLM):
         """Stream chat endpoint for Multi-Modal LLM."""
         return self._llm.stream_chat(messages=messages, **kwargs)
 
-    # ===== Async Endpoints =====
+    # ===== Async methods =====
 
     async def acomplete(
         self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
     ) -> CompletionResponse:
         """Async completion endpoint for Multi-Modal LLM."""
-        return self._llm.acomplete(
+        return await self._llm.acomplete(
             prompt=prompt, image_documents=image_documents, **kwargs
         )
 
@@ -81,7 +81,7 @@ class PaiMultiModalLlm(MultiModalLLM):
         self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
     ) -> CompletionResponseAsyncGen:
         """Async streaming completion endpoint for Multi-Modal LLM."""
-        return self._llm.astream_complete(
+        return await self._llm.astream_complete(
             prompt=prompt, image_documents=image_documents, **kwargs
         )
 
@@ -91,7 +91,7 @@ class PaiMultiModalLlm(MultiModalLLM):
         **kwargs: Any,
     ) -> ChatResponse:
         """Async chat endpoint for Multi-Modal LLM."""
-        return self._llm.achat(messages=messages, **kwargs)
+        return await self._llm.achat(messages=messages, **kwargs)
 
     async def astream_chat(
         self,
@@ -99,4 +99,4 @@ class PaiMultiModalLlm(MultiModalLLM):
         **kwargs: Any,
     ) -> ChatResponseAsyncGen:
         """Async streaming chat endpoint for Multi-Modal LLM."""
-        return self._llm.astream_chat(messages=messages, **kwargs)
+        return await self._llm.astream_chat(messages=messages, **kwargs)

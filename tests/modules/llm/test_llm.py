@@ -1,8 +1,9 @@
-import os
-from pai_rag.integrations.llms.dashscope.base import MyDashScope
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 
-llm = MyDashScope(model_name="qwen-turbo", api_key=os.getenv("DASHSCOPE_API_KEY"))
+llm_config = DashScopeLlmConfig(model_name="qwen-turbo")
+llm = PaiLlm(llm_config)
 
 
 def test_dashscope_llm_complete():
@@ -40,7 +41,6 @@ def test_dashscope_llm_stream_chat():
 
 
 async def test_dashscope_llm_acomplete():
-    llm = MyDashScope(model_name="qwen-turbo", api_key=os.getenv("DASHSCOPE_API_KEY"))
     response = await llm.acomplete("What is the result of 15+22?")
     assert "37" in response.text
 
