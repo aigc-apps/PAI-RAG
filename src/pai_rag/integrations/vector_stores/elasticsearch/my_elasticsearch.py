@@ -533,7 +533,8 @@ class MyElasticsearchStore(BasePydanticVectorStore):
 
         if isinstance(retrieval_strategy, AsyncBM25Strategy) and len(top_k_nodes) > 0:
             max_score = max(top_k_scores)
-            top_k_scores = [score / max_score for score in top_k_scores]
+            if max_score > 0:
+                top_k_scores = [score / max_score for score in top_k_scores]
 
         if (
             isinstance(retrieval_strategy, AsyncDenseVectorStrategy)
