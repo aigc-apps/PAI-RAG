@@ -43,15 +43,12 @@ def trace_correlation_id(function):
 
 
 class RagService:
-    def initialize(self, config_file: str):
-        self.config_file = config_file
-        self.rag_configuration = RagConfiguration.from_file(config_file)
+    def initialize(self, rag_configuration: RagConfiguration):
+        self.rag_configuration = rag_configuration
         self.config_dict_value = self.rag_configuration.get_value().to_dict()
         self.config_modified_time = self.rag_configuration.get_config_mtime()
 
         self.rag_configuration.persist()
-
-        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
 
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())

@@ -301,8 +301,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             new_text_ids = await self.storage_context.vector_stores[
                 DEFAULT_VECTOR_STORE
             ].async_add(text_nodes, **insert_kwargs)
-        else:
-            self._is_text_vector_store_empty = True
 
         if len(image_nodes) > 0:
             # embed image nodes as images directly
@@ -317,8 +315,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
 
             # TODO: Fix for FAISS
             new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
-        else:
-            self._is_image_vector_store_empty = True
 
         # if the vector store doesn't store text, we need to add the nodes to the
         # index struct and document store
@@ -378,7 +374,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             )
 
         else:
-            self._is_text_vector_store_empty = True
             logger.info("No text nodes to insert.")
 
         if len(image_nodes) > 0:
@@ -402,7 +397,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             )
 
         else:
-            self._is_image_vector_store_empty = True
             logger.info("No image nodes to insert.")
 
         # if the vector store doesn't store text, we need to add the nodes to the
