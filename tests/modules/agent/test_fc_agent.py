@@ -1,9 +1,12 @@
-import os
 from pai_rag.integrations.agent.function_calling.step import (
     MyFunctionCallingAgentWorker,
 )
-from pai_rag.integrations.llms.dashscope.fc_base import MyFCDashScope
 from llama_index.core.tools import FunctionTool
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
+
+fc_llm_config = DashScopeLlmConfig(model_name="qwen2-7b-instruct")
+fc_llm = PaiLlm(fc_llm_config)
 
 
 def multiply(a: int, b: int) -> int:
@@ -23,9 +26,6 @@ add_tool = FunctionTool.from_defaults(fn=add)
 
 tools = [multiply_tool, add_tool]
 
-fc_llm = MyFCDashScope(
-    model_name="qwen2-7b-instruct", api_key=os.getenv("DASHSCOPE_API_KEY")
-)
 fc_agent_worker = MyFunctionCallingAgentWorker.from_tools(
     tools=tools,
     llm=fc_llm,

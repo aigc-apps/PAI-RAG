@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Any
-from pai_rag.integrations.llms.dashscope.fc_base import MyFCDashScope
+from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.modules.base.configurable_module import ConfigurableModule
 from pai_rag.modules.base.module_constants import MODULE_PARAM_CONFIG
 
@@ -13,19 +14,13 @@ class FunctionCallingLlmModule(ConfigurableModule):
         return []
 
     def _create_new_instance(self, new_params: Dict[str, Any]):
-        llm_config = new_params[MODULE_PARAM_CONFIG]
-        if llm_config and llm_config.source.lower() == "dashscope":
-            model_name = llm_config.get("name", "qwen2-7b-instruct")
-            logger.info(
-                f"Using DashScope for Function-Calling-LLM with model: {model_name}."
-            )
-            return MyFCDashScope(model_name=model_name)
-        elif llm_config and llm_config.source.lower() == "openai":
-            model_name = llm_config.get("name", "gpt-3.5-turbo")
-            logger.info(
-                f"Using OpenAI for Function-Calling-LLM with model: {model_name}."
-            )
-            return MyFCDashScope(model_name=model_name)
-        else:
+        config = new_params[MODULE_PARAM_CONFIG]
+        if not config or not config.source:
             logger.info("Don't use Function-Calling-LLM.")
             return None
+
+        llm_config = parse_llm_config(config)
+        llm = PaiLlm(llm_config)
+        logger.info(f"Function-calling LLM created: {llm.metadata}.")
+
+        return llm
