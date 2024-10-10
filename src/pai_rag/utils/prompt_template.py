@@ -21,7 +21,7 @@ DEFAULT_QUESTION_GENERATION_PROMPT = '''\
     ---------------------
     {context_str}
     ---------------------
-    {query_str}
+    #08 请仔细阅读给出的内容，生成适合作为问答对数据集的{num_questions_per_chunk}个问题：
     '''
 
 

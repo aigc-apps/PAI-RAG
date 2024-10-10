@@ -1,5 +1,6 @@
 import click
 import os
+import asyncio
 from pathlib import Path
 from pai_rag.core.rag_configuration import RagConfiguration
 from pai_rag.core.rag_data_loader import RagDataLoader
@@ -20,6 +21,9 @@ from pai_rag.integrations.readers.pai.pai_data_reader import (
     PaiDataReader,
 )
 from pai_rag.utils.oss_client import OssClient
+from pai_rag.evaluation.rag_qca_generator import RagQCAGenerator
+from llama_index.llms.openai_like import OpenAILike
+
 import logging
 
 
@@ -82,7 +86,31 @@ def _create_data_loader(config_file, enable_raptor: bool = False) -> RagDataLoad
         vector_index=vector_index,
     )
 
-    return data_loader
+    return data_loader, vector_index
+
+
+def _create_qca_generator(config_file, vector_index) -> None:
+    config = RagConfiguration.from_file(config_file).get_value()
+    # llm_config = parse_embed_config(config.rag.llm)
+    # llm = PaiEmbedding(llm_config)
+    DASHSCOPE_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+    llm = OpenAILike(
+        model=config.rag.llm.name,
+        api_base=DASHSCOPE_API_BASE,
+        temperature=0.1,
+        is_chat_model=True,
+        api_key=os.environ.get("DASHSCOPE_API_KEY"),
+        max_tokens=2000,
+    )
+    qca_generator = RagQCAGenerator(
+        llm=llm, vector_index=vector_index, persist_path=config.rag.index.persist_path
+    )
+    return qca_generator
+
+
+def _create_qcap_generator(config_file) -> None:
+    pass
 
 
 @click.command()
@@ -142,7 +170,7 @@ def run(
         data_path is None
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
-    data_loader = _create_data_loader(config, enable_raptor)
+    data_loader, vector_index = _create_data_loader(config, enable_raptor)
     data_loader.load_data(
         file_path_or_directory=data_path,
         filter_pattern=pattern,
@@ -150,3 +178,5 @@ def run(
         from_oss=oss_path is not None,
         enable_raptor=enable_raptor,
     )
+    qca_generator = _create_qca_generator(config, vector_index)
+    asyncio.run(qca_generator.agenerate_qca_dataset())

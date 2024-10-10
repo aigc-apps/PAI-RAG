@@ -1,0 +1,7 @@
+experiment:
+  - name: "exp1"
+    retrieval_mode: "keyword"
+    similarity_top_k: 3
+  - name: "exp2"
+    retrieval_mode: "hybrid"
+    similarity_top_k: 3
