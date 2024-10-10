@@ -15,6 +15,9 @@ from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
 from llama_index.core.storage.chat_store.base import BaseChatStore
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.schema import (
+    ImageNode,
+)
 import json
 import logging
 import os
@@ -131,6 +134,13 @@ class RagApplication:
                 text=score_node.node.get_content(),
                 metadata=score_node.node.metadata,
                 score=score_node.score,
+                image_url=score_node.node.image_url,
+            )
+            if isinstance(score_node.node, ImageNode)
+            else ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
             )
             for score_node in node_results
         ]
@@ -199,6 +209,13 @@ class RagApplication:
         node_results = response.source_nodes
         reference_docs = [
             ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+                image_url=score_node.node.image_url,
+            )
+            if isinstance(score_node.node, ImageNode)
+            else ContextDoc(
                 text=score_node.node.get_content(),
                 metadata=score_node.node.metadata,
                 score=score_node.score,
@@ -342,6 +359,13 @@ class RagApplication:
 
         reference_docs = [
             ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+                image_url=score_node.node.image_url,
+            )
+            if isinstance(score_node.node, ImageNode)
+            else ContextDoc(
                 text=score_node.node.get_content(),
                 metadata=score_node.node.metadata,
                 score=score_node.score,

@@ -185,21 +185,21 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         # 从文本中召回图片
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
-                image_url_infos = node.node.metadata.get("image_url")
+                image_url_infos = node.node.metadata.get("image_info_list")
                 if not image_url_infos:
                     continue
                 for image_url_info in image_url_infos:
-                    if image_url_info.get("img_url", None) not in seen_images:
+                    if image_url_info.get("image_url", None) not in seen_images:
                         image_nodes.extend(
                             NodeWithScore(
                                 ImageNode(
-                                    image_url=image_url_info.get("img_url", None)
+                                    image_url=image_url_info.get("image_url", None)
                                 ),
                                 score=node.score
                                 * 0.5,  # discount the score from text nodes
                             )
                         )
-                        seen_images.add(image_url_info.get("img_url", None))
+                        seen_images.add(image_url_info.get("image_url", None))
                 if len(image_nodes) >= self._image_similarity_top_k:
                     break
 
@@ -413,7 +413,7 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                 if is_image:
                     node = ImageNode(
                         id_=node.id_,
-                        image_url=node.metadata["image_url"],
+                        image_url=node.image_url,
                         metadata=node.metadata,
                     )
                 query_result.nodes[i] = node
@@ -441,7 +441,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             if query_result.similarities is not None:
                 score = query_result.similarities[ind]
             node_with_scores.append(NodeWithScore(node=node, score=score))
-
         return node_with_scores
 
     # Async Retrieval Methods
@@ -463,21 +462,21 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         # 从文本中召回图片
         if self._search_image and len(image_nodes) < self._image_similarity_top_k:
             for node in text_nodes:
-                image_url_infos = node.node.metadata.get("image_url")
+                image_url_infos = node.node.metadata.get("image_info_list")
                 if not image_url_infos:
                     continue
                 for image_url_info in image_url_infos:
-                    if image_url_info.get("img_url", None) not in seen_images:
+                    if image_url_info.get("image_url", None) not in seen_images:
                         image_nodes.extend(
                             NodeWithScore(
                                 ImageNode(
-                                    image_url=image_url_info.get("img_url", None)
+                                    image_url=image_url_info.get("image_url", None)
                                 ),
                                 score=node.score
                                 * 0.5,  # discount the score from text nodes
                             )
                         )
-                        seen_images.add(image_url_info.get("img_url", None))
+                        seen_images.add(image_url_info.get("image_url", None))
                 if len(image_nodes) >= self._image_similarity_top_k:
                     break
 
@@ -486,7 +485,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         if not image_nodes:
             image_nodes = []
         results = text_nodes + image_nodes
-
         return results
 
     async def _atext_retrieve(
