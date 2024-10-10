@@ -15,8 +15,6 @@ from openinference.instrumentation import using_attributes
 from typing import Any, List
 import logging
 
-from pai_rag.core.rag_trace import init_trace
-
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 logger = logging.getLogger(__name__)
 
@@ -43,15 +41,12 @@ def trace_correlation_id(function):
 
 
 class RagService:
-    def initialize(self, config_file: str):
-        self.config_file = config_file
-        self.rag_configuration = RagConfiguration.from_file(config_file)
+    def initialize(self, rag_configuration: RagConfiguration):
+        self.rag_configuration = rag_configuration
         self.config_dict_value = self.rag_configuration.get_value().to_dict()
         self.config_modified_time = self.rag_configuration.get_config_mtime()
 
         self.rag_configuration.persist()
-
-        init_trace(self.rag_configuration.get_value().get("RAG.trace"))
 
         self.rag = RagApplication()
         self.rag.initialize(self.rag_configuration.get_value())

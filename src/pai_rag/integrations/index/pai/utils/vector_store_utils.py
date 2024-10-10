@@ -215,7 +215,7 @@ def create_opensearch(
             "file_name",
             "file_path",
             "file_type",
-            "image_url_list_str",
+            "image_url",
             "text",
             "doc_id",
         ]

@@ -1,11 +1,10 @@
-import os
 from pai_rag.modules.intentdetection.llm_single_detector import LLMSingleDetector
 from llama_index.core.tools import ToolMetadata
-from pai_rag.integrations.llms.dashscope.fc_base import MyFCDashScope
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 
-fc_llm = MyFCDashScope(
-    model_name="qwen2-7b-instruct", api_key=os.getenv("DASHSCOPE_API_KEY")
-)
+fc_llm_config = DashScopeLlmConfig(model_name="qwen2.5-7b-instruct")
+fc_llm = PaiLlm(fc_llm_config)
 
 intents = {
     "retrieval": "关于一些通用的信息检索，比如搜索旅游攻略、搜索美食攻略、搜索注意事项等信息。",
