@@ -69,10 +69,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         # keep image_vector_store here for backward compatibility
         image_vector_store: Optional[BasePydanticVectorStore] = None,
         image_embed_model: EmbedType = "clip:ViT-B/32",
-        # is_image_vector_store_empty is used to indicate whether image_vector_store is empty
-        # those flags are used for cases when only one vector store is used
-        is_image_vector_store_empty: bool = False,
-        is_text_vector_store_empty: bool = False,
         # deprecated
         service_context: Optional[ServiceContext] = None,
         **kwargs: Any,
@@ -105,8 +101,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 self.image_namespace
             ]
 
-        self._is_image_vector_store_empty = is_image_vector_store_empty
-        self._is_text_vector_store_empty = is_text_vector_store_empty
         storage_context = storage_context or StorageContext.from_defaults()
 
         super().__init__(
@@ -128,14 +122,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
     @property
     def image_embed_model(self) -> MultiModalEmbedding:
         return self._image_embed_model
-
-    @property
-    def is_image_vector_store_empty(self) -> bool:
-        return self._is_image_vector_store_empty
-
-    @property
-    def is_text_vector_store_empty(self) -> bool:
-        return self._is_text_vector_store_empty
 
     def as_retriever(self, **kwargs: Any) -> PaiMultiModalVectorIndexRetriever:
         return PaiMultiModalVectorIndexRetriever(
