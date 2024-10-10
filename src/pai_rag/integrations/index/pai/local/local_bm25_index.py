@@ -297,11 +297,12 @@ class LocalBm25IndexStore:
                 )
             )
 
-        if normalize:
+        if normalize and len(results) > 0:
             bm25_scores = [node.score for node in results]
             max_score = max(bm25_scores)
-            for node_with_score in results:
-                node_with_score.score = node_with_score.score / max_score
+            if max_score > 0:
+                for node_with_score in results:
+                    node_with_score.score = node_with_score.score / max_score
 
         return results
 
