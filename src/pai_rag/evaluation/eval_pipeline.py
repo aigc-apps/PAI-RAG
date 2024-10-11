@@ -21,8 +21,15 @@ from pai_rag.integrations.readers.pai.pai_data_reader import (
     PaiDataReader,
 )
 from pai_rag.utils.oss_client import OssClient
-from pai_rag.evaluation.rag_qca_generator import RagQCAGenerator
-from llama_index.llms.openai_like import OpenAILike
+from pai_rag.evaluation.generator.labelled_qca_generator import RagLabelledQCAGenerator
+from pai_rag.evaluation.generator.predicted_qca_generator import (
+    RagPredictedQCAGenerator,
+)
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
+    PaiMultiModalLlm,
+)
+from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 
 import logging
 
@@ -89,28 +96,26 @@ def _create_data_loader(config_file, enable_raptor: bool = False) -> RagDataLoad
     return data_loader, vector_index
 
 
-def _create_qca_generator(config_file, vector_index) -> None:
+def _create_labelled_qca_generator(config_file, vector_index) -> None:
     config = RagConfiguration.from_file(config_file).get_value()
-    # llm_config = parse_embed_config(config.rag.llm)
-    # llm = PaiEmbedding(llm_config)
-    DASHSCOPE_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-    llm = OpenAILike(
-        model=config.rag.llm.name,
-        api_base=DASHSCOPE_API_BASE,
-        temperature=0.1,
-        is_chat_model=True,
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        max_tokens=2000,
-    )
-    qca_generator = RagQCAGenerator(
+    llm_config = parse_llm_config(config.rag.llm)
+    llm = PaiLlm(llm_config)
+    qca_generator = RagLabelledQCAGenerator(
         llm=llm, vector_index=vector_index, persist_path=config.rag.index.persist_path
     )
     return qca_generator
 
 
-def _create_qcap_generator(config_file) -> None:
-    pass
+def _create_predicted_qca_generator(config_file, vector_index) -> None:
+    config = RagConfiguration.from_file(config_file).get_value()
+    llm_config = parse_llm_config(config.rag.llm)
+    multimodal_llm = PaiMultiModalLlm(llm_config)
+    predicted_qca_generator = RagPredictedQCAGenerator(
+        llm=multimodal_llm,
+        vector_index=vector_index,
+        persist_path=config.rag.index.persist_path,
+    )
+    return predicted_qca_generator
 
 
 @click.command()
@@ -171,12 +176,15 @@ def run(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     data_loader, vector_index = _create_data_loader(config, enable_raptor)
-    data_loader.load_data(
-        file_path_or_directory=data_path,
-        filter_pattern=pattern,
-        oss_path=oss_path,
-        from_oss=oss_path is not None,
-        enable_raptor=enable_raptor,
-    )
-    qca_generator = _create_qca_generator(config, vector_index)
-    asyncio.run(qca_generator.agenerate_qca_dataset())
+    # data_loader.load_data(
+    #     file_path_or_directory=data_path,
+    #     filter_pattern=pattern,
+    #     oss_path=oss_path,
+    #     from_oss=oss_path is not None,
+    #     enable_raptor=enable_raptor,
+    # )
+    qca_generator = _create_labelled_qca_generator(config, vector_index)
+    asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
+
+    predicted_qca_generator = _create_predicted_qca_generator(config, vector_index)
+    asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())

@@ -69,8 +69,9 @@ name = "qwen-turbo"
 source = ""
 
 [rag.llm.multi_modal]
-enable = false
-source = ""
+enable = true
+source = "DashScope"
+name = "qwen-vl-plus"
 
 [rag.node_enhancement]
 tree_depth = 3

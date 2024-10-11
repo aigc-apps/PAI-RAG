@@ -9,7 +9,7 @@ from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.prompts.base import PromptTemplate
 import re
 from llama_index.core.async_utils import run_jobs
-from pai_rag.evaluation.base.rag_qca_dataset import RagQCADataset
+from pai_rag.evaluation.generator.rag_qca_sample import LabelledRagQCASample
 from llama_index.core.llama_dataset import (
     CreatedBy,
     CreatedByType,
@@ -22,7 +22,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class RagQCAGenerator:
+class RagLabelledQCAGenerator:
     def __init__(
         self, llm, vector_index: VectorStoreIndex = None, persist_path: str = None
     ):
@@ -39,10 +39,19 @@ class RagQCAGenerator:
         self._show_progress = True
         self._workers = 2
 
-    async def agenerate_qca_dataset(
+    def save_labelled_qca_dataset_json(self, qas: LabelledRagDataset) -> None:
+        """Save json."""
+        labelled_qca_dataset_path = os.path.join(
+            self.persist_path, "labelled_qca_dataset.json"
+        )
+        with open(labelled_qca_dataset_path, "w", encoding="utf-8") as f:
+            json.dump(qas.dict(), f, indent=4, ensure_ascii=False)
+        logger.info(f"Saved labelled qca dataset to {labelled_qca_dataset_path}")
+
+    async def agenerate_labelled_qca_dataset(
         self,
     ) -> LabelledRagDataset:
-        examples: List[RagQCADataset] = []
+        examples: List[LabelledRagQCASample] = []
         docs = self._vector_index._docstore.docs
         nodes = list(docs.values())
         query_tasks = []
@@ -53,7 +62,7 @@ class RagQCAGenerator:
             task = self._llm.acomplete(prompt=prompt_str)
             query_tasks.append(task)
         responses = await run_jobs(query_tasks, self._show_progress, self._workers)
-        for _, response in enumerate(responses):
+        for node, response in zip(nodes, responses):
             result = str(response).strip().split("\n")
             cleaned_questions = [
                 re.sub(r"^\d+[\).\s]", "", question).strip() for question in result
@@ -76,7 +85,7 @@ class RagQCAGenerator:
                 question,
                 answer_response,
             ) in zip(cleaned_questions, answer_responses):
-                example = RagQCADataset(
+                example = LabelledRagQCASample(
                     query=question,
                     reference_answer=str(answer_response),
                     reference_contexts=[node.text],
@@ -86,9 +95,5 @@ class RagQCAGenerator:
                 )
                 examples.append(example)
         labelled_qca_dataset = LabelledRagDataset(examples=examples)
-        labelled_qca_dataset_path = os.path.join(
-            self.persist_path, "labelled_qca_dataset.json"
-        )
-        with open(labelled_qca_dataset_path, "w", encoding="utf-8") as f:
-            json.dump(labelled_qca_dataset.dict(), f, indent=4, ensure_ascii=False)
+        self.save_labelled_qca_dataset_json(labelled_qca_dataset)
         return labelled_qca_dataset
