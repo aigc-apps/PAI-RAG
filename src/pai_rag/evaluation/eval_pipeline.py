@@ -176,13 +176,13 @@ def run(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     data_loader, vector_index = _create_data_loader(config, enable_raptor)
-    # data_loader.load_data(
-    #     file_path_or_directory=data_path,
-    #     filter_pattern=pattern,
-    #     oss_path=oss_path,
-    #     from_oss=oss_path is not None,
-    #     enable_raptor=enable_raptor,
-    # )
+    data_loader.load_data(
+        file_path_or_directory=data_path,
+        filter_pattern=pattern,
+        oss_path=oss_path,
+        from_oss=oss_path is not None,
+        enable_raptor=enable_raptor,
+    )
     qca_generator = _create_labelled_qca_generator(config, vector_index)
     asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
 

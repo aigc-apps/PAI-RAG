@@ -16,7 +16,6 @@ from pai_rag.modules.chat.chat_store import ChatStoreModule
 from pai_rag.modules.agent.agent import AgentModule
 from pai_rag.modules.tool.tool import ToolModule
 from pai_rag.modules.cache.oss_cache import OssCacheModule
-from pai_rag.modules.evaluation.evaluation import EvaluationModule
 from pai_rag.modules.nodesenhance.nodes_enhancement import NodesEnhancementModule
 from pai_rag.modules.intentdetection.intent_detection import IntentDetectionModule
 from pai_rag.modules.customconfig.custom_config import CustomConfigModule
@@ -42,7 +41,6 @@ ALL_MODULES = [
     "AgentModule",
     "ToolModule",
     "OssCacheModule",
-    "EvaluationModule",
     "NodesEnhancementModule",
     "IntentDetectionModule",
     "CustomConfigModule",

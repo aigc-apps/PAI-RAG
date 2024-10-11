@@ -210,22 +210,6 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Load agent config: {ex}")
 
-    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
-        try:
-            return await self.rag.aload_evaluation_qa_dataset(overwrite)
-        except Exception as ex:
-            logger.error(traceback.format_exc())
-            raise UserInputError(f"Query RAG failed: {ex}")
-
-    async def aevaluate_retrieval_and_response(
-        self, type: str = "all", overwrite: bool = False
-    ):
-        try:
-            return await self.rag.aevaluate_retrieval_and_response(type, overwrite)
-        except Exception as ex:
-            logger.error(traceback.format_exc())
-            raise UserInputError(f"Query RAG failed: {ex}")
-
     async def aquery_analysis(self, query: RagQuery):
         try:
             self.check_updates()

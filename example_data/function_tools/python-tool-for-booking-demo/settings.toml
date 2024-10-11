@@ -38,11 +38,6 @@ embed_batch_size = 10
 [rag.embedding.multi_modal]
 source = "cnclip"
 
-[rag.evaluation]
-retrieval = ["mrr", "hit_rate"]
-response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
-
 [rag.index]
 persist_path = "localdata/storage"
 vector_store.type = "FAISS"
