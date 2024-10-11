@@ -2,7 +2,7 @@ from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 
-llm_config = DashScopeLlmConfig(model_name="qwen-max")
+llm_config = DashScopeLlmConfig(model_name="qwen-turbo")
 llm = PaiLlm(llm_config)
 
 
