@@ -4,7 +4,7 @@ from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def llm():
     llm_config = DashScopeLlmConfig(model_name="qwen-turbo")
     return PaiLlm(llm_config)
