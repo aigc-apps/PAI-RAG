@@ -37,10 +37,10 @@ source = [HuggingFace, OpenAI, DashScope]
 
 Currently, pai_rag supports three embedding sources.
 
-If source = "HuggingFace", you need to further specify model_name and embed_batch_size. The default model name and batch size are bge-small-zh-v1.5 and 10, respectively.
+If source = "HuggingFace", you need to further specify model_name and embed_batch_size. The default model name and batch size are bge-large-zh-v1.5 and 10, respectively.
 
     source = "HuggingFace"
-    model_name = "bge-small-zh-v1.5"
+    model_name = "bge-large-zh-v1.5"
     embed_batch_size = 10
 
 Alternatively, if you want to use other huggingface models, please specify parameters as below:
@@ -255,19 +255,6 @@ Currently, pai_rag supports four synthesizers.
 type = "RetrieverQueryEngine"
 
 Query engine is a generic interface that allows you to ask question over your data. It takes in a natural language query, and returns a rich response.
-
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-Chat engine is a high-level interface for having a conversation with your data (multiple back-and-forth instead of a single question & answer). It is a stateful analogy of a query engine.
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question is a simple chat mode built on top of a query engine over your data. For each chat interaction:
-first generate a standalone question from conversation context and last message, then query the query engine with the condensed question for a response.
 
 ## rag.chat_store
 

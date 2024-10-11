@@ -1,9 +1,6 @@
 from typing import Dict, Any
 import gradio as gr
-from pai_rag.app.web.ui_constants import (
-    EMBEDDING_API_KEY_DICT,
-    EMBEDDING_DIM_DICT,
-)
+from pai_rag.app.web.ui_constants import EMBEDDING_API_KEY_DICT
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import logging
@@ -28,7 +25,6 @@ def create_setting_tab() -> Dict[str, Any]:
                     interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                 )
                 embed_model = gr.Dropdown(
-                    EMBEDDING_DIM_DICT.keys(),
                     label="Embedding Model Name",
                     elem_id="embed_model",
                     visible=False,
@@ -41,6 +37,14 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_batch_size = gr.Textbox(
                         label="Embedding Batch Size",
                         elem_id="embed_batch_size",
+                    )
+                    embed_type = gr.Textbox(
+                        label="Embedding Type",
+                        elem_id="embed_type",
+                    )
+                    embed_link = gr.Markdown(
+                        label="Model URL Link",
+                        elem_id="embed_link",
                     )
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **(Optional) OSS Bucket**")
@@ -69,20 +73,16 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="OSS Bucket",
                         elem_id="oss_bucket",
                     )
-                    # oss_prefix = gr.Textbox(
-                    #     label="OSS Prefix",
-                    #     elem_id="oss_prefix",
-                    # )
 
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
-                inputs=embed_source,
-                outputs=[embed_model, embed_dim],
+                inputs=[embed_source, embed_model],
+                outputs=[embed_model, embed_dim, embed_type, embed_link],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_dim],
+                outputs=[embed_dim, embed_type, embed_link],
             )
             use_oss.change(
                 fn=ev_listeners.change_use_oss,
@@ -93,6 +93,8 @@ def create_setting_tab() -> Dict[str, Any]:
                 [
                     embed_source,
                     embed_dim,
+                    embed_type,
+                    embed_link,
                     embed_model,
                     embed_batch_size,
                     use_oss,
@@ -100,7 +102,6 @@ def create_setting_tab() -> Dict[str, Any]:
                     oss_sk,
                     oss_endpoint,
                     oss_bucket,
-                    # oss_prefix,
                 ]
             )
 
@@ -230,13 +231,14 @@ def create_setting_tab() -> Dict[str, Any]:
                 embed_source,
                 embed_model,
                 embed_dim,
+                embed_type,
+                embed_link,
                 embed_batch_size,
                 use_oss,
                 oss_ak,
                 oss_sk,
                 oss_endpoint,
                 oss_bucket,
-                # oss_prefix,
             }
         )
     save_btn = gr.Button("Save", variant="primary")

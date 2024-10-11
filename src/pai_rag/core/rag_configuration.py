@@ -38,6 +38,13 @@ class RagConfiguration:
             )
             snapshot_config = Dynaconf(settings_file=[GENERATED_CONFIG_FILE_NAME])
             config.update(snapshot_config, tomlfy=True, merge=True)
+            config["rag"]["index"]["vector_store"]["persist_path"] = config["rag"][
+                "index"
+            ]["persist_path"]
+            config["rag"]["index"]["vector_store"]["type"] = config["rag"]["index"][
+                "vector_store"
+            ]["type"].lower()
+
             return cls(config)
             # `envvar_prefix` = export envvars with `export PAIRAG_FOO=bar`.
             # `settings_files` = Load these files in the order.
@@ -63,7 +70,7 @@ class RagConfiguration:
                     "rag.embedding.multi_modal", None
                 )
 
-            self.config.rag.update(new_value, tomlfy=True, merge=True)
+            self.config.rag.update(new_value, merge=True)
 
     def persist(self):
         """Save configuration to file."""

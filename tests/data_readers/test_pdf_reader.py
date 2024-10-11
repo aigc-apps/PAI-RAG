@@ -17,7 +17,7 @@ def test_pai_pdf_reader():
     ModelScopeDownloader().load_mineru_config()
     directory_reader = SimpleDirectoryReader(
         input_dir="tests/testdata/data/pdf_data",
-        file_extractor={".pdf": PaiPDFReader(enable_multimodal=True)},
+        file_extractor={".pdf": PaiPDFReader()},
     )
     documents = directory_reader.load_data()
     assert len(documents) > 0

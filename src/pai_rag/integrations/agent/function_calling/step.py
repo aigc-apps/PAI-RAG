@@ -36,7 +36,6 @@ from llama_index.core.tools.calling import (
 from llama_index.core.tools.types import AsyncBaseTool
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
 
 DEFAULT_MAX_FUNCTION_CALLS = 5
 

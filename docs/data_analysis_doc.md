@@ -1,7 +1,9 @@
 # 模型配置
 
 在web界面 Settings 中，选择需要的LLM，如果选择DashScope（通义API），推荐使用qwen-max模型；如果选择PaiEas开源部署，推荐使用qwen2-72b-instruct模型
+在web界面 Settings 中，选择需要的LLM，如果选择DashScope（通义API），推荐使用qwen-max模型；如果选择PaiEas开源部署，推荐使用qwen2-72b-instruct模型
 
+点击下方Save更新使用的模型
 点击下方Save更新使用的模型
 
 ![llm_selection](/docs/figures/data_analysis/llm_selection.png)
@@ -30,13 +32,22 @@
 
 **注意：** 如自定义prompt，请尽量参考template修改，其中中大括号{}的内容为输入参数，需要保留
 
+- 支持三种prompt template用于生成sql查询，点击选项后可以看到具体的prompt template，也可在custom中自定义
+
+**注意：** 如自定义prompt，请尽量参考template修改，其中中大括号{}的内容为输入参数，需要保留
+
+确认输入无误后，可直接在右侧chatbot中开始提问，回答结果的Reference中可以看到查询的数据库表名称，生成的sql语句，以及该sql语句是否有效执行。**注意：** 这里有效执行是指sql语句语法有效，不代表业务逻辑一定正确
 确认输入无误后，可直接在右侧chatbot中开始提问，回答结果的Reference中可以看到查询的数据库表名称，生成的sql语句，以及该sql语句是否有效执行。**注意：** 这里有效执行是指sql语句语法有效，不代表业务逻辑一定正确
 
 Reference可以作为查询效果优化的"debug"工具
+Reference可以作为查询效果优化的"debug"工具
 
+![db_chat](/docs/figures/data_analysis/db_chat.png)
 ![db_chat](/docs/figures/data_analysis/db_chat.png)
 
 ## 查询效果优化
+
+### Description
 
 ### Description
 
@@ -50,6 +61,7 @@ Reference可以作为查询效果优化的"debug"工具
 
 ![db_query_no_desc](/docs/figures/data_analysis/db_query_no_desc.png)
 
+增加简单描述后，生成的sql查询语句为：SELECT COUNT(\*) FROM pets WHERE PetType = 'dog'，可以准确回答
 增加简单描述后，生成的sql查询语句为：SELECT COUNT(\*) FROM pets WHERE PetType = 'dog'，可以准确回答
 
 ![db_query_desc](/docs/figures/data_analysis/db_query_desc.png)

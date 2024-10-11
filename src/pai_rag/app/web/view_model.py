@@ -2,12 +2,17 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from collections import defaultdict
 from pai_rag.app.web.ui_constants import (
-    EMBEDDING_DIM_DICT,
     DEFAULT_EMBED_SIZE,
     DEFAULT_HF_EMBED_MODEL,
+    EMBEDDING_MODEL_LIST,
+    EMBEDDING_MODEL_DEPRECATED,
+    EMBEDDING_DIM_DICT,
+    EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
-    PROMPT_MAP,
+    DEFAULT_TEXT_QA_PROMPT_TMPL,
+    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
 import pandas as pd
 import os
@@ -33,6 +38,8 @@ class ViewModel(BaseModel):
     embed_source: str = "HuggingFace"
     embed_model: str = DEFAULT_HF_EMBED_MODEL
     embed_dim: int = 1024
+    embed_type: str = "Default"
+    embed_link: str = ""
     embed_api_key: str = None
     embed_batch_size: int = 10
 
@@ -60,23 +67,22 @@ class ViewModel(BaseModel):
     oss_sk: str = None
     oss_endpoint: str = None
     oss_bucket: str = None
-    oss_prefix: str = None
 
-    # chunking
+    # node_parser
     parser_type: str = "Sentence"
     chunk_size: int = 500
     chunk_overlap: int = 20
+    enable_multimodal: bool = False
 
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_qa_extraction: bool = False
     enable_raptor: bool = False
-    enable_multimodal: bool = False
     enable_table_summary: bool = False
 
     config_file: str = None
 
-    vectordb_type: str = "FAISS"
+    vectordb_type: str = "faiss"
 
     # AnalyticDB
     adb_ak: str = None
@@ -156,19 +162,19 @@ class ViewModel(BaseModel):
     db_nl2sql_prompt: str = None
 
     # postprocessor
-    reranker_type: str = (
-        "simple-weighted-reranker"  # simple-weighted-reranker / model-based-reranker
-    )
+    reranker_type: str = "no-reranker"  # no-reranker / model-based-reranker
     reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
     similarity_threshold: float = None
+    reranker_similarity_threshold: float = None
 
     query_engine_type: str = None
 
     synthesizer_type: str = None
 
-    text_qa_template: str = None
+    text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_TMPL
+    multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -244,15 +250,17 @@ class ViewModel(BaseModel):
             "endpoint", view_model.oss_endpoint
         )
         view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
-        view_model.oss_prefix = config["oss_store"].get("prefix", view_model.oss_prefix)
 
-        view_model.vectordb_type = config["index"]["vector_store"].get(
-            "type", view_model.vectordb_type
+        view_model.vectordb_type = (
+            config["index"]["vector_store"]
+            .get("type", view_model.vectordb_type)
+            .lower()
         )
-        view_model.faiss_path = config["index"].get(
+
+        view_model.faiss_path = config["index"]["vector_store"].get(
             "persist_path", view_model.faiss_path
         )
-        if view_model.vectordb_type == "AnalyticDB":
+        if view_model.vectordb_type.lower() == "analyticdb":
             view_model.adb_ak = config["index"]["vector_store"]["ak"]
             view_model.adb_sk = config["index"]["vector_store"]["sk"]
             view_model.adb_region_id = config["index"]["vector_store"]["region_id"]
@@ -267,7 +275,7 @@ class ViewModel(BaseModel):
                 "metrics", "cosine"
             )
 
-        elif view_model.vectordb_type == "Hologres":
+        elif view_model.vectordb_type.lower() == "hologres":
             view_model.hologres_host = config["index"]["vector_store"]["host"]
             view_model.hologres_port = config["index"]["vector_store"]["port"]
             view_model.hologres_user = config["index"]["vector_store"]["user"]
@@ -278,13 +286,13 @@ class ViewModel(BaseModel):
                 "pre_delete_table", False
             )
 
-        elif view_model.vectordb_type == "ElasticSearch":
+        elif view_model.vectordb_type.lower() == "elasticsearch":
             view_model.es_index = config["index"]["vector_store"]["es_index"]
             view_model.es_url = config["index"]["vector_store"]["es_url"]
             view_model.es_user = config["index"]["vector_store"]["es_user"]
             view_model.es_password = config["index"]["vector_store"]["es_password"]
 
-        elif view_model.vectordb_type == "Milvus":
+        elif view_model.vectordb_type.lower() == "milvus":
             view_model.milvus_host = config["index"]["vector_store"]["host"]
             view_model.milvus_port = config["index"]["vector_store"]["port"]
             view_model.milvus_user = config["index"]["vector_store"]["user"]
@@ -318,6 +326,9 @@ class ViewModel(BaseModel):
         view_model.parser_type = config["node_parser"]["type"]
         view_model.chunk_size = config["node_parser"]["chunk_size"]
         view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
+        view_model.enable_multimodal = config["node_parser"].get(
+            "enable_multimodal", view_model.enable_multimodal
+        )
 
         view_model.reader_type = config["data_reader"].get(
             "type", view_model.reader_type
@@ -328,9 +339,6 @@ class ViewModel(BaseModel):
         view_model.enable_raptor = config["data_reader"].get(
             "enable_raptor", view_model.enable_raptor
         )
-        view_model.enable_multimodal = config["data_reader"].get(
-            "enable_multimodal", view_model.enable_multimodal
-        )
         view_model.enable_table_summary = config["data_reader"].get(
             "enable_table_summary", view_model.enable_table_summary
         )
@@ -340,6 +348,11 @@ class ViewModel(BaseModel):
             "image_similarity_top_k", 2
         )
         view_model.need_image = config["retriever"].get("need_image", False)
+        vector_weight = config["retriever"].get("vector_weight", 0.7)
+        view_model.vector_weight = float(vector_weight)
+        keyword_weight = config["retriever"].get("keyword_weight", 0.3)
+        view_model.keyword_weight = float(keyword_weight)
+
         if config["retriever"]["retrieval_mode"] == "hybrid":
             view_model.retrieval_mode = "Hybrid"
             view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
@@ -379,22 +392,20 @@ class ViewModel(BaseModel):
 
         view_model.db_nl2sql_prompt = config["data_analysis"].get("nl2sql_prompt", None)
 
-        reranker_type = config["postprocessor"].get(
-            "reranker_type", "simple-weighted-reranker"
-        )
+        reranker_type = config["postprocessor"].get("reranker_type", "no-reranker")
         similarity_threshold = config["postprocessor"].get("similarity_threshold", 0)
         view_model.similarity_threshold = (
             similarity_threshold
             if similarity_threshold and similarity_threshold > 0
             else None
         )
+        reranker_similarity_threshold = config["postprocessor"].get(
+            "reranker_similarity_threshold", 0
+        )
+        view_model.reranker_similarity_threshold = reranker_similarity_threshold
 
-        if reranker_type == "simple-weighted-reranker":
-            view_model.reranker_type = "simple-weighted-reranker"
-            vector_weight = config["postprocessor"].get("vector_weight", 0.7)
-            view_model.vector_weight = float(vector_weight)
-            keyword_weight = config["postprocessor"].get("keyword_weight", 0.3)
-            view_model.keyword_weight = float(keyword_weight)
+        if reranker_type == "no-reranker":
+            view_model.reranker_type = "no-reranker"
 
         elif reranker_type == "model-based-reranker":
             view_model.reranker_type = "model-based-reranker"
@@ -406,7 +417,10 @@ class ViewModel(BaseModel):
             "type", "SimpleSummarize"
         )
         view_model.text_qa_template = config["synthesizer"].get(
-            "text_qa_template", None
+            "text_qa_template", DEFAULT_TEXT_QA_PROMPT_TMPL
+        )
+        view_model.multimodal_qa_template = config["synthesizer"].get(
+            "multimodal_qa_template", DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
         )
 
         search_config = config.get("search") or {}
@@ -457,22 +471,24 @@ class ViewModel(BaseModel):
             config["oss_store"]["sk"] = self.oss_sk
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
-        config["oss_store"]["prefix"] = self.oss_prefix
 
-        config["index"]["vector_store"]["type"] = self.vectordb_type
+        config["index"]["vector_store"]["type"] = self.vectordb_type.lower()
         config["index"]["persist_path"] = self.faiss_path
+        config["index"]["vector_store"]["persist_path"] = self.faiss_path
+
+        config["index"]["enable_multimodal"] = self.enable_multimodal
 
         config["node_parser"]["type"] = self.parser_type
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
+        config["node_parser"]["enable_multimodal"] = self.enable_multimodal
 
         config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
         config["data_reader"]["enable_raptor"] = self.enable_raptor
-        config["data_reader"]["enable_multimodal"] = self.enable_multimodal
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
         config["data_reader"]["type"] = self.reader_type
 
-        if self.vectordb_type == "Hologres":
+        if self.vectordb_type.lower() == "hologres":
             config["index"]["vector_store"]["host"] = self.hologres_host
             config["index"]["vector_store"]["port"] = self.hologres_port
             config["index"]["vector_store"]["user"] = self.hologres_user
@@ -483,7 +499,7 @@ class ViewModel(BaseModel):
                 "pre_delete_table"
             ] = self.hologres_pre_delete
 
-        elif self.vectordb_type == "AnalyticDB":
+        elif self.vectordb_type.lower() == "analyticdb":
             config["index"]["vector_store"]["ak"] = self.adb_ak
             config["index"]["vector_store"]["sk"] = self.adb_sk
             config["index"]["vector_store"]["region_id"] = self.adb_region_id
@@ -496,13 +512,13 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"]["collection"] = self.adb_collection
             config["index"]["vector_store"]["metrics"] = self.adb_metrics
 
-        elif self.vectordb_type == "ElasticSearch":
+        elif self.vectordb_type.lower() == "elasticsearch":
             config["index"]["vector_store"]["es_index"] = self.es_index
             config["index"]["vector_store"]["es_url"] = self.es_url
             config["index"]["vector_store"]["es_user"] = self.es_user
             config["index"]["vector_store"]["es_password"] = self.es_password
 
-        elif self.vectordb_type == "Milvus":
+        elif self.vectordb_type.lower() == "milvus":
             config["index"]["vector_store"]["host"] = self.milvus_host
             config["index"]["vector_store"]["port"] = self.milvus_port
             config["index"]["vector_store"]["user"] = self.milvus_user
@@ -513,6 +529,10 @@ class ViewModel(BaseModel):
             config["index"]["vector_store"][
                 "collection_name"
             ] = self.milvus_collection_name
+            config["index"]["vector_store"]["reranker_weights"] = [
+                self.vector_weight,
+                self.keyword_weight,
+            ]
 
         elif self.vectordb_type.lower() == "opensearch":
             config["index"]["vector_store"]["endpoint"] = self.opensearch_endpoint
@@ -531,6 +551,11 @@ class ViewModel(BaseModel):
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+        config["retriever"]["vector_weight"] = self.vector_weight
+        config["retriever"]["keyword_weight"] = self.keyword_weight
+
+        config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
+
         config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["retrieval_mode"] = "hybrid"
@@ -570,13 +595,15 @@ class ViewModel(BaseModel):
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        config["postprocessor"]["keyword_weight"] = self.keyword_weight
-        config["postprocessor"]["vector_weight"] = self.vector_weight
         config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
+        config["postprocessor"][
+            "reranker_similarity_threshold"
+        ] = self.reranker_similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 
         config["synthesizer"]["type"] = self.synthesizer_type
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+        config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
 
         config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
             "BING_SEARCH_KEY"
@@ -658,14 +685,36 @@ class ViewModel(BaseModel):
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
         settings["embed_source"] = {"value": self.embed_source}
-        settings["embed_model"] = {
-            "value": self.embed_model,
-            "visible": self.embed_source == "HuggingFace",
-        }
+
+        if (self.embed_model in EMBEDDING_MODEL_DEPRECATED) or os.getenv(
+            "USE_DEPRECATED_EMBEDDING_MODEL", "False"
+        ):
+            settings["embed_model"] = {
+                "choices": EMBEDDING_MODEL_LIST + EMBEDDING_MODEL_DEPRECATED,
+                "value": self.embed_model,
+                "visible": self.embed_source == "HuggingFace",
+            }
+        else:
+            settings["embed_model"] = {
+                "choices": EMBEDDING_MODEL_LIST,
+                "value": self.embed_model,
+                "visible": self.embed_source == "HuggingFace",
+            }
+
         settings["embed_dim"] = {
             "value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)
             if self.embed_source == "HuggingFace"
             else DEFAULT_EMBED_SIZE
+        }
+        settings["embed_type"] = {
+            "value": EMBEDDING_TYPE_DICT.get(self.embed_model, "Default")
+            if self.embed_source == "HuggingFace"
+            else "Default"
+        }
+        settings["embed_link"] = {
+            "value": f"Model Introduction: [{self.embed_model}]({EMBEDDING_MODEL_LINK_DICT.get(self.embed_model, '')})"
+            if self.embed_source == "HuggingFace"
+            else ""
         }
         settings["embed_batch_size"] = {"value": self.embed_batch_size}
 
@@ -717,7 +766,6 @@ class ViewModel(BaseModel):
         }
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
-        settings["oss_prefix"] = {"value": self.oss_prefix}
 
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
@@ -733,13 +781,21 @@ class ViewModel(BaseModel):
         settings["image_similarity_top_k"] = {"value": self.image_similarity_top_k}
         settings["need_image"] = {"value": self.need_image}
         settings["reranker_model"] = {"value": self.reranker_model}
-        settings["vector_weight"] = {"value": self.vector_weight}
-        settings["keyword_weight"] = {"value": self.keyword_weight}
+        settings["vector_weight"] = {
+            "value": self.vector_weight,
+            "visible": self.retrieval_mode == "Hybrid",
+        }
+        settings["keyword_weight"] = {
+            "value": self.keyword_weight,
+            "visible": self.retrieval_mode == "Hybrid",
+        }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
+        settings["reranker_similarity_threshold"] = {
+            "value": self.reranker_similarity_threshold
+        }
 
-        prm_type = PROMPT_MAP.get(self.text_qa_template, "Custom")
-        settings["prm_type"] = {"value": prm_type}
         settings["text_qa_template"] = {"value": self.text_qa_template}
+        settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
 
         settings["vectordb_type"] = {"value": self.vectordb_type}
 
@@ -795,7 +851,7 @@ class ViewModel(BaseModel):
         settings["postgresql_password"] = {"value": self.postgresql_password}
 
         # evaluation
-        if self.vectordb_type == "FAISS":
+        if self.vectordb_type.lower() == "faiss":
             qa_dataset_path, qa_dataset_res = self.get_local_generated_qa_file()
             settings["qa_dataset_file"] = {"value": qa_dataset_path}
             settings["qa_dataset_json_text"] = {"value": qa_dataset_res}

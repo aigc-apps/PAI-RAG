@@ -464,11 +464,8 @@ class MyElasticsearchStore(BasePydanticVectorStore):
 
         """
         if query.mode == VectorStoreQueryMode.HYBRID:
-            # retrieval_strategy = AsyncDenseVectorStrategy(
-            #     hybrid=True, rrf={"window_size": 50}
-            # )
-            raise ValueError(
-                "Not support query.mode == VectorStoreQueryMode.HYBRID for Elasticsearch."
+            retrieval_strategy = AsyncDenseVectorStrategy(
+                hybrid=True, rrf={"window_size": 50}
             )
         elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
             retrieval_strategy = AsyncBM25Strategy()
@@ -519,11 +516,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                     start_char_idx = node_info.get("start", None)
                     end_char_idx = node_info.get("end", None)
 
-                metadata["retrieval_type"] = (
-                    "keyword"
-                    if isinstance(retrieval_strategy, AsyncBM25Strategy)
-                    else "vector"
-                )
                 node = TextNode(
                     text=text,
                     metadata=metadata,
@@ -534,11 +526,22 @@ class MyElasticsearchStore(BasePydanticVectorStore):
                 )
             top_k_nodes.append(node)
             top_k_ids.append(node_id)
-            top_k_scores.append(hit.get("_rank", round(hit["_score"], 6)))
+            if hit.get("_score") is not None:
+                top_k_scores.append(hit.get("_rank", round(hit["_score"], 6)))
+            else:
+                top_k_scores.append(hit.get("_rank", hit["_score"]))
 
         if isinstance(retrieval_strategy, AsyncBM25Strategy) and len(top_k_nodes) > 0:
             max_score = max(top_k_scores)
-            top_k_scores = [score / max_score for score in top_k_scores]
+            if max_score > 0:
+                top_k_scores = [score / max_score for score in top_k_scores]
+
+        if (
+            isinstance(retrieval_strategy, AsyncDenseVectorStrategy)
+            and retrieval_strategy.hybrid
+        ):
+            total_rank = sum(top_k_scores)
+            top_k_scores = [(total_rank - rank) / total_rank for rank in top_k_scores]
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,

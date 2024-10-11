@@ -7,15 +7,25 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_DIM_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
+    EMBEDDING_TYPE_DICT,
+    EMBEDDING_MODEL_LINK_DICT,
 )
 
 
-def change_emb_source(source):
+def change_emb_source(source, model):
     return [
         gr.update(visible=(source == "HuggingFace")),
         EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
         if source == "HuggingFace"
         else DEFAULT_EMBED_SIZE,
+        EMBEDDING_TYPE_DICT.get(model, "Default")
+        if source == "HuggingFace"
+        else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     ]
 
 
@@ -23,7 +33,15 @@ def change_emb_model(source, model):
     return (
         EMBEDDING_DIM_DICT.get(model, DEFAULT_EMBED_SIZE)
         if source == "HuggingFace"
-        else DEFAULT_EMBED_SIZE
+        else DEFAULT_EMBED_SIZE,
+        EMBEDDING_TYPE_DICT.get(model, "Default")
+        if source == "HuggingFace"
+        else "Default",
+        gr.update(
+            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
+            if source == "HuggingFace"
+            else ""
+        ),
     )
 
 
@@ -76,19 +94,19 @@ def change_vectordb_conn(vectordb_type):
     milvus_visible = False
     opensearch_visible = False
     postgresql_visible = False
-    if vectordb_type == "AnalyticDB":
+    if vectordb_type.lower() == "analyticdb":
         adb_visible = True
-    elif vectordb_type == "Hologres":
+    elif vectordb_type.lower() == "hologres":
         hologres_visible = True
-    elif vectordb_type == "ElasticSearch":
+    elif vectordb_type.lower() == "elasticsearch":
         es_visible = True
-    elif vectordb_type == "Milvus":
+    elif vectordb_type.lower() == "milvus":
         milvus_visible = True
-    elif vectordb_type == "FAISS":
+    elif vectordb_type.lower() == "faiss":
         faiss_visible = True
-    elif vectordb_type == "OpenSearch":
+    elif vectordb_type.lower() == "opensearch":
         opensearch_visible = True
-    elif vectordb_type == "PostgreSQL":
+    elif vectordb_type.lower() == "postgresql":
         postgresql_visible = True
 
     return [

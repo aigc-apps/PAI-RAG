@@ -37,10 +37,10 @@ source = [HuggingFace, OpenAI, DashScope]
 
 目前, pai_rag 支持以上三种 embedding 源.
 
-如果 source = "HuggingFace", 您需要进一步指定 model_name 和 embed_batch_size。默认的模型名称和批处理大小分别为 bge-small-zh-v1.5 和 10。
+如果 source = "HuggingFace", 您需要进一步指定 model_name 和 embed_batch_size。默认的模型名称和批处理大小分别为 bge-large-zh-v1.5 和 10。
 
     source = "HuggingFace"
-    model_name = "bge-small-zh-v1.5"
+    model_name = "bge-large-zh-v1.5"
     embed_batch_size = 10
 
 或者, 如果你想使用其它 huggingface 模型, 请指定如下参数：
@@ -251,18 +251,6 @@ type = [Refine, Compact, TreeSummarize, SimpleSummarize]
 type = "RetrieverQueryEngine"
 
 查询引擎（query engine）是一个通用接口，接收自然语言查询，并返回丰富的响应。
-
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-基于 query engine 之上的一个高级接口，用于与数据进行对话（而不是单一的问答），可类比为状态化的查询引擎。
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question 是建立在查询引擎query engine之上的简易聊天模式。每次聊天交互中：首先从对话上下文和最后一条消息生成一个独立的问题，然后用这个简化的问题查询查询引擎以获取回复。
 
 ## rag.chat_store
 

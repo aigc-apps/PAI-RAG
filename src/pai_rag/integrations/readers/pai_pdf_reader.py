@@ -3,9 +3,10 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
-from llama_index.core.schema import Document, ImageDocument
+from llama_index.core.schema import Document
 from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
 from bs4 import BeautifulSoup
+import time
 from llama_index.core import Settings
 
 from magic_pdf.pipe.UNIPipe import UNIPipe
@@ -15,7 +16,6 @@ import magic_pdf.model as model_config
 import tempfile
 import re
 import math
-import requests
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
@@ -37,6 +37,7 @@ TABLE_SUMMARY_MAX_CELL_TOKEN = 20
 TABLE_SUMMARY_MAX_TOKEN = 200
 PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
 IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
+IMAGE_LOCAL_PATTERN = r"!\[(?P<alt_text>.*?)\]\((?P<url>/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
 IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
 DEFAULT_HEADING_DIFF_THRESHOLD = 2
 
@@ -45,119 +46,71 @@ class PaiPDFReader(BaseReader):
     """Read PDF files including texts, tables, images.
 
     Args:
-        enable_multimodal (bool):  whether to use multimodal to process images
         enable_table_summary (bool):  whether to use table_summary to process tables
     """
 
     def __init__(
         self,
-        enable_multimodal: bool = False,
         enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
         self.enable_table_summary = enable_table_summary
-        self.enable_multimodal = enable_multimodal
         self._oss_cache = oss_cache
-        if self.enable_multimodal:
-            logger.info("process with multimodal")
         if self.enable_table_summary:
             logger.info("process with table summary")
 
-    @staticmethod
-    def remove_image_paths(content: str):
-        return re.sub(IMAGE_URL_PATTERN, "", content)
+    def transform_local_to_oss(self, pdf_name: str, local_url: str):
+        try:
+            image = Image.open(local_url)
+            # Check image size
+            if image.width <= 50 or image.height <= 50:
+                return None
 
-    def replace_image_paths(self, pdf_name: str, context: str):
-        combined_pattern = IMAGE_COMBINED_PATTERN
+            current_pixels = image.width * image.height
 
-        def replace_func(match):
-            origin_path = match.group(1) or match.group(3)
-            print(f"origin_path: {origin_path}")
-            try:
-                if origin_path.startswith(("http://", "https://")):
-                    response = requests.get(origin_path)
-                    response.raise_for_status()
-                    image = Image.open(BytesIO(response.content))
-                else:
-                    image = Image.open(origin_path)
+            # 检查像素总数是否超过限制
+            if current_pixels > IMAGE_MAX_PIXELS:
+                # 计算缩放比例以适应最大像素数
+                scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
+                new_width = int(image.width * scale)
+                new_height = int(image.height * scale)
 
-                    # Check image size
-                if image.width <= 50 or image.height <= 50:
-                    return None
+                # 调整图片大小
+                image = image.resize((new_width, new_height), Image.LANCZOS)
 
-                current_pixels = image.width * image.height
+            image_stream = BytesIO()
+            image.save(image_stream, format="jpeg")
 
-                # 检查像素总数是否超过限制
-                if current_pixels > IMAGE_MAX_PIXELS:
-                    # 计算缩放比例以适应最大像素数
-                    scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
-                    new_width = int(image.width * scale)
-                    new_height = int(image.height * scale)
+            image_stream.seek(0)
+            data = image_stream.getvalue()
 
-                    # 调整图片大小
-                    image = image.resize((new_width, new_height), Image.LANCZOS)
+            image_url = self._oss_cache.put_object_if_not_exists(
+                data=data,
+                file_ext=".jpeg",
+                headers={
+                    "x-oss-object-acl": "public-read"
+                },  # set public read to make image accessible
+                path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
+            )
+            print(
+                f"Cropped image {image_url} with width={image.width}, height={image.height}."
+            )
+            return image_url
+        except Exception as e:
+            print(f"无法打开图片 '{local_url}': {e}")
 
-                image_stream = BytesIO()
-                image.save(image_stream, format="jpeg")
+    def replace_image_paths(self, pdf_name: str, content: str):
+        local_image_pattern = IMAGE_LOCAL_PATTERN
+        matches = re.findall(local_image_pattern, content)
+        for alt_text, local_url, image_type in matches:
+            time_tag = int(time.time())
+            oss_url = self.transform_local_to_oss(pdf_name, local_url)
+            updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
+            content = content.replace(
+                f"![{alt_text}]({local_url})", f"![{updated_alt_text}]({oss_url})"
+            )
 
-                image_stream.seek(0)
-                data = image_stream.getvalue()
-
-                image_url = self._oss_cache.put_object_if_not_exists(
-                    data=data,
-                    file_ext=".jpeg",
-                    headers={
-                        "x-oss-object-acl": "public-read"
-                    },  # set public read to make image accessible
-                    path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
-                )
-                print(
-                    f"Cropped image {image_url} with width={image.width}, height={image.height}."
-                )
-                return image_url
-            except Exception as e:
-                print(f"无法打开图片 '{origin_path}': {e}")
-
-        updated_content = re.sub(combined_pattern, replace_func, context)
-
-        return updated_content
-
-    @staticmethod
-    def combine_images_with_text(markdown_text):
-        # split_markdown_by_title
-        title_pattern = r"^(#+)\s*(.*)$"
-        sections = re.split(title_pattern, markdown_text, flags=re.MULTILINE)
-
-        output = {}
-
-        # 没有标题的情况
-        if len(sections) == 1:
-            content = sections[0]
-            content_without_images_url = PaiPDFReader.remove_image_paths(content)
-            url_pattern = IMAGE_URL_PATTERN
-            images = re.findall(url_pattern, content)
-            images_url_list = [image[0] for image in images if len(image[0]) > 0]
-            if len(images_url_list) > 0:
-                output[f"{content_without_images_url.strip()}"] = images_url_list
-        # 有标题的情况
-        else:
-            for i in range(1, len(sections), 3):
-                title_level = sections[i]
-                title_text = sections[i + 1]
-                content = sections[i + 2] if i + 2 < len(sections) else ""
-                content_without_images_url = PaiPDFReader.remove_image_paths(content)
-
-                url_pattern = IMAGE_URL_PATTERN
-                images = re.findall(url_pattern, content)
-                if title_level:
-                    images_url_list = [
-                        image[0] for image in images if len(image[0]) > 0
-                    ]
-                    if len(images_url_list) > 0:
-                        output[
-                            f"{title_level} {title_text}\n\n{content_without_images_url.strip()}"
-                        ] = images_url_list
-        return output
+        return content
 
     @staticmethod
     def perform_ocr(img_path: str) -> str:
@@ -180,15 +133,26 @@ class PaiPDFReader(BaseReader):
         return table_data
 
     @staticmethod
-    def replace_image_with_ocr_content(
+    def add_table_ocr_content(
         markdown_content: str, image_path: str, ocr_content: str
     ) -> str:
-        image_pattern = f"!\\[.*?\\]\\({re.escape(image_path)}\\)"
-        matches = list(re.finditer(image_pattern, markdown_content))
+        pattern = rf"!\[(.*?)\]\({re.escape(image_path)}\)"
+        regex = re.compile(pattern)
+        replacement = "table"
         offset = 0  # 用于记录已插入文本导致的偏移量
-        for match in matches:
+        for match in regex.finditer(markdown_content):
+            # 记录匹配的起始和结束偏移量
             start, end = match.span()
-            # 考虑到之前插入可能导致的偏移，计算新的插入位置
+            # 提取alt_text的起始和结束位置，以便替换
+            alt_start, alt_end = match.span(1)  # span(1)针对第一个捕获组
+            new_alt_start = alt_start + offset
+            new_alt_end = alt_end + offset
+
+            markdown_content = (
+                markdown_content[:new_alt_start]
+                + replacement
+                + markdown_content[new_alt_end:]
+            )
             new_start = start + offset
             ocr_content = f"\n\n{ocr_content}\n\n"
             markdown_content = (
@@ -197,8 +161,7 @@ class PaiPDFReader(BaseReader):
                 + markdown_content[new_start:]
             )
             # 更新偏移量，因为刚刚插入了新文本
-            offset += len(ocr_content)
-
+            offset += len(ocr_content) + len(replacement)
         return markdown_content
 
     @staticmethod
@@ -281,11 +244,11 @@ class PaiPDFReader(BaseReader):
                             table_list_data
                         )[:TABLE_SUMMARY_MAX_TOKEN]
                         ocr_content += f"\n\n{summarized_table_text}\n\n"
-                        markdown_content = PaiPDFReader.replace_image_with_ocr_content(
+                        markdown_content = PaiPDFReader.add_table_ocr_content(
                             markdown_content, item["img_path"], ocr_content
                         )
                     else:
-                        markdown_content = PaiPDFReader.replace_image_with_ocr_content(
+                        markdown_content = PaiPDFReader.add_table_ocr_content(
                             markdown_content, item["img_path"], ocr_content
                         )
                 else:
@@ -413,6 +376,9 @@ class PaiPDFReader(BaseReader):
                         logger("need model list input")
                         exit(1)
 
+                # Some dirty code from mineru modified log level to warning
+                logging.getLogger().setLevel(logging.INFO)
+
                 # 执行解析
                 pipe.pipe_parse()
                 content_list = pipe.pipe_mk_uni_format(temp_file_path, drop_mode="none")
@@ -426,7 +392,7 @@ class PaiPDFReader(BaseReader):
             return new_md_content
 
         except Exception as e:
-            print(e)
+            logger(e)
             return None
 
     def load_data(
@@ -459,56 +425,21 @@ class PaiPDFReader(BaseReader):
             List[Document]: list of documents.
         """
 
-        if not isinstance(file_path, str) and not isinstance(file_path, Path):
-            raise TypeError("file_path must be a string or Path.")
-
         md_content = self.parse_pdf(file_path, "auto")
-        images_with_content = PaiPDFReader.combine_images_with_text(md_content)
-        md_contend_without_images_url = PaiPDFReader.remove_image_paths(md_content)
-        print(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
+        logger.info(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
-        image_documents = []
-        text_image_documents = []
-        if extra_info:
-            if not isinstance(extra_info, dict):
-                raise TypeError("extra_info must be a dictionary.")
-        if self.enable_multimodal:
-            print("[PaiPDFReader] Using multimodal.")
-            images_url_set = set()
-            for content, image_urls in images_with_content.items():
-                images_url_set.update(image_urls)
-                text_image_documents.append(
-                    Document(
-                        text=content,
-                        extra_info={
-                            "image_url_list_str": json.dumps(image_urls),
-                            **extra_info,
-                        },
-                    )
-                )
-            print("[PaiPDFReader] successfully loaded images with multimodal.")
-            image_documents.extend(
-                ImageDocument(
-                    image_url=image_url,
-                    image_mimetype="image/jpeg",
-                    extra_info={"image_url": image_url, **extra_info},
-                )
-                for image_url in images_url_set
-            )
         if metadata:
             if not extra_info:
                 extra_info = {}
-            doc = Document(text=md_contend_without_images_url, extra_info=extra_info)
+            doc = Document(text=md_content, extra_info=extra_info)
 
             docs.append(doc)
         else:
             doc = Document(
-                text=md_contend_without_images_url,
+                text=md_content,
                 extra_info=dict(),
             )
             docs.append(doc)
-
-        docs.extend(image_documents)
-        docs.extend(text_image_documents)
+            logger.info(f"processed pdf file {file_path} without metadata")
         print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

@@ -30,6 +30,7 @@ class ContextDoc(BaseModel):
     text: str
     score: float
     metadata: Dict
+    image_url: str | None = None
 
 
 class RetrievalResponse(BaseModel):

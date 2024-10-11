@@ -117,7 +117,10 @@ class RagWebClient:
                 ref_table = doc["metadata"].get("query_tables", None)
                 invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)
-                media_url = doc.get("metadata", {}).get("image_url", None)
+                if doc.get("image_url", None):
+                    media_url = doc.get("image_url")
+                else:
+                    media_url = doc.get("metadata", {}).get("image_info_list", None)
                 if media_url and doc["text"] == "":
                     formatted_image_name = re.sub(
                         "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
@@ -312,11 +315,14 @@ class RagWebClient:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
                 file_url = doc.get("metadata", {}).get("file_url", None)
-                media_url = doc.get("metadata", {}).get("image_url", None)
+                if doc.get("image_url", None):
+                    media_url = doc.get("image_url")
+                else:
+                    media_url = doc.get("metadata", {}).get("image_info_list", None)
                 if media_url and isinstance(media_url, list):
                     media_url = "<br>".join(
                         [
-                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            f'<img src="{url.get("image_url", None)}" alt="Image {j + 1}"/>'
                             for j, url in enumerate(media_url)
                         ]
                     )
@@ -338,18 +344,23 @@ class RagWebClient:
 
     def add_knowledge(
         self,
-        input_files: str,
-        enable_qa_extraction: bool,
-        enable_raptor: bool,
+        oss_path: str = None,
+        input_files: str = None,
+        enable_qa_extraction: bool = False,
+        enable_raptor: bool = False,
     ):
         files = []
         file_obj_list = []
-        for file_name in input_files:
-            file_obj = open(file_name, "rb")
-            mimetype = mimetypes.guess_type(file_name)[0]
-            files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
-            file_obj_list.append(file_obj)
-        para = {"enable_raptor": enable_raptor}
+        if input_files:
+            for file_name in input_files:
+                file_obj = open(file_name, "rb")
+                mimetype = mimetypes.guess_type(file_name)[0]
+                files.append(
+                    ("files", (os.path.basename(file_name), file_obj, mimetype))
+                )
+                file_obj_list.append(file_obj)
+
+        para = {"enable_raptor": enable_raptor, "oss_path": oss_path}
         try:
             r = requests.post(
                 self.load_data_url,
