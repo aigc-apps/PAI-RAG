@@ -21,9 +21,9 @@ from pai_rag.integrations.readers.pai.pai_data_reader import (
     PaiDataReader,
 )
 from pai_rag.utils.oss_client import OssClient
-from pai_rag.evaluation.generator.labelled_qca_generator import RagLabelledQCAGenerator
+from pai_rag.evaluation.generator.labelled_qca_generator import LabelledRagQcaGenerator
 from pai_rag.evaluation.generator.predicted_qca_generator import (
-    RagPredictedQCAGenerator,
+    PredictedRagQcaGenerator,
 )
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
@@ -100,7 +100,7 @@ def _create_labelled_qca_generator(config_file, vector_index) -> None:
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
     llm = PaiLlm(llm_config)
-    qca_generator = RagLabelledQCAGenerator(
+    qca_generator = LabelledRagQcaGenerator(
         llm=llm, vector_index=vector_index, persist_path=config.rag.index.persist_path
     )
     return qca_generator
@@ -110,7 +110,7 @@ def _create_predicted_qca_generator(config_file, vector_index) -> None:
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
     multimodal_llm = PaiMultiModalLlm(llm_config)
-    predicted_qca_generator = RagPredictedQCAGenerator(
+    predicted_qca_generator = PredictedRagQcaGenerator(
         llm=multimodal_llm,
         vector_index=vector_index,
         persist_path=config.rag.index.persist_path,

@@ -9,7 +9,7 @@ from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.prompts.base import PromptTemplate
 import re
 from llama_index.core.async_utils import run_jobs
-from pai_rag.evaluation.generator.rag_qca_sample import LabelledRagQCASample
+from pai_rag.evaluation.generator.rag_qca_sample import LabelledRagQcaSample
 from llama_index.core.llama_dataset import (
     CreatedBy,
     CreatedByType,
@@ -22,7 +22,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class RagLabelledQCAGenerator:
+class LabelledRagQcaGenerator:
     def __init__(
         self, llm, vector_index: VectorStoreIndex = None, persist_path: str = None
     ):
@@ -51,7 +51,7 @@ class RagLabelledQCAGenerator:
     async def agenerate_labelled_qca_dataset(
         self,
     ) -> LabelledRagDataset:
-        examples: List[LabelledRagQCASample] = []
+        examples: List[LabelledRagQcaSample] = []
         docs = self._vector_index._docstore.docs
         nodes = list(docs.values())
         query_tasks = []
@@ -85,7 +85,7 @@ class RagLabelledQCAGenerator:
                 question,
                 answer_response,
             ) in zip(cleaned_questions, answer_responses):
-                example = LabelledRagQCASample(
+                example = LabelledRagQcaSample(
                     query=question,
                     reference_answer=str(answer_response),
                     reference_contexts=[node.text],

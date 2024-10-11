@@ -1,7 +1,7 @@
 from typing import List
 from llama_index.core.indices import VectorStoreIndex
 from llama_index.core.async_utils import run_jobs
-from pai_rag.evaluation.generator.rag_qca_sample import PredictedRagQCASample
+from pai_rag.evaluation.generator.rag_qca_sample import PredictedRagQcaSample
 from llama_index.core.llama_dataset import (
     CreatedBy,
     CreatedByType,
@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class RagPredictedQCAGenerator:
+class PredictedRagQcaGenerator:
     def __init__(
         self, llm, vector_index: VectorStoreIndex = None, persist_path: str = None
     ):
@@ -57,9 +57,9 @@ class RagPredictedQCAGenerator:
             labelled_qca_set.append(qca)
             query_tasks.append(task)
         responses = await run_jobs(query_tasks, self._show_progress, self._workers)
-        examples: List[PredictedRagQCASample] = []
+        examples: List[PredictedRagQcaSample] = []
         for qca, response in zip(labelled_qca_set, responses):
-            example = PredictedRagQCASample(
+            example = PredictedRagQcaSample(
                 query=qca["query"],
                 reference_answer=qca["reference_answer"],
                 reference_contexts=qca["reference_contexts"],
