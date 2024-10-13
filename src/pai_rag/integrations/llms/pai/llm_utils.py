@@ -32,6 +32,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.api_key,
             max_tokens=llm_config.max_tokens,
+            reuse_client=False,
         )
     elif isinstance(llm_config, DashScopeLlmConfig):
         logger.info(
@@ -50,6 +51,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             is_chat_model=True,
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             max_tokens=llm_config.max_tokens,
+            reuse_client=False,
         )
     elif isinstance(llm_config, PaiEasLlmConfig):
         logger.info(
@@ -67,6 +69,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
             max_tokens=llm_config.max_tokens,
+            reuse_client=False,
         )
     else:
         raise ValueError(f"Unknown LLM source: '{llm_config}'")
