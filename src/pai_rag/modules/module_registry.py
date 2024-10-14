@@ -26,7 +26,6 @@ MODULE_CONFIG_KEY_MAP = {
     "IntentDetectionModule": "rag.agent.intent_detection",
     "DataLoaderModule": "rag.data_loader",
     "OssCacheModule": "rag.oss_store",
-    "EvaluationModule": "rag.evaluation",
     "SearchModule": "rag.search",
     "NodesEnhancementModule": "rag.node_enhancement",
     "DataAnalysisModule": "rag.data_analysis",
