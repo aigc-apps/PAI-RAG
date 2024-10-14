@@ -1,0 +1,641 @@
+openapi: 3.1.0
+info:
+  title: FastAPI
+  version: 0.1.0
+servers:
+  - url: /
+paths:
+  /service/query:
+    post:
+      operationId: aquery_service_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/query/llm:
+    post:
+      operationId: aquery_llm_service_query_llm_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery Llm
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/query/search:
+    post:
+      operationId: aquery_search_service_query_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery Search
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/query/retrieval:
+    post:
+      operationId: aquery_retrieval_service_query_retrieval_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetrievalQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery Retrieval
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/query/agent:
+    post:
+      operationId: aquery_agent_service_query_agent_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmResponse"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery Agent
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/config/agent:
+    post:
+      operationId: aload_agent_config_service_config_agent_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/Body_aload_agent_config_service_config_agent_post"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aload Agent Config
+      tags:
+        - RagQuery
+      x-content-type: multipart/form-data
+      x-accepts:
+        - application/json
+  /service/config:
+    get:
+      operationId: aconfig_service_config_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Aconfig
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+    patch:
+      operationId: aupdate_service_config_patch
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aupdate
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+  /service/get_upload_state:
+    get:
+      operationId: task_status_service_get_upload_state_get
+      parameters:
+        - explode: true
+          in: query
+          name: task_id
+          required: true
+          schema:
+            title: Task Id
+            type: string
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Task Status
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/evaluate:
+    post:
+      operationId: batch_evaluate_service_evaluate_post
+      parameters:
+        - explode: true
+          in: query
+          name: overwrite
+          required: false
+          schema:
+            default: false
+            title: Overwrite
+            type: boolean
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Batch Evaluate
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/evaluate/retrieval:
+    post:
+      operationId: batch_retrieval_evaluate_service_evaluate_retrieval_post
+      parameters:
+        - explode: true
+          in: query
+          name: overwrite
+          required: false
+          schema:
+            default: false
+            title: Overwrite
+            type: boolean
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Batch Retrieval Evaluate
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/evaluate/response:
+    post:
+      operationId: batch_response_evaluate_service_evaluate_response_post
+      parameters:
+        - explode: true
+          in: query
+          name: overwrite
+          required: false
+          schema:
+            default: false
+            title: Overwrite
+            type: boolean
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Batch Response Evaluate
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/evaluate/generate:
+    post:
+      operationId: generate_qa_dataset_service_evaluate_generate_post
+      parameters:
+        - explode: true
+          in: query
+          name: overwrite
+          required: false
+          schema:
+            default: false
+            title: Overwrite
+            type: boolean
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Generate Qa Dataset
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/upload_data:
+    post:
+      operationId: upload_data_service_upload_data_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/Body_upload_data_service_upload_data_post"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Upload Data
+      tags:
+        - RagQuery
+      x-content-type: multipart/form-data
+      x-accepts:
+        - application/json
+  /service/upload_data_from_oss:
+    post:
+      operationId: upload_oss_data_service_upload_data_from_oss_post
+      parameters:
+        - explode: true
+          in: query
+          name: oss_prefix
+          required: false
+          schema:
+            title: Oss Prefix
+            type: string
+          style: form
+        - explode: true
+          in: query
+          name: faiss_path
+          required: false
+          schema:
+            title: Faiss Path
+            type: string
+          style: form
+        - explode: true
+          in: query
+          name: enable_raptor
+          required: false
+          schema:
+            default: false
+            title: Enable Raptor
+            type: boolean
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Upload Oss Data
+      tags:
+        - RagQuery
+      x-accepts:
+        - application/json
+  /service/upload_datasheet:
+    post:
+      operationId: upload_datasheet_service_upload_datasheet_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/Body_upload_datasheet_service_upload_datasheet_post"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Upload Datasheet
+      tags:
+        - RagQuery
+      x-content-type: multipart/form-data
+      x-accepts:
+        - application/json
+  /service/query/data_analysis:
+    post:
+      operationId: aquery_analysis_service_query_data_analysis_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Aquery Analysis
+      tags:
+        - RagQuery
+      x-content-type: application/json
+      x-accepts:
+        - application/json
+components:
+  schemas:
+    Body_aload_agent_config_service_config_agent_post:
+      properties:
+        file:
+          format: binary
+          title: File
+          type: string
+      required:
+        - file
+      title: Body_aload_agent_config_service_config_agent_post
+    Body_upload_data_service_upload_data_post:
+      properties:
+        files:
+          items:
+            format: binary
+            type: string
+          type: array
+        faiss_path:
+          title: Faiss Path
+          type: string
+        enable_raptor:
+          default: false
+          title: Enable Raptor
+          type: boolean
+      required:
+        - files
+      title: Body_upload_data_service_upload_data_post
+    Body_upload_datasheet_service_upload_datasheet_post:
+      properties:
+        file:
+          format: binary
+          title: File
+          type: string
+      required:
+        - file
+      title: Body_upload_datasheet_service_upload_datasheet_post
+    HTTPValidationError:
+      example:
+        detail:
+          - msg: msg
+            loc:
+              - ValidationError_loc_inner
+              - ValidationError_loc_inner
+            type: type
+          - msg: msg
+            loc:
+              - ValidationError_loc_inner
+              - ValidationError_loc_inner
+            type: type
+      properties:
+        detail:
+          items:
+            $ref: "#/components/schemas/ValidationError"
+          type: array
+      title: HTTPValidationError
+    LlmResponse:
+      example:
+        answer: answer
+        session_id: session_id
+      properties:
+        answer:
+          title: Answer
+          type: string
+        session_id:
+          nullable: true
+          type: string
+      required:
+        - answer
+      title: LlmResponse
+    RagQuery:
+      example:
+        question: question
+        vector_db:
+          faiss_path: faiss_path
+        stream: true
+        temperature: 0.8008281904610115
+        session_id: session_id
+        with_intent: true
+        chat_history:
+          - key: chat_history
+          - key: chat_history
+      properties:
+        question:
+          title: Question
+          type: string
+        temperature:
+          nullable: true
+          type: number
+        chat_history:
+          items:
+            additionalProperties:
+              type: string
+          nullable: true
+        session_id:
+          nullable: true
+          type: string
+        vector_db:
+          $ref: "#/components/schemas/VectorDbConfig"
+        stream:
+          nullable: true
+          type: boolean
+        with_intent:
+          nullable: true
+          type: boolean
+      required:
+        - question
+      title: RagQuery
+    RetrievalQuery:
+      example:
+        question: question
+        vector_db:
+          faiss_path: faiss_path
+      properties:
+        question:
+          title: Question
+          type: string
+        vector_db:
+          $ref: "#/components/schemas/VectorDbConfig"
+      required:
+        - question
+      title: RetrievalQuery
+    ValidationError:
+      example:
+        msg: msg
+        loc:
+          - ValidationError_loc_inner
+          - ValidationError_loc_inner
+        type: type
+      properties:
+        loc:
+          items:
+            $ref: "#/components/schemas/ValidationError_loc_inner"
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+        - loc
+        - msg
+        - type
+      title: ValidationError
+    VectorDbConfig:
+      example:
+        faiss_path: faiss_path
+      properties:
+        faiss_path:
+          nullable: true
+          type: string
+      title: VectorDbConfig
+    ValidationError_loc_inner:
+      anyOf:
+        - type: string
+        - type: integer
