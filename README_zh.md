@@ -166,15 +166,6 @@ poetry install
 
    你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
 
-7. 评估 (调试)
-
-您可以评估RAG系统的不同阶段的效果，如检索、生成或者全链路。
-
-```bash
-# 支持自定义 config file (default -c src/pai_rag/config/settings.yaml), overwrite (default False), type (default all)
-evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
-```
-
 ## 方式二：Docker镜像
 
 为了更方便使用，节省较长时间的环境安装问题，我们也提供了直接基于镜像启动的方式。
@@ -275,28 +266,6 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 ```bash
 curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
-```
-
-## Evaluation API
-
-支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
-
-- /evaluate (all)
-- /evaluate/retrieval
-- /evaluate/response
-
-初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。
-
-您也可以单独调用API（/evaluate/generate）来生成评估数据集。
-
-参考示例：
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/generate
-
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 ```
 
 # Agentic RAG

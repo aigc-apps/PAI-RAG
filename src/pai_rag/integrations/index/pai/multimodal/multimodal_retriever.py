@@ -160,7 +160,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             # image store does not apply hybrid/keyword search
             query_mode = VectorStoreQueryMode.DEFAULT
 
-        print(is_image_store, query_mode)
         return VectorStoreQuery(
             query_embedding=query_bundle_with_embeddings.embedding,
             similarity_top_k=similarity_top_k,
@@ -417,7 +416,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         is_image_store = (
             self._image_vector_store and vector_store is self._image_vector_store
         )
-        print("is image", is_image_store)
         query = self._build_vector_store_query(
             query_bundle_with_embeddings, similarity_top_k, is_image_store
         )

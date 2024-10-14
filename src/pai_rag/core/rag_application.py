@@ -291,38 +291,6 @@ class RagApplication:
         else:
             return f"The agent config path {agent_cfg_path} not exists."
 
-    async def aload_evaluation_qa_dataset(self, overwrite: bool = False):
-        vector_store_type = (
-            self.config.rag.get("index").get("vector_store").get("type", None)
-        )
-        if vector_store_type == "FAISS":
-            evaluation = module_registry.get_module_with_config(
-                "EvaluationModule", self.config
-            )
-            qa_dataset = await evaluation.aload_question_answer_pairs_json(overwrite)
-            return qa_dataset
-        else:
-            return f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now."
-
-    async def aevaluate_retrieval_and_response(self, type, overwrite: bool = False):
-        vector_store_type = (
-            self.config.rag.get("index").get("vector_store").get("type", None)
-        )
-        if vector_store_type == "FAISS":
-            evaluation = module_registry.get_module_with_config(
-                "EvaluationModule", self.config
-            )
-            df, eval_res_avg = await evaluation.abatch_retrieval_response_aevaluation(
-                type=type, workers=4, overwrite=overwrite
-            )
-
-            return df, eval_res_avg
-        else:
-            return (
-                None,
-                f"Evaluation against vector store '{vector_store_type}' is not supported. Only FAISS is supported for now.",
-            )
-
     async def aquery_analysis(self, query: RagQuery):
         """Query answer from RAG App asynchronously.
 

@@ -275,24 +275,6 @@ If type = "Aliyun-Redis", you need to get access to the your remote redis by ful
 
 This setting is not available in webui.
 
-## rag.evaluation
-
-Currently, pai_rag supports both retrieval and response evaluations.
-
-The candidate metrics for retrieval are "mrr" and "hit_rate", you can specify both or either.
-
-    retrieval = ["mrr", "hit_rate"]
-
-The candidate metrics for response are "Faithfulness", "Answer Relevancy", "Correctness" as well as "Semantic Similarity", you can specify all or any subsets.
-
-    response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
-
-It is noted that these evaluations are based on certain dataset format, which can be generated via `src/pai_rag/evaluations/batch_evaluator`, you can also provide the correctly formatted dataset path:
-
-     qa_dataset_path = ""
-
-This setting is not available in webui.
-
 ## rag.agent
 
 type = [react]

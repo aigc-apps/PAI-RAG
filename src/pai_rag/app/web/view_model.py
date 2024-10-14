@@ -207,11 +207,11 @@ class ViewModel(BaseModel):
         )
         if view_model.llm.lower() == "paieas":
             view_model.llm_eas_model_name = config["llm"].get(
-                "name", view_model.llm_eas_model_name
+                "model_name", view_model.llm_eas_model_name
             )
         else:
             view_model.llm_api_model_name = config["llm"].get(
-                "name", view_model.llm_api_model_name
+                "model_name", view_model.llm_api_model_name
             )
 
         view_model.use_mllm = config["llm"]["multi_modal"].get(
@@ -233,14 +233,14 @@ class ViewModel(BaseModel):
                 "view_model.mllm_eas_model_name",
                 view_model.mllm_eas_model_name,
                 "2",
-                config["llm"]["multi_modal"]["name"],
+                config["llm"]["multi_modal"]["model_name"],
             )
             view_model.mllm_eas_model_name = config["llm"]["multi_modal"].get(
-                "name", view_model.mllm_eas_model_name
+                "model_name", view_model.mllm_eas_model_name
             )
         else:
             view_model.mllm_api_model_name = config["llm"]["multi_modal"].get(
-                "name", view_model.mllm_api_model_name
+                "model_name", view_model.mllm_api_model_name
             )
 
         view_model.use_oss = config["oss_store"].get("enable", view_model.use_oss)
@@ -446,9 +446,9 @@ class ViewModel(BaseModel):
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
         if self.llm.lower() == "paieas":
-            config["llm"]["name"] = self.llm_eas_model_name
+            config["llm"]["model_name"] = self.llm_eas_model_name
         else:
-            config["llm"]["name"] = self.llm_api_model_name
+            config["llm"]["model_name"] = self.llm_api_model_name
 
         config["llm"]["multi_modal"]["enable"] = self.use_mllm
         config["llm"]["multi_modal"]["source"] = self.mllm
@@ -456,9 +456,9 @@ class ViewModel(BaseModel):
         config["llm"]["multi_modal"]["token"] = self.mllm_eas_token
         config["llm"]["multi_modal"]["api_key"] = self.mllm_api_key
         if self.mllm.lower() == "paieas":
-            config["llm"]["multi_modal"]["name"] = self.mllm_eas_model_name
+            config["llm"]["multi_modal"]["model_name"] = self.mllm_eas_model_name
         else:
-            config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
+            config["llm"]["multi_modal"]["model_name"] = self.mllm_api_model_name
 
         config["oss_store"]["enable"] = self.use_oss
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
