@@ -1,7 +1,4 @@
 import json
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def load_qca_dataset_json(qca_dataset_path):
