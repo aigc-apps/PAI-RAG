@@ -30,7 +30,7 @@ from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
     PaiMultiModalLlm,
 )
 from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
-
+from pai_rag.evaluation.evaluator.base_evaluator import BaseEvaluator
 import logging
 
 
@@ -118,6 +118,16 @@ def _create_predicted_qca_generator(config_file, vector_index) -> None:
     return predicted_qca_generator
 
 
+def _create_base_evaluator(config_file):
+    config = RagConfiguration.from_file(config_file).get_value()
+    llm_config = parse_llm_config(config.rag.llm)
+    llm = PaiLlm(llm_config)
+    return BaseEvaluator(
+        llm=llm,
+        persist_path=config.rag.index.persist_path,
+    )
+
+
 @click.command()
 @click.option(
     "-c",
@@ -188,3 +198,7 @@ def run(
 
     predicted_qca_generator = _create_predicted_qca_generator(config, vector_index)
     asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
+    evaluator = _create_base_evaluator(config)
+    qcas = evaluator.load_predicted_qca_dataset()
+    print(asyncio.run(evaluator.aevaluation_for_retrieval(qcas)))
+    print(asyncio.run(evaluator.aevaluation_for_response(qcas)))
