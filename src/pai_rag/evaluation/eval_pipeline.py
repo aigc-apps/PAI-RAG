@@ -35,8 +35,6 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
@@ -44,8 +42,13 @@ DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
 )
 
 
-def _create_data_loader(config_file, enable_raptor: bool = False) -> RagDataLoader:
+def _create_data_loader(
+    config_file, name, enable_raptor: bool = False
+) -> RagDataLoader:
     config = RagConfiguration.from_file(config_file).get_value()
+    config.rag.index.vector_store.persist_path = (
+        f"{config.rag.index.vector_store.persist_path}__{name}"
+    )
 
     oss_store = None
     if config.rag.oss_store.bucket:
@@ -96,35 +99,38 @@ def _create_data_loader(config_file, enable_raptor: bool = False) -> RagDataLoad
     return data_loader, vector_index
 
 
-def _create_labelled_qca_generator(config_file, vector_index) -> None:
+def _create_labelled_qca_generator(config_file, name, vector_index) -> None:
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
     llm = PaiLlm(llm_config)
+    persist_path = f"{config.rag.index.vector_store.persist_path}__{name}"
     qca_generator = LabelledRagQcaGenerator(
-        llm=llm, vector_index=vector_index, persist_path=config.rag.index.persist_path
+        llm=llm, vector_index=vector_index, persist_path=persist_path
     )
     return qca_generator
 
 
-def _create_predicted_qca_generator(config_file, vector_index) -> None:
+def _create_predicted_qca_generator(config_file, name, vector_index) -> None:
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
     multimodal_llm = PaiMultiModalLlm(llm_config)
+    persist_path = f"{config.rag.index.vector_store.persist_path}__{name}"
     predicted_qca_generator = PredictedRagQcaGenerator(
         llm=multimodal_llm,
         vector_index=vector_index,
-        persist_path=config.rag.index.persist_path,
+        persist_path=persist_path,
     )
     return predicted_qca_generator
 
 
-def _create_base_evaluator(config_file):
+def _create_base_evaluator(config_file, name):
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
     llm = PaiLlm(llm_config)
+    persist_path = f"{config.rag.index.vector_store.persist_path}__{name}"
     return BaseEvaluator(
         llm=llm,
-        persist_path=config.rag.index.persist_path,
+        persist_path=persist_path,
     )
 
 
@@ -185,7 +191,7 @@ def run(
         data_path is None
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
-    data_loader, vector_index = _create_data_loader(config, enable_raptor)
+    data_loader, vector_index = _create_data_loader(config, "default", enable_raptor)
     data_loader.load_data(
         file_path_or_directory=data_path,
         filter_pattern=pattern,
@@ -193,12 +199,51 @@ def run(
         from_oss=oss_path is not None,
         enable_raptor=enable_raptor,
     )
-    qca_generator = _create_labelled_qca_generator(config, vector_index)
+    qca_generator = _create_labelled_qca_generator(config, "default", vector_index)
     asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
 
-    predicted_qca_generator = _create_predicted_qca_generator(config, vector_index)
+    predicted_qca_generator = _create_predicted_qca_generator(
+        config, "default", vector_index
+    )
     asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
     evaluator = _create_base_evaluator(config)
     qcas = evaluator.load_predicted_qca_dataset()
     print(asyncio.run(evaluator.aevaluation_for_retrieval(qcas)))
     print(asyncio.run(evaluator.aevaluation_for_response(qcas)))
+
+
+def exp_run(
+    config=None,
+    oss_path=None,
+    data_path=None,
+    pattern=None,
+    enable_raptor=False,
+    name=None,
+):
+    assert (oss_path is not None) or (
+        data_path is not None
+    ), "Must provide either local path or oss path."
+    assert (oss_path is None) or (
+        data_path is None
+    ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
+
+    data_loader, vector_index = _create_data_loader(config, name, enable_raptor)
+    data_loader.load_data(
+        file_path_or_directory=data_path,
+        filter_pattern=pattern,
+        oss_path=oss_path,
+        from_oss=oss_path is not None,
+        enable_raptor=enable_raptor,
+    )
+    qca_generator = _create_labelled_qca_generator(config, name, vector_index)
+    asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
+
+    predicted_qca_generator = _create_predicted_qca_generator(
+        config, name, vector_index
+    )
+    asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
+    evaluator = _create_base_evaluator(config, name)
+    qcas = evaluator.load_predicted_qca_dataset()
+    retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
+    response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
+    return retrieval_result, response_result

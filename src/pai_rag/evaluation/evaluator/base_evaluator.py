@@ -17,6 +17,7 @@ from llama_index.core.llama_dataset import (
 )
 from pai_rag.evaluation.generator.utils import (
     save_qca_dataset_json,
+    load_qca_dataset_json,
 )
 
 
@@ -60,84 +61,125 @@ class BaseEvaluator:
 
     async def aevaluation_for_retrieval(self, qca_dataset):
         """Run retrieval evaluation with qca dataset."""
-        result = {}
-        examples = []
-        for metric in self.retrieval_evaluators:
-            eval_tasks = []
-            for qca in qca_dataset:
-                eval_tasks.append(
-                    self.compute_retrieval_metric(
-                        metric, qca["reference_node_id"], qca["predicted_node_id"]
-                    )
-                )
-            metric_result = await run_jobs(
-                eval_tasks, self._show_progress, self._workers
-            )
-            result[metric.metric_name] = metric_result
-        responses = [
-            {"hitrate": h, "mrr": m} for h, m in zip(result["hitrate"], result["mrr"])
-        ]
-        for (
-            qca,
-            answer_response,
-        ) in zip(qca_dataset, responses):
-            combined_dict = {**qca, **answer_response}
-            example = RetrievalEvaluationSample(**combined_dict)
-            examples.append(example)
-        retrieval_evaluation_dataset = LabelledRagDataset(examples=examples)
         retrieval_evaluation_dataset_path = os.path.join(
             self.persist_path, "retrieval_evaluation_dataset.json"
         )
-        save_qca_dataset_json(
-            retrieval_evaluation_dataset, retrieval_evaluation_dataset_path
-        )
-        mean_result = {key: sum(values) / len(values) for key, values in result.items()}
-        return mean_result
+        if os.path.exists(retrieval_evaluation_dataset_path):
+            print(
+                f"A evaluation dataset for retrieval already exists at {retrieval_evaluation_dataset_path}."
+            )
+            retrieval_evaluation_dataset = load_qca_dataset_json(
+                retrieval_evaluation_dataset_path
+            )
+            examples = retrieval_evaluation_dataset["examples"]
+            mean_result = {
+                "hitrate": sum(float(entry["hitrate"]) for entry in examples)
+                / len(examples),
+                "mrr": sum(float(entry["mrr"]) for entry in examples) / len(examples),
+            }
+            return mean_result
+        else:
+            print("Starting to generate evaluation dataset for retrieval...")
+            result = {}
+            examples = []
+            for metric in self.retrieval_evaluators:
+                eval_tasks = []
+                for qca in qca_dataset:
+                    eval_tasks.append(
+                        self.compute_retrieval_metric(
+                            metric, qca["reference_node_id"], qca["predicted_node_id"]
+                        )
+                    )
+                metric_result = await run_jobs(
+                    eval_tasks, self._show_progress, self._workers
+                )
+                result[metric.metric_name] = metric_result
+            responses = [
+                {"hitrate": h, "mrr": m}
+                for h, m in zip(result["hitrate"], result["mrr"])
+            ]
+            for (
+                qca,
+                answer_response,
+            ) in zip(qca_dataset, responses):
+                combined_dict = {**qca, **answer_response}
+                example = RetrievalEvaluationSample(**combined_dict)
+                examples.append(example)
+            retrieval_evaluation_dataset = LabelledRagDataset(examples=examples)
+            save_qca_dataset_json(
+                retrieval_evaluation_dataset, retrieval_evaluation_dataset_path
+            )
+            mean_result = {
+                key: sum(values) / len(values) for key, values in result.items()
+            }
+            return mean_result
 
     async def aevaluation_for_response(self, qca_dataset):
         """Run response evaluation with qca dataset."""
-        examples = []
-        result = {}
-        for metric in self.response_evaluators:
-            eval_tasks = []
-            for qca in qca_dataset:
-                eval_tasks.append(
-                    self.compute_response_metric(
-                        metric,
-                        qca["query"],
-                        qca["reference_answer"],
-                        qca["predicted_contexts"],
-                    )
-                )
-            metric_result = await run_jobs(
-                eval_tasks, self._show_progress, self._workers
-            )
-            result[metric.metric_name] = metric_result
-        responses = [
-            {
-                "faithfulness_score": f[0],
-                "faithfulness_reason": f[1],
-                "correctness_score": c[0],
-                "correctness_reason": c[1],
-            }
-            for f, c in zip(result["faithfulness"], result["correctness"])
-        ]
-        for (
-            qca,
-            answer_response,
-        ) in zip(qca_dataset, responses):
-            combined_dict = {**qca, **answer_response}
-            example = ResponseEvaluationSample(**combined_dict)
-            examples.append(example)
-        response_evaluation_dataset = LabelledRagDataset(examples=examples)
         response_evaluation_dataset_path = os.path.join(
             self.persist_path, "response_evaluation_dataset.json"
         )
-        save_qca_dataset_json(
-            response_evaluation_dataset, response_evaluation_dataset_path
-        )
-        mean_result = {
-            key: sum(value[0] for value in values) / len(values)
-            for key, values in result.items()
-        }
-        return mean_result
+        if os.path.exists(response_evaluation_dataset_path):
+            print(
+                f"A evaluation dataset for response already exists at {response_evaluation_dataset_path}."
+            )
+            response_evaluation_dataset = load_qca_dataset_json(
+                response_evaluation_dataset_path
+            )
+            examples = response_evaluation_dataset["examples"]
+            mean_result = {
+                "faithfulness_score": sum(
+                    float(entry["faithfulness_score"]) for entry in examples
+                )
+                / len(examples),
+                "correctness_score": sum(
+                    float(entry["correctness_score"]) for entry in examples
+                )
+                / len(examples),
+            }
+            return mean_result
+        else:
+            print("Starting to generate evaluation dataset for response...")
+            examples = []
+            result = {}
+            for metric in self.response_evaluators:
+                eval_tasks = []
+                for qca in qca_dataset:
+                    eval_tasks.append(
+                        self.compute_response_metric(
+                            metric,
+                            qca["query"],
+                            qca["reference_answer"],
+                            qca["predicted_contexts"],
+                        )
+                    )
+                metric_result = await run_jobs(
+                    eval_tasks, self._show_progress, self._workers
+                )
+                result[metric.metric_name] = metric_result
+            responses = [
+                {
+                    "faithfulness_score": f[0],
+                    "faithfulness_reason": f[1],
+                    "correctness_score": c[0],
+                    "correctness_reason": c[1],
+                }
+                for f, c in zip(result["faithfulness"], result["correctness"])
+            ]
+            for (
+                qca,
+                answer_response,
+            ) in zip(qca_dataset, responses):
+                combined_dict = {**qca, **answer_response}
+                example = ResponseEvaluationSample(**combined_dict)
+                examples.append(example)
+
+            response_evaluation_dataset = LabelledRagDataset(examples=examples)
+            save_qca_dataset_json(
+                response_evaluation_dataset, response_evaluation_dataset_path
+            )
+            mean_result = {
+                key: sum(value[0] for value in values) / len(values)
+                for key, values in result.items()
+            }
+            return mean_result
