@@ -1,4 +1,3 @@
-import click
 import os
 import asyncio
 from pathlib import Path
@@ -134,91 +133,13 @@ def _create_base_evaluator(config_file, name):
     )
 
 
-@click.command()
-@click.option(
-    "-c",
-    "--config",
-    show_default=True,
-    help=f"Configuration file. Default: {DEFAULT_APPLICATION_CONFIG_FILE}",
-    default=DEFAULT_APPLICATION_CONFIG_FILE,
-)
-@click.option(
-    "-o",
-    "--oss_path",
-    type=str,
-    required=False,
-    default=None,
-    show_default=True,
-    help="oss path (file or directory) to ingest. Example: oss://rag-demo/testdata",
-)
-@click.option(
-    "-d",
-    "--data_path",
-    type=str,
-    required=False,
-    default=None,
-    show_default=True,
-    help="data path (file or directory) to ingest.",
-)
-@click.option(
-    "-p",
-    "--pattern",
-    required=False,
-    type=str,
-    default=None,
-    help="data pattern to ingest.",
-)
-@click.option(
-    "-r",
-    "--enable_raptor",
-    required=False,
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="use raptor for node enhancement.",
-)
-def run(
+def run_evaluation_pipeline(
     config=None,
     oss_path=None,
     data_path=None,
     pattern=None,
     enable_raptor=False,
-):
-    assert (oss_path is not None) or (
-        data_path is not None
-    ), "Must provide either local path or oss path."
-    assert (oss_path is None) or (
-        data_path is None
-    ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
-
-    data_loader, vector_index = _create_data_loader(config, "default", enable_raptor)
-    data_loader.load_data(
-        file_path_or_directory=data_path,
-        filter_pattern=pattern,
-        oss_path=oss_path,
-        from_oss=oss_path is not None,
-        enable_raptor=enable_raptor,
-    )
-    qca_generator = _create_labelled_qca_generator(config, "default", vector_index)
-    asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
-
-    predicted_qca_generator = _create_predicted_qca_generator(
-        config, "default", vector_index
-    )
-    asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
-    evaluator = _create_base_evaluator(config)
-    qcas = evaluator.load_predicted_qca_dataset()
-    print(asyncio.run(evaluator.aevaluation_for_retrieval(qcas)))
-    print(asyncio.run(evaluator.aevaluation_for_response(qcas)))
-
-
-def exp_run(
-    config=None,
-    oss_path=None,
-    data_path=None,
-    pattern=None,
-    enable_raptor=False,
-    name=None,
+    name="default",
 ):
     assert (oss_path is not None) or (
         data_path is not None
@@ -246,4 +167,42 @@ def exp_run(
     qcas = evaluator.load_predicted_qca_dataset()
     retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
     response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
+    print("retrieval_result", retrieval_result, "response_result", response_result)
     return retrieval_result, response_result
+
+
+# def exp_run(
+#     config=None,
+#     oss_path=None,
+#     data_path=None,
+#     pattern=None,
+#     enable_raptor=False,
+#     name=None,
+# ):
+#     assert (oss_path is not None) or (
+#         data_path is not None
+#     ), "Must provide either local path or oss path."
+#     assert (oss_path is None) or (
+#         data_path is None
+#     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
+
+#     data_loader, vector_index = _create_data_loader(config, name, enable_raptor)
+#     data_loader.load_data(
+#         file_path_or_directory=data_path,
+#         filter_pattern=pattern,
+#         oss_path=oss_path,
+#         from_oss=oss_path is not None,
+#         enable_raptor=enable_raptor,
+#     )
+#     qca_generator = _create_labelled_qca_generator(config, name, vector_index)
+#     asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
+
+#     predicted_qca_generator = _create_predicted_qca_generator(
+#         config, name, vector_index
+#     )
+#     asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
+#     evaluator = _create_base_evaluator(config, name)
+#     qcas = evaluator.load_predicted_qca_dataset()
+#     retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
+#     response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
+#     return retrieval_result, response_result

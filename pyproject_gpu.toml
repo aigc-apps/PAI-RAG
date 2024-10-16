@@ -100,7 +100,6 @@ peft = "^0.12.0"
 pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.tool.load_data_tool:run"
 load_model = "pai_rag.utils.download_models:load_models"
-evaluation = "pai_rag.evaluation.eval_pipeline:run"
 run_eval_exp = "pai_rag.evaluation.run_eval_exp:run"
 
 [tool.pytest.ini_options]

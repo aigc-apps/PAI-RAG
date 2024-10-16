@@ -3,7 +3,7 @@ import click
 import logging
 import time
 import json
-from pai_rag.evaluation.eval_pipeline import exp_run
+from pai_rag.evaluation.eval_pipeline import run_evaluation_pipeline
 
 
 def run_experiment(exp_params):
@@ -14,7 +14,7 @@ def run_experiment(exp_params):
     )
     try:
         # 运行实验并获取结果
-        result = exp_run(
+        result = run_evaluation_pipeline(
             config=exp_params["setting_file"],
             data_path=exp_params["data_path"],
             name=name,
