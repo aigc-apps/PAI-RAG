@@ -41,6 +41,8 @@ from llama_index.core.settings import (
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from sqlalchemy import Table
 
+from pai_rag.utils.prompt_template import DEFAULT_SQL_REVISION_PROMPT
+
 logger = logging.getLogger(__name__)
 
 
@@ -243,6 +245,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         dialect: str,
         sql_database: SQLDatabase,
         text_to_sql_prompt: Optional[BasePromptTemplate] = None,
+        sql_revision_prompt: Optional[BasePromptTemplate] = None,
         context_query_kwargs: Optional[dict] = None,
         tables: Optional[Union[List[str], List[Table]]] = None,
         table_retriever: Optional[ObjectRetriever[SQLTableSchema]] = None,
@@ -269,6 +272,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
+        self._sql_revision_prompt = sql_revision_prompt or DEFAULT_SQL_REVISION_PROMPT
         self._sql_parser_mode = sql_parser_mode
 
         embed_model = embed_model or embed_model_from_settings_or_context(
@@ -478,14 +482,20 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 #     )
 
-            except BaseException as e:
+            except Exception as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
+                # sql_execution_res = str(e)
 
                 new_sql_query_str = self._sql_query_modification(
                     query_tables, sql_query_str
                 )
+                # revised_sql_query = await self._sql_query_arevision(
+                #     nl_query=query_bundle.query_str,
+                #     predicted_sql=sql_query_str,
+                #     sql_execution_result=sql_execution_res,
+                # )
 
                 # 如果找到table，生成新的sql_query
                 if new_sql_query_str != sql_query_str:
@@ -533,7 +543,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
                 table_collection.append(table)
         return table_collection
 
-    def _sql_query_modification(self, query_tables: list, sql_query_str: str):
+    def _sql_query_modification(self, query_tables: list, sql_query_str: str) -> str:
         # table_pattern = r"FROM\s+(\w+)"
         # match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
         # if match:
@@ -548,6 +558,26 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             logger.info("No table is matched")
 
         return new_sql_query_str
+
+    async def _sql_query_arevision(
+        self, nl_query: str, schema: str, predicted_sql: str, sql_execution_result: str
+    ) -> str:
+        response_str = await self._llm.apredict(
+            self._sql_revision_prompt,
+            query_str=nl_query,
+            schema=schema,
+            dialect=self._sql_database.dialect,
+            predicted_sql=predicted_sql,
+            sql_execution_result=sql_execution_result,
+        )
+
+        revised_sql_query = self._sql_parser.parse_response_to_sql(
+            response_str, QueryBundle(nl_query)
+        )
+        # assume that it's a valid SQL query
+        logger.info(f"> Revised SQL query: {revised_sql_query}\n")
+
+        return revised_sql_query
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""

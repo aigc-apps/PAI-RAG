@@ -195,6 +195,25 @@ DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
 )
 
 
+DEFAULT_SQL_REVISION_PROMPT = PromptTemplate(
+    "Given an input question, database schema, sql execution result, revise the predicted sql query following the correct {dialect} based on the instructions below.\n"
+    "Instructions:\n"
+    "1. When you need to find the highest or lowest values based on a certain condition, using ORDER BY + LIMIT 1 is preferred over using MAX/MIN within sub queries.\n"
+    "2. If predicted query includes an ORDER BY clause to sort the results, you should only include the column(s) used for sorting in the SELECT clause if the question specifically ask for them. Otherwise, omit these columns from the SELECT.\n"
+    "3. If the question doesn't specify exactly which columns to select, between name column and id column, prefer to select id column.\n"
+    "4. Make sure you only output the information that is asked in the question. If the question asks for a specific column, make sure to only include that column in the SELECT clause, nothing more.\n"
+    "5. Predicted query should return all of the information asked in the question without any missing or extra information.\n"
+    "6. No matter of how many things the question asks, you should only return one SQL query as the answer having all the information asked in the question, separated by a comma.\n"
+    "7. When ORDER BY is used, just include the column name in the ORDER BY in the SELECT clause when explicitly asked in the question. Otherwise, do not include the column name in the SELECT clause.\n\n"
+    "Question: {query_str}\n"
+    "Database schema: {schema}\n"
+    "Predicted sql query: {predicted_sql}\n"
+    "SQL execution result: {sql_execution_result}\n"
+    "You are required to use the following format, each taking one line:\n\n"
+    "Question: Question here\n"
+    "SQLQuery: SQL Query to run \n\n"
+)
+
 DEFAULT_SHEET_SUMMARY_PROMPT = PromptTemplate(
     "基于用户文件{file_name}的一部分数据样例，\n"
     "数据样例: {data_example}, \n\n"
