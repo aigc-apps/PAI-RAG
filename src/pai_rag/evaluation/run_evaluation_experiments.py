@@ -3,7 +3,7 @@ import click
 import logging
 import time
 import json
-from pai_rag.evaluation.eval_pipeline import run_evaluation_pipeline
+from pai_rag.evaluation.run_evaluation_pipeline import run_evaluation_pipeline
 
 
 def run_experiment(exp_params):

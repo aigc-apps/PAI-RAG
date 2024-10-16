@@ -107,7 +107,7 @@ duckduckgo-search = "6.2.12"
 pai_rag = "pai_rag.main:main"
 load_data = "pai_rag.tool.load_data_tool:run"
 load_model = "pai_rag.utils.download_models:load_models"
-run_eval_exp = "pai_rag.evaluation.run_eval_exp:run"
+run_eval_exp = "pai_rag.evaluation.run_evaluation_experiments:run"
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"
