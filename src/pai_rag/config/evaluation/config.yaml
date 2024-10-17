@@ -1,0 +1,8 @@
+experiment:
+  # [custom knowledge dataset]
+  - name: "exp1"
+    data_path: "example_data/eval_docs"
+    setting_file: "src/pai_rag/config/evaluation/settings_eval.toml"
+  - name: "exp2"
+    data_path: "example_data/eval_docs_1"
+    setting_file: "src/pai_rag/config/evaluation/settings_eval.toml"

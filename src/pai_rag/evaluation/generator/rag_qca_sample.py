@@ -72,3 +72,50 @@ class PredictedRagQcaSample(LabelledRagQcaSample):
     def class_name(self) -> str:
         """Data example class name."""
         return "PredictedRagQcaSample"
+
+
+class RetrievalEvaluationSample(PredictedRagQcaSample):
+    """Retrieval Evaluation RAG example class."""
+
+    hitrate: Optional[str] = Field(
+        default_factory=None,
+        description="The hitrate value for retrieval evaluation.",
+    )
+    mrr: Optional[str] = Field(
+        default_factory=None,
+        description="The mrr value for retrieval evaluation.",
+    )
+
+    @property
+    def class_name(self) -> str:
+        """Data example class name."""
+        return "RetrievalEvaluationSample"
+
+
+class ResponseEvaluationSample(PredictedRagQcaSample):
+    """Response Evaluation RAG example class."""
+
+    faithfulness_score: Optional[str] = Field(
+        default_factory=None,
+        description="The faithfulness score for response evaluation.",
+    )
+
+    faithfulness_reason: Optional[str] = Field(
+        default_factory=None,
+        description="The faithfulness reason for response evaluation.",
+    )
+
+    correctness_score: Optional[str] = Field(
+        default_factory=None,
+        description="The correctness score for response evaluation.",
+    )
+
+    correctness_reason: Optional[str] = Field(
+        default_factory=None,
+        description="The correctness reason for response evaluation.",
+    )
+
+    @property
+    def class_name(self) -> str:
+        """Data example class name."""
+        return "ResponseEvaluationSample"
