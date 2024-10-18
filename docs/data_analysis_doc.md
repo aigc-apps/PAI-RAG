@@ -23,7 +23,7 @@
 - Dialect为数据库类别，当前支持mysql，默认mysql
 - Username和Passoword分别为用户名和密码
 - Host为本地或远程数据库url，Port为接口，默认3306
-- DBname为需要分析的目标数据库名称
+- Database为需要分析的目标数据库名称
 - Tables为需要分析的数据表，格式为：table_A, table_B,... ，默认为空，使用目标数据库中所有数据表
 - Descriptions为针对目标数据库中每张表的补充描述，比如对表中字段的进一步解释，可以提升数据分析效果，格式为：{"table_A":"字段a表示xxx，字段b数据的格式为yyy","table_B":"这张表主要用于zzz"}，注意：需要使用英文输入法下的字典格式（英文双引号，冒号，逗号），默认为空
 - 支持三种prompt template用于生成sql查询，点击选项后可以看到具体的prompt template，也可在custom中自定义

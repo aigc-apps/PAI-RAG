@@ -101,7 +101,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "datafile",
                     "database",
                 ],
-                value="datafile",
+                value="database",
                 label="Please choose the data analysis type",
                 elem_id="analysis_type",
             )
@@ -145,7 +145,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         label="Password", elem_id="db_password", type="password"
                     )
                 with gr.Row():
-                    dbname = gr.Textbox(label="DBname", elem_id="db_name")
+                    database = gr.Textbox(label="Database", elem_id="database")
                     tables = gr.Textbox(
                         label="Tables",
                         elem_id="db_tables",
@@ -169,8 +169,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="nl2sql_prompt_type",
                 )
 
-                prompt_template = gr.Textbox(
-                    label="prompt template",
+                db_nl2sql_prompt = gr.Textbox(
+                    label="Prompt template",
                     elem_id="db_nl2sql_prompt",
                     value=DA_GENERAL_PROMPTS,
                     lines=4,
@@ -179,23 +179,23 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             def change_prompt_template(prompt_type):
                 if prompt_type == "general":
                     return {
-                        prompt_template: gr.update(
+                        db_nl2sql_prompt: gr.update(
                             value=DA_GENERAL_PROMPTS, interactive=False
                         )
                     }
                 elif prompt_type == "sql":
                     return {
-                        prompt_template: gr.update(
+                        db_nl2sql_prompt: gr.update(
                             value=DA_SQL_PROMPTS, interactive=False
                         )
                     }
                 else:
-                    return {prompt_template: gr.update(value="", interactive=True)}
+                    return {db_nl2sql_prompt: gr.update(value="", interactive=True)}
 
             prompt_type.input(
                 fn=change_prompt_template,
                 inputs=prompt_type,
-                outputs=[prompt_template],
+                outputs=[db_nl2sql_prompt],
             )
 
             def data_analysis_type_change(type_value):
@@ -230,10 +230,10 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             password,
             host,
             port,
-            dbname,
+            database,
             tables,
             descriptions,
-            prompt_template,
+            db_nl2sql_prompt,
             question,
             chatbot,
         }
@@ -279,9 +279,9 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             password.elem_id: password,
             host.elem_id: host,
             port.elem_id: port,
-            dbname.elem_id: dbname,
+            database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
             prompt_type.elem_id: prompt_type,
-            prompt_template.elem_id: prompt_template,
+            db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
         }

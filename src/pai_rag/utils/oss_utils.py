@@ -1,6 +1,8 @@
 import oss2
 import os
 
+from pai_rag.core.rag_config import RagConfig
+
 
 def calculate_file_md5(file_path: str, prefix: str) -> str:
     """
@@ -37,18 +39,18 @@ def check_and_set_oss_auth(config_snapshot):
     return config_snapshot
 
 
-def get_oss_auth(config_dict_value):
+def get_oss_auth(rag_config: RagConfig):
     """
     get oss auth and return to config dict
     """
     oss_auth_ak = os.getenv("OSS_ACCESS_KEY_ID")
     oss_auth_sk = os.getenv("OSS_ACCESS_KEY_SECRET")
     if oss_auth_ak:
-        config_dict_value["RAG"]["oss_store"]["ak"] = oss_auth_ak
+        rag_config.oss_store.ak = oss_auth_ak
     else:
-        config_dict_value["RAG"]["oss_store"]["ak"] = None
+        rag_config.oss_store.ak = None
     if oss_auth_sk:
-        config_dict_value["RAG"]["oss_store"]["sk"] = oss_auth_sk
+        rag_config.oss_store.sk = oss_auth_sk
     else:
-        config_dict_value["RAG"]["oss_store"]["sk"] = None
-    return config_dict_value
+        rag_config.oss_store.sk = None
+    return rag_config

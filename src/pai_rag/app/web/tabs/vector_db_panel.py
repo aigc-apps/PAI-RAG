@@ -1,5 +1,5 @@
 import gradio as gr
-from typing import Any, Set, Dict
+from typing import Any, Dict
 from pai_rag.app.web.utils import components_to_dict
 import os
 import pai_rag.app.web.event_listeners as ev_listeners
@@ -7,13 +7,11 @@ import pai_rag.app.web.event_listeners as ev_listeners
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
-def create_vector_db_panel(
-    input_elements: Set[Any],
-) -> Dict[str, Any]:
+def create_vector_db_panel() -> Dict[str, Any]:
     components = []
     with gr.Column():
         with gr.Column():
-            _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **Vector Store**")
+            # _ = gr.Markdown(value="**Index - Vector Store**")
             vectordb_type = gr.Radio(
                 [
                     "hologres",
@@ -297,6 +295,5 @@ def create_vector_db_panel(
                 adb_account_password,
                 adb_namespace,
             ]
-            union_input_elements = input_elements.union(db_related_elements)
             components.extend(db_related_elements)
-    return union_input_elements, components_to_dict(components)
+    return db_related_elements, components_to_dict(components)

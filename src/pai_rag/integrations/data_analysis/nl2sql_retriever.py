@@ -7,13 +7,18 @@ Modification based on llama-index SQL Retriever,
  - modify DefaultSQLParser
 """
 
+import functools
 import logging
+import os
 import re
 import signal
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
-
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import URL
+from sqlalchemy.pool import QueuePool
+from llama_index.core import SQLDatabase
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.callbacks.base import CallbackManager
@@ -21,10 +26,7 @@ from llama_index.core.instrumentation import DispatcherSpanMixin
 from llama_index.core.llms.llm import LLM
 from llama_index.core.objects.base import ObjectRetriever
 from llama_index.core.objects.table_node_mapping import SQLTableSchema
-from llama_index.core.prompts import BasePromptTemplate
-from llama_index.core.prompts.default_prompts import (
-    DEFAULT_TEXT_TO_SQL_PROMPT,
-)
+from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
 from llama_index.core.prompts.mixin import (
     PromptDictType,
     PromptMixin,
@@ -38,10 +40,38 @@ from llama_index.core.settings import (
     embed_model_from_settings_or_context,
     llm_from_settings_or_context,
 )
-from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from sqlalchemy import Table
 
+from pai_rag.integrations.data_analysis.data_analysis_config import (
+    MysqlAnalysisConfig,
+    SqlAnalysisConfig,
+    SqliteAnalysisConfig,
+)
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_TEXT_TO_SQL_TMPL = PromptTemplate(
+    "Given an input question, first create a syntactically correct {dialect} "
+    "query to run, then look at the results of the query and return the answer. "
+    "You can order the results by a relevant column to return the most "
+    "interesting examples in the database.\n\n"
+    "Never query for all the columns from a specific table, only ask for a "
+    "few relevant columns given the question.\n\n"
+    "Pay attention to use only the column names that you can see in the schema "
+    "description. "
+    "Be careful to not query for columns that do not exist. "
+    "Pay attention to which column is in which table. "
+    "Also, qualify column names with the table name when needed. "
+    "You are required to use the following format, each taking one line:\n\n"
+    "Question: Question here\n"
+    "SQLQuery: SQL Query to run\n"
+    "SQLResult: Result of the SQLQuery\n"
+    "Answer: Final answer here\n\n"
+    "Only use tables listed below.\n"
+    "{schema}\n\n"
+    "Question: {query_str}\n"
+    "SQLQuery: "
+)
 
 
 def timeout_handler():
@@ -214,6 +244,74 @@ class DefaultSQLParser(BaseSQLParser):
         return response.strip().strip("```").strip().strip(";").strip()
 
 
+def get_sql_info(sql_config: SqlAnalysisConfig):
+    if isinstance(sql_config, SqliteAnalysisConfig):
+        db_path = os.path.join(sql_config.db_path, sql_config.database)
+        database_url = f"{sql_config.type.value}:///{db_path}"
+    elif isinstance(sql_config, MysqlAnalysisConfig):
+        dd_prefix = f"{sql_config.type.value}+pymysql"
+        database_url = URL.create(
+            dd_prefix,
+            username=sql_config.user,
+            password=sql_config.password,
+            host=sql_config.host,
+            port=sql_config.port,
+            database=sql_config.database,
+        )
+        logger.info(f"Connecting to {database_url}.")
+    else:
+        raise ValueError(f"Not supported SQL dialect: {sql_config}")
+    return inspect_db_connection(
+        database_url=database_url,
+        desired_tables=tuple(sql_config.tables),
+        table_descriptions=tuple(sql_config.descriptions.items()),
+    )
+
+
+@functools.cache
+def inspect_db_connection(
+    database_url: str | URL,
+    desired_tables: Optional[List[str]] = None,
+    table_descriptions: Optional[Dict[str, str]] = None,
+):
+    desired_tables = list(desired_tables) if desired_tables else None
+    table_descriptions = dict(table_descriptions) if table_descriptions else None
+
+    # get rds_db config
+    logger.info(f"desired_tables from ui input: {desired_tables}")
+    logger.info(f"table_descriptions from ui input: {table_descriptions}")
+
+    # use sqlalchemy engine for db connection
+    engine = create_engine(
+        database_url,
+        echo=False,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=360,
+        poolclass=QueuePool,
+    )
+    inspector = inspect(engine)
+    db_tables = inspector.get_table_names()
+    if len(db_tables) == 0:
+        raise ValueError(f"No table found in db {database_url}.")
+
+    if desired_tables and len(desired_tables) > 0:
+        tables = desired_tables
+    else:
+        tables = db_tables
+
+    # create an sqldatabase instance including desired table info
+    sql_database = SQLDatabase(engine, include_tables=tables)
+
+    if table_descriptions and len(table_descriptions) > 0:
+        table_descriptions = table_descriptions
+    else:
+        table_descriptions = {}
+
+    return sql_database, tables, table_descriptions
+
+
 class MyNLSQLRetriever(BaseRetriever, PromptMixin):
     """Text-to-SQL Retriever.
 
@@ -267,7 +365,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         self._tables = tables
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-        self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
+        self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_TMPL
         self._sql_parser_mode = sql_parser_mode
 
         embed_model = embed_model or embed_model_from_settings_or_context(
@@ -280,6 +378,29 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         super().__init__(
             callback_manager=callback_manager
             or callback_manager_from_settings_or_context(Settings, service_context)
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        sql_config: SqlAnalysisConfig,
+        llm: Optional[LLM] = None,
+        embed_model: Optional[BaseEmbedding] = None,
+    ):
+        if sql_config.nl2sql_prompt:
+            nl2sql_prompt_tmpl = PromptTemplate(sql_config.nl2sql_prompt)
+        else:
+            nl2sql_prompt_tmpl = DEFAULT_TEXT_TO_SQL_TMPL
+
+        sql_database, tables, table_descriptions = get_sql_info(sql_config)
+        return cls(
+            sql_database=sql_database,
+            llm=llm,
+            text_to_sql_prompt=nl2sql_prompt_tmpl,
+            tables=tables,
+            context_query_kwargs=table_descriptions,
+            sql_only=False,
+            embed_model=embed_model,
         )
 
     def _get_prompts(self) -> Dict[str, Any]:

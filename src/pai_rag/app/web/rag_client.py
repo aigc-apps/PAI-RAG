@@ -10,8 +10,11 @@ import mimetypes
 from http import HTTPStatus
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
+from pai_rag.core.rag_config import RagConfig
+from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 
 DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
 
 
 class RagApiError(Exception):
@@ -30,7 +33,7 @@ class dotdict(dict):
 
 class RagWebClient:
     def __init__(self):
-        self.endpoint = "http://127.0.0.1:8000/"  # default link
+        self.endpoint = DEFAULT_LOCAL_URL  # default link
         self.session_id = None
 
     def set_endpoint(self, endpoint: str):
@@ -90,6 +93,14 @@ class RagWebClient:
     @property
     def get_evaluate_response_url(self):
         return f"{self.endpoint}service/evaluate/response"
+
+    @property
+    def index_url(self):
+        return f"{self.endpoint}service/indexes/"
+
+    @property
+    def list_index_url(self):
+        return f"{self.endpoint}service/indexes"
 
     def _format_rag_response(
         self, question, response, with_history: bool = False, stream: bool = False
@@ -193,10 +204,15 @@ class RagWebClient:
         with_history: bool = False,
         stream: bool = False,
         with_intent: bool = False,
+        index_name: str = None,
     ):
         session_id = self.session_id if with_history else None
         q = dict(
-            question=text, session_id=session_id, stream=stream, with_intent=with_intent
+            question=text,
+            session_id=session_id,
+            stream=stream,
+            with_intent=with_intent,
+            index_name=index_name,
         )
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
@@ -299,8 +315,8 @@ class RagWebClient:
                     text, chunk_response, with_history=with_history, stream=stream
                 )
 
-    def query_vector(self, text: str):
-        q = dict(question=text)
+    def query_vector(self, text: str, index_name: str = None):
+        q = dict(question=text, index_name=index_name)
         r = requests.post(self.retrieval_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
@@ -346,8 +362,9 @@ class RagWebClient:
         self,
         oss_path: str = None,
         input_files: str = None,
-        enable_qa_extraction: bool = False,
         enable_raptor: bool = False,
+        enable_multimodal: bool = False,
+        index_name: str = None,
     ):
         files = []
         file_obj_list = []
@@ -360,7 +377,12 @@ class RagWebClient:
                 )
                 file_obj_list.append(file_obj)
 
-        para = {"enable_raptor": enable_raptor, "oss_path": oss_path}
+        para = {
+            "enable_raptor": enable_raptor,
+            "oss_path": oss_path,
+            "index_name": index_name,
+            "enable_multimodal": enable_multimodal,
+        }
         try:
             r = requests.post(
                 self.load_data_url,
@@ -424,10 +446,11 @@ class RagWebClient:
 
     def get_config(self):
         r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
-        response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
-            raise RagApiError(code=r.status_code, msg=response.message)
-        return response
+            raise RagApiError(code=r.status_code, msg=r.text)
+
+        config = RagConfig.model_validate_json(json_data=r.text)
+        return config
 
     def load_agent_config(self, file_name: str):
         files = []
@@ -478,6 +501,47 @@ class RagWebClient:
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
         return response
+
+    def list_indexes(self) -> RagIndexMap:
+        r = requests.get(self.list_index_url, timeout=DEFAULT_CLIENT_TIME_OUT)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+
+        return RagIndexMap.model_validate_json(r.text)
+
+    def add_index(self, index_entry: RagIndexEntry):
+        r = requests.post(
+            f"{self.index_url}{index_entry.index_name}",
+            json=index_entry.model_dump(),
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code,
+                msg=f"update index {index_entry.index_name} failed. {r.text}",
+            )
+
+    def update_index(self, index_entry: RagIndexEntry):
+        r = requests.patch(
+            f"{self.index_url}{index_entry.index_name}",
+            json=index_entry.model_dump(),
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code,
+                msg=f"update index {index_entry.index_name} failed. {r.text}",
+            )
+
+    def delete_index(self, index_name: str):
+        r = requests.delete(
+            f"{self.index_url}{index_name}",
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code, msg=f"delete index {index_name} failed. {r.text}"
+            )
 
 
 rag_client = RagWebClient()

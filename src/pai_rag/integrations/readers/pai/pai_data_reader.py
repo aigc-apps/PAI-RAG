@@ -23,7 +23,7 @@ class BaseDataReaderConfig(BaseModel):
     concat_csv_rows: bool = False
     enable_table_summary: bool = False
     format_sheet_data_to_json: bool = False
-    sheet_column_filters: List[str] = None
+    sheet_column_filters: List[str] | None = None
 
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):

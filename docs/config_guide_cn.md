@@ -25,7 +25,7 @@ LlamaParseDirectoryReader是SimpleDirectoryReader中集成LlamaParse的PDF加载
     database_type = "PostgreSQL"
     host = "database url"
     port = "datasase port"
-    dbname = "target db name"
+    database = "target db name"
     user = "username"
     password = "password"
 

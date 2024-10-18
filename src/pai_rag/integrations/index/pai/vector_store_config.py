@@ -29,7 +29,7 @@ VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH = [
 
 
 class BaseVectorStoreConfig(BaseModel):
-    persist_path: str = None
+    persist_path: str = DEFAULT_LOCAL_STORAGE_PATH
     type: SupportedVectorStoreType
     is_image_store: bool = False
 
@@ -117,9 +117,6 @@ class PaiVectorIndexConfig(BaseModel):
     ]
     enable_multimodal: bool = False
     persist_path: str = DEFAULT_LOCAL_STORAGE_PATH
-
-    class Config:
-        frozen = True
 
 
 PaiVectorStoreConfig = Annotated[
