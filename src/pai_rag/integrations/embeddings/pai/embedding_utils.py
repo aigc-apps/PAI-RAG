@@ -39,24 +39,24 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
         pai_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
         embed_model = HuggingFaceEmbedding(
-            model_name=os.path.join(pai_model_dir, embed_config.model_name),
+            model_name=os.path.join(pai_model_dir, embed_config.model),
             embed_batch_size=embed_config.embed_batch_size,
             trust_remote_code=True,
             callback_manager=Settings.callback_manager,
         )
 
         logger.info(
-            f"Initialized HuggingFace embedding model {embed_config.model_name} from model_dir_path {pai_model_dir} with {embed_config.embed_batch_size} batch size."
+            f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {pai_model_dir} with {embed_config.embed_batch_size} batch size."
         )
 
     elif isinstance(embed_config, CnClipEmbeddingConfig):
         embed_model = CnClipEmbedding(
-            model_name=embed_config.model_name,
+            model_name=embed_config.model,
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
         )
         logger.info(
-            f"Initialized CnClip embedding model {embed_config.model_name} with {embed_config.embed_batch_size} batch size."
+            f"Initialized CnClip embedding model {embed_config.model} with {embed_config.embed_batch_size} batch size."
         )
 
     else:

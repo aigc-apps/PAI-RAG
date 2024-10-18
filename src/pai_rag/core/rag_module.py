@@ -153,7 +153,7 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     multimodal_llm = None
-    if config.multimodal_llm:
+    if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
         multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
     synthesizer = resolve(
         cls=PaiSynthesizer,
@@ -167,10 +167,8 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     return synthesizer
 
 
-def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
-    # TODO: 目前无法传递session_id到query_engine，因而无法直接在query engine中调用condense transform
+def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    Settings.embed_model = embed_model
     Settings.embed_model = embed_model
     multimodal_embed_model = None
     if config.index.enable_multimodal:
@@ -187,6 +185,11 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
         multimodal_embed_model=multimodal_embed_model,
         enable_local_keyword_index=True,
     )
+    return vector_index
+
+
+def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
+    vector_index = resolve_vector_index(config)
 
     retriever = vector_index.as_retriever(
         vector_store_query_mode=config.retriever.vector_store_query_mode,

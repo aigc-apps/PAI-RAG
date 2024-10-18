@@ -37,16 +37,16 @@ source = [HuggingFace, OpenAI, DashScope]
 
 Currently, pai_rag supports three embedding sources.
 
-If source = "HuggingFace", you need to further specify model_name and embed_batch_size. The default model name and batch size are bge-large-zh-v1.5 and 10, respectively.
+If source = "HuggingFace", you need to further specify model_modelname and embed_batch_size. The default model name and batch size are bge-large-zh-v1.5 and 10, respectively.
 
     source = "HuggingFace"
-    model_name = "bge-large-zh-v1.5"
+    model = "bge-large-zh-v1.5"
     embed_batch_size = 10
 
 Alternatively, if you want to use other huggingface models, please specify parameters as below:
 
     source = "HuggingFace"
-    model_name = "xxx"
+    model = "xxx"
     model_dir = "xxx/xxx"
     embed_batch_size = 20 (for example)
 
@@ -272,24 +272,6 @@ If type = "Aliyun-Redis", you need to get access to the your remote redis by ful
     type = "Aliyun-Redis"
     host = "Aliyun-Redis host"
     password = "Aliyun-Redis user:pwd"
-
-This setting is not available in webui.
-
-## rag.evaluation
-
-Currently, pai_rag supports both retrieval and response evaluations.
-
-The candidate metrics for retrieval are "mrr" and "hit_rate", you can specify both or either.
-
-    retrieval = ["mrr", "hit_rate"]
-
-The candidate metrics for response are "Faithfulness", "Answer Relevancy", "Correctness" as well as "Semantic Similarity", you can specify all or any subsets.
-
-    response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
-
-It is noted that these evaluations are based on certain dataset format, which can be generated via `src/pai_rag/evaluations/batch_evaluator`, you can also provide the correctly formatted dataset path:
-
-     qa_dataset_path = ""
 
 This setting is not available in webui.
 

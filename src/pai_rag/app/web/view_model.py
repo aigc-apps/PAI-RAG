@@ -43,7 +43,7 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = "model_name"
+    llm_eas_model_name: str = "model"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1
@@ -53,7 +53,7 @@ class ViewModel(BaseModel):
     mllm: str = None
     mllm_eas_url: str = None
     mllm_eas_token: str = None
-    mllm_eas_model_name: str = "model_name"
+    mllm_eas_model_name: str = "model"
     mllm_api_key: str = None
     mllm_api_model_name: str = None
 
@@ -132,22 +132,22 @@ class ViewModel(BaseModel):
         # llm
         view_model.llm = config.llm.source.value
         if isinstance(config.llm, PaiEasLlmConfig):
-            view_model.llm_eas_model_name = config.llm.model_name
+            view_model.llm_eas_model_name = config.llm.model
             view_model.llm_eas_url = config.llm.endpoint
             view_model.llm_eas_token = config.llm.token
         else:
             view_model.llm_api_key = config.llm.api_key
-            view_model.llm_api_model_name = config.llm.model_name
+            view_model.llm_api_model_name = config.llm.model
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
 
         view_model.mllm = config.multimodal_llm.source.value
         if isinstance(config.multimodal_llm, PaiEasLlmConfig):
             view_model.mllm_eas_url = config.multimodal_llm.endpoint
-            view_model.mllm_eas_model_name = config.multimodal_llm.model_name
+            view_model.mllm_eas_model_name = config.multimodal_llm.model
             view_model.mllm_eas_token = config.multimodal_llm.token
         else:
-            view_model.mllm_api_model_name = config.multimodal_llm.model_name
+            view_model.mllm_api_model_name = config.multimodal_llm.model
             view_model.mllm_api_key = config.multimodal_llm.api_key
 
         view_model.use_oss = (
@@ -226,18 +226,18 @@ class ViewModel(BaseModel):
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
         if self.llm.lower() == "paieas":
-            config["llm"]["model_name"] = self.llm_eas_model_name
+            config["llm"]["model"] = self.llm_eas_model_name
         else:
-            config["llm"]["model_name"] = self.llm_api_model_name
+            config["llm"]["model"] = self.llm_api_model_name
 
         config["multimodal_llm"]["source"] = self.mllm
         config["multimodal_llm"]["endpoint"] = self.mllm_eas_url
         config["multimodal_llm"]["token"] = self.mllm_eas_token
         config["multimodal_llm"]["api_key"] = self.mllm_api_key
         if self.mllm.lower() == "paieas":
-            config["multimodal_llm"]["model_name"] = self.mllm_eas_model_name
+            config["multimodal_llm"]["model"] = self.mllm_eas_model_name
         else:
-            config["multimodal_llm"]["model_name"] = self.mllm_api_model_name
+            config["multimodal_llm"]["model"] = self.mllm_api_model_name
 
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
@@ -408,7 +408,7 @@ class ViewModel(BaseModel):
             "visible": self.llm.lower() == "paieas",
         }
         if self.llm.lower() == "paieas" and not self.llm_eas_model_name:
-            self.llm_eas_model_name = "model_name"
+            self.llm_eas_model_name = "model"
 
         settings["llm_eas_model_name"] = {
             "value": self.llm_eas_model_name,

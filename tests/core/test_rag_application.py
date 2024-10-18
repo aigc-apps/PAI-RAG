@@ -75,13 +75,3 @@ def test_agent(rag_app: RagApplication):
     query = RagQuery(question="")
     response = asyncio.run(rag_app.aquery_agent(query))
     assert response.answer == EXPECTED_EMPTY_RESPONSE
-
-
-# async def test_batch_evaluate_retrieval_and_response(rag_app: RagApplication):
-#     _, eval_res_avg = await rag_app.aevaluate_retrieval_and_response(type="all")
-#     print('eval_res_avg', eval_res_avg)
-
-
-def test_load_evaluation_qa_dataset(rag_app: RagApplication):
-    qa_dataset = asyncio.run(rag_app.aload_evaluation_qa_dataset())
-    print(qa_dataset)

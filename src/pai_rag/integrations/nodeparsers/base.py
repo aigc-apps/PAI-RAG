@@ -186,7 +186,10 @@ class StructuredNodeParser(NodeParser):
                             metadata_seperator=node.metadata_seperator,
                             metadata_template=node.metadata_template,
                             text_template=node.text_template,
-                            metadata=node.extra_info,
+                            metadata={
+                                "image_url": img_info["image_url"],
+                                **node.extra_info,
+                            },
                             relationships=relationships,
                         )
                         nodes.append(image_node)

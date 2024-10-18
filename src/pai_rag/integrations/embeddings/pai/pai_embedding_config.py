@@ -15,7 +15,7 @@ class SupportedEmbedType(str, Enum):
 
 class PaiBaseEmbeddingConfig(BaseModel):
     source: SupportedEmbedType
-    model_name: str
+    model: str
     embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE
 
     class Config:
@@ -32,24 +32,24 @@ class PaiBaseEmbeddingConfig(BaseModel):
 
 class DashScopeEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.dashscope] = SupportedEmbedType.dashscope
-    model_name: str | None = None  # use default
+    model: str | None = None  # use default
     api_key: str | None = None  # use default
 
 
 class OpenAIEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.openai] = SupportedEmbedType.openai
-    model_name: str | None = None  # use default
+    model: str | None = None  # use default
     api_key: str | None = None  # use default
 
 
 class HuggingFaceEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.huggingface] = SupportedEmbedType.huggingface
-    model_name: str | None = DEFAULT_HF_EMBED_MODEL
+    model: str | None = DEFAULT_HF_EMBED_MODEL
 
 
 class CnClipEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.cnclip] = SupportedEmbedType.cnclip
-    model_name: str | None = "ViT-L-14"
+    model: str | None = "ViT-L-14"
 
 
 SupporttedEmbeddingClsMap = {
@@ -69,6 +69,6 @@ def parse_embed_config(config_data):
 
 
 if __name__ == "__main__":
-    embedding_config_data = {"source": "Openai", "model_name": "gpt-1", "api_key": None}
+    embedding_config_data = {"source": "Openai", "model": "gpt-1", "api_key": None}
 
     print(parse_embed_config(embedding_config_data))

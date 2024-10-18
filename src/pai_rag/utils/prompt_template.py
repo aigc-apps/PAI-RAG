@@ -2,27 +2,19 @@
 
 from llama_index.core import PromptTemplate
 
-DEFAULT_QUESTION_GENERATION_PROMPT = '''\
+DEFAULT_QUESTION_GENERATION_PROMPT = """\
     #01 你是一个问答对数据集处理专家。
     #02 你的任务是根据我给出的内容，生成适合作为问答对数据集的问题。
     #03 问题要关于文件内容，不要太长。
     #04 一句话中只有一个问题。
-    #05 生成问题需要具体明确，示例：
-
-    """
-
-    抬高床头有哪些对人体有益的影响？
-
-    舒服德睡眠床如何常驻缩短入睡时间？
-
-    """
+    #05 生成问题需要具体明确。
     #06 生成问题需要避免指代不明确，以下是需要避免的示例：这款产品、这些文献、这项研究等。
     #07 以下是我给出的内容：
     ---------------------
     {context_str}
     ---------------------
-    {query_str}
-    '''
+    #08 请仔细阅读给出的内容，生成适合作为问答对数据集的{num_questions_per_chunk}个问题：
+    """
 
 
 DEFAULT_TEXT_QA_PROMPT_TMPL = """内容信息如下

@@ -160,7 +160,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
             # image store does not apply hybrid/keyword search
             query_mode = VectorStoreQueryMode.DEFAULT
 
-        print(is_image_store, query_mode)
         return VectorStoreQuery(
             query_embedding=query_bundle_with_embeddings.embedding,
             similarity_top_k=similarity_top_k,
@@ -324,6 +323,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
+        if self._similarity_top_k <= 0:
+            return []
         if (
             self._supports_hybrid_search
             or self._vector_store_query_mode == VectorStoreQueryMode.DEFAULT
@@ -359,7 +360,10 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
-        if self._image_vector_store.is_embedding_query:
+        if (
+            self._image_vector_store.is_embedding_query
+            and self._image_similarity_top_k > 0
+        ):
             # change the embedding for query bundle to Multi Modal Text encoder
             query_bundle.embedding = (
                 self._image_embed_model.get_agg_embedding_from_queries(
@@ -367,9 +371,11 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                 )
             )
 
-        return self._get_nodes_with_embeddings(
-            query_bundle, self._image_similarity_top_k, self._image_vector_store
-        )
+            return self._get_nodes_with_embeddings(
+                query_bundle, self._image_similarity_top_k, self._image_vector_store
+            )
+        else:
+            return []
 
     def text_to_image_retrieve(
         self, str_or_query_bundle: QueryType
@@ -410,7 +416,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         is_image_store = (
             self._image_vector_store and vector_store is self._image_vector_store
         )
-        print("is image", is_image_store)
         query = self._build_vector_store_query(
             query_bundle_with_embeddings, similarity_top_k, is_image_store
         )
@@ -448,7 +453,7 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                 if is_image:
                     node = ImageNode(
                         id_=node.id_,
-                        image_url=node.image_url,
+                        image_url=node.metadata.get("image_url"),
                         metadata=node.metadata,
                     )
                 query_result.nodes[i] = node
@@ -556,6 +561,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
+        if self._similarity_top_k <= 0:
+            return []
         if (
             self._supports_hybrid_search
             or self._vector_store_query_mode == VectorStoreQueryMode.DEFAULT
@@ -593,7 +600,11 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle: QueryBundle,
     ) -> List[NodeWithScore]:
-        if self._enable_multimodal and self._search_image:
+        if (
+            self._enable_multimodal
+            and self._search_image
+            and self._image_similarity_top_k > 0
+        ):
             if self._image_vector_store.is_embedding_query:
                 # change the embedding for query bundle to Multi Modal Text encoder
                 query_bundle.embedding = (

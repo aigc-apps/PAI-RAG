@@ -23,19 +23,14 @@ nl2sql_prompt = "给定一个输入问题，创建一个语法正确的{dialect}
 type = "SimpleDirectoryReader"
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
-# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model
 # eg.
 # source = "HuggingFace"
-# model_name = "bge-large-zh-v1.5"
+# model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
 source = "DashScope"
 embed_batch_size = 10
-
-[rag.evaluation]
-retrieval = ["mrr", "hit_rate"]
-response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -45,12 +40,12 @@ vector_store.type = "FAISS"
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
 # source = "PaiEas"
-# name = ""
+# model = ""
 # endpoint = ""
 # token = ""
 [rag.llm]
 source = "DashScope"
-name = "qwen-turbo"
+model = "qwen-turbo"
 
 [rag.multimodal_embedding]
 source = "cnclip"
