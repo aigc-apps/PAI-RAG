@@ -5,7 +5,7 @@ from llama_index.core.tools import FunctionTool
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 
-fc_llm_config = DashScopeLlmConfig(model_name="qwen-max")
+fc_llm_config = DashScopeLlmConfig(model="qwen-max")
 fc_llm = PaiLlm(fc_llm_config)
 
 

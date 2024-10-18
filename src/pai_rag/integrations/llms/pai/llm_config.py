@@ -126,7 +126,7 @@ class PaiBaseLlmConfig(BaseModel):
     temperature: float = DEFAULT_TEMPERATURE
     system_prompt: str = None
     max_tokens: int = DEFAULT_MAX_TOKENS
-    model_name: str = None
+    model: str = None
 
     @classmethod
     def get_subclasses(cls):
@@ -150,20 +150,20 @@ class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
     api_key: str | None = None
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model_name: str = "qwen-turbo"
+    model: str = "qwen-turbo"
 
 
 class OpenAILlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.openai] = SupportedLlmType.openai
     api_key: str | None = None
-    model_name: str = "gpt-3.5-turbo"
+    model: str = "gpt-3.5-turbo"
 
 
 class PaiEasLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.paieas] = SupportedLlmType.paieas
     endpoint: str
     token: str
-    model_name: str = "default"
+    model: str = "default"
 
 
 SupporttedLlmClsMap = {cls.get_type(): cls for cls in PaiBaseLlmConfig.get_subclasses()}
@@ -183,7 +183,7 @@ def parse_llm_config(config_data):
 if __name__ == "__main__":
     llm_config_data = {
         "source": "dashscope",
-        "model_name": "qwen-turbo",
+        "model": "qwen-turbo",
         "api_key": None,
         "max_tokens": 1024,
     }

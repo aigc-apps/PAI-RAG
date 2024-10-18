@@ -34,7 +34,7 @@ class PaiLlm(OpenAILike):
     def __init__(self, llm_config: PaiBaseLlmConfig):
         super().__init__()
         self._llm = create_llm(llm_config)
-        self.model = llm_config.model_name
+        self.model = llm_config.model
         self._llm.callback_manager = Settings.callback_manager
         self.callback_manager = Settings.callback_manager
 

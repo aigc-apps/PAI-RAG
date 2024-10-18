@@ -415,7 +415,6 @@ class RagWebClient:
         view_model: ViewModel = ViewModel.from_app_config(config)
         view_model.update(update_dict)
         new_config = view_model.to_app_config()
-
         r = requests.patch(
             self.config_url, json=new_config, timeout=DEFAULT_CLIENT_TIME_OUT
         )
