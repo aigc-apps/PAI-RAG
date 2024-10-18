@@ -1,12 +1,11 @@
 import logging
 from typing import Optional, List
 
-
+from llama_index.core.prompts import PromptTemplate
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.base.base_retriever import BaseRetriever
-from llama_index.core.response_synthesizers import BaseSynthesizer
+from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.llms.llm import LLM
 from llama_index.core.prompts.mixin import PromptMixinType
@@ -14,15 +13,45 @@ from llama_index.core.schema import QueryBundle, NodeWithScore
 from llama_index.core.settings import Settings
 import llama_index.core.instrumentation as instrument
 
-
+from pai_rag.integrations.data_analysis.nl2sql_retriever import MyNLSQLRetriever
+from pai_rag.integrations.data_analysis.data_analysis_config import (
+    BaseAnalysisConfig,
+    PandasAnalysisConfig,
+    SqlAnalysisConfig,
+)
 from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
 from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
 
 logger = logging.getLogger(__name__)
-
 dispatcher = instrument.get_dispatcher(__name__)
+
+DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
+    "Given an input question, synthesize a response in Chinese from the query results.\n"
+    "Query: {query_str}\n\n"
+    "SQL or Python Code Instructions (optional):\n{query_code_instruction}\n\n"
+    "Code Query Output: {query_output}\n\n"
+    "Response: "
+)
+
+
+def create_retriever(
+    analysis_config: BaseAnalysisConfig, llm: LLM, embed_model: BaseEmbedding
+):
+    if isinstance(analysis_config, PandasAnalysisConfig):
+        return PandasQueryRetriever.from_config(
+            pandas_config=analysis_config,
+            llm=llm,
+        )
+    elif isinstance(analysis_config, SqlAnalysisConfig):
+        return MyNLSQLRetriever.from_config(
+            sql_config=analysis_config,
+            llm=llm,
+            embed_model=embed_model,
+        )
+    else:
+        raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
 
 
 class DataAnalysisTool(BaseQueryEngine):
@@ -32,15 +61,23 @@ class DataAnalysisTool(BaseQueryEngine):
 
     def __init__(
         self,
+        analysis_config: BaseAnalysisConfig,
         llm: Optional[LLM] = None,
-        analysis_retriever: BaseRetriever = PandasQueryRetriever,
-        analysis_synthesizer: BaseSynthesizer = DataAnalysisSynthesizer,
+        embed_model: Optional[BaseEmbedding] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
         """Initialize params."""
         self._llm = llm or Settings.llm
-        self._retriever = analysis_retriever
-        self._synthesizer = analysis_synthesizer
+        self._embed_model = embed_model or Settings.embed_model
+        self._retriever = create_retriever(
+            analysis_config=analysis_config,
+            llm=self._llm,
+            embed_model=self._embed_model,
+        )
+        self._synthesizer = DataAnalysisSynthesizer(
+            llm=self._llm,
+            response_synthesis_prompt=DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
+        )
         super().__init__(callback_manager=callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:

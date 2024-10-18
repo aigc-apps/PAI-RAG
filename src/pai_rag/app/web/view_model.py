@@ -2,13 +2,6 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from collections import defaultdict
 from pai_rag.app.web.ui_constants import (
-    DEFAULT_EMBED_SIZE,
-    DEFAULT_HF_EMBED_MODEL,
-    EMBEDDING_MODEL_LIST,
-    EMBEDDING_MODEL_DEPRECATED,
-    EMBEDDING_DIM_DICT,
-    EMBEDDING_TYPE_DICT,
-    EMBEDDING_MODEL_LINK_DICT,
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
     DEFAULT_TEXT_QA_PROMPT_TMPL,
@@ -20,6 +13,18 @@ import re
 from datetime import datetime
 import tempfile
 import json
+
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from pai_rag.core.rag_config import RagConfig
+from pai_rag.integrations.data_analysis.data_analysis_config import (
+    MysqlAnalysisConfig,
+    PandasAnalysisConfig,
+    SqliteAnalysisConfig,
+)
+from pai_rag.integrations.llms.pai.llm_config import PaiEasLlmConfig
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
+    SimilarityPostProcessorConfig,
+)
 
 
 def recursive_dict():
@@ -34,15 +39,6 @@ def _transform_to_dict(config):
 
 
 class ViewModel(BaseModel):
-    # embedding
-    embed_source: str = "HuggingFace"
-    embed_model: str = DEFAULT_HF_EMBED_MODEL
-    embed_dim: int = 1024
-    embed_type: str = "Default"
-    embed_link: str = ""
-    embed_api_key: str = None
-    embed_batch_size: int = 10
-
     # llm
     llm: str = "PaiEas"
     llm_eas_url: str = None
@@ -76,65 +72,12 @@ class ViewModel(BaseModel):
 
     # reader
     reader_type: str = "SimpleDirectoryReader"
-    enable_qa_extraction: bool = False
     enable_raptor: bool = False
     enable_table_summary: bool = False
 
     config_file: str = None
 
     vectordb_type: str = "faiss"
-
-    # AnalyticDB
-    adb_ak: str = None
-    adb_sk: str = None
-    adb_region_id: str = None
-    adb_instance_id: str = None
-    adb_account: str = None
-    adb_account_password: str = None
-    adb_namespace: str = "pairag"
-    adb_collection: str = "pairag_collection"
-    adb_metrics: str = "cosine"
-
-    # Hologres
-    hologres_database: str = "pairag"
-    hologres_table: str = "pairag"
-    hologres_user: str = None
-    hologres_password: str = None
-    hologres_host: str = None
-    hologres_port: int = 80
-    hologres_pre_delete: bool = False
-
-    # Faiss
-    faiss_path: str = None
-
-    # ElasticSearch
-    es_url: str = None
-    es_index: str = None
-    es_user: str = None
-    es_password: str = None
-
-    # Milvus
-    milvus_host: str = None
-    milvus_port: int = None
-    milvus_user: str = None
-    milvus_password: str = None
-    milvus_database: str = "default"
-    milvus_collection_name: str = "pairagcollection"
-
-    # open search
-    opensearch_endpoint: str = None
-    opensearch_instance_id: str = None
-    opensearch_username: str = None
-    opensearch_password: str = None
-    opensearch_table_name: str = "pairag"
-
-    # PostgreSQL
-    postgresql_host: str = None
-    postgresql_port: int = 5432
-    postgresql_database: str = None
-    postgresql_table_name: str = "pairag"
-    postgresql_username: str = None
-    postgresql_password: str = None
 
     # retriever
     similarity_top_k: int = 5
@@ -156,7 +99,7 @@ class ViewModel(BaseModel):
     db_password: str = None
     db_host: str = None
     db_port: int = 3306
-    db_name: str = None
+    database: str = None
     db_tables: str = None
     db_descriptions: str = None
     db_nl2sql_prompt: str = None
@@ -166,8 +109,8 @@ class ViewModel(BaseModel):
     reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
-    similarity_threshold: float = None
-    reranker_similarity_threshold: float = None
+    similarity_threshold: float = 0.5
+    reranker_similarity_threshold: float = 0
 
     query_engine_type: str = None
 
@@ -183,262 +126,99 @@ class ViewModel(BaseModel):
                 setattr(self, key, value)
 
     @staticmethod
-    def from_app_config(config):
+    def from_app_config(config: RagConfig):
         view_model = ViewModel()
-        view_model.embed_source = config["embedding"].get(
-            "source", view_model.embed_source
-        )
-        view_model.embed_model = config["embedding"].get(
-            "model_name", view_model.embed_model
-        )
-        view_model.embed_api_key = config["embedding"].get(
-            "api_key", view_model.embed_api_key
-        )
-        view_model.embed_batch_size = config["embedding"].get(
-            "embed_batch_size", view_model.embed_batch_size
-        )
 
-        view_model.llm = config["llm"].get("source", view_model.llm)
-        view_model.llm_eas_url = config["llm"].get("endpoint", view_model.llm_eas_url)
-        view_model.llm_eas_token = config["llm"].get("token", view_model.llm_eas_token)
-        view_model.llm_api_key = config["llm"].get("api_key", view_model.llm_api_key)
-        view_model.llm_temperature = config["llm"].get(
-            "temperature", view_model.llm_temperature
-        )
-        if view_model.llm.lower() == "paieas":
-            view_model.llm_eas_model_name = config["llm"].get(
-                "name", view_model.llm_eas_model_name
-            )
+        # llm
+        view_model.llm = config.llm.source.value
+        if isinstance(config.llm, PaiEasLlmConfig):
+            view_model.llm_eas_model_name = config.llm.model_name
+            view_model.llm_eas_url = config.llm.endpoint
+            view_model.llm_eas_token = config.llm.token
         else:
-            view_model.llm_api_model_name = config["llm"].get(
-                "name", view_model.llm_api_model_name
-            )
+            view_model.llm_api_key = config.llm.api_key
+            view_model.llm_api_model_name = config.llm.model_name
 
-        view_model.use_mllm = config["llm"]["multi_modal"].get(
-            "enable", view_model.use_mllm
-        )
-        view_model.mllm = config["llm"]["multi_modal"].get("source", view_model.mllm)
-        view_model.mllm_eas_url = config["llm"]["multi_modal"].get(
-            "endpoint", view_model.mllm_eas_url
-        )
-        view_model.mllm_eas_token = config["llm"]["multi_modal"].get(
-            "token", view_model.mllm_eas_token
-        )
-        view_model.mllm_api_key = config["llm"]["multi_modal"].get(
-            "api_key", view_model.mllm_api_key
-        )
+        view_model.use_mllm = config.synthesizer.use_multimodal_llm
 
-        if view_model.mllm.lower() == "paieas":
-            print(
-                "view_model.mllm_eas_model_name",
-                view_model.mllm_eas_model_name,
-                "2",
-                config["llm"]["multi_modal"]["name"],
-            )
-            view_model.mllm_eas_model_name = config["llm"]["multi_modal"].get(
-                "name", view_model.mllm_eas_model_name
-            )
+        view_model.mllm = config.multimodal_llm.source.value
+        if isinstance(config.multimodal_llm, PaiEasLlmConfig):
+            view_model.mllm_eas_url = config.multimodal_llm.endpoint
+            view_model.mllm_eas_model_name = config.multimodal_llm.model_name
+            view_model.mllm_eas_token = config.multimodal_llm.token
         else:
-            view_model.mllm_api_model_name = config["llm"]["multi_modal"].get(
-                "name", view_model.mllm_api_model_name
-            )
+            view_model.mllm_api_model_name = config.multimodal_llm.model_name
+            view_model.mllm_api_key = config.multimodal_llm.api_key
 
-        view_model.use_oss = config["oss_store"].get("enable", view_model.use_oss)
-        view_model.oss_ak = config["oss_store"].get("ak", view_model.oss_ak)
-        view_model.oss_sk = config["oss_store"].get("sk", view_model.oss_sk)
-        view_model.oss_endpoint = config["oss_store"].get(
-            "endpoint", view_model.oss_endpoint
+        view_model.use_oss = (
+            config.oss_store.bucket is not None and config.oss_store.bucket != ""
         )
-        view_model.oss_bucket = config["oss_store"].get("bucket", view_model.oss_bucket)
+        view_model.oss_ak = config.oss_store.ak
+        view_model.oss_sk = config.oss_store.sk
+        view_model.oss_endpoint = config.oss_store.endpoint
+        view_model.oss_bucket = config.oss_store.bucket
 
-        view_model.vectordb_type = (
-            config["index"]["vector_store"]
-            .get("type", view_model.vectordb_type)
-            .lower()
-        )
+        view_model.parser_type = config.node_parser.type
+        view_model.chunk_overlap = config.node_parser.chunk_overlap
+        view_model.chunk_size = config.node_parser.chunk_size
 
-        view_model.faiss_path = config["index"]["vector_store"].get(
-            "persist_path", view_model.faiss_path
-        )
-        if view_model.vectordb_type.lower() == "analyticdb":
-            view_model.adb_ak = config["index"]["vector_store"]["ak"]
-            view_model.adb_sk = config["index"]["vector_store"]["sk"]
-            view_model.adb_region_id = config["index"]["vector_store"]["region_id"]
-            view_model.adb_instance_id = config["index"]["vector_store"]["instance_id"]
-            view_model.adb_account = config["index"]["vector_store"]["account"]
-            view_model.adb_account_password = config["index"]["vector_store"][
-                "account_password"
-            ]
-            view_model.adb_namespace = config["index"]["vector_store"]["namespace"]
-            view_model.adb_collection = config["index"]["vector_store"]["collection"]
-            view_model.adb_metrics = config["index"]["vector_store"].get(
-                "metrics", "cosine"
-            )
+        view_model.enable_table_summary = config.data_reader.enable_table_summary
 
-        elif view_model.vectordb_type.lower() == "hologres":
-            view_model.hologres_host = config["index"]["vector_store"]["host"]
-            view_model.hologres_port = config["index"]["vector_store"]["port"]
-            view_model.hologres_user = config["index"]["vector_store"]["user"]
-            view_model.hologres_password = config["index"]["vector_store"]["password"]
-            view_model.hologres_database = config["index"]["vector_store"]["database"]
-            view_model.hologres_table = config["index"]["vector_store"]["table_name"]
-            view_model.hologres_pre_delete = config["index"]["vector_store"].get(
-                "pre_delete_table", False
-            )
-
-        elif view_model.vectordb_type.lower() == "elasticsearch":
-            view_model.es_index = config["index"]["vector_store"]["es_index"]
-            view_model.es_url = config["index"]["vector_store"]["es_url"]
-            view_model.es_user = config["index"]["vector_store"]["es_user"]
-            view_model.es_password = config["index"]["vector_store"]["es_password"]
-
-        elif view_model.vectordb_type.lower() == "milvus":
-            view_model.milvus_host = config["index"]["vector_store"]["host"]
-            view_model.milvus_port = config["index"]["vector_store"]["port"]
-            view_model.milvus_user = config["index"]["vector_store"]["user"]
-            view_model.milvus_password = config["index"]["vector_store"]["password"]
-            view_model.milvus_database = config["index"]["vector_store"]["database"]
-            view_model.milvus_collection_name = config["index"]["vector_store"][
-                "collection_name"
-            ]
-
-        elif view_model.vectordb_type.lower() == "opensearch":
-            view_model.opensearch_endpoint = config["index"]["vector_store"]["endpoint"]
-            view_model.opensearch_instance_id = config["index"]["vector_store"][
-                "instance_id"
-            ]
-            view_model.opensearch_username = config["index"]["vector_store"]["username"]
-            view_model.opensearch_password = config["index"]["vector_store"]["password"]
-            view_model.opensearch_table_name = config["index"]["vector_store"][
-                "table_name"
-            ]
-
-        elif view_model.vectordb_type.lower() == "postgresql":
-            view_model.postgresql_host = config["index"]["vector_store"]["host"]
-            view_model.postgresql_port = config["index"]["vector_store"]["port"]
-            view_model.postgresql_database = config["index"]["vector_store"]["database"]
-            view_model.postgresql_table_name = config["index"]["vector_store"][
-                "table_name"
-            ]
-            view_model.postgresql_username = config["index"]["vector_store"]["username"]
-            view_model.postgresql_password = config["index"]["vector_store"]["password"]
-
-        view_model.parser_type = config["node_parser"]["type"]
-        view_model.chunk_size = config["node_parser"]["chunk_size"]
-        view_model.chunk_overlap = config["node_parser"]["chunk_overlap"]
-        view_model.enable_multimodal = config["node_parser"].get(
-            "enable_multimodal", view_model.enable_multimodal
-        )
-
-        view_model.reader_type = config["data_reader"].get(
-            "type", view_model.reader_type
-        )
-        view_model.enable_qa_extraction = config["data_reader"].get(
-            "enable_qa_extraction", view_model.enable_qa_extraction
-        )
-        view_model.enable_raptor = config["data_reader"].get(
-            "enable_raptor", view_model.enable_raptor
-        )
-        view_model.enable_table_summary = config["data_reader"].get(
-            "enable_table_summary", view_model.enable_table_summary
-        )
-
-        view_model.similarity_top_k = config["retriever"].get("similarity_top_k", 5)
-        view_model.image_similarity_top_k = config["retriever"].get(
-            "image_similarity_top_k", 2
-        )
-        view_model.need_image = config["retriever"].get("need_image", False)
-        vector_weight = config["retriever"].get("vector_weight", 0.7)
-        view_model.vector_weight = float(vector_weight)
-        keyword_weight = config["retriever"].get("keyword_weight", 0.3)
-        view_model.keyword_weight = float(keyword_weight)
-
-        if config["retriever"]["retrieval_mode"] == "hybrid":
-            view_model.retrieval_mode = "Hybrid"
-            view_model.query_rewrite_n = config["retriever"]["query_rewrite_n"]
-        elif config["retriever"]["retrieval_mode"] == "embedding":
+        view_model.similarity_top_k = config.retriever.similarity_top_k
+        view_model.image_similarity_top_k = config.retriever.image_similarity_top_k
+        view_model.need_image = config.retriever.search_image
+        view_model.vector_weight = config.retriever.hybrid_fusion_weights[0]
+        view_model.keyword_weight = config.retriever.hybrid_fusion_weights[1]
+        if config.retriever.vector_store_query_mode == VectorStoreQueryMode.DEFAULT:
             view_model.retrieval_mode = "Embedding Only"
-        elif config["retriever"]["retrieval_mode"] == "keyword":
+        elif config.retriever.vector_store_query_mode == VectorStoreQueryMode.HYBRID:
+            view_model.retrieval_mode = "Hybrid"
+        else:
             view_model.retrieval_mode = "Keyword Only"
 
-        if config["data_analysis"]["analysis_type"] == "nl2pandas":
+        view_model.reranker_type = config.postprocessor.reranker_type.value
+        if isinstance(config.postprocessor, SimilarityPostProcessorConfig):
+            view_model.similarity_threshold = config.postprocessor.similarity_threshold
+        else:
+            view_model.reranker_model = config.postprocessor.reranker_model
+            view_model.reranker_similarity_threshold = (
+                config.postprocessor.similarity_threshold
+            )
+
+        view_model.text_qa_template = config.synthesizer.text_qa_template
+        view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
+
+        view_model.search_api_key = config.search.search_api_key or os.environ.get(
+            "BING_SEARCH_KEY"
+        )
+        view_model.search_lang = config.search.search_lang
+        view_model.search_count = config.search.search_count
+
+        if isinstance(config.data_analysis, PandasAnalysisConfig):
             view_model.analysis_type = "nl2pandas"
-        elif config["data_analysis"]["analysis_type"] == "nl2sql":
+            view_model.analysis_file_path = config.data_analysis.file_path
+        elif isinstance(config.data_analysis, SqliteAnalysisConfig):
             view_model.analysis_type = "nl2sql"
-
-        view_model.analysis_file_path = config["data_analysis"].get(
-            "analysis_file_path", None
-        )
-        view_model.db_dialect = config["data_analysis"].get("dialect", "mysql")
-        view_model.db_username = config["data_analysis"].get("user", None)
-        view_model.db_password = config["data_analysis"].get("password", None)
-        view_model.db_host = config["data_analysis"].get("host", None)
-        view_model.db_port = config["data_analysis"].get("port", 3306)
-        view_model.db_name = config["data_analysis"].get("dbname", None)
-
-        # from list to string
-        if config["data_analysis"].get("tables", None):
-            view_model.db_tables = ",".join(config["data_analysis"].get("tables", None))
-        else:
-            view_model.db_tables = None
-
-        # from dict to string
-        if config["data_analysis"].get("descriptions", None):
+            view_model.db_dialect = config.data_analysis.type.value
+            view_model.database = config.data_analysis.database
+        elif isinstance(config.data_analysis, MysqlAnalysisConfig):
+            view_model.analysis_type = "nl2sql"
+            view_model.db_dialect = config.data_analysis.type.value
+            view_model.database = config.data_analysis.database
+            view_model.db_username = config.data_analysis.user
+            view_model.db_password = config.data_analysis.password
+            view_model.db_host = config.data_analysis.host
+            view_model.db_port = config.data_analysis.port
+            view_model.db_tables = ",".join(config.data_analysis.tables)
             view_model.db_descriptions = json.dumps(
-                config["data_analysis"].get("descriptions", None), ensure_ascii=False
+                config.data_analysis.descriptions, ensure_ascii=False
             )
-        else:
-            view_model.db_descriptions = None
-
-        view_model.db_nl2sql_prompt = config["data_analysis"].get("nl2sql_prompt", None)
-
-        reranker_type = config["postprocessor"].get("reranker_type", "no-reranker")
-        similarity_threshold = config["postprocessor"].get("similarity_threshold", 0)
-        view_model.similarity_threshold = (
-            similarity_threshold
-            if similarity_threshold and similarity_threshold > 0
-            else None
-        )
-        reranker_similarity_threshold = config["postprocessor"].get(
-            "reranker_similarity_threshold", 0
-        )
-        view_model.reranker_similarity_threshold = reranker_similarity_threshold
-
-        if reranker_type == "no-reranker":
-            view_model.reranker_type = "no-reranker"
-
-        elif reranker_type == "model-based-reranker":
-            view_model.reranker_type = "model-based-reranker"
-            view_model.reranker_model = config["postprocessor"].get(
-                "reranker_model", "bge-reranker-base"
-            )
-
-        view_model.synthesizer_type = config["synthesizer"].get(
-            "type", "SimpleSummarize"
-        )
-        view_model.text_qa_template = config["synthesizer"].get(
-            "text_qa_template", DEFAULT_TEXT_QA_PROMPT_TMPL
-        )
-        view_model.multimodal_qa_template = config["synthesizer"].get(
-            "multimodal_qa_template", DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
-        )
-
-        search_config = config.get("search") or {}
-        view_model.search_api_key = search_config.get(
-            "search_api_key"
-        ) or os.environ.get("BING_SEARCH_KEY")
-        view_model.search_lang = search_config.get("search_lang", "zh-CN")
-        view_model.search_count = search_config.get("search_count", 10)
+        view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
 
         return view_model
 
     def to_app_config(self):
         config = recursive_dict()
-
-        config["embedding"]["source"] = self.embed_source
-        config["embedding"]["model_name"] = self.embed_model
-        config["embedding"]["api_key"] = self.embed_api_key
-        config["embedding"]["embed_batch_size"] = int(self.embed_batch_size)
 
         config["llm"]["source"] = self.llm
         config["llm"]["endpoint"] = self.llm_eas_url
@@ -446,21 +226,19 @@ class ViewModel(BaseModel):
         config["llm"]["api_key"] = self.llm_api_key
         config["llm"]["temperature"] = self.llm_temperature
         if self.llm.lower() == "paieas":
-            config["llm"]["name"] = self.llm_eas_model_name
+            config["llm"]["model_name"] = self.llm_eas_model_name
         else:
-            config["llm"]["name"] = self.llm_api_model_name
+            config["llm"]["model_name"] = self.llm_api_model_name
 
-        config["llm"]["multi_modal"]["enable"] = self.use_mllm
-        config["llm"]["multi_modal"]["source"] = self.mllm
-        config["llm"]["multi_modal"]["endpoint"] = self.mllm_eas_url
-        config["llm"]["multi_modal"]["token"] = self.mllm_eas_token
-        config["llm"]["multi_modal"]["api_key"] = self.mllm_api_key
+        config["multimodal_llm"]["source"] = self.mllm
+        config["multimodal_llm"]["endpoint"] = self.mllm_eas_url
+        config["multimodal_llm"]["token"] = self.mllm_eas_token
+        config["multimodal_llm"]["api_key"] = self.mllm_api_key
         if self.mllm.lower() == "paieas":
-            config["llm"]["multi_modal"]["name"] = self.mllm_eas_model_name
+            config["multimodal_llm"]["model_name"] = self.mllm_eas_model_name
         else:
-            config["llm"]["multi_modal"]["name"] = self.mllm_api_model_name
+            config["multimodal_llm"]["model_name"] = self.mllm_api_model_name
 
-        config["oss_store"]["enable"] = self.use_oss
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
         if os.getenv("OSS_ACCESS_KEY_SECRET") is None and self.oss_sk:
@@ -472,82 +250,11 @@ class ViewModel(BaseModel):
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
 
-        config["index"]["vector_store"]["type"] = self.vectordb_type.lower()
-        config["index"]["persist_path"] = self.faiss_path
-        config["index"]["vector_store"]["persist_path"] = self.faiss_path
-
-        config["index"]["enable_multimodal"] = self.enable_multimodal
-
         config["node_parser"]["type"] = self.parser_type
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
-        config["node_parser"]["enable_multimodal"] = self.enable_multimodal
 
-        config["data_reader"]["enable_qa_extraction"] = self.enable_qa_extraction
-        config["data_reader"]["enable_raptor"] = self.enable_raptor
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
-        config["data_reader"]["type"] = self.reader_type
-
-        if self.vectordb_type.lower() == "hologres":
-            config["index"]["vector_store"]["host"] = self.hologres_host
-            config["index"]["vector_store"]["port"] = self.hologres_port
-            config["index"]["vector_store"]["user"] = self.hologres_user
-            config["index"]["vector_store"]["password"] = self.hologres_password
-            config["index"]["vector_store"]["database"] = self.hologres_database
-            config["index"]["vector_store"]["table_name"] = self.hologres_table
-            config["index"]["vector_store"][
-                "pre_delete_table"
-            ] = self.hologres_pre_delete
-
-        elif self.vectordb_type.lower() == "analyticdb":
-            config["index"]["vector_store"]["ak"] = self.adb_ak
-            config["index"]["vector_store"]["sk"] = self.adb_sk
-            config["index"]["vector_store"]["region_id"] = self.adb_region_id
-            config["index"]["vector_store"]["instance_id"] = self.adb_instance_id
-            config["index"]["vector_store"]["account"] = self.adb_account
-            config["index"]["vector_store"][
-                "account_password"
-            ] = self.adb_account_password
-            config["index"]["vector_store"]["namespace"] = self.adb_namespace
-            config["index"]["vector_store"]["collection"] = self.adb_collection
-            config["index"]["vector_store"]["metrics"] = self.adb_metrics
-
-        elif self.vectordb_type.lower() == "elasticsearch":
-            config["index"]["vector_store"]["es_index"] = self.es_index
-            config["index"]["vector_store"]["es_url"] = self.es_url
-            config["index"]["vector_store"]["es_user"] = self.es_user
-            config["index"]["vector_store"]["es_password"] = self.es_password
-
-        elif self.vectordb_type.lower() == "milvus":
-            config["index"]["vector_store"]["host"] = self.milvus_host
-            config["index"]["vector_store"]["port"] = self.milvus_port
-            config["index"]["vector_store"]["user"] = self.milvus_user
-            config["index"]["vector_store"]["data"] = self.milvus_password
-            config["index"]["vector_store"]["database"] = self.milvus_password
-            config["index"]["vector_store"]["password"] = self.milvus_password
-            config["index"]["vector_store"]["database"] = self.milvus_database
-            config["index"]["vector_store"][
-                "collection_name"
-            ] = self.milvus_collection_name
-            config["index"]["vector_store"]["reranker_weights"] = [
-                self.vector_weight,
-                self.keyword_weight,
-            ]
-
-        elif self.vectordb_type.lower() == "opensearch":
-            config["index"]["vector_store"]["endpoint"] = self.opensearch_endpoint
-            config["index"]["vector_store"]["instance_id"] = self.opensearch_instance_id
-            config["index"]["vector_store"]["username"] = self.opensearch_username
-            config["index"]["vector_store"]["password"] = self.opensearch_password
-            config["index"]["vector_store"]["table_name"] = self.opensearch_table_name
-
-        elif self.vectordb_type.lower() == "postgresql":
-            config["index"]["vector_store"]["host"] = self.postgresql_host
-            config["index"]["vector_store"]["port"] = self.postgresql_port
-            config["index"]["vector_store"]["database"] = self.postgresql_database
-            config["index"]["vector_store"]["table_name"] = self.postgresql_table_name
-            config["index"]["vector_store"]["username"] = self.postgresql_username
-            config["index"]["vector_store"]["password"] = self.postgresql_password
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
@@ -558,50 +265,56 @@ class ViewModel(BaseModel):
 
         config["retriever"]["need_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
-            config["retriever"]["retrieval_mode"] = "hybrid"
-            config["retriever"]["query_rewrite_n"] = self.query_rewrite_n
+            config["retriever"]["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
         elif self.retrieval_mode == "Embedding Only":
-            config["retriever"]["retrieval_mode"] = "embedding"
+            config["retriever"][
+                "vector_store_query_mode"
+            ] = VectorStoreQueryMode.DEFAULT
         elif self.retrieval_mode == "Keyword Only":
-            config["retriever"]["retrieval_mode"] = "keyword"
+            config["retriever"][
+                "vector_store_query_mode"
+            ] = VectorStoreQueryMode.TEXT_SEARCH
 
         if self.analysis_type == "nl2pandas":
-            config["data_analysis"]["analysis_type"] = "nl2pandas"
+            config["data_analysis"]["type"] = "pandas"
+            config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
         elif self.analysis_type == "nl2sql":
-            config["data_analysis"]["analysis_type"] = "nl2sql"
+            config["data_analysis"]["type"] = "mysql"
+            config["data_analysis"]["user"] = self.db_username
+            config["data_analysis"]["password"] = self.db_password
+            config["data_analysis"]["host"] = self.db_host
+            config["data_analysis"]["port"] = self.db_port
+            config["data_analysis"]["database"] = self.database
+            config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
 
-        config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
-        config["data_analysis"]["dialect"] = self.db_dialect
-        config["data_analysis"]["user"] = self.db_username
-        config["data_analysis"]["password"] = self.db_password
-        config["data_analysis"]["host"] = self.db_host
-        config["data_analysis"]["port"] = self.db_port
-        config["data_analysis"]["dbname"] = self.db_name
-        config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
-        # string to list
-        if self.db_tables:
-            # 去掉首位空格和末尾逗号
-            value = self.db_tables.strip().rstrip(",")
-            # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
-            value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
-            config["data_analysis"]["tables"] = value
-        else:
-            config["data_analysis"]["tables"] = None
-        # string to dict
-        if self.db_descriptions:
-            config["data_analysis"]["descriptions"] = json.loads(self.db_descriptions)
-        else:
-            config["data_analysis"]["descriptions"] = None
+            # string to list
+            if self.db_tables:
+                # 去掉首位空格和末尾逗号
+                value = self.db_tables.strip().rstrip(",")
+                # 英文逗号和中文逗号作为分隔符进行分割，并去除多余空白字符
+                value = [word.strip() for word in re.split(r"\s*,\s*|，\s*", value)]
+                config["data_analysis"]["tables"] = value
+            else:
+                config["data_analysis"]["tables"] = []
+            # string to dict
+            if self.db_descriptions:
+                config["data_analysis"]["descriptions"] = json.loads(
+                    self.db_descriptions
+                )
+            else:
+                config["data_analysis"]["descriptions"] = {}
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
-        config["postprocessor"][
-            "reranker_similarity_threshold"
-        ] = self.reranker_similarity_threshold
+        if self.reranker_type == "no-rerank":
+            config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
+        else:
+            config["postprocessor"][
+                "similarity_threshold"
+            ] = self.reranker_similarity_threshold
         config["postprocessor"]["top_n"] = self.similarity_top_k
 
-        config["synthesizer"]["type"] = self.synthesizer_type
+        config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
         config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
 
@@ -611,6 +324,7 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
+        print(config)
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -684,40 +398,6 @@ class ViewModel(BaseModel):
 
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
-        settings["embed_source"] = {"value": self.embed_source}
-
-        if (self.embed_model in EMBEDDING_MODEL_DEPRECATED) or os.getenv(
-            "USE_DEPRECATED_EMBEDDING_MODEL", "False"
-        ):
-            settings["embed_model"] = {
-                "choices": EMBEDDING_MODEL_LIST + EMBEDDING_MODEL_DEPRECATED,
-                "value": self.embed_model,
-                "visible": self.embed_source == "HuggingFace",
-            }
-        else:
-            settings["embed_model"] = {
-                "choices": EMBEDDING_MODEL_LIST,
-                "value": self.embed_model,
-                "visible": self.embed_source == "HuggingFace",
-            }
-
-        settings["embed_dim"] = {
-            "value": EMBEDDING_DIM_DICT.get(self.embed_model, DEFAULT_EMBED_SIZE)
-            if self.embed_source == "HuggingFace"
-            else DEFAULT_EMBED_SIZE
-        }
-        settings["embed_type"] = {
-            "value": EMBEDDING_TYPE_DICT.get(self.embed_model, "Default")
-            if self.embed_source == "HuggingFace"
-            else "Default"
-        }
-        settings["embed_link"] = {
-            "value": f"Model Introduction: [{self.embed_model}]({EMBEDDING_MODEL_LINK_DICT.get(self.embed_model, '')})"
-            if self.embed_source == "HuggingFace"
-            else ""
-        }
-        settings["embed_batch_size"] = {"value": self.embed_batch_size}
-
         settings["llm"] = {"value": self.llm}
         settings["llm_eas_url"] = {
             "value": self.llm_eas_url,
@@ -741,6 +421,8 @@ class ViewModel(BaseModel):
         }
 
         settings["use_mllm"] = {"value": self.use_mllm}
+        settings["use_mllm_col"] = {"visible": self.use_mllm}
+
         settings["mllm"] = {"value": self.mllm}
         settings["mllm_eas_url"] = {"value": self.mllm_eas_url}
         settings["mllm_eas_token"] = {"value": self.mllm_eas_token}
@@ -752,6 +434,8 @@ class ViewModel(BaseModel):
         }
 
         settings["use_oss"] = {"value": self.use_oss}
+        settings["use_oss_col"] = {"visible": self.use_oss}
+
         settings["oss_ak"] = {
             "value": (self.oss_ak[:2] + "*" * (len(self.oss_ak) - 4) + self.oss_ak[-2:])
             if self.oss_ak
@@ -769,7 +453,6 @@ class ViewModel(BaseModel):
 
         settings["chunk_size"] = {"value": self.chunk_size}
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
-        settings["enable_qa_extraction"] = {"value": self.enable_qa_extraction}
         settings["enable_raptor"] = {"value": self.enable_raptor}
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_table_summary"] = {"value": self.enable_table_summary}
@@ -797,71 +480,6 @@ class ViewModel(BaseModel):
         settings["text_qa_template"] = {"value": self.text_qa_template}
         settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
 
-        settings["vectordb_type"] = {"value": self.vectordb_type}
-
-        # adb
-        settings["adb_ak"] = {"value": self.adb_ak}
-        settings["adb_sk"] = {"value": self.adb_sk}
-        settings["adb_region_id"] = {"value": self.adb_region_id}
-        settings["adb_account"] = {"value": self.adb_account}
-        settings["adb_account_password"] = {"value": self.adb_account_password}
-        settings["adb_namespace"] = {"value": self.adb_namespace}
-        settings["adb_instance_id"] = {"value": self.adb_instance_id}
-        settings["adb_collection"] = {"value": self.adb_collection}
-
-        # hologres
-        settings["hologres_host"] = {"value": self.hologres_host}
-        settings["hologres_database"] = {"value": self.hologres_database}
-        settings["hologres_port"] = {"value": self.hologres_port}
-        settings["hologres_user"] = {"value": self.hologres_user}
-        settings["hologres_password"] = {"value": self.hologres_password}
-        settings["hologres_table"] = {"value": self.hologres_table}
-        settings["hologres_pre_delete"] = {"value": self.hologres_pre_delete}
-
-        # elasticsearch
-        settings["es_url"] = {"value": self.es_url}
-        settings["es_index"] = {"value": self.es_index}
-        settings["es_user"] = {"value": self.es_user}
-        settings["es_password"] = {"value": self.es_password}
-
-        # milvus
-        settings["milvus_host"] = {"value": self.milvus_host}
-        settings["milvus_port"] = {"value": self.milvus_port}
-        settings["milvus_database"] = {"value": self.milvus_database}
-        settings["milvus_user"] = {"value": self.milvus_user}
-        settings["milvus_password"] = {"value": self.milvus_password}
-        settings["milvus_collection_name"] = {"value": self.milvus_collection_name}
-
-        # faiss
-        settings["faiss_path"] = {"value": self.faiss_path}
-
-        # opensearch
-        settings["opensearch_endpoint"] = {"value": self.opensearch_endpoint}
-        settings["opensearch_instance_id"] = {"value": self.opensearch_instance_id}
-        settings["opensearch_username"] = {"value": self.opensearch_username}
-        settings["opensearch_password"] = {"value": self.opensearch_password}
-        settings["opensearch_table_name"] = {"value": self.opensearch_table_name}
-
-        # postgresql
-        settings["postgresql_host"] = {"value": self.postgresql_host}
-        settings["postgresql_port"] = {"value": self.postgresql_port}
-        settings["postgresql_database"] = {"value": self.postgresql_database}
-        settings["postgresql_table_name"] = {"value": self.postgresql_table_name}
-        settings["postgresql_username"] = {"value": self.postgresql_username}
-        settings["postgresql_password"] = {"value": self.postgresql_password}
-
-        # evaluation
-        if self.vectordb_type.lower() == "faiss":
-            qa_dataset_path, qa_dataset_res = self.get_local_generated_qa_file()
-            settings["qa_dataset_file"] = {"value": qa_dataset_path}
-            settings["qa_dataset_json_text"] = {"value": qa_dataset_res}
-            settings["eval_retrieval_res"] = {
-                "value": self.get_local_evaluation_result_file(type="retrieval")
-            }
-            settings["eval_response_res"] = {
-                "value": self.get_local_evaluation_result_file(type="response")
-            }
-
         # search
         settings["search_api_key"] = {"value": self.search_api_key}
         settings["search_lang"] = {"value": self.search_lang}
@@ -875,9 +493,10 @@ class ViewModel(BaseModel):
         settings["db_password"] = {"value": self.db_password}
         settings["db_host"] = {"value": self.db_host}
         settings["db_port"] = {"value": self.db_port}
-        settings["db_name"] = {"value": self.db_name}
+        settings["database"] = {"value": self.database}
         settings["db_tables"] = {"value": self.db_tables}
         settings["db_descriptions"] = {"value": self.db_descriptions}
         settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
 
+        print(settings)
         return settings

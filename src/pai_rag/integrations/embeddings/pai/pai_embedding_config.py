@@ -1,7 +1,9 @@
 from typing import Literal
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from enum import Enum
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
+
+DEFAULT_HF_EMBED_MODEL = "bge-large-zh-v1.5"
 
 
 class SupportedEmbedType(str, Enum):
@@ -27,12 +29,6 @@ class PaiBaseEmbeddingConfig(BaseModel):
     def get_type(cls):
         return cls.model_fields["source"].default
 
-    @field_validator("source", mode="before")
-    def validate_case_insensitive(cls, value):
-        if isinstance(value, str):
-            return value.lower()
-        return value
-
 
 class DashScopeEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.dashscope] = SupportedEmbedType.dashscope
@@ -48,7 +44,7 @@ class OpenAIEmbeddingConfig(PaiBaseEmbeddingConfig):
 
 class HuggingFaceEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.huggingface] = SupportedEmbedType.huggingface
-    model_name: str | None = "bge-large-zh-v1.5"
+    model_name: str | None = DEFAULT_HF_EMBED_MODEL
 
 
 class CnClipEmbeddingConfig(PaiBaseEmbeddingConfig):

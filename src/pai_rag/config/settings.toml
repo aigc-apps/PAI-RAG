@@ -6,15 +6,8 @@ version = "0.1.1"
 
 [rag.agent]
 type = "react"
-
-[rag.agent.custom_config]
-agent_file_path = ""
-
-[rag.agent.intent_detection]
-type = ""
-
-[rag.agent.tool]
-type = ""
+custom_agent_config_file = ""
+agent_tool_type = ""
 
 [rag.chat_store]
 type = "Local" # [Local, Aliyun-Redis]
@@ -23,11 +16,8 @@ password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
 [rag.data_analysis]
-analysis_type = "nl2pandas"
+type = "pandas"
 nl2sql_prompt = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行，不要从特定的表中查询所有列，只根据问题查询几个相关的列。请注意只使用你在schema descriptions 中看到的列名。\n=====\n 小心不要查询不存在的列。请注意哪个列位于哪个表中。必要时，请使用表名限定列名。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "
-
-[rag.data_loader]
-type = "local"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"
@@ -41,9 +31,6 @@ type = "SimpleDirectoryReader"
 [rag.embedding]
 source = "DashScope"
 embed_batch_size = 10
-
-[rag.embedding.multi_modal]
-source = "cnclip"
 
 [rag.evaluation]
 retrieval = ["mrr", "hit_rate"]
@@ -65,12 +52,11 @@ vector_store.type = "FAISS"
 source = "DashScope"
 name = "qwen-turbo"
 
-[rag.llm.function_calling_llm]
-source = ""
+[rag.multimodal_embedding]
+source = "cnclip"
 
-[rag.llm.multi_modal]
-enable = false
-source = ""
+[rag.multimodal_llm]
+source = "dashscope"
 
 [rag.node_enhancement]
 tree_depth = 3
@@ -85,19 +71,15 @@ enable_multimodal = true
 
 [rag.oss_store]
 bucket = ""
-endpoint = ""
-prefix = ""
+endpoint = "oss-cn-hangzhou.aliyuncs.com"
 
 [rag.postprocessor]
-reranker_type = "simple-weighted-reranker" # [simple-weighted-reranker, model-based-reranker]
+reranker_type = "no-reranker" # [simple-weighted-reranker, model-based-reranker]
 reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
 keyword_weight = 0.3
 vector_weight = 0.7
 similarity_threshold = 0.5
 top_n = 2
-
-[rag.query_engine]
-type = "RetrieverQueryEngine"
 
 [rag.query_transform]
 type = ""

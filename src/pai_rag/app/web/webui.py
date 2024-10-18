@@ -1,13 +1,16 @@
 from fastapi import FastAPI
 import gradio as gr
 import os
+from pai_rag.app.web import event_listeners
+from pai_rag.app.web.index_utils import index_to_components_settings
 from pai_rag.app.web.view_model import ViewModel
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_client import DEFAULT_LOCAL_URL, rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
+from pai_rag.app.web.index_utils import index_related_component_keys
 
 # from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager
@@ -15,10 +18,10 @@ from pai_rag.app.web.ui_constants import (
     DEFAULT_CSS_STYPE,
     WELCOME_MESSAGE,
 )
+from pai_rag.app.web.tabs.model.index_info import get_index_map
 
 import logging
 
-DEFAULT_LOCAL_URL = "http://localhost:8001/"
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 logger = logging.getLogger("WebUILogger")
@@ -28,7 +31,14 @@ def resume_ui():
     outputs = {}
     rag_config = rag_client.get_config()
     view_model = ViewModel.from_app_config(rag_config)
+    index_map = get_index_map()
     component_settings = view_model.to_component_settings()
+    default_index = index_map.indexes[index_map.current_index_name]
+    component_settings.update(
+        index_to_components_settings(
+            default_index, index_list=list(index_map.indexes.keys())
+        )
+    )
 
     for elem in elem_manager.get_elem_list():
         elem_id = elem.elem_id
@@ -43,6 +53,22 @@ def resume_ui():
             #     outputs[elem] = elem.__class__(**elem_attr).value
 
     return outputs
+
+
+def change_vector_index_button(index_name):
+    if index_name == "NEW":
+        return [
+            gr.update(),
+            gr.update(),
+            gr.update(),
+        ]
+    index_map = get_index_map()
+    index_list = list(index_map.indexes.keys())
+    return [
+        gr.update(choices=index_list + ["NEW"], value=index_name),
+        gr.update(choices=index_list, value=index_name),
+        gr.update(choices=index_list, value=index_name),
+    ]
 
 
 def make_homepage():
@@ -64,6 +90,33 @@ def make_homepage():
         with gr.Tab("\N{bar chart} Data Analysis"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
+
+        index_selector_elements = [
+            setting_elements["vector_index"],
+            upload_elements["upload_index"],
+            chat_elements["chat_index"],
+        ]
+        index_related_components = [
+            setting_elements[key] for key in index_related_component_keys
+        ]
+
+        setting_elements["vector_index"].change(
+            event_listeners.change_vector_index,
+            inputs=setting_elements["vector_index"],
+            outputs=index_related_components
+            + [upload_elements["upload_index"], chat_elements["chat_index"]],
+        )
+        upload_elements["upload_index"].input(
+            change_vector_index_button,
+            inputs=upload_elements["upload_index"],
+            outputs=index_selector_elements,
+        )
+        chat_elements["chat_index"].input(
+            change_vector_index_button,
+            inputs=chat_elements["chat_index"],
+            outputs=index_selector_elements,
+        )
+
         # with gr.Tab("\N{rocket} Evaluation"):
         #     eval_elements = create_evaluation_tab()
         #     elem_manager.add_elems(eval_elements)

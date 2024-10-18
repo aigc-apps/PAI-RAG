@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from typing import List
 
+from pydantic import BaseModel
+
 app = FastAPI()
 
 # Mock 数据
@@ -162,12 +164,17 @@ def get_highspeed_trains(from_city: str, to_city: str, date: str):
     ]
 
 
-@app.get("/demo/api/hotels", response_model=List[dict])
-def get_hotels(city: str, date: str):
+class HotelInput(BaseModel):
+    city: str
+    date: str
+
+
+@app.post("/demo/api/hotels", response_model=List[dict])
+def get_hotels(input: HotelInput):
     return [
         hotel
         for hotel in hotels_data
-        if hotel["city"] == city and hotel["check_in"] == date
+        if hotel["city"] == input.city and hotel["check_in"] == input.date
     ]
 
 

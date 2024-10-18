@@ -14,10 +14,10 @@ def upload_oss_knowledge(
     oss_path,
     chunk_size,
     chunk_overlap,
-    enable_qa_extraction,
     enable_raptor,
     enable_multimodal,
     enable_table_summary,
+    upload_index,
 ):
     if not oss_path:
         return [
@@ -33,10 +33,10 @@ def upload_oss_knowledge(
         oss_path=oss_path,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        enable_qa_extraction=enable_qa_extraction,
         enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
         enable_table_summary=enable_table_summary,
+        index_name=upload_index,
         from_oss=True,
     ):
         yield state_info
@@ -46,10 +46,10 @@ def upload_files(
     upload_files,
     chunk_size,
     chunk_overlap,
-    enable_qa_extraction,
     enable_raptor,
     enable_multimodal,
     enable_table_summary,
+    upload_index,
 ):
     if not upload_files:
         return [
@@ -65,10 +65,10 @@ def upload_files(
         oss_path=None,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        enable_qa_extraction=enable_qa_extraction,
         enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
         enable_table_summary=enable_table_summary,
+        index_name=upload_index,
     ):
         yield state_info
 
@@ -78,10 +78,10 @@ def upload_knowledge(
     oss_path,
     chunk_size,
     chunk_overlap,
-    enable_qa_extraction,
     enable_raptor,
     enable_multimodal,
     enable_table_summary,
+    index_name,
     from_oss: bool = False,
 ):
     try:
@@ -89,7 +89,6 @@ def upload_knowledge(
             {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
-                "enable_multimodal": enable_multimodal,
                 "enable_table_summary": enable_table_summary,
             }
         )
@@ -100,15 +99,16 @@ def upload_knowledge(
     if from_oss:
         response = rag_client.add_knowledge(
             oss_path=oss_path,
-            enable_qa_extraction=enable_qa_extraction,
             enable_raptor=enable_raptor,
+            index_name=index_name,
+            enable_multimodal=enable_multimodal,
         )
         my_upload_files.append(MyUploadFile(oss_path, response["task_id"]))
     else:
         response = rag_client.add_knowledge(
             input_files=[file.name for file in upload_files],
-            enable_qa_extraction=enable_qa_extraction,
             enable_raptor=enable_raptor,
+            index_name=index_name,
         )
         for file in upload_files:
             base_name = os.path.basename(file.name)
@@ -162,6 +162,11 @@ def clear_files():
 def create_upload_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
+            upload_index = gr.Dropdown(
+                choices=[],
+                label="\N{bookmark} Index Name",
+                elem_id="upload_index",
+            )
             chunk_size = gr.Textbox(
                 label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",
                 elem_id="chunk_size",
@@ -170,11 +175,6 @@ def create_upload_tab() -> Dict[str, Any]:
             chunk_overlap = gr.Textbox(
                 label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",
                 elem_id="chunk_overlap",
-            )
-            enable_qa_extraction = gr.Checkbox(
-                label="Yes",
-                info="Process with QA Extraction Model",
-                elem_id="enable_qa_extraction",
             )
             enable_raptor = gr.Checkbox(
                 label="Yes",
@@ -229,10 +229,10 @@ def create_upload_tab() -> Dict[str, Any]:
                         oss_path,
                         chunk_size,
                         chunk_overlap,
-                        enable_qa_extraction,
                         enable_raptor,
                         enable_multimodal,
                         enable_table_summary,
+                        upload_index,
                     ],
                     outputs=[upload_oss_state_df, upload_oss_state],
                     api_name="upload_oss",
@@ -244,10 +244,10 @@ def create_upload_tab() -> Dict[str, Any]:
                     upload_file,
                     chunk_size,
                     chunk_overlap,
-                    enable_qa_extraction,
                     enable_raptor,
                     enable_multimodal,
                     enable_table_summary,
+                    upload_index,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
@@ -266,10 +266,10 @@ def create_upload_tab() -> Dict[str, Any]:
                     dummy_component,
                     chunk_size,
                     chunk_overlap,
-                    enable_qa_extraction,
                     enable_raptor,
                     enable_multimodal,
                     enable_table_summary,
+                    upload_index,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
@@ -281,9 +281,9 @@ def create_upload_tab() -> Dict[str, Any]:
                 api_name="clear_file_dir",
             )
             return {
+                upload_index.elem_id: upload_index,
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
-                enable_qa_extraction.elem_id: enable_qa_extraction,
                 enable_raptor.elem_id: enable_raptor,
                 enable_multimodal.elem_id: enable_multimodal,
                 enable_table_summary.elem_id: enable_table_summary,

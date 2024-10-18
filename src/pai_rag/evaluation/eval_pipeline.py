@@ -2,8 +2,6 @@ import asyncio
 import click
 import os
 from pathlib import Path
-from pai_rag.core.rag_configuration import RagConfiguration
-from pai_rag.modules.module_registry import module_registry
 
 _BASE_DIR = Path(__file__).parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
@@ -25,10 +23,11 @@ class EvalDatasetPipeline:
 
 
 def __init_eval_pipeline(config_file):
-    config = RagConfiguration.from_file(config_file).get_value()
-    module_registry.init_modules(config)
-    evaluation = module_registry.get_module_with_config("EvaluationModule", config)
-    return EvalDatasetPipeline(evaluation)
+    # config = RagConfigManager.from_file(config_file).get_value()
+    # module_registry.init_modules(config)
+    # evaluation = module_registry.get_module_with_config("EvaluationModule", config)
+    # return EvalDatasetPipeline(evaluation)
+    return EvalDatasetPipeline(None)
 
 
 @click.command()

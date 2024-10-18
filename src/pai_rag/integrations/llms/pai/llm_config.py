@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -124,7 +124,7 @@ class SupportedLlmType(str, Enum):
 class PaiBaseLlmConfig(BaseModel):
     source: SupportedLlmType
     temperature: float = DEFAULT_TEMPERATURE
-    system_prompt: str = None
+    system_prompt: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
     model_name: str = None
 
@@ -138,12 +138,6 @@ class PaiBaseLlmConfig(BaseModel):
     @classmethod
     def get_type(cls):
         return cls.model_fields["source"].default
-
-    @field_validator("source", mode="before")
-    def validate_case_insensitive(cls, value):
-        if isinstance(value, str):
-            return value.lower()
-        return value
 
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):
