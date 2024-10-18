@@ -26,10 +26,10 @@ persist_path = "localdata/storage"
 type = "SimpleDirectoryReader"
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
-# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model
 # eg.
 # source = "HuggingFace"
-# model_name = "bge-large-zh-v1.5"
+# model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
 source = "DashScope"
@@ -49,11 +49,11 @@ vector_store.type = "FAISS"
 # token = ""
 [rag.llm]
 source = "DashScope"
-name = "qwen-turbo"
+model = "qwen-turbo"
 
 [rag.llm.function_calling_llm]
 source = "DashScope"
-name = "qwen2-7b-instruct"
+model = "qwen2-7b-instruct"
 
 [rag.llm.multi_modal]
 source = ""

@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture(scope="module", autouse=True)
 def llm():
-    llm_config = DashScopeLlmConfig(model_name="qwen-turbo")
+    llm_config = DashScopeLlmConfig(model="qwen-turbo")
     return PaiLlm(llm_config)
 
 
