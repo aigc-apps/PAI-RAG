@@ -11,7 +11,9 @@ from llama_index.core.schema import ImageType
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
-DEFAULT_CNCLIP_MODEL_DIR = os.path.join(DEFAULT_MODEL_DIR, "cn_clip")
+DEFAULT_CNCLIP_MODEL_DIR = os.path.join(
+    DEFAULT_MODEL_DIR, "chinese-clip-vit-large-patch14"
+)
 DEFAULT_CNCLIP_MODEL = "ViT-L-14"
 
 

@@ -33,6 +33,7 @@ def respond(input_elements: List[Any]):
     msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
+    index_name = update_dict["chat_index"]
 
     if chatbot is not None:
         chatbot.append((msg, ""))
@@ -40,10 +41,12 @@ def respond(input_elements: List[Any]):
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
-                msg, with_history=update_dict["include_history"], stream=is_streaming
+                msg,
+                with_history=update_dict["include_history"],
+                stream=is_streaming,
             )
         elif query_type == "Retrieval":
-            response_gen = rag_client.query_vector(msg)
+            response_gen = rag_client.query_vector(msg, index_name=index_name)
 
         elif query_type == "RAG (Search Web)":
             response_gen = rag_client.query_search(
@@ -51,7 +54,10 @@ def respond(input_elements: List[Any]):
             )
         else:
             response_gen = rag_client.query(
-                msg, with_history=update_dict["include_history"], stream=is_streaming
+                msg,
+                with_history=update_dict["include_history"],
+                stream=is_streaming,
+                index_name=index_name,
             )
 
         for resp in response_gen:
@@ -69,6 +75,12 @@ def respond(input_elements: List[Any]):
 def create_chat_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
+            chat_index = gr.Dropdown(
+                choices=[],
+                value="",
+                label="\N{bookmark} Index Name",
+                elem_id="chat_index",
+            )
             query_type = gr.Radio(
                 ["Retrieval", "LLM", "RAG (Search Web)", "RAG (Retrieval + LLM)"],
                 label="\N{fire} Which query do you want to use?",
@@ -344,14 +356,7 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=8):
-            css = """
-            .text{
-                white-space: normal !important;
-                overflow:hidden;
-                text-overflow:ellipsis;
-                display: -webkit-box;
-            }"""
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot", css=css)
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
@@ -367,6 +372,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 is_streaming,
                 need_image,
                 include_history,
+                chat_index,
             }
             .union(vec_args)
             .union(llm_args)
@@ -400,6 +406,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
+            chat_index.elem_id: chat_index,
             similarity_top_k.elem_id: similarity_top_k,
             image_similarity_top_k.elem_id: image_similarity_top_k,
             need_image.elem_id: need_image,

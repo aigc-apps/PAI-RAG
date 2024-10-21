@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -124,7 +124,7 @@ class SupportedLlmType(str, Enum):
 class PaiBaseLlmConfig(BaseModel):
     source: SupportedLlmType
     temperature: float = DEFAULT_TEMPERATURE
-    system_prompt: str = None
+    system_prompt: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
     model: str = None
 
@@ -139,18 +139,12 @@ class PaiBaseLlmConfig(BaseModel):
     def get_type(cls):
         return cls.model_fields["source"].default
 
-    @field_validator("source", mode="before")
-    def validate_case_insensitive(cls, value):
-        if isinstance(value, str):
-            return value.lower()
-        return value
-
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
     api_key: str | None = None
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: str = "qwen-turbo"
+    model: str = "qwen-max"
 
 
 class OpenAILlmConfig(PaiBaseLlmConfig):
@@ -164,6 +158,10 @@ class PaiEasLlmConfig(PaiBaseLlmConfig):
     endpoint: str
     token: str
     model: str = "default"
+
+
+class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):
+    model: str = "qwen-vl-max"
 
 
 SupporttedLlmClsMap = {cls.get_type(): cls for cls in PaiBaseLlmConfig.get_subclasses()}

@@ -1,13 +1,7 @@
-import asyncio
-from contextlib import asynccontextmanager
 import click
 import uvicorn
 from fastapi import FastAPI
-from pai_rag.app.api.service import configure_app
-from pai_rag.app.web.webui import configure_webapp
-from pai_rag.core.rag_configuration import RagConfiguration
-from pai_rag.core.rag_trace import init_trace
-from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR, EAS_DEFAULT_MODEL_DIR
 from logging.config import dictConfig
 import os
@@ -67,31 +61,8 @@ def init_log():
     dictConfig(log_config)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Load the ML model
-    from pai_rag.modules.index.index_daemon import index_daemon
-
-    """Start all the non-blocking service tasks, which run in the background."""
-    asyncio.create_task(index_daemon.refresh_async())
-    yield
-
-
 init_log()
-
 app = FastAPI()
-
-is_gunicorn = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
-if is_gunicorn:
-    app = FastAPI(lifespan=lifespan)
-    configure_app(app, DEFAULT_APPLICATION_CONFIG_FILE)
-
-
-async def service_tasks_startup():
-    from pai_rag.modules.index.index_daemon import index_daemon
-
-    """Start all the non-blocking service tasks, which run in the background."""
-    asyncio.create_task(index_daemon.refresh_async())
 
 
 @click.group(invoke_without_command=True)
@@ -128,6 +99,8 @@ def main(ctx, version):
     default=DEFAULT_RAG_URL,
 )
 def ui(host, port, rag_url):
+    from pai_rag.app.web.webui import configure_webapp
+
     configure_webapp(app=app, web_url=f"http://{host}:{port}/", rag_url=rag_url)
     uvicorn.run(app, host=host, port=port, loop="asyncio")
 
@@ -183,8 +156,13 @@ def ui(host, port, rag_url):
     default=False,
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
-    rag_configuration = RagConfiguration.from_file(config_file)
-    init_trace(rag_configuration.get_value().get("RAG.trace"))
+    from pai_rag.app.api.service import configure_app
+    from pai_rag.core.rag_module import setup_tracing
+    from pai_rag.utils.download_models import ModelScopeDownloader
+
+    rag_configuration = RagConfigManager.from_file(config_file)
+    rag_configuration.persist()
+    setup_tracing(rag_configuration.get_value().trace)
 
     if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
         logger.info("Start to download models.")
@@ -197,6 +175,6 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
         logger.info("Finished loading minerU config file.")
 
     os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI()
     configure_app(app, rag_configuration)
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
