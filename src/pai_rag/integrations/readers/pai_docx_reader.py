@@ -93,6 +93,8 @@ class PaiDocxReader(BaseReader):
             heading_level = int(
                 re.search(r"Heading (\d)", paragraph.style.name).group(1)
             )
+            if heading_level > 6:
+                heading_level = 6
             return f"{'#' * heading_level} {text}\n\n"
 
         # 处理普通段落
