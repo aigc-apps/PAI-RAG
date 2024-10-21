@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class ModelScopeDownloader:
-    def __init__(self):
+    def __init__(self, fetch_config: bool = False):
         self.download_directory_path = Path(DEFAULT_MODEL_DIR)
-        if not os.path.exists(self.download_directory_path):
-            os.makedirs(self.download_directory_path)
+        if fetch_config or not os.path.exists(self.download_directory_path):
+            os.makedirs(self.download_directory_path, exist_ok=True)
             logger.info(
                 f"Create model directory: {self.download_directory_path} and get model info from oss {OSS_URL}."
             )
@@ -100,7 +100,7 @@ class ModelScopeDownloader:
     help="model name. Default: download all models provided",
     default=None,
 )
-def load_models(model):
-    download_models = ModelScopeDownloader()
-    download_models.load_models(model)
+def load_models(model_name):
+    download_models = ModelScopeDownloader(fetch_config=True)
+    download_models.load_models(model=model_name)
     download_models.load_mineru_config()

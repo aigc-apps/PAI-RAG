@@ -354,7 +354,7 @@ def components_to_index(
     milvus_collection_name,
     **kwargs,
 ) -> RagIndexEntry:
-    if vector_index.lower() == "new":
+    if vector_index is None or vector_index.lower() == "new":
         index_name = new_index_name
     else:
         index_name = vector_index
