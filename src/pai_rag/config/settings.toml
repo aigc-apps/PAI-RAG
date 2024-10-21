@@ -5,7 +5,6 @@ name = "pai_rag"
 version = "0.1.1"
 
 [rag.agent]
-type = "react"
 custom_agent_config_file = ""
 agent_tool_type = ""
 
