@@ -285,7 +285,6 @@ class RagApplication:
                 answer="Empty query. Please input your question.", session_id=session_id
             )
 
-        print(self.config)
         analysis_tool = resolve_data_analysis_tool(self.config)
         if not analysis_tool:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")

@@ -131,7 +131,7 @@ async def delete_index(index_name: str):
 
 
 @router.get("/indexes")
-async def list_index():
+async def list_indexes():
     return index_manager.list_indexes()
 
 

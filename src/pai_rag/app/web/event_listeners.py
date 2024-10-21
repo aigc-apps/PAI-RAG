@@ -115,7 +115,6 @@ def change_llm(value):
     model_options = LLM_MODEL_KEY_DICT.get(value, [])
 
     cur_model = model_options[0] if model_options else ""
-    print(model_options)
     return [
         gr.update(visible=eas_visible),
         gr.update(visible=eas_visible),

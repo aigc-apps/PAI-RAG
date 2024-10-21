@@ -23,7 +23,6 @@ def rag_app():
     config.index.vector_store.persist_path = TEST_INDEX_PATH
 
     rag_app = RagApplication(config)
-    rag_app.initialize(config)
 
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
     rag_app.load_knowledge(data_dir)
