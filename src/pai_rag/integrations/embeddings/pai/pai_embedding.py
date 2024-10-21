@@ -33,6 +33,12 @@ class PaiEmbedding(BaseEmbedding):
             embed_batch_size=self._embed_model.embed_batch_size,
             callback_manager=self._embed_model.callback_manager,
         )
+        logger.info(
+            f"""
+                PaiEmbedding created with config:
+                {embed_config}
+            """
+        )
 
     @classmethod
     def class_name(cls) -> str:

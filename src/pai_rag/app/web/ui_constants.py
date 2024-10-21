@@ -92,26 +92,26 @@ EMBEDDING_MODEL_LINK_DICT = {
     "paraphrase-multilingual-MiniLM-L12-v2": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 }
 
-EMBEDDING_API_KEY_DICT = {"HuggingFace": False, "OpenAI": True, "DashScope": True}
+EMBEDDING_API_KEY_DICT = {"huggingface": False, "openai": True, "dashscope": True}
 
 LLM_MODEL_KEY_DICT = {
-    "DashScope": [
+    "dashscope": [
         "qwen-turbo",
         "qwen-plus",
         "qwen-max",
         "qwen-max-1201",
         "qwen-max-longcontext",
     ],
-    "OpenAI": [
+    "openai": [
         "gpt-3.5-turbo",
         "gpt-4-turbo",
     ],
 }
 
 MLLM_MODEL_KEY_DICT = {
-    "DashScope": [
+    "dashscope": [
         "qwen-vl-max",
-        "qwen-vl-turbo",
+        "qwen-vl-plus",
     ]
 }
 

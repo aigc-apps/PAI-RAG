@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -124,9 +124,9 @@ class SupportedLlmType(str, Enum):
 class PaiBaseLlmConfig(BaseModel):
     source: SupportedLlmType
     temperature: float = DEFAULT_TEMPERATURE
-    system_prompt: str = None
+    system_prompt: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
-    model_name: str = None
+    model: str = None
 
     @classmethod
     def get_subclasses(cls):
@@ -139,31 +139,29 @@ class PaiBaseLlmConfig(BaseModel):
     def get_type(cls):
         return cls.model_fields["source"].default
 
-    @field_validator("source", mode="before")
-    def validate_case_insensitive(cls, value):
-        if isinstance(value, str):
-            return value.lower()
-        return value
-
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
     api_key: str | None = None
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model_name: str = "qwen-turbo"
+    model: str = "qwen-max"
 
 
 class OpenAILlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.openai] = SupportedLlmType.openai
     api_key: str | None = None
-    model_name: str = "gpt-3.5-turbo"
+    model: str = "gpt-3.5-turbo"
 
 
 class PaiEasLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.paieas] = SupportedLlmType.paieas
     endpoint: str
     token: str
-    model_name: str = "default"
+    model: str = "default"
+
+
+class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):
+    model: str = "qwen-vl-max"
 
 
 SupporttedLlmClsMap = {cls.get_type(): cls for cls in PaiBaseLlmConfig.get_subclasses()}
@@ -183,7 +181,7 @@ def parse_llm_config(config_data):
 if __name__ == "__main__":
     llm_config_data = {
         "source": "dashscope",
-        "model_name": "qwen-turbo",
+        "model": "qwen-turbo",
         "api_key": None,
         "max_tokens": 1024,
     }

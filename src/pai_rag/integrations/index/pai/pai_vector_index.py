@@ -50,7 +50,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     _embed_model: BaseEmbedding = PrivateAttr()
     _storage_context: StorageContext = PrivateAttr()
     _vector_index: VectorStoreIndex = PrivateAttr()
-    _multi_modal_embed_model: BaseEmbedding = PrivateAttr()
+    _multimodal_embed_model: BaseEmbedding = PrivateAttr()
 
     _persist_path: str
     # Enable local keyword index for
@@ -60,7 +60,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         vector_store_config: BaseVectorStoreConfig,
         embed_model: BaseEmbedding,
         enable_multimodal: bool = False,
-        multi_modal_embed_model: BaseEmbedding = None,
+        multimodal_embed_model: BaseEmbedding = None,
         enable_local_keyword_index: bool = False,
         vector_index_retrieval_type: VectorIndexRetrievalType = VectorIndexRetrievalType.embedding,
         similarity_top_k=DEFAULT_SIMILARITY_TOP_K,
@@ -75,26 +75,24 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self._embed_model = embed_model
 
         # change persist path to subfolder
-        self.vector_store_config.persist_path = resolve_store_path(
-            vector_store_config, ndims=embed_dims
-        )
-        self._persist_path = self.vector_store_config.persist_path
+        self._persist_path = resolve_store_path(vector_store_config, ndims=embed_dims)
 
         self._vector_store = create_vector_store(
-            vector_store_config, embed_dims=embed_dims
+            vector_store_config,
+            embed_dims=embed_dims,
+            persist_path=self._persist_path,
         )
         multi_modal_embed_dims = -1  # multimodal not enabled
-        # assert multi_modal_embed_model is not None, "Multi-modal embedding model must be provided."
+        # assert multimodal_embed_model is not None, "Multi-modal embedding model must be provided."
         if self._enable_multimodal:
-            multi_modal_embed_dims = len(
-                multi_modal_embed_model.get_text_embedding("0")
-            )
-            self._multi_modal_embed_model = multi_modal_embed_model
+            multi_modal_embed_dims = len(multimodal_embed_model.get_text_embedding("0"))
+            self._multimodal_embed_model = multimodal_embed_model
 
             self._image_store = create_vector_store(
                 vectordb_config=vector_store_config,
                 embed_dims=multi_modal_embed_dims,
                 is_image_store=True,
+                persist_path=self._persist_path,
             )
 
         self._storage_context = self._create_storage_context()
@@ -139,7 +137,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             vector_index = load_index_from_storage(
                 storage_context=self.storage_context,
                 embed_model=self._embed_model,
-                image_embed_model=self._multi_modal_embed_model,
+                image_embed_model=self._multimodal_embed_model,
                 enable_multimodal=self._enable_multimodal,
                 enable_local_keyword_index=self._enable_local_keyword_index,
                 vector_index_retrieval_type=self._vector_index_retrieval_type,
@@ -157,7 +155,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             storage_context=self.storage_context,
             embed_model=self._embed_model,
             enable_multimodal=self._enable_multimodal,
-            image_embed_model=self._multi_modal_embed_model,
+            image_embed_model=self._multimodal_embed_model,
         )
 
     def _create_storage_context(self):
@@ -198,7 +196,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             "vector_store_query_mode" not in kwargs
             or kwargs["vector_store_query_mode"] is None
         ):
-            kwargs["similarity_top_k"] = self._vector_store_query_mode
+            kwargs["vector_store_query_mode"] = self._vector_store_query_mode
         if "similarity_top_k" not in kwargs or kwargs["similarity_top_k"] is None:
             kwargs["similarity_top_k"] = self._similarity_top_k
         if (

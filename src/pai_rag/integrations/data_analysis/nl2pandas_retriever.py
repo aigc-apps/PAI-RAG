@@ -1,6 +1,7 @@
+import glob
 import logging
 from typing import Any, Dict, List, Optional
-
+import os
 import pandas as pd
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.llms.llm import LLM
@@ -13,8 +14,11 @@ from llama_index.experimental.query_engine.pandas.output_parser import (
     PandasInstructionParser,
 )
 
+from pai_rag.integrations.data_analysis.data_analysis_config import PandasAnalysisConfig
+
 
 logger = logging.getLogger(__name__)
+
 
 DEFAULT_INSTRUCTION_STR = (
     "1. Convert the query to executable Python code using Pandas.\n"
@@ -24,7 +28,8 @@ DEFAULT_INSTRUCTION_STR = (
     "5. Do not quote the expression.\n"
 )
 
-DEFAULT_PANDAS_TMPL = (
+
+DEFAULT_PANDAS_PROMPT = PromptTemplate(
     "You are working with a pandas dataframe in Python.\n"
     "The name of the dataframe is `df`.\n"
     "This is the result of `print(df.head())`:\n"
@@ -32,12 +37,49 @@ DEFAULT_PANDAS_TMPL = (
     "Follow these instructions:\n"
     "{instruction_str}\n"
     "Query: {query_str}\n\n"
-    "Expression:"
+    "Expression:",
+    prompt_type=PromptType.PANDAS,
 )
 
-DEFAULT_PANDAS_PROMPT = PromptTemplate(
-    DEFAULT_PANDAS_TMPL, prompt_type=PromptType.PANDAS
-)
+
+def read_file(file_path):
+    if file_path.endswith(".csv"):
+        df = pd.read_csv(file_path)
+        return df
+    elif file_path.endswith(".xlsx"):
+        df = pd.read_excel(file_path)
+        return df
+    else:
+        raise TypeError("Unsupported file type.")
+
+
+def find_first_csv_or_xlsx_in_directory(directory_path):
+    # 使用 glob 模块查找第一个 .csv 或 .xlsx 文件
+    files = glob.glob(os.path.join(directory_path, "*.csv")) + glob.glob(
+        os.path.join(directory_path, "*.xlsx")
+    )
+    if files:
+        return files[0]
+    else:
+        return None
+
+
+def get_dataframe(pandas_config: PandasAnalysisConfig):
+    file_path = pandas_config.file_path
+
+    if os.path.isfile(file_path):
+        return read_file(file_path)
+    elif os.path.isdir(file_path):
+        first_file_path = find_first_csv_or_xlsx_in_directory(file_path)
+        if first_file_path:
+            return read_file(first_file_path)
+        else:
+            # raise FileExistsError("No .csv or .xlsx files found in the directory.")
+            logger.info("No .csv or .xlsx files found in the directory.")
+            return
+    else:
+        logger.info("Please provide a valid file")
+        return None
 
 
 class PandasQueryRetriever(BaseRetriever):
@@ -85,6 +127,20 @@ class PandasQueryRetriever(BaseRetriever):
         self._llm = llm or Settings.llm
 
         super().__init__(callback_manager)
+
+    @classmethod
+    def from_config(
+        cls,
+        pandas_config: PandasAnalysisConfig,
+        llm: Optional[LLM] = None,
+    ):
+        df = get_dataframe(pandas_config)
+        return cls(
+            df=df,
+            instruction_str=DEFAULT_INSTRUCTION_STR,
+            pandas_prompt=DEFAULT_PANDAS_PROMPT,
+            llm=llm,
+        )
 
     def _get_prompts(self) -> Dict[str, Any]:
         """Get prompts."""

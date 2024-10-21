@@ -49,6 +49,6 @@ def run(exp_config=None):
         results.append(result)
 
     with open(result_filename, "w") as result_file:
-        json.dump(results, result_file)
+        json.dump(results, result_file, indent=4)
 
     logging.info(f"Results saved to {result_filename}")
