@@ -40,6 +40,9 @@ def validate_case_insensitive(value: Dict) -> Dict:
     for key in keys:
         if key in value:
             value[key] = value[key].lower()
+            # fix old config
+            if value[key] == "pai-llm-trace":
+                value[key] = "pai_trace"
     return value
 
 

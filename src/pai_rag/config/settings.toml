@@ -92,6 +92,6 @@ type = "SimpleSummarize"
 text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
 
 [rag.trace]
-type = "pai-llm-trace"
+type = "pai_trace"
 endpoint = "http://tracing-analysis-dc-hz.aliyuncs.com:8090"
 token = ""
