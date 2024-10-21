@@ -32,6 +32,7 @@ from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
+logger = logging.getLogger(__name__)
 
 
 def uuid_generator() -> str:
@@ -89,11 +90,20 @@ class RagApplication:
         enable_raptor=False,
         enable_multimodal=False,
     ):
+        logger.info(
+            f"""Loading data:
+            input_files: {input_files}
+            index_name: {index_name}
+            enable_multimodal: {enable_multimodal}
+            enable_raptor: {enable_raptor}"""
+        )
+
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(index_name)
         session_config.embedding = index_entry.embedding_config
         session_config.index.vector_store = index_entry.vector_store_config
         session_config.node_parser.enable_multimodal = enable_multimodal
+
         data_loader = resolve_data_loader(session_config)
         data_loader.load_data(
             file_path_or_directory=input_files,

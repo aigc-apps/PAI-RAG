@@ -191,14 +191,16 @@ def create_setting_tab() -> Dict[str, Any]:
                     elem_id="use_mllm",
                     container=False,
                 )
-                with gr.Row(visible=False) as use_mllm_col:
+                with gr.Row(visible=False, elem_id="use_mllm_col") as use_mllm_col:
                     mllm = gr.Radio(
                         ["paieas", "dashscope"],
                         label="LLM Model Source",
                         elem_id="mllm",
                         interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
                     )
-                    with gr.Row(visible=(mllm == "paieas")) as m_eas_col:
+                    with gr.Row(
+                        visible=(mllm == "paieas"), elem_id="m_eas_col"
+                    ) as m_eas_col:
                         mllm_eas_url = gr.Textbox(
                             label="EAS Url",
                             elem_id="mllm_eas_url",
@@ -216,7 +218,9 @@ def create_setting_tab() -> Dict[str, Any]:
                             elem_id="mllm_eas_model_name",
                             interactive=True,
                         )
-                    with gr.Row(visible=(mllm == "dashscope")) as api_mllm_col:
+                    with gr.Row(
+                        visible=(mllm == "dashscope"), elem_id="api_mllm_col"
+                    ) as api_mllm_col:
                         mllm_api_model_name = gr.Dropdown(
                             label="LLM Model Name",
                             elem_id="mllm_api_model_name",
@@ -231,7 +235,11 @@ def create_setting_tab() -> Dict[str, Any]:
                     elem_id="use_oss",
                     container=False,
                 )
-                with gr.Row(visible=False) as use_oss_col:
+                with gr.Row(visible=False, elem_id="use_oss_col") as use_oss_col:
+                    oss_bucket = gr.Textbox(
+                        label="OSS Bucket",
+                        elem_id="oss_bucket",
+                    )
                     oss_ak = gr.Textbox(
                         label="Access Key",
                         elem_id="oss_ak",
@@ -245,10 +253,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     oss_endpoint = gr.Textbox(
                         label="OSS Endpoint",
                         elem_id="oss_endpoint",
-                    )
-                    oss_bucket = gr.Textbox(
-                        label="OSS Bucket",
-                        elem_id="oss_bucket",
+                        default="oss-cn-hangzhou.aliyuncs.com",
                     )
                 use_oss.input(
                     fn=ev_listeners.change_use_oss,
@@ -312,8 +317,10 @@ def create_setting_tab() -> Dict[str, Any]:
     elems.update(vector_db_components)
     elems.update(
         {
-            "use_oss_col": use_oss_col,
-            "use_mllm_col": use_mllm_col,
+            m_eas_col.elem_id: m_eas_col,
+            api_mllm_col.elem_id: api_mllm_col,
+            use_oss_col.elem_id: use_oss_col,
+            use_mllm_col.elem_id: use_mllm_col,
         }
     )
     return elems

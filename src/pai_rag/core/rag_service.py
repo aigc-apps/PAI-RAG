@@ -55,6 +55,7 @@ class RagService:
     def reload(self, new_config: Dict):
         self.rag_configuration.update(new_config)
         self.rag.refresh(self.rag_configuration.get_value())
+        self.rag_configuration.persist()
 
     def add_knowledge(
         self,

@@ -40,8 +40,6 @@ cls_cache = {}
 def resolve(cls: Any, **kwargs):
     cls_key = kwargs.__repr__()
     if cls_key not in cls_cache:
-        print("New cls_key", cls_key)
-
         cls_cache[cls_key] = cls(**kwargs)
     return cls_cache[cls_key]
 

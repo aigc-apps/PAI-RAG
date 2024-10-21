@@ -8,7 +8,6 @@ from pai_rag.app.web.rag_client import DEFAULT_LOCAL_URL, rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
-from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 
@@ -84,9 +83,11 @@ def make_homepage():
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
+        """ hide agent tab
         with gr.Tab("\N{rocket} Agent"):
             agent_elements = create_agent_tab()
             elem_manager.add_elems(agent_elements)
+        """
         with gr.Tab("\N{bar chart} Data Analysis"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)

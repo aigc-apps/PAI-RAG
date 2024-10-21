@@ -109,6 +109,7 @@ def upload_knowledge(
             input_files=[file.name for file in upload_files],
             enable_raptor=enable_raptor,
             index_name=index_name,
+            enable_multimodal=enable_multimodal,
         )
         for file in upload_files:
             base_name = os.path.basename(file.name)

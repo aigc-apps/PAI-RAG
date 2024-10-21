@@ -144,7 +144,7 @@ class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
     api_key: str | None = None
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: str = "qwen-turbo"
+    model: str = "qwen-max"
 
 
 class OpenAILlmConfig(PaiBaseLlmConfig):
@@ -158,6 +158,10 @@ class PaiEasLlmConfig(PaiBaseLlmConfig):
     endpoint: str
     token: str
     model: str = "default"
+
+
+class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):
+    model: str = "qwen-vl-max"
 
 
 SupporttedLlmClsMap = {cls.get_type(): cls for cls in PaiBaseLlmConfig.get_subclasses()}

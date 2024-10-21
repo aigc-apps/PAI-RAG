@@ -263,7 +263,7 @@ class ViewModel(BaseModel):
 
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
 
-        config["retriever"]["need_image"] = self.need_image
+        config["retriever"]["search_image"] = self.need_image
         if self.retrieval_mode == "Hybrid":
             config["retriever"]["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
         elif self.retrieval_mode == "Embedding Only":
@@ -432,6 +432,8 @@ class ViewModel(BaseModel):
             "choices": MLLM_MODEL_KEY_DICT.get(self.mllm, []),
             "visible": self.mllm.lower() != "paieas",
         }
+        settings["m_eas_col"] = {"visible": self.mllm == "paieas"}
+        settings["api_mllm_col"] = {"visible": self.mllm == "dashscope"}
 
         settings["use_oss"] = {"value": self.use_oss}
         settings["use_oss_col"] = {"visible": self.use_oss}

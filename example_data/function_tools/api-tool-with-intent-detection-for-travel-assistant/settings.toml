@@ -49,7 +49,7 @@ vector_store.type = "FAISS"
 # token = ""
 [rag.llm]
 source = "DashScope"
-model = "qwen-turbo"
+model = "qwen-max"
 
 [rag.llm.function_calling_llm]
 source = "DashScope"

@@ -22,7 +22,11 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import PaiVectorIndexConfig
-from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
+from pai_rag.integrations.llms.pai.llm_config import (
+    DashScopeMultiModalLlmConfig,
+    PaiBaseLlmConfig,
+    PaiEasLlmConfig,
+)
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     RerankModelPostProcessorConfig,
@@ -75,7 +79,7 @@ class RagConfig(BaseModel):
         BeforeValidator(validate_case_insensitive),
     ]
     multimodal_llm: Annotated[
-        Union[PaiBaseLlmConfig.get_subclasses()],
+        Union[DashScopeMultiModalLlmConfig, PaiEasLlmConfig],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ] | None = None

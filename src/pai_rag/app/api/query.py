@@ -145,14 +145,15 @@ def task_status(task_id: str):
 async def upload_data(
     files: List[UploadFile] = Body(None),
     oss_path: str = Form(None),
-    faiss_path: str = Form(None),
     index_name: str = Form(None),
     enable_raptor: bool = Form(False),
     enable_multimodal: bool = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
-
+    logger.info(
+        f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
+    )
     if oss_path:
         background_tasks.add_task(
             rag_service.add_knowledge,
@@ -161,7 +162,6 @@ async def upload_data(
             oss_path=oss_path,
             from_oss=True,
             index_name=index_name,
-            faiss_path=faiss_path,
             enable_raptor=enable_raptor,
             enable_multimodal=enable_multimodal,
         )
@@ -194,6 +194,7 @@ async def upload_data(
             oss_path=None,
             enable_raptor=enable_raptor,
             temp_file_dir=tmpdir,
+            enable_multimodal=enable_multimodal,
         )
 
     return {"task_id": task_id}
