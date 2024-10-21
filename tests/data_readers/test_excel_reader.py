@@ -17,9 +17,11 @@ def test_pandas_excel_reader():
     )
     input_dir = "tests/testdata/data/excel_data"
     directory_reader.file_readers[".xlsx"] = PaiPandasExcelReader(
+        concat_rows=config.data_reader.concat_csv_rows,
         pandas_config={"header": [0, 1]},
     )
     directory_reader.file_readers[".xls"] = PaiPandasExcelReader(
+        concat_rows=config.data_reader.concat_csv_rows,
         pandas_config={"header": [0, 1]},
     )
 

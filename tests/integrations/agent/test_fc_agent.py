@@ -1,7 +1,5 @@
-from pai_rag.integrations.agent.function_calling.step import (
-    MyFunctionCallingAgentWorker,
-)
 from llama_index.core.tools import FunctionTool
+from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 
@@ -26,13 +24,7 @@ add_tool = FunctionTool.from_defaults(fn=add)
 
 tools = [multiply_tool, add_tool]
 
-fc_agent_worker = MyFunctionCallingAgentWorker.from_tools(
-    tools=tools,
-    llm=fc_llm,
-    system_prompt="你是一个调用计算插件的计算小助手，请严格使用已知的插件来计算，不允许虚构。",
-    verbose=True,
-)
-agent = fc_agent_worker.as_agent()
+agent = PaiAgent.from_tools(tools=tools, llm=fc_llm)
 
 
 def test_fc_agent_chat():

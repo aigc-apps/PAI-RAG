@@ -97,7 +97,7 @@ def index_to_components_settings(
         ]
 
     embed_source = index_entry.embedding_config.source.value
-    embed_model = index_entry.embedding_config.model_name
+    embed_model = index_entry.embedding_config.model
     if (embed_model in EMBEDDING_MODEL_DEPRECATED) or os.getenv(
         "USE_DEPRECATED_EMBEDDING_MODEL", "False"
     ):
@@ -361,7 +361,7 @@ def components_to_index(
 
     embedding = {
         "source": embed_source,
-        "model_name": embed_model,
+        "model": embed_model,
         "embed_batch_size": int(embed_batch_size),
     }
 

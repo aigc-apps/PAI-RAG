@@ -99,7 +99,9 @@ def get_customized_tools(agent_config):
     tools = []
 
     # 首先尝试加载python代码文件
-    if os.path.exists(agent_config.python_script_file):
+    if agent_config.python_script_file and os.path.exists(
+        agent_config.python_script_file
+    ):
         with open(
             agent_config.python_script_file, "r", encoding="utf-8"
         ) as python_file:
@@ -109,7 +111,9 @@ def get_customized_tools(agent_config):
                 logger.info(f"Loaded python scripts: {python_scripts}")
 
     # 对于tool definition，分别解析api tool和自定义function tool
-    if os.path.exists(agent_config.tool_definition_file):
+    if agent_config.tool_definition_file and os.path.exists(
+        agent_config.tool_definition_file
+    ):
         with open(
             agent_config.tool_definition_file, "r", encoding="utf-8"
         ) as agent_file:

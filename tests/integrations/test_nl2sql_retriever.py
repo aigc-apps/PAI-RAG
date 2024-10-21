@@ -9,10 +9,10 @@ from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 from llama_index.core import SQLDatabase
 
-from pai_rag.utils.prompt_template import DEFAULT_TEXT_TO_SQL_TMPL
 from pai_rag.integrations.data_analysis.nl2sql_retriever import (
     MyNLSQLRetriever,
     MySQLRetriever,
+    DEFAULT_TEXT_TO_SQL_TMPL,
 )
 
 load_dotenv()

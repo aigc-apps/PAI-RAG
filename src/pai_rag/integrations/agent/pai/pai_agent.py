@@ -88,7 +88,7 @@ class PaiAgent(AgentRunner):
     @classmethod
     def from_tools(
         cls,
-        agent_config: AgentConfig,
+        agent_config: Optional[AgentConfig] = None,
         tools: Optional[List[BaseTool]] = None,
         tool_retriever: Optional[ObjectRetriever[BaseTool]] = None,
         llm: Optional[LLM] = None,
@@ -111,6 +111,9 @@ class PaiAgent(AgentRunner):
         if they are not specified.
 
         """
+        assert (tools is not None) or (
+            agent_config is not None
+        ), "Must provide either tools or agent config."
         tools = tools or get_tools(agent_config)
 
         chat_history = chat_history or []

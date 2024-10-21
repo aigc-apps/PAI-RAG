@@ -20,7 +20,7 @@ class ApiTool(BaseModel):
 
 
 class PaiAgentToolDefinition(BaseModel):
-    intents: Dict[str, str]
-    system_prompt: str
+    intents: Dict[str, str] = {}
+    system_prompt: str | None = None
     function_tools: List[FunctionTool] = []
     api_tools: List[ApiTool] = []

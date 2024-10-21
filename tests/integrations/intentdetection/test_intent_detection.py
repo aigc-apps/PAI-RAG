@@ -1,7 +1,6 @@
-from pai_rag.modules.intentdetection.llm_single_detector import LLMSingleDetector
-from llama_index.core.tools import ToolMetadata
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
+from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, IntentConfig
 
 fc_llm_config = DashScopeLlmConfig(model="qwen-max")
 fc_llm = PaiLlm(fc_llm_config)
@@ -13,15 +12,12 @@ intents = {
 
 
 def test_single_detectors():
-    intents_tools = []
-    for intent in intents:
-        tool = ToolMetadata(name=intent, description=intents[intent])
-        intents_tools.append(tool)
-    intent_detector = LLMSingleDetector(llm=fc_llm, choices=intents_tools)
+    intent_config = IntentConfig(descriptions=intents)
+    intent_detector = PaiIntentRouter(intent_config=intent_config, llm=fc_llm)
     query_1 = "去上海玩的攻略有什么？"
-    intent_1 = intent_detector.select(intent_detector._choices, query=query_1)
-    assert intent_1.intent == "retrieval"
+    intent_1 = intent_detector.select(str_or_query_bundle=query_1)
+    assert intent_1 == "retrieval"
 
     query_1 = "8月10号从北京出发去上海，机票价格有哪些？"
-    intent_1 = intent_detector.select(intent_detector._choices, query=query_1)
-    assert intent_1.intent == "agent"
+    intent_1 = intent_detector.select(str_or_query_bundle=query_1)
+    assert intent_1 == "agent"

@@ -59,7 +59,20 @@ class PaiIntentRouter:
             choices=self.choices, query=str_or_query_bundle
         )
         assert (
-            selector_result.selections > 0
+            len(selector_result.selections) > 0
+        ), f"intent detection failed. {selector_result}"
+        select_index = selector_result.selections[0].index
+        return self.choices[select_index].name
+
+    def select(self, str_or_query_bundle: QueryType) -> Intents:
+        if len(self.choices) == 1:
+            return self.choices[0].name
+
+        selector_result = self.selector.select(
+            choices=self.choices, query=str_or_query_bundle
+        )
+        assert (
+            len(selector_result.selections) > 0
         ), f"intent detection failed. {selector_result}"
         select_index = selector_result.selections[0].index
         return self.choices[select_index].name
