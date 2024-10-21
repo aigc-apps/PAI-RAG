@@ -16,16 +16,20 @@
 ### 创建
 
 1. Index下拉列表选择新建"New"
-   ![](../figures/index/add_index.png)
+
+  <img src="../figures/index/add_index.png" alt="Description" width="400">
+
 2. 填写索引名称，选择embedding和向量数据库类型，点击"Add Index"
-   ![](../figures/index/config_new_index.png)
+
+  <img src="../figures/index/config_new_index.png" alt="Description" width="400">
 
 创建完成。
 
 ### 上传知识库和查询
 
 可以通过左边的选择器选择对应的index_name进行操作:
-![](../figures/index/select_index.png)
+
+  <img src="../figures/index/select_index.png" alt="Description" width="400">
 
 ## API 使用
 
