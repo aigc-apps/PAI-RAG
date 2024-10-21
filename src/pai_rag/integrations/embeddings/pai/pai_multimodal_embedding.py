@@ -23,15 +23,21 @@ class PaiMultiModalEmbedding(MultiModalEmbedding):
 
     def __init__(
         self,
-        multi_modal_embed_config: PaiBaseEmbeddingConfig,
+        multimodal_embed_config: PaiBaseEmbeddingConfig,
     ):
-        self._config = multi_modal_embed_config
-        self._embed_model = create_embedding(multi_modal_embed_config)
+        self._config = multimodal_embed_config
+        self._embed_model = create_embedding(multimodal_embed_config)
 
         super().__init__(
             model_name=self._embed_model.model_name,
             embed_batch_size=self._embed_model.embed_batch_size,
             callback_manager=self._embed_model.callback_manager,
+        )
+        logger.info(
+            f"""
+                PaiMultiModalEmbedding Module created with config:
+                {multimodal_embed_config}
+            """
         )
 
     @classmethod

@@ -16,7 +16,7 @@ class RagDataLoader:
         node_parser: PaiNodeParser,
         raptor_processor: TransformComponent = None,
         embed_model: Any = None,
-        multi_modal_embed_modal: Any = None,
+        multimodal_embed_model: Any = None,
         vector_index: VectorStoreIndex = None,
     ):
         self._data_reader = data_reader
@@ -24,7 +24,7 @@ class RagDataLoader:
         self._raptor_processor = raptor_processor
 
         self._embed_model = embed_model
-        self._multi_modal_embed_model = multi_modal_embed_modal
+        self._multimodal_embed_model = multimodal_embed_model
         self._vector_index = vector_index
 
     def load_data(
@@ -49,24 +49,19 @@ class RagDataLoader:
                 f"Loaded {len(documents)} documents from {file_path_or_directory}"
             )
 
+        transformations = [
+            self._node_parser,
+            self._embed_model,
+        ]
+
+        if self._multimodal_embed_model is not None:
+            transformations.append(self._multimodal_embed_model)
+
         if enable_raptor:
             assert self._raptor_processor is not None, "Raptor processor is not set."
-            ingestion_pipeline = IngestionPipeline(
-                transformations=[
-                    self._node_parser,
-                    self._embed_model,
-                    self._multi_modal_embed_model,
-                    self._raptor_processor,
-                ]
-            )
-        else:
-            ingestion_pipeline = IngestionPipeline(
-                transformations=[
-                    self._node_parser,
-                    self._embed_model,
-                    self._multi_modal_embed_model,
-                ]
-            )
+            transformations.append(self._raptor_processor)
+
+        ingestion_pipeline = IngestionPipeline(transformations=transformations)
 
         nodes = ingestion_pipeline.run(documents=documents)
         logger.info(

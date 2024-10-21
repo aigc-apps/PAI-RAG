@@ -1,5 +1,6 @@
 from typing import Any, Sequence
 from llama_index.core.multi_modal_llms import MultiModalLLM, MultiModalLLMMetadata
+from llama_index.multi_modal_llms.openai import OpenAIMultiModal
 from llama_index.core.schema import ImageDocument
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -16,7 +17,7 @@ from pai_rag.integrations.llms.pai.llm_utils import create_multi_modal_llm
 from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
 
 
-class PaiMultiModalLlm(MultiModalLLM):
+class PaiMultiModalLlm(OpenAIMultiModal):
     _llm: MultiModalLLM = PrivateAttr()
 
     def __init__(self, llm_config: PaiBaseLlmConfig):

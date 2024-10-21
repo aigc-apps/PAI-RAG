@@ -5,7 +5,7 @@ from pai_rag.app.api.models import RagQuery
 import pytest
 import shutil
 from pai_rag.core.rag_application import RagApplication, RagChatType
-from pai_rag.core.rag_configuration import RagConfiguration
+from pai_rag.core.rag_config_manager import RagConfigManager
 
 BASE_DIR = Path(__file__).parent.parent.parent
 TEST_INDEX_PATH = "localdata/teststorage"
@@ -16,14 +16,13 @@ EXPECTED_EMPTY_RESPONSE = """Empty query. Please input your question."""
 @pytest.fixture(scope="module", autouse=True)
 def rag_app():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
-    config = RagConfiguration.from_file(config_file).get_value()
+    config = RagConfigManager.from_file(config_file).get_value()
 
     if os.path.isdir(TEST_INDEX_PATH):
         shutil.rmtree(TEST_INDEX_PATH)
-    config.rag.index.update({"persist_path": TEST_INDEX_PATH})
+    config.index.vector_store.persist_path = TEST_INDEX_PATH
 
-    rag_app = RagApplication()
-    rag_app.initialize(config)
+    rag_app = RagApplication(config)
 
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
     rag_app.load_knowledge(data_dir)

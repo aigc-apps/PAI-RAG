@@ -40,9 +40,14 @@ def create_vector_store(
     vectordb_config: BaseVectorStoreConfig,
     embed_dims: int,
     is_image_store: bool = False,
+    persist_path: str = None,
 ):
     if isinstance(vectordb_config, FaissVectorStoreConfig):
-        create_vector_store_func = create_faiss
+        return create_faiss(
+            embed_dims=embed_dims,
+            is_image_store=is_image_store,
+            persist_path=persist_path,
+        )
     elif isinstance(vectordb_config, MilvusVectorStoreConfig):
         create_vector_store_func = create_milvus
     elif isinstance(vectordb_config, HologresVectorStoreConfig):
@@ -66,18 +71,18 @@ def create_vector_store(
 
 
 def create_faiss(
-    faiss_config: FaissVectorStoreConfig,
     embed_dims: int,
     is_image_store: bool = False,
+    persist_path: str = None,
 ):
     if is_image_store:
         faiss_vector_index_path = os.path.join(
-            faiss_config.persist_path,
+            persist_path,
             f"{DEFAULT_PERSIST_IMAGE_NAMESPACE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
         )
     else:
         faiss_vector_index_path = os.path.join(
-            faiss_config.persist_path,
+            persist_path,
             f"{DEFAULT_VECTOR_STORE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
         )
 

@@ -103,7 +103,7 @@ def get_data_parser(parser_config: NodeParserConfig):
 
 
 class PaiNodeParser(TransformComponent):
-    _parser_config: Any = PrivateAttr()
+    _parser_config: NodeParserConfig = PrivateAttr()
     _parser: Any = PrivateAttr()
     _doc_cnt_map: Any = PrivateAttr()
 
