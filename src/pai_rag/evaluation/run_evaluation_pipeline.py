@@ -30,8 +30,14 @@ from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
 )
 from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.evaluation.evaluator.base_evaluator import BaseEvaluator
+from pai_rag.evaluation.evaluator.pai.pai_evaluator import PaiEvaluator
 import logging
-
+from pai_rag.integrations.llms.pai.llm_config import (
+    OpenAILlmConfig,
+    DashScopeLlmConfig,
+)
+from pai.llm_eval.evals.models.openai_model import OpenAIModel
+from pai.llm_eval.evals.models.qwen_model import QWenModel
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +128,25 @@ def _create_predicted_qca_generator(config_file, name, vector_index) -> None:
     return predicted_qca_generator
 
 
-def _create_base_evaluator(config_file, name):
+def _create_evaluator(config_file, name, evaluator):
     config = RagConfiguration.from_file(config_file).get_value()
     llm_config = parse_llm_config(config.rag.llm)
-    llm = PaiLlm(llm_config)
     persist_path = f"{config.rag.index.vector_store.persist_path}__{name}"
-    return BaseEvaluator(
-        llm=llm,
-        persist_path=persist_path,
-    )
+    if evaluator == "pai":
+        if isinstance(llm_config, OpenAILlmConfig):
+            llm = OpenAIModel(model=llm_config.model_name)
+        elif isinstance(llm_config, DashScopeLlmConfig):
+            import pdb
+
+            pdb.set_trace()
+            llm = QWenModel(model=llm_config.model_name, top_p=0.99)
+        return PaiEvaluator(llm=llm, persist_path=persist_path)
+    else:
+        llm = PaiLlm(llm_config)
+        return BaseEvaluator(
+            llm=llm,
+            persist_path=persist_path,
+        )
 
 
 def run_evaluation_pipeline(
@@ -140,6 +156,7 @@ def run_evaluation_pipeline(
     pattern=None,
     enable_raptor=False,
     name="default",
+    evaluator="base",
 ):
     assert (oss_path is not None) or (
         data_path is not None
@@ -163,46 +180,9 @@ def run_evaluation_pipeline(
         config, name, vector_index
     )
     asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
-    evaluator = _create_base_evaluator(config, name)
+    evaluator = _create_evaluator(config, name, evaluator)
     qcas = evaluator.load_predicted_qca_dataset()
     retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
     response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
     print("retrieval_result", retrieval_result, "response_result", response_result)
     return retrieval_result, response_result
-
-
-# def exp_run(
-#     config=None,
-#     oss_path=None,
-#     data_path=None,
-#     pattern=None,
-#     enable_raptor=False,
-#     name=None,
-# ):
-#     assert (oss_path is not None) or (
-#         data_path is not None
-#     ), "Must provide either local path or oss path."
-#     assert (oss_path is None) or (
-#         data_path is None
-#     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
-
-#     data_loader, vector_index = _create_data_loader(config, name, enable_raptor)
-#     data_loader.load_data(
-#         file_path_or_directory=data_path,
-#         filter_pattern=pattern,
-#         oss_path=oss_path,
-#         from_oss=oss_path is not None,
-#         enable_raptor=enable_raptor,
-#     )
-#     qca_generator = _create_labelled_qca_generator(config, name, vector_index)
-#     asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
-
-#     predicted_qca_generator = _create_predicted_qca_generator(
-#         config, name, vector_index
-#     )
-#     asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
-#     evaluator = _create_base_evaluator(config, name)
-#     qcas = evaluator.load_predicted_qca_dataset()
-#     retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
-#     response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
-#     return retrieval_result, response_result

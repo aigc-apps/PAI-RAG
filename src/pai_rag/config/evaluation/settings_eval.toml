@@ -53,12 +53,12 @@ vector_store.type = "FAISS"
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
 # source = "PaiEas"
-# name = ""
+# model_name = ""
 # endpoint = ""
 # token = ""
 [rag.llm]
 source = "DashScope"
-name = "qwen-turbo"
+model_name = "qwen-max"
 
 [rag.llm.function_calling_llm]
 source = ""
@@ -66,7 +66,7 @@ source = ""
 [rag.llm.multi_modal]
 enable = true
 source = "DashScope"
-name = "qwen-vl-plus"
+model_name = "qwen-vl-plus"
 
 [rag.node_enhancement]
 tree_depth = 3
