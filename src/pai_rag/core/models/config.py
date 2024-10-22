@@ -70,7 +70,7 @@ class PaiTraceConfig(BaseTraceConfig):
     type: Literal[TraceType.pai_trace] = TraceType.pai_trace
     endpoint: str | None = None
     token: str | None = None
-    app_name: str = "PAI-RAG"
+    app_name: str = "PAIRAG-Service"
 
 
 class ArizeTraceConfig(BaseTraceConfig):

@@ -241,7 +241,7 @@ def setup_tracing(trace_config: BaseTraceConfig):
             LlamaIndexInstrumentor,
             grpc_endpoint=trace_config.endpoint,
             token=trace_config.token,
-            service_name=os.getenv("NAMESPACE", "PAIRAG-Service"),
+            service_name=os.getenv("NAMESPACE", trace_config.app_name),
             service_version="0.1.0",
             service_id="",
             deployment_environment="",
