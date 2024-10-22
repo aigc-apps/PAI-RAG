@@ -96,6 +96,15 @@ async def aconfig():
     return rag_service.get_config()
 
 
+@router.get("/indexes/{index_name}")
+async def get_index(index_name: str):
+    try:
+        return index_manager.get_index_by_name(index_name=index_name)
+    except Exception as ex:
+        logger.error(f"Get index '{index_name}' failed: {ex} {traceback.format_exc()}")
+        raise UserInputError(f"Get index '{index_name}' failed: {ex}")
+
+
 @router.post("/indexes/{index_name}")
 async def add_index(index_name: str, index_entry: RagIndexEntry):
     try:

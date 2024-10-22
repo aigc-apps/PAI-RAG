@@ -73,7 +73,6 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
     node_parser = resolve(cls=PaiNodeParser, parser_config=config.node_parser)
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    Settings.embed_model = embed_model
     multimodal_embed_model = None
     if config.index.enable_multimodal:
         multimodal_embed_model = resolve(
@@ -128,7 +127,6 @@ def resolve_llm(config: RagConfig) -> PaiLlm:
 def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    Settings.embed_model = embed_model
 
     return resolve(
         cls=DataAnalysisTool,
@@ -167,7 +165,6 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
 
 def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    Settings.embed_model = embed_model
     multimodal_embed_model = None
     if config.index.enable_multimodal:
         multimodal_embed_model = resolve(
