@@ -63,7 +63,7 @@ class RagIndexManager:
         self._lock = threading.Lock()
 
     def add_default_index(self, rag_config: RagConfig):
-        if DEFAULT_INDEX_NAME not in self._index_map:
+        if DEFAULT_INDEX_NAME not in self._index_map.indexes:
             self._index_map.indexes[DEFAULT_INDEX_NAME] = RagIndexEntry(
                 index_name=DEFAULT_INDEX_NAME,
                 vector_store_config=rag_config.index.vector_store,
@@ -116,7 +116,9 @@ class RagIndexManager:
             ), f"Index name '{index_entry.index_name}' not exists."
             self._index_map.indexes[index_entry.index_name] = index_entry
             self.save_index_map()
-            logger.info(f"Index '{index_entry.index_name}' created successfully.")
+            logger.info(
+                f"Index '{index_entry.index_name}' updated successfully {self._index_map}."
+            )
 
     def delete_index(self, index_name: str):
         with self._lock:
