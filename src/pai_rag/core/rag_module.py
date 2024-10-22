@@ -230,6 +230,7 @@ def setup_tracing(trace_config: BaseTraceConfig):
     from pai.llm_trace.instrumentation import init_opentelemetry
     from pai.llm_trace.instrumentation.llama_index import LlamaIndexInstrumentor
     from llama_index.core import set_global_handler
+    import os
 
     if isinstance(trace_config, PaiTraceConfig):
         if not trace_config.token:
@@ -240,7 +241,7 @@ def setup_tracing(trace_config: BaseTraceConfig):
             LlamaIndexInstrumentor,
             grpc_endpoint=trace_config.endpoint,
             token=trace_config.token,
-            service_name=trace_config.app_name,
+            service_name=os.getenv("NAMESPACE", "PAIRAG-Service"),
             service_version="0.1.0",
             service_id="",
             deployment_environment="",
