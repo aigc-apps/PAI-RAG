@@ -5,25 +5,25 @@ from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
+from pai_rag.utils.markdown_utils import transform_local_to_oss
 from bs4 import BeautifulSoup
-import time
 from llama_index.core import Settings
 
 from magic_pdf.pipe.UNIPipe import UNIPipe
 from magic_pdf.pipe.OCRPipe import OCRPipe
 from magic_pdf.pipe.TXTPipe import TXTPipe
 import magic_pdf.model as model_config
-import tempfile
-import re
-import math
-from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
 from operator import itemgetter
+import time
+import tempfile
+import re
+from PIL import Image
+
 
 import logging
 import os
-from io import BytesIO
 import json
 
 model_config.__use_inside_model__ = True
@@ -56,55 +56,20 @@ class PaiPDFReader(BaseReader):
     ) -> None:
         self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        if self.enable_table_summary:
-            logger.info("process with table summary")
+        logger.info(
+            f"PaiPdfReader created with enable_table_summary : {self.enable_table_summary}"
+        )
 
-    def transform_local_to_oss(self, pdf_name: str, local_url: str):
-        try:
-            image = Image.open(local_url)
-            # Check image size
-            if image.width <= 50 or image.height <= 50:
-                return None
-
-            current_pixels = image.width * image.height
-
-            # 检查像素总数是否超过限制
-            if current_pixels > IMAGE_MAX_PIXELS:
-                # 计算缩放比例以适应最大像素数
-                scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
-                new_width = int(image.width * scale)
-                new_height = int(image.height * scale)
-
-                # 调整图片大小
-                image = image.resize((new_width, new_height), Image.LANCZOS)
-
-            image_stream = BytesIO()
-            image.save(image_stream, format="jpeg")
-
-            image_stream.seek(0)
-            data = image_stream.getvalue()
-
-            image_url = self._oss_cache.put_object_if_not_exists(
-                data=data,
-                file_ext=".jpeg",
-                headers={
-                    "x-oss-object-acl": "public-read"
-                },  # set public read to make image accessible
-                path_prefix=f"pairag/pdf_images/{pdf_name.strip()}/",
-            )
-            print(
-                f"Cropped image {image_url} with width={image.width}, height={image.height}."
-            )
-            return image_url
-        except Exception as e:
-            print(f"无法打开图片 '{local_url}': {e}")
+    def _transform_local_to_oss(self, pdf_name: str, local_url: str):
+        image = Image.open(local_url)
+        return transform_local_to_oss(self._oss_cache, image, pdf_name)
 
     def replace_image_paths(self, pdf_name: str, content: str):
         local_image_pattern = IMAGE_LOCAL_PATTERN
         matches = re.findall(local_image_pattern, content)
         for alt_text, local_url, image_type in matches:
             time_tag = int(time.time())
-            oss_url = self.transform_local_to_oss(pdf_name, local_url)
+            oss_url = self._transform_local_to_oss(pdf_name, local_url)
             updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
             content = content.replace(
                 f"![{alt_text}]({local_url})", f"![{updated_alt_text}]({oss_url})"

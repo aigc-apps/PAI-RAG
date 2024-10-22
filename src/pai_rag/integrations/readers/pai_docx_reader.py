@@ -6,11 +6,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+from pai_rag.utils.markdown_utils import (
+    transform_local_to_oss,
+    convert_table_to_markdown,
+    PaiTable,
+)
 from docx import Document as DocxDocument
 import re
 import os
 from PIL import Image
-import math
 import time
 from io import BytesIO
 
@@ -32,56 +36,20 @@ class PaiDocxReader(BaseReader):
     ) -> None:
         self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        if self.enable_table_summary:
-            logger.info("process with table summary")
+        logger.info(
+            f"PaiDocxReader created with enable_table_summary : {self.enable_table_summary}"
+        )
 
     def _transform_local_to_oss(
         self, image_blob: bytes, image_filename: str, doc_name: str
     ):
-        try:
-            # 暂时不处理Windows图元文件
-            if image_filename.lower().endswith(
-                ".emf"
-            ) or image_filename.lower().endswith(".wmf"):
-                return None
-            image = Image.open(BytesIO(image_blob))
-            if image.mode == "RGBA":
-                image = image.convert("RGB")
-            if image.width <= 50 or image.height <= 50:
-                return None
-
-            current_pixels = image.width * image.height
-
-            # 检查像素总数是否超过限制
-            if current_pixels > IMAGE_MAX_PIXELS:
-                # 计算缩放比例以适应最大像素数
-                scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
-                new_width = int(image.width * scale)
-                new_height = int(image.height * scale)
-
-                # 调整图片大小
-                image = image.resize((new_width, new_height), Image.LANCZOS)
-
-            image_stream = BytesIO()
-            image.save(image_stream, format="jpeg")
-
-            image_stream.seek(0)
-            data = image_stream.getvalue()
-
-            image_url = self._oss_cache.put_object_if_not_exists(
-                data=data,
-                file_ext=".jpeg",
-                headers={
-                    "x-oss-object-acl": "public-read"
-                },  # set public read to make image accessible
-                path_prefix=f"pairag/doc_images/{doc_name.strip()}/",
-            )
-            print(
-                f"Cropped image {image_url} with width={image.width}, height={image.height}."
-            )
-            return image_url
-        except Exception as e:
-            print(f"无法打开图片 '{image}': {e}")
+        # 暂时不处理Windows图元文件
+        if image_filename.lower().endswith(".emf") or image_filename.lower().endswith(
+            ".wmf"
+        ):
+            return None
+        image = Image.open(BytesIO(image_blob))
+        return transform_local_to_oss(self._oss_cache, image, doc_name)
 
     def _convert_paragraph(self, paragraph):
         text = paragraph.text.strip()
@@ -99,17 +67,6 @@ class PaiDocxReader(BaseReader):
 
         # 处理普通段落
         return f"{text}\n\n"
-
-    def _convert_table(self, table):
-        markdown = (
-            "| " + " | ".join([cell.text for cell in table.rows[0].cells]) + " |\n"
-        )
-        markdown += "| " + " | ".join(["---" for _ in table.rows[0].cells]) + " |\n"
-
-        for row in table.rows[1:]:
-            markdown += "| " + " | ".join([cell.text for cell in row.cells]) + " |\n"
-
-        return markdown + "\n"
 
     def _get_list_level(self, paragraph):
         indent_levels = {
@@ -142,36 +99,27 @@ class PaiDocxReader(BaseReader):
 
         return ""
 
-    def _table_to_markdown(self, table, doc_name):
-        markdown = []
+    def _convert_table_to_markdown(self, table, doc_name):
         total_cols = max(len(row.cells) for row in table.rows)
 
         header_row = table.rows[0]
+        rows = []
         headers = self._parse_row(header_row, doc_name, total_cols)
-        markdown.append("| " + " | ".join(headers) + " |")
-        markdown.append("| " + " | ".join(["---"] * total_cols) + " |")
-
         for row in table.rows[1:]:
-            row_cells = self._parse_row(row, doc_name, total_cols)
-            markdown.append("| " + " | ".join(row_cells) + " |")
-        return "\n".join(markdown)
+            rows.append(self._parse_row(row, doc_name, total_cols))
+        table = PaiTable(headers=[headers], rows=rows)
+        return convert_table_to_markdown(table, total_cols)
 
     def _parse_row(self, row, doc_name, total_cols):
         row_cells = [""] * total_cols
         col_index = 0
         for cell in row.cells:
-            # make sure the col_index is not out of range
             while col_index < total_cols and row_cells[col_index] != "":
                 col_index += 1
-            # if col_index is out of range the loop is jumped
             if col_index >= total_cols:
                 break
             cell_content = self._parse_cell(cell, doc_name).strip()
-            cell_colspan = cell.grid_span or 1
-            for i in range(cell_colspan):
-                if col_index + i < total_cols:
-                    row_cells[col_index + i] = cell_content if i == 0 else ""
-            col_index += cell_colspan
+            row_cells[col_index] = cell_content
         return row_cells
 
     def _parse_cell(self, cell, doc_name):
@@ -264,7 +212,7 @@ class PaiDocxReader(BaseReader):
 
             elif isinstance(element.tag, str) and element.tag.endswith("tbl"):  # 表格
                 table = tables.pop(0)
-                markdown.append(self._table_to_markdown(table, None))
+                markdown.append(self._convert_table_to_markdown(table, None))
                 markdown.append("\n\n")
 
         return "".join(markdown)
