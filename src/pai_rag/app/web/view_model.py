@@ -306,7 +306,7 @@ class ViewModel(BaseModel):
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        if self.reranker_type == "no-rerank":
+        if self.reranker_type == "no-reranker":
             config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         else:
             config["postprocessor"][
