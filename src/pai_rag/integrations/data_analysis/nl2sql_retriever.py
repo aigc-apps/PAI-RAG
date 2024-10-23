@@ -241,7 +241,7 @@ class DefaultSQLParser(BaseSQLParser):
         sql_result_start = response.find("SQLResult:")
         if sql_result_start != -1:
             response = response[:sql_result_start]
-        return response.strip().strip("```").strip().strip(";").strip()
+        return response.strip().strip("```").strip().strip(";").strip().strip("sql")
 
 
 def get_sql_info(sql_config: SqlAnalysisConfig):

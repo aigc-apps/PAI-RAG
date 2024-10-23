@@ -98,11 +98,12 @@ class ViewModel(BaseModel):
     db_username: str = None
     db_password: str = None
     db_host: str = None
-    db_port: int = 3306
+    db_port: str = "3306"
     database: str = None
     db_tables: str = None
     db_descriptions: str = None
     db_nl2sql_prompt: str = None
+    synthesizer_prompt: str = None
 
     # postprocessor
     reranker_type: str = "no-reranker"  # no-reranker / model-based-reranker
@@ -214,6 +215,7 @@ class ViewModel(BaseModel):
                 config.data_analysis.descriptions, ensure_ascii=False
             )
         view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
+        view_model.synthesizer_prompt = config.data_analysis.synthesizer_prompt
 
         return view_model
 
@@ -286,6 +288,7 @@ class ViewModel(BaseModel):
             config["data_analysis"]["port"] = self.db_port
             config["data_analysis"]["database"] = self.database
             config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
+            config["data_analysis"]["synthesizer_prompt"] = self.synthesizer_prompt
 
             # string to list
             if self.db_tables:
@@ -499,6 +502,7 @@ class ViewModel(BaseModel):
         settings["db_tables"] = {"value": self.db_tables}
         settings["db_descriptions"] = {"value": self.db_descriptions}
         settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
+        settings["synthesizer_prompt"] = {"value": self.synthesizer_prompt}
 
         print(settings)
         return settings

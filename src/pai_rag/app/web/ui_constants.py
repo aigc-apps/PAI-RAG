@@ -8,6 +8,7 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_T
 
 DA_GENERAL_PROMPTS = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行，不要从特定的表中查询所有列，只根据问题查询几个相关的列。请注意只使用你在schema descriptions 中看到的列名。\n=====\n 小心不要查询不存在的列。请注意哪个列位于哪个表中。必要时，请使用表名限定列名。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "
 DA_SQL_PROMPTS = "给定一个输入问题，其中包含了需要执行的SQL语句，请提取问题中的SQL语句，并使用{schema}进行校验优化，生成符合相应语法{dialect}和schema的SQL语句。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "
+SYN_GENERAL_PROMPTS = "给定一个输入问题，根据查询代码指令以及查询结果生成最终回复，生成的回复语言需要与输入问题的语言保持一致。\n\n输入问题: {query_str} \n\nSQL 或 Python 查询代码指令（可选）: {query_code_instruction}\n\n 查询结果: {query_output}\n\n 最终回复: "
 
 
 # WELCOME_MESSAGE = """

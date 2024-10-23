@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 
-from pai_rag.app.web.ui_constants import DA_GENERAL_PROMPTS
+from pai_rag.app.web.ui_constants import DA_GENERAL_PROMPTS, SYN_GENERAL_PROMPTS
 
 
 class DataAnalysisType(str, Enum):
@@ -18,6 +18,7 @@ class BaseAnalysisConfig(BaseModel):
 
     type: DataAnalysisType
     nl2sql_prompt: str = DA_GENERAL_PROMPTS
+    synthesizer_prompt: str = SYN_GENERAL_PROMPTS
 
 
 class PandasAnalysisConfig(BaseAnalysisConfig):
@@ -41,4 +42,4 @@ class MysqlAnalysisConfig(SqlAnalysisConfig):
     user: str
     password: str
     host: str
-    port: str = 3306
+    port: str = "3306"
