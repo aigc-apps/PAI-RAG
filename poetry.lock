@@ -439,26 +439,6 @@ files = [
 alibabacloud-tea = "*"
 
 [[package]]
-name = "alibabacloud_paillmtrace20240311"
-version = "1.0.0"
-description = "Alibaba Cloud PaiLLMTrace (20240311) SDK Library for Python"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "u-bcb13b93-91da-4fa3-be75-67b1810fbdba-python-tea.zip", hash = "sha256:980618237e586a15f0f89037b001d793e5a3f52d04e2598f455608dcb79e61ac"},
-]
-
-[package.dependencies]
-alibabacloud_endpoint_util = ">=0.0.3,<1.0.0"
-alibabacloud_openapi_util = ">=0.2.1,<1.0.0"
-alibabacloud_tea_openapi = ">=0.3.10,<1.0.0"
-alibabacloud_tea_util = ">=0.3.12,<1.0.0"
-
-[package.source]
-type = "url"
-url = "https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-bcb13b93-91da-4fa3-be75-67b1810fbdba-python-tea.zip"
-
-[[package]]
 name = "alibabacloud-tea"
 version = "0.3.9"
 description = "The tea module of alibabaCloud Python SDK."
@@ -530,70 +510,21 @@ files = [
 alibabacloud-tea = ">=0.0.1"
 
 [[package]]
-name = "aliyun-instrumentation-langchain"
-version = "1.0.0"
-description = "Aliyun Langchain Instrumentation"
-optional = false
-python-versions = "<3.13,>=3.8"
-files = [
-    {file = "aliyun_instrumentation_langchain-1.0.0-py3-none-any.whl", hash = "sha256:a44f4d440fc0b2cc59d6ae1fd8aae17f6a9c9fed3716d220d950b3da5a968752"},
-]
-
-[package.dependencies]
-aliyun-semantic-conventions = ">=1.0.0"
-opentelemetry-api = "*"
-opentelemetry-instrumentation = "*"
-opentelemetry-semantic-conventions = "*"
-wrapt = "*"
-
-[package.extras]
-instruments = ["langchain-core (>=0.1.0)"]
-test = ["langchain (==0.1.0)", "langchain-community (==0.0.10)", "langchain-core (==0.1.8)", "langchain-openai (==0.0.2)", "opentelemetry-sdk", "respx"]
-type-check = ["langchain-core (==0.1.0)"]
-
-[[package]]
-name = "aliyun-instrumentation-llama-index"
+name = "aliyun-bootstrap"
 version = "1.0.1"
-description = "Aliyun LlamaIndex Instrumentation"
+description = "aliyun  bootstrap"
 optional = false
-python-versions = "<3.13,>=3.8"
+python-versions = ">=3.8"
 files = [
-    {file = "aliyun_instrumentation_llama_index-1.0.1-py3-none-any.whl", hash = "sha256:570c32ac13e00f402ff2a8d2fb6d7db460a712d172e0e75f8b8f73a177e8c572"},
+    {file = "aliyun_bootstrap-1.0.1-py3-none-any.whl", hash = "sha256:235dc0a5f5189d945491efd60edb691ba941111db92fa3e264ff7bba2551c892"},
 ]
 
 [package.dependencies]
-aliyun-semantic-conventions = ">=1.0.0"
-opentelemetry-api = "*"
-opentelemetry-instrumentation = "*"
-opentelemetry-semantic-conventions = "*"
-typing-extensions = "*"
-wrapt = "*"
-
-[package.extras]
-instruments = ["llama-index (>=0.10.5)"]
-test = ["llama-index (==0.10.5)", "llama-index-llms-openai", "opentelemetry-sdk", "respx"]
-
-[[package]]
-name = "aliyun-instrumentation-openai"
-version = "1.0.1"
-description = "Aliyun OpanAi Instrumentation"
-optional = false
-python-versions = "<3.13,>=3.8"
-files = [
-    {file = "aliyun_instrumentation_openai-1.0.1-py3-none-any.whl", hash = "sha256:ac93333362ce129275ba0f9adce5d0c2a660092127383dd6f5edceb35e2043a7"},
-]
-
-[package.dependencies]
-aliyun-semantic-conventions = ">=1.0.0"
-opentelemetry-api = "*"
-opentelemetry-instrumentation = "*"
-opentelemetry-semantic-conventions = "*"
-typing-extensions = "*"
-wrapt = "*"
-
-[package.extras]
-instruments = ["openai (>=1.0.0)"]
-test = ["numpy", "openai (==1.0.0)", "opentelemetry-instrumentation-httpx", "opentelemetry-sdk", "respx"]
+nacos-sdk-python = "*"
+opentelemetry-exporter-otlp = "*"
+requests = "*"
+setuptools = ">=16.0"
+wrapt = ">=1.0.0,<2.0.0"
 
 [[package]]
 name = "aliyun-python-sdk-core"
@@ -622,16 +553,6 @@ files = [
 
 [package.dependencies]
 aliyun-python-sdk-core = ">=2.11.5"
-
-[[package]]
-name = "aliyun-semantic-conventions"
-version = "1.0.0"
-description = "Aliyun Semantic Conventions"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "aliyun_semantic_conventions-1.0.0-py3-none-any.whl", hash = "sha256:0b8ed8335f39f77bc7834c6bfa8a861cb4c6d4c0c5fbaecc1cfff4df9a932e99"},
-]
 
 [[package]]
 name = "altair"
@@ -6089,6 +6010,17 @@ files = [
 ]
 
 [[package]]
+name = "nacos-sdk-python"
+version = "1.0.0"
+description = "Python client for Nacos."
+optional = false
+python-versions = "*"
+files = [
+    {file = "nacos-sdk-python-1.0.0.tar.gz", hash = "sha256:bafbaf7ade4f2a48cbeb87d863ded8149148fa514f6901dc916ec5644c8c6175"},
+    {file = "nacos_sdk_python-1.0.0-py3-none-any.whl", hash = "sha256:0c221de64e5a28babff693ba926a3d5698d6545ddd05584f80cac7a28168a991"},
+]
+
+[[package]]
 name = "narwhals"
 version = "1.6.2"
 description = "Extremely lightweight compatibility layer between dataframe libraries"
@@ -7173,30 +7105,6 @@ protobuf = ">=3.20.2"
 typing-extensions = "*"
 
 [[package]]
-name = "pai_llm_trace"
-version = "1.0.0"
-description = "PAI LLM trace client sdk, for upload trace data."
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "pai_llm_trace-1.0.0-py3-none-any.whl", hash = "sha256:cabe12bc0ee566332c58c30ef66bc1457b3a67a1179c8a99a1c7b140c0001280"},
-]
-
-[package.dependencies]
-alibabacloud-paillmtrace20240311 = {url = "https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-bcb13b93-91da-4fa3-be75-67b1810fbdba-python-tea.zip"}
-aliyun-instrumentation-langchain = "*"
-aliyun-instrumentation-llama-index = ">=1.0.1"
-aliyun-instrumentation-openai = "*"
-opentelemetry-api = "*"
-opentelemetry-exporter-otlp-proto-grpc = "*"
-opentelemetry-proto = "*"
-opentelemetry-sdk = "*"
-
-[package.source]
-type = "url"
-url = "https://pai-llm-trace.oss-cn-zhangjiakou.aliyuncs.com/sdk_package/pai_llm_trace-1.0.0-py3-none-any.whl"
-
-[[package]]
 name = "pandas"
 version = "2.2.2"
 description = "Powerful data structures for data analysis, time series, and statistics"
@@ -7836,6 +7744,19 @@ files = [
     {file = "pyarrow-17.0.0-cp312-cp312-win_amd64.whl", hash = "sha256:392bc9feabc647338e6c89267635e111d71edad5fcffba204425a7c8d13610d7"},
     {file = "pyarrow-17.0.0-cp38-cp38-macosx_10_15_x86_64.whl", hash = "sha256:af5ff82a04b2171415f1410cff7ebb79861afc5dae50be73ce06d6e870615204"},
     {file = "pyarrow-17.0.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:edca18eaca89cd6382dfbcff3dd2d87633433043650c07375d095cd3517561d8"},
+    {file = "pyarrow-17.0.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7c7916bff914ac5d4a8fe25b7a25e432ff921e72f6f2b7547d1e325c1ad9d155"},
+    {file = "pyarrow-17.0.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f553ca691b9e94b202ff741bdd40f6ccb70cdd5fbf65c187af132f1317de6145"},
+    {file = "pyarrow-17.0.0-cp38-cp38-manylinux_2_28_aarch64.whl", hash = "sha256:0cdb0e627c86c373205a2f94a510ac4376fdc523f8bb36beab2e7f204416163c"},
+    {file = "pyarrow-17.0.0-cp38-cp38-manylinux_2_28_x86_64.whl", hash = "sha256:d7d192305d9d8bc9082d10f361fc70a73590a4c65cf31c3e6926cd72b76bc35c"},
+    {file = "pyarrow-17.0.0-cp38-cp38-win_amd64.whl", hash = "sha256:02dae06ce212d8b3244dd3e7d12d9c4d3046945a5933d28026598e9dbbda1fca"},
+    {file = "pyarrow-17.0.0-cp39-cp39-macosx_10_15_x86_64.whl", hash = "sha256:13d7a460b412f31e4c0efa1148e1d29bdf18ad1411eb6757d38f8fbdcc8645fb"},
+    {file = "pyarrow-17.0.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:9b564a51fbccfab5a04a80453e5ac6c9954a9c5ef2890d1bcf63741909c3f8df"},
+    {file = "pyarrow-17.0.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:32503827abbc5aadedfa235f5ece8c4f8f8b0a3cf01066bc8d29de7539532687"},
+    {file = "pyarrow-17.0.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a155acc7f154b9ffcc85497509bcd0d43efb80d6f733b0dc3bb14e281f131c8b"},
+    {file = "pyarrow-17.0.0-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:dec8d129254d0188a49f8a1fc99e0560dc1b85f60af729f47de4046015f9b0a5"},
+    {file = "pyarrow-17.0.0-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:a48ddf5c3c6a6c505904545c25a4ae13646ae1f8ba703c4df4a1bfe4f4006bda"},
+    {file = "pyarrow-17.0.0-cp39-cp39-win_amd64.whl", hash = "sha256:42bf93249a083aca230ba7e2786c5f673507fa97bbd9725a1e2754715151a204"},
+    {file = "pyarrow-17.0.0.tar.gz", hash = "sha256:4beca9521ed2c0921c1023e68d097d0299b62c362639ea315572a58f3f50fd28"},
 ]
 
 [package.dependencies]
@@ -12018,4 +11939,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "246c2c725af462a390d0e715632351347b17e6ec1e20bb3a441626e0a2c6fe8b"
+content-hash = "f98e907768ffd95f5c20e5648167be7856ab08989d8fcd12fe88761ef5f413b9"
