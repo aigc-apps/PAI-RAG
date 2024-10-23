@@ -45,6 +45,8 @@ def validate_case_insensitive(value: Dict) -> Dict:
         if key in value:
             value[key] = value[key].lower()
             # fix old config
+            if value[key] == "simple-weighted-reranker":
+                value[key] = "no-reranker"
             if value[key] == "pai-llm-trace":
                 value[key] = "pai_trace"
     return value
