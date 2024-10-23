@@ -76,7 +76,8 @@ class DataAnalysisTool(BaseQueryEngine):
         )
         self._synthesizer = DataAnalysisSynthesizer(
             llm=self._llm,
-            response_synthesis_prompt=DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
+            response_synthesis_prompt=PromptTemplate(analysis_config.synthesizer_prompt)
+            or DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
         )
         super().__init__(callback_manager=callback_manager)
 

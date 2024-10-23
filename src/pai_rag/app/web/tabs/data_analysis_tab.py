@@ -3,7 +3,11 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 from pai_rag.app.web.rag_client import rag_client, RagApiError
-from pai_rag.app.web.ui_constants import DA_GENERAL_PROMPTS, DA_SQL_PROMPTS
+from pai_rag.app.web.ui_constants import (
+    DA_GENERAL_PROMPTS,
+    DA_SQL_PROMPTS,
+    SYN_GENERAL_PROMPTS,
+)
 
 
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
@@ -157,45 +161,80 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+                with gr.Column(visible=True):
+                    with gr.Tab("Nl2sql Prompt"):
+                        sql_prompt_type = gr.Radio(
+                            [
+                                "general",
+                                "sql",
+                                "custom",
+                            ],
+                            value="general",
+                            label="\N{rocket} Please choose the nl2sql prompt template",
+                            elem_id="nl2sql_prompt_type",
+                        )
 
-                prompt_type = gr.Radio(
-                    [
-                        "general",
-                        "sql",
-                        "custom",
-                    ],
-                    value="general",
-                    label="\N{rocket} Please choose the prompt template type",
-                    elem_id="nl2sql_prompt_type",
-                )
+                        db_nl2sql_prompt = gr.Textbox(
+                            label="nl2sql template",
+                            elem_id="db_nl2sql_prompt",
+                            value=DA_GENERAL_PROMPTS,
+                            lines=4,
+                        )
 
-                db_nl2sql_prompt = gr.Textbox(
-                    label="Prompt template",
-                    elem_id="db_nl2sql_prompt",
-                    value=DA_GENERAL_PROMPTS,
-                    lines=4,
-                )
+                    with gr.Tab("Synthesize Prompt"):
+                        syn_prompt_type = gr.Radio(
+                            [
+                                "general",
+                                "custom",
+                            ],
+                            value="general",
+                            label="\N{rocket} Please choose the synthesizer prompt template",
+                            elem_id="synthesizer_prompt_type",
+                        )
 
-            def change_prompt_template(prompt_type):
+                        synthesizer_prompt = gr.Textbox(
+                            label="synthesizer template",
+                            elem_id="synthesizer_prompt",
+                            value=SYN_GENERAL_PROMPTS,
+                            lines=4,
+                        )
+
+            def change_sql_prompt_template(prompt_type):
                 if prompt_type == "general":
                     return {
                         db_nl2sql_prompt: gr.update(
-                            value=DA_GENERAL_PROMPTS, interactive=False
+                            value=DA_GENERAL_PROMPTS, interactive=True
                         )
                     }
                 elif prompt_type == "sql":
                     return {
                         db_nl2sql_prompt: gr.update(
-                            value=DA_SQL_PROMPTS, interactive=False
+                            value=DA_SQL_PROMPTS, interactive=True
                         )
                     }
                 else:
                     return {db_nl2sql_prompt: gr.update(value="", interactive=True)}
 
-            prompt_type.input(
-                fn=change_prompt_template,
-                inputs=prompt_type,
+            sql_prompt_type.input(
+                fn=change_sql_prompt_template,
+                inputs=sql_prompt_type,
                 outputs=[db_nl2sql_prompt],
+            )
+
+            def change_syn_prompt_template(prompt_type):
+                if prompt_type == "general":
+                    return {
+                        synthesizer_prompt: gr.update(
+                            value=SYN_GENERAL_PROMPTS, interactive=True
+                        )
+                    }
+                else:
+                    return {synthesizer_prompt: gr.update(value="", interactive=True)}
+
+            syn_prompt_type.input(
+                fn=change_syn_prompt_template,
+                inputs=syn_prompt_type,
+                outputs=[synthesizer_prompt],
             )
 
             def data_analysis_type_change(type_value):
@@ -234,6 +273,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             tables,
             descriptions,
             db_nl2sql_prompt,
+            synthesizer_prompt,
             question,
             chatbot,
         }
@@ -282,6 +322,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
-            prompt_type.elem_id: prompt_type,
+            sql_prompt_type.elem_id: sql_prompt_type,
             db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
+            syn_prompt_type.elem_id: syn_prompt_type,
+            synthesizer_prompt.elem_id: synthesizer_prompt,
         }
