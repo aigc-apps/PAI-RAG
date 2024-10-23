@@ -98,7 +98,7 @@ class ViewModel(BaseModel):
     db_username: str = None
     db_password: str = None
     db_host: str = None
-    db_port: str = "3306"
+    db_port: int = 3306
     database: str = None
     db_tables: str = None
     db_descriptions: str = None

@@ -42,4 +42,4 @@ class MysqlAnalysisConfig(SqlAnalysisConfig):
     user: str
     password: str
     host: str
-    port: str = "3306"
+    port: int
