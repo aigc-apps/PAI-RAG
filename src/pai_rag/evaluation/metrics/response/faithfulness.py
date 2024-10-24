@@ -1,14 +1,13 @@
 """Faithfulness evaluation."""
-
-from __future__ import annotations
-
 import asyncio
 from typing import Any, Optional, Sequence, Union
-
-from llama_index.core.evaluation.base import EvaluationResult
 from llama_index.core.llms.llm import LLM
-from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
-from llama_index.core.prompts.mixin import PromptDictType
+from llama_index.core.prompts import (
+    BasePromptTemplate,
+    PromptTemplate,
+)
+from llama_index.core.evaluation.base import EvaluationResult
+from pai_rag.evaluation.metrics.response.base import LlmMetric
 
 DEFAULT_EVAL_TEMPLATE = PromptTemplate(
     "Please tell if a given piece of information "
@@ -48,45 +47,7 @@ DEFAULT_EVAL_TEMPLATE = PromptTemplate(
 )
 
 
-LLAMA3_8B_EVAL_TEMPLATE = PromptTemplate(
-    """Please tell if a given piece of information is supported by the context.
-You need to answer with either YES or NO.
-Answer YES if **any part** of the context supports the information, even if most of the context is unrelated.
-Answer NO if the context does not support the information at all.
-Be sure to read all provided context segments carefully before making your decision.
-
-Some examples are provided below:
-
-Example 1:
-Information: The Eiffel Tower is located in Paris.
-Context: The Eiffel Tower, a symbol of French culture, stands prominently in the city of Paris.
-Answer: YES
-
-Example 2:
-Information: Bananas are a type of berry.
-Context: Bananas are a popular fruit enjoyed worldwide and are rich in potassium.
-Answer: NO
-
-Example 3:
-Information: Cats are reptiles.
-Context: Cats are domesticated felines known for their agility and companionship.
-Answer: NO
-
-Example 4:
-Information: Amazon started as an online bookstore.
-Context: Amazon initially launched as an online store for books but has since expanded into a global e-commerce giant
-offering various products and services.
-Answer: YES
-
-Information: {query}
-Context: {reference_contexts}
-Answer:"""
-)
-
-TEMPLATES_CATALOG = {"llama3:8b": LLAMA3_8B_EVAL_TEMPLATE}
-
-
-class FaithfulnessEvaluator:
+class Faithfulness(LlmMetric):
     """
     Faithfulness evaluator.
 
@@ -110,29 +71,24 @@ class FaithfulnessEvaluator:
         raise_error: bool = False,
         eval_template: Optional[Union[str, BasePromptTemplate]] = None,
     ) -> None:
-        """Init params."""
-        self._llm = llm
-        self._raise_error = raise_error
-
-        self._eval_template: BasePromptTemplate
         if isinstance(eval_template, str):
-            self._eval_template = PromptTemplate(eval_template)
+            eval_template = PromptTemplate(eval_template)
         else:
-            model_name = self._llm.metadata.model_name
-            self._eval_template = eval_template or TEMPLATES_CATALOG.get(
-                model_name, DEFAULT_EVAL_TEMPLATE
-            )
+            eval_template = eval_template or DEFAULT_EVAL_TEMPLATE
 
-    def _get_prompts(self) -> PromptDictType:
-        """Get prompts."""
-        return {
-            "eval_template": self._eval_template,
-        }
+        super().__init__(llm, raise_error, eval_template)
 
-    def _update_prompts(self, prompts: PromptDictType) -> None:
-        """Update prompts."""
-        if "eval_template" in prompts:
-            self._eval_template = prompts["eval_template"]
+    def parse_eval_result(self, eval_result: str):
+        raw_response_txt = eval_result.text.lower()
+        if "yes" in raw_response_txt:
+            passing = True
+        else:
+            passing = False
+            if self._raise_error:
+                raise ValueError("The response is invalid")
+        score = 1.0 if passing else 0.0
+        reasoning = raw_response_txt
+        return [score, reasoning]
 
     async def aevaluate(
         self,
@@ -155,12 +111,6 @@ class FaithfulnessEvaluator:
             context_str="\n".join(contexts),
         )
         raw_response = await self._llm.acomplete(prompt=prompt_str)
-        raw_response_txt = raw_response.text.lower()
-        if "yes" in raw_response_txt:
-            passing = True
-        else:
-            passing = False
-            if self._raise_error:
-                raise ValueError("The response is invalid")
-        score = 1.0 if passing else 0.0
-        return [score, raw_response_txt]
+
+        # Use the parser function
+        return self.parse_eval_result(raw_response)

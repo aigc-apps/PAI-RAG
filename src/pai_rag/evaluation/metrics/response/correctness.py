@@ -1,9 +1,8 @@
 """Correctness evaluation."""
 import asyncio
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Union
 
-from llama_index.core.evaluation.base import BaseEvaluator, EvaluationResult
-from llama_index.core.evaluation.eval_utils import default_parser
+from llama_index.core.evaluation.base import EvaluationResult
 from llama_index.core.llms.llm import LLM
 from llama_index.core.prompts import (
     BasePromptTemplate,
@@ -12,7 +11,7 @@ from llama_index.core.prompts import (
     MessageRole,
     PromptTemplate,
 )
-from llama_index.core.prompts.mixin import PromptDictType
+from pai_rag.evaluation.metrics.response.base import LlmMetric
 
 DEFAULT_SYSTEM_TEMPLATE = """
 You are an expert evaluation system for a question answering chatbot.
@@ -64,7 +63,7 @@ DEFAULT_EVAL_TEMPLATE = ChatPromptTemplate(
 )
 
 
-class CorrectnessEvaluator(BaseEvaluator):
+class Correctness(LlmMetric):
     """Correctness evaluator.
 
     Evaluates the correctness of a question answering system.
@@ -88,34 +87,33 @@ class CorrectnessEvaluator(BaseEvaluator):
     def __init__(
         self,
         llm: Optional[LLM] = None,
-        eval_template: Optional[Union[BasePromptTemplate, str]] = None,
+        raise_error: bool = False,
+        eval_template: Optional[Union[str, BasePromptTemplate]] = None,
         score_threshold: float = 4.0,
-        # deprecated
-        parser_function: Callable[
-            [str], Tuple[Optional[float], Optional[str]]
-        ] = default_parser,
     ) -> None:
-        self._llm = llm
-
-        self._eval_template: BasePromptTemplate
         if isinstance(eval_template, str):
-            self._eval_template = PromptTemplate(eval_template)
+            eval_template = PromptTemplate(eval_template)
         else:
-            self._eval_template = eval_template or DEFAULT_EVAL_TEMPLATE
+            eval_template = eval_template or DEFAULT_EVAL_TEMPLATE
+
+        super().__init__(llm, raise_error, eval_template)
 
         self._score_threshold = score_threshold
-        self.parser_function = parser_function
 
-    def _get_prompts(self) -> PromptDictType:
-        """Get prompts."""
-        return {
-            "eval_template": self._eval_template,
-        }
+    def parse_eval_result(self, eval_result: str):
+        if not eval_result.strip():
+            # Return None or default values if the response is empty
+            return None, "No response"
 
-    def _update_prompts(self, prompts: PromptDictType) -> None:
-        """Update prompts."""
-        if "eval_template" in prompts:
-            self._eval_template = prompts["eval_template"]
+        score_str, reasoning_str = eval_result.split("\n", 1)
+
+        try:
+            score = float(score_str)
+        except ValueError:
+            score = None
+
+        reasoning = reasoning_str.lstrip("\n")
+        return [score, reasoning]
 
     async def aevaluate(
         self,
@@ -134,7 +132,7 @@ class CorrectnessEvaluator(BaseEvaluator):
         if query is None or response is None:
             raise ValueError("query, and response must be provided")
 
-        eval_response = await self._llm.apredict(
+        raw_response = await self._llm.apredict(
             prompt=self._eval_template,
             query=query,
             generated_answer=response,
@@ -142,6 +140,4 @@ class CorrectnessEvaluator(BaseEvaluator):
         )
 
         # Use the parser function
-        score, reasoning = self.parser_function(eval_response)
-
-        return [score, reasoning]
+        return self.parse_eval_result(raw_response)

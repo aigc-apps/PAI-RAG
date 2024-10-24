@@ -8,11 +8,9 @@ from pai_rag.core.rag_module import (
     resolve_data_loader,
     resolve_llm,
     resolve_vector_index,
+    resolve_query_engine,
 )
-from pai_rag.evaluation.generator.labelled_qca_generator import LabelledRagQcaGenerator
-from pai_rag.evaluation.generator.predicted_qca_generator import (
-    PredictedRagQcaGenerator,
-)
+from pai_rag.evaluation.generator.rag_qca_generator import RagQcaGenerator
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
     PaiMultiModalLlm,
 )
@@ -38,30 +36,22 @@ def _create_data_loader(
     )
     data_loader = resolve_data_loader(config)
     vector_index = resolve_vector_index(config)
+    query_engine = resolve_query_engine(config)
 
-    return data_loader, vector_index
-
-
-def _create_labelled_qca_generator(config_file, name, vector_index) -> None:
-    config = RagConfigManager.from_file(config_file).get_value()
-    llm = resolve_llm(config)
-    persist_path = f"{config.index.vector_store.persist_path}__{name}"
-    qca_generator = LabelledRagQcaGenerator(
-        llm=llm, vector_index=vector_index, persist_path=persist_path
-    )
-    return qca_generator
+    return data_loader, vector_index, query_engine
 
 
-def _create_predicted_qca_generator(config_file, name, vector_index) -> None:
+def _create_qca_generator(config_file, name, vector_index, query_engine):
     config = RagConfigManager.from_file(config_file).get_value()
     multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
     persist_path = f"{config.index.vector_store.persist_path}__{name}"
-    predicted_qca_generator = PredictedRagQcaGenerator(
+    qca_generator = RagQcaGenerator(
         llm=multimodal_llm,
         vector_index=vector_index,
+        query_engine=query_engine,
         persist_path=persist_path,
     )
-    return predicted_qca_generator
+    return qca_generator
 
 
 def _create_base_evaluator(config_file, name):
@@ -89,7 +79,9 @@ def run_evaluation_pipeline(
         data_path is None
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
-    data_loader, vector_index = _create_data_loader(config, name, enable_raptor)
+    data_loader, vector_index, query_engine = _create_data_loader(
+        config, name, enable_raptor
+    )
     data_loader.load_data(
         file_path_or_directory=data_path,
         filter_pattern=pattern,
@@ -97,16 +89,11 @@ def run_evaluation_pipeline(
         from_oss=oss_path is not None,
         enable_raptor=enable_raptor,
     )
-    qca_generator = _create_labelled_qca_generator(config, name, vector_index)
-    asyncio.run(qca_generator.agenerate_labelled_qca_dataset())
-
-    predicted_qca_generator = _create_predicted_qca_generator(
-        config, name, vector_index
-    )
-    asyncio.run(predicted_qca_generator.agenerate_predicted_qca_dataset())
+    qca_generator = _create_qca_generator(config, name, vector_index, query_engine)
+    _ = asyncio.run(qca_generator.agenerate_qca_dataset(stage="labelled"))
+    _ = asyncio.run(qca_generator.agenerate_qca_dataset(stage="predicted"))
     evaluator = _create_base_evaluator(config, name)
-    qcas = evaluator.load_predicted_qca_dataset()
-    retrieval_result = asyncio.run(evaluator.aevaluation_for_retrieval(qcas))
-    response_result = asyncio.run(evaluator.aevaluation_for_response(qcas))
+    retrieval_result = asyncio.run(evaluator.aevaluation(stage="retrieval"))
+    response_result = asyncio.run(evaluator.aevaluation(stage="response"))
     print("retrieval_result", retrieval_result, "response_result", response_result)
-    return retrieval_result, response_result
+    return {"retrieval": retrieval_result, "response": response_result}

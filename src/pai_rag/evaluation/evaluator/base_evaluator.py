@@ -1,24 +1,15 @@
 import os
-import json
-from pai_rag.evaluation.evaluator.retrieval_metrics import HitRate, MRR
-from pai_rag.evaluation.evaluator.response_faithfulness_metric import (
-    FaithfulnessEvaluator,
-)
-from pai_rag.evaluation.evaluator.response_correctness_metric import (
-    CorrectnessEvaluator,
-)
-from pai_rag.evaluation.generator.rag_qca_sample import (
-    RetrievalEvaluationSample,
-    ResponseEvaluationSample,
-)
+from pai_rag.evaluation.metrics.retrieval.hitrate import HitRate
+from pai_rag.evaluation.metrics.retrieval.mrr import MRR
+from pai_rag.evaluation.metrics.response.faithfulness import Faithfulness
+from pai_rag.evaluation.metrics.response.correctness import Correctness
+
 from llama_index.core.async_utils import run_jobs
-from llama_index.core.llama_dataset import (
-    LabelledRagDataset,
+from pai_rag.evaluation.dataset.rag_eval_dataset import (
+    EvaluationSample,
+    PaiRagEvalDataset,
 )
-from pai_rag.evaluation.generator.utils import (
-    save_qca_dataset_json,
-    load_qca_dataset_json,
-)
+from pai_rag.evaluation.dataset.rag_qca_dataset import PaiRagQcaDataset
 
 
 class BaseEvaluator:
@@ -28,158 +19,114 @@ class BaseEvaluator:
         self.hitrate = HitRate()
         self.mrr = MRR()
         self.retrieval_evaluators = [self.hitrate, self.mrr]
-        self.faithfulness_evaluator = FaithfulnessEvaluator(
+        self.faithfulness_evaluator = Faithfulness(
             llm=self._llm,
         )
-        self.correctness_evaluator = CorrectnessEvaluator(
+        self.correctness_evaluator = Correctness(
             llm=self._llm,
         )
         self.response_evaluators = [
             self.faithfulness_evaluator,
             self.correctness_evaluator,
         ]
+        self.evaluation_dataset_path = os.path.join(
+            self.persist_path, "evaluation_dataset.json"
+        )
+        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
         self._show_progress = True
         self._workers = 2
 
-    def load_predicted_qca_dataset(self) -> None:
-        labelled_qca_dataset_path = os.path.join(
-            self.persist_path, "predicted_qca_dataset.json"
-        )
-        with open(labelled_qca_dataset_path, "r", encoding="utf-8") as f:
-            qcas = json.load(f)
-            return qcas["examples"][0:5]
-
-    async def compute_retrieval_metric(
-        self, metric, labelled_node_ids, predicted_node_ids
-    ):
-        eval_result = metric.compute(labelled_node_ids, predicted_node_ids)
-        return eval_result
-
-    async def compute_response_metric(self, metric, query, response, contexts):
-        eval_result = await metric.aevaluate(query, response, contexts)
-        return eval_result
-
-    async def aevaluation_for_retrieval(self, qca_dataset):
-        """Run retrieval evaluation with qca dataset."""
-        retrieval_evaluation_dataset_path = os.path.join(
-            self.persist_path, "retrieval_evaluation_dataset.json"
-        )
-        if os.path.exists(retrieval_evaluation_dataset_path):
-            print(
-                f"A evaluation dataset for retrieval already exists at {retrieval_evaluation_dataset_path}."
-            )
-            retrieval_evaluation_dataset = load_qca_dataset_json(
-                retrieval_evaluation_dataset_path
-            )
-            examples = retrieval_evaluation_dataset["examples"]
-            mean_result = {
-                "hitrate": sum(float(entry["hitrate"]) for entry in examples)
-                / len(examples),
-                "mrr": sum(float(entry["mrr"]) for entry in examples) / len(examples),
-            }
-            return mean_result
+    def load_qca_dataset(self) -> None:
+        if os.path.exists(self.qca_dataset_path):
+            rag_qca_dataset = PaiRagQcaDataset.from_json(self.qca_dataset_path)
+            if rag_qca_dataset.labelled and rag_qca_dataset.predicted:
+                print(
+                    f"Labelled QCA dataset already exists at {self.qca_dataset_path}."
+                )
+                return rag_qca_dataset
+            else:
+                raise ValueError(
+                    "The QCA dataset exists but is not labelled and predicted. "
+                    "Please either label it or provide a new one."
+                )
         else:
-            print("Starting to generate evaluation dataset for retrieval...")
-            result = {}
-            examples = []
-            for metric in self.retrieval_evaluators:
-                eval_tasks = []
-                for qca in qca_dataset:
-                    eval_tasks.append(
-                        self.compute_retrieval_metric(
-                            metric, qca["reference_node_id"], qca["predicted_node_id"]
-                        )
-                    )
-                metric_result = await run_jobs(
-                    eval_tasks, self._show_progress, self._workers
-                )
-                result[metric.metric_name] = metric_result
-            responses = [
-                {"hitrate": h, "mrr": m}
-                for h, m in zip(result["hitrate"], result["mrr"])
-            ]
-            for (
-                qca,
-                answer_response,
-            ) in zip(qca_dataset, responses):
-                combined_dict = {**qca, **answer_response}
-                example = RetrievalEvaluationSample(**combined_dict)
-                examples.append(example)
-            retrieval_evaluation_dataset = LabelledRagDataset(examples=examples)
-            save_qca_dataset_json(
-                retrieval_evaluation_dataset, retrieval_evaluation_dataset_path
-            )
-            mean_result = {
-                key: sum(values) / len(values) for key, values in result.items()
-            }
-            return mean_result
+            print("No existing QCA dataset found. You can proceed to create a new one.")
+            return None
 
-    async def aevaluation_for_response(self, qca_dataset):
-        """Run response evaluation with qca dataset."""
-        response_evaluation_dataset_path = os.path.join(
-            self.persist_path, "response_evaluation_dataset.json"
-        )
-        if os.path.exists(response_evaluation_dataset_path):
+    def load_evaluation_dataset(self) -> None:
+        if os.path.exists(self.evaluation_dataset_path):
             print(
-                f"A evaluation dataset for response already exists at {response_evaluation_dataset_path}."
+                f"A evaluation dataset already exists at {self.evaluation_dataset_path}."
             )
-            response_evaluation_dataset = load_qca_dataset_json(
-                response_evaluation_dataset_path
+            evaluation_dataset = PaiRagEvalDataset.from_json(
+                self.evaluation_dataset_path
             )
-            examples = response_evaluation_dataset["examples"]
-            mean_result = {
-                "faithfulness_score": sum(
-                    float(entry["faithfulness_score"]) for entry in examples
-                )
-                / len(examples),
-                "correctness_score": sum(
-                    float(entry["correctness_score"]) for entry in examples
-                )
-                / len(examples),
-            }
-            return mean_result
+            return evaluation_dataset
         else:
-            print("Starting to generate evaluation dataset for response...")
-            examples = []
-            result = {}
-            for metric in self.response_evaluators:
-                eval_tasks = []
-                for qca in qca_dataset:
-                    eval_tasks.append(
-                        self.compute_response_metric(
-                            metric,
-                            qca["query"],
-                            qca["reference_answer"],
-                            qca["predicted_contexts"],
-                        )
-                    )
-                metric_result = await run_jobs(
-                    eval_tasks, self._show_progress, self._workers
-                )
-                result[metric.metric_name] = metric_result
-            responses = [
-                {
-                    "faithfulness_score": f[0],
-                    "faithfulness_reason": f[1],
-                    "correctness_score": c[0],
-                    "correctness_reason": c[1],
-                }
-                for f, c in zip(result["faithfulness"], result["correctness"])
-            ]
-            for (
-                qca,
-                answer_response,
-            ) in zip(qca_dataset, responses):
-                combined_dict = {**qca, **answer_response}
-                example = ResponseEvaluationSample(**combined_dict)
-                examples.append(example)
-
-            response_evaluation_dataset = LabelledRagDataset(examples=examples)
-            save_qca_dataset_json(
-                response_evaluation_dataset, response_evaluation_dataset_path
+            print(
+                "No existing evaluation dataset found. You can proceed to create a new one."
             )
-            mean_result = {
-                key: sum(value[0] for value in values) / len(values)
-                for key, values in result.items()
-            }
-            return mean_result
+            return None
+
+    async def compute_retrieval_metrics(self, qca_sample):
+        retrieval_eval_example = EvaluationSample(**vars(qca_sample))
+        reference_node_id = retrieval_eval_example.reference_node_id
+        predicted_node_id = retrieval_eval_example.predicted_node_id
+        for metric in self.retrieval_evaluators:
+            metric_score = metric.compute(reference_node_id, predicted_node_id)
+            setattr(retrieval_eval_example, metric.metric_name, metric_score)
+
+        return retrieval_eval_example
+
+    async def compute_response_metrics(self, qca_sample):
+        response_eval_example = EvaluationSample(**vars(qca_sample))
+        query = response_eval_example.query
+        response = response_eval_example.reference_answer
+        contexts = response_eval_example.predicted_contexts
+        for metric in self.response_evaluators:
+            metric_result = await metric.aevaluate(query, response, contexts)
+            setattr(
+                response_eval_example, f"{metric.metric_name}_score", metric_result[0]
+            )
+            setattr(
+                response_eval_example, f"{metric.metric_name}_reason", metric_result[1]
+            )
+
+        return response_eval_example
+
+    async def aevaluation(self, stage):
+        """Run evaluation with qca dataset."""
+        _status = {"retrieval": False, "response": False}
+        evaluation_dataset = self.load_evaluation_dataset()
+        qca_dataset = self.load_qca_dataset()
+        if evaluation_dataset:
+            print(
+                f"A evaluation dataset already exists with status: [[{evaluation_dataset.status}]]"
+            )
+            _status = evaluation_dataset.status
+            if _status[stage]:
+                return evaluation_dataset.results[stage]
+            else:
+                qca_dataset = evaluation_dataset
+        if qca_dataset:
+            print(f"Starting to generate evaluation dataset for stage: [[{stage}]]...")
+            eval_tasks = []
+            for qca in qca_dataset.examples:
+                if stage == "retrieval":
+                    eval_tasks.append(self.compute_retrieval_metrics(qca))
+                elif stage == "response":
+                    eval_tasks.append(self.compute_response_metrics(qca))
+                else:
+                    raise ValueError(f"Invalid stage: {stage}")
+            eval_examples = await run_jobs(
+                eval_tasks, self._show_progress, self._workers
+            )
+            _status[stage] = True
+            eval_dataset = PaiRagEvalDataset(examples=eval_examples, status=_status)
+            eval_dataset.save_json(self.evaluation_dataset_path)
+            return eval_dataset.results[stage]
+        else:
+            raise ValueError(
+                "No QCA dataset found. Please provide a QCA dataset or "
+                "generate one first."
+            )

@@ -7,6 +7,15 @@ import hashlib
 from pai_rag.evaluation.run_evaluation_pipeline import run_evaluation_pipeline
 
 
+def validate_json_file(ctx, param, value):
+    """检查文件路径是否以 .json 结尾"""
+    if value is not None and not value.endswith(".json"):
+        raise click.BadParameter(
+            "Output path must be a JSON file with a .json extension."
+        )
+    return value
+
+
 def calculate_md5_from_json(data):
     """计算 JSON 内容的 MD5 值"""
     hasher = hashlib.md5()
@@ -34,21 +43,22 @@ def run_experiment(exp_params):
 
 
 @click.command()
-@click.option("-e", "--exp_config", show_default=True)
-def run(exp_config=None):
-    with open(exp_config) as file:
+@click.option("-i", "--input_exp_config", show_default=True)
+@click.option("-o", "--output_path", callback=validate_json_file, show_default=True)
+def run(input_exp_config=None, output_path=None):
+    with open(input_exp_config) as file:
         configs = yaml.safe_load(file)
 
-    # 记录实验结果到 JSON 文件
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    file_key = calculate_md5_from_json(configs)
-    result_filename = f"localdata/eval_exp_data/results_{file_key}_{timestamp}.json"
+    if not output_path:
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        file_key = calculate_md5_from_json(configs)
+        output_path = f"localdata/eval_exp_data/results_{file_key}_{timestamp}.json"
     results = []
     for exp in configs["experiment"]:
         result = run_experiment(exp)
         results.append(result)
 
-    with open(result_filename, "w") as result_file:
-        json.dump(results, result_file, indent=4)
+    with open(output_path, "w") as result_file:
+        json.dump(results, result_file, ensure_ascii=False, indent=4)
 
-    logging.info(f"Results saved to {result_filename}")
+    logging.info(f"Results saved to {output_path}")
