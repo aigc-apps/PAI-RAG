@@ -17,7 +17,7 @@ class PaiTable(BaseModel):
 
 def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -> str:
     try:
-        if image.mode == "RGBA":
+        if image.mode != "RGB":
             image = image.convert("RGB")
         if image.width <= 50 or image.height <= 50:
             return None

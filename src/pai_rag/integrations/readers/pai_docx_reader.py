@@ -223,7 +223,7 @@ class PaiDocxReader(BaseReader):
         metadata: bool = True,
         extra_info: Optional[Dict] = None,
     ) -> List[Document]:
-        """Loads list of documents from PDF file and also accepts extra information in dict format."""
+        """Loads list of documents from Docx file and also accepts extra information in dict format."""
         return self.load(file_path, metadata=metadata, extra_info=extra_info)
 
     def load(
