@@ -9,15 +9,51 @@ IMAGE_MAX_PIXELS = 512 * 512
 
 
 class PaiTable(BaseModel):
-    headers: Optional[List[List[str]]] = (
-        Field(description="The table headers.", default=None),
+    data: List[List[str]] = (Field(description="The table data.", default=[]),)
+    row_headers_index: Optional[List[int]] = (
+        Field(description="The table row headers index.", default=None),
     )
-    rows: Optional[List[List[str]]] = Field(description="The table rows.", default=None)
+    column_headers_index: Optional[List[int]] = (
+        Field(description="The table column headers index.", default=None),
+    )
+
+    def get_row_numbers(self):
+        return len(self.data)
+
+    def get_col_numbers(self):
+        return len(self.data[0])
+
+    def get_row_headers(self):
+        if len(self.row_headers_index) == 0:
+            return []
+        return [self.data[row] for row in self.row_headers_index]
+
+    def get_rows(self):
+        if self.row_headers_index:
+            data_row_start_index = max(self.row_headers_index) + 1
+        else:
+            data_row_start_index = 0
+        return self.data[data_row_start_index:]
+
+    def get_column_headers(self):
+        if len(self.column_headers_index) == 0:
+            return []
+        return [[row[i] for i in self.column_headers_index] for row in self.data]
+
+    def get_columns(self):
+        if self.column_headers_index:
+            data_col_start_index = max(self.col_headers_index) + 1
+        else:
+            data_col_start_index = 0
+        return [
+            [row[i] for i in range(data_col_start_index, self.get_col_numbers())]
+            for row in self.data
+        ]
 
 
 def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -> str:
     try:
-        if image.mode == "RGBA":
+        if image.mode != "RGB":
             image = image.convert("RGB")
         if image.width <= 50 or image.height <= 50:
             return None
@@ -73,11 +109,17 @@ def _table_to_markdown(self, table, doc_name):
 
 def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:
     markdown = []
-    if table.headers:
-        for header in table.headers:
+    if len(table.get_column_headers()) > 0:
+        headers = table.get_column_headers()
+        rows = table.get_columns()
+    else:
+        headers = table.get_row_headers()
+        rows = table.get_rows()
+    if headers:
+        for header in headers:
             markdown.append("| " + " | ".join(header) + " |")
-    markdown.append("| " + " | ".join(["---"] * total_cols) + " |")
-    if table.rows:
-        for row in table.rows:
+        markdown.append("| " + " | ".join(["---"] * total_cols) + " |")
+    if rows:
+        for row in rows:
             markdown.append("| " + " | ".join(row) + " |")
     return "\n".join(markdown)
