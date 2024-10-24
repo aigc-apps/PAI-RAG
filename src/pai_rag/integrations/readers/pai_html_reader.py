@@ -54,47 +54,73 @@ class PaiHtmlReader(BaseReader):
             table.replace_with(placeholder)
         return str(soup), tables
 
-    def _get_table_dimension(self, table):
-        max_rows = len(table.find_all("tr"))
-        max_columns = 0
-        for row in table.find_all("tr"):
-            current_columns = 0
-            for col in row.find_all(["th", "td"]):
-                current_columns += 1
-            max_columns = max(current_columns, max_columns)
-        return max_rows, max_columns
-
-    def _convert_table_to_list(self, table):
-        max_rows, max_cols = self._get_table_dimension(table)
-        table_matrix = [["" for _ in range(max_cols)] for _ in range(max_rows)]
+    def _convert_table_to_pai_table(self, table):
+        # 标记header的index
+        row_headers_index = []
+        col_headers_index = []
+        row_header_flag = True
+        col_header_index_max = -1
+        table_matrix = []
         current_row_index = 0
+        max_cols = 0
+        max_rows = 0
         for row in table.find_all("tr"):
             current_col_index = 0
+            if current_row_index == 0:
+                row_cells = []
+            else:
+                row_cells = [""] * max_cols
+            if current_row_index >= max_rows:
+                table_matrix.append(row_cells)
             for cell in row.find_all(["th", "td"]):
+                if cell.name != "th":
+                    row_header_flag = False
+                else:
+                    col_header_index_max = max(col_header_index_max, current_col_index)
                 cell_content = self._parse_cell_content(cell)
                 col_span = int(cell.get("colspan", 1))
                 row_span = int(cell.get("rowspan", 1))
-                while (
-                    current_col_index < max_rows
-                    and table_matrix[current_row_index][current_col_index] != ""
+                if current_row_index != 0:
+                    while (
+                        current_col_index < max_cols
+                        and table_matrix[current_row_index][current_col_index] != ""
+                    ):
+                        current_col_index += 1
+                if (current_col_index > max_cols and max_cols != 0) or (
+                    current_row_index > max_rows and max_rows != 0
                 ):
-                    current_col_index += 1
-                if current_col_index >= max_cols or current_row_index >= max_rows:
                     break
                 for i in range(col_span):
-                    if current_col_index + i < max_cols:
+                    if current_row_index == 0:
+                        table_matrix[current_row_index].append(cell_content)
+                    elif current_col_index + i < max_cols:
                         table_matrix[current_row_index][
                             current_col_index + i
                         ] = cell_content
-                for i in range(row_span):
-                    if current_row_index + i < max_rows:
+                for i in range(1, row_span):
+                    if current_row_index + i > max_rows:
+                        table_matrix.append(row_cells)
                         table_matrix[current_row_index + i][
                             current_col_index
                         ] = cell_content
+                max_rows = max(current_row_index + row_span, max_rows)
                 current_col_index += col_span
+                if current_row_index == 0:
+                    max_cols += col_span
+            if row_header_flag:
+                row_headers_index.append(current_row_index)
             current_row_index += 1
 
-        return table_matrix, max_cols
+        for i in range(col_header_index_max + 1):
+            col_headers_index.append(i)
+
+        table = PaiTable(
+            data=table_matrix,
+            row_headers_index=row_headers_index,
+            column_headers_index=col_headers_index,
+        )
+
+        return table, max_cols
 
     def _parse_cell_content(self, cell):
         content = []
@@ -107,10 +133,7 @@ class PaiHtmlReader(BaseReader):
         return " ".join(content)
 
     def _convert_table_to_markdown(self, table):
-        table, total_cols = self._convert_table_to_list(table)
-        headers = table[0]
-        rows = table[1:]
-        table = PaiTable(headers=[headers], rows=rows)
+        table, total_cols = self._convert_table_to_pai_table(table)
         return convert_table_to_markdown(table, total_cols)
 
     def _transform_local_to_oss(self, html_name: str, image_url: str):
