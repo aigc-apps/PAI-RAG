@@ -1,7 +1,6 @@
 import click
 import os
 from pathlib import Path
-from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_data_loader
 import logging
@@ -72,9 +71,8 @@ def run(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     config = RagConfigManager.from_file(config_file).get_value()
-    rag_config = RagConfig.model_validate(config.rag)
 
-    data_loader = resolve_data_loader(rag_config)
+    data_loader = resolve_data_loader(config)
     data_loader.load_data(
         file_path_or_directory=data_path,
         filter_pattern=pattern,

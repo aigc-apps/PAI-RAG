@@ -1,7 +1,6 @@
 import click
 import os
 from pathlib import Path
-from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_agent
 import logging
@@ -61,12 +60,11 @@ def run(
 
     config = RagConfigManager.from_file(config_file).get_value()
     if tool_definition_file:
-        config.rag.agent.tool_definition_file = tool_definition_file
+        config.agent.tool_definition_file = tool_definition_file
     if python_script_file:
-        config.rag.agent.python_script_file = python_script_file
+        config.agent.python_script_file = python_script_file
 
-    rag_config = RagConfig.model_validate(config.rag)
-    agent = resolve_agent(rag_config)
+    agent = resolve_agent(config)
 
     print("**Question**: ", question)
     response = agent.chat(question)

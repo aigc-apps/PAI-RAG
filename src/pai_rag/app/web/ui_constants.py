@@ -112,7 +112,7 @@ LLM_MODEL_KEY_DICT = {
 MLLM_MODEL_KEY_DICT = {
     "dashscope": [
         "qwen-vl-max",
-        "qwen-vl-turbo",
+        "qwen-vl-plus",
     ]
 }
 
