@@ -68,14 +68,14 @@ app = FastAPI()
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.option("-V", "--version", is_flag=True, help="Show version and exit.")
-def main(ctx, version):
+def run(ctx, version):
     if version:
         click.echo(version)
     elif ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
 
-@main.command()
+@run.command()
 @click.option(
     "-h",
     "--host",
@@ -105,7 +105,7 @@ def ui(host, port, rag_url):
     uvicorn.run(app, host=host, port=port, loop="asyncio")
 
 
-@main.command()
+@run.command()
 @click.option(
     "-h",
     "--host",
@@ -178,3 +178,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
     app = FastAPI()
     configure_app(app, rag_configuration)
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
+
+
+if __name__ == "__main__":
+    serve()
