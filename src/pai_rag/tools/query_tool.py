@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.rag_module import resolve_query_engine, setup_tracing
+from pai_rag.core.rag_module import resolve_query_engine
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 import logging
 
@@ -46,7 +46,6 @@ def run(
 
     config = RagConfigManager.from_file(config_file).get_value()
     rag_config = RagConfig.model_validate(config.rag)
-    setup_tracing(rag_config.trace)
 
     query_engine = resolve_query_engine(rag_config)
 

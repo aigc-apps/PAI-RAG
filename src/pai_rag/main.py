@@ -157,12 +157,10 @@ def ui(host, port, rag_url):
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
     from pai_rag.app.api.service import configure_app
-    from pai_rag.core.rag_module import setup_tracing
     from pai_rag.utils.download_models import ModelScopeDownloader
 
     rag_configuration = RagConfigManager.from_file(config_file)
     rag_configuration.persist()
-    setup_tracing(rag_configuration.get_value().trace)
 
     if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
         logger.info("Start to download models.")
