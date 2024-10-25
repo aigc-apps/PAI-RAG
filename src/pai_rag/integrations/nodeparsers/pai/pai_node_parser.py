@@ -43,6 +43,7 @@ class NodeParserConfig(BaseModel):
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
     [".csv", ".xlsx", ".xls", ".htm", ".html", ".jsonl"]
 )
+DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx"])
 IMAGE_FILE_TYPES = set([".jpg", ".jpeg", ".png"])
 
 IMAGE_URL_REGEX = re.compile(
@@ -160,7 +161,7 @@ class PaiNodeParser(TransformComponent):
                     )
                 )
             else:
-                if doc_type == ".md" or doc_type == ".pdf":
+                if doc_type in DOC_TYPES_CONVERT_TO_MD:
                     md_node_parser = MarkdownNodeParser(
                         id_func=node_id_hash,
                         enable_multimodal=self._parser_config.enable_multimodal,

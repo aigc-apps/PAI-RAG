@@ -101,6 +101,7 @@ def test_nl2sql_retriever(db_connection):
     sql_database, db_tables, table_descriptions = db_connection
     nl2sql_retriever = MyNLSQLRetriever(
         sql_database=sql_database,
+        dialect="sqlite",
         text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
         tables=db_tables,
     )
