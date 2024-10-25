@@ -1,7 +1,6 @@
 import click
 import os
 from pathlib import Path
-from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_query_engine
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
@@ -45,9 +44,8 @@ def run(
     logging.basicConfig(level=logging.INFO)
 
     config = RagConfigManager.from_file(config_file).get_value()
-    rag_config = RagConfig.model_validate(config.rag)
 
-    query_engine = resolve_query_engine(rag_config)
+    query_engine = resolve_query_engine(config)
 
     print("**Question**: ", question)
 

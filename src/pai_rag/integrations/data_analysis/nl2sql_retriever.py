@@ -241,7 +241,7 @@ class DefaultSQLParser(BaseSQLParser):
         sql_result_start = response.find("SQLResult:")
         if sql_result_start != -1:
             response = response[:sql_result_start]
-        return response.strip().strip("```").strip().strip(";").strip()
+        return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
 
 
 def get_sql_info(sql_config: SqlAnalysisConfig):
@@ -285,8 +285,8 @@ def inspect_db_connection(
     engine = create_engine(
         database_url,
         echo=False,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=10,
+        max_overflow=20,
         pool_timeout=30,
         pool_recycle=360,
         poolclass=QueuePool,
@@ -339,6 +339,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
     def __init__(
         self,
         sql_database: SQLDatabase,
+        dialect: str,
         text_to_sql_prompt: Optional[BasePromptTemplate] = None,
         context_query_kwargs: Optional[dict] = None,
         tables: Optional[Union[List[str], List[Table]]] = None,
@@ -362,7 +363,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             sql_database, tables, context_query_kwargs, table_retriever
         )
         self._tables = tables
-        self._tables = tables
+        self._dialect = dialect
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_TMPL
@@ -393,8 +394,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             nl2sql_prompt_tmpl = DEFAULT_TEXT_TO_SQL_TMPL
 
         sql_database, tables, table_descriptions = get_sql_info(sql_config)
+        # print("tmp_test:", sql_config.type)
         return cls(
             sql_database=sql_database,
+            dialect=sql_config.type,
             llm=llm,
             text_to_sql_prompt=nl2sql_prompt_tmpl,
             tables=tables,
@@ -681,11 +684,11 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
 
     def _get_table_context(self, query_bundle: QueryBundle) -> str:
         """Get table context.
-
-        Get tables schema + optional context as a single string.
-
+        Get tables schema + optional context + data sample as a single string.
         """
-        table_schema_objs = self._get_tables(query_bundle.query_str)
+        table_schema_objs = self._get_tables(
+            query_bundle.query_str
+        )  # get a list of SQLTableSchema, e.g. [SQLTableSchema(table_name='has_pet', context_str=None),]
         context_strs = []
         if self._context_str_prefix is not None:
             context_strs = [self._context_str_prefix]
@@ -693,13 +696,27 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         for table_schema_obj in table_schema_objs:
             table_info = self._sql_database.get_single_table_info(
                 table_schema_obj.table_name
-            )
+            )  # get ddl info
+            data_sample = self._get_data_sample(
+                table_schema_obj.table_name
+            )  # get data sample
+            table_info_with_sample = table_info + "\ndata_sample: " + data_sample
 
             if table_schema_obj.context_str:
                 table_opt_context = " The table description is: "
                 table_opt_context += table_schema_obj.context_str
-                table_info += table_opt_context
+                table_info_with_sample += table_opt_context
 
-            context_strs.append(table_info)
+            context_strs.append(table_info_with_sample)
 
         return "\n\n".join(context_strs)
+
+    def _get_data_sample(self, table: str, sample_n: int = 3) -> str:
+        # 对每个table随机采样
+        if self._dialect == "mysql":
+            sql_str = f"SELECT * FROM {table} ORDER BY RAND() LIMIT {sample_n};"
+        if self._dialect in ("sqlite", "postgresql"):
+            sql_str = f"Select * FROM {table} ORDER BY RANDOM() LIMIT {sample_n};"
+        table_sample, _ = self._sql_database.run_sql(sql_str)
+
+        return table_sample
