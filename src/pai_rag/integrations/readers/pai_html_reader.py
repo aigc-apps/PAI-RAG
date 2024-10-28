@@ -221,18 +221,12 @@ class PaiHtmlReader(BaseReader):
         md_content = self.convert_html_to_markdown(file_path)
         logger.info(f"[PaiHtmlReader] successfully processed html file {file_path}.")
         docs = []
-        if metadata:
-            if not extra_info:
-                extra_info = {}
-            doc = Document(text=md_content, extra_info=extra_info)
-
-            docs.append(doc)
+        if metadata and extra_info:
+            extra_info = extra_info
         else:
-            doc = Document(
-                text=md_content,
-                extra_info=dict(),
-            )
-            docs.append(doc)
+            extra_info = dict()
             logger.info(f"processed html file {file_path} without metadata")
+        doc = Document(text=md_content, extra_info=extra_info)
+        docs.append(doc)
         print(f"[PaiHtmlReader] successfully loaded {len(docs)} nodes.")
         return docs
