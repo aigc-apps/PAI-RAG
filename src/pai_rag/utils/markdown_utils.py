@@ -9,12 +9,12 @@ IMAGE_MAX_PIXELS = 512 * 512
 
 
 class PaiTable(BaseModel):
-    data: List[List[str]] = (Field(description="The table data.", default=[]),)
-    row_headers_index: Optional[List[int]] = (
-        Field(description="The table row headers index.", default=None),
+    data: List[List[str]] = Field(description="The table data.", default=[])
+    row_headers_index: Optional[List[int]] = Field(
+        description="The table row headers index.", default=None
     )
-    column_headers_index: Optional[List[int]] = (
-        Field(description="The table column headers index.", default=None),
+    column_headers_index: Optional[List[int]] = Field(
+        description="The table column headers index.", default=None
     )
 
     def get_row_numbers(self):
@@ -24,24 +24,24 @@ class PaiTable(BaseModel):
         return len(self.data[0])
 
     def get_row_headers(self):
-        if len(self.row_headers_index) == 0:
+        if not self.row_headers_index or len(self.row_headers_index) == 0:
             return []
         return [self.data[row] for row in self.row_headers_index]
 
     def get_rows(self):
-        if self.row_headers_index:
+        if self.row_headers_index and len(self.row_headers_index) > 0:
             data_row_start_index = max(self.row_headers_index) + 1
         else:
             data_row_start_index = 0
         return self.data[data_row_start_index:]
 
     def get_column_headers(self):
-        if len(self.column_headers_index) == 0:
+        if not self.column_headers_index or len(self.column_headers_index) == 0:
             return []
         return [[row[i] for i in self.column_headers_index] for row in self.data]
 
     def get_columns(self):
-        if self.column_headers_index:
+        if self.column_headers_index and len(self.column_headers_index) > 0:
             data_col_start_index = max(self.col_headers_index) + 1
         else:
             data_col_start_index = 0
@@ -123,3 +123,35 @@ def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:
         for row in rows:
             markdown.append("| " + " | ".join(row) + " |")
     return "\n".join(markdown)
+
+
+def is_horizontal_table(table: List[List]) -> bool:
+    # if the table is empty or the first (header) of table is empty, it's not a horizontal table
+    if not table or not table[0]:
+        return False
+
+    vertical_value_any_count = 0
+    horizontal_value_any_count = 0
+    vertical_value_all_count = 0
+    horizontal_value_all_count = 0
+
+    """If it is a horizontal table, the probability that each row contains at least one number is higher than the probability that each column contains at least one number.
+    If it is a horizontal table with headers, the number of rows that are entirely composed of numbers will be greater than the number of columns that are entirely composed of numbers.
+    """
+
+    for row in table:
+        if any(isinstance(item, (int, float)) for item in row):
+            horizontal_value_any_count += 1
+        if all(isinstance(item, (int, float)) for item in row):
+            horizontal_value_all_count += 1
+
+    for col in zip(*table):
+        if any(isinstance(item, (int, float)) for item in col):
+            vertical_value_any_count += 1
+        if all(isinstance(item, (int, float)) for item in col):
+            vertical_value_all_count += 1
+
+    return (
+        horizontal_value_any_count >= vertical_value_any_count
+        or horizontal_value_all_count > 0 >= vertical_value_all_count
+    )

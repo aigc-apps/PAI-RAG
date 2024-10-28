@@ -9,6 +9,7 @@ from llama_index.core.schema import Document
 from pai_rag.utils.markdown_utils import (
     transform_local_to_oss,
     convert_table_to_markdown,
+    is_horizontal_table,
     PaiTable,
 )
 from docx import Document as DocxDocument
@@ -102,12 +103,13 @@ class PaiDocxReader(BaseReader):
     def _convert_table_to_markdown(self, table, doc_name):
         total_cols = max(len(row.cells) for row in table.rows)
 
-        header_row = table.rows[0]
-        rows = []
-        headers = self._parse_row(header_row, doc_name, total_cols)
-        for row in table.rows[1:]:
-            rows.append(self._parse_row(row, doc_name, total_cols))
-        table = PaiTable(headers=[headers], rows=rows)
+        table_matrix = []
+        for row in table.rows:
+            table_matrix.append(self._parse_row(row, doc_name, total_cols))
+        if is_horizontal_table(table_matrix):
+            table = PaiTable(data=table_matrix, row_headers_index=[0])
+        else:
+            table = PaiTable(data=table_matrix, column_headers_index=[0])
         return convert_table_to_markdown(table, total_cols)
 
     def _parse_row(self, row, doc_name, total_cols):

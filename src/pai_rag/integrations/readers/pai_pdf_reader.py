@@ -5,7 +5,10 @@ from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
-from pai_rag.utils.markdown_utils import transform_local_to_oss
+from pai_rag.utils.markdown_utils import (
+    transform_local_to_oss,
+    is_horizontal_table,
+)
 from bs4 import BeautifulSoup
 from llama_index.core import Settings
 
@@ -178,7 +181,7 @@ class PaiPDFReader(BaseReader):
     @staticmethod
     def tables_summarize(table: List[List]) -> str:
         table = PaiPDFReader.limit_table_content(table)
-        if not PaiPDFReader.is_horizontal_table(table):
+        if not is_horizontal_table(table):
             table = list(zip(*table))
         table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
         table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
