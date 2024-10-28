@@ -125,11 +125,21 @@ class PaiHtmlReader(BaseReader):
     def _parse_cell_content(self, cell):
         content = []
         for element in cell.contents:
-            images = element.find_all("img")
-            image_links = [img.get("src") for img in images]
-            for image_url in image_links:
-                content.append(f"![]({image_url})")
-            content.append(element.text)
+            if isinstance(element, str):
+                content.append(element.strip())
+            elif element.name == "p":
+                p_content = []
+                for sub_element in element.contents:
+                    if sub_element.name == "img":
+                        image_url = sub_element.get("src")
+                        p_content.append(f"![]({image_url})")
+                    elif isinstance(sub_element, str):
+                        p_content.append(sub_element.strip())
+                    else:
+                        p_content.append(sub_element.text.strip())
+                content.append(" ".join(p_content))
+            else:
+                content.append(element.text.strip())
         return " ".join(content)
 
     def _convert_table_to_markdown(self, table):
