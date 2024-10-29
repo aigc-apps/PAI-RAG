@@ -1,4 +1,4 @@
-from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize
+from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize # ByPass unused import: use for arms trace initialization
 
 import click
 import uvicorn
