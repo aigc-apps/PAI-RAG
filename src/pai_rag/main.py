@@ -1,3 +1,5 @@
+from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize
+
 import click
 import uvicorn
 from fastapi import FastAPI
