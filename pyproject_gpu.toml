@@ -94,6 +94,7 @@ detectron2 = [
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 llama-index-callbacks-arize-phoenix = "0.1.6"
 peft = "^0.12.0"
+aliyun-bootstrap = "^1.0.1"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:run"
