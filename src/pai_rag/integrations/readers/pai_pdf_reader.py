@@ -5,7 +5,10 @@ from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
-from pai_rag.utils.markdown_utils import transform_local_to_oss
+from pai_rag.utils.markdown_utils import (
+    transform_local_to_oss,
+    is_horizontal_table,
+)
 from bs4 import BeautifulSoup
 from llama_index.core import Settings
 
@@ -144,41 +147,9 @@ class PaiPDFReader(BaseReader):
         ]
 
     @staticmethod
-    def is_horizontal_table(table: List[List]) -> bool:
-        # if the table is empty or the first (header) of table is empty, it's not a horizontal table
-        if not table or not table[0]:
-            return False
-
-        vertical_value_any_count = 0
-        horizontal_value_any_count = 0
-        vertical_value_all_count = 0
-        horizontal_value_all_count = 0
-
-        """If it is a horizontal table, the probability that each row contains at least one number is higher than the probability that each column contains at least one number.
-        If it is a horizontal table with headers, the number of rows that are entirely composed of numbers will be greater than the number of columns that are entirely composed of numbers.
-        """
-
-        for row in table:
-            if any(isinstance(item, (int, float)) for item in row):
-                horizontal_value_any_count += 1
-            if all(isinstance(item, (int, float)) for item in row):
-                horizontal_value_all_count += 1
-
-        for col in zip(*table):
-            if any(isinstance(item, (int, float)) for item in col):
-                vertical_value_any_count += 1
-            if all(isinstance(item, (int, float)) for item in col):
-                vertical_value_all_count += 1
-
-        return (
-            horizontal_value_any_count >= vertical_value_any_count
-            or horizontal_value_all_count > 0 >= vertical_value_all_count
-        )
-
-    @staticmethod
     def tables_summarize(table: List[List]) -> str:
         table = PaiPDFReader.limit_table_content(table)
-        if not PaiPDFReader.is_horizontal_table(table):
+        if not is_horizontal_table(table):
             table = list(zip(*table))
         table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
         table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
