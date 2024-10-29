@@ -21,6 +21,9 @@ import logging
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
+from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
+    PaiMultiModalLlm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,12 @@ class RagQcaGenerator:
         prompt_str = self.text_question_template.format(
             context_str=node.text, num_questions_per_chunk=1
         )
-        response = await self._llm.acomplete(prompt=prompt_str, image_documents=None)
+        if isinstance(self._llm, PaiMultiModalLlm):
+            response = await self._llm.acomplete(
+                prompt=prompt_str, image_documents=None
+            )
+        else:
+            response = await self._llm.acomplete(prompt=prompt_str)
         result = str(response).strip().split("\n")
         cleaned_questions = [
             re.sub(r"^\d+[\).\s]", "", question).strip() for question in result
@@ -96,7 +104,10 @@ class RagQcaGenerator:
             prompt_str = self.text_question_answer_template.format(
                 context_str=node.text, query_str=query
             )
-            qr_task = self._llm.acomplete(prompt=prompt_str, image_documents=None)
+            if isinstance(self._llm, PaiMultiModalLlm):
+                qr_task = self._llm.acomplete(prompt=prompt_str, image_documents=None)
+            else:
+                qr_task = self._llm.acomplete(prompt=prompt_str)
             qr_tasks.append(qr_task)
         answer_responses: List[RESPONSE_TYPE] = await run_jobs(
             qr_tasks, self._show_progress, self._workers

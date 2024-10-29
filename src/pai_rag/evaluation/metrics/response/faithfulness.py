@@ -8,6 +8,7 @@ from llama_index.core.prompts import (
 )
 from llama_index.core.evaluation.base import EvaluationResult
 from pai_rag.evaluation.metrics.response.base import LlmMetric
+from llama_index.multi_modal_llms.openai import OpenAIMultiModal
 
 DEFAULT_EVAL_TEMPLATE = PromptTemplate(
     "Please tell if a given piece of information "
@@ -79,7 +80,7 @@ class Faithfulness(LlmMetric):
         super().__init__(llm, raise_error, eval_template)
 
     def parse_eval_result(self, eval_result: str):
-        raw_response_txt = eval_result.text.lower()
+        raw_response_txt = eval_result.lower()
         if "yes" in raw_response_txt:
             passing = True
         else:
@@ -110,7 +111,12 @@ class Faithfulness(LlmMetric):
             query_str=query,
             context_str="\n".join(contexts),
         )
-        raw_response = await self._llm.acomplete(prompt=prompt_str)
+        if isinstance(self._llm, OpenAIMultiModal):
+            raw_response = await self._llm.acomplete(
+                prompt=prompt_str, image_documents=None
+            )
+        else:
+            raw_response = await self._llm.acomplete(prompt=prompt_str)
 
         # Use the parser function
-        return self.parse_eval_result(raw_response)
+        return self.parse_eval_result(str(raw_response))

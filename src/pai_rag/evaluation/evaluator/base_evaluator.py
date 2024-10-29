@@ -9,6 +9,10 @@ from pai_rag.evaluation.dataset.rag_eval_dataset import (
     EvaluationSample,
     PaiRagEvalDataset,
 )
+from llama_index.core.llama_dataset import (
+    CreatedBy,
+    CreatedByType,
+)
 from pai_rag.evaluation.dataset.rag_qca_dataset import PaiRagQcaDataset
 
 
@@ -31,6 +35,9 @@ class BaseEvaluator:
         ]
         self.evaluation_dataset_path = os.path.join(
             self.persist_path, "evaluation_dataset.json"
+        )
+        self.created_by = CreatedBy(
+            type=CreatedByType.AI, model_name=self._llm.metadata.model_name
         )
         self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
         self._show_progress = True
@@ -75,6 +82,7 @@ class BaseEvaluator:
         for metric in self.retrieval_evaluators:
             metric_score = metric.compute(reference_node_id, predicted_node_id)
             setattr(retrieval_eval_example, metric.metric_name, metric_score)
+            setattr(retrieval_eval_example, "evaluated_by", self.created_by)
 
         return retrieval_eval_example
 
@@ -91,6 +99,7 @@ class BaseEvaluator:
             setattr(
                 response_eval_example, f"{metric.metric_name}_reason", metric_result[1]
             )
+            setattr(response_eval_example, "evaluated_by", self.created_by)
 
         return response_eval_example
 

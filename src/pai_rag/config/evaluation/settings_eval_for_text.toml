@@ -33,7 +33,7 @@ embed_batch_size = 10
 
 [rag.index]
 persist_path = "localdata/eval_exp_data/storage"
-enable_multimodal = true
+enable_multimodal = false
 vector_store.type = "FAISS"
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
@@ -62,7 +62,7 @@ proba_threshold = 0.10
 type = "Sentence"
 chunk_size = 500
 chunk_overlap = 10
-enable_multimodal = true
+enable_multimodal = false
 
 [rag.oss_store]
 bucket = ""

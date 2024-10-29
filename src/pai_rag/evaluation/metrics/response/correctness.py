@@ -6,60 +6,51 @@ from llama_index.core.evaluation.base import EvaluationResult
 from llama_index.core.llms.llm import LLM
 from llama_index.core.prompts import (
     BasePromptTemplate,
-    ChatMessage,
-    ChatPromptTemplate,
-    MessageRole,
     PromptTemplate,
 )
 from pai_rag.evaluation.metrics.response.base import LlmMetric
+from llama_index.multi_modal_llms.openai import OpenAIMultiModal
 
-DEFAULT_SYSTEM_TEMPLATE = """
-You are an expert evaluation system for a question answering chatbot.
 
-You are given the following information:
-- a user query, and
-- a generated answer
+DEFAULT_EVAL_TEMPLATE = PromptTemplate(
+    """
+    You are an expert evaluation system for a question answering chatbot.
 
-You may also be given a reference answer to use for reference in your evaluation.
+    You are given the following information:
+    - a user query, and
+    - a generated answer
 
-Your job is to judge the relevance and correctness of the generated answer.
-Output a single score that represents a holistic evaluation.
-You must return your response in a line with only the score.
-Do not return answers in any other format.
-On a separate line provide your reasoning for the score as well.
+    You may also be given a reference answer to use for reference in your evaluation.
 
-Follow these guidelines for scoring:
-- Your score has to be between 1 and 5, where 1 is the worst and 5 is the best.
-- If the generated answer is not relevant to the user query, \
-you should give a score of 1.
-- If the generated answer is relevant but contains mistakes, \
-you should give a score between 2 and 3.
-- If the generated answer is relevant and fully correct, \
-you should give a score between 4 and 5.
+    Your job is to judge the relevance and correctness of the generated answer.
+    Output a single score that represents a holistic evaluation.
+    You must return your response in a line with only the score.
+    Do not return answers in any other format.
+    On a separate line provide your reasoning for the score as well.
 
-Example Response:
-4.0
-The generated answer has the exact same metrics as the reference answer, \
-    but it is not as concise.
+    Follow these guidelines for scoring:
+    - Your score has to be between 1 and 5, where 1 is the worst and 5 is the best.
+    - If the generated answer is not relevant to the user query, \
+    you should give a score of 1.
+    - If the generated answer is relevant but contains mistakes, \
+    you should give a score between 2 and 3.
+    - If the generated answer is relevant and fully correct, \
+    you should give a score between 4 and 5.
 
-"""
+    Example Response:
+    4.0
+    The generated answer has the exact same metrics as the reference answer, \
+        but it is not as concise.
 
-DEFAULT_USER_TEMPLATE = """
-## User Query
-{query}
+    ## User Query
+    {query}
 
-## Reference Answer
-{reference_answer}
+    ## Reference Answer
+    {reference_answer}
 
-## Generated Answer
-{generated_answer}
-"""
-
-DEFAULT_EVAL_TEMPLATE = ChatPromptTemplate(
-    message_templates=[
-        ChatMessage(role=MessageRole.SYSTEM, content=DEFAULT_SYSTEM_TEMPLATE),
-        ChatMessage(role=MessageRole.USER, content=DEFAULT_USER_TEMPLATE),
-    ]
+    ## Generated Answer
+    {generated_answer}
+    """
 )
 
 
@@ -132,12 +123,23 @@ class Correctness(LlmMetric):
         if query is None or response is None:
             raise ValueError("query, and response must be provided")
 
-        raw_response = await self._llm.apredict(
-            prompt=self._eval_template,
+        # raw_response = await self._llm.apredict(
+        #     prompt=self._eval_template,
+        #     query=query,
+        #     generated_answer=response,
+        #     reference_answer=reference or "(NO REFERENCE ANSWER SUPPLIED)",
+        # )
+        prompt_str = self._eval_template.format(
             query=query,
             generated_answer=response,
             reference_answer=reference or "(NO REFERENCE ANSWER SUPPLIED)",
         )
+        if isinstance(self._llm, OpenAIMultiModal):
+            raw_response = await self._llm.acomplete(
+                prompt=prompt_str, image_documents=None
+            )
+        else:
+            raw_response = await self._llm.acomplete(prompt=prompt_str)
 
         # Use the parser function
-        return self.parse_eval_result(raw_response)
+        return self.parse_eval_result(str(raw_response))
