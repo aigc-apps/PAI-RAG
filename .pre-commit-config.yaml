@@ -57,7 +57,7 @@ repos:
       - id: black-jupyter
         name: black-docs-py
         alias: black
-        files: ^(docs/|examples/)
+        files: ^(docs/|examples/|main.py)
         # Using PEP 8's line length in docs prevents excess left/right scrolling
         args: [--line-length=79]
   - repo: https://github.com/adamchainz/blacken-docs
