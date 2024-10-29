@@ -4,7 +4,7 @@ import os
 from pai_rag.integrations.readers.markdown_reader import MarkdownReader
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
-from pai_rag.integrations.readers.html.html_reader import HtmlReader
+from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
 from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
 from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
@@ -32,8 +32,14 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
     image_reader = PaiImageReader(oss_cache=oss_store)
 
     file_readers = {
-        ".html": HtmlReader(),
-        ".htm": HtmlReader(),
+        ".html": PaiHtmlReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing html images
+        ),
+        ".htm": PaiHtmlReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing html images
+        ),
         ".docx": PaiDocxReader(
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing docx images
