@@ -225,7 +225,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
@@ -249,7 +251,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -275,7 +279,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -308,7 +314,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
@@ -448,7 +456,6 @@ class RagWebClient:
         r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
-
         config = RagConfig.model_validate_json(json_data=r.text)
         return config
 

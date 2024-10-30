@@ -1,15 +1,15 @@
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api import query
+from pai_rag.app.api import agent_demo
 from pai_rag.app.api.middleware import init_middleware
 from pai_rag.app.api.error_handler import config_app_errors
 
 
 def init_router(app: FastAPI):
-    api_router = APIRouter()
-    api_router.include_router(query.router, tags=["RagQuery"])
-    app.include_router(api_router, prefix="/service")
+    app.include_router(query.router, prefix="/service", tags=["RAG"])
+    app.include_router(agent_demo.demo_router, tags=["AgentDemo"], prefix="/demo/api")
 
 
 def configure_app(app: FastAPI, rag_configuration: RagConfigManager):

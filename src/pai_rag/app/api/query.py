@@ -69,7 +69,14 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 @router.post("/query/agent")
 async def aquery_agent(query: RagQuery):
-    return await rag_service.aquery_agent(query)
+    response = await rag_service.aquery_agent(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/config/agent")

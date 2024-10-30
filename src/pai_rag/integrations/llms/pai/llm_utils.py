@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.parse import urljoin
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.multi_modal_llms.openai import OpenAIMultiModal
@@ -64,7 +65,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
         )
         llm = OpenAILike(
             model=llm_config.model,
-            api_base=llm_config.endpoint,
+            api_base=urljoin(llm_config.endpoint, "v1"),
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,

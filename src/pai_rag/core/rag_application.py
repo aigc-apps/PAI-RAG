@@ -53,7 +53,7 @@ async def event_generator_async(
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
-            yield json.dumps(chunk, ensure_ascii=False) + "\n"
+            yield "data: " + json.dumps(chunk, ensure_ascii=False) + "\n"
 
     if chat_store:
         chat_store.add_message(
@@ -66,7 +66,9 @@ async def event_generator_async(
     else:
         last_chunk = {"delta": "", "is_finished": True}
 
-    yield json.dumps(last_chunk, default=lambda x: x.dict(), ensure_ascii=False)
+    yield "data: " + json.dumps(
+        last_chunk, default=lambda x: x.dict(), ensure_ascii=False
+    ) + "\n"
 
 
 class RagApplication:
@@ -169,17 +171,17 @@ class RagApplication:
         self.logger.info(f"Querying with question '{new_question}'.")
 
         if query.with_intent:
-            intent_router = resolve_intent_router(
-                "IntentDetectionModule", session_config
-            )
-            intent = await intent_router.aselect(str_or_query_bundle=query)
+            intent_router = resolve_intent_router(session_config)
+            intent = await intent_router.aselect(str_or_query_bundle=new_question)
             self.logger.info(f"[IntentDetection] Routing query to {intent}.")
-            if intent.intent == Intents.TOOL:
+            if intent == Intents.TOOL:
                 return await self.aquery_agent(query)
-            elif intent.intent == Intents.WEBSEARCH:
-                return await self.aquery(query, RagChatType.WEB)
-            elif intent.intent != Intents.RAG:
-                return ValueError(f"Invalid intent {intent.intent}")
+            elif intent == Intents.WEBSEARCH:
+                chat_type = RagChatType.WEB
+            elif intent == Intents.NL2SQL:
+                return await self.aquery_analysis(query)
+            elif intent != Intents.RAG:
+                return ValueError(f"Invalid intent {intent}")
 
         query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)
         chat_store.add_message(
@@ -250,8 +252,12 @@ class RagApplication:
             return RagResponse(answer="Empty query. Please input your question.")
 
         agent = resolve_agent(self.config)
-        response = await agent.achat(query.question)
-        return RagResponse(answer=response.response)
+        if query.stream:
+            response = await agent.astream_chat(query.question)
+            return event_generator_async(response)
+        else:
+            response = await agent.achat(query.question)
+            return RagResponse(answer=response.response)
 
     async def aload_agent_config(self, agent_cfg_path: str):
         if os.path.exists(agent_cfg_path):

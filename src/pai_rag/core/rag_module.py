@@ -111,7 +111,8 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
 
 def resolve_agent(config: RagConfig) -> PaiAgent:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
-    agent = PaiAgent.from_tools(
+    agent = resolve(
+        cls=PaiAgent.from_tools,
         agent_config=config.agent,
         llm=llm,
     )
