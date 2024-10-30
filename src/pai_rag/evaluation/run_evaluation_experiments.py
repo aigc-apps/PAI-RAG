@@ -26,18 +26,20 @@ def calculate_md5_from_json(data):
 
 
 def run_experiment(exp_params):
-    name = exp_params["name"]
-    logging.info(f"Running experiment with name={name}, exp_params={exp_params}")
+    exp_name = exp_params["name"]
+    logging.info(f"Running experiment with name={exp_name}, exp_params={exp_params}")
     try:
         # 运行实验并获取结果
         result = run_evaluation_pipeline(
-            config=exp_params["setting_file"],
-            data_path=exp_params["data_path"],
-            name=name,
+            config=exp_params["rag_setting_file"],
+            data_path=exp_params["eval_data_path"],
+            exp_name=exp_name,
+            eval_model_source=exp_params["eval_model_source"],
+            eval_model_name=exp_params["eval_model_name"],
         )
-        logging.info(f"Finished experiment with name={name}")
+        logging.info(f"Finished experiment with name={exp_name}")
     except Exception as e:
-        logging.error(f"Error running experiment {name}: {e}")
+        logging.error(f"Error running experiment {exp_name}: {e}")
 
     return {"name": exp_params["name"], "parameters": exp_params, "result": result}
 

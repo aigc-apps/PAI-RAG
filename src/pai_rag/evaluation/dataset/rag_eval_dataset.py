@@ -3,6 +3,7 @@ from llama_index.core.bridge.pydantic import Field
 import json
 from llama_index.core.bridge.pydantic import BaseModel
 from pai_rag.evaluation.dataset.rag_qca_dataset import RagQcaSample
+from llama_index.core.llama_dataset import CreatedBy
 
 
 class EvaluationSample(RagQcaSample):
@@ -35,6 +36,9 @@ class EvaluationSample(RagQcaSample):
     correctness_reason: Optional[str] = Field(
         default_factory=None,
         description="The correctness reason for response evaluation.",
+    )
+    evaluated_by: Optional[CreatedBy] = Field(
+        default=None, description="What model generated the evaluation result."
     )
 
     @property
