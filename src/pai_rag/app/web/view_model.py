@@ -120,6 +120,15 @@ class ViewModel(BaseModel):
     text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_TMPL
     multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
+    # agent
+    agent_api_definition: str = None  # API tool definition
+    agent_function_definition: str = None  # Function tool definition
+    agent_python_scripts: str = None  # Function scripts
+    agent_system_prompt: str = None  # Agent system prompt
+
+    # intent
+    intent_description: str = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -216,6 +225,15 @@ class ViewModel(BaseModel):
             )
         view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
         view_model.synthesizer_prompt = config.data_analysis.synthesizer_prompt
+
+        view_model.agent_api_definition = config.agent.api_definition
+        view_model.agent_function_definition = config.agent.function_definition
+        view_model.agent_python_scripts = config.agent.python_scripts
+        view_model.agent_system_prompt = config.agent.system_prompt
+
+        view_model.intent_description = json.dumps(
+            config.intent.descriptions, ensure_ascii=False, sort_keys=True, indent=4
+        )
 
         return view_model
 
@@ -327,7 +345,13 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
-        print(config)
+        config["intent"]["descriptions"] = json.loads(self.intent_description)
+
+        config["agent"]["system_prompt"] = self.agent_system_prompt
+        config["agent"]["python_scripts"] = self.agent_python_scripts
+        config["agent"]["function_definition"] = self.agent_function_definition
+        config["agent"]["api_definition"] = self.agent_api_definition
+
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -504,5 +528,13 @@ class ViewModel(BaseModel):
         settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
         settings["synthesizer_prompt"] = {"value": self.synthesizer_prompt}
 
-        print(settings)
+        settings["agent_system_prompt"] = {"value": self.agent_system_prompt}
+        settings["agent_python_scripts"] = {"value": self.agent_python_scripts}
+        settings["agent_api_definition"] = {"value": self.agent_api_definition}
+        settings["agent_function_definition"] = {
+            "value": self.agent_function_definition
+        }
+
+        settings["intent_description"] = {"value": self.intent_description}
+
         return settings

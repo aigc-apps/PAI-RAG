@@ -53,6 +53,8 @@ class PaiLlm(OpenAILike):
             return LLMMetadata(
                 model_name=self.model,
                 num_output=DEFAULT_MAX_TOKENS,
+                is_chat_model=True,
+                is_function_calling_model=True,
             )
 
     def complete(

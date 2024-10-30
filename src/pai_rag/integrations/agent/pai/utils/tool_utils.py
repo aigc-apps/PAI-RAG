@@ -1,13 +1,12 @@
 from llama_index.core.tools import FunctionTool
-import os
-import logging
-from pai_rag.integrations.agent.pai.base_tool import ApiTool, PaiAgentToolDefinition
+from pai_rag.integrations.agent.pai.base_tool import ApiTool, PaiAgentDefinition
 from pai_rag.integrations.agent.pai.utils.default_tool_description_template import (
     DEFAULT_CALCULATE_MULTIPLY,
     DEFAULT_CALCULATE_ADD,
     DEFAULT_CALCULATE_DIVIDE,
     DEFAULT_CALCULATE_SUBTRACT,
 )
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -95,47 +94,30 @@ def {function_name}({param_str}):
     return globals()[function_name]
 
 
-def get_customized_tools(agent_config):
+def get_customized_tools(agent_definition: PaiAgentDefinition):
     tools = []
 
-    # 首先尝试加载python代码文件
-    if agent_config.python_script_file and os.path.exists(
-        agent_config.python_script_file
-    ):
-        with open(
-            agent_config.python_script_file, "r", encoding="utf-8"
-        ) as python_file:
-            python_scripts = python_file.read()
-            if python_scripts:
-                exec(python_scripts, globals())
-                logger.info(f"Loaded python scripts: {python_scripts}")
+    # 首先尝试加载python代码
+    if agent_definition.python_scripts:
+        exec(agent_definition.python_scripts, globals())
+        logger.info(f"Loaded python scripts: {agent_definition.python_scripts}")
 
-    # 对于tool definition，分别解析api tool和自定义function tool
-    if agent_config.tool_definition_file and os.path.exists(
-        agent_config.tool_definition_file
-    ):
-        with open(
-            agent_config.tool_definition_file, "r", encoding="utf-8"
-        ) as agent_file:
-            json_str = agent_file.read()
-            custom_tool_config = PaiAgentToolDefinition.model_validate_json(json_str)
+    for api_tool in agent_definition.api_tools:
+        api_func = generate_api_function(api_tool=api_tool)
+        tool = FunctionTool.from_defaults(
+            name=api_tool.name,
+            description=api_tool.description,
+            fn=api_func,
+        )
+        print(f"Loaded api tool definition {tool.metadata}")
+        tools.append(tool)
 
-            for api_tool in custom_tool_config.api_tools:
-                api_func = generate_api_function(api_tool=api_tool)
-                tool = FunctionTool.from_defaults(
-                    name=api_tool.name,
-                    description=api_tool.description,
-                    fn=api_func,
-                )
-                print(f"Loaded api tool definition {tool.metadata}")
-                tools.append(tool)
-
-            for func_tool in custom_tool_config.function_tools:
-                tool = FunctionTool.from_defaults(
-                    name=func_tool.function.name,
-                    description=func_tool.function.description,
-                    fn=globals()[func_tool.function.name],
-                )
-                print(f"Loaded function tool definition {tool.metadata}")
-                tools.append(tool)
+    for func_tool in agent_definition.function_tools:
+        tool = FunctionTool.from_defaults(
+            name=func_tool.function.name,
+            description=func_tool.function.description,
+            fn=globals()[func_tool.function.name],
+        )
+        print(f"Loaded function tool definition {tool.metadata}")
+        tools.append(tool)
     return tools

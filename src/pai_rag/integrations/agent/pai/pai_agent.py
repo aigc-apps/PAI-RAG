@@ -1,4 +1,3 @@
-from pydantic import BaseModel
 from typing import (
     Any,
     Dict,
@@ -7,6 +6,7 @@ from typing import (
     Optional,
     Type,
 )
+from flask import json
 from llama_index.agent.openai.step import OpenAIAgentWorker
 from llama_index.core.agent.runner.base import AgentRunner
 from llama_index.core.callbacks import CallbackManager
@@ -18,10 +18,10 @@ from llama_index.core.objects.base import ObjectRetriever
 from llama_index.core.settings import Settings
 from llama_index.core.tools import BaseTool
 from llama_index.llms.openai.utils import OpenAIToolCall
+from pai_rag.integrations.agent.pai.base_tool import AgentConfig, PaiAgentDefinition
 from pai_rag.integrations.agent.pai.utils.tool_utils import (
     get_customized_tools,
 )
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,19 +29,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_FUNCTION_CALLS = 5
 
 
-# TODO: move to each integration
-class AgentConfig(BaseModel):
-    tool_definition_file: str | None = None
-    python_script_file: str | None = None
-
-
 def get_tools(agent_config: AgentConfig):
-    tools = []
-    # tools.extend(get_calculator_tools())
-    # logger.info(f"Loaded calculator tools.")
-    tools.extend(get_customized_tools(agent_config))
-    logger.info("Loaded custom tools.")
+    json_object = {
+        "system_prompt": agent_config.system_prompt,
+        "api_tools": json.loads(agent_config.api_definition),
+        "python_scripts": agent_config.python_scripts,
+        "function_tools": json.loads(agent_config.function_definition),
+    }
 
+    agent_definition = PaiAgentDefinition.model_validate(json_object)
+    tools = []
+    tools.extend(get_customized_tools(agent_definition))
+    logger.info("Loaded custom tools.")
     return tools
 
 
