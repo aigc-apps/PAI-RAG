@@ -65,8 +65,9 @@ chunk_overlap = 10
 enable_multimodal = true
 
 [rag.oss_store]
-bucket = ""
+bucket = "pai-rag"
 endpoint = "oss-cn-hangzhou.aliyuncs.com"
+prefix = "evaluation"
 
 [rag.postprocessor]
 reranker_type = "no-reranker" # [simple-weighted-reranker, model-based-reranker]

@@ -1,16 +1,11 @@
 """Llm metric for response evaluation."""
 from abc import abstractmethod
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 from llama_index.core.evaluation.base import EvaluationResult
 from llama_index.core.llms.llm import LLM
-from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.prompts.mixin import PromptMixin, PromptMixinType
-
-DEFAULT_EVAL_TEMPLATE = PromptTemplate(
-    "Information: {query_str}\n" "Context: {context_str}\n" "Answer: " "Reason: "
-)
 
 
 class LlmMetric(PromptMixin):
@@ -24,17 +19,10 @@ class LlmMetric(PromptMixin):
         self,
         llm: Optional[LLM] = None,
         raise_error: bool = False,
-        eval_template: Optional[Union[str, BasePromptTemplate]] = None,
     ) -> None:
         """Init params."""
         self._llm = llm
         self._raise_error = raise_error
-
-        self._eval_template: BasePromptTemplate
-        if isinstance(eval_template, str):
-            self._eval_template = PromptTemplate(eval_template)
-        else:
-            self._eval_template = eval_template or DEFAULT_EVAL_TEMPLATE
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
@@ -56,8 +44,9 @@ class LlmMetric(PromptMixin):
     async def aevaluate(
         self,
         query: str | None = None,
-        response: str | None = None,
+        reference_answer: str | None = None,
         contexts: Sequence[str] | None = None,
+        response_answer: str | None = None,
         **kwargs: Any,
     ) -> EvaluationResult:
         """Run evaluation with query string, retrieved contexts,

@@ -17,7 +17,7 @@ from pai_rag.evaluation.dataset.rag_qca_dataset import PaiRagQcaDataset
 
 
 class BaseEvaluator:
-    def __init__(self, llm, persist_path: str = None):
+    def __init__(self, llm, persist_path: str = None, enable_multi_modal: bool = False):
         self._llm = llm
         self.persist_path = persist_path
         self.hitrate = HitRate()
@@ -42,6 +42,7 @@ class BaseEvaluator:
         self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
         self._show_progress = True
         self._workers = 2
+        self.enable_multi_modal = enable_multi_modal
 
     def load_qca_dataset(self) -> None:
         if os.path.exists(self.qca_dataset_path):
@@ -89,10 +90,30 @@ class BaseEvaluator:
     async def compute_response_metrics(self, qca_sample):
         response_eval_example = EvaluationSample(**vars(qca_sample))
         query = response_eval_example.query
-        response = response_eval_example.reference_answer
+        reference_answer = response_eval_example.reference_answer
+        response_answer = response_eval_example.predicted_answer
+        reference_image_url_list = response_eval_example.reference_image_url_list
         contexts = response_eval_example.predicted_contexts
+
         for metric in self.response_evaluators:
-            metric_result = await metric.aevaluate(query, response, contexts)
+            if self.enable_multi_modal:
+                metric_result = await metric.aevaluate_multimodal(
+                    query,
+                    reference_answer,
+                    contexts,
+                    reference_image_url_list,
+                    response_answer,
+                    sleep_time_in_seconds=0.5,
+                )
+            else:
+                metric_result = await metric.aevaluate(
+                    query,
+                    reference_answer,
+                    contexts,
+                    response_answer,
+                    sleep_time_in_seconds=0.5,
+                )
+
             setattr(
                 response_eval_example, f"{metric.metric_name}_score", metric_result[0]
             )

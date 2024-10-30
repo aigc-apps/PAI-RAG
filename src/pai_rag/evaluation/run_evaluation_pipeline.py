@@ -34,6 +34,7 @@ def _create_components(
     """Create all components from the default config file."""
     config = RagConfigManager.from_file(config_file).get_value()
     mode = "image" if config.retriever.search_image else "text"
+    config.synthesizer.use_multimodal_llm = True if mode == "image" else False
 
     print(f"Creating RAG evaluation components for mode: {mode}...")
 
@@ -61,11 +62,13 @@ def _create_components(
         vector_index=vector_index,
         query_engine=query_engine,
         persist_path=config.index.vector_store.persist_path,
+        enable_multi_modal=True if mode == "image" else False,
     )
 
     evaluator = BaseEvaluator(
         llm=eval_llm,
         persist_path=config.index.vector_store.persist_path,
+        enable_multi_modal=True if mode == "image" else False,
     )
 
     return data_loader, qca_generator, evaluator
