@@ -122,10 +122,10 @@ class PaiAgent(AgentRunner):
 
         memory = memory or memory_cls.from_defaults(chat_history, llm=llm)
 
-        # if not llm.metadata.is_function_calling_model:
-        #    raise ValueError(
-        #        f"Model name {llm.model} does not support function calling API. "
-        #    )
+        if not llm.metadata.is_function_calling_model:
+            raise ValueError(
+                f"Model name {llm.model} does not support function calling API. "
+            )
 
         if system_prompt is not None:
             if prefix_messages is not None:
