@@ -226,9 +226,9 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         if chat_history is not None:
             history_messages = parse_chat_messages(chat_history)
             for hist_mes in history_messages:
-                self._chat_store.add_message(hist_mes)
+                self._chat_store.add_message(key=session_id, message=hist_mes)
 
-        chat_history = self._chat_store.get_messages(session_id)
+        chat_history = self._chat_store.get_messages(key=session_id)
         if not chat_history:
             # Keep the question as is if there's no conversation context.
             return query_bundle

@@ -110,7 +110,7 @@ class RagConfig(BaseModel):
         BeforeValidator(validate_case_insensitive),
     ]
 
-    intent: IntentConfig | None = None
+    intent: IntentConfig = IntentConfig()
 
     # node_enhancement
     node_enhancement: NodeEnhancementConfig

@@ -25,10 +25,17 @@ class Intents(str, Enum):
     WEBSEARCH = "websearch"
     RAG = "rag"
     TOOL = "tool"
+    NL2SQL = "nl2sql"
+
+
+DEFAULT_INTENT_DESCRIPTIONS = {
+    Intents.RAG: DEFAULT_RAG_DESCRIPTION,
+    Intents.TOOL: DEFAULT_TOOL_DESCRIPTION,
+}
 
 
 class IntentConfig(BaseModel):
-    descriptions: Dict[str, str] = {}
+    descriptions: Dict[Intents, str] = DEFAULT_INTENT_DESCRIPTIONS
 
 
 class PaiIntentRouter:
@@ -37,12 +44,6 @@ class PaiIntentRouter:
         intent_config: IntentConfig,
         llm: LLM,
     ):
-        if intent_config.descriptions is None or len(intent_config.descriptions) == 0:
-            intent_config.descriptions = {
-                Intents.RAG: DEFAULT_RAG_DESCRIPTION,
-                Intents.TOOL: DEFAULT_TOOL_DESCRIPTION,
-            }
-
         self.choices = [
             ToolMetadata(name=name, description=description)
             for name, description in intent_config.descriptions.items()
@@ -52,8 +53,8 @@ class PaiIntentRouter:
         )
 
     async def aselect(self, str_or_query_bundle: QueryType) -> Intents:
-        if len(self.choices) == 1:
-            return self.choices[0].name
+        if len(self.choices) <= 1:
+            return Intents.RAG
 
         selector_result = await self.selector.aselect(
             choices=self.choices, query=str_or_query_bundle
@@ -65,8 +66,8 @@ class PaiIntentRouter:
         return self.choices[select_index].name
 
     def select(self, str_or_query_bundle: QueryType) -> Intents:
-        if len(self.choices) == 1:
-            return self.choices[0].name
+        if len(self.choices) <= 1:
+            return Intents.RAG
 
         selector_result = self.selector.select(
             choices=self.choices, query=str_or_query_bundle

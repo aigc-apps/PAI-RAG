@@ -3,6 +3,7 @@ import gradio as gr
 import os
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
+from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_client import DEFAULT_LOCAL_URL, rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
@@ -83,11 +84,9 @@ def make_homepage():
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        """ hide agent tab
         with gr.Tab("\N{rocket} Agent"):
             agent_elements = create_agent_tab()
             elem_manager.add_elems(agent_elements)
-        """
         with gr.Tab("\N{bar chart} Data Analysis"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
