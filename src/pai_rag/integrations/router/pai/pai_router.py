@@ -53,8 +53,10 @@ class PaiIntentRouter:
         )
 
     async def aselect(self, str_or_query_bundle: QueryType) -> Intents:
-        if len(self.choices) <= 1:
+        if len(self.choices) <= 0:
             return Intents.RAG
+        elif len(self.choices) == 1:
+            return self.choices[0].name
 
         selector_result = await self.selector.aselect(
             choices=self.choices, query=str_or_query_bundle

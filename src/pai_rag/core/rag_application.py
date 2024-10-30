@@ -252,7 +252,6 @@ class RagApplication:
             return RagResponse(answer="Empty query. Please input your question.")
 
         agent = resolve_agent(self.config)
-        query.stream = True
         if query.stream:
             response = await agent.astream_chat(query.question)
             return event_generator_async(response)
