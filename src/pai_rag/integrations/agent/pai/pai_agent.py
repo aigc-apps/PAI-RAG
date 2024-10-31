@@ -126,7 +126,7 @@ class PaiAgent(AgentRunner):
                 f"Model name {llm.model} does not support function calling API. "
             )
 
-        if agent_config.system_prompt is not None:
+        if agent_config is not None and agent_config.system_prompt is not None:
             if prefix_messages is not None:
                 raise ValueError(
                     "Cannot specify both system_prompt and prefix_messages"
