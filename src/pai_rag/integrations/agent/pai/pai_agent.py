@@ -6,7 +6,7 @@ from typing import (
     Optional,
     Type,
 )
-from flask import json
+import json
 from llama_index.agent.openai.step import OpenAIAgentWorker
 from llama_index.core.agent.runner.base import AgentRunner
 from llama_index.core.callbacks import CallbackManager
@@ -26,7 +26,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_FUNCTION_CALLS = 5
+DEFAULT_MAX_FUNCTION_CALLS = 10
 
 
 def get_tools(agent_config: AgentConfig):
@@ -98,7 +98,6 @@ class PaiAgent(AgentRunner):
         max_function_calls: int = DEFAULT_MAX_FUNCTION_CALLS,
         default_tool_choice: str = "auto",
         callback_manager: Optional[CallbackManager] = None,
-        system_prompt: Optional[str] = None,
         prefix_messages: Optional[List[ChatMessage]] = None,
         tool_call_parser: Optional[Callable[[OpenAIToolCall], Dict]] = None,
         **kwargs: Any,
@@ -127,12 +126,14 @@ class PaiAgent(AgentRunner):
                 f"Model name {llm.model} does not support function calling API. "
             )
 
-        if system_prompt is not None:
+        if agent_config.system_prompt is not None:
             if prefix_messages is not None:
                 raise ValueError(
                     "Cannot specify both system_prompt and prefix_messages"
                 )
-            prefix_messages = [ChatMessage(content=system_prompt, role="system")]
+            prefix_messages = [
+                ChatMessage(content=agent_config.system_prompt, role="system")
+            ]
 
         prefix_messages = prefix_messages or []
 
