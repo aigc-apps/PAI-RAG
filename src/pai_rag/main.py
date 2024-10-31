@@ -1,3 +1,5 @@
+from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize # ByPass unused import: use for arms trace initialization
+
 import click
 import uvicorn
 from fastapi import FastAPI
@@ -68,14 +70,14 @@ app = FastAPI()
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.option("-V", "--version", is_flag=True, help="Show version and exit.")
-def main(ctx, version):
+def run(ctx, version):
     if version:
         click.echo(version)
     elif ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
 
-@main.command()
+@run.command()
 @click.option(
     "-h",
     "--host",
@@ -105,7 +107,7 @@ def ui(host, port, rag_url):
     uvicorn.run(app, host=host, port=port, loop="asyncio")
 
 
-@main.command()
+@run.command()
 @click.option(
     "-h",
     "--host",
@@ -157,12 +159,10 @@ def ui(host, port, rag_url):
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
     from pai_rag.app.api.service import configure_app
-    from pai_rag.core.rag_module import setup_tracing
     from pai_rag.utils.download_models import ModelScopeDownloader
 
     rag_configuration = RagConfigManager.from_file(config_file)
     rag_configuration.persist()
-    setup_tracing(rag_configuration.get_value().trace)
 
     if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
         logger.info("Start to download models.")
@@ -178,3 +178,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
     app = FastAPI()
     configure_app(app, rag_configuration)
     uvicorn.run(app=app, host=host, port=port, loop="asyncio", workers=workers)
+
+
+if __name__ == "__main__":
+    serve()

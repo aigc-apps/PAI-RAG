@@ -2,7 +2,7 @@ import click
 import os
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.rag_module import resolve_query_engine, setup_tracing
+from pai_rag.core.rag_module import resolve_query_engine
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 import logging
 
@@ -44,7 +44,6 @@ def run(
     logging.basicConfig(level=logging.INFO)
 
     config = RagConfigManager.from_file(config_file).get_value()
-    setup_tracing(config.trace)
 
     query_engine = resolve_query_engine(config)
 
