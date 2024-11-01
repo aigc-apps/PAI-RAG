@@ -222,7 +222,10 @@ Agentic RAG支持通过API调用的方式，以支持更多复杂的业务场景
 ### RAG - 知识库问答
 
 ```sh
-curl -X POST http://localhost:8001/service/query -H "Authorization: YOUR_TOKEN" -H "Content-Type: application/json" -d '{"question": "什么是组件化技术", "with_intent": true, "stream": true}'
+curl -X POST http://localhost:8001/service/query \
+-H "Authorization: YOUR_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{"question": "什么是组件化技术", "with_intent": true, "stream": true}'
 ```
 
 **Response**
@@ -346,8 +349,11 @@ data: {"delta": "", "is_finished": true, "session_id": "671bb4e8ca324a34ac6fe7f1
 
 ### 使用工具 - 查询时间（内置工具）
 
-```json
-curl -X POST http://localhost:8001/service/query -H "Authorization: YOUR_TOKEN" -H "Content-Type: application/json" -d '{"question": "今天的日期", "with_intent": true, "stream": true}'
+```sh
+curl -X POST http://localhost:8001/service/query \
+-H "Authorization: YOUR_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{"question": "今天的日期", "with_intent": true, "stream": true}'
 ```
 
 **Response**
@@ -376,8 +382,11 @@ data: {"delta": "", "is_finished": true}
 
 ### 使用工具 - 查询天气
 
-```json
-curl -X POST http://localhost:8001/service/query -H "Authorization: YOUR_TOKEN" -H "Content-Type: application/json" -d '{"question": "杭州的天气", "with_intent": true, "stream": true}'
+```sh
+curl -X POST http://localhost:8001/service/query \
+-H "Authorization: YOUR_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{"question": "杭州的天气", "with_intent": true, "stream": true}'
 ```
 
 **RESPONSE**
