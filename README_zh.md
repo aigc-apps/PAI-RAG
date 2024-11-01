@@ -264,14 +264,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 - Agent及调用Function Tool的简单对话
 
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
-```
-
 # Agentic RAG
 
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
-[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
+[Agentic RAG](./docs/agentic_rag.md)
 
 # Data Analysis
 
