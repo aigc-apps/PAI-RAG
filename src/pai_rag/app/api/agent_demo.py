@@ -94,9 +94,56 @@ highspeed_trains_data = [
         "arrival_time": "00:30",
         "price": 870,
     },
+    {
+        "train_number": "G85",
+        "from": "上海",
+        "to": "北京",
+        "departure_time": "09:00",
+        "arrival_time": "14:30",
+        "price": 900,
+    },
+    {
+        "train_number": "G87",
+        "from": "上海",
+        "to": "北京",
+        "departure_time": "11:00",
+        "arrival_time": "17:30",
+        "price": 1001,
+    },
+    {
+        "train_number": "G88",
+        "from": "上海",
+        "to": "北京",
+        "departure_time": "13:10",
+        "arrival_time": "17:40",
+        "price": 767,
+    },
+    {
+        "train_number": "G110",
+        "from": "上海",
+        "to": "北京",
+        "departure_time": "18:00",
+        "arrival_time": "23:30",
+        "price": 598,
+    },
 ]
 
 hotels_data = [
+    {
+        "hotel_name": "大地花园酒店",
+        "city": "北京",
+        "price_per_night": 300,
+    },
+    {
+        "hotel_name": "凯悦酒店",
+        "city": "北京",
+        "price_per_night": 1000,
+    },
+    {
+        "hotel_name": "秋果酒店金融街店",
+        "city": "北京",
+        "price_per_night": 500,
+    },
     {
         "hotel_name": "万豪酒店",
         "city": "上海",

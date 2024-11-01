@@ -32,6 +32,8 @@ def test_customized_api_tool():
     agent_definition = PaiAgentDefinition.model_validate(json_object)
 
     tools = get_customized_tools(agent_definition)
-    assert tools[0].metadata.name == "search_flight_ticket_api"
-    assert tools[0].metadata.description == "帮助用户获取机票信息，用户需要输入出发地、目的地"
-    assert tools[0].fn.__name__ == "search_flight_ticket_api"
+    assert tools[0].metadata.name == "get_current_datetime"
+
+    assert tools[1].metadata.name == "search_flight_ticket_api"
+    assert tools[1].metadata.description == "帮助用户获取机票信息，用户需要输入出发地、目的地"
+    assert tools[1].fn.__name__ == "search_flight_ticket_api"

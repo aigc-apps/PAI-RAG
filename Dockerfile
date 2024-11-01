@@ -11,7 +11,7 @@ WORKDIR /app
 COPY . .
 
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
-RUN aliyun-bootstrap -a install
+RUN poetry run aliyun-bootstrap -a install
 
 FROM python:3.11-slim AS prod
 

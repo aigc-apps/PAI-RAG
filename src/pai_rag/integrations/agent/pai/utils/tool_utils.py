@@ -1,3 +1,4 @@
+import datetime
 from llama_index.core.tools import FunctionTool
 from pai_rag.integrations.agent.pai.base_tool import ApiTool, PaiAgentDefinition
 from pai_rag.integrations.agent.pai.utils.default_tool_description_template import (
@@ -5,10 +6,27 @@ from pai_rag.integrations.agent.pai.utils.default_tool_description_template impo
     DEFAULT_CALCULATE_ADD,
     DEFAULT_CALCULATE_DIVIDE,
     DEFAULT_CALCULATE_SUBTRACT,
+    DEFAULT_GET_DATETIME_TOOL,
 )
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_time_tools():
+    def get_current_datetime():
+        """
+        Get the current date and time in the given format.
+        """
+        output_format = "%Y-%m-%d %H:%M:%S"
+        return datetime.datetime.now().strftime(output_format)
+
+    get_current_datetime_tool = FunctionTool.from_defaults(
+        fn=get_current_datetime,
+        name="get_current_datetime",
+        description=DEFAULT_GET_DATETIME_TOOL,
+    )
+    return [get_current_datetime_tool]
 
 
 def get_calculator_tools():
@@ -96,6 +114,7 @@ def {function_name}({param_str}):
 
 def get_customized_tools(agent_definition: PaiAgentDefinition):
     tools = []
+    tools.extend(get_time_tools())
 
     # 首先尝试加载python代码
     if agent_definition.python_scripts:
