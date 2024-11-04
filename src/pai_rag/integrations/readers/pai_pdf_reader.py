@@ -298,7 +298,7 @@ class PaiPDFReader(BaseReader):
                 elif parse_method == "ocr":
                     pipe = OCRPipe(pdf_bytes, model_json, image_writer)
                 else:
-                    logger("unknown parse method, only auto, ocr, txt allowed")
+                    logger.error("unknown parse method, only auto, ocr, txt allowed")
                     exit(1)
 
                 # 执行分类
@@ -309,11 +309,8 @@ class PaiPDFReader(BaseReader):
                     if model_config.__use_inside_model__:
                         pipe.pipe_analyze()  # 解析
                     else:
-                        logger("need model list input")
+                        logger.error("need model list input")
                         exit(1)
-
-                # Some dirty code from mineru modified log level to warning
-                logging.getLogger().setLevel(logging.INFO)
 
                 # 执行解析
                 pipe.pipe_parse()
@@ -328,7 +325,7 @@ class PaiPDFReader(BaseReader):
             return new_md_content
 
         except Exception as e:
-            logger(e)
+            logger.error(e)
             return None
 
     def load_data(
