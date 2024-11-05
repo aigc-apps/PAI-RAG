@@ -8,6 +8,7 @@ import markdown
 import html
 import mimetypes
 from http import HTTPStatus
+from loguru import logger
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -425,7 +426,7 @@ class RagWebClient:
             if r.status_code != HTTPStatus.OK:
                 raise RagApiError(code=r.status_code, msg=response.message)
         except Exception as e:
-            print(f"add_datasheet failed: {e}")
+            logger.exception(f"add_datasheet failed: {e}")
         finally:
             file_obj.close()
 

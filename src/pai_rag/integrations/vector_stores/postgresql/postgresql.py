@@ -1,4 +1,4 @@
-import logging
+from loguru import logger
 import re
 from typing import Any, List, NamedTuple, Optional, Type, Union
 from urllib.parse import quote_plus
@@ -30,9 +30,6 @@ class DBEmbeddingRow(NamedTuple):
     text: str
     metadata: dict
     similarity: float
-
-
-_logger = logging.getLogger(__name__)
 
 
 def get_data_model(
@@ -333,7 +330,7 @@ class PGVectorStore(BasePydanticVectorStore):
                 statement = sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS pg_jieba")
                 session.execute(statement)
             except Exception:
-                _logger.warning("create extension pg_jieba failed")
+                logger.warning("create extension pg_jieba failed")
             session.commit()
 
     def _initialize(self) -> None:
@@ -357,12 +354,12 @@ class PGVectorStore(BasePydanticVectorStore):
                         session.execute(
                             sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
                         )
-                        _logger.info("session load jieba_load_user_dict success!")
+                        logger.info("session load jieba_load_user_dict success!")
                     session.commit()
             except Exception as e:
-                _logger.warning(e)
+                logger.warning(e)
             self._is_extension_load = True
-            _logger.info("load extension done!")
+            logger.info("load extension done!")
 
     async def _async_extension_load(self) -> None:
         if not self._is_async_extension_load:
@@ -376,11 +373,11 @@ class PGVectorStore(BasePydanticVectorStore):
                         await async_session.execute(
                             sqlalchemy.text("SELECT jieba_load_user_dict(0,0)")
                         )
-                        _logger.info("async_session load jieba_load_user_dict success!")
+                        logger.info("async_session load jieba_load_user_dict success!")
             except Exception as e:
-                _logger.warning(e)
+                logger.warning(e)
             self._is_async_extension_load = True
-            _logger.info("async load extension done!")
+            logger.info("async load extension done!")
 
     def _node_to_table_row(self, node: BaseNode) -> Any:
         return self._table_class(
@@ -442,7 +439,7 @@ class PGVectorStore(BasePydanticVectorStore):
         elif operator == FilterOperator.CONTAINS:
             return "@>"
         else:
-            _logger.warning(f"Unknown operator: {operator}, fallback to '='")
+            logger.warning(f"Unknown operator: {operator}, fallback to '='")
             return "="
 
     def _build_filter_clause(self, filter_: MetadataFilter) -> Any:
@@ -707,7 +704,7 @@ class PGVectorStore(BasePydanticVectorStore):
         import asyncio
 
         if query.alpha is not None:
-            _logger.warning("postgres hybrid search does not support alpha parameter.")
+            logger.warning("postgres hybrid search does not support alpha parameter.")
 
         sparse_top_k = query.sparse_top_k or query.similarity_top_k
 
@@ -731,7 +728,7 @@ class PGVectorStore(BasePydanticVectorStore):
         self, query: VectorStoreQuery, **kwargs: Any
     ) -> List[DBEmbeddingRow]:
         if query.alpha is not None:
-            _logger.warning("postgres hybrid search does not support alpha parameter.")
+            logger.warning("postgres hybrid search does not support alpha parameter.")
 
         sparse_top_k = query.sparse_top_k or query.similarity_top_k
 

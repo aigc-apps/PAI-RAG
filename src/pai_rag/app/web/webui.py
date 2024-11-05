@@ -20,11 +20,9 @@ from pai_rag.app.web.ui_constants import (
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 
-import logging
+from loguru import logger
 
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
-
-logger = logging.getLogger("WebUILogger")
 
 
 def resume_ui():
@@ -131,6 +129,6 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
     home = make_homepage()
     home.queue(concurrency_count=1, max_size=64)
     home._queue.set_url(web_url)
-    print(web_url)
+    logger.info(f"web_url: {web_url}")
     gr.mount_gradio_app(app, home, path="")
     return home

@@ -1,4 +1,3 @@
-import logging
 from typing import Any, List, Optional, Sequence
 
 from llama_index.core.indices.base import BaseIndex
@@ -16,8 +15,6 @@ MODIFIED_INDEX_STRUCT_TYPE_TO_INDEX_CLASS = INDEX_STRUCT_TYPE_TO_INDEX_CLASS
 MODIFIED_INDEX_STRUCT_TYPE_TO_INDEX_CLASS[
     IndexStructType.MULTIMODAL_VECTOR_STORE
 ] = PaiMultiModalVectorStoreIndex
-
-logger = logging.getLogger(__name__)
 
 
 def load_index_from_storage(

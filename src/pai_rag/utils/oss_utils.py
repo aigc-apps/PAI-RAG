@@ -1,6 +1,5 @@
 import oss2
 import os
-
 from pai_rag.core.rag_config import RagConfig
 
 

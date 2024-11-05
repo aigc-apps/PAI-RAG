@@ -18,6 +18,7 @@ from pai_rag.utils.prompt_template import (
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.utils.messages_utils import parse_chat_messages
+from loguru import logger
 
 DEFAULT_FUSION_NUM_QUERIES = 4
 
@@ -86,7 +87,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         queries = [q.strip() for q in queries if q.strip()]
         if self._verbose:
             queries_str = "\n".join(queries)
-            print(f"Generated queries:\n{queries_str}")
+            logger.info(f"Generated queries:\n{queries_str}")
 
         # The LLM often returns more queries than we asked for, so trim the list.
         return [
@@ -113,7 +114,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         queries = [q.strip() for q in queries if q.strip()]
         if self._verbose:
             queries_str = "\n".join(queries)
-            print(f"Generated queries:\n{queries_str}")
+            logger.info(f"Generated queries:\n{queries_str}")
 
         # The LLM often returns more queries than we asked for, so trim the list.
         return [

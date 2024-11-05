@@ -1,7 +1,7 @@
 """Elasticsearch vector store."""
 
 import asyncio
-from logging import getLogger
+from loguru import logger
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
 import nest_asyncio
@@ -35,8 +35,6 @@ from llama_index.vector_stores.elasticsearch.utils import (
     get_elasticsearch_client,
     get_user_agent,
 )
-
-logger = getLogger(__name__)
 
 DISTANCE_STRATEGIES = Literal[
     "COSINE",

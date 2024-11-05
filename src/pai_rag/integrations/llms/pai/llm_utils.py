@@ -1,4 +1,3 @@
-import logging
 import os
 from urllib.parse import urljoin
 from llama_index.llms.openai import OpenAI
@@ -14,7 +13,7 @@ from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def create_llm(llm_config: PaiBaseLlmConfig):

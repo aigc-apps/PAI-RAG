@@ -7,9 +7,7 @@ from llama_index.storage.chat_store.redis import RedisChatStore
 from llama_index.core.storage.chat_store.base import BaseChatStore
 from pydantic import BaseModel
 from llama_index.core.bridge.pydantic import PrivateAttr
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 CHAT_STORE_FILE = "chat_store.json"
 DEFAULT_LOCAL_STORAGE_PATH = "./localdata/storage/"

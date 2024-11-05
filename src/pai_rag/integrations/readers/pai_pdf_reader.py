@@ -23,15 +23,13 @@ import time
 import tempfile
 import re
 from PIL import Image
-
-
-import logging
 import os
 import json
+from loguru import logger
+
 
 model_config.__use_inside_model__ = True
 
-logger = logging.getLogger(__name__)
 
 IMAGE_MAX_PIXELS = 512 * 512
 TABLE_SUMMARY_MAX_ROW_NUM = 5
@@ -188,7 +186,7 @@ class PaiPDFReader(BaseReader):
                             markdown_content, item["img_path"], ocr_content
                         )
                 else:
-                    print(f"警告：图片文件不存在 {img_path}")
+                    logger.warning(f"警告：图片文件不存在 {img_path}")
         return markdown_content
 
     def post_process_multi_level_headings(self, json_data, md_content):
@@ -374,5 +372,5 @@ class PaiPDFReader(BaseReader):
             )
             docs.append(doc)
             logger.info(f"processed pdf file {file_path} without metadata")
-        print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

@@ -1,9 +1,8 @@
 import os
-import logging
 from typing import List
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 MODEL_NAME = "bge-m3"
 

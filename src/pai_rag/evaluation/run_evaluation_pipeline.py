@@ -14,13 +14,11 @@ from pai_rag.integrations.llms.pai.pai_multi_modal_llm import (
 )
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.evaluation.evaluator.base_evaluator import BaseEvaluator
-import logging
+from loguru import logger
 
 from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.integrations.llms.pai.llm_utils import create_llm, create_multi_modal_llm
 
-
-logger = logging.getLogger(__name__)
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
@@ -36,7 +34,7 @@ def _create_components(
     mode = "image" if config.retriever.search_image else "text"
     config.synthesizer.use_multimodal_llm = True if mode == "image" else False
 
-    print(f"Creating RAG evaluation components for mode: {mode}...")
+    logger.info(f"Creating RAG evaluation components for mode: {mode}...")
 
     config.index.vector_store.persist_path = (
         f"{config.index.vector_store.persist_path}__{exp_name}"
@@ -105,5 +103,7 @@ def run_evaluation_pipeline(
     _ = asyncio.run(qca_generator.agenerate_qca_dataset(stage="predicted"))
     retrieval_result = asyncio.run(evaluator.aevaluation(stage="retrieval"))
     response_result = asyncio.run(evaluator.aevaluation(stage="response"))
-    print("retrieval_result", retrieval_result, "response_result", response_result)
+    logger.info(
+        "retrieval_result", retrieval_result, "response_result", response_result
+    )
     return {"retrieval": retrieval_result, "response": response_result}

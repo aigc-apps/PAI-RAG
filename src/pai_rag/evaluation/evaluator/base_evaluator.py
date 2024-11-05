@@ -14,6 +14,7 @@ from llama_index.core.llama_dataset import (
     CreatedByType,
 )
 from pai_rag.evaluation.dataset.rag_qca_dataset import PaiRagQcaDataset
+from loguru import logger
 
 
 class BaseEvaluator:
@@ -48,7 +49,7 @@ class BaseEvaluator:
         if os.path.exists(self.qca_dataset_path):
             rag_qca_dataset = PaiRagQcaDataset.from_json(self.qca_dataset_path)
             if rag_qca_dataset.labelled and rag_qca_dataset.predicted:
-                print(
+                logger.info(
                     f"Labelled QCA dataset already exists at {self.qca_dataset_path}."
                 )
                 return rag_qca_dataset
@@ -58,12 +59,14 @@ class BaseEvaluator:
                     "Please either label it or provide a new one."
                 )
         else:
-            print("No existing QCA dataset found. You can proceed to create a new one.")
+            logger.info(
+                "No existing QCA dataset found. You can proceed to create a new one."
+            )
             return None
 
     def load_evaluation_dataset(self) -> None:
         if os.path.exists(self.evaluation_dataset_path):
-            print(
+            logger.info(
                 f"A evaluation dataset already exists at {self.evaluation_dataset_path}."
             )
             evaluation_dataset = PaiRagEvalDataset.from_json(
@@ -71,7 +74,7 @@ class BaseEvaluator:
             )
             return evaluation_dataset
         else:
-            print(
+            logger.info(
                 "No existing evaluation dataset found. You can proceed to create a new one."
             )
             return None
@@ -130,7 +133,7 @@ class BaseEvaluator:
         evaluation_dataset = self.load_evaluation_dataset()
         qca_dataset = self.load_qca_dataset()
         if evaluation_dataset:
-            print(
+            logger.info(
                 f"A evaluation dataset already exists with status: [[{evaluation_dataset.status}]]"
             )
             _status = evaluation_dataset.status
@@ -139,7 +142,9 @@ class BaseEvaluator:
             else:
                 qca_dataset = evaluation_dataset
         if qca_dataset:
-            print(f"Starting to generate evaluation dataset for stage: [[{stage}]]...")
+            logger.info(
+                f"Starting to generate evaluation dataset for stage: [[{stage}]]..."
+            )
             eval_tasks = []
             for qca in qca_dataset.examples:
                 if stage == "retrieval":

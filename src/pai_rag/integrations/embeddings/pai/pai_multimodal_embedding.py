@@ -5,13 +5,11 @@ from llama_index.core.base.embeddings.base import Embedding
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
 from llama_index.core.schema import ImageType, BaseNode, ImageNode
-import logging
+from loguru import logger
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
-
-logger = logging.getLogger(__name__)
 
 
 class PaiMultiModalEmbedding(MultiModalEmbedding):

@@ -4,7 +4,6 @@ An index that is built on top of multiple vector stores for different modalities
 
 """
 
-import logging
 from typing import Any, List, Optional, Sequence, cast
 
 from llama_index.core.base.embeddings.base import BaseEmbedding
@@ -37,8 +36,7 @@ from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pai_rag.integrations.index.pai.multimodal.multimodal_retriever import (
     PaiMultiModalVectorIndexRetriever,
 )
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
@@ -217,7 +215,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             else:
                 result = node.copy()
 
-            # print("===", is_image, node.node_id, len(result.embedding))
             results.append(result)
         return results
 

@@ -1,6 +1,6 @@
 import yaml
 import click
-import logging
+from loguru import logger
 import time
 import json
 import hashlib
@@ -27,7 +27,7 @@ def calculate_md5_from_json(data):
 
 def run_experiment(exp_params):
     exp_name = exp_params["name"]
-    logging.info(f"Running experiment with name={exp_name}, exp_params={exp_params}")
+    logger.info(f"Running experiment with name={exp_name}, exp_params={exp_params}")
     try:
         # 运行实验并获取结果
         result = run_evaluation_pipeline(
@@ -37,9 +37,9 @@ def run_experiment(exp_params):
             eval_model_source=exp_params["eval_model_source"],
             eval_model_name=exp_params["eval_model_name"],
         )
-        logging.info(f"Finished experiment with name={exp_name}")
+        logger.info(f"Finished experiment with name={exp_name}")
     except Exception as e:
-        logging.error(f"Error running experiment {exp_name}: {e}")
+        logger.error(f"Error running experiment {exp_name}: {e}")
 
     return {"name": exp_params["name"], "parameters": exp_params, "result": result}
 
@@ -63,4 +63,4 @@ def run(input_exp_config=None, output_path=None):
     with open(output_path, "w") as result_file:
         json.dump(results, result_file, ensure_ascii=False, indent=4)
 
-    logging.info(f"Results saved to {output_path}")
+    logger.info(f"Results saved to {output_path}")

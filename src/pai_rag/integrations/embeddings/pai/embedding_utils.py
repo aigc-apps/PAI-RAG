@@ -12,9 +12,7 @@ from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from pai_rag.integrations.embeddings.clip.cnclip_embedding import CnClipEmbedding
 import os
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def create_embedding(embed_config: PaiBaseEmbeddingConfig):

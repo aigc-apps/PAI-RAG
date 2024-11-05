@@ -22,9 +22,7 @@ from pai_rag.integrations.agent.pai.base_tool import AgentConfig, PaiAgentDefini
 from pai_rag.integrations.agent.pai.utils.tool_utils import (
     get_customized_tools,
 )
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 DEFAULT_MAX_FUNCTION_CALLS = 10
 

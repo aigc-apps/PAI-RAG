@@ -4,6 +4,7 @@ from PIL.PngImagePlugin import PngImageFile
 from typing import Any, List, Optional
 from llama_index.core.bridge.pydantic import Field, BaseModel
 import math
+from loguru import logger
 
 IMAGE_MAX_PIXELS = 512 * 512
 
@@ -84,12 +85,12 @@ def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -
             },  # set public read to make image accessible
             path_prefix=f"pairag/doc_images/{doc_name.strip()}/",
         )
-        print(
+        logger.info(
             f"Cropped image {image_url} with width={image.width}, height={image.height}."
         )
         return image_url
     except Exception as e:
-        print(f"无法打开图片 '{image}': {e}")
+        logger.warning(f"无法打开图片 '{image}': {e}")
 
 
 def _table_to_markdown(self, table, doc_name):

@@ -1,3 +1,4 @@
+import os
 from typing import Any
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
@@ -29,9 +30,6 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
-import logging
-
-logger = logging.getLogger(__name__)
 
 cls_cache = {}
 
@@ -61,6 +59,8 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             cls=OssClient,
             bucket_name=config.oss_store.bucket,
             endpoint=config.oss_store.endpoint,
+            ak=os.getenv("OSS_ACCESS_KEY_ID", None),
+            sk=os.getenv("OSS_ACCESS_KEY_SECRET", None),
         )
 
     data_reader = resolve(

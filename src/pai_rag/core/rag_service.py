@@ -13,10 +13,9 @@ from pai_rag.app.api.models import (
 )
 from openinference.instrumentation import using_attributes
 from typing import Dict, List
-import logging
+from loguru import logger
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
-logger = logging.getLogger(__name__)
 
 
 def trace_correlation_id(function):

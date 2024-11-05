@@ -1,4 +1,3 @@
-import logging
 import os
 import pickle
 import json
@@ -8,7 +7,7 @@ from llama_index.core.schema import BaseNode, TextNode, NodeWithScore
 from pai_rag.utils.tokenizer import jieba_tokenizer
 from scipy.sparse import csr_matrix
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 MAX_DOC_LIMIT = 9000000000  # 9B
 

@@ -4,14 +4,12 @@ from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
 from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 
-import logging
+from loguru import logger
 
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class PaiEmbedding(BaseEmbedding):

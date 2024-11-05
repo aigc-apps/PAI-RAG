@@ -8,9 +8,7 @@ from pai_rag.integrations.agent.pai.utils.default_tool_description_template impo
     DEFAULT_CALCULATE_SUBTRACT,
     DEFAULT_GET_DATETIME_TOOL,
 )
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def get_time_tools():
@@ -128,7 +126,7 @@ def get_customized_tools(agent_definition: PaiAgentDefinition):
             description=api_tool.description,
             fn=api_func,
         )
-        print(f"Loaded api tool definition {tool.metadata}")
+        logger.info(f"Loaded api tool definition {tool.metadata}")
         tools.append(tool)
 
     for func_tool in agent_definition.function_tools:
@@ -137,6 +135,6 @@ def get_customized_tools(agent_definition: PaiAgentDefinition):
             description=func_tool.function.description,
             fn=globals()[func_tool.function.name],
         )
-        print(f"Loaded function tool definition {tool.metadata}")
+        logger.info(f"Loaded function tool definition {tool.metadata}")
         tools.append(tool)
     return tools

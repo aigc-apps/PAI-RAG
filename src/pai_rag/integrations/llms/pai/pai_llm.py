@@ -23,9 +23,6 @@ from pai_rag.integrations.llms.pai.llm_config import (
     DEFAULT_MAX_TOKENS,
     PaiBaseLlmConfig,
 )
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class PaiLlm(OpenAILike):

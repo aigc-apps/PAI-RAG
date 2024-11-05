@@ -1,4 +1,3 @@
-import logging
 import os
 from typing import Coroutine, List, Any, Sequence
 from llama_index.core.base.base_query_engine import BaseQueryEngine
@@ -32,7 +31,7 @@ from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25Index
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):

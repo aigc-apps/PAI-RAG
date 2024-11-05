@@ -7,9 +7,7 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.async_utils import run_jobs
 import os
 import re
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class TextQAExtractor(BaseExtractor):
@@ -95,9 +93,9 @@ class TextQAExtractor(BaseExtractor):
         Q_index = [obj.span() for obj in list(partten_question.finditer(text))]
         A_index = [obj.span() for obj in list(partten_answer.finditer(text))]
         if len(Q_index) != len(A_index) or len(Q_index) == 0 or len(A_index) == 0:
-            print("text: ", text)
-            print("Q_index: ", Q_index)
-            print("A_index: ", A_index)
+            logger.debug("text: ", text)
+            logger.debug("Q_index: ", Q_index)
+            logger.debug("A_index: ", A_index)
             if len(Q_index) == len(A_index) + 1:
                 # 截断的情况
                 Q_index = Q_index[:-1]
@@ -114,7 +112,7 @@ class TextQAExtractor(BaseExtractor):
         QA_list[1].append(text[A_index[-1][1] :].strip())
         QA_dict = {QA_list[0][i]: QA_list[1][i] for i in range(len(Q_index))}
         # {Q1: A1, Q2: A2}
-        print(QA_dict)
+        logger.debug(QA_dict)
         return QA_dict
 
     def _get_prompt_template(self):

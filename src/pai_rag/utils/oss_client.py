@@ -1,14 +1,12 @@
-import logging
 import hashlib
 import oss2
 import os
 from oss2.credentials import EnvironmentVariableCredentialsProvider
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class OssClient:
-    def __init__(self, bucket_name: str, endpoint: str):
+    def __init__(self, bucket_name: str, endpoint: str, ak: str = None, sk: str = None):
         auth = oss2.ProviderAuth(EnvironmentVariableCredentialsProvider())
         self.bucket_name = bucket_name
         self.endpoint = endpoint

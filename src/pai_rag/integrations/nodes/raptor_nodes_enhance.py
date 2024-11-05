@@ -16,9 +16,7 @@ from llama_index.core.schema import TransformComponent
 from pai_rag.integrations.nodes.raptor_clusters import get_clusters
 from pai_rag.utils.prompt_template import DEFAULT_SUMMARY_PROMPT
 
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RaptorProcessor(TransformComponent):

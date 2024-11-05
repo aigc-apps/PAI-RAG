@@ -7,11 +7,10 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 import faiss
-import logging
+from loguru import logger
 
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 
-logger = logging.getLogger(__name__)
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
 DEFAULT_SEARCH_COUNT = 10

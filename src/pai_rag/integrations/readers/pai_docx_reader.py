@@ -1,7 +1,6 @@
 """Docs parser.
 
 """
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
@@ -18,8 +17,9 @@ import os
 from PIL import Image
 import time
 from io import BytesIO
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 IMAGE_MAX_PIXELS = 512 * 512
 
 
@@ -265,5 +265,5 @@ class PaiDocxReader(BaseReader):
             )
             docs.append(doc)
             logger.info(f"processed doc file {file_path} without metadata")
-        print(f"[PaiDocxReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiDocxReader] successfully loaded {len(docs)} nodes.")
         return docs

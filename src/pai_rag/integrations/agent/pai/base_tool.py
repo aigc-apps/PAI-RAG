@@ -1,9 +1,7 @@
 from typing import Dict, List, Self
 from pydantic import BaseModel, model_validator
 from openai.types.beta.function_tool import FunctionTool
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 DEFAULT_TOOL_DEFINITION_FILE = "./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/tools.json"
 DEFAULT_PYTHONSCRIPT_FILE = "./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/tools.py"

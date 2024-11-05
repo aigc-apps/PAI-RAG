@@ -4,11 +4,8 @@ from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.core.rag_module import resolve_data_loader
-import logging
+from loguru import logger
 
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
@@ -72,8 +69,7 @@ def run(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     config = RagConfigManager.from_file(config_file).get_value()
-    ModelScopeDownloader().load_basic_models()
-    ModelScopeDownloader().load_mineru_config()
+    ModelScopeDownloader().load_rag_models()
     data_loader = resolve_data_loader(config)
     data_loader.load_data(
         file_path_or_directory=data_path,
@@ -82,3 +78,4 @@ def run(
         from_oss=oss_path is not None,
         enable_raptor=enable_raptor,
     )
+    logger.info("Load data tool invoke finished")

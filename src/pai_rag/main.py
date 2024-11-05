@@ -4,14 +4,9 @@ import click
 import uvicorn
 from fastapi import FastAPI
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR, EAS_DEFAULT_MODEL_DIR
-from logging.config import dictConfig
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 import os
 from pathlib import Path
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 _BASE_DIR = Path(__file__).parent
 _ROOT_BASE_DIR = Path(__file__).parent.parent.parent
@@ -25,45 +20,6 @@ DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
 DEFAULT_GRADIO_PORT = 8002
 
 
-def init_log():
-    log_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "filters": {
-            "correlation_id": {
-                "()": "asgi_correlation_id.CorrelationIdFilter",
-                "uuid_length": 32,
-                "default_value": "-",
-            },
-        },
-        "formatters": {
-            "sample": {
-                "format": "%(asctime)s %(levelname)s [%(correlation_id)s] %(message)s"
-            },
-            "verbose": {
-                "format": "%(asctime)s %(levelname)s [%(correlation_id)s] %(name)s %(process)d %(thread)d %(message)s"
-            },
-            "access": {
-                "()": "uvicorn.logging.AccessFormatter",
-                "fmt": '%(asctime)s %(levelprefix)s %(client_addr)s [%(correlation_id)s] - "%(request_line)s" %(status_code)s',
-            },
-        },
-        "handlers": {
-            "console": {
-                "formatter": "verbose",
-                "level": "DEBUG",
-                "filters": ["correlation_id"],
-                "class": "logging.StreamHandler",
-            },
-        },
-        "loggers": {
-            "": {"level": "INFO", "handlers": ["console"]},
-        },
-    }
-    dictConfig(log_config)
-
-
-init_log()
 app = FastAPI()
 
 
@@ -163,16 +119,7 @@ def serve(host, port, config_file, workers, enable_example, skip_download_models
 
     rag_configuration = RagConfigManager.from_file(config_file)
     rag_configuration.persist()
-
-    if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
-        logger.info("Start to download models.")
-        ModelScopeDownloader().load_basic_models()
-        ModelScopeDownloader().load_mineru_config()
-        logger.info("Finished downloading models.")
-    else:
-        logger.info("Start to loading minerU config file.")
-        ModelScopeDownloader().load_mineru_config()
-        logger.info("Finished loading minerU config file.")
+    ModelScopeDownloader().load_rag_models(skip_download_models)
 
     os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
     app = FastAPI()

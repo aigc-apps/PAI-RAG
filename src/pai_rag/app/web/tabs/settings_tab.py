@@ -4,11 +4,8 @@ from pai_rag.app.web.ui_constants import EMBEDDING_API_KEY_DICT
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
-import logging
 import os
 import pai_rag.app.web.event_listeners as ev_listeners
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
