@@ -69,6 +69,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
+            is_chat_model=True,
             max_tokens=llm_config.max_tokens,
             reuse_client=False,
         )
@@ -128,6 +129,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
+            is_chat_model=True,
             max_new_tokens=llm_config.max_tokens,
         )
     else:

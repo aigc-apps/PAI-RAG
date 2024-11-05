@@ -22,7 +22,7 @@ def respond(
 
     rag_client.patch_config(update_dict)
 
-    response_gen = rag_client.query(agent_question, with_intent=True, stream=True)
+    response_gen = rag_client.query(agent_question, with_intent=True, stream=False)
     content = ""
     agent_chatbot.append((agent_question, content))
     for resp in response_gen:
