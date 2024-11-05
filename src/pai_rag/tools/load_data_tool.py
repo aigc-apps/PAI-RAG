@@ -2,6 +2,7 @@ import click
 import os
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
+from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.core.rag_module import resolve_data_loader
 import logging
 
@@ -71,7 +72,8 @@ def run(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     config = RagConfigManager.from_file(config_file).get_value()
-
+    ModelScopeDownloader().load_basic_models()
+    ModelScopeDownloader().load_mineru_config()
     data_loader = resolve_data_loader(config)
     data_loader.load_data(
         file_path_or_directory=data_path,
