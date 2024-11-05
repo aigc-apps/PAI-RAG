@@ -6,7 +6,7 @@ from loguru import logger
 
 
 class OssClient:
-    def __init__(self, bucket_name: str, endpoint: str, ak: str = None, sk: str = None):
+    def __init__(self, bucket_name: str, endpoint: str):
         auth = oss2.ProviderAuth(EnvironmentVariableCredentialsProvider())
         self.bucket_name = bucket_name
         self.endpoint = endpoint

@@ -1,4 +1,3 @@
-import os
 from typing import Any
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
@@ -59,8 +58,6 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             cls=OssClient,
             bucket_name=config.oss_store.bucket,
             endpoint=config.oss_store.endpoint,
-            ak=os.getenv("OSS_ACCESS_KEY_ID", None),
-            sk=os.getenv("OSS_ACCESS_KEY_SECRET", None),
         )
 
     data_reader = resolve(
