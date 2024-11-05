@@ -306,9 +306,7 @@ class RagApplication:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")
 
         if not query.stream:
-            response = await analysis_tool.aquery(
-                query.question, streaming=query.stream
-            )
+            response = await analysis_tool.aquery(query.question)
         else:
             response = await analysis_tool.astream_query(query.question)
 

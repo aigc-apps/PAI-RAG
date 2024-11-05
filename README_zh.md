@@ -57,17 +57,20 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```bash
     pip install poetry
     poetry install
+    aliyun-bootstrap -a install
    ```
 
-### (2) GPU环境
+   ### (2) GPU环境
 
-首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
+   首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
 
-```bash
-mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-pip install poetry
-poetry install
-```
+   ```bash
+   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+   pip install poetry
+   poetry install
+   aliyun-bootstrap -a install
+
+   ```
 
 - 常见网络超时问题
 
