@@ -81,6 +81,8 @@ class PaiAgent(AgentRunner):
             callback_manager=callback_manager,
             default_tool_choice=default_tool_choice,
         )
+        tool_metadata = [tool.metadata for tool in tools]
+        logger.info(f"Pai Agent Runner successfully set up with tools: {tool_metadata}")
 
     @classmethod
     def from_tools(
@@ -144,6 +146,5 @@ class PaiAgent(AgentRunner):
             verbose=verbose,
             max_function_calls=max_function_calls,
             callback_manager=callback_manager,
-            default_tool_choice=default_tool_choice,
             tool_call_parser=tool_call_parser,
         )

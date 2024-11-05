@@ -62,6 +62,7 @@ Use poetry to install project dependency packages directly:
 ```bash
 pip install poetry
 poetry install
+poetry run aliyun-bootstrap -a install
 ```
 
 ### (2) GPU
@@ -72,6 +73,7 @@ First replace the default pyproject.toml with the GPU version, and then use poet
 mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
 pip install poetry
 poetry install
+poetry run aliyun-bootstrap -a install
 ```
 
 - Common network timeout issues
