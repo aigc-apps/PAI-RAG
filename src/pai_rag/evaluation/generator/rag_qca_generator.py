@@ -213,11 +213,13 @@ class RagQcaGenerator:
         qca_sample.predicted_answer = response.response
         predicted_contexts = []
         predicted_node_id = []
+        predicted_node_score = []
         predicted_image_url_list = []
         for node in response.source_nodes:
             if type(node.node) is TextNode:
                 predicted_contexts.append(node.node.text)
                 predicted_node_id.append(node.node.node_id)
+                predicted_node_score.append(node.score)
                 image_url_infos = node.node.metadata.get("image_info_list", None)
                 if image_url_infos:
                     predicted_image_url_list.extend(
@@ -233,6 +235,7 @@ class RagQcaGenerator:
 
         qca_sample.predicted_contexts = predicted_contexts
         qca_sample.predicted_node_id = predicted_node_id
+        qca_sample.predicted_node_score = predicted_node_score
         qca_sample.predicted_image_url_list = predicted_image_url_list
         qca_sample.predicted_answer_by = self.created_by
         return qca_sample
@@ -248,6 +251,7 @@ class RagQcaGenerator:
         qca_sample.predicted_node_id = [
             node.node.node_id for node in response.source_nodes
         ]
+        qca_sample.predicted_node_score = [node.score for node in response.source_nodes]
         qca_sample.predicted_answer_by = self.created_by
         return qca_sample
 
