@@ -48,7 +48,7 @@ class RagQcaSample(BaseLlamaDataExample):
     )
     predicted_node_score: Optional[List[float]] = Field(
         default_factory=None,
-        description="The node id corresponding to the predicted contexts",
+        description="The node score corresponding to the predicted contexts",
     )
     predicted_image_url_list: Optional[List[str]] = Field(
         default_factory=None,
