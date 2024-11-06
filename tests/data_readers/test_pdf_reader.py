@@ -18,8 +18,7 @@ def test_pai_pdf_reader():
         reader_config=config.data_reader,
     )
     input_dir = "tests/testdata/data/pdf_data"
-    ModelScopeDownloader().load_basic_models()
-    ModelScopeDownloader().load_mineru_config()
+    ModelScopeDownloader().load_rag_models()
 
     directory_reader.file_readers[".pdf"] = PaiPDFReader()
 

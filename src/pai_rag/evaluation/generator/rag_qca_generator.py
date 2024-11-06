@@ -18,16 +18,13 @@ from llama_index.core.llama_dataset import (
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 
 import os
-import logging
+from loguru import logger
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
 from llama_index.multi_modal_llms.openai import OpenAIMultiModal
 from llama_index.core.schema import TextNode, ImageNode
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
-
-
-logger = logging.getLogger(__name__)
 
 
 class RagQcaGenerator:
@@ -62,23 +59,27 @@ class RagQcaGenerator:
     def load_qca_dataset(self) -> None:
         if os.path.exists(self.qca_dataset_path):
             rag_qca_dataset = PaiRagQcaDataset.from_json(self.qca_dataset_path)
-            print(
+            logger.info(
                 f"A RAG QCA dataset already exists at {self.qca_dataset_path} with status: [labelled: {rag_qca_dataset.labelled}, predicted: {rag_qca_dataset.predicted}]."
             )
             return rag_qca_dataset
         else:
-            print("No existing QCA dataset found. You can proceed to create a new one.")
+            logger.info(
+                "No existing QCA dataset found. You can proceed to create a new one."
+            )
             return None
 
     async def agenerate_qca_dataset(self, stage):
         rag_qca_dataset = self.load_qca_dataset()
         if rag_qca_dataset and rag_qca_dataset.labelled:
             if stage == "labelled":
-                print("Labelled QCA dataset already exists. Skipping labelled stage.")
+                logger.info(
+                    "Labelled QCA dataset already exists. Skipping labelled stage."
+                )
                 return rag_qca_dataset.examples
             elif stage == "predicted":
                 if rag_qca_dataset.predicted:
-                    print(
+                    logger.info(
                         "Predicted QCA dataset already exists. Skipping predicted stage."
                     )
                     return rag_qca_dataset.examples
@@ -190,7 +191,7 @@ class RagQcaGenerator:
     async def agenerate_labelled_qca_dataset(
         self,
     ):
-        print("Starting to generate QCA dataset for [[labelled]].")
+        logger.info("Starting to generate QCA dataset for [[labelled]].")
         docs = self._vector_index._docstore.docs
         nodes = list(docs.values())
         tasks = []
@@ -251,7 +252,7 @@ class RagQcaGenerator:
         return qca_sample
 
     async def agenerate_predicted_qca_dataset(self, rag_qca_dataset):
-        print("Starting to generate QCA dataset for [[predicted]].")
+        logger.info("Starting to generate QCA dataset for [[predicted]].")
         tasks = []
         for qca_sample in rag_qca_dataset.examples:
             if self.enable_multi_modal:

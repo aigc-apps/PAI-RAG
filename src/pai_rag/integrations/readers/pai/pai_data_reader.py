@@ -13,9 +13,7 @@ from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 
@@ -104,7 +102,6 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
 
     if not files:
         raise ValueError(f"No file found at OSS path '{oss_path}'.")
-    print(files)
     return files
 
 

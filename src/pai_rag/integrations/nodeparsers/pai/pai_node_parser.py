@@ -23,9 +23,7 @@ from pai_rag.utils.constants import (
     DEFAULT_BREAKPOINT,
     DEFAULT_BUFFER_SIZE,
 )
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class NodeParserConfig(BaseModel):

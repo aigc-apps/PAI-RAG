@@ -2,7 +2,6 @@
 
 """
 import html2text
-import logging
 from bs4 import BeautifulSoup
 import requests
 from typing import Dict, List, Optional, Union, Any
@@ -19,8 +18,8 @@ import os
 from PIL import Image
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+from loguru import logger
 
-logger = logging.getLogger(__name__)
 
 IMAGE_URL_PATTERN = (
     r"!\[(?P<alt_text>.*?)\]\((https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))\)"
@@ -195,7 +194,7 @@ class PaiHtmlReader(BaseReader):
             return markdown_content
 
         except Exception as e:
-            logger(e)
+            logger.exception(e)
             return None
 
     def load_data(
@@ -238,5 +237,5 @@ class PaiHtmlReader(BaseReader):
             logger.info(f"processed html file {file_path} without metadata")
         doc = Document(text=md_content, extra_info=extra_info)
         docs.append(doc)
-        print(f"[PaiHtmlReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiHtmlReader] successfully loaded {len(docs)} nodes.")
         return docs

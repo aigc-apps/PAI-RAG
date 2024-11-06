@@ -1,6 +1,5 @@
 import hashlib
 import faiss
-import logging
 import os
 import json
 from llama_index.core.vector_stores.simple import DEFAULT_VECTOR_STORE, NAMESPACE_SEP
@@ -30,8 +29,6 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     HologresVectorStoreConfig,
 )
 
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_PERSIST_IMAGE_NAMESPACE = "image"
 

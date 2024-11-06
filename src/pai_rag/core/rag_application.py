@@ -25,14 +25,13 @@ from llama_index.core.schema import (
     ImageNode,
 )
 import json
-import logging
+from loguru import logger
 import os
 from enum import Enum
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
-logger = logging.getLogger(__name__)
 
 
 def uuid_generator() -> str:
@@ -74,7 +73,6 @@ async def event_generator_async(
 class RagApplication:
     def __init__(self, config: RagConfig):
         self.name = "RagApplication"
-        self.logger = logging.getLogger(__name__)
         self.config = config
         index_manager.add_default_index(self.config)
 
@@ -147,7 +145,7 @@ class RagApplication:
 
     async def aquery(self, query: RagQuery, chat_type: RagChatType = RagChatType.RAG):
         session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
+        logger.debug(f"Get session ID: {session_id}.")
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(query.index_name)
         session_config.embedding = index_entry.embedding_config
@@ -168,12 +166,12 @@ class RagApplication:
             chat_history=query.chat_history,
         )
         new_question = new_query_bundle.query_str
-        self.logger.info(f"Querying with question '{new_question}'.")
+        logger.info(f"Querying with question '{new_question}'.")
 
         if query.with_intent:
             intent_router = resolve_intent_router(session_config)
             intent = await intent_router.aselect(str_or_query_bundle=new_question)
-            self.logger.info(f"[IntentDetection] Routing query to {intent}.")
+            logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
                 return await self.aquery_agent(query)
             elif intent == Intents.WEBSEARCH:
@@ -295,7 +293,7 @@ class RagApplication:
             RagResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
+        logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id

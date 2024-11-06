@@ -7,9 +7,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
 DEFAULT_INDEX_NAME = "default_index"

@@ -118,9 +118,7 @@ Python代码工具分为两个部分:代码和函数定义。
 ```python
 import requests
 import os
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def get_place_weather(city: str) -> str:

@@ -1,10 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter
-import logging
 
 from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
 
 demo_router = APIRouter()
 

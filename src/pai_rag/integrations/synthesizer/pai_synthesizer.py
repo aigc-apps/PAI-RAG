@@ -37,11 +37,10 @@ from llama_index.core.llms.llm import (
     astream_completion_response_to_tokens,
 )
 from llama_index.core.prompts import PromptTemplate
-import logging
+from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
 
-logger = logging.getLogger(__name__)
 
 DEFAULT_LLM_CHAT_TMPL = (
     "You are a helpful assistant."

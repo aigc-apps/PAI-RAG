@@ -1,5 +1,5 @@
 from io import BytesIO
-import logging
+from loguru import logger
 import httpx
 import asyncio
 import numpy as np
@@ -7,8 +7,6 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 from typing import Dict, List, Sequence
-
-logger = logging.getLogger(__name__)
 
 
 async def download_url(url):

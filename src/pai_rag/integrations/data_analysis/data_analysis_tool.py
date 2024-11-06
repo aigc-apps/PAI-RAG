@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, List
 
 from llama_index.core.prompts import PromptTemplate
@@ -24,7 +23,6 @@ from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
 
-logger = logging.getLogger(__name__)
 dispatcher = instrument.get_dispatcher(__name__)
 
 DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(

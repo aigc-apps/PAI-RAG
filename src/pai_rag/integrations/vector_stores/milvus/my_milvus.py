@@ -4,7 +4,7 @@ An index that is built within Milvus.
 
 """
 
-import logging
+from loguru import logger
 from typing import Any, Dict, List, Optional, Union
 
 import pymilvus  # noqa
@@ -33,8 +33,6 @@ from llama_index.core.vector_stores.utils import (
 )
 from pymilvus import Collection, MilvusClient, DataType, AnnSearchRequest
 from pai_rag.utils.score_utils import normalize_cosine_similarity_score
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_SIZE = 100
 MILVUS_ID_FIELD = "id"

@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 
 from llama_index.core.base.base_retriever import BaseRetriever
@@ -6,8 +5,6 @@ from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 from llama_index.core.schema import IndexNode, NodeWithScore, QueryBundle
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
-
-logger = logging.getLogger(__name__)
 
 
 class LocalBM25Retriever(BaseRetriever):

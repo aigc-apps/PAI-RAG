@@ -23,15 +23,13 @@ import time
 import tempfile
 import re
 from PIL import Image
-
-
-import logging
 import os
 import json
+from loguru import logger
+
 
 model_config.__use_inside_model__ = True
 
-logger = logging.getLogger(__name__)
 
 IMAGE_MAX_PIXELS = 512 * 512
 TABLE_SUMMARY_MAX_ROW_NUM = 5
@@ -188,7 +186,7 @@ class PaiPDFReader(BaseReader):
                             markdown_content, item["img_path"], ocr_content
                         )
                 else:
-                    print(f"警告：图片文件不存在 {img_path}")
+                    logger.warning(f"警告：图片文件不存在 {img_path}")
         return markdown_content
 
     def post_process_multi_level_headings(self, json_data, md_content):
@@ -298,7 +296,7 @@ class PaiPDFReader(BaseReader):
                 elif parse_method == "ocr":
                     pipe = OCRPipe(pdf_bytes, model_json, image_writer)
                 else:
-                    logger("unknown parse method, only auto, ocr, txt allowed")
+                    logger.error("unknown parse method, only auto, ocr, txt allowed")
                     exit(1)
 
                 # 执行分类
@@ -309,11 +307,8 @@ class PaiPDFReader(BaseReader):
                     if model_config.__use_inside_model__:
                         pipe.pipe_analyze()  # 解析
                     else:
-                        logger("need model list input")
+                        logger.error("need model list input")
                         exit(1)
-
-                # Some dirty code from mineru modified log level to warning
-                logging.getLogger().setLevel(logging.INFO)
 
                 # 执行解析
                 pipe.pipe_parse()
@@ -328,7 +323,7 @@ class PaiPDFReader(BaseReader):
             return new_md_content
 
         except Exception as e:
-            logger(e)
+            logger.error(e)
             return None
 
     def load_data(
@@ -377,5 +372,5 @@ class PaiPDFReader(BaseReader):
             )
             docs.append(doc)
             logger.info(f"processed pdf file {file_path} without metadata")
-        print(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiPDFReader] successfully loaded {len(docs)} nodes.")
         return docs

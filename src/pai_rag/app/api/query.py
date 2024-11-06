@@ -15,13 +15,11 @@ from pai_rag.app.api.models import (
     RetrievalQuery,
 )
 from fastapi.responses import StreamingResponse
-import logging
+from loguru import logger
 
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

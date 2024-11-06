@@ -1,10 +1,11 @@
 from dynaconf import Dynaconf, loaders
 from dynaconf.utils.boxing import DynaBox
 
-import logging
+from loguru import logger
 import os
 
 from pai_rag.core.rag_config import RagConfig
+from pai_rag.utils.oss_utils import check_and_set_oss_auth
 
 # store config file generated from ui.
 GENERATED_CONFIG_FILE_NAME = "localdata/settings.snapshot.toml"
@@ -26,7 +27,7 @@ class RagConfigManager:
             )
             return cls(config)
         except Exception as error:
-            logging.critical("Read config file failed.")
+            logger.critical("Read config file failed.")
             raise error
 
     @classmethod
@@ -51,7 +52,7 @@ class RagConfigManager:
             # `envvar_prefix` = export envvars with `export PAIRAG_FOO=bar`.
             # `settings_files` = Load these files in the order.
         except Exception as error:
-            logging.critical("Read config file failed.")
+            logger.critical("Read config file failed.")
             raise error
 
     def get_value(self) -> RagConfig:
@@ -61,6 +62,7 @@ class RagConfigManager:
     def update(self, new_value: Dynaconf):
         if self.config.get("rag", None):
             self.config.rag.update(new_value, merge=True)
+            check_and_set_oss_auth(self.config.rag)
 
     def persist(self):
         """Save configuration to file."""
@@ -72,5 +74,5 @@ class RagConfigManager:
         try:
             return os.path.getmtime(GENERATED_CONFIG_FILE_NAME)
         except Exception as ex:
-            print(f"Fail to read config mtime {ex}")
+            logger.critical(f"Fail to read config mtime {ex}")
             return -1

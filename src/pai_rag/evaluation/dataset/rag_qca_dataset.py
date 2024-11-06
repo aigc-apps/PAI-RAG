@@ -4,6 +4,7 @@ from llama_index.core.llama_dataset.base import BaseLlamaDataExample
 from llama_index.core.llama_dataset import CreatedBy
 import json
 from llama_index.core.bridge.pydantic import BaseModel
+from loguru import logger
 
 
 class RagQcaSample(BaseLlamaDataExample):
@@ -91,7 +92,7 @@ class PaiRagQcaDataset(BaseModel):
             }
 
             json.dump(data, f, indent=4, ensure_ascii=False)
-            print(f"Saved PaiRagQcaDataset to {path}.")
+            logger.info(f"Saved PaiRagQcaDataset to {path}.")
 
     @classmethod
     def from_json(cls, path: str) -> "PaiRagQcaDataset":

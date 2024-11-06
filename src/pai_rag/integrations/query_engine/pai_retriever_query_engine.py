@@ -10,10 +10,8 @@ from llama_index.core.indices.query.query_transform.base import BaseQueryTransfo
 from llama_index.core.callbacks.base import CallbackManager
 import llama_index.core.instrumentation as instrument
 from llama_index.core.response_synthesizers import BaseSynthesizer
-import logging
 
 dispatcher = instrument.get_dispatcher(__name__)
-logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -10,9 +10,7 @@ from llama_index.core import Settings
 from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import NodeWithScore, QueryBundle
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # rerank constants
 DEFAULT_RERANK_MODEL = "bge-reranker-base"

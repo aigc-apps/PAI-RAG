@@ -1,8 +1,6 @@
 import requests
 import os
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def get_place_weather(city: str) -> str:

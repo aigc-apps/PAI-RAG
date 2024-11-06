@@ -19,6 +19,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     HuggingFaceEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
+from loguru import logger
 
 
 def add_index(*components):
@@ -26,7 +27,7 @@ def add_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.add_index(index_entry)
     index_map = get_index_map()
-    print(f"Add index {index_entry.index_name} successfully")
+    logger.info(f"Add index {index_entry.index_name} successfully")
     return [
         gr.update(
             choices=list(index_map.indexes.keys()) + ["NEW"],
@@ -44,7 +45,7 @@ def update_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.update_index(index_entry)
     index_map = get_index_map()
-    print(f"Update index {index_entry.index_name} successfully")
+    logger.info(f"Update index {index_entry.index_name} successfully")
     return [
         gr.update(
             choices=list(index_map.indexes.keys()) + ["NEW"],

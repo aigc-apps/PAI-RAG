@@ -6,6 +6,7 @@ import json
 import urllib.request
 import tarfile
 from datasets import load_dataset
+from loguru import logger
 
 DEFAULT_DATASET_DIR = "datasets"
 
@@ -40,7 +41,7 @@ class MiraclOpenDataSet(OpenDataSet):
                 dataset_url, file_path, self.dataset_path
             )
         else:
-            print(
+            logger.info(
                 f"[MiraclOpenDataSet] Dataset file already exists at {self.dataset_path}."
             )
         if not os.path.exists(self.corpus_path):
@@ -48,7 +49,7 @@ class MiraclOpenDataSet(OpenDataSet):
             file_path = os.path.join(DEFAULT_DATASET_DIR, "miracl-corpus.tar.gz")
             self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
         else:
-            print(
+            logger.info(
                 f"[MiraclOpenDataSet] Corpus file already exists at {self.corpus_path}."
             )
 
@@ -57,22 +58,24 @@ class MiraclOpenDataSet(OpenDataSet):
         if not os.path.exists(file_path_dir):
             os.makedirs(file_path_dir)
         with urllib.request.urlopen(url) as response, open(file_path, "wb") as out_file:
-            print(f"[MiraclOpenDataSet] Start downloading file {file_path} from {url}.")
+            logger.info(
+                f"[MiraclOpenDataSet] Start downloading file {file_path} from {url}."
+            )
             data = response.read()
             out_file.write(data)
-            print("[MiraclOpenDataSet] Finish downloading.")
+            logger.info("[MiraclOpenDataSet] Finish downloading.")
         if not os.path.exists(extract_path):
             os.makedirs(extract_path)
         with tarfile.open(file_path, "r:gz") as tar:
-            print(
+            logger.info(
                 f"[MiraclOpenDataSet] Start extracting file {file_path} to {extract_path}."
             )
             tar.extractall(path=extract_path)
-            print("[MiraclOpenDataSet] Finish extracting.")
+            logger.info("[MiraclOpenDataSet] Finish extracting.")
 
     def load_qrels(self, type: str):
         file = f"{self.dataset_path}/miracl/miracl-v1.0-{self.lang}/qrels/qrels.miracl-v1.0-{self.lang}-{type}.tsv"
-        print(
+        logger.info(
             f"[MiraclOpenDataSet] Loading qrels for MiraclDataSet with type {type} from {file}..."
         )
         qrels = defaultdict(dict)
@@ -82,14 +85,14 @@ class MiraclOpenDataSet(OpenDataSet):
                 qid, _, docid, rel = line.strip().split("\t")
                 qrels[qid][docid] = int(rel)
                 docids.add(docid)
-        print(
+        logger.info(
             f"[MiraclOpenDataSet] Loaded qrels {len(qrels)}, docids {len(docids)} with type {type}"
         )
         return qrels, docids
 
     def load_topic(self, type: str):
         file = f"{self.dataset_path}/miracl/miracl-v1.0-{self.lang}/topics/topics.miracl-v1.0-{self.lang}-{type}.tsv"
-        print(
+        logger.info(
             f"[MiraclOpenDataSet] Loading topic for MiraclDataSet with type {type} from {file}..."
         )
         qid2topic = {}
@@ -97,7 +100,9 @@ class MiraclOpenDataSet(OpenDataSet):
             for line in f:
                 qid, topic = line.strip().split("\t")
                 qid2topic[qid] = topic
-        print(f"[MiraclOpenDataSet] Loaded qid2topic {len(qid2topic)} with type {type}")
+        logger.info(
+            f"[MiraclOpenDataSet] Loaded qid2topic {len(qid2topic)} with type {type}"
+        )
         return qid2topic
 
     def load_related_corpus(self):
@@ -120,11 +125,11 @@ class MiraclOpenDataSet(OpenDataSet):
                             )
                         )
                         docid2doc[json_obj["docid"]] = json_obj["text"]
-                print(
+                logger.info(
                     f"[MiraclOpenDataSet] Loaded nodes {len(nodes)} from file_path {file_path}"
                 )
 
-        print(f"[MiraclOpenDataSet] Loaded all nodes {len(nodes)}")
+        logger.info(f"[MiraclOpenDataSet] Loaded all nodes {len(nodes)}")
         return nodes, docid2doc
 
     def load_related_corpus_for_type(self, type: str):
@@ -149,11 +154,13 @@ class MiraclOpenDataSet(OpenDataSet):
                                 )
                             )
                             docid2doc[json_obj["docid"]] = json_obj["text"]
-                print(
+                logger.info(
                     f"[MiraclOpenDataSet] Loaded nodes {len(nodes)} with type {type} from file_path {file_path}"
                 )
 
-        print(f"[MiraclOpenDataSet] Loaded all nodes {len(nodes)} with type {type}")
+        logger.info(
+            f"[MiraclOpenDataSet] Loaded all nodes {len(nodes)} with type {type}"
+        )
         return nodes, docid2doc
 
 
@@ -172,7 +179,7 @@ class DuRetrievalDataSet(OpenDataSet):
                 dataset_url, file_path, self.dataset_path
             )
         else:
-            print(
+            logger.info(
                 f"[DuRetrievalDataSet] Dataset file already exists at {self.dataset_path}."
             )
         if not os.path.exists(self.corpus_path):
@@ -180,7 +187,7 @@ class DuRetrievalDataSet(OpenDataSet):
             file_path = os.path.join(DEFAULT_DATASET_DIR, "DuRetrieval.tar.gz")
             self._extract_and_download_dataset(dataset_url, file_path, self.corpus_path)
         else:
-            print(
+            logger.info(
                 f"[DuRetrievalDataSet] Corpus file already exists at {self.corpus_path}."
             )
 
@@ -189,23 +196,23 @@ class DuRetrievalDataSet(OpenDataSet):
         if not os.path.exists(file_path_dir):
             os.makedirs(file_path_dir)
         with urllib.request.urlopen(url) as response, open(file_path, "wb") as out_file:
-            print(
+            logger.info(
                 f"[DuRetrievalDataSet] Start downloading file {file_path} from {url}."
             )
             data = response.read()
             out_file.write(data)
-            print("[DuRetrievalDataSet] Finish downloading.")
+            logger.info("[DuRetrievalDataSet] Finish downloading.")
         if not os.path.exists(extract_path):
             os.makedirs(extract_path)
         with tarfile.open(file_path, "r:gz") as tar:
-            print(
+            logger.info(
                 f"[DuRetrievalDataSet] Start extracting file {file_path} to {extract_path}."
             )
             tar.extractall(path=extract_path)
-            print("[DuRetrievalDataSet] Finish extracting.")
+            logger.info("[DuRetrievalDataSet] Finish extracting.")
 
     def load_qrels(self, type: str = "dev"):
-        print(
+        logger.info(
             f"[DuRetrievalDataSet] Loading qrels for DuRetrievalDataSet with type {type} from {self.dataset_path}..."
         )
         qrels_path = f"{self.dataset_path}/DuRetrieval-qrels"
@@ -216,7 +223,7 @@ class DuRetrievalDataSet(OpenDataSet):
             docid = sample["pid"]
             rel = sample["score"]
             qrels[qid][docid] = int(rel)
-        print(f"[DuRetrievalDataSet] Loaded qrels {len(qrels)} with type {type}")
+        logger.info(f"[DuRetrievalDataSet] Loaded qrels {len(qrels)} with type {type}")
         return qrels
 
     def load_related_corpus(self):
@@ -234,15 +241,15 @@ class DuRetrievalDataSet(OpenDataSet):
                 )
             )
             docid2doc[sample["id"]] = sample["text"]
-        print(
+        logger.info(
             f"[DuRetrievalDataSet] Loaded nodes {len(nodes)} from file_path {self.corpus_path}"
         )
 
         for sample in du_dataset["queries"]:
             qid2query[sample["id"]] = sample["text"]
-        print(
+        logger.info(
             f"[DuRetrievalDataSet] Loaded queries {len(nodes)} from file_path {self.corpus_path}"
         )
 
-        print(f"[DuRetrievalDataSet] Loaded all nodes {len(nodes)}")
+        logger.info(f"[DuRetrievalDataSet] Loaded all nodes {len(nodes)}")
         return nodes, docid2doc, qid2query

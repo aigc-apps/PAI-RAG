@@ -4,9 +4,7 @@ from llama_index.core.indices import VectorStoreIndex
 from llama_index.core.ingestion import IngestionPipeline
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RagDataLoader:
