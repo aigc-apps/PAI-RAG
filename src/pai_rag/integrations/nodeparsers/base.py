@@ -156,6 +156,24 @@ class StructuredNodeParser(NodeParser):
                 )
         nodes = []
         cur_chunk_start_position = 0
+        if len(self._cut(raw_section_without_image)) == 0 and self.enable_multimodal:
+            for img_info in image_urls_positions:
+                image_node = ImageNode(
+                    embedding=node.embedding,
+                    image_url=img_info["image_url"],
+                    excluded_embed_metadata_keys=node.excluded_embed_metadata_keys,
+                    excluded_llm_metadata_keys=node.excluded_llm_metadata_keys,
+                    metadata_seperator=node.metadata_seperator,
+                    metadata_template=node.metadata_template,
+                    text_template=node.text_template,
+                    metadata={
+                        "image_url": img_info["image_url"],
+                        **node.extra_info,
+                    },
+                    relationships=relationships,
+                )
+                nodes.append(image_node)
+
         for section_parts in self._cut(raw_section_without_image):
             section_image_urls_positions = []
             node_text = f"{current_header}: {section_parts}"

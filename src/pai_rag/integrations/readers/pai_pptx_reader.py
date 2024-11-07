@@ -106,6 +106,7 @@ class PaiPptxReader(BaseReader):
     def convert_pptx_to_markdown(self, fnm):
         ppt_name = os.path.basename(fnm).split(".")[0]
         ppt_name = ppt_name.replace(" ", "_")
+        fnm = fnm.as_posix()
         prs = Presentation(fnm)
 
         markdown = []
@@ -119,23 +120,26 @@ class PaiPptxReader(BaseReader):
                 if shape_image_flag:
                     image_flag = shape_image_flag
                 markdown.append(shape_markdown)
-            markdown.append("# \n\n")
+            markdown.append(f"# slide_number_{slide_number}\n\n")
             slide_image_flag.append(image_flag)
 
-        with slides.Presentation(fnm) as presentation:
-            for i, slide in enumerate(presentation.slides):
-                if slide_image_flag[i]:
-                    buffered = BytesIO()
-                    slide.get_thumbnail(0.5, 0.5).save(
-                        buffered, drawing.imaging.ImageFormat.jpeg
-                    )
-                    buffered.seek(0)
-                    image = Image.open(buffered)
-                    image_url = transform_local_to_oss(self._oss_cache, image, ppt_name)
-                    time_tag = int(time.time())
-                    alt_text = f"pai_rag_image_{time_tag}_"
-                    image_content = f"![{alt_text}]({image_url})"
-                    markdown.append(f"{image_content}\n\n")
+        if self._oss_cache:
+            with slides.Presentation(fnm) as presentation:
+                for i, slide in enumerate(presentation.slides):
+                    if slide_image_flag[i]:
+                        buffered = BytesIO()
+                        slide.get_thumbnail(0.5, 0.5).save(
+                            buffered, drawing.imaging.ImageFormat.jpeg
+                        )
+                        buffered.seek(0)
+                        image = Image.open(buffered)
+                        image_url = transform_local_to_oss(
+                            self._oss_cache, image, ppt_name
+                        )
+                        time_tag = int(time.time())
+                        alt_text = f"pai_rag_image_{time_tag}_"
+                        image_content = f"![{alt_text}]({image_url})"
+                        markdown.append(f"{image_content}\n\n")
 
         return "".join(markdown)
 
@@ -168,7 +172,6 @@ class PaiPptxReader(BaseReader):
         Returns:
             List[Document]: list of documents.
         """
-
         md_content = self.convert_pptx_to_markdown(file_path)
         logger.info(f"[PaiPptxReader] successfully processed pptx file {file_path}.")
         docs = []
