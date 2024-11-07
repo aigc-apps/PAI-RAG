@@ -11199,16 +11199,6 @@ numpy = "*"
 torch = "*"
 
 [[package]]
-name = "umap"
-version = "0.1.1"
-description = "UNIST synthesis MAP solution"
-optional = false
-python-versions = "*"
-files = [
-    {file = "umap-0.1.1.tar.gz", hash = "sha256:5d08c1a335cc7ee175811a99dc9356d3d4b8567ad082e2b1b205198cf27c4256"},
-]
-
-[[package]]
 name = "umap-learn"
 version = "0.5.6"
 description = "Uniform Manifold Approximation and Projection"
@@ -12156,4 +12146,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "dde51af35ce841208629abce97d4709dccee61d9bb6a7fadc5a2d68f0f7b8482"
+content-hash = "43a4e0032bd0f4ba2bd3ef566d5df828d54269760568bd0158d31bbf575662de"

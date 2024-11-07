@@ -104,7 +104,6 @@ duckduckgo-search = "6.2.12"
 aliyun-bootstrap = "^1.0.1"
 docx = "^0.2.4"
 python-pptx = "^1.0.2"
-umap = "^0.1.1"
 aspose-slides = "^24.10.0"
 
 [tool.poetry.scripts]
