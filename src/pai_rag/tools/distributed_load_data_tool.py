@@ -8,9 +8,9 @@ _rank = int(os.environ["RANK"])
 _world_size = int(os.environ["WORLD_SIZE"])
 
 
-def init_process():
-    print(f'init_process: rank={_rank}, world_size={_world_size}")')
-    dist.init_process_group(backend="nccl", rank=_rank, world_size=_world_size)
+def init_process(backend):
+    print(f"init_process: backend={backend} rank={_rank}, world_size={_world_size}")
+    dist.init_process_group(backend=backend, rank=_rank, world_size=_world_size)
 
 
 def process_file(file_path):
@@ -53,8 +53,16 @@ def worker(file_list):
     show_default=True,
     help="data path (file or directory) to ingest.",
 )
-def run(data_path=None):
-    init_process()
+@click.option(
+    "-b",
+    "--backend",
+    type=str,
+    required=False,
+    default="gloo",
+    show_default=True,
+)
+def run(data_path=None, backend="gloo"):
+    init_process(backend)
     print(f"data_path: {data_path}")
     file_list = [f for f in data_path if os.path.isfile(f)]
     print(f"Loading files count: {len(file_list)}")
