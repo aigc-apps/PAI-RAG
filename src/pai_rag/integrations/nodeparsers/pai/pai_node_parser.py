@@ -39,7 +39,7 @@ class NodeParserConfig(BaseModel):
 
 
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl"])
-DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html"])
+DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", "pptx"])
 IMAGE_FILE_TYPES = set([".jpg", ".jpeg", ".png"])
 
 IMAGE_URL_REGEX = re.compile(

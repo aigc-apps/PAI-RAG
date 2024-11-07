@@ -9,6 +9,7 @@ from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
 from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
 from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
+from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
 
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
@@ -45,6 +46,10 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
         ".pdf": PaiPDFReader(
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pdf images
+        ),
+        ".pptx": PaiPptxReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing pptx images
         ),
         ".csv": PaiPandasCSVReader(
             concat_rows=reader_config.concat_csv_rows,

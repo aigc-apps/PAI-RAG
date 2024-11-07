@@ -122,6 +122,7 @@ class PaiDocxReader(BaseReader):
                 break
             cell_content = self._parse_cell(cell, doc_name).strip()
             row_cells[col_index] = cell_content
+            col_index += 1
         return row_cells
 
     def _parse_cell(self, cell, doc_name):

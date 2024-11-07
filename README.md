@@ -55,6 +55,12 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    conda activate rag_env
    ```
 
+   if you use macOS and need to process PPTX files, you need use the following command to install the dependencies to process PPTX files:
+
+   ```bash
+      brew install mono-libgdiplus
+   ```
+
 ### (1) CPU
 
 Use poetry to install project dependency packages directly:
@@ -328,3 +334,15 @@ You can use data analysis based on database or sheet file in PAI-RAG, please ref
 For more customization options, please refer to the documentation:
 
 [Parameter Configuration Instruction](./docs/config_guide_en.md)
+
+# Supported File Types
+
+| 文件类型     | 文件格式                               |
+| ------------ | -------------------------------------- |
+| Unstructured | .txt, .docx， .pdf， .html，.pptx，.md |
+| Images       | .gif， .jpg，.png，.jpeg， .webp       |
+| Structured   | .csv，.xls， .xlsx，.jsonl             |
+| Others       | .epub，.mbox，.ipynb                   |
+
+1. .doc files need to be converted to .docx files.
+2. .ppt and .pptm files need to be converted to .pptx files.
