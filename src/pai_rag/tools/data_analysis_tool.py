@@ -2,7 +2,10 @@ import click
 import os
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.rag_module import resolve_data_analysis_query
+from pai_rag.core.rag_module import (
+    resolve_data_analysis_loader,
+    resolve_data_analysis_query,
+)
 
 # from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 from llama_index.core.schema import QueryBundle
@@ -52,13 +55,14 @@ def run(
     # rag_config = RagConfig.model_validate(config.rag)
     # print("rag_config:", rag_config)
 
-    # da_loader = resolve_data_analysis_loader(rag_config)
-
-    da_query_engine = resolve_data_analysis_query(config)
-
     print("**Question**: ", question)
 
+    da_loader = resolve_data_analysis_loader(config)
+    da_loader.load_db_info()
+
+    da_query_engine = resolve_data_analysis_query(config)
     response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
+
     print("**SQL RESULT**:", response_nodes)
 
     if not stream:

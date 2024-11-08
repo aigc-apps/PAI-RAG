@@ -365,13 +365,14 @@ class DBDescriptor(PromptMixin):
             file_path = self._db_description_file_path
         with open(file_path, "r") as f:
             structured_db_description_str = f.read()
+
         (
             schema_description_str,
             table_info_df,
             column_info_df,
         ) = generate_schema_description(structured_db_description_str)
         logger.info(f"schema description for llm: \n {schema_description_str}")
-        print(f"schema description for llm: \n {schema_description_str}")
+
         sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
         output_summary_str = sllm.predict(
             prompt=self._db_summary_prompt,
@@ -396,14 +397,20 @@ class DBDescriptor(PromptMixin):
         """
         利用LLM总结table, 以及各个table/column的description
         """
+        if file_path is None:
+            file_path = self._db_description_file_path
+        with open(file_path, "r") as f:
+            structured_db_description_str = f.read()
+
         (
             schema_description_str,
             table_info_df,
             column_info_df,
-        ) = self.generate_schema_description()
+        ) = generate_schema_description(structured_db_description_str)
+        logger.info(f"schema description for llm: \n {schema_description_str}")
 
-        sllm = await self._llm.as_structured_llm(output_cls=AnalysisOutput)
-        output_summary_str = sllm.predict(
+        sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
+        output_summary_str = await sllm.predict(
             prompt=self._db_summary_prompt,
             db_name=self._dbname,
             db_schema=schema_description_str,
@@ -417,8 +424,6 @@ class DBDescriptor(PromptMixin):
         logger.info("async llm enhanced db description generated.")
 
         # 保存为txt文件
-        if file_path is None:
-            file_path = self._db_description_file_path
         self._save_to_txt(output_description_str, file_path)
         logger.info(f"async llm enhanced db description saved to: {file_path}")
 

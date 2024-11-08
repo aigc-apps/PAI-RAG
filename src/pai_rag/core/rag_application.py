@@ -4,6 +4,8 @@ from pai_rag.core.rag_module import (
     resolve_agent,
     resolve_chat_store,
     resolve_data_analysis_tool,
+    resolve_data_analysis_loader,
+    resolve_data_analysis_query,
     resolve_data_loader,
     resolve_intent_router,
     resolve_query_engine,
@@ -300,11 +302,72 @@ class RagApplication:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")
 
         if not query.stream:
-            response = await analysis_tool.aquery(
-                query.question, streaming=query.stream
-            )
+            response = await analysis_tool.aquery(query.question)
         else:
             response = await analysis_tool.astream_query(query.question)
+
+        node_results = response.source_nodes
+        new_query = query.question
+
+        reference_docs = [
+            ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+                image_url=score_node.node.image_url,
+            )
+            if isinstance(score_node.node, ImageNode)
+            else ContextDoc(
+                text=score_node.node.get_content(),
+                metadata=score_node.node.metadata,
+                score=score_node.score,
+            )
+            for score_node in node_results
+        ]
+
+        result_info = {
+            "session_id": session_id,
+            "docs": reference_docs,
+            "new_query": new_query,
+        }
+
+        if not query.stream:
+            return RagResponse(answer=response.response, **result_info)
+        else:
+            return event_generator_async(response=response, extra_info=result_info)
+
+    async def aload_db_info(self):
+        db_info_loader = resolve_data_analysis_loader(self.config)
+        await db_info_loader.aload_db_info()
+
+        return "Load database info successfully."
+
+    async def aquery_data_analysis(self, query: RagQuery):
+        """Query answer from RAG App asynchronously.
+
+        Generate answer from Data Analysis interface.
+
+        Args:
+            query: RagQuery
+
+        Returns:
+            RagResponse
+        """
+        session_id = query.session_id or uuid_generator()
+        self.logger.debug(f"Get session ID: {session_id}.")
+        if not query.question:
+            return RagResponse(
+                answer="Empty query. Please input your question.", session_id=session_id
+            )
+
+        analysis_query = resolve_data_analysis_query(self.config)
+        if not analysis_query:
+            raise ValueError("Data Analysis not enabled. Please specify analysis type.")
+
+        if not query.stream:
+            response = await analysis_query.aquery(query.question)
+        else:
+            response = await analysis_query.astream_query(query.question)
 
         node_results = response.source_nodes
         new_query = query.question

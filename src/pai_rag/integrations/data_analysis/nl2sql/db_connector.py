@@ -8,6 +8,12 @@ from sqlalchemy.engine import URL
 from sqlalchemy.pool import QueuePool
 from sqlalchemy import text
 
+from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+    SqlAnalysisConfig,
+    SqliteAnalysisConfig,
+    MysqlAnalysisConfig,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -128,6 +134,42 @@ class DBConnector:
         except Exception as e:
             logger.info(f"An error occurred while executing the query: {e}")
             return
+
+    @classmethod
+    def from_config(
+        cls,
+        sql_config: SqlAnalysisConfig,
+    ):
+        db_config = {
+            "dbname": sql_config.db_name,
+            "dialect": sql_config.type.value,
+            "tables": sql_config.tables,
+            "descriptions": sql_config.descriptions,
+            "enable_enhanced_description": sql_config.enable_enhanced_description,
+            "enable_db_history": sql_config.enable_db_history,
+            "enable_description_embedding": sql_config.enable_description_embedding,
+            "enable_history_embedding": sql_config.enable_history_embedding,
+            "enable_db_embedding": sql_config.enable_db_embedding,
+        }
+
+        if isinstance(sql_config, SqliteAnalysisConfig):
+            db_path = os.path.join(sql_config.db_path, sql_config.db_name)
+            db_config.update(
+                {
+                    "path": db_path,
+                }
+            )
+        if isinstance(sql_config, MysqlAnalysisConfig):
+            db_config.update(
+                {
+                    "user": sql_config.user,
+                    "password": sql_config.password,
+                    "host": sql_config.host,
+                    "port": sql_config.port,
+                }
+            )
+
+        return cls(db_config=db_config)
 
 
 if __name__ == "__main__":

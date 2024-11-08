@@ -188,7 +188,7 @@ class DBQuery:
             selected_db_description_str = retrieved_db_description_str
 
         # 4. sql generator, 必须
-        response_nodes, _ = self._sql_generator.agenerate_sql_candidates(
+        response_nodes, _ = await self._sql_generator.agenerate_sql_candidates(
             nl_query, selected_db_description_str, retrieved_db_history_str
         )
         return response_nodes

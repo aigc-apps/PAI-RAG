@@ -52,7 +52,7 @@ class RagWebClient:
 
     @property
     def data_analysis_url(self):
-        return f"{self.endpoint}service/query/data_analysis"
+        return f"{self.endpoint}service/query/data_analysis1"
 
     @property
     def llm_url(self):

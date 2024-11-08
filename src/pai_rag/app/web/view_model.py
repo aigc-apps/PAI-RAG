@@ -201,11 +201,11 @@ class ViewModel(BaseModel):
         elif isinstance(config.data_analysis, SqliteAnalysisConfig):
             view_model.analysis_type = "nl2sql"
             view_model.db_dialect = config.data_analysis.type.value
-            view_model.database = config.data_analysis.database
+            view_model.database = config.data_analysis.db_name
         elif isinstance(config.data_analysis, MysqlAnalysisConfig):
             view_model.analysis_type = "nl2sql"
             view_model.db_dialect = config.data_analysis.type.value
-            view_model.database = config.data_analysis.database
+            view_model.database = config.data_analysis.db_name
             view_model.db_username = config.data_analysis.user
             view_model.db_password = config.data_analysis.password
             view_model.db_host = config.data_analysis.host
@@ -286,7 +286,7 @@ class ViewModel(BaseModel):
             config["data_analysis"]["password"] = self.db_password
             config["data_analysis"]["host"] = self.db_host
             config["data_analysis"]["port"] = self.db_port
-            config["data_analysis"]["database"] = self.database
+            config["data_analysis"]["db_name"] = self.database
             config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
             config["data_analysis"]["synthesizer_prompt"] = self.synthesizer_prompt
 

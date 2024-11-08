@@ -8,6 +8,7 @@ from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
 from pai_rag.integrations.data_analysis.data_analysis_tool import DataAnalysisTool
 from pai_rag.integrations.data_analysis.data_analysis_tool1 import (
+    DataAnalysisConnector,
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
@@ -140,13 +141,22 @@ def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
     )
 
 
+def resolve_data_analysis_connector(config: RagConfig):
+    db_connector = DataAnalysisConnector(config.data_analysis)
+    sql_database = db_connector.connect_db()
+
+    return sql_database
+
+
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+    sql_database = resolve_data_analysis_connector(config)
 
     return resolve(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
+        sql_database=sql_database,
         llm=llm,
         embed_model=embed_model,
     )
@@ -155,8 +165,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    data_analysis_loader = resolve_data_analysis_loader(config)
-    sql_database = data_analysis_loader.db_analysis()
+    sql_database = resolve_data_analysis_connector(config)
 
     return resolve(
         cls=DataAnalysisQuery,

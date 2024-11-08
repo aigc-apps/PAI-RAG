@@ -23,6 +23,7 @@ from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRe
 from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
+from pai_rag.integrations.data_analysis.nl2sql.db_connector import DBConnector
 from pai_rag.integrations.data_analysis.nl2sql.db_loader import DBLoader
 from pai_rag.integrations.data_analysis.nl2sql.db_query import DBQuery
 
@@ -38,12 +39,23 @@ DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
 )
 
 
+def create_db_connctor(analysis_config: BaseAnalysisConfig):
+    if isinstance(analysis_config, SqlAnalysisConfig):
+        return DBConnector.from_config(sql_config=analysis_config)
+    else:
+        raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
+
+
 def create_db_loader(
-    analysis_config: BaseAnalysisConfig, llm: LLM, embed_model: BaseEmbedding
+    analysis_config: BaseAnalysisConfig,
+    sql_database: SQLDatabase,
+    llm: LLM,
+    embed_model: BaseEmbedding,
 ):
     if isinstance(analysis_config, SqlAnalysisConfig):
         return DBLoader.from_config(
             sql_config=analysis_config,
+            sql_database=sql_database,
             llm=llm,
             embed_model=embed_model,
         )
@@ -85,6 +97,21 @@ def create_retriever(
         raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
 
 
+class DataAnalysisConnector:
+    """
+    Used for db connection
+    """
+
+    def __init__(
+        self,
+        analysis_config: BaseAnalysisConfig,
+    ) -> None:
+        self._db_connector = create_db_connctor(analysis_config)
+
+    def connect_db(self):
+        return self._db_connector.connect()
+
+
 class DataAnalysisLoader:
     """
     Used for db connection, description and embedding
@@ -93,25 +120,31 @@ class DataAnalysisLoader:
     def __init__(
         self,
         analysis_config: BaseAnalysisConfig,
+        sql_database: SQLDatabase,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
         self._llm = llm or Settings.llm
         self._embed_model = embed_model or Settings.embed_model
+        self._sql_database = sql_database
         self._db_loder = create_db_loader(
             analysis_config=analysis_config,
+            sql_database=self._sql_database,
             llm=self._llm,
             embed_model=self._embed_model,
         )
 
-    def db_analysis(self):
-        return self._db_loder.db_analysis_init()
+    def load_db_info(self):
+        return self._db_loder.load_db_info()
+
+    async def aload_db_info(self):
+        return await self._db_loder.aload_db_info()
 
 
 class DataAnalysisQuery(BaseQueryEngine):
     """
-    Used for db or excel/csv file Data Analysis
+    Used for db or excel/csv file Data Query
     """
 
     def __init__(

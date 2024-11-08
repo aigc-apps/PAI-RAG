@@ -14,7 +14,7 @@ from llama_index.core.settings import Settings
 import llama_index.core.instrumentation as instrument
 
 from pai_rag.integrations.data_analysis.nl2sql_retriever import MyNLSQLRetriever
-from pai_rag.integrations.data_analysis.data_analysis_config import (
+from pai_rag.integrations.data_analysis.data_analysis_config1 import (
     BaseAnalysisConfig,
     PandasAnalysisConfig,
     SqlAnalysisConfig,

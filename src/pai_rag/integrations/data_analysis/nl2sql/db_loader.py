@@ -7,8 +7,9 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core import BasePromptTemplate
 from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
+from llama_index.core.utilities.sql_wrapper import SQLDatabase
 
-from pai_rag.integrations.data_analysis.nl2sql.db_connector import DBConnector
+# from pai_rag.integrations.data_analysis.nl2sql.db_connector import DBConnector
 from pai_rag.integrations.data_analysis.nl2sql.db_descriptor import DBDescriptor
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
@@ -25,12 +26,13 @@ logger = logging.getLogger(__name__)
 
 class DBLoader:
     """
-    offline work, including connection, description
+    offline work, including description
     """
 
     def __init__(
         self,
         db_config: Dict,
+        sql_database: SQLDatabase,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
         db_summary_prompt: Optional[BasePromptTemplate] = None,
@@ -40,55 +42,42 @@ class DBLoader:
         self._dbname = self._db_config.get("dbname", "")
         self._desired_tables = self._db_config.get("tables", [])
         self._table_descriptions = self._db_config.get("descriptions", {})
+        self._sql_database = sql_database
         self._llm = llm or Settings.llm
         self._embed_model = embed_model or Settings.embed_model
         self._db_summary_prompt = db_summary_prompt or DEFAULT_DB_SUMMARY_PROMPT
-        self._db_connector = DBConnector(db_config=self._db_config)
-        logger.info("db_loader init successfully")
-
-    def db_analysis_init(
-        self,
-    ):
-        try:
-            sql_database = self._db_connector.connect()
-        except Exception as e:
-            raise (
-                f"cannot connect db, please check your config or network, error message: {e}"
-            )
-        logger.info("Offline workflow: sql_database obtained from db_connector.")
-
-        # 2. 获得数据库描述信息
-        ## 2.1 基础描述信息：ddl+sample
-        db_descriptor = DBDescriptor(
-            sql_database=sql_database,
+        self._db_descriptor = DBDescriptor(
+            sql_database=self._sql_database,
             db_name=self._dbname,
             context_query_kwargs=self._table_descriptions,
             llm=self._llm,
             embed_model=self._embed_model,
         )
+        logger.info("db_loader init successfully")
 
-        ## 2.2 数据库描述是否需要增强
+    def load_db_info(
+        self,
+    ):
+        # 1 获得数据库描述信息
+        # 1.1 基础描述信息：ddl+sample
+        # 数据库描述是否需要增强
         enable_enhanced_description = self._db_config.get(
             "enable_enhanced_description", True
         )
-        if enable_enhanced_description is True:
-            db_descriptor.get_enhanced_table_description()
-            logger.info(
-                "Offline workflow: db_description obtained from db_descriptor without llm."
-            )
+        if enable_enhanced_description:
+            self._db_descriptor.get_enhanced_table_description()
+            logger.info("db_description obtained from db_descriptor with llm.")
         else:
-            db_descriptor.get_structured_table_description(QueryBundle(""))
-            logger.info(
-                "Offline workflow: db_description obtained from db_descriptor with llm."
-            )
+            self._db_descriptor.get_structured_table_description(QueryBundle(""))
+            logger.info("db_description obtained from db_descriptor without llm.")
 
         ## 2.3 是否包括历史查询记录 TODO
         enable_db_history = self._db_config.get("enable_db_history", False)
-        if enable_db_history is True:
+        if enable_db_history:
             db_query_history = (
                 "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
             )
-            db_descriptor.collect_history(db_query_history)
+            self._db_descriptor.collect_history(db_query_history)
 
         # ## 2.4 description embedding TODO
         # enable_description_embedding = self._db_config.get(
@@ -101,12 +90,35 @@ class DBLoader:
         # ## 2.6 db embedding TODO
         # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
 
-        return sql_database
+    async def aload_db_info(
+        self,
+    ):
+        # 1 获得数据库描述信息
+        # 1.1 基础描述信息：ddl+sample
+        # 数据库描述是否需要增强
+        enable_enhanced_description = self._db_config.get(
+            "enable_enhanced_description", True
+        )
+        if enable_enhanced_description:
+            await self._db_descriptor.aget_enhanced_table_description()
+            logger.info("db_description obtained from db_descriptor with llm.")
+        else:
+            self._db_descriptor.get_structured_table_description(QueryBundle(""))
+            logger.info("db_description obtained from db_descriptor without llm.")
+
+        ## 2.3 是否包括历史查询记录 TODO
+        enable_db_history = self._db_config.get("enable_db_history", False)
+        if enable_db_history:
+            db_query_history = (
+                "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
+            )
+            self._db_descriptor.collect_history(db_query_history)
 
     @classmethod
     def from_config(
         cls,
         sql_config: SqlAnalysisConfig,
+        sql_database: SQLDatabase,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
     ):
@@ -141,6 +153,7 @@ class DBLoader:
 
         return cls(
             db_config=db_config,
+            sql_database=sql_database,
             llm=llm,
             embed_model=embed_model,
         )
