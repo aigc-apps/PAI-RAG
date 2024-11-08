@@ -1,7 +1,7 @@
 import os
 import logging
 import json
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Union, cast
 
 import pandas as pd
 from pydantic.v1 import BaseModel, Field
@@ -90,7 +90,7 @@ class DBDescriptor(PromptMixin):
 
     def get_structured_table_description(
         self, query_bundle: QueryBundle, file_path: Optional[str] = None
-    ) -> Tuple[List, List]:
+    ) -> Dict:
         """
         Get structured table schema with data samples + optional context description from webui
         """
@@ -361,10 +361,15 @@ class DBDescriptor(PromptMixin):
         利用LLM总结table, 以及各个table/column的description
         """
         # schema_description_str, table_info_df, column_info_df = self.generate_schema_description()
-        if file_path is None:
-            file_path = self._db_description_file_path
-        with open(file_path, "r") as f:
-            structured_db_description_str = f.read()
+        structured_table_description_dict = self.get_structured_table_description(
+            QueryBundle("")
+        )
+        structured_db_description_str = json.dumps(structured_table_description_dict)
+
+        # if file_path is None:
+        #     file_path = self._db_description_file_path
+        # with open(file_path, "r") as f:
+        #     structured_db_description_str = f.read()
 
         (
             schema_description_str,
@@ -388,6 +393,8 @@ class DBDescriptor(PromptMixin):
         logger.info("llm enhanced db description generated.")
 
         # 保存为txt文件
+        if file_path is None:
+            file_path = self._db_description_file_path
         self._save_to_txt(output_description_str, file_path)
         logger.info(f"llm enhanced db description saved to: {file_path}")
 
@@ -397,10 +404,15 @@ class DBDescriptor(PromptMixin):
         """
         利用LLM总结table, 以及各个table/column的description
         """
-        if file_path is None:
-            file_path = self._db_description_file_path
-        with open(file_path, "r") as f:
-            structured_db_description_str = f.read()
+        structured_table_description_dict = self.get_structured_table_description(
+            QueryBundle("")
+        )
+        structured_db_description_str = json.dumps(structured_table_description_dict)
+
+        # if file_path is None:
+        #     file_path = self._db_description_file_path
+        # with open(file_path, "r") as f:
+        #     structured_db_description_str = f.read()
 
         (
             schema_description_str,
@@ -424,6 +436,8 @@ class DBDescriptor(PromptMixin):
         logger.info("async llm enhanced db description generated.")
 
         # 保存为txt文件
+        if file_path is None:
+            file_path = self._db_description_file_path
         self._save_to_txt(output_description_str, file_path)
         logger.info(f"async llm enhanced db description saved to: {file_path}")
 
