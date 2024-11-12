@@ -67,8 +67,11 @@ class PaiPptxReader(BaseReader):
         table_matrix = [
             ["" for _ in range(len(table.columns))] for _ in range(len(table.rows))
         ]
+        visited_cells = set()
         for i in range(len(table.rows)):
             for j in range(len(table.columns)):
+                if (i, j) in visited_cells:
+                    continue
                 cell_content = table.cell(i, j).text.replace("\n", "").replace("\r", "")
                 if table.cell(i, j).is_merge_origin:
                     col_span = table.cell(i, j).span_width
@@ -80,6 +83,7 @@ class PaiPptxReader(BaseReader):
                     ):
                         col_span -= 1
                         table_matrix[i][j + col_span] = cell_content
+                        visited_cells.add((i, j + col_span))
                     while (
                         row_span > 1
                         and i + row_span <= len(table.rows)
@@ -87,8 +91,10 @@ class PaiPptxReader(BaseReader):
                     ):
                         row_span -= 1
                         table_matrix[i + row_span][j] = cell_content
+                        visited_cells.add((i + row_span, j))
                 if table_matrix[i][j] == "":
                     table_matrix[i][j] = cell_content
+                    visited_cells.add((i, j))
 
         row_headers_index = []
         col_headers_index = []
