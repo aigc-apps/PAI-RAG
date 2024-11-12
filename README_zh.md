@@ -50,6 +50,12 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    conda activate rag_env
    ```
 
+   如果使用macOS且需要处理PPTX文件，需要下载依赖库处理PPTX文件
+
+   ```bash
+   brew install mono-libgdiplus
+   ```
+
    ### (1) CPU环境
 
    直接使用poetry安装项目依赖包：
@@ -281,3 +287,15 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 如需实现更多个性化配置，请参考文档：
 
 [参数配置说明](./docs/config_guide_cn.md)
+
+# 支持文件类型
+
+| 文件类型 | 文件格式                               |
+| -------- | -------------------------------------- |
+| 非结构化 | .txt, .docx， .pdf， .html，.pptx，.md |
+| 图片     | .gif， .jpg，.png，.jpeg， .webp       |
+| 结构化   | .csv，.xls， .xlsx，.jsonl             |
+| 其他     | .epub，.mbox，.ipynb                   |
+
+1. .doc格式文档需转化为.docx格式
+2. .ppt和.pptm格式需转化为.pptx格式

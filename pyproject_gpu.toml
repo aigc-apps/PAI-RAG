@@ -95,6 +95,9 @@ magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 llama-index-callbacks-arize-phoenix = "0.1.6"
 peft = "^0.12.0"
 aliyun-bootstrap = "^1.0.1"
+docx = "^0.2.4"
+python-pptx = "^1.0.2"
+aspose-slides = "^24.10.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:run"

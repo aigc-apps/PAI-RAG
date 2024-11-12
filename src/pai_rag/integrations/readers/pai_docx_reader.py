@@ -122,6 +122,7 @@ class PaiDocxReader(BaseReader):
                 break
             cell_content = self._parse_cell(cell, doc_name).strip()
             row_cells[col_index] = cell_content
+            col_index += 1
         return row_cells
 
     def _parse_cell(self, cell, doc_name):
@@ -144,7 +145,7 @@ class PaiDocxReader(BaseReader):
                     if not image_id:
                         continue
                     image_part = paragraph.part.rels.get(image_id, None)
-                    if image_id:
+                    if image_id and self._oss_cache:
                         image_blob = image_part.blob
                         image_filename = os.path.basename(image_part.partname)
                         image_url = self._transform_local_to_oss(
@@ -195,7 +196,7 @@ class PaiDocxReader(BaseReader):
                                     embed_id = blip.get(
                                         "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
                                     )
-                                    if embed_id:
+                                    if embed_id and self._oss_cache:
                                         image_part = document.part.related_parts.get(
                                             embed_id
                                         )
@@ -209,7 +210,7 @@ class PaiDocxReader(BaseReader):
                                         time_tag = int(time.time())
                                         alt_text = f"pai_rag_image_{time_tag}_"
                                         image_content = f"![{alt_text}]({image_url})"
-                                markdown.append(f"{image_content}\n\n")
+                                        markdown.append(f"{image_content}\n\n")
                     markdown.append(self._convert_paragraph(paragraph))
 
             elif isinstance(element.tag, str) and element.tag.endswith("tbl"):  # 表格

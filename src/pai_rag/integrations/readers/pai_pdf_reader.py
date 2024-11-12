@@ -69,12 +69,15 @@ class PaiPDFReader(BaseReader):
         local_image_pattern = IMAGE_LOCAL_PATTERN
         matches = re.findall(local_image_pattern, content)
         for alt_text, local_url, image_type in matches:
-            time_tag = int(time.time())
-            oss_url = self._transform_local_to_oss(pdf_name, local_url)
-            updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
-            content = content.replace(
-                f"![{alt_text}]({local_url})", f"![{updated_alt_text}]({oss_url})"
-            )
+            if self._oss_cache:
+                time_tag = int(time.time())
+                oss_url = self._transform_local_to_oss(pdf_name, local_url)
+                updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
+                content = content.replace(
+                    f"![{alt_text}]({local_url})", f"![{updated_alt_text}]({oss_url})"
+                )
+            else:
+                content = content.replace(f"![{alt_text}]({local_url})", "")
 
         return content
 

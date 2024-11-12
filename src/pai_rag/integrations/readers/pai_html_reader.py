@@ -157,13 +157,15 @@ class PaiHtmlReader(BaseReader):
         image_pattern = IMAGE_URL_PATTERN
         matches = re.findall(image_pattern, content)
         for alt_text, image_url, image_type in matches:
-            time_tag = int(time.time())
-            oss_url = self._transform_local_to_oss(html_name, image_url)
-            updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
-            content = content.replace(
-                f"![{alt_text}]({image_url})", f"![{updated_alt_text}]({oss_url})"
-            )
-
+            if self._oss_cache:
+                time_tag = int(time.time())
+                oss_url = self._transform_local_to_oss(html_name, image_url)
+                updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
+                content = content.replace(
+                    f"![{alt_text}]({image_url})", f"![{updated_alt_text}]({oss_url})"
+                )
+            else:
+                content = content.replace(f"![{alt_text}]({image_url})", "")
         return content
 
     def convert_html_to_markdown(self, html_path):
