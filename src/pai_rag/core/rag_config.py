@@ -13,7 +13,7 @@ from pai_rag.integrations.chat_store.pai.pai_chat_store import (
     LocalChatStoreConfig,
     RedisChatStoreConfig,
 )
-from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+from pai_rag.integrations.data_analysis.data_analysis_config import (
     MysqlAnalysisConfig,
     PandasAnalysisConfig,
     SqliteAnalysisConfig,

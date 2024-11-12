@@ -2,9 +2,10 @@ import os
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
+import datetime
 from pai_rag.app.web.rag_client import rag_client, RagApiError
 from pai_rag.app.web.ui_constants import (
-    DA_GENERAL_PROMPTS,
+    NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,
 )
 
@@ -20,7 +21,7 @@ def upload_file_fn(input_file):
         res = rag_client.add_datasheet(input_file.name)
         # 更新config
         update_dict = {
-            "analysis_type": "nl2pandas",
+            "analysis_type": "pandas",
             "analysis_file_path": res["destination_path"],
         }
         rag_client.patch_config(update_dict)
@@ -46,6 +47,24 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
+def load_db_info_fn(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+
+    # update snapshot
+    try:
+        update_dict["analysis_type"] = "nl2sql"
+        print("update_dict:", update_dict)
+        rag_client.patch_config(update_dict)
+
+        rag_client.load_db_info()
+        return f"[{datetime.datetime.now()}] DB info loaded successfully!"
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
 def respond(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
@@ -63,6 +82,7 @@ def respond(input_elements: List[Any]):
 
     # update snapshot
     try:
+        # print("respond udpate_dict:", update_dict)
         rag_client.patch_config(update_dict)
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -160,6 +180,75 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+
+                with gr.Column(visible=True):
+                    enhance_argument = gr.Accordion(
+                        "Parameters of Enhancement", open=False
+                    )
+                    with enhance_argument:
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                enable_enhanced_description = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enhance db description by llm",
+                                    elem_id="enable_enhanced_description",
+                                )
+                                enable_db_history = gr.Checkbox(
+                                    label="Yes",
+                                    info="Load db history",
+                                    elem_id="enable_db_history",
+                                )
+                                enable_db_embedding = gr.Checkbox(
+                                    label="Yes",
+                                    info="Embed db info",
+                                    elem_id="enable_db_embedding",
+                                )
+                            with gr.Column(scale=1):
+                                enable_query_preprocessor = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable query processor",
+                                    elem_id="enable_query_preprocessor",
+                                )
+                                enable_db_preretriever = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db preretriever",
+                                    elem_id="enable_db_preretriever",
+                                )
+                                enable_db_selector = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db selector",
+                                    elem_id="enable_db_selector",
+                                )
+
+                # load db info
+                with gr.Row():
+                    load_db_info_btn = gr.Button(
+                        value="Load DB Info", variant="primary", scale=4
+                    )
+                    save_state = gr.Textbox(
+                        label="DB Load Info: ", container=False, scale=6
+                    )
+
+                load_args = {
+                    data_analysis_type,
+                    dialect,
+                    user,
+                    password,
+                    host,
+                    port,
+                    database,
+                    tables,
+                    descriptions,
+                    enable_enhanced_description,
+                    enable_db_selector,
+                }
+
+                load_db_info_btn.click(
+                    fn=load_db_info_fn,
+                    inputs=load_args,
+                    outputs=[save_state],
+                )
+
                 with gr.Column(visible=True):
                     with gr.Tab("Nl2sql Prompt"):
                         # sql_prompt_type = gr.Radio(
@@ -176,11 +265,11 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         db_nl2sql_prompt = gr.Textbox(
                             label="nl2sql template",
                             elem_id="db_nl2sql_prompt",
-                            value=DA_GENERAL_PROMPTS,
+                            value=NL2SQL_GENERAL_PROMPTS,
                             lines=6,
                         )
 
-                    with gr.Tab("Synthesize Prompt"):
+                    with gr.Tab("Synthesizer Prompt"):
                         # syn_prompt_type = gr.Radio(
                         #     [
                         #         "general",
@@ -197,12 +286,36 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                             value=SYN_GENERAL_PROMPTS,
                             lines=6,
                         )
+                    with gr.Tab("Prompt Reset"):
+                        reset_nl2sql_prompt_btn = gr.Button("Reset Nl2sql Prompt")
+                        reset_synthesizer_prompt_btn = gr.Button(
+                            "Reset Synthesizer Prompt"
+                        )
+
+                    def reset_nl2sql_prompt():
+                        return gr.update(value=NL2SQL_GENERAL_PROMPTS)
+
+                    def reset_synthesizer_prompt():
+                        return gr.update(value=SYN_GENERAL_PROMPTS)
+
+                    reset_nl2sql_prompt_btn.click(
+                        fn=reset_nl2sql_prompt,
+                        inputs=[],
+                        outputs=[db_nl2sql_prompt],
+                        api_name="reset_nl2sql_prompt_clk",
+                    )
+                    reset_synthesizer_prompt_btn.click(
+                        fn=reset_synthesizer_prompt,
+                        inputs=[],
+                        outputs=[synthesizer_prompt],
+                        api_name="reset_synthesizer_prompt_clk",
+                    )
 
             # def change_sql_prompt_template(prompt_type):
             #     if prompt_type == "general":
             #         return {
             #             db_nl2sql_prompt: gr.update(
-            #                 value=DA_GENERAL_PROMPTS, interactive=True
+            #                 value=NL2SQL_GENERAL_PROMPTS, interactive=True
             #             )
             #         }
             #     elif prompt_type == "sql":
@@ -263,14 +376,14 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
         chat_args = {
             data_analysis_type,
-            dialect,
-            user,
-            password,
-            host,
-            port,
-            database,
-            tables,
-            descriptions,
+            # dialect,
+            # user,
+            # password,
+            # host,
+            # port,
+            # database,
+            # tables,
+            # descriptions,
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,
@@ -321,6 +434,12 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
+            enable_enhanced_description.elem_id: enable_enhanced_description,
+            enable_db_history.elem_id: enable_db_history,
+            enable_db_embedding.elem_id: enable_db_embedding,
+            enable_query_preprocessor.elem_id: enable_query_preprocessor,
+            enable_db_preretriever.elem_id: enable_db_preretriever,
+            enable_db_selector.elem_id: enable_db_selector,
             # sql_prompt_type.elem_id: sql_prompt_type,
             db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
             # syn_prompt_type.elem_id: syn_prompt_type,

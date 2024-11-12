@@ -15,7 +15,7 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
 )
 
-from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqlAnalysisConfig,
     SqliteAnalysisConfig,
     MysqlAnalysisConfig,
@@ -79,17 +79,6 @@ class DBLoader:
             )
             self._db_descriptor.collect_history(db_query_history)
 
-        # ## 2.4 description embedding TODO
-        # enable_description_embedding = self._db_config.get(
-        #     "enable_description_embedding", False
-        # )
-
-        # ## 2.5 history embedding TODO
-        # enable_history_embedding = self._db_config.get("enable_db_history", False)
-
-        # ## 2.6 db embedding TODO
-        # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
-
     async def aload_db_info(
         self,
     ):
@@ -106,13 +95,18 @@ class DBLoader:
             self._db_descriptor.get_structured_table_description(QueryBundle(""))
             logger.info("db_description obtained from db_descriptor without llm.")
 
-        ## 2.3 是否包括历史查询记录 TODO
-        enable_db_history = self._db_config.get("enable_db_history", False)
-        if enable_db_history:
-            db_query_history = (
-                "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
-            )
-            self._db_descriptor.collect_history(db_query_history)
+        # ## 2.3 是否包括历史查询记录 TODO
+        # enable_db_history = self._db_config.get("enable_db_history", False)
+        # if enable_db_history:
+        #     db_query_history = (
+        #         "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
+        #     )
+        #     self._db_descriptor.collect_history(db_query_history)
+
+        # ## 2.4 embedding, including db_description, db_history, db_value TODO
+        # enable_embedding = self._db_config.get(
+        #     "enable_embedding", False
+        # )
 
     @classmethod
     def from_config(
@@ -129,9 +123,7 @@ class DBLoader:
             "descriptions": sql_config.descriptions,
             "enable_enhanced_description": sql_config.enable_enhanced_description,
             "enable_db_history": sql_config.enable_db_history,
-            "enable_description_embedding": sql_config.enable_description_embedding,
-            "enable_history_embedding": sql_config.enable_history_embedding,
-            "enable_db_embedding": sql_config.enable_db_embedding,
+            "enable_embedding": sql_config.enable_db_embedding,
         }
 
         if isinstance(sql_config, SqliteAnalysisConfig):

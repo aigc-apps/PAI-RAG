@@ -4,13 +4,13 @@ from typing import List, Dict, Optional
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from llama_index.core import BasePromptTemplate
+from llama_index.core import BasePromptTemplate, PromptTemplate
 from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
 from llama_index.core.schema import NodeWithScore
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 
-from pai_rag.integrations.data_analysis.data_analysis_config1 import SqlAnalysisConfig
+from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_KEYWORD_EXTRACTION_PROMPT,
     DEFAULT_DB_SCHEMA_SELECT_PROMPT,
@@ -67,7 +67,7 @@ class DBQuery:
                 self._db_description_str = f.read()
         else:
             raise FileNotFoundError(
-                f"db_structured_description_path: {db_structured_description_path} does not exist."
+                f"Please load your db info first, db_structured_description_path: {db_structured_description_path} does not exist. "
             )
         db_query_history_path = db_query_history_path or DEFAULT_DB_QUERY_HISTORY_PATH
         if os.path.exists(db_query_history_path):
@@ -207,9 +207,15 @@ class DBQuery:
             "enable_db_selector": sql_config.enable_db_selector,
         }
 
+        if sql_config.nl2sql_prompt:
+            nl2sql_prompt_tmpl = PromptTemplate(sql_config.nl2sql_prompt)
+        else:
+            nl2sql_prompt_tmpl = DEFAULT_TEXT_TO_SQL_PROMPT
+
         return cls(
             db_config=db_config,
             sql_database=sql_database,
+            text_to_sql_prompt=nl2sql_prompt_tmpl,
             llm=llm,
             embed_model=embed_model,
         )

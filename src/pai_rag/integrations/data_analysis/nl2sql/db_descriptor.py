@@ -422,7 +422,7 @@ class DBDescriptor(PromptMixin):
         logger.info(f"schema description for llm: \n {schema_description_str}")
 
         sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
-        output_summary_str = await sllm.predict(
+        output_summary_str = await sllm.apredict(
             prompt=self._db_summary_prompt,
             db_name=self._dbname,
             db_schema=schema_description_str,

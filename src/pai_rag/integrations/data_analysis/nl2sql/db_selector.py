@@ -5,7 +5,7 @@ from pydantic.v1 import BaseModel, Field
 from typing import List, Optional
 
 from llama_index.core import BasePromptTemplate
-from llama_index.core.schema import QueryBundle
+from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.llms.llm import LLM
 from llama_index.core import Settings
 
@@ -69,12 +69,17 @@ class DBSelector:
 
     def select_schema(
         self,
-        nl_query: QueryBundle,
+        nl_query: QueryType,
         db_description_str: Optional[str] = None,  # 支持额外传入
     ) -> str:
         """
         选择相关的表和列
         """
+        if isinstance(nl_query, str):
+            nl_query = QueryBundle(nl_query)
+        else:
+            nl_query = nl_query
+
         # 如果online流程没有选择preretriever直接使用selector，则一般从db_structured_description.txt中读取
         if db_description_str is None:
             if os.path.exists(self._db_description_file_path):
@@ -106,12 +111,17 @@ class DBSelector:
 
     async def aselect_schema(
         self,
-        nl_query: QueryBundle,
+        nl_query: QueryType,
         db_description_str: Optional[str] = None,  # 支持额外传入
     ) -> str:
         """
         选择相关的表和列
         """
+        if isinstance(nl_query, str):
+            nl_query = QueryBundle(nl_query)
+        else:
+            nl_query = nl_query
+
         # 如果online流程没有选择preretriever直接使用selector，则一般从db_structured_description.txt中读取
         if db_description_str is None:
             if os.path.exists(self._db_description_file_path):

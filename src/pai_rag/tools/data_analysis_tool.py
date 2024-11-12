@@ -1,5 +1,6 @@
 import click
 import os
+import time
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import (
@@ -14,9 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 _BASE_DIR = Path(__file__).parent.parent
-DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
-    _BASE_DIR, "config/settings_da_test.toml"
-)
+DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
 
 
 @click.command()
@@ -58,23 +57,32 @@ def run(
     print("**Question**: ", question)
 
     da_loader = resolve_data_analysis_loader(config)
+    print("check_instance:", da_loader._sql_database, id(da_loader._sql_database))
     da_loader.load_db_info()
 
     da_query_engine = resolve_data_analysis_query(config)
+    print(
+        "check_instance:",
+        da_query_engine._sql_database,
+        id(da_query_engine._sql_database),
+    )
+    start_time1 = time.time()
     response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
+    end_time1 = time.time()
+    print("sql time:", round(end_time1 - start_time1, 3), end_time1, start_time1)
 
     print("**SQL RESULT**:", response_nodes)
 
-    if not stream:
-        query_bundle = QueryBundle(query_str=question, stream=False)
-        response = da_query_engine.query(query_bundle)
-        print("**Answer**: ", response.response)
-    else:
-        query_bundle = QueryBundle(query_str=question, stream=True)
-        response = da_query_engine.query(query_bundle)
-        print("**Answer**: ", end="")
-        for chunk in response.response_gen:
-            print(chunk, end="")
+    # if not stream:
+    #     query_bundle = QueryBundle(query_str=question, stream=False)
+    #     response = da_query_engine.query(query_bundle)
+    #     print("**Answer**: ", response.response)
+    # else:
+    #     query_bundle = QueryBundle(query_str=question, stream=True)
+    #     response = da_query_engine.query(query_bundle)
+    #     print("**Answer**: ", end="")
+    #     for chunk in response.response_gen:
+    #         print(chunk, end="")
 
 
 if __name__ == "__main__":

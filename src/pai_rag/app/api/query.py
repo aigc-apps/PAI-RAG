@@ -270,13 +270,13 @@ async def upload_datasheet(
 
 
 @router.post("/query/load_db_info")
-async def aload_db_info(query: RagQuery):
-    return await rag_service.aload_db_info(query)
+async def aload_db_info():
+    return await rag_service.aload_db_info()
 
 
 @router.post("/query/data_analysis1")
 async def aquery_analysis(query: RagQuery):
-    await rag_service.aload_db_info()
+    # await rag_service.aload_db_info()
     response = await rag_service.aquery_data_analysis(query)
     if not query.stream:
         return response

@@ -8,7 +8,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.pool import QueuePool
 from sqlalchemy import text
 
-from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqlAnalysisConfig,
     SqliteAnalysisConfig,
     MysqlAnalysisConfig,
@@ -27,6 +27,7 @@ class DBConnector:
         # 初始化数据库连接参数
         self.db_config = db_config
         self.engine = None
+        self.sql_database = None
 
     def connect(self):
         # create sqlalchemy engine & sqldatabase instance
@@ -112,14 +113,14 @@ class DBConnector:
             tables = db_tables
 
         # create an sqldatabase instance including desired table info
-        sql_database = SQLDatabase(self.engine, include_tables=tables)
+        self.sql_database = SQLDatabase(self.engine, include_tables=tables)
 
         if table_descriptions and len(table_descriptions) > 0:
             table_descriptions = table_descriptions
         else:
             table_descriptions = {}
 
-        return sql_database
+        return self.sql_database
 
     def execute_sql_query(self, sql_query: str):
         # 执行SQL查询并返回结果
@@ -147,8 +148,6 @@ class DBConnector:
             "descriptions": sql_config.descriptions,
             "enable_enhanced_description": sql_config.enable_enhanced_description,
             "enable_db_history": sql_config.enable_db_history,
-            "enable_description_embedding": sql_config.enable_description_embedding,
-            "enable_history_embedding": sql_config.enable_history_embedding,
             "enable_db_embedding": sql_config.enable_db_embedding,
         }
 
@@ -175,17 +174,24 @@ class DBConnector:
 if __name__ == "__main__":
     config = {
         "dialect": "sqlite",
-        "path": "./",
-        "dbname": "test1.db",
+        "path": "/Users/chuyu/Documents/gitlab/rag/pairag_github/pairag_v0.4/PAI-RAG/tests/testdata/data/db_data",
+        "dbname": "pets.db",
         "desired_tables": [],
         "table_descriptions": {},
     }
-    db_connector = DBConnector(db_config=config)
 
+    db_connector = DBConnector(db_config=config)
+    print(id(db_connector), db_connector.sql_database, id(db_connector.sql_database))
     # 连接数据库，创建实例
-    sql_database, tables = db_connector.connect()
-    print(sql_database, tables)
+    db_connector.connect()
+    print(id(db_connector), db_connector.sql_database, id(db_connector.sql_database))
+    print(id(db_connector), db_connector.sql_database._usable_tables)
 
     # 执行SQL查询
     results = db_connector.execute_sql_query("SELECT * FROM pets")
     print(results)
+
+    db_connector1 = DBConnector(db_config=config)
+    print(id(db_connector1), db_connector1.sql_database, id(db_connector1.sql_database))
+    db_connector1.connect()
+    print(id(db_connector1), db_connector1.sql_database, id(db_connector1.sql_database))

@@ -1,4 +1,5 @@
 from typing import Any
+
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.core.models.config import ArizeTraceConfig, BaseTraceConfig, PaiTraceConfig
@@ -143,9 +144,9 @@ def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
 
 def resolve_data_analysis_connector(config: RagConfig):
     db_connector = DataAnalysisConnector(config.data_analysis)
-    sql_database = db_connector.connect_db()
+    print("connector_id:", id(db_connector), id(db_connector._sql_database))
 
-    return sql_database
+    return db_connector._sql_database
 
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:

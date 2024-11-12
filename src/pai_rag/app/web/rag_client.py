@@ -55,6 +55,10 @@ class RagWebClient:
         return f"{self.endpoint}service/query/data_analysis1"
 
     @property
+    def db_loder_url(self):
+        return f"{self.endpoint}service/query/load_db_info"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}service/query/llm"
 
@@ -424,6 +428,23 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
+    def load_db_info(
+        self,
+    ):
+        try:
+            r = requests.post(
+                self.db_loder_url,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            # response = dotdict(json.loads(r.text))
+            # print("response:", r, r.text)
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=r.text)
+        except Exception as e:
+            print(f"load db info failed: {e}")
+
+        return r.text
+
     async def get_knowledge_state(self, task_id: str):
         async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
@@ -434,6 +455,7 @@ class RagWebClient:
 
     def patch_config(self, update_dict: Any):
         config = self.get_config()
+        print("config:", config)
         view_model: ViewModel = ViewModel.from_app_config(config)
         view_model.update(update_dict)
         new_config = view_model.to_app_config()

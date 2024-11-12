@@ -42,7 +42,7 @@ from llama_index.core.settings import (
 )
 from sqlalchemy import Table
 
-from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+from pai_rag.integrations.data_analysis.data_analysis_config import (
     MysqlAnalysisConfig,
     SqlAnalysisConfig,
     SqliteAnalysisConfig,

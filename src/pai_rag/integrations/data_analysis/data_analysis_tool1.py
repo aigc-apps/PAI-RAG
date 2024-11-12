@@ -14,7 +14,7 @@ from llama_index.core.settings import Settings
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 import llama_index.core.instrumentation as instrument
 
-from pai_rag.integrations.data_analysis.data_analysis_config1 import (
+from pai_rag.integrations.data_analysis.data_analysis_config import (
     BaseAnalysisConfig,
     PandasAnalysisConfig,
     SqlAnalysisConfig,
@@ -102,11 +102,25 @@ class DataAnalysisConnector:
     Used for db connection
     """
 
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(DataAnalysisConnector, cls).__new__(cls)
+        return cls._instance
+
     def __init__(
         self,
         analysis_config: BaseAnalysisConfig,
     ) -> None:
-        self._db_connector = create_db_connctor(analysis_config)
+        print("analysis_config:", analysis_config)
+        if isinstance(analysis_config, PandasAnalysisConfig):
+            self._sql_database = None
+        elif isinstance(analysis_config, SqlAnalysisConfig):
+            self._db_connector = create_db_connctor(analysis_config)
+            self._sql_database = self.connect_db()
+        else:
+            raise ValueError(f"Unknown analysis config: {analysis_config}.")
 
     def connect_db(self):
         return self._db_connector.connect()
@@ -158,10 +172,10 @@ class DataAnalysisQuery(BaseQueryEngine):
         """Initialize params."""
         self._llm = llm or Settings.llm
         self._embed_model = embed_model or Settings.embed_model
-
+        self._sql_database = sql_database
         self._retriever = create_retriever(
             analysis_config=analysis_config,
-            sql_database=sql_database,
+            sql_database=self._sql_database,
             llm=self._llm,
             embed_model=self._embed_model,
         )

@@ -111,7 +111,7 @@ class SQLGenerator:
         str_or_query_bundle: QueryType,
         selected_db_description_str: str,
         selected_db_history_str: str,
-        max_retries: int = 2,
+        max_retries: int = 1,
         candidate_num: int = 1,
     ) -> Tuple[List[NodeWithScore], Dict]:
         # 生成sql查询语句，如果candidate_num>1, 需要接candidates_selection, 暂不用
@@ -163,6 +163,9 @@ class SQLGenerator:
                     logger.info(
                         f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                     )
+                    print(
+                        f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
                     # 如果执行成功，记录query_tables，并跳出循环
                     query_tables = self._get_table_from_sql(self._tables, sql_query_str)
                     break
@@ -175,12 +178,15 @@ class SQLGenerator:
                     # 调用revision尝试更新sql
                     sql_query_str = self._revise_sql(
                         nl_query_bundle=query_bundle,
-                        db_desc_table_column_str=schema_description_str,
-                        selected_db_history_str=selected_db_history_str,
+                        db_schema_str=schema_description_str,
+                        db_history_str=selected_db_history_str,
                         executed_sql=sql_query_str,
                         error_message=sql_execution_error_str,
                     )
                     logger.info(
+                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                    )
+                    print(
                         f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                     )
 
@@ -235,7 +241,7 @@ class SQLGenerator:
         str_or_query_bundle: QueryType,
         selected_db_description_str: str,
         selected_db_history_str: str,
-        max_retries: int = 2,
+        max_retries: int = 1,
         candidate_num: int = 1,
     ) -> Tuple[List[NodeWithScore], Dict]:
         # 生成sql查询语句，如果candidate_num>1, 需要接candidates_selection, 暂不用
@@ -299,12 +305,15 @@ class SQLGenerator:
                     # 调用revision尝试更新sql
                     sql_query_str = await self._arevise_sql(
                         nl_query_bundle=query_bundle,
-                        selected_db_description_str=schema_description_str,
-                        selected_db_history_str=selected_db_history_str,
+                        db_schema_str=schema_description_str,
+                        db_history_str=selected_db_history_str,
                         executed_sql=sql_query_str,
                         error_message=sql_execution_error_str,
                     )
                     logger.info(
+                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                    )
+                    print(
                         f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                     )
 
@@ -369,8 +378,8 @@ class SQLGenerator:
     def _revise_sql(
         self,
         nl_query_bundle: QueryBundle,
-        selected_db_description_str: str,
-        selected_db_history_str: str,
+        db_schema_str: str,
+        db_history_str: str,
         executed_sql: str,
         error_message: str,
     ) -> str:
@@ -379,8 +388,8 @@ class SQLGenerator:
             prompt=self._sql_revision_prompt,
             dialect=self._dialect,
             query_str=nl_query_bundle.query_str,
-            db_schema=selected_db_description_str,
-            db_history=selected_db_history_str,
+            db_schema=db_schema_str,
+            db_history=db_history_str,
             predicted_sql=executed_sql,
             sql_execution_result=error_message,
         )
@@ -395,8 +404,8 @@ class SQLGenerator:
     async def _arevise_sql(
         self,
         nl_query_bundle: QueryBundle,
-        selected_db_description_str: str,
-        selected_db_history_str: str,
+        db_schema_str: str,
+        db_history_str: str,
         executed_sql: str,
         error_message: str,
     ):
@@ -405,8 +414,8 @@ class SQLGenerator:
             prompt=self._sql_revision_prompt,
             dialect=self._dialect,
             query_str=nl_query_bundle.query_str,
-            db_schema=selected_db_description_str,
-            db_history=selected_db_history_str,
+            db_schema=db_schema_str,
+            db_history=db_history_str,
             predicted_sql=executed_sql,
             sql_execution_result=error_message,
         )
