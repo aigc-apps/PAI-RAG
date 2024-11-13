@@ -1,10 +1,9 @@
 import gradio as gr
 from typing import Any, Dict
 from pai_rag.app.web.utils import components_to_dict
-import os
 import pai_rag.app.web.event_listeners as ev_listeners
 
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
+DEFAULT_IS_INTERACTIVE = True
 
 
 def create_vector_db_panel() -> Dict[str, Any]:
