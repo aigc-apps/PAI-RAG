@@ -35,7 +35,7 @@ def get_dataset(
 
 
 def init_ray_env():
-    ray.init(runtime_env=RuntimeEnv(conda="pai_rag"))
+    ray.init(runtime_env=RuntimeEnv(conda="pai_rag", working_dir="/home/ray/PAI-RAG"))
 
 
 @ray.remote
@@ -58,7 +58,7 @@ def process(input_file, args):
 
 def main(args):
     init_ray_env()
-    output = "/app/localdata/test_LoadAndParseDocTask_ray.jsonl"
+    output = "/home/ray/PAI-RAG/localdata/test_LoadAndParseDocTask_ray.jsonl"
     dataset = get_dataset(args.data_path)
     run_tasks = [process.remote(data, args) for data in dataset]
     results = ray.get(run_tasks)
