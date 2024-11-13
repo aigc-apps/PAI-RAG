@@ -9,6 +9,7 @@ from llama_index.core.schema import QueryBundle
 logger = logging.getLogger(__name__)
 
 
+# TODO
 class DBPreRetriever:
     """
     基于自然语言问题、关键词等进行预检索，承接db_descriptor，缩小提供的summary范围
@@ -54,9 +55,6 @@ class DBPreRetriever:
 
     #     :param schema_descriptions: 一个字典，键是模式标识符（如表名+列名），值是描述字符串。
     #     """
-    #     embeddings = self.model.encode(list(schema_descriptions.values()))
-    #     for idx, key in enumerate(schema_descriptions.keys()):
-    #         self.schema_embeddings[key] = embeddings[idx]
 
     # def retrieve(self, nlp_query: str, top_k: int = 5) -> List[Tuple[str, float]]:
     #     """
@@ -66,7 +64,3 @@ class DBPreRetriever:
     #     :param top_k: 返回前K个最相关的模式描述。
     #     :return: 一个列表，包含元组形式的模式标识符和相似度分数。
     #     """
-    #     query_embedding = self.model.encode([nlp_query])
-    #     similarities = cosine_similarity(query_embedding, list(self.schema_embeddings.values()))
-    #     top_indices = similarities.argsort()[0][-top_k:][::-1]
-    #     return [(list(self.schema_embeddings.keys())[idx], similarities[0][idx]) for idx in top_indices]

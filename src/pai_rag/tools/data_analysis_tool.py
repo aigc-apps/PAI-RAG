@@ -1,12 +1,14 @@
 import click
 import os
 import time
+import sys
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import (
     resolve_data_analysis_loader,
     resolve_data_analysis_query,
 )
+from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 
 # from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 from llama_index.core.schema import QueryBundle
@@ -47,7 +49,9 @@ def run(
     question=None,
     stream=False,
 ):
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)]
+    )
 
     config = RagConfigManager.from_file(config_file).get_value()
     print("config:", config)
@@ -56,9 +60,10 @@ def run(
 
     print("**Question**: ", question)
 
-    da_loader = resolve_data_analysis_loader(config)
-    print("check_instance:", da_loader._sql_database, id(da_loader._sql_database))
-    da_loader.load_db_info()
+    if isinstance(config.data_analysis, SqlAnalysisConfig):
+        da_loader = resolve_data_analysis_loader(config)
+        print("check_instance:", da_loader._sql_database, id(da_loader._sql_database))
+        da_loader.load_db_info()
 
     da_query_engine = resolve_data_analysis_query(config)
     print(

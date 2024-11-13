@@ -187,7 +187,8 @@ class DefaultSQLParser(BaseSQLParser):
             response = response[:sql_query_end].rstrip()
         # if sql_result_start != -1:
         # response = response[:sql_result_start]
-        return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
+        # return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
+        return response.strip().lstrip("sql")
 
 
 def generate_schema_description(structured_db_description_str: str) -> str:

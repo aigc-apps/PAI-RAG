@@ -63,18 +63,6 @@ def create_db_loader(
         raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
 
 
-# def create_db_query(
-#     analysis_config: BaseAnalysisConfig, sql_database: SQLDatabase, llm: LLM, embed_model: BaseEmbedding
-# ):
-#     if isinstance(analysis_config, SqlAnalysisConfig):
-#         return DBQuery.from_config(
-#             sql_config=analysis_config,
-#             sql_database=sql_database,
-#             llm=llm,
-#             embed_model=embed_model,
-#         )
-
-
 def create_retriever(
     analysis_config: BaseAnalysisConfig,
     sql_database: SQLDatabase,
@@ -102,28 +90,24 @@ class DataAnalysisConnector:
     Used for db connection
     """
 
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(DataAnalysisConnector, cls).__new__(cls)
-        return cls._instance
-
     def __init__(
         self,
         analysis_config: BaseAnalysisConfig,
     ) -> None:
-        print("analysis_config:", analysis_config)
-        if isinstance(analysis_config, PandasAnalysisConfig):
-            self._sql_database = None
-        elif isinstance(analysis_config, SqlAnalysisConfig):
-            self._db_connector = create_db_connctor(analysis_config)
-            self._sql_database = self.connect_db()
-        else:
-            raise ValueError(f"Unknown analysis config: {analysis_config}.")
+        # if isinstance(analysis_config, PandasAnalysisConfig):
+        self._analysis_config = analysis_config
+        # elif isinstance(analysis_config, SqlAnalysisConfig):
+        self._db_connector = create_db_connctor(analysis_config)
+        # else:
+        #     raise ValueError(f"Unknown analysis config: {analysis_config}.")
 
     def connect_db(self):
-        return self._db_connector.connect()
+        if isinstance(self._analysis_config, PandasAnalysisConfig):
+            return
+        elif isinstance(self._analysis_config, SqlAnalysisConfig):
+            return self._db_connector.connect()
+        else:
+            raise ValueError(f"Unknown analysis config: {self.analysis_config}.")
 
 
 class DataAnalysisLoader:
@@ -142,7 +126,7 @@ class DataAnalysisLoader:
         self._llm = llm or Settings.llm
         self._embed_model = embed_model or Settings.embed_model
         self._sql_database = sql_database
-        self._db_loder = create_db_loader(
+        self._db_loader = create_db_loader(
             analysis_config=analysis_config,
             sql_database=self._sql_database,
             llm=self._llm,
@@ -150,10 +134,10 @@ class DataAnalysisLoader:
         )
 
     def load_db_info(self):
-        return self._db_loder.load_db_info()
+        return self._db_loader.load_db_info()
 
     async def aload_db_info(self):
-        return await self._db_loder.aload_db_info()
+        return await self._db_loader.aload_db_info()
 
 
 class DataAnalysisQuery(BaseQueryEngine):

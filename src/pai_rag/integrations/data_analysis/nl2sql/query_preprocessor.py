@@ -12,6 +12,7 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
 logger = logging.getLogger(__name__)
 
 
+# TODO
 class QueryPreprocessor:
     """
     预处理自然语言问题，目前主要考虑关键词提取，query改写待定；

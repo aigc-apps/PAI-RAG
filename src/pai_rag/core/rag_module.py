@@ -143,16 +143,19 @@ def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
 
 
 def resolve_data_analysis_connector(config: RagConfig):
-    db_connector = DataAnalysisConnector(config.data_analysis)
-    print("connector_id:", id(db_connector), id(db_connector._sql_database))
-
-    return db_connector._sql_database
+    db_connector = resolve(
+        cls=DataAnalysisConnector,
+        analysis_config=config.data_analysis,
+    )
+    # db_connector = DataAnalysisConnector(config.data_analysis)
+    return db_connector
 
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    sql_database = resolve_data_analysis_connector(config)
+    sql_database = resolve_data_analysis_connector(config).connect_db()
+    print("loader sql_database:", sql_database)
 
     return resolve(
         cls=DataAnalysisLoader,
@@ -166,7 +169,8 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    sql_database = resolve_data_analysis_connector(config)
+    sql_database = resolve_data_analysis_connector(config).connect_db()
+    print("query sql_database:", sql_database)
 
     return resolve(
         cls=DataAnalysisQuery,
@@ -174,6 +178,7 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         sql_database=sql_database,
         llm=llm,
         embed_model=embed_model,
+        callback_manager=None,
     )
 
 

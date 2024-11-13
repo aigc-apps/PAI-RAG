@@ -2,7 +2,8 @@ import os
 import logging
 import json
 from typing import Any, Callable, Dict, List, Optional, Union, cast
-
+from decimal import Decimal
+import datetime
 import pandas as pd
 from pydantic.v1 import BaseModel, Field
 from sqlalchemy import Table
@@ -133,7 +134,8 @@ class DBDescriptor(PromptMixin):
                     table_name, self._sql_database._schema
                 )
             ):
-                column_value_sample = [row[i] for row in eval(data_sample)]
+                # print("col:", col, "data_sample:", data_sample)
+                column_value_sample = [row[i] for row in data_sample]
                 if col["name"] == table_pk_col:
                     column_info_list.append(
                         {
@@ -235,7 +237,7 @@ class DBDescriptor(PromptMixin):
             ]
             return lambda _: table_schemas
 
-    def _get_data_sample(self, table: str, sample_n: int = 3, seed: int = 2024) -> str:
+    def _get_data_sample(self, table: str, sample_n: int = 3, seed: int = 2024) -> List:
         """对table随机采样"""
         if self._dialect == "mysql":
             # MySQL 使用 RAND(seed) 函数
@@ -252,7 +254,31 @@ class DBDescriptor(PromptMixin):
         #     sql_str = f"Select * FROM {table} ORDER BY RANDOM() LIMIT {sample_n};"
         table_sample, _ = self._sql_database.run_sql(sql_str)
 
-        return table_sample
+        # 转换 Decimal 对象为 float，datetime 对象为字符串
+        converted_table_sample = self._convert_data_sample_format(eval(table_sample))
+        print("converted_table_sample:", converted_table_sample)
+
+        return converted_table_sample
+
+    def _convert_data_sample_format(self, data):
+        """递归地将数据中的 Decimal 对象转换为 float，将 datetime 对象转换为字符串"""
+        if isinstance(data, list):
+            return [self._convert_data_sample_format(item) for item in data]
+        elif isinstance(data, tuple):
+            return tuple(self._convert_data_sample_format(item) for item in data)
+        elif isinstance(data, dict):
+            return {
+                key: self._convert_data_sample_format(value)
+                for key, value in data.items()
+            }
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, datetime.datetime):
+            return data.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(data, datetime.date):
+            return data.strftime("%Y-%m-%d")
+        else:
+            return data
 
     # def generate_schema_description(self, file_path: Optional[str] = None) -> str:
     #     """"
