@@ -173,7 +173,7 @@ class PaiNodeParser(TransformComponent):
                         )
                         splitted_nodes.append(tmp_node)
 
-        for node in nodes:
+        for node in splitted_nodes:
             node.excluded_embed_metadata_keys.append("file_path")
             node.excluded_embed_metadata_keys.append("image_url")
             node.excluded_embed_metadata_keys.append("total_pages")
