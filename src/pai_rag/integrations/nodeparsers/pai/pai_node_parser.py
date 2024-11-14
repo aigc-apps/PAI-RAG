@@ -48,7 +48,7 @@ IMAGE_URL_REGEX = re.compile(
 )
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
-DEFAULT_EXCLUDED_KEYS = [
+DEFAULT_EXCLUDED_METADATA_KEYS = [
     "file_name",
     "file_type",
     "file_size",
@@ -59,6 +59,7 @@ DEFAULT_EXCLUDED_KEYS = [
     "image_url",
     "total_pages",
     "source",
+    "row_number",
 ]
 
 
@@ -187,10 +188,10 @@ class PaiNodeParser(TransformComponent):
 
         for node in splitted_nodes:
             node.excluded_embed_metadata_keys = list(
-                set(node.excluded_embed_metadata_keys + DEFAULT_EXCLUDED_KEYS)
+                set(node.excluded_embed_metadata_keys + DEFAULT_EXCLUDED_METADATA_KEYS)
             )
             node.excluded_llm_metadata_keys = list(
-                set(node.excluded_llm_metadata_keys + DEFAULT_EXCLUDED_KEYS)
+                set(node.excluded_llm_metadata_keys + DEFAULT_EXCLUDED_METADATA_KEYS)
             )
 
         logger.info(
