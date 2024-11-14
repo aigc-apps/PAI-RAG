@@ -155,7 +155,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     sql_database = resolve_data_analysis_connector(config).connect_db()
-    print("loader sql_database:", sql_database)
+    # print("loader sql_database:", sql_database)
 
     return resolve(
         cls=DataAnalysisLoader,
@@ -170,7 +170,7 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     sql_database = resolve_data_analysis_connector(config).connect_db()
-    print("query sql_database:", sql_database)
+    # print("query sql_database:", sql_database)
 
     return resolve(
         cls=DataAnalysisQuery,

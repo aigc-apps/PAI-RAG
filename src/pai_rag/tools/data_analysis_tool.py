@@ -74,7 +74,7 @@ def run(
     start_time1 = time.time()
     response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
     end_time1 = time.time()
-    print("sql time:", round(end_time1 - start_time1, 3), end_time1, start_time1)
+    print("sql time:", round(end_time1 - start_time1, 3))
 
     print("**SQL RESULT**:", response_nodes)
 

@@ -59,8 +59,7 @@ class DBLoader:
         self,
     ):
         # 1 获得数据库描述信息
-        # 1.1 基础描述信息：ddl+sample
-        # 数据库描述是否需要增强
+        # 基础描述信息：ddl+sample 以及 基础描述是否需要增强
         enable_enhanced_description = self._db_config.get(
             "enable_enhanced_description", True
         )
@@ -71,7 +70,7 @@ class DBLoader:
             self._db_descriptor.get_structured_table_description(QueryBundle(""))
             logger.info("db_description obtained from db_descriptor without llm.")
 
-        ## 2.3 是否包括历史查询记录 TODO
+        # 2 是否包括历史查询记录 TODO
         enable_db_history = self._db_config.get("enable_db_history", False)
         if enable_db_history:
             db_query_history = (
@@ -79,12 +78,14 @@ class DBLoader:
             )
             self._db_descriptor.collect_history(db_query_history)
 
+        # 3 embedding including db_description, db_history, db_value TODO
+        # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
+
     async def aload_db_info(
         self,
     ):
         # 1 获得数据库描述信息
-        # 1.1 基础描述信息：ddl+sample
-        # 数据库描述是否需要增强
+        # 基础描述信息：ddl+sample 以及 基础描述是否需要增强
         enable_enhanced_description = self._db_config.get(
             "enable_enhanced_description", True
         )
@@ -95,7 +96,7 @@ class DBLoader:
             self._db_descriptor.get_structured_table_description(QueryBundle(""))
             logger.info("db_description obtained from db_descriptor without llm.")
 
-        # ## 2.3 是否包括历史查询记录 TODO
+        # 2 是否包括历史查询记录 TODO
         # enable_db_history = self._db_config.get("enable_db_history", False)
         # if enable_db_history:
         #     db_query_history = (
@@ -103,10 +104,8 @@ class DBLoader:
         #     )
         #     self._db_descriptor.collect_history(db_query_history)
 
-        # ## 2.4 embedding, including db_description, db_history, db_value TODO
-        # enable_embedding = self._db_config.get(
-        #     "enable_embedding", False
-        # )
+        # 3 embedding including db_description, db_history, db_value TODO
+        # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
 
     @classmethod
     def from_config(
@@ -123,7 +122,7 @@ class DBLoader:
             "descriptions": sql_config.descriptions,
             "enable_enhanced_description": sql_config.enable_enhanced_description,
             "enable_db_history": sql_config.enable_db_history,
-            "enable_embedding": sql_config.enable_db_embedding,
+            "enable_db_embedding": sql_config.enable_db_embedding,
         }
 
         if isinstance(sql_config, SqliteAnalysisConfig):

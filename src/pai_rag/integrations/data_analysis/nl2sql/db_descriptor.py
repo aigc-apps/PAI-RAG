@@ -23,7 +23,7 @@ from llama_index.core.prompts.mixin import (
     PromptMixinType,
 )
 
-from pai_rag.integrations.data_analysis.nl2sql.nl2sql_utils import (
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     generate_schema_description,
 )
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
@@ -256,12 +256,12 @@ class DBDescriptor(PromptMixin):
 
         # 转换 Decimal 对象为 float，datetime 对象为字符串
         converted_table_sample = self._convert_data_sample_format(eval(table_sample))
-        print("converted_table_sample:", converted_table_sample)
+        # print("converted_table_sample:", converted_table_sample)
 
         return converted_table_sample
 
     def _convert_data_sample_format(self, data):
-        """递归地将数据中的 Decimal 对象转换为 float，将 datetime 对象转换为字符串"""
+        """递归地将数据中的特殊类型转换为常规类型"""
         if isinstance(data, list):
             return [self._convert_data_sample_format(item) for item in data]
         elif isinstance(data, tuple):
@@ -277,62 +277,12 @@ class DBDescriptor(PromptMixin):
             return data.strftime("%Y-%m-%d %H:%M:%S")
         elif isinstance(data, datetime.date):
             return data.strftime("%Y-%m-%d")
+        elif isinstance(data, datetime.time):
+            return data.strftime("%H:%M:%S")
+        elif isinstance(data, bytes):
+            return data.decode("utf-8", errors="ignore")  # 将 bytes 转换为 str
         else:
             return data
-
-    # def generate_schema_description(self, file_path: Optional[str] = None) -> str:
-    #     """"
-    #     基于结构化的数据库信息，生成适合llm的数据库描述，包括表结构、表描述、列描述等
-    #     """
-    #     if file_path is None:
-    #         file_path = self._db_description_file_path
-    #     with open(file_path, 'r') as f:
-    #         structured_table_description_dict = json.load(f)
-
-    #     table_info_list = structured_table_description_dict[
-    #         "table_info"
-    #     ]
-    #     column_info_list = structured_table_description_dict[
-    #         "column_info"
-    #     ]
-    #     table_info_df = pd.DataFrame(table_info_list)
-    #     column_info_df = pd.DataFrame(column_info_list)
-
-    #     # 生成所有表的描述
-    #     all_table_descriptions = []
-    #     for table_name in table_info_df['table']:
-    #         all_table_descriptions.append(self._generate_single_table_description(table_name, table_info_df, column_info_df))
-
-    #     # 将所有表的描述合并成一个字符串
-    #     schema_description_str = "\n".join(all_table_descriptions)
-
-    #     return schema_description_str, table_info_df, column_info_df
-
-    # def _generate_single_table_description(self, table_name, table_info_df, column_info_df) -> str:
-    #     """
-    #     基于单表的结构化信息，生成适合llm的数据库描述，包括表结构、表描述、列描述等
-    #     """
-    #     table_row = table_info_df[table_info_df["table"] == table_name].iloc[0]
-    #     columns = column_info_df[column_info_df["table"] == table_name]
-
-    #     table_desc = f"Table {table_name} has columns: "
-    #     for _, column in columns.iterrows():
-    #         table_desc += f""" {column["column"]} ({column["type"]})"""
-    #         if column["primary_key"]:
-    #             table_desc += ", Primary Key"
-    #         if column["foreign_key"]:
-    #             table_desc += f""", Foreign Key, Referred Table: {column["foreign_key_referred_table"]}"""
-    #         table_desc += f""", with Value Sample: {column["value_sample"]}"""
-    #         if column["comment"] or column["description"]:
-    #             table_desc += f""", with Description: {column["comment"] or ""}, {column['description'] or ""};"""
-    #         else:
-    #             table_desc += ";"
-    #     if table_row["comment"] or table_row["description"] or table_row["overview"]:
-    #         table_desc += f""" with Table Description: {table_row["comment"] or ""}, {table_row["description"] or ""}, {table_row["overview"] or ""}.\n"""
-    #     else:
-    #         table_desc += f".\n "
-
-    #     return table_desc
 
     def _merge_llm_info(
         self, table_info_df, column_info_df, output_summary_dict: Dict
@@ -392,11 +342,6 @@ class DBDescriptor(PromptMixin):
         )
         structured_db_description_str = json.dumps(structured_table_description_dict)
 
-        # if file_path is None:
-        #     file_path = self._db_description_file_path
-        # with open(file_path, "r") as f:
-        #     structured_db_description_str = f.read()
-
         (
             schema_description_str,
             table_info_df,
@@ -434,11 +379,6 @@ class DBDescriptor(PromptMixin):
             QueryBundle("")
         )
         structured_db_description_str = json.dumps(structured_table_description_dict)
-
-        # if file_path is None:
-        #     file_path = self._db_description_file_path
-        # with open(file_path, "r") as f:
-        #     structured_db_description_str = f.read()
 
         (
             schema_description_str,

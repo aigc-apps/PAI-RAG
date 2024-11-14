@@ -12,7 +12,7 @@ from llama_index.core import Settings
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SCHEMA_SELECT_PROMPT,
 )
-from pai_rag.integrations.data_analysis.nl2sql.nl2sql_utils import (
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     generate_schema_description,
 )
 

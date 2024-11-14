@@ -94,12 +94,13 @@ class DataAnalysisConnector:
         self,
         analysis_config: BaseAnalysisConfig,
     ) -> None:
-        # if isinstance(analysis_config, PandasAnalysisConfig):
         self._analysis_config = analysis_config
-        # elif isinstance(analysis_config, SqlAnalysisConfig):
-        self._db_connector = create_db_connctor(analysis_config)
-        # else:
-        #     raise ValueError(f"Unknown analysis config: {analysis_config}.")
+        if isinstance(analysis_config, PandasAnalysisConfig):
+            self._db_connector = None
+        elif isinstance(analysis_config, SqlAnalysisConfig):
+            self._db_connector = create_db_connctor(analysis_config)
+        else:
+            raise ValueError(f"Unknown analysis config: {analysis_config}.")
 
     def connect_db(self):
         if isinstance(self._analysis_config, PandasAnalysisConfig):
@@ -107,7 +108,7 @@ class DataAnalysisConnector:
         elif isinstance(self._analysis_config, SqlAnalysisConfig):
             return self._db_connector.connect()
         else:
-            raise ValueError(f"Unknown analysis config: {self.analysis_config}.")
+            raise ValueError(f"Unknown analysis config: {self._analysis_config}.")
 
 
 class DataAnalysisLoader:

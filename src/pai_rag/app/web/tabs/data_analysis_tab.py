@@ -55,7 +55,7 @@ def load_db_info_fn(input_elements: List[Any]):
     # update snapshot
     try:
         update_dict["analysis_type"] = "nl2sql"
-        print("update_dict:", update_dict)
+        # print("update_dict:", update_dict)
         rag_client.patch_config(update_dict)
 
         rag_client.load_db_info()
@@ -376,14 +376,14 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
         chat_args = {
             data_analysis_type,
-            # dialect,
-            # user,
-            # password,
-            # host,
-            # port,
-            # database,
-            # tables,
-            # descriptions,
+            dialect,
+            user,
+            password,
+            host,
+            port,
+            database,
+            tables,
+            descriptions,
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,

@@ -11,13 +11,13 @@ from llama_index.core.prompts.mixin import (
     PromptDictType,
     PromptMixinType,
 )
-from pai_rag.integrations.data_analysis.nl2sql.nl2sql_utils import (
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     MySQLRetriever,
     SQLParserMode,
     BaseSQLParser,
     DefaultSQLParser,
 )
-from pai_rag.integrations.data_analysis.nl2sql.nl2sql_utils import (
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     generate_schema_description,
 )
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
@@ -163,9 +163,7 @@ class SQLGenerator:
                     logger.info(
                         f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                     )
-                    print(
-                        f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
+
                     # 如果执行成功，记录query_tables，并跳出循环
                     query_tables = self._get_table_from_sql(self._tables, sql_query_str)
                     break
@@ -184,9 +182,6 @@ class SQLGenerator:
                         error_message=sql_execution_error_str,
                     )
                     logger.info(
-                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
-                    )
-                    print(
                         f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                     )
 
@@ -311,9 +306,6 @@ class SQLGenerator:
                         error_message=sql_execution_error_str,
                     )
                     logger.info(
-                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
-                    )
-                    print(
                         f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                     )
 
