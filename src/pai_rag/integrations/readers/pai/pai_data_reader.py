@@ -149,13 +149,14 @@ class PaiDataReader(BaseReader):
         self.file_readers = get_file_readers(reader_config, oss_store)
         self.oss_store = oss_store
 
-    def load_files(
+    def load_data(
         self,
         file_path_or_directory: str | List[str],
         filter_pattern: str = None,
         from_oss: bool = False,
         oss_path: str = None,
-    ) -> List[str]:
+        show_progress: bool = False,
+    ) -> List[Document]:
         input_files = get_input_files(
             file_path_or_directory=file_path_or_directory,
             from_oss=from_oss,
@@ -163,7 +164,17 @@ class PaiDataReader(BaseReader):
             filter_pattern=filter_pattern,
             oss_store=self.oss_store,
         )
-        return input_files
+        directory_reader = SimpleDirectoryReader(
+            input_files=input_files,
+            file_extractor=self.file_readers,
+        )
+
+        """Load data from the input directory."""
+        return directory_reader.load_data(show_progress=show_progress)
+
+    async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:
+        """Load data from the input directory."""
+        return self.load_data(*args, **load_kwargs)
 
     def load_single_data(self, input_file: str):
         directory_reader = SimpleDirectoryReader(
@@ -176,19 +187,3 @@ class PaiDataReader(BaseReader):
         document = directory_reader._exclude_metadata(documents)
         format_doc = document[0].to_embedchain_format()
         return format_doc
-
-    def load_data(
-        self,
-        input_files: List[str],
-        show_progress: bool = False,
-    ) -> List[Document]:
-        directory_reader = SimpleDirectoryReader(
-            input_files=input_files,
-            file_extractor=self.file_readers,
-        )
-        """Load data from the input directory."""
-        return directory_reader.load_data(show_progress=show_progress)
-
-    async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:
-        """Load data from the input directory."""
-        return self.load_data(*args, **load_kwargs)

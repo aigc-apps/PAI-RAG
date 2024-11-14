@@ -1,6 +1,5 @@
 import ray
 import os
-from ray.runtime_env import RuntimeEnv
 import argparse
 import json
 from typing import List
@@ -35,14 +34,17 @@ def get_dataset(
 
 
 def init_ray_env():
-    ray.init(runtime_env=RuntimeEnv(conda="pai_rag", working_dir="/home/ray/PAI-RAG"))
+    # ray.init(runtime_env=RuntimeEnv(conda="pai_rag", working_dir="/home/ray/PAI-RAG"))
+    ray.init(runtime_env={"working_dir": "/home/ray/PAI-RAG/", "conda": "pai_rag"})
 
 
 @ray.remote
-def write_to_file(data, output):
-    with open(output, "w", encoding="utf-8") as file:
-        json_line = json.dumps(data, ensure_ascii=False)  # 将字典转换为 JSON 字符串
-        file.write(json_line + "\n")  # 写入文件并加上换行符
+def write_to_file(results, filename):
+    # 每个结果写入一个新行
+    with open(filename, "a", encoding="utf-8") as f:
+        for result in results:
+            json_line = json.dumps(result, ensure_ascii=False)  # 转换为 JSON 格式的字符串
+            f.write(json_line + "\n")  # 每个 JSON 对象写入一行
 
 
 @ray.remote

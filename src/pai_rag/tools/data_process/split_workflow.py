@@ -4,9 +4,14 @@ import ray
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 
 
+def init_ray_env():
+    ray.init(runtime_env={"working_dir": "/home/ray/PAI-RAG/", "conda": "pai_rag"})
+
+
 def main(args):
+    init_ray_env()
     ds = ray.data.read_json(
-        "/home/xiaowen/xiaowen/github_code/PAI-RAG/localdata/test_LoadAndParseDocTask.jsonl"
+        "/home/ray/PAI-RAG/localdata/test_LoadAndParseDocTask_ray.jsonl"
     )
 
     ds = ds.flat_map(
@@ -14,7 +19,7 @@ def main(args):
     )
 
     ds.write_json(
-        "/home/xiaowen/xiaowen/github_code/PAI-RAG/localdata/output",
+        "/home/ray/PAI-RAG/localdata/outout_ray_split",
         filename_provider=_DefaultFilenameProvider(file_format="jsonl"),
         force_ascii=False,
     )

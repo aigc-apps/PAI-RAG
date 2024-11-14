@@ -25,14 +25,6 @@ class LoadAndParseDocTask(BaseTask):
             oss_store=self.oss_store,
         )
 
-    def get_input_files(self):
-        return self.data_reader.load_files(
-            file_path_or_directory=self.data_path,
-            filter_pattern=self.pattern,
-            from_oss=self.oss_path is not None,
-            oss_path=self.oss_path,
-        )
-
     def process(self, input_file):
         document = self.data_reader.load_single_data(input_file)
         return document

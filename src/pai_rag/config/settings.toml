@@ -59,7 +59,7 @@ proba_threshold = 0.10
 
 [rag.node_parser]
 type = "Sentence"
-chunk_size = 500
+chunk_size = 200
 chunk_overlap = 10
 enable_multimodal = true
 
