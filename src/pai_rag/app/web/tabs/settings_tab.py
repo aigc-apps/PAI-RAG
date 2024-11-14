@@ -6,8 +6,6 @@ from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import pai_rag.app.web.event_listeners as ev_listeners
 
-DEFAULT_IS_INTERACTIVE = True
-
 
 def create_setting_tab() -> Dict[str, Any]:
     components = []
@@ -37,7 +35,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
                     elem_id="embed_source",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 embed_model = gr.Dropdown(
                     label="Embedding Model Name",
@@ -155,7 +153,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     ["paieas", "dashscope"],
                     label="LLM Model Source",
                     elem_id="llm",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 llm_eas_url = gr.Textbox(
                     label="EAS Url",
@@ -198,7 +196,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         ["paieas", "dashscope"],
                         label="LLM Model Source",
                         elem_id="mllm",
-                        interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                        interactive=True,
                     )
                     with gr.Row(
                         visible=(mllm == "paieas"), elem_id="m_eas_col"
