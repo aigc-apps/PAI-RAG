@@ -61,9 +61,11 @@ class PaiPandasExcelReader(BaseReader):
         """Parse Excel file。"""
         if fs:
             with fs.open(file) as f:
-                excel = pd.ExcelFile(load_workbook(f), engine="openpyxl")
+                excel = pd.ExcelFile(
+                    load_workbook(f, data_only=True), engine="openpyxl"
+                )
         else:
-            excel = pd.ExcelFile(load_workbook(file), engine="openpyxl")
+            excel = pd.ExcelFile(load_workbook(file, data_only=True), engine="openpyxl")
         sheet_name = excel.sheet_names[0]
         sheet = excel.book[sheet_name]
         df = excel.parse(sheet_name, **self._pandas_config)
