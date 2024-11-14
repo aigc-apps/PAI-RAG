@@ -55,6 +55,12 @@ def create_setting_tab() -> Dict[str, Any]:
                         label="Embedding Type",
                         elem_id="embed_type",
                     )
+                    embed_api_key = gr.Textbox(
+                        label="API KEY",
+                        elem_id="embed_api_key",
+                        visible=False,
+                        type="password",
+                    )
                     embed_link = gr.Markdown(
                         label="Model URL Link",
                         elem_id="embed_link",
@@ -83,7 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_model, embed_dim, embed_type, embed_link],
+                outputs=[embed_model, embed_dim, embed_type, embed_link, embed_api_key],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
@@ -97,6 +103,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_type,
                     embed_link,
                     embed_model,
+                    embed_api_key,
                     embed_batch_size,
                     vector_index,
                     new_index_name,

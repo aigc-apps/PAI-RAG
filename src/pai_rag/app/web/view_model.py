@@ -77,8 +77,6 @@ class ViewModel(BaseModel):
 
     config_file: str = None
 
-    vectordb_type: str = "faiss"
-
     # retriever
     similarity_top_k: int = 5
     image_similarity_top_k: int = 2
