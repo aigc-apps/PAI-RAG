@@ -8,7 +8,7 @@ from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 
 
 def init_ray_env():
-    ray.init(runtime_env={"working_dir": "/PAI-RAG/", "conda": "pai_rag"})
+    ray.init(runtime_env={"working_dir": "/PAI-RAG/"})
 
 
 def text_node_to_dict(node):
