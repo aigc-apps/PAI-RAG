@@ -44,15 +44,33 @@ class RagChatType(str, Enum):
     WEB = "web"
 
 
+class SseVersion(int, Enum):
+    V0 = 0  # Backward compatibility
+    V1 = 1  # New V1 version
+
+
+def _event_chunk_wrapper(chunk_content, sse_version: SseVersion = SseVersion.V0):
+    if sse_version == sse_version.V1:
+        return f"data: {chunk_content}\n\n"
+    else:
+        return f"{chunk_content}\n"
+
+
 async def event_generator_async(
-    response, extra_info=None, chat_store=None, session_id=None
+    response,
+    extra_info=None,
+    chat_store=None,
+    session_id=None,
+    sse_version: SseVersion = SseVersion.V0,
 ):
     content = ""
     async for token in response.async_response_gen():
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
-            yield "data: " + json.dumps(chunk, ensure_ascii=False) + "\n\n"
+            yield _event_chunk_wrapper(
+                json.dumps(chunk, ensure_ascii=False), sse_version
+            )
 
     if chat_store:
         chat_store.add_message(
@@ -65,9 +83,10 @@ async def event_generator_async(
     else:
         last_chunk = {"delta": "", "is_finished": True}
 
-    yield "data: " + json.dumps(
+    last_chunk_data = json.dumps(
         last_chunk, default=lambda x: x.dict(), ensure_ascii=False
-    ) + "\n\n"
+    )
+    yield _event_chunk_wrapper(last_chunk_data, sse_version)
 
 
 class RagApplication:
@@ -143,7 +162,12 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery, chat_type: RagChatType = RagChatType.RAG):
+    async def aquery(
+        self,
+        query: RagQuery,
+        chat_type: RagChatType = RagChatType.RAG,
+        sse_version: SseVersion = SseVersion.V0,
+    ):
         session_id = query.session_id or uuid_generator()
         logger.debug(f"Get session ID: {session_id}.")
         session_config = self.config.model_copy()
@@ -233,6 +257,7 @@ class RagApplication:
                 extra_info=result_info,
                 chat_store=chat_store,
                 session_id=session_id,
+                sse_version=sse_version,
             )
 
     async def aquery_agent(self, query: RagQuery) -> RagResponse:

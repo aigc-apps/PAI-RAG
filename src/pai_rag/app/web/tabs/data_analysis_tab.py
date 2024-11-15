@@ -9,9 +9,6 @@ from pai_rag.app.web.ui_constants import (
 )
 
 
-DEFAULT_IS_INTERACTIVE = True
-
-
 def upload_file_fn(input_file):
     if input_file is None:
         return None

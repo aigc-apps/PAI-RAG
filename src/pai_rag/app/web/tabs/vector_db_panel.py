@@ -3,8 +3,6 @@ from typing import Any, Dict
 from pai_rag.app.web.utils import components_to_dict
 import pai_rag.app.web.event_listeners as ev_listeners
 
-DEFAULT_IS_INTERACTIVE = True
-
 
 def create_vector_db_panel() -> Dict[str, Any]:
     components = []
@@ -22,7 +20,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                 ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
-                interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                interactive=True,
             )
             # Adb
             with gr.Column(visible=(vectordb_type == "analyticdb")) as adb_col:

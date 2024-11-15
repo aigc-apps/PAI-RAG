@@ -1,3 +1,7 @@
+import os
+os.environ["ENABLE_FASTAPI"] = "false"
+os.environ["ENABLE_REQUESTS"] = "false"
+os.environ["ENABLE_AIOHTTPCLIENT"] = "false"
 from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize # ByPass unused import: use for arms trace initialization
 
 import click
@@ -5,7 +9,6 @@ import uvicorn
 from fastapi import FastAPI
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
-import os
 from pathlib import Path
 
 _BASE_DIR = Path(__file__).parent

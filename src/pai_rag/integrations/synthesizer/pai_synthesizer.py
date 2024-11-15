@@ -379,24 +379,25 @@ class PaiSynthesizer(BaseSynthesizer):
 
         logger.info("Synthsize using LLM with no image inputs.")
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        single_text_chunk = "\n".join(text_chunks)
         truncated_chunks = self._prompt_helper.truncate(
             prompt=text_qa_template,
-            text_chunks=[single_text_chunk],
+            text_chunks=text_chunks,
         )
+
+        context_str = "\n".join(truncated_chunks)
 
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = await self._llm.apredict(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **response_kwargs,
             )
         else:
             # customized modify [will be removed]
             response = await self._llm.astream(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **response_kwargs,
             )
 
@@ -428,23 +429,23 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        single_text_chunk = "\n".join(text_chunks)
         truncated_chunks = self._prompt_helper.truncate(
             prompt=text_qa_template,
-            text_chunks=[single_text_chunk],
+            text_chunks=text_chunks,
         )
 
+        context_str = "\n".join(truncated_chunks)
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = self._llm.predict(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **kwargs,
             )
         else:
             response = self._llm.stream(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **kwargs,
             )
 
