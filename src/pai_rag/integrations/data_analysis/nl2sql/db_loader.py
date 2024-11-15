@@ -1,6 +1,6 @@
 import os
-import logging
 from typing import Dict, Optional
+from loguru import logger
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core.base.embeddings.base import BaseEmbedding
@@ -9,19 +9,15 @@ from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 
-# from pai_rag.integrations.data_analysis.nl2sql.db_connector import DBConnector
 from pai_rag.integrations.data_analysis.nl2sql.db_descriptor import DBDescriptor
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
 )
-
 from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqlAnalysisConfig,
     SqliteAnalysisConfig,
     MysqlAnalysisConfig,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class DBLoader:

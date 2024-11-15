@@ -1,5 +1,5 @@
 import os
-import logging
+from loguru import logger
 import json
 from pydantic.v1 import BaseModel, Field
 from typing import List, Optional
@@ -16,7 +16,6 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     generate_schema_description,
 )
 
-logger = logging.getLogger(__name__)
 
 DEFAULT_DESC_FILE_PATH = "./db_structured_description.txt"
 

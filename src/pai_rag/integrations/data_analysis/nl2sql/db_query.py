@@ -1,5 +1,5 @@
 import os
-import logging
+from loguru import logger
 from typing import List, Dict, Optional
 
 from llama_index.core.llms.llm import LLM
@@ -23,9 +23,6 @@ from pai_rag.integrations.data_analysis.nl2sql.query_preprocessor import (
     QueryPreprocessor,
 )
 from pai_rag.integrations.data_analysis.nl2sql.sql_generator import SQLGenerator
-
-
-logger = logging.getLogger(__name__)
 
 
 DEFAULT_DB_STRUCTURED_DESCRIPTION_PATH = (

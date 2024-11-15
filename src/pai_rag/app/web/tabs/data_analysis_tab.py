@@ -247,17 +247,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                 with gr.Column(visible=True):
                     with gr.Tab("Nl2sql Prompt"):
-                        # sql_prompt_type = gr.Radio(
-                        #     [
-                        #         "general",
-                        #         "sql",
-                        #         "custom",
-                        #     ],
-                        #     value="general",
-                        #     label="\N{rocket} Please choose the nl2sql prompt template",
-                        #     elem_id="nl2sql_prompt_type",
-                        # )
-
                         db_nl2sql_prompt = gr.Textbox(
                             label="nl2sql template",
                             elem_id="db_nl2sql_prompt",
@@ -266,16 +255,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         )
 
                     with gr.Tab("Synthesizer Prompt"):
-                        # syn_prompt_type = gr.Radio(
-                        #     [
-                        #         "general",
-                        #         "custom",
-                        #     ],
-                        #     value="general",
-                        #     label="\N{rocket} Please choose the synthesizer prompt template",
-                        #     elem_id="synthesizer_prompt_type",
-                        # )
-
                         synthesizer_prompt = gr.Textbox(
                             label="synthesizer template",
                             elem_id="synthesizer_prompt",
@@ -306,44 +285,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         outputs=[synthesizer_prompt],
                         api_name="reset_synthesizer_prompt_clk",
                     )
-
-            # def change_sql_prompt_template(prompt_type):
-            #     if prompt_type == "general":
-            #         return {
-            #             db_nl2sql_prompt: gr.update(
-            #                 value=NL2SQL_GENERAL_PROMPTS, interactive=True
-            #             )
-            #         }
-            #     elif prompt_type == "sql":
-            #         return {
-            #             db_nl2sql_prompt: gr.update(
-            #                 value=DA_SQL_PROMPTS, interactive=True
-            #             )
-            #         }
-            #     else:
-            #         return {db_nl2sql_prompt: gr.update(value="", interactive=True)}
-
-            # sql_prompt_type.input(
-            #     fn=change_sql_prompt_template,
-            #     inputs=sql_prompt_type,
-            #     outputs=[db_nl2sql_prompt],
-            # )
-
-            # def change_syn_prompt_template(prompt_type):
-            #     if prompt_type == "general":
-            #         return {
-            #             synthesizer_prompt: gr.update(
-            #                 value=SYN_GENERAL_PROMPTS, interactive=True
-            #             )
-            #         }
-            #     else:
-            #         return {synthesizer_prompt: gr.update(value="", interactive=True)}
-
-            # syn_prompt_type.input(
-            #     fn=change_syn_prompt_template,
-            #     inputs=syn_prompt_type,
-            #     outputs=[synthesizer_prompt],
-            # )
 
             def data_analysis_type_change(type_value):
                 if type_value == "datafile":
@@ -437,8 +378,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             enable_query_preprocessor.elem_id: enable_query_preprocessor,
             enable_db_preretriever.elem_id: enable_db_preretriever,
             enable_db_selector.elem_id: enable_db_selector,
-            # sql_prompt_type.elem_id: sql_prompt_type,
             db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
-            # syn_prompt_type.elem_id: syn_prompt_type,
             synthesizer_prompt.elem_id: synthesizer_prompt,
         }

@@ -6,8 +6,7 @@ from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_data_loader import RagDataLoader
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
-from pai_rag.integrations.data_analysis.data_analysis_tool import DataAnalysisTool
-from pai_rag.integrations.data_analysis.data_analysis_tool1 import (
+from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisConnector,
     DataAnalysisLoader,
     DataAnalysisQuery,
@@ -125,18 +124,6 @@ def resolve_llm(config: RagConfig) -> PaiLlm:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     return llm
-
-
-def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
-    llm = resolve_llm(config)
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-
-    return resolve(
-        cls=DataAnalysisTool,
-        analysis_config=config.data_analysis,
-        llm=llm,
-        embed_model=embed_model,
-    )
 
 
 def resolve_data_analysis_connector(config: RagConfig):

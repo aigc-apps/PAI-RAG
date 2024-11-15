@@ -1,6 +1,6 @@
 import os
 import functools
-import logging
+from loguru import logger
 from typing import Dict
 from llama_index.core import SQLDatabase
 from sqlalchemy import create_engine, inspect
@@ -13,8 +13,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
     MysqlAnalysisConfig,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class DBConnector:

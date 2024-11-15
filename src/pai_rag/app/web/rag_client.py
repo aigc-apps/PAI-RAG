@@ -53,11 +53,11 @@ class RagWebClient:
 
     @property
     def data_analysis_url(self):
-        return f"{self.endpoint}service/query/data_analysis1"
+        return f"{self.endpoint}v1/query/data_analysis"
 
     @property
     def db_loder_url(self):
-        return f"{self.endpoint}service/query/load_db_info"
+        return f"{self.endpoint}v1/query/load_db_info"
 
     @property
     def llm_url(self):
@@ -128,8 +128,6 @@ class RagWebClient:
             self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
-                ref_table = doc["metadata"].get("query_tables", None)
-                invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 ref_table = doc["metadata"].get("query_tables", None)
                 invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)

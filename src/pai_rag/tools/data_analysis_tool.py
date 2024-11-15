@@ -78,16 +78,16 @@ def run(
 
     print("**SQL RESULT**:", response_nodes)
 
-    # if not stream:
-    #     query_bundle = QueryBundle(query_str=question, stream=False)
-    #     response = da_query_engine.query(query_bundle)
-    #     print("**Answer**: ", response.response)
-    # else:
-    #     query_bundle = QueryBundle(query_str=question, stream=True)
-    #     response = da_query_engine.query(query_bundle)
-    #     print("**Answer**: ", end="")
-    #     for chunk in response.response_gen:
-    #         print(chunk, end="")
+    if not stream:
+        query_bundle = QueryBundle(query_str=question, stream=False)
+        response = da_query_engine.query(query_bundle)
+        print("**Answer**: ", response.response)
+    else:
+        query_bundle = QueryBundle(query_str=question, stream=True)
+        response = da_query_engine.query(query_bundle)
+        print("**Answer**: ", end="")
+        for chunk in response.response_gen:
+            print(chunk, end="")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import logging
+from loguru import logger
 from typing import Any, Dict, List, Optional, Tuple
 
 from llama_index.core.llms.llm import LLM
@@ -24,8 +24,6 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_TEXT_TO_SQL_PROMPT,
     DEFAULT_SQL_REVISION_PROMPT,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class SQLGenerator:

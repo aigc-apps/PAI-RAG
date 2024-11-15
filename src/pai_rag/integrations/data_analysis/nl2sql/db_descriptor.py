@@ -1,8 +1,8 @@
 import os
-import logging
 import json
 from typing import Any, Callable, Dict, List, Optional, Union, cast
 from decimal import Decimal
+from loguru import logger
 import datetime
 import pandas as pd
 from pydantic.v1 import BaseModel, Field
@@ -30,8 +30,6 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
 )
 
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_DESC_FILE_PATH = (
     "./localdata/data_analysis/nl2sql/db_structured_description.txt"

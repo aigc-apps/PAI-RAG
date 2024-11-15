@@ -4,7 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
-
+from loguru import logger
 import pandas as pd
 
 from llama_index.core.base.base_retriever import BaseRetriever
@@ -12,10 +12,6 @@ from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextNode
 from llama_index.core.instrumentation import DispatcherSpanMixin
-
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def timeout_handler():

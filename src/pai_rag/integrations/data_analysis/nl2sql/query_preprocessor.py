@@ -1,5 +1,5 @@
-import logging
 from typing import List, Optional
+
 from llama_index.core.llms.llm import LLM
 from llama_index.core import BasePromptTemplate
 from llama_index.core.schema import QueryBundle
@@ -7,9 +7,6 @@ from llama_index.core.schema import QueryBundle
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_KEYWORD_EXTRACTION_PROMPT,
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 # TODO

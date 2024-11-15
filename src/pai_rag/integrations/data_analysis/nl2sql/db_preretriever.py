@@ -1,12 +1,9 @@
-import logging
 from typing import Optional, Any
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
-
-logger = logging.getLogger(__name__)
 
 
 # TODO
