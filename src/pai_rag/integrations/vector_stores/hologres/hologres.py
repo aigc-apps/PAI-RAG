@@ -3,7 +3,6 @@
 Vector store using hologres back end.
 """
 
-import logging
 from typing import Any, List, cast, Dict
 from hologres_vector import HologresVector
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -14,8 +13,6 @@ from llama_index.core.vector_stores.types import (
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pai_rag.utils.score_utils import normalize_cosine_similarity_score
-
-logger = logging.getLogger()
 
 
 class HologresVectorStore(BasePydanticVectorStore):

@@ -27,14 +27,13 @@ from llama_index.core.schema import (
     ImageNode,
 )
 import json
-import logging
+from loguru import logger
 import os
 from enum import Enum
 from uuid import uuid4
 
 DEFAULT_EMPTY_RESPONSE_GEN = "Empty Response"
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
-logger = logging.getLogger(__name__)
 
 
 def uuid_generator() -> str:
@@ -47,15 +46,33 @@ class RagChatType(str, Enum):
     WEB = "web"
 
 
+class SseVersion(int, Enum):
+    V0 = 0  # Backward compatibility
+    V1 = 1  # New V1 version
+
+
+def _event_chunk_wrapper(chunk_content, sse_version: SseVersion = SseVersion.V0):
+    if sse_version == sse_version.V1:
+        return f"data: {chunk_content}\n\n"
+    else:
+        return f"{chunk_content}\n"
+
+
 async def event_generator_async(
-    response, extra_info=None, chat_store=None, session_id=None
+    response,
+    extra_info=None,
+    chat_store=None,
+    session_id=None,
+    sse_version: SseVersion = SseVersion.V0,
 ):
     content = ""
     async for token in response.async_response_gen():
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
-            yield json.dumps(chunk, ensure_ascii=False) + "\n"
+            yield _event_chunk_wrapper(
+                json.dumps(chunk, ensure_ascii=False), sse_version
+            )
 
     if chat_store:
         chat_store.add_message(
@@ -68,13 +85,15 @@ async def event_generator_async(
     else:
         last_chunk = {"delta": "", "is_finished": True}
 
-    yield json.dumps(last_chunk, default=lambda x: x.dict(), ensure_ascii=False)
+    last_chunk_data = json.dumps(
+        last_chunk, default=lambda x: x.dict(), ensure_ascii=False
+    )
+    yield _event_chunk_wrapper(last_chunk_data, sse_version)
 
 
 class RagApplication:
     def __init__(self, config: RagConfig):
         self.name = "RagApplication"
-        self.logger = logging.getLogger(__name__)
         self.config = config
         index_manager.add_default_index(self.config)
 
@@ -145,9 +164,14 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery, chat_type: RagChatType = RagChatType.RAG):
+    async def aquery(
+        self,
+        query: RagQuery,
+        chat_type: RagChatType = RagChatType.RAG,
+        sse_version: SseVersion = SseVersion.V0,
+    ):
         session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
+        logger.debug(f"Get session ID: {session_id}.")
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(query.index_name)
         session_config.embedding = index_entry.embedding_config
@@ -168,20 +192,20 @@ class RagApplication:
             chat_history=query.chat_history,
         )
         new_question = new_query_bundle.query_str
-        self.logger.info(f"Querying with question '{new_question}'.")
+        logger.info(f"Querying with question '{new_question}'.")
 
         if query.with_intent:
-            intent_router = resolve_intent_router(
-                "IntentDetectionModule", session_config
-            )
-            intent = await intent_router.aselect(str_or_query_bundle=query)
-            self.logger.info(f"[IntentDetection] Routing query to {intent}.")
-            if intent.intent == Intents.TOOL:
+            intent_router = resolve_intent_router(session_config)
+            intent = await intent_router.aselect(str_or_query_bundle=new_question)
+            logger.info(f"[IntentDetection] Routing query to {intent}.")
+            if intent == Intents.TOOL:
                 return await self.aquery_agent(query)
-            elif intent.intent == Intents.WEBSEARCH:
-                return await self.aquery(query, RagChatType.WEB)
-            elif intent.intent != Intents.RAG:
-                return ValueError(f"Invalid intent {intent.intent}")
+            elif intent == Intents.WEBSEARCH:
+                chat_type = RagChatType.WEB
+            elif intent == Intents.NL2SQL:
+                return await self.aquery_analysis(query)
+            elif intent != Intents.RAG:
+                return ValueError(f"Invalid intent {intent}")
 
         query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)
         chat_store.add_message(
@@ -235,6 +259,7 @@ class RagApplication:
                 extra_info=result_info,
                 chat_store=chat_store,
                 session_id=session_id,
+                sse_version=sse_version,
             )
 
     async def aquery_agent(self, query: RagQuery) -> RagResponse:
@@ -252,8 +277,12 @@ class RagApplication:
             return RagResponse(answer="Empty query. Please input your question.")
 
         agent = resolve_agent(self.config)
-        response = await agent.achat(query.question)
-        return RagResponse(answer=response.response)
+        if query.stream:
+            response = await agent.astream_chat(query.question)
+            return event_generator_async(response)
+        else:
+            response = await agent.achat(query.question)
+            return RagResponse(answer=response.response)
 
     async def aload_agent_config(self, agent_cfg_path: str):
         if os.path.exists(agent_cfg_path):
@@ -291,7 +320,7 @@ class RagApplication:
             RagResponse
         """
         session_id = query.session_id or uuid_generator()
-        self.logger.debug(f"Get session ID: {session_id}.")
+        logger.debug(f"Get session ID: {session_id}.")
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id

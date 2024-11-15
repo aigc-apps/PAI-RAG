@@ -2,7 +2,6 @@ from typing import Any
 
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.core.models.config import ArizeTraceConfig, BaseTraceConfig, PaiTraceConfig
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_data_loader import RagDataLoader
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
@@ -36,9 +35,6 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
-import logging
-
-logger = logging.getLogger(__name__)
 
 cls_cache = {}
 
@@ -117,7 +113,8 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
 
 def resolve_agent(config: RagConfig) -> PaiAgent:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
-    agent = PaiAgent.from_tools(
+    agent = resolve(
+        cls=PaiAgent.from_tools,
         agent_config=config.agent,
         llm=llm,
     )
@@ -270,32 +267,3 @@ def resolve_searcher(config: RagConfig) -> BingSearchTool:
     )
 
     return searcher
-
-
-def setup_tracing(trace_config: BaseTraceConfig):
-    from pai.llm_trace.instrumentation import init_opentelemetry
-    from pai.llm_trace.instrumentation.llama_index import LlamaIndexInstrumentor
-    from llama_index.core import set_global_handler
-
-    if isinstance(trace_config, PaiTraceConfig):
-        if not trace_config.token:
-            logger.info("Trace is not enabled since PaiTraceConfig.token is not set.")
-            return
-
-        init_opentelemetry(
-            LlamaIndexInstrumentor,
-            grpc_endpoint=trace_config.endpoint,
-            token=trace_config.token,
-            service_name=trace_config.app_name,
-            service_version="0.1.0",
-            service_id="",
-            deployment_environment="",
-            service_owner_id="",
-            service_owner_sub_id="",
-        )
-        logger.info(f"Pai-LLM-Trace enabled with endpoint: '{trace_config.endpoint}'.")
-    elif isinstance(trace_config, ArizeTraceConfig):
-        set_global_handler("arize_phoenix")
-        logger.info("Arize trace enabled.")
-    else:
-        logger.warning("Trace is not configured.")

@@ -1,5 +1,5 @@
 import glob
-import logging
+from loguru import logger
 from typing import Any, Dict, List, Optional
 import os
 import pandas as pd
@@ -15,9 +15,6 @@ from llama_index.experimental.query_engine.pandas.output_parser import (
 )
 
 from pai_rag.integrations.data_analysis.data_analysis_config import PandasAnalysisConfig
-
-
-logger = logging.getLogger(__name__)
 
 
 DEFAULT_INSTRUCTION_STR = (

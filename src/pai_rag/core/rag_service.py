@@ -3,7 +3,7 @@ import os
 import traceback
 from asgi_correlation_id import correlation_id
 from pai_rag.core.models.errors import UserInputError
-from pai_rag.core.rag_application import RagApplication, RagChatType
+from pai_rag.core.rag_application import RagApplication, RagChatType, SseVersion
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.oss_utils import get_oss_auth
 from pai_rag.app.api.models import (
@@ -13,10 +13,9 @@ from pai_rag.app.api.models import (
 )
 from openinference.instrumentation import using_attributes
 from typing import Dict, List
-import logging
+from loguru import logger
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
-logger = logging.getLogger(__name__)
 
 
 def trace_correlation_id(function):
@@ -117,6 +116,33 @@ class RagService:
 
         return status, detail
 
+    async def aquery_v1(self, query: RagQuery):
+        try:
+            return await self.rag.aquery(
+                query, RagChatType.RAG, sse_version=SseVersion.V1
+            )
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query RAG failed: {ex}")
+
+    async def aquery_search_v1(self, query: RagQuery):
+        try:
+            return await self.rag.aquery(
+                query, RagChatType.WEB, sse_version=SseVersion.V1
+            )
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query Search failed: {ex}")
+
+    async def aquery_llm_v1(self, query: RagQuery):
+        try:
+            return await self.rag.aquery(
+                query, RagChatType.LLM, sse_version=SseVersion.V1
+            )
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query RAG failed: {ex}")
+
     async def aquery(self, query: RagQuery):
         try:
             return await self.rag.aquery(query, RagChatType.RAG)
@@ -124,7 +150,9 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_search(self, query: RagQuery):
+    async def aquery_search(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ):
         try:
             return await self.rag.aquery(query, RagChatType.WEB)
         except Exception as ex:

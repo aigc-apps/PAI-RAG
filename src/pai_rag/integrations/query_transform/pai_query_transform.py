@@ -18,6 +18,7 @@ from pai_rag.utils.prompt_template import (
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.utils.messages_utils import parse_chat_messages
+from loguru import logger
 
 DEFAULT_FUSION_NUM_QUERIES = 4
 
@@ -86,7 +87,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         queries = [q.strip() for q in queries if q.strip()]
         if self._verbose:
             queries_str = "\n".join(queries)
-            print(f"Generated queries:\n{queries_str}")
+            logger.info(f"Generated queries:\n{queries_str}")
 
         # The LLM often returns more queries than we asked for, so trim the list.
         return [
@@ -113,7 +114,7 @@ class PaiFusionQueryTransform(PaiBaseQueryTransform):
         queries = [q.strip() for q in queries if q.strip()]
         if self._verbose:
             queries_str = "\n".join(queries)
-            print(f"Generated queries:\n{queries_str}")
+            logger.info(f"Generated queries:\n{queries_str}")
 
         # The LLM often returns more queries than we asked for, so trim the list.
         return [
@@ -226,9 +227,9 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         if chat_history is not None:
             history_messages = parse_chat_messages(chat_history)
             for hist_mes in history_messages:
-                self._chat_store.add_message(hist_mes)
+                self._chat_store.add_message(key=session_id, message=hist_mes)
 
-        chat_history = self._chat_store.get_messages(session_id)
+        chat_history = self._chat_store.get_messages(key=session_id)
         if not chat_history:
             # Keep the question as is if there's no conversation context.
             return query_bundle

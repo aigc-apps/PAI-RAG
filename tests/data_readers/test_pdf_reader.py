@@ -5,6 +5,7 @@ from pai_rag.core.rag_module import resolve
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.utils.markdown_utils import is_horizontal_table
 
 BASE_DIR = Path(__file__).parent.parent.parent
 
@@ -17,8 +18,7 @@ def test_pai_pdf_reader():
         reader_config=config.data_reader,
     )
     input_dir = "tests/testdata/data/pdf_data"
-    ModelScopeDownloader().load_basic_models()
-    ModelScopeDownloader().load_mineru_config()
+    ModelScopeDownloader().load_rag_models()
 
     directory_reader.file_readers[".pdf"] = PaiPDFReader()
 
@@ -53,7 +53,7 @@ def test_is_horizontal_table():
         ["Age", 30, 25],
         ["City", "New York", "San Francisco"],
     ]
-    assert PaiPDFReader.is_horizontal_table(horizontal_table_1)
-    assert PaiPDFReader.is_horizontal_table(horizontal_table_2)
-    assert PaiPDFReader.is_horizontal_table(horizontal_table_3)
-    assert not PaiPDFReader.is_horizontal_table(vertical_table)
+    assert is_horizontal_table(horizontal_table_1)
+    assert is_horizontal_table(horizontal_table_2)
+    assert is_horizontal_table(horizontal_table_3)
+    assert not is_horizontal_table(vertical_table)

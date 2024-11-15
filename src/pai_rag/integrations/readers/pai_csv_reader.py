@@ -12,9 +12,7 @@ import pandas as pd
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 import chardet
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class PaiCSVReader(BaseReader):

@@ -8,7 +8,7 @@ Modification based on llama-index SQL Retriever,
 """
 
 import functools
-import logging
+from loguru import logger
 import os
 import re
 import signal
@@ -47,8 +47,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqlAnalysisConfig,
     SqliteAnalysisConfig,
 )
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_TEXT_TO_SQL_TMPL = PromptTemplate(
     "Given an input question, first create a syntactically correct {dialect} "

@@ -4,18 +4,17 @@ import os
 from pai_rag.integrations.readers.markdown_reader import MarkdownReader
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
-from pai_rag.integrations.readers.html.html_reader import HtmlReader
+from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
 from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
 from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
 from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
+from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
 
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 
@@ -32,8 +31,14 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
     image_reader = PaiImageReader(oss_cache=oss_store)
 
     file_readers = {
-        ".html": HtmlReader(),
-        ".htm": HtmlReader(),
+        ".html": PaiHtmlReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing html images
+        ),
+        ".htm": PaiHtmlReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing html images
+        ),
         ".docx": PaiDocxReader(
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing docx images
@@ -41,6 +46,10 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
         ".pdf": PaiPDFReader(
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pdf images
+        ),
+        ".pptx": PaiPptxReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing pptx images
         ),
         ".csv": PaiPandasCSVReader(
             concat_rows=reader_config.concat_csv_rows,
@@ -98,7 +107,6 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
 
     if not files:
         raise ValueError(f"No file found at OSS path '{oss_path}'.")
-    print(files)
     return files
 
 

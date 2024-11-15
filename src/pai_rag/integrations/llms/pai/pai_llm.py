@@ -1,7 +1,7 @@
 from typing import Any, Sequence
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.core import Settings
-from llama_index.core.bridge.pydantic import PrivateAttr
+from llama_index.core.bridge.pydantic import PrivateAttr, Field
 from llama_index.core.base.llms.types import LLMMetadata
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -23,17 +23,19 @@ from pai_rag.integrations.llms.pai.llm_config import (
     DEFAULT_MAX_TOKENS,
     PaiBaseLlmConfig,
 )
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class PaiLlm(OpenAILike):
     _llm: Any = PrivateAttr()
+    llm_config: PaiBaseLlmConfig = Field(
+        default=None,
+        description="Llm configuration",
+    )
 
     def __init__(self, llm_config: PaiBaseLlmConfig):
         super().__init__()
-        self._llm = create_llm(llm_config)
+        self.llm_config = llm_config
+        self._llm = create_llm(self.llm_config)
         self.model = llm_config.model
         self._llm.callback_manager = Settings.callback_manager
         self.callback_manager = Settings.callback_manager
@@ -53,6 +55,8 @@ class PaiLlm(OpenAILike):
             return LLMMetadata(
                 model_name=self.model,
                 num_output=DEFAULT_MAX_TOKENS,
+                is_chat_model=True,
+                is_function_calling_model=True,
             )
 
     def complete(

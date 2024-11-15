@@ -1,4 +1,3 @@
-import os
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
@@ -8,9 +7,6 @@ from pai_rag.app.web.ui_constants import (
     NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,
 )
-
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def upload_file_fn(input_file):
@@ -385,6 +381,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             tables,
             descriptions,
             db_nl2sql_prompt,
+            synthesizer_prompt,
             synthesizer_prompt,
             question,
             chatbot,

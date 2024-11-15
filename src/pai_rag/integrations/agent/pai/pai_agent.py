@@ -1,4 +1,3 @@
-from pydantic import BaseModel
 from typing import (
     Any,
     Dict,
@@ -7,6 +6,7 @@ from typing import (
     Optional,
     Type,
 )
+import json
 from llama_index.agent.openai.step import OpenAIAgentWorker
 from llama_index.core.agent.runner.base import AgentRunner
 from llama_index.core.callbacks import CallbackManager
@@ -18,30 +18,27 @@ from llama_index.core.objects.base import ObjectRetriever
 from llama_index.core.settings import Settings
 from llama_index.core.tools import BaseTool
 from llama_index.llms.openai.utils import OpenAIToolCall
+from pai_rag.integrations.agent.pai.base_tool import AgentConfig, PaiAgentDefinition
 from pai_rag.integrations.agent.pai.utils.tool_utils import (
     get_customized_tools,
 )
+from loguru import logger
 
-import logging
-
-logger = logging.getLogger(__name__)
-
-DEFAULT_MAX_FUNCTION_CALLS = 5
-
-
-# TODO: move to each integration
-class AgentConfig(BaseModel):
-    tool_definition_file: str | None = None
-    python_script_file: str | None = None
+DEFAULT_MAX_FUNCTION_CALLS = 10
 
 
 def get_tools(agent_config: AgentConfig):
-    tools = []
-    # tools.extend(get_calculator_tools())
-    # logger.info(f"Loaded calculator tools.")
-    tools.extend(get_customized_tools(agent_config))
-    logger.info("Loaded custom tools.")
+    json_object = {
+        "system_prompt": agent_config.system_prompt,
+        "api_tools": json.loads(agent_config.api_definition),
+        "python_scripts": agent_config.python_scripts,
+        "function_tools": json.loads(agent_config.function_definition),
+    }
 
+    agent_definition = PaiAgentDefinition.model_validate(json_object)
+    tools = []
+    tools.extend(get_customized_tools(agent_definition))
+    logger.info("Loaded custom tools.")
     return tools
 
 
@@ -84,6 +81,8 @@ class PaiAgent(AgentRunner):
             callback_manager=callback_manager,
             default_tool_choice=default_tool_choice,
         )
+        tool_metadata = [tool.metadata for tool in tools]
+        logger.info(f"Pai Agent Runner successfully set up with tools: {tool_metadata}")
 
     @classmethod
     def from_tools(
@@ -99,7 +98,6 @@ class PaiAgent(AgentRunner):
         max_function_calls: int = DEFAULT_MAX_FUNCTION_CALLS,
         default_tool_choice: str = "auto",
         callback_manager: Optional[CallbackManager] = None,
-        system_prompt: Optional[str] = None,
         prefix_messages: Optional[List[ChatMessage]] = None,
         tool_call_parser: Optional[Callable[[OpenAIToolCall], Dict]] = None,
         **kwargs: Any,
@@ -128,12 +126,14 @@ class PaiAgent(AgentRunner):
                 f"Model name {llm.model} does not support function calling API. "
             )
 
-        if system_prompt is not None:
+        if agent_config is not None and agent_config.system_prompt is not None:
             if prefix_messages is not None:
                 raise ValueError(
                     "Cannot specify both system_prompt and prefix_messages"
                 )
-            prefix_messages = [ChatMessage(content=system_prompt, role="system")]
+            prefix_messages = [
+                ChatMessage(content=agent_config.system_prompt, role="system")
+            ]
 
         prefix_messages = prefix_messages or []
 
@@ -146,6 +146,5 @@ class PaiAgent(AgentRunner):
             verbose=verbose,
             max_function_calls=max_function_calls,
             callback_manager=callback_manager,
-            default_tool_choice=default_tool_choice,
             tool_call_parser=tool_call_parser,
         )

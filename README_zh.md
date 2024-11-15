@@ -50,6 +50,12 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    conda activate rag_env
    ```
 
+   如果使用macOS且需要处理PPTX文件，需要下载依赖库处理PPTX文件
+
+   ```bash
+   brew install mono-libgdiplus
+   ```
+
    ### (1) CPU环境
 
    直接使用poetry安装项目依赖包：
@@ -57,17 +63,20 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```bash
     pip install poetry
     poetry install
+    poetry run aliyun-bootstrap -a install
    ```
 
-### (2) GPU环境
+   ### (2) GPU环境
 
-首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
+   首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
 
-```bash
-mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-pip install poetry
-poetry install
-```
+   ```bash
+   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+   pip install poetry
+   poetry install
+   poetry run aliyun-bootstrap -a install
+
+   ```
 
 - 常见网络超时问题
 
@@ -264,14 +273,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 - Agent及调用Function Tool的简单对话
 
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
-```
-
 # Agentic RAG
 
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
-[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
+[Agentic RAG](./docs/agentic_rag.md)
 
 # Data Analysis
 
@@ -282,3 +287,15 @@ curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: appli
 如需实现更多个性化配置，请参考文档：
 
 [参数配置说明](./docs/config_guide_cn.md)
+
+# 支持文件类型
+
+| 文件类型 | 文件格式                               |
+| -------- | -------------------------------------- |
+| 非结构化 | .txt, .docx， .pdf， .html，.pptx，.md |
+| 图片     | .gif， .jpg，.png，.jpeg， .webp       |
+| 结构化   | .csv，.xls， .xlsx，.jsonl             |
+| 其他     | .epub，.mbox，.ipynb                   |
+
+1. .doc格式文档需转化为.docx格式
+2. .ppt和.pptm格式需转化为.pptx格式

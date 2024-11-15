@@ -8,6 +8,7 @@ import markdown
 import html
 import mimetypes
 from http import HTTPStatus
+from loguru import logger
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -44,11 +45,11 @@ class RagWebClient:
 
     @property
     def query_url(self):
-        return f"{self.endpoint}service/query"
+        return f"{self.endpoint}v1/query"
 
     @property
     def search_url(self):
-        return f"{self.endpoint}service/query/search"
+        return f"{self.endpoint}v1/query/search"
 
     @property
     def data_analysis_url(self):
@@ -60,51 +61,51 @@ class RagWebClient:
 
     @property
     def llm_url(self):
-        return f"{self.endpoint}service/query/llm"
+        return f"{self.endpoint}v1/query/llm"
 
     @property
     def retrieval_url(self):
-        return f"{self.endpoint}service/query/retrieval"
+        return f"{self.endpoint}v1/query/retrieval"
 
     @property
     def config_url(self):
-        return f"{self.endpoint}service/config"
+        return f"{self.endpoint}v1/config"
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/upload_data"
+        return f"{self.endpoint}v1/upload_data"
 
     @property
     def load_datasheet_url(self):
-        return f"{self.endpoint}service/upload_datasheet"
+        return f"{self.endpoint}v1/upload_datasheet"
 
     @property
     def load_agent_cfg_url(self):
-        return f"{self.endpoint}service/config/agent"
+        return f"{self.endpoint}v1/config/agent"
 
     @property
     def get_load_state_url(self):
-        return f"{self.endpoint}service/get_upload_state"
+        return f"{self.endpoint}v1/get_upload_state"
 
     @property
     def get_evaluate_generate_url(self):
-        return f"{self.endpoint}service/evaluate/generate"
+        return f"{self.endpoint}v1/evaluate/generate"
 
     @property
     def get_evaluate_retrieval_url(self):
-        return f"{self.endpoint}service/evaluate/retrieval"
+        return f"{self.endpoint}v1/evaluate/retrieval"
 
     @property
     def get_evaluate_response_url(self):
-        return f"{self.endpoint}service/evaluate/response"
+        return f"{self.endpoint}v1/evaluate/response"
 
     @property
     def index_url(self):
-        return f"{self.endpoint}service/indexes/"
+        return f"{self.endpoint}v1/indexes/"
 
     @property
     def list_index_url(self):
-        return f"{self.endpoint}service/indexes"
+        return f"{self.endpoint}v1/indexes"
 
     def _format_rag_response(
         self, question, response, with_history: bool = False, stream: bool = False
@@ -229,7 +230,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
@@ -253,7 +256,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -279,7 +284,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -312,7 +319,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
@@ -421,7 +430,7 @@ class RagWebClient:
             if r.status_code != HTTPStatus.OK:
                 raise RagApiError(code=r.status_code, msg=response.message)
         except Exception as e:
-            print(f"add_datasheet failed: {e}")
+            logger.exception(f"add_datasheet failed: {e}")
         finally:
             file_obj.close()
 
@@ -470,7 +479,6 @@ class RagWebClient:
         r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
-
         config = RagConfig.model_validate_json(json_data=r.text)
         return config
 

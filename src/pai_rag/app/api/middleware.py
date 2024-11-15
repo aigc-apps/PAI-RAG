@@ -3,9 +3,7 @@ from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from asgi_correlation_id import CorrelationIdMiddleware
 import time
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class CustomMiddleWare(BaseHTTPMiddleware):

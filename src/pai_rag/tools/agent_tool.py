@@ -1,12 +1,9 @@
 import click
 import os
 from pathlib import Path
-from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_agent
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
@@ -57,20 +54,17 @@ def run(
     tool_definition_file=None,
     python_script_file=None,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     config = RagConfigManager.from_file(config_file).get_value()
     if tool_definition_file:
-        config.rag.agent.tool_definition_file = tool_definition_file
+        config.agent.tool_definition_file = tool_definition_file
     if python_script_file:
-        config.rag.agent.python_script_file = python_script_file
+        config.agent.python_script_file = python_script_file
 
-    rag_config = RagConfig.model_validate(config.rag)
-    agent = resolve_agent(rag_config)
+    agent = resolve_agent(config)
 
-    print("**Question**: ", question)
+    logger.info("**Question**: ", question)
     response = agent.chat(question)
-    print("**Answer**: ", response.response)
+    logger.info("**Answer**: ", response.response)
 
 
 if __name__ == "__main__":

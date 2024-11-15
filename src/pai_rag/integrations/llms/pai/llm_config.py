@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -158,6 +158,8 @@ class PaiEasLlmConfig(PaiBaseLlmConfig):
     endpoint: str
     token: str
     model: str = "default"
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
 class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):

@@ -51,3 +51,4 @@ class MysqlAnalysisConfig(SqlAnalysisConfig):
     password: str
     host: str
     port: int
+    port: int

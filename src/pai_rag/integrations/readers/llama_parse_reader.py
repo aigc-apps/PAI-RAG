@@ -1,7 +1,7 @@
 import nest_asyncio
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core import Document
-import logging
+from loguru import logger
 import os
 import json
 import asyncio
@@ -20,8 +20,6 @@ from tqdm import tqdm
 from pai_rag.utils.oss_utils import calculate_file_md5
 
 nest_asyncio.apply()
-
-logger = logging.getLogger(__name__)
 
 
 def is_default_fs(fs: fsspec.AbstractFileSystem) -> bool:
@@ -171,9 +169,8 @@ class LlamaParseDirectoryReader(SimpleDirectoryReader):
                     if raise_on_error:
                         raise Exception("Error loading file") from e
                     # otherwise, just skip the file and report the error
-                    print(
-                        f"Failed to load file {input_file} with error: {e}. Skipping...",
-                        flush=True,
+                    logger.exception(
+                        f"Failed to load file {input_file} with error: {e}. Skipping..."
                     )
                     return []
 

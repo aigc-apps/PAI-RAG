@@ -2,7 +2,7 @@
 
 import asyncio
 import nest_asyncio
-import logging
+from loguru import logger
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
@@ -10,8 +10,6 @@ import httpx
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.readers.base import BasePydanticReader
 from llama_index.core.schema import Document
-
-logger = logging.getLogger(__name__)
 
 
 def _substack_reader(soup: Any, **kwargs) -> Tuple[str, Dict[str, Any]]:
@@ -157,7 +155,6 @@ def fetch_multiple(urls):
     nest_asyncio.apply()
     tasks = [fetch_url(url) for url in urls]
     results = asyncio.run(asyncio.gather(*tasks))
-    print(results)
     return results
 
 

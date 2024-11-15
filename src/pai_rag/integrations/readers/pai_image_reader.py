@@ -10,9 +10,6 @@ from fsspec import AbstractFileSystem
 import os
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document, ImageDocument
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class PaiImageReader(BaseReader):

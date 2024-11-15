@@ -1,7 +1,6 @@
 """Docs parser.
 
 """
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
@@ -9,6 +8,7 @@ from llama_index.core.schema import Document
 from pai_rag.utils.markdown_utils import (
     transform_local_to_oss,
     convert_table_to_markdown,
+    is_horizontal_table,
     PaiTable,
 )
 from docx import Document as DocxDocument
@@ -17,8 +17,9 @@ import os
 from PIL import Image
 import time
 from io import BytesIO
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 IMAGE_MAX_PIXELS = 512 * 512
 
 
@@ -102,12 +103,13 @@ class PaiDocxReader(BaseReader):
     def _convert_table_to_markdown(self, table, doc_name):
         total_cols = max(len(row.cells) for row in table.rows)
 
-        header_row = table.rows[0]
-        rows = []
-        headers = self._parse_row(header_row, doc_name, total_cols)
-        for row in table.rows[1:]:
-            rows.append(self._parse_row(row, doc_name, total_cols))
-        table = PaiTable(headers=[headers], rows=rows)
+        table_matrix = []
+        for row in table.rows:
+            table_matrix.append(self._parse_row(row, doc_name, total_cols))
+        if is_horizontal_table(table_matrix):
+            table = PaiTable(data=table_matrix, row_headers_index=[0])
+        else:
+            table = PaiTable(data=table_matrix, column_headers_index=[0])
         return convert_table_to_markdown(table, total_cols)
 
     def _parse_row(self, row, doc_name, total_cols):
@@ -120,6 +122,7 @@ class PaiDocxReader(BaseReader):
                 break
             cell_content = self._parse_cell(cell, doc_name).strip()
             row_cells[col_index] = cell_content
+            col_index += 1
         return row_cells
 
     def _parse_cell(self, cell, doc_name):
@@ -142,7 +145,7 @@ class PaiDocxReader(BaseReader):
                     if not image_id:
                         continue
                     image_part = paragraph.part.rels.get(image_id, None)
-                    if image_id:
+                    if image_id and self._oss_cache:
                         image_blob = image_part.blob
                         image_filename = os.path.basename(image_part.partname)
                         image_url = self._transform_local_to_oss(
@@ -193,7 +196,7 @@ class PaiDocxReader(BaseReader):
                                     embed_id = blip.get(
                                         "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
                                     )
-                                    if embed_id:
+                                    if embed_id and self._oss_cache:
                                         image_part = document.part.related_parts.get(
                                             embed_id
                                         )
@@ -207,7 +210,7 @@ class PaiDocxReader(BaseReader):
                                         time_tag = int(time.time())
                                         alt_text = f"pai_rag_image_{time_tag}_"
                                         image_content = f"![{alt_text}]({image_url})"
-                                markdown.append(f"{image_content}\n\n")
+                                        markdown.append(f"{image_content}\n\n")
                     markdown.append(self._convert_paragraph(paragraph))
 
             elif isinstance(element.tag, str) and element.tag.endswith("tbl"):  # 表格
@@ -223,7 +226,7 @@ class PaiDocxReader(BaseReader):
         metadata: bool = True,
         extra_info: Optional[Dict] = None,
     ) -> List[Document]:
-        """Loads list of documents from PDF file and also accepts extra information in dict format."""
+        """Loads list of documents from Docx file and also accepts extra information in dict format."""
         return self.load(file_path, metadata=metadata, extra_info=extra_info)
 
     def load(
@@ -263,5 +266,5 @@ class PaiDocxReader(BaseReader):
             )
             docs.append(doc)
             logger.info(f"processed doc file {file_path} without metadata")
-        print(f"[PaiDocxReader] successfully loaded {len(docs)} nodes.")
+        logger.info(f"[PaiDocxReader] successfully loaded {len(docs)} nodes.")
         return docs

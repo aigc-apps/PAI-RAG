@@ -73,3 +73,13 @@ DEFAULT_CALCULATE_SUBTRACT = """
 
     Example uses of this tool include but are not limited to calculating age differences, determining the number of items sold from inventory, working out loan repayments, and any other context where subtraction of numerical values plays a key role.
 """
+
+
+DEFAULT_GET_DATETIME_TOOL = """
+    The get datetime tool is used to retrieve the current date and time. It is particularly useful for tasks that require obtaining the current date and time, such as booking tickets, scheduling appointments, tracking events, or managing time-sensitive tasks.
+    get_current_datetime() -> str
+
+    Return the current date and time as a string using format "%Y-%d-%d %H:%M:%S"..
+
+    This function is essential for tasks that require obtaining the current date and time, such as booking tickets, scheduling appointments, tracking events, or managing time-sensitive tasks.
+"""

@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 import gradio as gr
-import os
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
+from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_client import DEFAULT_LOCAL_URL, rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
@@ -19,11 +19,7 @@ from pai_rag.app.web.ui_constants import (
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 
-import logging
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
-
-logger = logging.getLogger("WebUILogger")
+from loguru import logger
 
 
 def resume_ui():
@@ -83,11 +79,9 @@ def make_homepage():
         with gr.Tab("\N{fire} Chat"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        """ hide agent tab
         with gr.Tab("\N{rocket} Agent"):
             agent_elements = create_agent_tab()
             elem_manager.add_elems(agent_elements)
-        """
         with gr.Tab("\N{bar chart} Data Analysis"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
@@ -132,6 +126,6 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
     home = make_homepage()
     home.queue(concurrency_count=1, max_size=64)
     home._queue.set_url(web_url)
-    print(web_url)
+    logger.info(f"web_url: {web_url}")
     gr.mount_gradio_app(app, home, path="")
     return home

@@ -1,10 +1,8 @@
-import logging
 import hashlib
 import oss2
 import os
 from oss2.credentials import EnvironmentVariableCredentialsProvider
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class OssClient:

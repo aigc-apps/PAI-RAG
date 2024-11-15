@@ -1,24 +1,28 @@
 from typing import Dict, Any
-import json
 from pai_rag.app.web.rag_client import rag_client
 import gradio as gr
 
 
-def upload_config_file_fn(upload_config_file):
-    if upload_config_file is None:
-        return None
-    with open(upload_config_file.name, "rb") as file:
-        res = json.loads(file.read())
-    return res
+def respond(
+    intent_description,
+    agent_api_definition,
+    agent_function_definition,
+    agent_python_scripts,
+    agent_system_prompt,
+    agent_question,
+    agent_chatbot,
+):
+    update_dict = {
+        "intent_description": intent_description,
+        "agent_api_definition": agent_api_definition,
+        "agent_function_definition": agent_function_definition,
+        "agent_python_scripts": agent_python_scripts,
+        "agent_system_prompt": agent_system_prompt,
+    }
 
+    rag_client.patch_config(update_dict)
 
-def update_agent_config(upload_config_file):
-    res = rag_client.load_agent_config(upload_config_file.name)
-    return res
-
-
-def respond(agent_question, agent_chatbot):
-    response_gen = rag_client.query(agent_question, with_intent=True)
+    response_gen = rag_client.query(agent_question, with_intent=True, stream=False)
     content = ""
     agent_chatbot.append((agent_question, content))
     for resp in response_gen:
@@ -39,42 +43,39 @@ def reset_textbox():
 def create_agent_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
-            _ = gr.Markdown(
-                value="**Upload the agent config file with function calling**"
-            )
-            with gr.Row():
-                with gr.Column(scale=7):
-                    upload_config_file = gr.File(
-                        label="Upload agent config file for function calling.",
-                        file_count="single",
-                        file_types=[".json"],
-                        elem_id="upload_config_file",
-                        scale=8,
-                    )
-                with gr.Column(variant="panel", scale=3):
-                    config_submit = gr.Button(
-                        "Submit Config",
-                        elem_id="config_submit",
-                        variant="primary",
-                        scale=6,
-                    )
-                    config_submit_state = gr.Textbox(label="Submit Status", scale=4)
-            upload_file_content = gr.JSON(
-                label="Displaying config content", elem_id="upload_file_content"
-            )
-
-        upload_config_file.upload(
-            fn=upload_config_file_fn,
-            inputs=[upload_config_file],
-            outputs=[upload_file_content],
-            api_name="upload_config_file_fn",
-        )
-        config_submit.click(
-            update_agent_config,
-            [upload_config_file],
-            [config_submit_state],
-            api_name="agent_config_submit_clk",
-        )
+            with gr.Tab(label="Intents & Prompts"):
+                intent_description = gr.Code(
+                    label="Intent Descriptions",
+                    elem_id="intent_description",
+                    interactive=True,
+                    language="json",
+                )
+            with gr.Tab(label="API tools"):
+                agent_system_prompt = gr.Textbox(
+                    label="Function-call system Prompt",
+                    elem_id="agent_system_prompt",
+                    lines=5,
+                    interactive=True,
+                )
+                agent_api_definition = gr.Code(
+                    label="API Tool Definitions",
+                    elem_id="agent_api_definition",
+                    interactive=True,
+                    language="json",
+                )
+            with gr.Tab(label="Python tools"):
+                agent_function_definition = gr.Code(
+                    label="Python Tool Definitions",
+                    elem_id="agent_function_definition",
+                    interactive=True,
+                    language="json",
+                )
+                agent_python_scripts = gr.Code(
+                    label="Python Tool Scripts",
+                    elem_id="agent_python_scripts",
+                    language="python",
+                    interactive=True,
+                )
 
         with gr.Column(scale=6):
             _ = gr.Markdown(value="**Agentic RAG Chatbot Test**")
@@ -87,13 +88,29 @@ def create_agent_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("Clear History", variant="secondary")
             submitBtn.click(
                 respond,
-                [agent_question, agent_chatbot],
+                [
+                    intent_description,
+                    agent_api_definition,
+                    agent_function_definition,
+                    agent_python_scripts,
+                    agent_system_prompt,
+                    agent_question,
+                    agent_chatbot,
+                ],
                 [agent_chatbot],
                 api_name="agent_respond_clk",
             )
             agent_question.submit(
                 respond,
-                [agent_question, agent_chatbot],
+                [
+                    intent_description,
+                    agent_api_definition,
+                    agent_function_definition,
+                    agent_python_scripts,
+                    agent_system_prompt,
+                    agent_question,
+                    agent_chatbot,
+                ],
                 [agent_chatbot],
                 api_name="agent_respond_q",
             )
@@ -112,6 +129,9 @@ def create_agent_tab() -> Dict[str, Any]:
 
             clearBtn.click(clear_history, [agent_chatbot], [agent_chatbot])
         return {
-            upload_config_file.elem_id: upload_config_file,
-            upload_file_content.elem_id: upload_file_content,
+            intent_description.elem_id: intent_description,
+            agent_system_prompt.elem_id: agent_system_prompt,
+            agent_api_definition.elem_id: agent_api_definition,
+            agent_function_definition.elem_id: agent_function_definition,
+            agent_python_scripts.elem_id: agent_python_scripts,
         }

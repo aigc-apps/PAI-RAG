@@ -55,6 +55,12 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    conda activate rag_env
    ```
 
+   if you use macOS and need to process PPTX files, you need use the following command to install the dependencies to process PPTX files:
+
+   ```bash
+      brew install mono-libgdiplus
+   ```
+
 ### (1) CPU
 
 Use poetry to install project dependency packages directly:
@@ -62,6 +68,7 @@ Use poetry to install project dependency packages directly:
 ```bash
 pip install poetry
 poetry install
+poetry run aliyun-bootstrap -a install
 ```
 
 ### (2) GPU
@@ -72,6 +79,7 @@ First replace the default pyproject.toml with the GPU version, and then use poet
 mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
 pip install poetry
 poetry install
+poetry run aliyun-bootstrap -a install
 ```
 
 - Common network timeout issues
@@ -312,14 +320,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 - Agent And Function Tool
 
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"This year is 2024. What year was it 10 years ago?"}'
-```
-
 # Agentic RAG
 
 You can use agent with function calling api-tools in PAI-RAG, please refer to the documentation:
-[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
+[Agentic RAG](./docs/agentic_rag.md)
 
 # Data Analysis
 
@@ -330,3 +334,15 @@ You can use data analysis based on database or sheet file in PAI-RAG, please ref
 For more customization options, please refer to the documentation:
 
 [Parameter Configuration Instruction](./docs/config_guide_en.md)
+
+# Supported File Types
+
+| 文件类型     | 文件格式                               |
+| ------------ | -------------------------------------- |
+| Unstructured | .txt, .docx， .pdf， .html，.pptx，.md |
+| Images       | .gif， .jpg，.png，.jpeg， .webp       |
+| Structured   | .csv，.xls， .xlsx，.jsonl             |
+| Others       | .epub，.mbox，.ipynb                   |
+
+1. .doc files need to be converted to .docx files.
+2. .ppt and .pptm files need to be converted to .pptx files.

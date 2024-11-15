@@ -1,5 +1,5 @@
-import logging
 import os
+from urllib.parse import urljoin
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.multi_modal_llms.openai import OpenAIMultiModal
@@ -13,7 +13,7 @@ from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def create_llm(llm_config: PaiBaseLlmConfig):
@@ -64,10 +64,11 @@ def create_llm(llm_config: PaiBaseLlmConfig):
         )
         llm = OpenAILike(
             model=llm_config.model,
-            api_base=llm_config.endpoint,
+            api_base=urljoin(llm_config.endpoint, "v1"),
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
+            is_chat_model=True,
             max_tokens=llm_config.max_tokens,
             reuse_client=False,
         )
@@ -127,6 +128,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
+            is_chat_model=True,
             max_new_tokens=llm_config.max_tokens,
         )
     else:

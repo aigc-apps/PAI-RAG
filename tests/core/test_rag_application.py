@@ -34,8 +34,6 @@ def rag_app():
 def test_query(rag_app: RagApplication):
     query = RagQuery(question="Why did he decide to learn AI?")
     response = asyncio.run(rag_app.aquery(query, chat_type=RagChatType.RAG))
-    print(response.answer)
-    print(response.docs)
     assert len(response.answer) > 10 and response.answer != "Empty Response"
 
     query = RagQuery(question="")

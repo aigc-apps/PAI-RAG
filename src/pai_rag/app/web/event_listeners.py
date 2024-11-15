@@ -19,6 +19,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     HuggingFaceEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
+from loguru import logger
 
 
 def add_index(*components):
@@ -26,7 +27,7 @@ def add_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.add_index(index_entry)
     index_map = get_index_map()
-    print(f"Add index {index_entry.index_name} successfully")
+    logger.info(f"Add index {index_entry.index_name} successfully")
     return [
         gr.update(
             choices=list(index_map.indexes.keys()) + ["NEW"],
@@ -44,7 +45,7 @@ def update_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.update_index(index_entry)
     index_map = get_index_map()
-    print(f"Update index {index_entry.index_name} successfully")
+    logger.info(f"Update index {index_entry.index_name} successfully")
     return [
         gr.update(
             choices=list(index_map.indexes.keys()) + ["NEW"],
@@ -65,14 +66,18 @@ def change_emb_source(source, model):
         EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
         if source.lower() == "huggingface"
         else DEFAULT_EMBED_SIZE,
-        EMBEDDING_TYPE_DICT.get(model, "Default")
-        if source.lower() == "huggingface"
-        else "Default",
+        gr.update(
+            value=EMBEDDING_TYPE_DICT.get(model, "Default")
+            if source.lower() == "huggingface"
+            else "Default",
+            visible=True if source.lower() == "huggingface" else False,
+        ),
         gr.update(
             value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
             if source.lower() == "huggingface"
             else ""
         ),
+        gr.update(visible=True if source.lower() != "huggingface" else False),
     ]
 
 
@@ -113,13 +118,13 @@ def change_llm(value):
     eas_visible = value.lower() == "paieas"
     api_visible = value.lower() != "paieas"
     model_options = LLM_MODEL_KEY_DICT.get(value, [])
-
     cur_model = model_options[0] if model_options else ""
     return [
         gr.update(visible=eas_visible),
         gr.update(visible=eas_visible),
         gr.update(visible=eas_visible),
         gr.update(choices=model_options, value=cur_model, visible=api_visible),
+        gr.update(visible=api_visible),
     ]
 
 
@@ -132,6 +137,7 @@ def change_mllm(value):
         gr.update(visible=eas_visible),
         gr.update(visible=api_visible),
         gr.update(choices=model_options, value=cur_model),
+        gr.update(visible=api_visible),
     ]
 
 

@@ -35,11 +35,10 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryResult,
 )
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
-import logging
+from loguru import logger
 import llama_index.core.instrumentation as instrument
 
 dispatcher = instrument.get_dispatcher(__name__)
-logger = logging.getLogger(__name__)
 
 DEFAULT_IMAGE_STORE = "image"
 
@@ -291,17 +290,11 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         keyword_nodes: List[NodeWithScore],
         similarity_top_k: int,
     ):
-        # print("Fusion weights: ", self._hybrid_fusion_weights)
-
         for node_with_score in vector_nodes:
-            # print("vector score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[0]
-            # print("vector score 1", node_with_score.node_id, node_with_score.score)
 
         for node_with_score in keyword_nodes:
-            # print("keyword score 0", node_with_score.node_id, node_with_score.score)
             node_with_score.score *= self._hybrid_fusion_weights[1]
-            # print("keyword score 1", node_with_score.node_id, node_with_score.score)
 
         # Use a dict to de-duplicate nodes
         all_nodes: Dict[str, NodeWithScore] = {}
@@ -495,8 +488,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
         task_results = await asyncio.gather(*tasks)
 
         text_nodes, image_nodes = task_results[0], task_results[1]
-        logger.info(f"Retrieved text nodes: {text_nodes}")
-        logger.info(f"Retrieved image nodes: {image_nodes}")
+        logger.debug(f"Retrieved text nodes: {text_nodes}")
+        logger.debug(f"Retrieved image nodes: {image_nodes}")
 
         seen_images = set([node.node.image_url for node in image_nodes])
         # 从文本中召回图片

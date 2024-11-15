@@ -21,7 +21,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     PandasAnalysisConfig,
     SqliteAnalysisConfig,
 )
-from pai_rag.integrations.llms.pai.llm_config import PaiEasLlmConfig
+from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig, PaiEasLlmConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
@@ -43,7 +43,7 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = "model"
+    llm_eas_model_name: str = "default"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1
@@ -53,7 +53,7 @@ class ViewModel(BaseModel):
     mllm: str = None
     mllm_eas_url: str = None
     mllm_eas_token: str = None
-    mllm_eas_model_name: str = "model"
+    mllm_eas_model_name: str = "default"
     mllm_api_key: str = None
     mllm_api_model_name: str = None
 
@@ -76,8 +76,6 @@ class ViewModel(BaseModel):
     enable_table_summary: bool = False
 
     config_file: str = None
-
-    vectordb_type: str = "faiss"
 
     # retriever
     similarity_top_k: int = 5
@@ -126,6 +124,15 @@ class ViewModel(BaseModel):
     text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_TMPL
     multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
+    # agent
+    agent_api_definition: str = None  # API tool definition
+    agent_function_definition: str = None  # Function tool definition
+    agent_python_scripts: str = None  # Function scripts
+    agent_system_prompt: str = None  # Agent system prompt
+
+    # intent
+    intent_description: str = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -142,7 +149,7 @@ class ViewModel(BaseModel):
             view_model.llm_eas_model_name = config.llm.model
             view_model.llm_eas_url = config.llm.endpoint
             view_model.llm_eas_token = config.llm.token
-        else:
+        elif isinstance(config.llm, DashScopeLlmConfig):
             view_model.llm_api_key = config.llm.api_key
             view_model.llm_api_model_name = config.llm.model
 
@@ -226,6 +233,15 @@ class ViewModel(BaseModel):
             view_model.enable_db_selector = config.data_analysis.enable_db_selector
         view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
         view_model.synthesizer_prompt = config.data_analysis.synthesizer_prompt
+
+        view_model.agent_api_definition = config.agent.api_definition
+        view_model.agent_function_definition = config.agent.function_definition
+        view_model.agent_python_scripts = config.agent.python_scripts
+        view_model.agent_system_prompt = config.agent.system_prompt
+
+        view_model.intent_description = json.dumps(
+            config.intent.descriptions, ensure_ascii=False, sort_keys=True, indent=4
+        )
 
         return view_model
 
@@ -341,6 +357,13 @@ class ViewModel(BaseModel):
         config["search"]["search_lang"] = self.search_lang
         config["search"]["search_count"] = self.search_count
 
+        config["intent"]["descriptions"] = json.loads(self.intent_description)
+
+        config["agent"]["system_prompt"] = self.agent_system_prompt
+        config["agent"]["python_scripts"] = self.agent_python_scripts
+        config["agent"]["function_definition"] = self.agent_function_definition
+        config["agent"]["api_definition"] = self.agent_api_definition
+
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -423,8 +446,12 @@ class ViewModel(BaseModel):
             "value": self.llm_eas_token,
             "visible": self.llm.lower() == "paieas",
         }
+        settings["llm_api_key"] = {
+            "value": self.llm_api_key,
+            "visible": self.llm.lower() != "paieas",
+        }
         if self.llm.lower() == "paieas" and not self.llm_eas_model_name:
-            self.llm_eas_model_name = "model"
+            self.llm_eas_model_name = "default"
 
         settings["llm_eas_model_name"] = {
             "value": self.llm_eas_model_name,
@@ -446,6 +473,10 @@ class ViewModel(BaseModel):
         settings["mllm_api_model_name"] = {
             "value": self.mllm_api_model_name,
             "choices": MLLM_MODEL_KEY_DICT.get(self.mllm, []),
+            "visible": self.mllm.lower() != "paieas",
+        }
+        settings["mllm_api_key"] = {
+            "value": self.mllm_api_key,
             "visible": self.mllm.lower() != "paieas",
         }
         settings["m_eas_col"] = {"visible": self.mllm == "paieas"}
@@ -527,5 +558,15 @@ class ViewModel(BaseModel):
         settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
         settings["synthesizer_prompt"] = {"value": self.synthesizer_prompt}
 
+        settings["agent_system_prompt"] = {"value": self.agent_system_prompt}
+        settings["agent_python_scripts"] = {"value": self.agent_python_scripts}
+        settings["agent_api_definition"] = {"value": self.agent_api_definition}
+        settings["agent_function_definition"] = {
+            "value": self.agent_function_definition
+        }
+
+        settings["intent_description"] = {"value": self.intent_description}
+
         print("view model settings:", settings)
+
         return settings

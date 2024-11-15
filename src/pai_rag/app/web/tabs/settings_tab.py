@@ -4,13 +4,7 @@ from pai_rag.app.web.ui_constants import EMBEDDING_API_KEY_DICT
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
-import logging
-import os
 import pai_rag.app.web.event_listeners as ev_listeners
-
-logger = logging.getLogger(__name__)
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def create_setting_tab() -> Dict[str, Any]:
@@ -41,7 +35,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
                     elem_id="embed_source",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 embed_model = gr.Dropdown(
                     label="Embedding Model Name",
@@ -60,6 +54,12 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_type = gr.Textbox(
                         label="Embedding Type",
                         elem_id="embed_type",
+                    )
+                    embed_api_key = gr.Textbox(
+                        label="API KEY",
+                        elem_id="embed_api_key",
+                        visible=False,
+                        type="password",
                     )
                     embed_link = gr.Markdown(
                         label="Model URL Link",
@@ -89,7 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_model, embed_dim, embed_type, embed_link],
+                outputs=[embed_model, embed_dim, embed_type, embed_link, embed_api_key],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
@@ -103,6 +103,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_type,
                     embed_link,
                     embed_model,
+                    embed_api_key,
                     embed_batch_size,
                     vector_index,
                     new_index_name,
@@ -156,10 +157,10 @@ def create_setting_tab() -> Dict[str, Any]:
             with gr.Row():
                 _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **Large Language Model**")
                 llm = gr.Radio(
-                    ["paieas", "dashscope", "openai"],
+                    ["paieas", "dashscope"],
                     label="LLM Model Source",
                     elem_id="llm",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 llm_eas_url = gr.Textbox(
                     label="EAS Url",
@@ -182,6 +183,12 @@ def create_setting_tab() -> Dict[str, Any]:
                     label="LLM Model Name",
                     elem_id="llm_api_model_name",
                 )
+                llm_api_key = gr.Textbox(
+                    label="LLM API Key",
+                    elem_id="llm_api_key",
+                    type="password",
+                    interactive=True,
+                )
             with gr.Column(variant="panel"):
                 _ = gr.Markdown(
                     value="\N{WHITE MEDIUM STAR} **(Optional) Multi-Modal Large Language Model**"
@@ -196,7 +203,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         ["paieas", "dashscope"],
                         label="LLM Model Source",
                         elem_id="mllm",
-                        interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                        interactive=True,
                     )
                     with gr.Row(
                         visible=(mllm == "paieas"), elem_id="m_eas_col"
@@ -224,6 +231,12 @@ def create_setting_tab() -> Dict[str, Any]:
                         mllm_api_model_name = gr.Dropdown(
                             label="LLM Model Name",
                             elem_id="mllm_api_model_name",
+                        )
+                        mllm_api_key = gr.Textbox(
+                            label="MultiModal-LLM API Key",
+                            elem_id="mllm_api_key",
+                            type="password",
+                            interactive=True,
                         )
 
             with gr.Column(scale=5, variant="panel"):
@@ -267,12 +280,14 @@ def create_setting_tab() -> Dict[str, Any]:
                 llm_eas_token,
                 llm_eas_model_name,
                 llm_api_model_name,
+                llm_api_key,
                 use_mllm,
                 mllm,
                 mllm_eas_url,
                 mllm_eas_token,
                 mllm_eas_model_name,
                 mllm_api_model_name,
+                mllm_api_key,
                 use_oss,
                 oss_ak,
                 oss_sk,
@@ -296,13 +311,14 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_eas_token,
                     llm_eas_model_name,
                     llm_api_model_name,
+                    llm_api_key,
                 ],
             )
 
             mllm.input(
                 fn=ev_listeners.change_mllm,
                 inputs=mllm,
-                outputs=[m_eas_col, api_mllm_col, mllm_api_model_name],
+                outputs=[m_eas_col, api_mllm_col, mllm_api_model_name, mllm_api_key],
             )
 
             save_btn = gr.Button("Save Llm Setting", variant="primary")

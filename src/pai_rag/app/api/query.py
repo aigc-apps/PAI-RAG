@@ -15,13 +15,11 @@ from pai_rag.app.api.models import (
     RetrievalQuery,
 )
 from fastapi.responses import StreamingResponse
-import logging
+from loguru import logger
 
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -69,7 +67,14 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 @router.post("/query/agent")
 async def aquery_agent(query: RagQuery):
-    return await rag_service.aquery_agent(query)
+    response = await rag_service.aquery_agent(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/config/agent")

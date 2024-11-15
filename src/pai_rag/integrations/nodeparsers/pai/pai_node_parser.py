@@ -23,9 +23,7 @@ from pai_rag.utils.constants import (
     DEFAULT_BREAKPOINT,
     DEFAULT_BUFFER_SIZE,
 )
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class NodeParserConfig(BaseModel):
@@ -40,10 +38,8 @@ class NodeParserConfig(BaseModel):
     buffer_size: int = DEFAULT_BUFFER_SIZE
 
 
-DOC_TYPES_DO_NOT_NEED_CHUNKING = set(
-    [".csv", ".xlsx", ".xls", ".htm", ".html", ".jsonl"]
-)
-DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx"])
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl"])
+DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", ".pptx"])
 IMAGE_FILE_TYPES = set([".jpg", ".jpeg", ".png"])
 
 IMAGE_URL_REGEX = re.compile(
@@ -52,6 +48,19 @@ IMAGE_URL_REGEX = re.compile(
 )
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
+DEFAULT_EXCLUDED_METADATA_KEYS = [
+    "file_name",
+    "file_type",
+    "file_size",
+    "creation_date",
+    "last_modified_date",
+    "last_accessed_date",
+    "file_path",
+    "image_url",
+    "total_pages",
+    "source",
+    "row_number",
+]
 
 
 def format_temp_file_path(temp_file_path):
@@ -128,7 +137,7 @@ class PaiNodeParser(TransformComponent):
         self, nodes: List[BaseNode], **kwargs: Any
     ) -> List[BaseNode]:
         # Accumulate node index for doc
-        splitted_nodes = []
+        splitted_nodes: List[BaseNode] = []
         self._doc_cnt_map = {}
 
         for doc_node in nodes:
@@ -177,11 +186,13 @@ class PaiNodeParser(TransformComponent):
                         )
                         splitted_nodes.append(tmp_node)
 
-        for node in nodes:
-            node.excluded_embed_metadata_keys.append("file_path")
-            node.excluded_embed_metadata_keys.append("image_url")
-            node.excluded_embed_metadata_keys.append("total_pages")
-            node.excluded_embed_metadata_keys.append("source")
+        for node in splitted_nodes:
+            node.excluded_embed_metadata_keys = list(
+                set(node.excluded_embed_metadata_keys + DEFAULT_EXCLUDED_METADATA_KEYS)
+            )
+            node.excluded_llm_metadata_keys = list(
+                set(node.excluded_llm_metadata_keys + DEFAULT_EXCLUDED_METADATA_KEYS)
+            )
 
         logger.info(
             f"[DataReader] Split {len(nodes)} documents into {len(splitted_nodes)} nodes."

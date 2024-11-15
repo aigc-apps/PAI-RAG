@@ -35,6 +35,7 @@ index_related_component_keys = [
     "embed_type",
     "embed_link",
     "embed_batch_size",
+    "embed_api_key",
     "vectordb_type",
     "faiss_path",
     "adb_ak",
@@ -121,7 +122,8 @@ def index_to_components_settings(
     embed_type_setting = {
         "value": EMBEDDING_TYPE_DICT.get(embed_model, "Default")
         if embed_source == "huggingface"
-        else "Default"
+        else "Default",
+        "visible": True if embed_source == "huggingface" else False,
     }
     embed_link_setting = {
         "value": f"Model Introduction: [{embed_model}]({EMBEDDING_MODEL_LINK_DICT[embed_model]})"
@@ -129,6 +131,13 @@ def index_to_components_settings(
         else ""
     }
     embed_batch_size_setting = {"value": index_entry.embedding_config.embed_batch_size}
+    if index_entry.embedding_config.source.value == "huggingface":
+        embed_api_key_setting = {"value": "", "visible": False}
+    else:
+        embed_api_key_setting = {
+            "value": index_entry.embedding_config.api_key,
+            "visible": True,
+        }
 
     embed_component_settings = [
         {"value": embed_source},
@@ -137,6 +146,7 @@ def index_to_components_settings(
         embed_type_setting,
         embed_link_setting,
         embed_batch_size_setting,
+        embed_api_key_setting,
     ]
 
     vector_store_config = index_entry.vector_store_config
@@ -301,7 +311,6 @@ def index_to_components(
     component_settings = index_to_components_settings(
         index_entry, index_list, is_new_index
     )
-    print("+++", index_entry.index_name)
     return [gr.update(**setting) for setting in component_settings.values()] + [
         gr.update(choices=index_list, value=index_entry.index_name),
         gr.update(choices=index_list, value=index_entry.index_name),
@@ -314,6 +323,7 @@ def components_to_index(
     embed_source,
     embed_model,
     embed_batch_size,
+    embed_api_key,
     vectordb_type,
     hologres_host,
     hologres_port,
@@ -364,6 +374,8 @@ def components_to_index(
         "model": embed_model,
         "embed_batch_size": int(embed_batch_size),
     }
+    if embed_source != "huggingface":
+        embedding["api_key"] = embed_api_key
 
     if vectordb_type.lower() == "hologres":
         vector_store = {

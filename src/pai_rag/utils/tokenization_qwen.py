@@ -6,15 +6,13 @@
 """Tokenization classes for QWen."""
 
 import base64
-import logging
 import os
 import unicodedata
 from typing import Collection, Dict, List, Set, Tuple, Union
 
 import tiktoken
 from transformers import PreTrainedTokenizer, AddedToken
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 VOCAB_FILES_NAMES = {"vocab_file": "qwen.tiktoken"}
