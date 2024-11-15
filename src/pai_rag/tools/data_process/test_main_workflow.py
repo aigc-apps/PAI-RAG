@@ -1,7 +1,10 @@
 import argparse
-from pai_rag.tools.data_process.tasks.split_node_task import split_node_task
 import ray
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
+
+
+def split_node_task(row):
+    return row
 
 
 def main(args):
