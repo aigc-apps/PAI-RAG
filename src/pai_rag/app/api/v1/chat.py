@@ -67,7 +67,7 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 @router_v1.post("/query/agent")
 async def aquery_agent(query: RagQuery):
-    response = await rag_service.aquery_agent(query)
+    response = await rag_service.aquery_agent_v1(query)
     if not query.stream:
         return response
     else:
@@ -264,7 +264,7 @@ async def upload_datasheet(
 
 @router_v1.post("/query/data_analysis")
 async def aquery_analysis(query: RagQuery):
-    response = await rag_service.aquery_analysis(query)
+    response = await rag_service.aquery_analysis_v1(query)
     if not query.stream:
         return response
     else:
