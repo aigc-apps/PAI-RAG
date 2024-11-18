@@ -26,4 +26,4 @@ RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
 WORKDIR /app
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 COPY . .
-CMD ["pai_rag", "serve"]
+CMD ["ENABLE_FASTAPI=false", "ENABLE_REQUESTS=false", "ENABLE_AIOHTTPCLIENT=false", "aliyun-instrument", "python" , "src/pai_rag/main.py"]
