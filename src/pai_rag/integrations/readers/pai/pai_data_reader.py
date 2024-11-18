@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Any
 import os
+import pathlib
 from pai_rag.integrations.readers.markdown_reader import MarkdownReader
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
@@ -125,13 +126,11 @@ def get_input_files(
         file_path_or_directory
     ):
         # glob from directory
-        import pathlib
-
         directory = pathlib.Path(file_path_or_directory)
         input_files = [f for f in directory.rglob(filter_pattern) if os.path.isfile(f)]
     else:
         # Single file
-        input_files = [file_path_or_directory]
+        input_files = [pathlib.Path(file_path_or_directory)]
 
     if not input_files:
         raise ValueError(
@@ -176,7 +175,10 @@ class PaiDataReader(BaseReader):
         """Load data from the input directory."""
         return self.load_data(*args, **load_kwargs)
 
-    def load_single_data(self, input_file: str):
+    def load_single_data(
+        self,
+        input_file: str,
+    ):
         directory_reader = SimpleDirectoryReader(
             input_files=[input_file],
             file_extractor=self.file_readers,
@@ -184,6 +186,5 @@ class PaiDataReader(BaseReader):
         documents = directory_reader.load_file(
             input_file, directory_reader.file_metadata, directory_reader.file_extractor
         )
-        document = directory_reader._exclude_metadata(documents)
-        format_doc = document[0].to_embedchain_format()
-        return format_doc
+        documents = directory_reader._exclude_metadata(documents)
+        return documents[0]
