@@ -62,3 +62,7 @@ jobs:
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_gpu .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+
+      - name: Free disk space
+        run: |
+          docker system prune -a -f
