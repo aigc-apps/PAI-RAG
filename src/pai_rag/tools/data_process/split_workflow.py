@@ -9,15 +9,15 @@ from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 def main(args):
     NUM_WORKERS = init_ray_env(args.working_dir)
     ds = ray.data.read_json(args.data_path)
-    logger.info("Starting to splitting..")
+    logger.info("Splitting nodes started.")
     ds = ds.flat_map(
         split_node_task,
         fn_kwargs={"config_file": args.config_file},
         concurrency=NUM_WORKERS,
     )
-    logger.info(f"Splitting completed with blocks: {ds.num_blocks()}..")
+    logger.info("Splitting nodes completed.")
     ds = ds.repartition(1)
-    logger.info(f"Starting to write to {args.output_path}")
+    logger.info(f"Write to {args.output_path}")
     ds.write_json(
         args.output_path,
         filename_provider=_DefaultFilenameProvider(file_format="jsonl"),
