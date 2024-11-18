@@ -17,7 +17,7 @@ class ModelScopeDownloader:
         if fetch_config or not os.path.exists(self.download_directory_path):
             os.makedirs(self.download_directory_path, exist_ok=True)
             logger.info(
-                f"Create model directory: {self.download_directory_path} and get model info from oss {OSS_URL}."
+                f"Create model directory: {self.download_directory_path.resolve()} and get model info from oss {OSS_URL}."
             )
             response = requests.get(OSS_URL)
             response.raise_for_status()
