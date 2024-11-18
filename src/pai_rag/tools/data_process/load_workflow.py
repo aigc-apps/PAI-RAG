@@ -25,7 +25,7 @@ def process(config_file, input_file):
 
 
 def main(args):
-    init_ray_env(args.working_dir)
+    _ = init_ray_env(args.working_dir)
     input_files = get_input_files(args.data_path)
     run_tasks = [
         process.remote(args.config_file, input_file) for input_file in input_files

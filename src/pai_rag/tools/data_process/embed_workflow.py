@@ -3,11 +3,11 @@ from loguru import logger
 import ray
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.tasks.embed_node import embed_node_task
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env, NUM_WORKERS
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 
 
 def main(args):
-    init_ray_env(args.working_dir)
+    NUM_WORKERS = init_ray_env(args.working_dir)
     ds = ray.data.read_json(args.data_path)
     logger.info("Starting to embedding..")
     ds = ds.map(

@@ -3,11 +3,11 @@ import ray
 from loguru import logger
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.tasks.split_node import split_node_task
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env, NUM_WORKERS
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 
 
 def main(args):
-    init_ray_env(args.working_dir)
+    NUM_WORKERS = init_ray_env(args.working_dir)
     ds = ray.data.read_json(args.data_path)
     logger.info("Starting to splitting..")
     ds = ds.flat_map(
