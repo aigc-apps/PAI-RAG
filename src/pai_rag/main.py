@@ -1,9 +1,4 @@
 import os
-os.environ["ENABLE_FASTAPI"] = "false"
-os.environ["ENABLE_REQUESTS"] = "false"
-os.environ["ENABLE_AIOHTTPCLIENT"] = "false"
-# from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize # ByPass unused import: use for arms trace initialization
-
 import click
 import uvicorn
 from fastapi import FastAPI

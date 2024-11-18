@@ -180,6 +180,13 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG Agent failed: {ex}")
 
+    async def aquery_agent_v1(self, query: RagQuery) -> RagResponse:
+        try:
+            return await self.rag.aquery_agent(query, sse_version=SseVersion.V1)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query RAG Agent failed: {ex}")
+
     async def aload_agent_config(self, agent_cfg_path: str):
         try:
             return await self.rag.aload_agent_config(agent_cfg_path)
@@ -194,12 +201,19 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Load DB info: {ex}")
 
-    async def aquery_data_analysis(self, query: RagQuery):
+    async def aquery_data_analysis_v1(self, query: RagQuery):
         try:
-            return await self.rag.aquery_data_analysis(query)
+            return await self.rag.aquery_data_analysis(query, sse_version=SseVersion.V1)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Data Analysis failed: {ex}")
+
+    # async def aquery_analysis_v1(self, query: RagQuery):
+    #     try:
+    #         return await self.rag.aquery_analysis(query, sse_version=SseVersion.V1)
+    #     except Exception as ex:
+    #         logger.error(traceback.format_exc())
+    #         raise UserInputError(f"Query Analysis failed: {ex}")
 
 
 rag_service = RagService()

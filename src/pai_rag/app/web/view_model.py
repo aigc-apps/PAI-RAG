@@ -567,6 +567,6 @@ class ViewModel(BaseModel):
 
         settings["intent_description"] = {"value": self.intent_description}
 
-        print("view model settings:", settings)
+        # print("view model settings:", settings)
 
         return settings
