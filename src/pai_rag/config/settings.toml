@@ -15,14 +15,7 @@ password = "Aliyun-Redis user:pwd"
 persist_path = "localdata/storage"
 
 [rag.data_analysis]
-type = "mysql"
-host = "127.0.0.1"
-port = 3306
-user = "root"
-password = "mysql123456"
-db_name = "my_pets"
-tables = []
-descriptions = {}
+type = "pandas"
 
 [rag.data_reader]
 type = "SimpleDirectoryReader"

@@ -372,4 +372,6 @@ class RagApplication:
         if not query.stream:
             return RagResponse(answer=response.response, **result_info)
         else:
-            return event_generator_async(response=response, sse_version=sse_version)
+            return event_generator_async(
+                response=response, extra_info=result_info, sse_version=sse_version
+            )

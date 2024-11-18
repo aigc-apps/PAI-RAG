@@ -114,7 +114,6 @@ class RagWebClient:
             text = response["delta"]
         else:
             text = response["answer"]
-
         docs = response.get("docs", []) or []
         session_id = response.get("session_id", None)
         is_finished = response.get("is_finished", True)
@@ -448,7 +447,7 @@ class RagWebClient:
             if r.status_code != HTTPStatus.OK:
                 raise RagApiError(code=r.status_code, msg=r.text)
         except Exception as e:
-            print(f"load db info failed: {e}")
+            logger.exception(f"load db info failed: {e}")
 
         return r.text
 
@@ -462,7 +461,7 @@ class RagWebClient:
 
     def patch_config(self, update_dict: Any):
         config = self.get_config()
-        print("config:", config)
+        # print("config:", config)
         view_model: ViewModel = ViewModel.from_app_config(config)
         view_model.update(update_dict)
         new_config = view_model.to_app_config()
