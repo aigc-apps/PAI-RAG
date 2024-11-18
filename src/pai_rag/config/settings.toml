@@ -44,7 +44,6 @@ vector_store.type = "FAISS"
 # token = ""
 [rag.llm]
 source = "DashScope"
-model = "qwen-max"
 
 [rag.multimodal_embedding]
 source = "cnclip"
