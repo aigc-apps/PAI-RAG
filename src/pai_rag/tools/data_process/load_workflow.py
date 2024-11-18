@@ -3,13 +3,7 @@ import argparse
 import json
 from loguru import logger
 from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
-import os
-
-os.environ["RAY_DEDUP_LOGS"] = "0"
-
-
-def init_ray_env(working_dir):
-    ray.init(runtime_env={"working_dir": working_dir})
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 
 
 @ray.remote
@@ -22,7 +16,7 @@ def write_to_file(results, filename):
 
 @ray.remote
 def process(config_file, input_file):
-    from pai_rag.tools.data_process.tasks.load_and_parse_doc_task import (
+    from pai_rag.tools.data_process.tasks.load_and_parse_doc import (
         load_and_parse_doc_task,
     )
 

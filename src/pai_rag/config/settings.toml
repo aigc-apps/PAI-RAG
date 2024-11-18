@@ -28,8 +28,9 @@ type = "SimpleDirectoryReader"
 # model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
-source = "DashScope"
+source = "HuggingFace"
 embed_batch_size = 10
+model = "bge-large-zh-v1.5"
 
 [rag.index]
 persist_path = "localdata/storage"

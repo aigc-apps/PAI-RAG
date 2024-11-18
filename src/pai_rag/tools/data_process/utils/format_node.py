@@ -20,7 +20,9 @@ def text_node_to_dict(node):
     }
 
 
+# 从字典创建 TextNode 对象的函数
 def dict_to_text_node(node_dict):
+    # 处理 metadata，确保 datetime 或其他类型的字段恢复原型
     metadata = {
         k: datetime.fromisoformat(v)
         if k == "creation_date" and isinstance(v, str)
