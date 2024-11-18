@@ -197,7 +197,7 @@ class RagApplication:
             intent = await intent_router.aselect(str_or_query_bundle=new_question)
             logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
-                return await self.aquery_agent(query)
+                return await self.aquery_agent(query, sse_version=sse_version)
             elif intent == Intents.WEBSEARCH:
                 chat_type = RagChatType.WEB
             elif intent == Intents.NL2SQL:
@@ -260,7 +260,9 @@ class RagApplication:
                 sse_version=sse_version,
             )
 
-    async def aquery_agent(self, query: RagQuery) -> RagResponse:
+    async def aquery_agent(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
 
         Generate answer from agent's achat interface.
@@ -277,7 +279,7 @@ class RagApplication:
         agent = resolve_agent(self.config)
         if query.stream:
             response = await agent.astream_chat(query.question)
-            return event_generator_async(response)
+            return event_generator_async(response, sse_version=sse_version)
         else:
             response = await agent.achat(query.question)
             return RagResponse(answer=response.response)
@@ -306,7 +308,9 @@ class RagApplication:
         else:
             return f"The agent config path {agent_cfg_path} not exists."
 
-    async def aquery_analysis(self, query: RagQuery):
+    async def aquery_analysis(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Data Analysis interface.
@@ -361,4 +365,4 @@ class RagApplication:
         if not query.stream:
             return RagResponse(answer=response.response, **result_info)
         else:
-            return event_generator_async(response=response, extra_info=result_info)
+            return event_generator_async(response=response, sse_version=sse_version)
