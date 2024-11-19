@@ -12,8 +12,10 @@ import json
 
 
 class ModelScopeDownloader:
-    def __init__(self, fetch_config: bool = False):
-        self.download_directory_path = Path(DEFAULT_MODEL_DIR)
+    def __init__(self, fetch_config: bool = False, download_directory_path: str = None):
+        self.download_directory_path = Path(download_directory_path) or Path(
+            DEFAULT_MODEL_DIR
+        )
         if fetch_config or not os.path.exists(self.download_directory_path):
             os.makedirs(self.download_directory_path, exist_ok=True)
             logger.info(
@@ -25,7 +27,7 @@ class ModelScopeDownloader:
             logger.info(f"Model info loaded {self.model_info}.")
 
     def load_model(self, model):
-        model_path = os.path.join(self.download_directory_path, model)
+        model_path = self.download_directory_path / model
         with TemporaryDirectory() as temp_dir:
             if not os.path.exists(model_path):
                 logger.info(f"start downloading model {model}.")
@@ -42,7 +44,7 @@ class ModelScopeDownloader:
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info(
-                    f"Finished downloading model {model} to {model_path}, took {duration:.2f} seconds."
+                    f"Finished downloading model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
                 )
 
     def load_rag_models(self, skip_download_models: bool = False):

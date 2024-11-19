@@ -6,14 +6,15 @@ from pai_rag.tools.data_process.utils.format_node import (
     text_node_to_dict,
     dict_to_text_node,
 )
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.utils.download_models import ModelScopeDownloader
+
+RAY_ENV_MODEL_DIR = "/PAI-RAG/pai_rag_model_repository"
+os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
 
 
 def embed_node_task(node, config_file):
     config = RagConfigManager.from_file(config_file).get_value()
-    ModelScopeDownloader().load_rag_models()
-    os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
+    ModelScopeDownloader(download_directory_path=RAY_ENV_MODEL_DIR).load_rag_models()
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     format_node = dict_to_text_node(node)
