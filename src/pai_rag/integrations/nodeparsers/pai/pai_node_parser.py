@@ -72,7 +72,6 @@ def get_data_parser(parser_config: NodeParserConfig):
             id_func=node_id_hash,
         )
     elif parser_type == "sentence":
-        print("sentence parser_config", parser_config)
         return SentenceSplitter(
             chunk_size=parser_config.chunk_size,
             chunk_overlap=parser_config.chunk_overlap,
@@ -108,7 +107,6 @@ class PaiNodeParser(TransformComponent):
         super().__init__()
         self._parser_config = parser_config or NodeParserConfig()
         self._parser = get_data_parser(self._parser_config)
-        print("__init__ self._parser", self._parser)
         self._doc_cnt_map = {}
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
@@ -167,10 +165,7 @@ class PaiNodeParser(TransformComponent):
                     )
                     tmp_nodes = md_node_parser.get_nodes_from_documents([doc_node])
                 else:
-                    print("doc_node", doc_node)
-                    print("self._parser", self._parser)
                     tmp_nodes = self._parser.get_nodes_from_documents([doc_node])
-                    print("tmp_nodes", tmp_nodes)
                 if tmp_nodes:
                     for tmp_node in tmp_nodes:
                         tmp_node.id_ = node_id_hash(
