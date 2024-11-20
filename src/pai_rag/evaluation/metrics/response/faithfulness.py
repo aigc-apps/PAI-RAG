@@ -165,7 +165,9 @@ class Faithfulness(LlmMetric):
 
         await asyncio.sleep(sleep_time_in_seconds)
 
-        if contexts is None or response_answer is None:
+        if (
+            contexts is None and reference_image_url_list is None
+        ) or response_answer is None:
             raise ValueError("contexts and response must be provided")
 
         prompt_str = self._multimodal_eval_template.format(
