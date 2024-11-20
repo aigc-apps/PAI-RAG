@@ -66,14 +66,18 @@ def change_emb_source(source, model):
         EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
         if source.lower() == "huggingface"
         else DEFAULT_EMBED_SIZE,
-        EMBEDDING_TYPE_DICT.get(model, "Default")
-        if source.lower() == "huggingface"
-        else "Default",
+        gr.update(
+            value=EMBEDDING_TYPE_DICT.get(model, "Default")
+            if source.lower() == "huggingface"
+            else "Default",
+            visible=True if source.lower() == "huggingface" else False,
+        ),
         gr.update(
             value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
             if source.lower() == "huggingface"
             else ""
         ),
+        gr.update(visible=True if source.lower() != "huggingface" else False),
     ]
 
 

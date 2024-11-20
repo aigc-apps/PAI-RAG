@@ -6,8 +6,6 @@ from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import pai_rag.app.web.event_listeners as ev_listeners
 
-DEFAULT_IS_INTERACTIVE = True
-
 
 def create_setting_tab() -> Dict[str, Any]:
     components = []
@@ -37,7 +35,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
                     elem_id="embed_source",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 embed_model = gr.Dropdown(
                     label="Embedding Model Name",
@@ -56,6 +54,12 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_type = gr.Textbox(
                         label="Embedding Type",
                         elem_id="embed_type",
+                    )
+                    embed_api_key = gr.Textbox(
+                        label="API KEY",
+                        elem_id="embed_api_key",
+                        visible=False,
+                        type="password",
                     )
                     embed_link = gr.Markdown(
                         label="Model URL Link",
@@ -85,7 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_model, embed_dim, embed_type, embed_link],
+                outputs=[embed_model, embed_dim, embed_type, embed_link, embed_api_key],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
@@ -99,6 +103,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     embed_type,
                     embed_link,
                     embed_model,
+                    embed_api_key,
                     embed_batch_size,
                     vector_index,
                     new_index_name,
@@ -155,7 +160,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     ["paieas", "dashscope"],
                     label="LLM Model Source",
                     elem_id="llm",
-                    interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                    interactive=True,
                 )
                 llm_eas_url = gr.Textbox(
                     label="EAS Url",
@@ -198,7 +203,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         ["paieas", "dashscope"],
                         label="LLM Model Source",
                         elem_id="mllm",
-                        interactive=DEFAULT_IS_INTERACTIVE.lower() != "false",
+                        interactive=True,
                     )
                     with gr.Row(
                         visible=(mllm == "paieas"), elem_id="m_eas_col"

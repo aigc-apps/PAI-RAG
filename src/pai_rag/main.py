@@ -1,11 +1,9 @@
-from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize # ByPass unused import: use for arms trace initialization
-
+import os
 import click
 import uvicorn
 from fastapi import FastAPI
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
-import os
 from pathlib import Path
 
 _BASE_DIR = Path(__file__).parent

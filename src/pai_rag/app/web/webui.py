@@ -21,8 +21,6 @@ from pai_rag.app.web.tabs.model.index_info import get_index_map
 
 from loguru import logger
 
-DEFAULT_IS_INTERACTIVE = True
-
 
 def resume_ui():
     outputs = {}
