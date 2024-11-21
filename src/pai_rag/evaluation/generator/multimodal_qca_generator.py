@@ -29,7 +29,6 @@ class MultimodalQcaGenerator(RagQcaGenerator):
         vector_index: VectorStoreIndex = None,
         query_engine: PaiRetrieverQueryEngine = None,
         persist_path: str = None,
-        qca_dataset_path: str = None,
         enable_multi_modal: bool = False,
         text_qa_template: Optional[BasePromptTemplate] = None,
         multimodal_qa_template: Optional[BasePromptTemplate] = None,
@@ -38,9 +37,7 @@ class MultimodalQcaGenerator(RagQcaGenerator):
             labelled_llm, vector_index, query_engine, persist_path, enable_multi_modal
         )
 
-        self.qca_dataset_path = qca_dataset_path or os.path.join(
-            self.persist_path, "qca_dataset.json"
-        )
+        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
 
         self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
             template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL

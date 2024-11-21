@@ -1,4 +1,5 @@
 import os
+import json
 from loguru import logger
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import (
@@ -120,24 +121,29 @@ def get_multimodal_eval_components(
     tested_multimodal_llm_config = parse_llm_config(tested_multimodal_llm_config)
     tested_multimodal_llm = create_multi_modal_llm(tested_multimodal_llm_config)
 
+    if qca_dataset_path:
+        persist_path = config.index.vector_store.persist_path
+        os.makedirs(persist_path, exist_ok=True)
+        source_path = qca_dataset_path  # 源路径
+        destination_path = os.path.join(persist_path, "qca_dataset.json")  # 目标路径
+        with open(source_path, "r") as source_file:
+            data = json.load(source_file)
+            with open(destination_path, "w") as destination_file:
+                json.dump(data, destination_file, indent=4)
+        assert os.path.exists(destination_path), "Failed to copy qca_dataset.json"
+
     multimodal_qca_generator = MultimodalQcaGenerator(
         labelled_llm=llm,
         predicted_llm=tested_multimodal_llm,
         vector_index=vector_index,
         query_engine=query_engine,
         persist_path=config.index.vector_store.persist_path,
-        qca_dataset_path=qca_dataset_path,
         enable_multi_modal=True,
     )
-    if qca_dataset_path:
-        persist_path = os.path.join("localdata/eval_exp_data", f"storage__{exp_name}")
-        os.makedirs(persist_path, exist_ok=True)
-    else:
-        persist_path = config.index.vector_store.persist_path
+
     evaluator = BaseEvaluator(
         llm=eval_llm,
         persist_path=persist_path,
-        qca_dataset_path=qca_dataset_path,
         enable_multi_modal=True,
     )
 

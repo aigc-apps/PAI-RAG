@@ -23,7 +23,6 @@ class BaseEvaluator:
         llm,
         persist_path: str = None,
         evaluation_dataset_path: str = None,
-        qca_dataset_path: str = None,
         enable_multi_modal: bool = False,
         use_granular_metrics: bool = False,
     ):
@@ -48,9 +47,7 @@ class BaseEvaluator:
         self.created_by = CreatedBy(
             type=CreatedByType.AI, model_name=self._llm.metadata.model_name
         )
-        self.qca_dataset_path = qca_dataset_path or os.path.join(
-            self.persist_path, "qca_dataset.json"
-        )
+        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
         self._show_progress = True
         self._workers = 2
         self.enable_multi_modal = enable_multi_modal
