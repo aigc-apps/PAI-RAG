@@ -19,13 +19,13 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
+from pai_rag.evaluation.utils.file_utils import list_files_in_directory
 from pai_rag.utils.prompt_template import (
     DEFAULT_QUESTION_GENERATION_PROMPT,
     DEFAULT_MULTI_MODAL_QUESTION_GENERATION_PROMPT,
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
-from pai_rag.evaluation.utils.parse_directory import list_files_in_directory
 
 
 class RagQcaGenerator:

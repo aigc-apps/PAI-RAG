@@ -64,8 +64,7 @@ def get_eval_components(
     vector_index,
     query_engine,
     mode,
-    eval_model_source,
-    eval_model_name,
+    eval_model_llm_config,
     use_pai_eval=False,
 ):
     if mode == "text":
@@ -83,7 +82,7 @@ def get_eval_components(
 
     if use_pai_eval:
         model_config = {
-            "model_name": eval_model_name,
+            "model_name": eval_model_llm_config["model"],
             "is_self_host": False,
             "use_function_call": True,
         }
@@ -92,12 +91,7 @@ def get_eval_components(
             persist_path=config.index.vector_store.persist_path,
         )
     else:
-        eval_llm_config_data = {
-            "source": eval_model_source.lower(),
-            "model": eval_model_name,
-            "max_tokens": 1024,
-        }
-        eval_llm_config = parse_llm_config(eval_llm_config_data)
+        eval_llm_config = parse_llm_config(eval_model_llm_config)
         if mode == "text":
             eval_llm = create_llm(eval_llm_config)
         else:
@@ -113,24 +107,16 @@ def get_eval_components(
 
 def get_multimodal_eval_components(
     config,
+    exp_name,
     vector_index,
     query_engine,
-    mode,
-    eval_model_source,
-    eval_model_name,
-    exp_name,
+    eval_model_llm_config,
     tested_multimodal_llm_config,
     qca_dataset_path: str = None,
 ):
-    eval_llm_config_data = {
-        "source": eval_model_source.lower(),
-        "model": eval_model_name,
-        "max_tokens": 1024,
-    }
-    eval_llm_config = parse_llm_config(eval_llm_config_data)
-    eval_llm = create_multi_modal_llm(eval_llm_config)
-
     llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    eval_llm_config = parse_llm_config(eval_model_llm_config)
+    eval_llm = create_multi_modal_llm(eval_llm_config)
     tested_multimodal_llm_config = parse_llm_config(tested_multimodal_llm_config)
     tested_multimodal_llm = create_multi_modal_llm(tested_multimodal_llm_config)
 
@@ -141,17 +127,18 @@ def get_multimodal_eval_components(
         query_engine=query_engine,
         persist_path=config.index.vector_store.persist_path,
         qca_dataset_path=qca_dataset_path,
-        enable_multi_modal=True if mode == "image" else False,
+        enable_multi_modal=True,
     )
     if qca_dataset_path:
-        persist_path = os.path.join("localdata/eval_exp_data", exp_name)
+        persist_path = os.path.join("localdata/eval_exp_data", f"storage__{exp_name}")
+        os.makedirs(persist_path, exist_ok=True)
     else:
         persist_path = config.index.vector_store.persist_path
     evaluator = BaseEvaluator(
         llm=eval_llm,
         persist_path=persist_path,
         qca_dataset_path=qca_dataset_path,
-        enable_multi_modal=True if mode == "image" else False,
+        enable_multi_modal=True,
     )
 
     return multimodal_qca_generator, evaluator

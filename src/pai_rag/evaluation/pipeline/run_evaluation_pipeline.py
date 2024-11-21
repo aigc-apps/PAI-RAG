@@ -13,8 +13,7 @@ def run_rag_evaluation_pipeline(
     data_path=None,
     pattern=None,
     exp_name="default",
-    eval_model_source=None,
-    eval_model_name=None,
+    eval_model_llm_config=None,
     dataset=None,
     use_pai_eval=False,
 ):
@@ -41,8 +40,7 @@ def run_rag_evaluation_pipeline(
         vector_index,
         query_engine,
         mode,
-        eval_model_source,
-        eval_model_name,
+        eval_model_llm_config,
         use_pai_eval,
     )
 

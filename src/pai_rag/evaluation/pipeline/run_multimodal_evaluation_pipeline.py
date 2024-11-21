@@ -13,27 +13,18 @@ def run_multimodal_evaluation_pipeline(
     data_path=None,
     pattern=None,
     exp_name="default",
-    eval_model_source=None,
-    eval_model_name=None,
+    eval_model_llm_config=None,
     tested_multimodal_llm_config=None,
 ):
-    assert (oss_path is not None) or (
-        data_path is not None
-    ), "Must provide either local path or oss path."
-    assert (oss_path is None) or (
-        data_path is None
-    ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
-
     config, mode, exist_flag = get_rag_config_and_mode(config_file, exp_name)
+    assert mode == "image"
     data_loader, vector_index, query_engine = get_rag_components(config)
     multimodal_qca_generator, evaluator = get_multimodal_eval_components(
         config,
+        exp_name,
         vector_index,
         query_engine,
-        mode,
-        eval_model_source,
-        eval_model_name,
-        exp_name,
+        eval_model_llm_config,
         tested_multimodal_llm_config,
         qca_dataset_path,
     )
@@ -43,6 +34,13 @@ def run_multimodal_evaluation_pipeline(
         )
         response_result = asyncio.run(evaluator.aevaluation(stage="response"))
         return {"response": response_result}
+
+    assert (oss_path is not None) or (
+        data_path is not None
+    ), "Must provide either local path or oss path."
+    assert (oss_path is None) or (
+        data_path is None
+    ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     if not exist_flag:
         data_loader.load_data(

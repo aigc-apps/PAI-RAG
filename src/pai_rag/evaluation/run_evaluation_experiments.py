@@ -44,8 +44,7 @@ def run_experiment(exp_params):
             config_file=exp_params["rag_setting_file"],
             data_path=exp_params["eval_data_path"],
             exp_name=exp_name,
-            eval_model_source=exp_params["eval_model_source"],
-            eval_model_name=exp_params["eval_model_name"],
+            eval_model_llm_config=exp_params["eval_model_llm"],
             dataset=dataset,
             use_pai_eval=use_pai_eval,
         )
@@ -63,11 +62,10 @@ def run_multimodal_experiment(exp_params):
         # 运行实验并获取结果
         result = run_multimodal_evaluation_pipeline(
             config_file=exp_params["rag_setting_file"],
+            exp_name=exp_name,
             qca_dataset_path=exp_params.get("qca_dataset_path", None),
             data_path=exp_params.get("eval_data_path", None),
-            exp_name=exp_name,
-            eval_model_source=exp_params["eval_model_source"],
-            eval_model_name=exp_params["eval_model_name"],
+            eval_model_llm_config=exp_params["eval_model_llm"],
             tested_multimodal_llm_config=exp_params.get("tested_multimodal_llm", None),
         )
         logger.info(f"Finished experiment with name={exp_name}")
