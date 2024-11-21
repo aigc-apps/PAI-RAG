@@ -22,6 +22,8 @@ class BaseEvaluator:
         self,
         llm,
         persist_path: str = None,
+        evaluation_dataset_path: str = None,
+        qca_dataset_path: str = None,
         enable_multi_modal: bool = False,
         use_granular_metrics: bool = False,
     ):
@@ -40,13 +42,15 @@ class BaseEvaluator:
             self.faithfulness_evaluator,
             self.correctness_evaluator,
         ]
-        self.evaluation_dataset_path = os.path.join(
+        self.evaluation_dataset_path = evaluation_dataset_path or os.path.join(
             self.persist_path, "evaluation_dataset.json"
         )
         self.created_by = CreatedBy(
             type=CreatedByType.AI, model_name=self._llm.metadata.model_name
         )
-        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
+        self.qca_dataset_path = qca_dataset_path or os.path.join(
+            self.persist_path, "qca_dataset.json"
+        )
         self._show_progress = True
         self._workers = 2
         self.enable_multi_modal = enable_multi_modal
@@ -102,7 +106,10 @@ class BaseEvaluator:
         reference_answer = response_eval_example.reference_answer
         response_answer = response_eval_example.predicted_answer
         reference_image_url_list = response_eval_example.reference_image_url_list
-        contexts = response_eval_example.predicted_contexts
+        contexts = (
+            response_eval_example.predicted_contexts
+            or response_eval_example.reference_contexts
+        )
 
         for metric in self.response_evaluators:
             if self.enable_multi_modal:
@@ -112,7 +119,7 @@ class BaseEvaluator:
                     contexts,
                     reference_image_url_list,
                     response_answer,
-                    sleep_time_in_seconds=0.5,
+                    sleep_time_in_seconds=3,
                 )
             else:
                 metric_result = await metric.aevaluate(
@@ -120,7 +127,7 @@ class BaseEvaluator:
                     reference_answer,
                     contexts,
                     response_answer,
-                    sleep_time_in_seconds=0.5,
+                    sleep_time_in_seconds=3,
                 )
 
             setattr(

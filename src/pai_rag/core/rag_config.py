@@ -24,6 +24,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 from pai_rag.integrations.index.pai.vector_store_config import PaiVectorIndexConfig
 from pai_rag.integrations.llms.pai.llm_config import (
     DashScopeMultiModalLlmConfig,
+    OpenAILlmConfig,
     PaiBaseLlmConfig,
     PaiEasLlmConfig,
 )
@@ -81,7 +82,7 @@ class RagConfig(BaseModel):
         BeforeValidator(validate_case_insensitive),
     ]
     multimodal_llm: Annotated[
-        Union[DashScopeMultiModalLlmConfig, PaiEasLlmConfig],
+        Union[DashScopeMultiModalLlmConfig, PaiEasLlmConfig, OpenAILlmConfig],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ] | None = None

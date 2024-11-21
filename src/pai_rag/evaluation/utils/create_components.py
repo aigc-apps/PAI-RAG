@@ -20,6 +20,7 @@ from pai_rag.evaluation.dataset.crag.crag_jsonl_reader import CragJsonLReader
 from pai_rag.evaluation.dataset.crag.crag_data_loader import CragDataLoader
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
+from pai_rag.evaluation.generator.multimodal_qca_generator import MultimodalQcaGenerator
 
 
 def get_rag_config_and_mode(config_file, exp_name):
@@ -108,3 +109,49 @@ def get_eval_components(
             use_granular_metrics=True,
         )
     return qca_generator, evaluator
+
+
+def get_multimodal_eval_components(
+    config,
+    vector_index,
+    query_engine,
+    mode,
+    eval_model_source,
+    eval_model_name,
+    exp_name,
+    tested_multimodal_llm_config,
+    qca_dataset_path: str = None,
+):
+    eval_llm_config_data = {
+        "source": eval_model_source.lower(),
+        "model": eval_model_name,
+        "max_tokens": 1024,
+    }
+    eval_llm_config = parse_llm_config(eval_llm_config_data)
+    eval_llm = create_multi_modal_llm(eval_llm_config)
+
+    llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    tested_multimodal_llm_config = parse_llm_config(tested_multimodal_llm_config)
+    tested_multimodal_llm = create_multi_modal_llm(tested_multimodal_llm_config)
+
+    multimodal_qca_generator = MultimodalQcaGenerator(
+        labelled_llm=llm,
+        predicted_llm=tested_multimodal_llm,
+        vector_index=vector_index,
+        query_engine=query_engine,
+        persist_path=config.index.vector_store.persist_path,
+        qca_dataset_path=qca_dataset_path,
+        enable_multi_modal=True if mode == "image" else False,
+    )
+    if qca_dataset_path:
+        persist_path = os.path.join("localdata/eval_exp_data", exp_name)
+    else:
+        persist_path = config.index.vector_store.persist_path
+    evaluator = BaseEvaluator(
+        llm=eval_llm,
+        persist_path=persist_path,
+        qca_dataset_path=qca_dataset_path,
+        enable_multi_modal=True if mode == "image" else False,
+    )
+
+    return multimodal_qca_generator, evaluator

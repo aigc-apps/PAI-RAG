@@ -12,6 +12,10 @@ experiment:
     eval_model_source: "Dashscope"
     eval_model_name: "qwen-vl-max"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
+    tested_multimodal_llm:
+      source: "dashscope"
+      model: "qwen-vl-max"
+      max_tokens: 1024
   # [custom text dataset][crag]
   - name: "exp3"
     dataset: "crag"
@@ -19,3 +23,13 @@ experiment:
     eval_model_source: "Dashscope"
     eval_model_name: "qwen-max"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_crag_text.toml"
+  # [custom multi-modal dataset]
+  - name: "exp4"
+    qca_dataset_path: "data/eval_dataset/multimodal_eval_dataset_zh.json"
+    eval_model_source: "Dashscope"
+    eval_model_name: "qwen-vl-max"
+    rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
+    tested_multimodal_llm:
+      source: "dashscope"
+      model: "qwen-vl-max"
+      max_tokens: 1024
