@@ -18,7 +18,7 @@
       "predicted_node_ids": null,
       "predicted_node_scores": null,
       "predicted_image_url_list": null,
-      "predicted_answer": "2023年春夏期间，垂钓在社交平台上的讨论声量最高。\n\n![](https://pai-rag.oss-cn-hangzhou.aliyuncs.com/pairag/doc_images/2024春夏淘宝天猫运动户外行业趋势白皮书_淘宝/4f77ded6421ddadd519ab9ef1601a784.jpeg)",
+      "predicted_answer": "",
       "predicted_answer_by": null
     },
     {
@@ -35,10 +35,10 @@
       "predicted_node_ids": null,
       "predicted_node_scores": null,
       "predicted_image_url_list": null,
-      "predicted_answer": "狄尔泰属于文化教育学流派。\n\n![](https://pai-rag.oss-cn-hangzhou.aliyuncs.com/pairag/doc_images/教育文档/思维导图.jpeg)",
+      "predicted_answer": "",
       "predicted_answer_by": null
     }
   ],
   "labelled": true,
-  "predicted": true
+  "predicted": false
 }
