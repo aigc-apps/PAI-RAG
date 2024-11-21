@@ -23,7 +23,7 @@ class RagQcaSample(BaseLlamaDataExample):
         default_factory=None,
         description="The contexts used to generate the reference answer.",
     )
-    reference_node_id: Optional[List[str]] = Field(
+    reference_node_ids: Optional[List[str]] = Field(
         default_factory=None, description="The node id corresponding to the contexts"
     )
     reference_image_url_list: Optional[List[str]] = Field(
@@ -42,11 +42,11 @@ class RagQcaSample(BaseLlamaDataExample):
         default_factory=None,
         description="The contexts used to generate the predicted answer.",
     )
-    predicted_node_id: Optional[List[str]] = Field(
+    predicted_node_ids: Optional[List[str]] = Field(
         default_factory=None,
         description="The node id corresponding to the predicted contexts",
     )
-    predicted_node_score: Optional[List[float]] = Field(
+    predicted_node_scores: Optional[List[float]] = Field(
         default_factory=None,
         description="The node score corresponding to the predicted contexts",
     )

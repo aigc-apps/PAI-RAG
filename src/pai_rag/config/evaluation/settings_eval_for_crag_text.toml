@@ -43,8 +43,8 @@ vector_store.type = "FAISS"
 # endpoint = ""
 # token = ""
 [rag.llm]
-source = "DashScope"
-model = "qwen-turbo"
+source = "OpenAI"
+model = "gpt-4o-2024-08-06"
 
 [rag.multimodal_embedding]
 source = "cnclip"
@@ -89,7 +89,7 @@ search_api_key = ""
 
 [rag.synthesizer]
 type = "SimpleSummarize"
-text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
+text_qa_template = "You are a helpful assistant.\nYou are given a Question and References. The references may or may not help answer the question. Your task is to answer the question in as few words as possible.\nPlease follow these guidelines when formulating your answer:\n1. If the question contains a false premise or assumption, answer “invalid question”.\n2. If you are uncertain or don’t know the answer, respond with “I don’t know”.\n\n### Question \n{query_str} \n\n### References:\n {context_str} \n\n### Answer:\n"
 
 [rag.trace]
 type = "arize_phoenix"

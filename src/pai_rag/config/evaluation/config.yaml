@@ -1,12 +1,21 @@
 experiment:
-  # [custom knowledge dataset]
+  # [text dataset][pai-eval]
   - name: "exp1"
     eval_data_path: "example_data/eval_docs_text"
     eval_model_source: "Dashscope"
     eval_model_name: "qwen-max"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_text.toml"
+    use_pai_eval: true
+  # [multi-modal dataset]
   - name: "exp2"
     eval_data_path: "example_data/eval_docs_image"
     eval_model_source: "Dashscope"
     eval_model_name: "qwen-vl-max"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
+  # [custom text dataset][crag]
+  - name: "exp3"
+    dataset: "crag"
+    eval_data_path: "example_data/eval_docs_crag_small"
+    eval_model_source: "Dashscope"
+    eval_model_name: "qwen-max"
+    rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_crag_text.toml"
