@@ -121,7 +121,7 @@ Response
       "reference_contexts": [
         ": 在赛事和政策的双重推动下，国民运动户外参与意愿高涨，超过六成的受访者表示近一年显著增加了运动户外的频率，各类运动项目正在快速走向“全民化”。新的一年，随着巴黎奥运会、美洲杯等赛事的举办，全民运动热情将进一步被激发。对于品牌而言，这是一个难得的市场机遇，通过精准地选中和锁定与运动相关的目标人群，品牌可以有效地实现用户收割。  \n\n  \n\n悦己驱动，运动边界向轻量泛户外持续延伸  \n\n国民参与运动户外活动更多来自“悦己”观念的驱动，近7成的受访者表示他们主要是为了“强身健体/享受大自然”，因此轻量级、易开展的活动项目更受广大普通受众的青睐。近三年，社交平台关于“泛户外运动”的讨论热度持续走高，更是在23年春夏期间迎来一波小高峰：细分到具体的活动项目上，垂钓讨论声量较高；露营也保持较高声量，其经历过22年的大爆发、23年的行业调整，预计24年已经进入更深精细化运营；此外城市骑行热度也在不断上升，成为当下新兴的小众活动。"
       ],
-      "reference_node_id": null,
+      "reference_node_ids": null,
       "reference_image_url_list": [
         "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/pairag/doc_images/2024春夏淘宝天猫运动户外行业趋势白皮书_淘宝/d4e624aceb4043839c924e33c075e388.jpeg",
         "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/pairag/doc_images/2024春夏淘宝天猫运动户外行业趋势白皮书_淘宝/52d1353d4577698891e7710ae12e18b1.jpeg",
@@ -130,8 +130,8 @@ Response
       "reference_answer": "根据给定的材料，2023年春夏期间，垂钓在社交平台上的讨论声量最高。\n\n![](https://pai-rag.oss-cn-hangzhou.aliyuncs.com/pairag/doc_images/2024春夏淘宝天猫运动户外行业趋势白皮书_淘宝/d4e624aceb4043839c924e33c075e388.jpeg)",
       "reference_answer_by": null,
       "predicted_contexts": null,
-      "predicted_node_id": null,
-      "predicted_node_score": null,
+      "predicted_node_ids": null,
+      "predicted_node_scores": null,
       "predicted_image_url_list": null,
       "predicted_answer": "",
       "predicted_answer_by": null
