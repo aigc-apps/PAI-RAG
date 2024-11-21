@@ -38,9 +38,9 @@ DEFAULT_EVAL_TEMPLATE = PromptTemplate(
 
 DEFAULT_MULTIMODAL_EVAL_TEMPLATE = PromptTemplate(
     """
-    请告诉我一段信息是否得到上下文的支持。
+    请告诉我一段信息是否得到上下文的支持。如果上下文中有图片链接，请读取图片获取信息。\n\n"
     你需要回答“是”或“否”。
-    如果任何上下文支持该信息，即使大部分上下文无关，也请回答“是”。
+    如果任何上下文或者图片中的信息支持该信息，即使大部分上下文无关或者图片内容无关，也请回答“是”。
     下面提供了一些示例。\n\n
     信息：苹果派通常是双皮的。
     上下文：苹果派是一种水果派，主要填充成分是苹果。
@@ -103,7 +103,7 @@ class Faithfulness(LlmMetric):
 
     def parse_eval_result(self, eval_result: str):
         raw_response_txt = eval_result.lower()
-        if "yes" or "是" in raw_response_txt:
+        if "yes" in raw_response_txt or "答案：是" in raw_response_txt:
             passing = True
         else:
             passing = False
