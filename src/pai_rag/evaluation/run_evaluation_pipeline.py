@@ -27,9 +27,7 @@ DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
 )
 
 
-def _create_components(
-    config_file, exp_name, eval_model_source, eval_model_name
-) -> None:
+def _create_components(config_file, exp_name, eval_model_llm_config) -> None:
     """Create all components from the default config file."""
     config = RagConfigManager.from_file(config_file).get_value()
     mode = "image" if config.retriever.search_image else "text"
@@ -43,12 +41,7 @@ def _create_components(
     data_loader = resolve_data_loader(config)
     vector_index = resolve_vector_index(config)
     query_engine = resolve_query_engine(config)
-    eval_llm_config_data = {
-        "source": eval_model_source.lower(),
-        "model": eval_model_name,
-        "max_tokens": 1024,
-    }
-    eval_llm_config = parse_llm_config(eval_llm_config_data)
+    eval_llm_config = parse_llm_config(eval_model_llm_config)
     if mode == "text":
         llm = resolve(cls=PaiLlm, llm_config=config.llm)
         eval_llm = create_llm(eval_llm_config)
@@ -76,8 +69,7 @@ def _create_components(
 def _create_multimodal_components(
     config_file,
     exp_name,
-    eval_model_source,
-    eval_model_name,
+    eval_model_llm_config,
     tested_multimodal_llm_config,
     qca_dataset_path: str = None,
 ) -> None:
@@ -94,12 +86,7 @@ def _create_multimodal_components(
     data_loader = resolve_data_loader(config)
     vector_index = resolve_vector_index(config)
     query_engine = resolve_query_engine(config)
-    eval_llm_config_data = {
-        "source": eval_model_source.lower(),
-        "model": eval_model_name,
-        "max_tokens": 1024,
-    }
-    eval_llm_config = parse_llm_config(eval_llm_config_data)
+    eval_llm_config = parse_llm_config(eval_model_llm_config)
     eval_llm = create_multi_modal_llm(eval_llm_config)
 
     llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
@@ -136,8 +123,7 @@ def run_evaluation_pipeline(
     data_path=None,
     pattern=None,
     exp_name="default",
-    eval_model_source=None,
-    eval_model_name=None,
+    eval_model_llm_config=None,
 ):
     assert (oss_path is not None) or (
         data_path is not None
@@ -147,7 +133,7 @@ def run_evaluation_pipeline(
     ), f"Can not provide both local path '{data_path}' and oss path '{oss_path}'."
 
     data_loader, qca_generator, evaluator = _create_components(
-        config, exp_name, eval_model_source, eval_model_name
+        config, exp_name, eval_model_llm_config
     )
     data_loader.load_data(
         file_path_or_directory=data_path,
@@ -174,15 +160,13 @@ def run_multimodal_evaluation_pipeline(
     data_path=None,
     pattern=None,
     exp_name="default",
-    eval_model_source=None,
-    eval_model_name=None,
+    eval_model_llm_config=None,
     tested_multimodal_llm_config=None,
 ):
     data_loader, multimodal_qca_generator, evaluator = _create_multimodal_components(
         config,
         exp_name,
-        eval_model_source,
-        eval_model_name,
+        eval_model_llm_config,
         tested_multimodal_llm_config,
         qca_dataset_path,
     )
