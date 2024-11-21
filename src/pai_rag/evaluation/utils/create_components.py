@@ -143,7 +143,7 @@ def get_multimodal_eval_components(
 
     evaluator = BaseEvaluator(
         llm=eval_llm,
-        persist_path=persist_path,
+        persist_path=config.index.vector_store.persist_path,
         enable_multi_modal=True,
     )
 
