@@ -117,6 +117,7 @@ def _create_multimodal_components(
     )
     if qca_dataset_path:
         persist_path = os.path.join("localdata/eval_exp_data", exp_name)
+        os.makedirs(persist_path, exist_ok=True)
     else:
         persist_path = config.index.vector_store.persist_path
     evaluator = BaseEvaluator(

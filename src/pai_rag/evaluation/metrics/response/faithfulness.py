@@ -103,7 +103,7 @@ class Faithfulness(LlmMetric):
 
     def parse_eval_result(self, eval_result: str):
         raw_response_txt = eval_result.lower()
-        if "yes" in raw_response_txt:
+        if "yes" or "是" in raw_response_txt:
             passing = True
         else:
             passing = False
@@ -170,9 +170,12 @@ class Faithfulness(LlmMetric):
         ) or response_answer is None:
             raise ValueError("contexts and response must be provided")
 
+        image_context_str = "\n\n".join(reference_image_url_list)
+        text_context_str = "\n\n".join(contexts)
+
         prompt_str = self._multimodal_eval_template.format(
             response_str=response_answer,
-            context_str="\n".join(contexts),
+            context_str=f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n",
             reference_image_url_list=reference_image_url_list or "(没有提供参考图片链接)",
         )
         image_documents = load_image_urls(reference_image_url_list)
