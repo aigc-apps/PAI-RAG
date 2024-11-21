@@ -15,7 +15,7 @@ experiment:
       model: "qwen-vl-max"
       max_tokens: 1024
   - name: "exp3"
-    qca_dataset_path: "data/eval_dataset/multimodal_eval_dataset_zh.json"
+    qca_dataset_path: "data/eval_dataset/multimodal_eval_dataset_zh_example.json"
     eval_model_source: "Dashscope"
     eval_model_name: "qwen-vl-max"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
