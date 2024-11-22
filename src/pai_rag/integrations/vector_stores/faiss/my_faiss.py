@@ -4,7 +4,6 @@ An index that is built on top of an existing vector store.
 
 """
 
-import logging
 import os
 from typing import Any, List, cast
 
@@ -19,7 +18,7 @@ from llama_index.core.vector_stores.types import (
 from llama_index.vector_stores.faiss import FaissVectorStore
 from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
-logger = logging.getLogger()
+from loguru import logger
 
 DEFAULT_PERSIST_PATH = os.path.join(
     DEFAULT_PERSIST_DIR, f"{DEFAULT_VECTOR_STORE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}"
@@ -56,10 +55,12 @@ class MyFaissVectorStore(FaissVectorStore):
 
         query_embedding = cast(List[float], query.query_embedding)
         query_embedding_np = np.array(query_embedding, dtype="float32")[np.newaxis, :]
+
         dists, indices = self._faiss_index.search(
             query_embedding_np, query.similarity_top_k
         )
         dists = list(dists[0])
+        logger.info(f"FAISS search: {dists}, {indices}, {self._faiss_index.ntotal}")
         # if empty, then return an empty response
         if len(indices) == 0:
             return VectorStoreQueryResult(similarities=[], ids=[])

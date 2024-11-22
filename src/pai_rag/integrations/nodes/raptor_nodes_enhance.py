@@ -10,14 +10,13 @@ from llama_index.core.schema import (
     BaseNode,
     NodeWithScore,
     TextNode,
+    ImageNode,
 )
 from llama_index.core.schema import TransformComponent
 from pai_rag.integrations.nodes.raptor_clusters import get_clusters
 from pai_rag.utils.prompt_template import DEFAULT_SUMMARY_PROMPT
 
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RaptorProcessor(TransformComponent):
@@ -54,7 +53,10 @@ class RaptorProcessor(TransformComponent):
         embed_model = self.embed_model
         summary_module = SummaryModule()
 
-        cur_nodes = nodes
+        text_nodes = [n for n in nodes if not isinstance(n, ImageNode)]
+        image_nodes = [n for n in nodes if isinstance(n, ImageNode)]
+
+        cur_nodes = text_nodes
         new_nodes_collection = []
         nodes_with_embeddings_collections = []
         for level in range(self.tree_depth):
@@ -138,7 +140,7 @@ class RaptorProcessor(TransformComponent):
             k for i in nodes_with_embeddings_collections for k in i
         ]
 
-        return nodes_with_embeddings_collections
+        return nodes_with_embeddings_collections + image_nodes
 
     async def acall(self, nodes: List[BaseNode], **kwargs) -> List[BaseNode]:
         """Async transform nodes."""
@@ -146,7 +148,10 @@ class RaptorProcessor(TransformComponent):
         embed_model = self.embed_model
         summary_module = SummaryModule()
 
-        cur_nodes = nodes
+        text_nodes = [n for n in nodes if not isinstance(n, ImageNode)]
+        image_nodes = [n for n in nodes if isinstance(n, ImageNode)]
+
+        cur_nodes = text_nodes
         new_nodes_collection = []
         nodes_with_embeddings_collections = []
         for level in range(self.tree_depth):
@@ -230,7 +235,7 @@ class RaptorProcessor(TransformComponent):
             k for i in nodes_with_embeddings_collections for k in i
         ]
 
-        return nodes_with_embeddings_collections
+        return nodes_with_embeddings_collections + image_nodes
 
 
 class SummaryModule(BaseModel):

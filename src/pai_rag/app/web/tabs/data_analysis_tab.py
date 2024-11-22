@@ -1,12 +1,12 @@
-import os
-import datetime
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 from pai_rag.app.web.rag_client import rag_client, RagApiError
-
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
+from pai_rag.app.web.ui_constants import (
+    DA_GENERAL_PROMPTS,
+    DA_SQL_PROMPTS,
+    SYN_GENERAL_PROMPTS,
+)
 
 
 def upload_file_fn(input_file):
@@ -43,25 +43,43 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def connect_database(input_db: List[Any]):
-    try:
-        update_dict = {"analysis_type": "nl2sql"}
-        for element, value in input_db.items():
-            update_dict[element.elem_id] = value
-        # print("db_config:", update_dict)
+def respond(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
 
+    if update_dict["analysis_type"] == "datafile":
+        update_dict["analysis_type"] = "nl2pandas"
+    else:
+        update_dict["analysis_type"] = "nl2sql"
+
+    # empty input.
+    if not update_dict["question"]:
+        yield update_dict["chatbot"]
+        return
+
+    # update snapshot
+    try:
         rag_client.patch_config(update_dict)
-        return f"[{datetime.datetime.now()}] Connect database success!"
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
+    question = update_dict["question"]
+    chatbot = update_dict["chatbot"]
 
-def analysis_respond(question, chatbot):
-    response_gen = rag_client.query_data_analysis(question, stream=True)
-    content = ""
-    chatbot.append((question, content))
-    for resp in response_gen:
-        chatbot[-1] = (question, resp.result)
+    if chatbot is not None:
+        chatbot.append((question, ""))
+
+    try:
+        response_gen = rag_client.query_data_analysis(question, stream=True)
+        for resp in response_gen:
+            chatbot[-1] = (question, resp.result)
+            yield chatbot
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+    except Exception as e:
+        raise gr.Error(f"Error: {e}")
+    finally:
         yield chatbot
 
 
@@ -83,9 +101,9 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "datafile",
                     "database",
                 ],
-                value="datafile",
-                label="Please choose data analysis type",
-                elem_id="data_analysis_type",
+                value="database",
+                label="Please choose the data analysis type",
+                elem_id="analysis_type",
             )
 
             # datafile
@@ -115,54 +133,104 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
             # database
             with gr.Column(visible=(data_analysis_type.value == "database")) as db_col:
-                dialect = gr.Textbox(
-                    label="Dialect", elem_id="db_dialect", value="mysql"
-                )
-                user = gr.Textbox(label="Username", elem_id="db_username")
-                password = gr.Textbox(
-                    label="Password", elem_id="db_password", type="password"
-                )
-                host = gr.Textbox(label="Host", elem_id="db_host")
-                port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
-                dbname = gr.Textbox(label="DBname", elem_id="db_name")
-                tables = gr.Textbox(
-                    label="Tables",
-                    elem_id="db_tables",
-                    placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
-                )
+                with gr.Row():
+                    dialect = gr.Textbox(
+                        label="Dialect", elem_id="db_dialect", value="mysql"
+                    )
+                    port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
+                    host = gr.Textbox(label="Host", elem_id="db_host")
+                with gr.Row():
+                    user = gr.Textbox(label="Username", elem_id="db_username")
+                    password = gr.Textbox(
+                        label="Password", elem_id="db_password", type="password"
+                    )
+                with gr.Row():
+                    database = gr.Textbox(label="Database", elem_id="database")
+                    tables = gr.Textbox(
+                        label="Tables",
+                        elem_id="db_tables",
+                        placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
+                    )
                 descriptions = gr.Textbox(
                     label="Descriptions",
-                    lines=5,
+                    lines=3,
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+                with gr.Column(visible=True):
+                    with gr.Tab("Nl2sql Prompt"):
+                        sql_prompt_type = gr.Radio(
+                            [
+                                "general",
+                                "sql",
+                                "custom",
+                            ],
+                            value="general",
+                            label="\N{rocket} Please choose the nl2sql prompt template",
+                            elem_id="nl2sql_prompt_type",
+                        )
 
-                connect_db_button = gr.Button(
-                    "Connect Database",
-                    elem_id="connect_db_button",
-                    variant="primary",
-                )  # 点击功能中更新analysis_type
+                        db_nl2sql_prompt = gr.Textbox(
+                            label="nl2sql template",
+                            elem_id="db_nl2sql_prompt",
+                            value=DA_GENERAL_PROMPTS,
+                            lines=4,
+                        )
 
-                connection_info = gr.Textbox(
-                    label="Connection Info", elem_id="db_connection_info"
-                )
+                    with gr.Tab("Synthesize Prompt"):
+                        syn_prompt_type = gr.Radio(
+                            [
+                                "general",
+                                "custom",
+                            ],
+                            value="general",
+                            label="\N{rocket} Please choose the synthesizer prompt template",
+                            elem_id="synthesizer_prompt_type",
+                        )
 
-            inputs_db = {
-                dialect,
-                user,
-                password,
-                host,
-                port,
-                dbname,
-                tables,
-                descriptions,
-            }
+                        synthesizer_prompt = gr.Textbox(
+                            label="synthesizer template",
+                            elem_id="synthesizer_prompt",
+                            value=SYN_GENERAL_PROMPTS,
+                            lines=4,
+                        )
 
-            connect_db_button.click(
-                fn=connect_database,
-                inputs=inputs_db,
-                outputs=connection_info,
-                api_name="connect_db",
+            def change_sql_prompt_template(prompt_type):
+                if prompt_type == "general":
+                    return {
+                        db_nl2sql_prompt: gr.update(
+                            value=DA_GENERAL_PROMPTS, interactive=True
+                        )
+                    }
+                elif prompt_type == "sql":
+                    return {
+                        db_nl2sql_prompt: gr.update(
+                            value=DA_SQL_PROMPTS, interactive=True
+                        )
+                    }
+                else:
+                    return {db_nl2sql_prompt: gr.update(value="", interactive=True)}
+
+            sql_prompt_type.input(
+                fn=change_sql_prompt_template,
+                inputs=sql_prompt_type,
+                outputs=[db_nl2sql_prompt],
+            )
+
+            def change_syn_prompt_template(prompt_type):
+                if prompt_type == "general":
+                    return {
+                        synthesizer_prompt: gr.update(
+                            value=SYN_GENERAL_PROMPTS, interactive=True
+                        )
+                    }
+                else:
+                    return {synthesizer_prompt: gr.update(value="", interactive=True)}
+
+            syn_prompt_type.input(
+                fn=change_syn_prompt_template,
+                inputs=syn_prompt_type,
+                outputs=[synthesizer_prompt],
             )
 
             def data_analysis_type_change(type_value):
@@ -184,23 +252,39 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=6):
-            chatbot = gr.Chatbot(height=500, elem_id="data_analysis_chatbot")
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
                 clearBtn = gr.Button("Clear History", variant="secondary")
 
+        chat_args = {
+            data_analysis_type,
+            dialect,
+            user,
+            password,
+            host,
+            port,
+            database,
+            tables,
+            descriptions,
+            db_nl2sql_prompt,
+            synthesizer_prompt,
+            question,
+            chatbot,
+        }
+
         submitBtn.click(
-            fn=analysis_respond,
-            inputs=[question, chatbot],
+            fn=respond,
+            inputs=chat_args,
             outputs=[chatbot],
             api_name="analysis_respond_clk",
         )
 
         # 绑定Textbox提交事件，当按下Enter，调用respond函数
         question.submit(
-            analysis_respond,
-            inputs=[question, chatbot],
+            respond,
+            inputs=chat_args,
             outputs=[chatbot],
             api_name="analysis_respond_q",
         )
@@ -231,7 +315,11 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             password.elem_id: password,
             host.elem_id: host,
             port.elem_id: port,
-            dbname.elem_id: dbname,
+            database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
+            sql_prompt_type.elem_id: sql_prompt_type,
+            db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
+            syn_prompt_type.elem_id: syn_prompt_type,
+            synthesizer_prompt.elem_id: synthesizer_prompt,
         }

@@ -6,11 +6,9 @@ from llama_index.core.bridge.pydantic import Field
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.async_utils import run_jobs
 import re
-import logging
+from loguru import logger
 
 CHINESE_PUNKTUATION = "＂＃＄％＆＇（）＊＋，－／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､\u3000、〃〈〉《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏﹑﹔·．！？｡。"
-
-logger = logging.getLogger(__name__)
 
 
 class HtmlQAExtractor(BaseExtractor):
@@ -147,9 +145,9 @@ class HtmlQAExtractor(BaseExtractor):
         Q_index = [obj.span() for obj in list(partten_question.finditer(text))]
         A_index = [obj.span() for obj in list(partten_answer.finditer(text))]
         if len(Q_index) != len(A_index) or len(Q_index) == 0 or len(A_index) == 0:
-            print("text: ", text)
-            print("Q_index: ", Q_index)
-            print("A_index: ", A_index)
+            logger.debug("text: ", text)
+            logger.debug("Q_index: ", Q_index)
+            logger.debug("A_index: ", A_index)
             raise IndexError("[To Dict Error]提取出的问题和答案的数量不一致")
         QA_i = 0
         QA_list = [[], []]

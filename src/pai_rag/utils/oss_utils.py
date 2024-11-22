@@ -1,4 +1,6 @@
 import oss2
+import os
+from pai_rag.core.rag_config import RagConfig
 
 
 def calculate_file_md5(file_path: str, prefix: str) -> str:
@@ -18,3 +20,36 @@ def calculate_file_md5(file_path: str, prefix: str) -> str:
     """上传文件"""
     key = prefix + content_md5
     return key
+
+
+def check_and_set_oss_auth(config_snapshot):
+    """
+    check snapshot config and set oss auth
+    """
+    if config_snapshot["oss_store"].get("ak") and config_snapshot["oss_store"].get(
+        "sk"
+    ):
+        if "***" not in config_snapshot["oss_store"].get("ak"):
+            os.environ["OSS_ACCESS_KEY_ID"] = config_snapshot["oss_store"].get("ak")
+        if "***" not in config_snapshot["oss_store"].get("sk"):
+            os.environ["OSS_ACCESS_KEY_SECRET"] = config_snapshot["oss_store"].get("sk")
+        del config_snapshot["oss_store"]["ak"]
+        del config_snapshot["oss_store"]["sk"]
+    return config_snapshot
+
+
+def get_oss_auth(rag_config: RagConfig):
+    """
+    get oss auth and return to config dict
+    """
+    oss_auth_ak = os.getenv("OSS_ACCESS_KEY_ID")
+    oss_auth_sk = os.getenv("OSS_ACCESS_KEY_SECRET")
+    if oss_auth_ak:
+        rag_config.oss_store.ak = oss_auth_ak
+    else:
+        rag_config.oss_store.ak = None
+    if oss_auth_sk:
+        rag_config.oss_store.sk = oss_auth_sk
+    else:
+        rag_config.oss_store.sk = None
+    return rag_config

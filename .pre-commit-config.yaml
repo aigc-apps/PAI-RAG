@@ -22,13 +22,14 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ".*poetry.lock|.*_static|.*__init__.py"
+        exclude: ".*poetry.lock|.*_static|.*__init__.py|.*main.py"
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 23.10.1
     hooks:
       - id: black-jupyter
         name: black-src
         alias: black
+        exclude: ".*main.py"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.0.1
     hooks:
@@ -87,6 +88,8 @@ repos:
           [
             "--exclude",
             "./data/tokenization/qwen.tiktoken",
+            "--skip",
+            "*.json",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
           ]

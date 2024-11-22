@@ -25,7 +25,7 @@ LlamaParseDirectoryReader是SimpleDirectoryReader中集成LlamaParse的PDF加载
     database_type = "PostgreSQL"
     host = "database url"
     port = "datasase port"
-    dbname = "target db name"
+    database = "target db name"
     user = "username"
     password = "password"
 
@@ -37,16 +37,16 @@ source = [HuggingFace, OpenAI, DashScope]
 
 目前, pai_rag 支持以上三种 embedding 源.
 
-如果 source = "HuggingFace", 您需要进一步指定 model_name 和 embed_batch_size。默认的模型名称和批处理大小分别为 bge-small-zh-v1.5 和 10。
+如果 source = "HuggingFace", 您需要进一步指定 model 和 embed_batch_size。默认的模型名称和批处理大小分别为 bge-large-zh-v1.5 和 10。
 
     source = "HuggingFace"
-    model_name = "bge-small-zh-v1.5"
+    model = "bge-large-zh-v1.5"
     embed_batch_size = 10
 
 或者, 如果你想使用其它 huggingface 模型, 请指定如下参数：
 
     source = "HuggingFace"
-    model_name = "xxx"
+    model = "xxx"
     model_dir = "xxx/xxx"
     embed_batch_size = 20 (for example)
 
@@ -252,18 +252,6 @@ type = "RetrieverQueryEngine"
 
 查询引擎（query engine）是一个通用接口，接收自然语言查询，并返回丰富的响应。
 
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-基于 query engine 之上的一个高级接口，用于与数据进行对话（而不是单一的问答），可类比为状态化的查询引擎。
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question 是建立在查询引擎query engine之上的简易聊天模式。每次聊天交互中：首先从对话上下文和最后一条消息生成一个独立的问题，然后用这个简化的问题查询查询引擎以获取回复。
-
 ## rag.chat_store
 
 type = [Local, Aliyun-Redis]
@@ -280,24 +268,6 @@ type = [Local, Aliyun-Redis]
     type = "Aliyun-Redis"
     host = "Aliyun-Redis host"
     password = "Aliyun-Redis user:pwd"
-
-该设置在网页中不可用。
-
-## rag.evaluation
-
-目前, pai_rag 支持对检索效果和回复效果的评估。
-
-检索器的评估指标包括 "mrr"（平均倒数排名） 和 "hit_rate"（命中率）, 可以指定两者或者任意一个：
-
-    retrieval = ["mrr", "hit_rate"]
-
-对最终回复的评估指标包括 "Faithfulness"（事实性）, "Answer Relevancy"（回答相关性）, "Correctness"（正确性）以及 "Semantic Similarity"（语义相似性）, 可以选择全部或者任意若干：
-
-    response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
-
-说明：这些评估需要基于特定的数据集格式，可以通过`src/pai_rag/evaluations/batch_evaluator`中的功能生成, 也可以提供正确格式的数据集路径：
-
-     qa_dataset_path = ""
 
 该设置在网页中不可用。
 

@@ -7,13 +7,18 @@ Modification based on llama-index SQL Retriever,
  - modify DefaultSQLParser
 """
 
-import logging
+import functools
+from loguru import logger
+import os
 import re
 import signal
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
-
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import URL
+from sqlalchemy.pool import QueuePool
+from llama_index.core import SQLDatabase
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.callbacks.base import CallbackManager
@@ -21,10 +26,7 @@ from llama_index.core.instrumentation import DispatcherSpanMixin
 from llama_index.core.llms.llm import LLM
 from llama_index.core.objects.base import ObjectRetriever
 from llama_index.core.objects.table_node_mapping import SQLTableSchema
-from llama_index.core.prompts import BasePromptTemplate
-from llama_index.core.prompts.default_prompts import (
-    DEFAULT_TEXT_TO_SQL_PROMPT,
-)
+from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
 from llama_index.core.prompts.mixin import (
     PromptDictType,
     PromptMixin,
@@ -38,10 +40,36 @@ from llama_index.core.settings import (
     embed_model_from_settings_or_context,
     llm_from_settings_or_context,
 )
-from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from sqlalchemy import Table
 
-logger = logging.getLogger(__name__)
+from pai_rag.integrations.data_analysis.data_analysis_config import (
+    MysqlAnalysisConfig,
+    SqlAnalysisConfig,
+    SqliteAnalysisConfig,
+)
+
+DEFAULT_TEXT_TO_SQL_TMPL = PromptTemplate(
+    "Given an input question, first create a syntactically correct {dialect} "
+    "query to run, then look at the results of the query and return the answer. "
+    "You can order the results by a relevant column to return the most "
+    "interesting examples in the database.\n\n"
+    "Never query for all the columns from a specific table, only ask for a "
+    "few relevant columns given the question.\n\n"
+    "Pay attention to use only the column names that you can see in the schema "
+    "description. "
+    "Be careful to not query for columns that do not exist. "
+    "Pay attention to which column is in which table. "
+    "Also, qualify column names with the table name when needed. "
+    "You are required to use the following format, each taking one line:\n\n"
+    "Question: Question here\n"
+    "SQLQuery: SQL Query to run\n"
+    "SQLResult: Result of the SQLQuery\n"
+    "Answer: Final answer here\n\n"
+    "Only use tables listed below.\n"
+    "{schema}\n\n"
+    "Question: {query_str}\n"
+    "SQLQuery: "
+)
 
 
 def timeout_handler():
@@ -126,16 +154,18 @@ class MySQLRetriever(BaseRetriever):
             query_bundle.query_str = self._limit_check(query_bundle.query_str)
         logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
-        # set timeout to 5s
+        # set timeout to 10s
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(10)  # start
         try:
             raw_response_str, metadata = self._sql_database.run_sql(
                 query_bundle.query_str
             )
-        except TimeoutError:
-            logger.info("SQL Query Timed Out (>10s)")
-            raw_response_str = "SQL Query Timed Out (>10s)"
+        except (TimeoutError, NotImplementedError) as error:
+            logger.info("Invalid SQL or SQL Query Timed Out (>10s)")
+            raise error
+            # raw_response_str = "Invalid SQL or SQL Query Timed Out (>10s)"
+            # metadata = {"result": {e}, "col_keys": []}
         finally:
             signal.alarm(0)  # cancel
 
@@ -209,7 +239,75 @@ class DefaultSQLParser(BaseSQLParser):
         sql_result_start = response.find("SQLResult:")
         if sql_result_start != -1:
             response = response[:sql_result_start]
-        return response.strip().strip("```").strip().strip(";").strip()
+        return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
+
+
+def get_sql_info(sql_config: SqlAnalysisConfig):
+    if isinstance(sql_config, SqliteAnalysisConfig):
+        db_path = os.path.join(sql_config.db_path, sql_config.database)
+        database_url = f"{sql_config.type.value}:///{db_path}"
+    elif isinstance(sql_config, MysqlAnalysisConfig):
+        dd_prefix = f"{sql_config.type.value}+pymysql"
+        database_url = URL.create(
+            dd_prefix,
+            username=sql_config.user,
+            password=sql_config.password,
+            host=sql_config.host,
+            port=sql_config.port,
+            database=sql_config.database,
+        )
+        logger.info(f"Connecting to {database_url}.")
+    else:
+        raise ValueError(f"Not supported SQL dialect: {sql_config}")
+    return inspect_db_connection(
+        database_url=database_url,
+        desired_tables=tuple(sql_config.tables),
+        table_descriptions=tuple(sql_config.descriptions.items()),
+    )
+
+
+@functools.cache
+def inspect_db_connection(
+    database_url: str | URL,
+    desired_tables: Optional[List[str]] = None,
+    table_descriptions: Optional[Dict[str, str]] = None,
+):
+    desired_tables = list(desired_tables) if desired_tables else None
+    table_descriptions = dict(table_descriptions) if table_descriptions else None
+
+    # get rds_db config
+    logger.info(f"desired_tables from ui input: {desired_tables}")
+    logger.info(f"table_descriptions from ui input: {table_descriptions}")
+
+    # use sqlalchemy engine for db connection
+    engine = create_engine(
+        database_url,
+        echo=False,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=360,
+        poolclass=QueuePool,
+    )
+    inspector = inspect(engine)
+    db_tables = inspector.get_table_names()
+    if len(db_tables) == 0:
+        raise ValueError(f"No table found in db {database_url}.")
+
+    if desired_tables and len(desired_tables) > 0:
+        tables = desired_tables
+    else:
+        tables = db_tables
+
+    # create an sqldatabase instance including desired table info
+    sql_database = SQLDatabase(engine, include_tables=tables)
+
+    if table_descriptions and len(table_descriptions) > 0:
+        table_descriptions = table_descriptions
+    else:
+        table_descriptions = {}
+
+    return sql_database, tables, table_descriptions
 
 
 class MyNLSQLRetriever(BaseRetriever, PromptMixin):
@@ -239,6 +337,7 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
     def __init__(
         self,
         sql_database: SQLDatabase,
+        dialect: str,
         text_to_sql_prompt: Optional[BasePromptTemplate] = None,
         context_query_kwargs: Optional[dict] = None,
         tables: Optional[Union[List[str], List[Table]]] = None,
@@ -261,9 +360,11 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         self._get_tables = self._load_get_tables_fn(
             sql_database, tables, context_query_kwargs, table_retriever
         )
+        self._tables = tables
+        self._dialect = dialect
         self._context_str_prefix = context_str_prefix
         self._llm = llm or llm_from_settings_or_context(Settings, service_context)
-        self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
+        self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_TMPL
         self._sql_parser_mode = sql_parser_mode
 
         embed_model = embed_model or embed_model_from_settings_or_context(
@@ -276,6 +377,31 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         super().__init__(
             callback_manager=callback_manager
             or callback_manager_from_settings_or_context(Settings, service_context)
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        sql_config: SqlAnalysisConfig,
+        llm: Optional[LLM] = None,
+        embed_model: Optional[BaseEmbedding] = None,
+    ):
+        if sql_config.nl2sql_prompt:
+            nl2sql_prompt_tmpl = PromptTemplate(sql_config.nl2sql_prompt)
+        else:
+            nl2sql_prompt_tmpl = DEFAULT_TEXT_TO_SQL_TMPL
+
+        sql_database, tables, table_descriptions = get_sql_info(sql_config)
+        # print("tmp_test:", sql_config.type)
+        return cls(
+            sql_database=sql_database,
+            dialect=sql_config.type,
+            llm=llm,
+            text_to_sql_prompt=nl2sql_prompt_tmpl,
+            tables=tables,
+            context_query_kwargs=table_descriptions,
+            sql_only=False,
+            embed_model=embed_model,
         )
 
     def _get_prompts(self) -> Dict[str, Any]:
@@ -356,42 +482,69 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata = {"result": sql_query_str}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
                     metadata,
                 ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
-                if retrieved_nodes[0].metadata["query_output"] == []:
-                    new_sql_query_str = self._sql_query_modification(sql_query_str)
-                    (
-                        retrieved_nodes,
-                        metadata,
-                    ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
+                # if retrieved_nodes[0].metadata["query_output"] == "":
+
+                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
+                #     (
+                #         retrieved_nodes,
+                #         metadata,
+                #     ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                #     logger.info(
+                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                #     )
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
-                (
-                    retrieved_nodes,
-                    metadata,
-                ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
-                logger.info(
-                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
                 )
-                # err_node = TextNode(text=f"Error: {e!s}")
-                # logger.info(f"async error_node info: {err_node}\n")
-                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                # metadata = {}
-                # else:
-                #     raise
+
+                # 如果找到table，生成新的sql_query
+                if new_sql_query_str != sql_query_str:
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = self._sql_retriever.retrieve_with_metadata(new_sql_query_str)
+                    retrieved_nodes[0].metadata["invalid_flag"] = 1
+                    retrieved_nodes[0].metadata[
+                        "generated_query_code_instruction"
+                    ] = sql_query_str
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
+                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
+                else:
+                    logger.info(f"[{new_sql_query_str}] is not even a SQL")
+                    retrieved_nodes = [
+                        NodeWithScore(
+                            node=TextNode(
+                                text=new_sql_query_str,
+                                metadata={
+                                    "query_code_instruction": new_sql_query_str,
+                                    "generated_query_code_instruction": sql_query_str,
+                                    "query_output": "",
+                                    "invalid_flag": 1,
+                                },
+                            ),
+                            score=1.0,
+                        ),
+                    ]
+                    metadata = {}
+
+            # add query_tables into metadata
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
 
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
 
@@ -424,56 +577,96 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             metadata: Dict[str, Any] = {}
         else:
+            query_tables = self._get_table_from_sql(self._tables, sql_query_str)
             try:
                 (
                     retrieved_nodes,
                     metadata,
                 ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
+                retrieved_nodes[0].metadata["invalid_flag"] = 0
                 logger.info(
                     f"> SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
                 )
-                if retrieved_nodes[0].metadata["query_output"] == []:
-                    new_sql_query_str = self._sql_query_modification(sql_query_str)
-                    (
-                        retrieved_nodes,
-                        metadata,
-                    ) = await self._sql_retriever.aretrieve_with_metadata(
-                        new_sql_query_str
-                    )
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
+                # if retrieved_nodes[0].metadata["query_output"] == "":
+                #     new_sql_query_str = self._sql_query_modification(sql_query_str)
+                #     (
+                #         retrieved_nodes,
+                #         metadata,
+                #     ) = await self._sql_retriever.aretrieve_with_metadata(
+                #         new_sql_query_str
+                #     )
+                #     logger.info(
+                #         f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                #     )
 
             except BaseException as e:
                 # if handle_sql_errors is True, then return error message
                 if self._handle_sql_errors:
                     logger.info(f"async error info: {e}\n")
 
-                new_sql_query_str = self._sql_query_modification(sql_query_str)
-                (
-                    retrieved_nodes,
-                    metadata,
-                ) = await self._sql_retriever.aretrieve_with_metadata(new_sql_query_str)
-                logger.info(
-                    f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                new_sql_query_str = self._sql_query_modification(
+                    query_tables, sql_query_str
                 )
-                # err_node = TextNode(text=f"Error: {e!s}")
-                # logger.info(f"async error_node info: {err_node}\n")
-                # retrieved_nodes = [NodeWithScore(node=err_node, score=1.0)]
-                # metadata = {}
-                # else:
-                #     raise
+
+                # 如果找到table，生成新的sql_query
+                if new_sql_query_str != sql_query_str:
+                    (
+                        retrieved_nodes,
+                        metadata,
+                    ) = await self._sql_retriever.aretrieve_with_metadata(
+                        new_sql_query_str
+                    )
+                    retrieved_nodes[0].metadata["invalid_flag"] = 1
+                    retrieved_nodes[0].metadata[
+                        "generated_query_code_instruction"
+                    ] = sql_query_str
+                    logger.info(
+                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
+                    )
+                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
+                else:
+                    logger.info(f"[{new_sql_query_str}] is not even a SQL")
+                    retrieved_nodes = [
+                        NodeWithScore(
+                            node=TextNode(
+                                text=new_sql_query_str,
+                                metadata={
+                                    "query_code_instruction": new_sql_query_str,
+                                    "generated_query_code_instruction": sql_query_str,
+                                    "query_output": "",
+                                    "invalid_flag": 1,
+                                },
+                            ),
+                            score=1.0,
+                        ),
+                    ]
+                    metadata = {}
+
+            # add query_tables into metadata
+            retrieved_nodes[0].metadata["query_tables"] = query_tables
+
         return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
 
-    def _sql_query_modification(self, sql_query_str):
-        table_pattern = r"FROM\s+(\w+)"
-        match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
-        if match:
-            first_table = match.group(1)
+    def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
+        table_collection = list()
+        for table in table_list:
+            if table.lower() in sql_query.lower():
+                table_collection.append(table)
+        return table_collection
+
+    def _sql_query_modification(self, query_tables: list, sql_query_str: str):
+        # table_pattern = r"FROM\s+(\w+)"
+        # match = re.search(table_pattern, sql_query_str, re.IGNORECASE | re.DOTALL)
+        # if match:
+        # 改用已知table匹配，否则match中FROM逻辑也可能匹配到无效的table
+        if len(query_tables) != 0:
+            first_table = query_tables[0]
             new_sql_query_str = f"SELECT * FROM {first_table}"
-            logger.info(f"use the whole table {first_table} instead if possible")
+            logger.info(f"use the whole table named {first_table} instead if possible")
         else:
-            raise ValueError("No table is matched")
+            # raise ValueError("No table is matched")
+            new_sql_query_str = sql_query_str
+            logger.info("No table is matched")
 
         return new_sql_query_str
 
@@ -489,11 +682,11 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
 
     def _get_table_context(self, query_bundle: QueryBundle) -> str:
         """Get table context.
-
-        Get tables schema + optional context as a single string.
-
+        Get tables schema + optional context + data sample as a single string.
         """
-        table_schema_objs = self._get_tables(query_bundle.query_str)
+        table_schema_objs = self._get_tables(
+            query_bundle.query_str
+        )  # get a list of SQLTableSchema, e.g. [SQLTableSchema(table_name='has_pet', context_str=None),]
         context_strs = []
         if self._context_str_prefix is not None:
             context_strs = [self._context_str_prefix]
@@ -501,13 +694,27 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         for table_schema_obj in table_schema_objs:
             table_info = self._sql_database.get_single_table_info(
                 table_schema_obj.table_name
-            )
+            )  # get ddl info
+            data_sample = self._get_data_sample(
+                table_schema_obj.table_name
+            )  # get data sample
+            table_info_with_sample = table_info + "\ndata_sample: " + data_sample
 
             if table_schema_obj.context_str:
                 table_opt_context = " The table description is: "
                 table_opt_context += table_schema_obj.context_str
-                table_info += table_opt_context
+                table_info_with_sample += table_opt_context
 
-            context_strs.append(table_info)
+            context_strs.append(table_info_with_sample)
 
         return "\n\n".join(context_strs)
+
+    def _get_data_sample(self, table: str, sample_n: int = 3) -> str:
+        # 对每个table随机采样
+        if self._dialect == "mysql":
+            sql_str = f"SELECT * FROM {table} ORDER BY RAND() LIMIT {sample_n};"
+        if self._dialect in ("sqlite", "postgresql"):
+            sql_str = f"Select * FROM {table} ORDER BY RANDOM() LIMIT {sample_n};"
+        table_sample, _ = self._sql_database.run_sql(sql_str)
+
+        return table_sample

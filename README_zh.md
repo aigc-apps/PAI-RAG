@@ -50,6 +50,12 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    conda activate rag_env
    ```
 
+   如果使用macOS且需要处理PPTX文件，需要下载依赖库处理PPTX文件
+
+   ```bash
+   brew install mono-libgdiplus
+   ```
+
    ### (1) CPU环境
 
    直接使用poetry安装项目依赖包：
@@ -57,17 +63,20 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    ```bash
     pip install poetry
     poetry install
+    poetry run aliyun-bootstrap -a install
    ```
 
-### (2) GPU环境
+   ### (2) GPU环境
 
-首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
+   首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
 
-```bash
-mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-pip install poetry
-poetry install
-```
+   ```bash
+   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+   pip install poetry
+   poetry install
+   poetry run aliyun-bootstrap -a install
+
+   ```
 
 - 常见网络超时问题
 
@@ -139,8 +148,8 @@ poetry install
 
    ```bash
    # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
-   # 默认启动时下载模型 [bge-small-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
-   # 可使用命令行 "load_model" 下载模型 including [bge-small-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
+   # 默认启动时下载模型 [bge-large-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
+   # 可使用命令行 "load_model" 下载模型 including [bge-large-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
    pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
    ```
 
@@ -165,15 +174,6 @@ poetry install
    ```
 
    你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
-
-7. 评估 (调试)
-
-您可以评估RAG系统的不同阶段的效果，如检索、生成或者全链路。
-
-```bash
-# 支持自定义 config file (default -c src/pai_rag/config/settings.yaml), overwrite (default False), type (default all)
-evaluation [-c src/pai_rag/config/settings.yaml] [-o False] [-t retrieval]
-```
 
 ## 方式二：Docker镜像
 
@@ -273,36 +273,10 @@ curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application
 
 - Agent及调用Function Tool的简单对话
 
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query/agent -H "Content-Type: application/json" -d '{"question":"今年是2024年，10年前是哪一年？"}'
-```
-
-## Evaluation API
-
-支持三种评估模式：全链路评估、检索效果评估、生成效果评估。
-
-- /evaluate (all)
-- /evaluate/retrieval
-- /evaluate/response
-
-初次调用时会在 localdata/evaluation 下自动生成一个评估数据集（qc_dataset.json， 其中包含了由LLM生成的query、reference_contexts、reference_node_id、reference_answer）。同时评估过程中涉及大量的LLM调用，因此会耗时较久。
-
-您也可以单独调用API（/evaluate/generate）来生成评估数据集。
-
-参考示例：
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/generate
-
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/retrieval
-curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
-```
-
 # Agentic RAG
 
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
-[Agentic RAG](./example_data/function_tools/api-tool-with-intent-detection-for-travel-assistant/README.md)
+[Agentic RAG](./docs/agentic_rag.md)
 
 # Data Analysis
 
@@ -313,3 +287,15 @@ curl -X 'POST' http://127.0.0.1:8000/service/evaluate/response
 如需实现更多个性化配置，请参考文档：
 
 [参数配置说明](./docs/config_guide_cn.md)
+
+# 支持文件类型
+
+| 文件类型 | 文件格式                               |
+| -------- | -------------------------------------- |
+| 非结构化 | .txt, .docx， .pdf， .html，.pptx，.md |
+| 图片     | .gif， .jpg，.png，.jpeg， .webp       |
+| 结构化   | .csv，.xls， .xlsx，.jsonl             |
+| 其他     | .epub，.mbox，.ipynb                   |
+
+1. .doc格式文档需转化为.docx格式
+2. .ppt和.pptm格式需转化为.pptx格式

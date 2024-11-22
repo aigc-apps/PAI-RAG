@@ -10,32 +10,17 @@ import asyncio
 IGNORE_FILE_LIST = [".DS_Store"]
 
 
-def upload_knowledge(
-    upload_files,
+def upload_oss_knowledge(
+    oss_path,
     chunk_size,
     chunk_overlap,
-    enable_qa_extraction,
     enable_raptor,
     enable_multimodal,
     enable_table_summary,
+    upload_index,
 ):
-    if not upload_files:
-        return
-
-    try:
-        rag_client.patch_config(
-            {
-                "chunk_size": chunk_size,
-                "chunk_overlap": chunk_overlap,
-                "enable_multimodal": enable_multimodal,
-                "enable_table_summary": enable_table_summary,
-            }
-        )
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-    if not upload_files:
-        yield [
+    if not oss_path:
+        return [
             gr.update(visible=False),
             gr.update(
                 visible=True,
@@ -43,14 +28,93 @@ def upload_knowledge(
             ),
         ]
 
-    response = rag_client.add_knowledge(
-        [file.name for file in upload_files], enable_qa_extraction, enable_raptor
-    )
+    for state_info in upload_knowledge(
+        upload_files=[],
+        oss_path=oss_path,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        enable_raptor=enable_raptor,
+        enable_multimodal=enable_multimodal,
+        enable_table_summary=enable_table_summary,
+        index_name=upload_index,
+        from_oss=True,
+    ):
+        yield state_info
+
+
+def upload_files(
+    upload_files,
+    chunk_size,
+    chunk_overlap,
+    enable_raptor,
+    enable_multimodal,
+    enable_table_summary,
+    upload_index,
+):
+    if not upload_files:
+        return [
+            gr.update(visible=False),
+            gr.update(
+                visible=True,
+                value="No file selected. Please choose at least one file.",
+            ),
+        ]
+
+    for state_info in upload_knowledge(
+        upload_files=upload_files,
+        oss_path=None,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        enable_raptor=enable_raptor,
+        enable_multimodal=enable_multimodal,
+        enable_table_summary=enable_table_summary,
+        index_name=upload_index,
+    ):
+        yield state_info
+
+
+def upload_knowledge(
+    upload_files,
+    oss_path,
+    chunk_size,
+    chunk_overlap,
+    enable_raptor,
+    enable_multimodal,
+    enable_table_summary,
+    index_name,
+    from_oss: bool = False,
+):
+    try:
+        rag_client.patch_config(
+            {
+                "chunk_size": chunk_size,
+                "chunk_overlap": chunk_overlap,
+                "enable_table_summary": enable_table_summary,
+            }
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
     my_upload_files = []
-    for file in upload_files:
-        base_name = os.path.basename(file.name)
-        if base_name not in IGNORE_FILE_LIST:
-            my_upload_files.append(MyUploadFile(base_name, response["task_id"]))
+    if from_oss:
+        response = rag_client.add_knowledge(
+            oss_path=oss_path,
+            enable_raptor=enable_raptor,
+            index_name=index_name,
+            enable_multimodal=enable_multimodal,
+        )
+        my_upload_files.append(MyUploadFile(oss_path, response["task_id"]))
+    else:
+        response = rag_client.add_knowledge(
+            input_files=[file.name for file in upload_files],
+            enable_raptor=enable_raptor,
+            index_name=index_name,
+            enable_multimodal=enable_multimodal,
+        )
+        for file in upload_files:
+            base_name = os.path.basename(file.name)
+            if base_name not in IGNORE_FILE_LIST:
+                my_upload_files.append(MyUploadFile(base_name, response["task_id"]))
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     error_msg = ""
@@ -99,6 +163,11 @@ def clear_files():
 def create_upload_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=2):
+            upload_index = gr.Dropdown(
+                choices=[],
+                label="\N{bookmark} Index Name",
+                elem_id="upload_index",
+            )
             chunk_size = gr.Textbox(
                 label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",
                 elem_id="chunk_size",
@@ -107,11 +176,6 @@ def create_upload_tab() -> Dict[str, Any]:
             chunk_overlap = gr.Textbox(
                 label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",
                 elem_id="chunk_overlap",
-            )
-            enable_qa_extraction = gr.Checkbox(
-                label="Yes",
-                info="Process with QA Extraction Model",
-                elem_id="enable_qa_extraction",
             )
             enable_raptor = gr.Checkbox(
                 label="Yes",
@@ -122,7 +186,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 label="Yes",
                 info="Process with MultiModal",
                 elem_id="enable_multimodal",
-                visible=False,
+                visible=True,
             )
             enable_table_summary = gr.Checkbox(
                 label="Yes",
@@ -147,16 +211,44 @@ def create_upload_tab() -> Dict[str, Any]:
                     label="Upload Status Info", visible=False
                 )
                 upload_dir_state = gr.Textbox(label="Upload Status", visible=False)
+            with gr.Tab("Aliyun OSS"):
+                oss_path = gr.Textbox(
+                    label="Aliyun OSS Path",
+                    placeholder="oss://bucket_name/path/to/knowledge/",
+                    elem_id="oss_path",
+                )
+                upload_oss = gr.Button(value="Upload from OSS", variant="primary")
+
+                upload_oss_state_df = gr.DataFrame(
+                    label="Upload Status Info", visible=False
+                )
+                upload_oss_state = gr.Textbox(label="Upload Status", visible=False)
+
+                upload_oss.click(
+                    fn=upload_oss_knowledge,
+                    inputs=[
+                        oss_path,
+                        chunk_size,
+                        chunk_overlap,
+                        enable_raptor,
+                        enable_multimodal,
+                        enable_table_summary,
+                        upload_index,
+                    ],
+                    outputs=[upload_oss_state_df, upload_oss_state],
+                    api_name="upload_oss",
+                )
+
             upload_file.upload(
-                fn=upload_knowledge,
+                fn=upload_files,
                 inputs=[
                     upload_file,
                     chunk_size,
                     chunk_overlap,
-                    enable_qa_extraction,
                     enable_raptor,
                     enable_multimodal,
                     enable_table_summary,
+                    upload_index,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="upload_knowledge",
@@ -167,16 +259,18 @@ def create_upload_tab() -> Dict[str, Any]:
                 outputs=[upload_file_state_df, upload_file_state],
                 api_name="clear_file",
             )
+            dummy_component = gr.Textbox(visible=False, value="")
             upload_file_dir.upload(
                 fn=upload_knowledge,
                 inputs=[
                     upload_file_dir,
+                    dummy_component,
                     chunk_size,
                     chunk_overlap,
-                    enable_qa_extraction,
                     enable_raptor,
                     enable_multimodal,
                     enable_table_summary,
+                    upload_index,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
                 api_name="upload_knowledge_dir",
@@ -188,9 +282,9 @@ def create_upload_tab() -> Dict[str, Any]:
                 api_name="clear_file_dir",
             )
             return {
+                upload_index.elem_id: upload_index,
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
-                enable_qa_extraction.elem_id: enable_qa_extraction,
                 enable_raptor.elem_id: enable_raptor,
                 enable_multimodal.elem_id: enable_multimodal,
                 enable_table_summary.elem_id: enable_table_summary,

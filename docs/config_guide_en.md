@@ -25,7 +25,7 @@ If type = "DatabaseReader", the currently supported database_type is PostgreSQL,
     database_type = "PostgreSQL"
     host = "database url"
     port = "datasase port"
-    dbname = "target db name"
+    database = "target db name"
     user = "username"
     password = "password"
 
@@ -37,16 +37,16 @@ source = [HuggingFace, OpenAI, DashScope]
 
 Currently, pai_rag supports three embedding sources.
 
-If source = "HuggingFace", you need to further specify model_name and embed_batch_size. The default model name and batch size are bge-small-zh-v1.5 and 10, respectively.
+If source = "HuggingFace", you need to further specify model_modelname and embed_batch_size. The default model name and batch size are bge-large-zh-v1.5 and 10, respectively.
 
     source = "HuggingFace"
-    model_name = "bge-small-zh-v1.5"
+    model = "bge-large-zh-v1.5"
     embed_batch_size = 10
 
 Alternatively, if you want to use other huggingface models, please specify parameters as below:
 
     source = "HuggingFace"
-    model_name = "xxx"
+    model = "xxx"
     model_dir = "xxx/xxx"
     embed_batch_size = 20 (for example)
 
@@ -256,19 +256,6 @@ type = "RetrieverQueryEngine"
 
 Query engine is a generic interface that allows you to ask question over your data. It takes in a natural language query, and returns a rich response.
 
-## rag.llm_chat_engine
-
-type = "SimpleChatEngine"
-
-Chat engine is a high-level interface for having a conversation with your data (multiple back-and-forth instead of a single question & answer). It is a stateful analogy of a query engine.
-
-## rag.chat_engine
-
-type = [CondenseQuestionChatEngine]
-
-Condense question is a simple chat mode built on top of a query engine over your data. For each chat interaction:
-first generate a standalone question from conversation context and last message, then query the query engine with the condensed question for a response.
-
 ## rag.chat_store
 
 type = [Local, Aliyun-Redis]
@@ -285,24 +272,6 @@ If type = "Aliyun-Redis", you need to get access to the your remote redis by ful
     type = "Aliyun-Redis"
     host = "Aliyun-Redis host"
     password = "Aliyun-Redis user:pwd"
-
-This setting is not available in webui.
-
-## rag.evaluation
-
-Currently, pai_rag supports both retrieval and response evaluations.
-
-The candidate metrics for retrieval are "mrr" and "hit_rate", you can specify both or either.
-
-    retrieval = ["mrr", "hit_rate"]
-
-The candidate metrics for response are "Faithfulness", "Answer Relevancy", "Correctness" as well as "Semantic Similarity", you can specify all or any subsets.
-
-    response = ["Faithfulness", "Answer Relevancy", "Correctness", "Semantic Similarity"]
-
-It is noted that these evaluations are based on certain dataset format, which can be generated via `src/pai_rag/evaluations/batch_evaluator`, you can also provide the correctly formatted dataset path:
-
-     qa_dataset_path = ""
 
 This setting is not available in webui.
 

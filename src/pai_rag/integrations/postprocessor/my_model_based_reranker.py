@@ -1,7 +1,8 @@
 from typing import Any, List, Optional
 
+from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
-from llama_index.core.callbacks import CBEventType, EventPayload
+from llama_index.core.callbacks import CBEventType, EventPayload, CallbackManager
 from llama_index.core.instrumentation import get_dispatcher
 from llama_index.core.instrumentation.events.rerank import (
     ReRankEndEvent,
@@ -13,9 +14,8 @@ from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle
 dispatcher = get_dispatcher(__name__)
 
 
+# TODO : Remove this
 class MyModelBasedReranker(BaseNodePostprocessor):
-    """Flag Embedding Reranker."""
-
     """Flag Embedding Reranker."""
 
     model: str = Field(description="BAAI Reranker model name.")
@@ -32,6 +32,7 @@ class MyModelBasedReranker(BaseNodePostprocessor):
         similarity_threshold: None = None,
         model: str = "BAAI/bge-reranker-large",
         use_fp16: bool = False,
+        callback_manager: CallbackManager = None,
     ) -> None:
         try:
             from FlagEmbedding import FlagReranker
@@ -44,16 +45,21 @@ class MyModelBasedReranker(BaseNodePostprocessor):
             model,
             use_fp16=use_fp16,
         )
+        callback_manager = callback_manager or Settings.callback_manager
         super().__init__(
             top_n=top_n,
             model=model,
             similarity_threshold=similarity_threshold,
             use_fp16=use_fp16,
+            callback_manager=callback_manager,
         )
 
     @classmethod
     def class_name(cls) -> str:
         return "MyModelBasedReranker"
+
+    def __repr__(self):
+        return f"MyModelBasedReranker: top_n={self.top_n}, model={self.model}, similarity_threshold={self.similarity_threshold})"
 
     def _postprocess_nodes(
         self,

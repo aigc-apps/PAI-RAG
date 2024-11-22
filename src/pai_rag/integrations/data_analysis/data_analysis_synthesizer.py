@@ -1,4 +1,3 @@
-import logging
 from typing import Any, List, Generator, Optional, Sequence, cast, AsyncGenerator
 
 from llama_index.core.callbacks.base import CallbackManager
@@ -23,8 +22,7 @@ from llama_index.core.instrumentation.events.synthesis import (
 )
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 import llama_index.core.instrumentation as instrument
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
 

@@ -16,9 +16,6 @@ type = "single"
 [rag.agent.tool]
 type = "api"
 
-[rag.chat_engine]
-type = "CondenseQuestionChatEngine"
-
 [rag.chat_store]
 type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
@@ -29,10 +26,10 @@ persist_path = "localdata/storage"
 type = "SimpleDirectoryReader"
 
 # embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
-# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model_name
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model
 # eg.
 # source = "HuggingFace"
-# model_name = "bge-small-zh-v1.5"
+# model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
 source = "DashScope"
@@ -40,11 +37,6 @@ embed_batch_size = 10
 
 [rag.embedding.multi_modal]
 source = "cnclip"
-
-[rag.evaluation]
-retrieval = ["mrr", "hit_rate"]
-response_label = true
-response = ["Faithfulness", "Answer Relevancy", "Guideline Adherence", "Correctness", "Semantic Similarity"]
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -57,17 +49,14 @@ vector_store.type = "FAISS"
 # token = ""
 [rag.llm]
 source = "DashScope"
-name = "qwen-turbo"
+model = "qwen-max"
 
 [rag.llm.function_calling_llm]
 source = "DashScope"
-name = "qwen2-7b-instruct"
+model = "qwen2-7b-instruct"
 
 [rag.llm.multi_modal]
 source = ""
-
-[rag.llm_chat_engine]
-type = "SimpleChatEngine"
 
 [rag.node_enhancement]
 tree_depth = 3

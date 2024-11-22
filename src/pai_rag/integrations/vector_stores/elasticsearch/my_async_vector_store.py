@@ -15,7 +15,6 @@
 #  specific language governing permissions and limitations
 #  under the License.
 
-import logging
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
@@ -27,8 +26,7 @@ from elasticsearch.helpers.vectorstore import (
     AsyncRetrievalStrategy,
 )
 from elasticsearch.helpers.vectorstore._utils import maximal_marginal_relevance
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class AsyncVectorStore:

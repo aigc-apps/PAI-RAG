@@ -1,3 +1,4 @@
+import traceback
 from typing import Any, List
 from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
 import uuid
@@ -6,16 +7,19 @@ import os
 import tempfile
 import shutil
 import pandas as pd
+from pai_rag.core.models.errors import UserInputError
+from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import (
     RagQuery,
     RetrievalQuery,
-    LlmResponse,
 )
 from fastapi.responses import StreamingResponse
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
+    COMMON_FILE_PATH_FODER_NAME,
+)
 
 router = APIRouter()
 
@@ -62,8 +66,15 @@ async def aquery_retrieval(query: RetrievalQuery):
 
 
 @router.post("/query/agent")
-async def aquery_agent(query: RagQuery) -> LlmResponse:
-    return await rag_service.aquery_agent(query)
+async def aquery_agent(query: RagQuery):
+    response = await rag_service.aquery_agent(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
 
 
 @router.post("/config/agent")
@@ -90,99 +101,115 @@ async def aconfig():
     return rag_service.get_config()
 
 
+@router.get("/indexes/{index_name}")
+async def get_index(index_name: str):
+    try:
+        return index_manager.get_index_by_name(index_name=index_name)
+    except Exception as ex:
+        logger.error(f"Get index '{index_name}' failed: {ex} {traceback.format_exc()}")
+        raise UserInputError(f"Get index '{index_name}' failed: {ex}")
+
+
+@router.post("/indexes/{index_name}")
+async def add_index(index_name: str, index_entry: RagIndexEntry):
+    try:
+        index_manager.add_index(index_entry)
+        return {"msg": f"Add index '{index_name}' successfully."}
+    except Exception as ex:
+        logger.error(f"Add index '{index_name}' failed: {ex} {traceback.format_exc()}")
+        raise UserInputError(f"Add index '{index_name}' failed: {ex}")
+
+
+@router.patch("/indexes/{index_name}")
+async def update_index(index_name: str, index_entry: RagIndexEntry):
+    try:
+        index_manager.update_index(index_entry)
+        return {"msg": f"Update index '{index_name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Update index '{index_name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Update index '{index_name}' failed: {ex}")
+
+
+@router.delete("/indexes/{index_name}")
+async def delete_index(index_name: str):
+    try:
+        index_manager.delete_index(index_name)
+        return {"msg": f"Delete index '{index_name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Delete index '{index_name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Delete index '{index_name}' failed: {ex}")
+
+
+@router.get("/indexes")
+async def list_indexes():
+    return index_manager.list_indexes()
+
+
 @router.get("/get_upload_state")
 def task_status(task_id: str):
     status, detail = rag_service.get_task_status(task_id)
     return {"task_id": task_id, "status": status, "detail": detail}
 
 
-@router.post("/evaluate")
-async def batch_evaluate(overwrite: bool = False):
-    df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="all", overwrite=overwrite
-    )
-    return {"status": 200, "result": eval_results}
-
-
-@router.post("/evaluate/retrieval")
-async def batch_retrieval_evaluate(overwrite: bool = False):
-    df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="retrieval", overwrite=overwrite
-    )
-    return {"status": 200, "result": eval_results}
-
-
-@router.post("/evaluate/response")
-async def batch_response_evaluate(overwrite: bool = False):
-    df, eval_results = await rag_service.aevaluate_retrieval_and_response(
-        type="response", overwrite=overwrite
-    )
-    return {"status": 200, "result": eval_results}
-
-
-@router.post("/evaluate/generate")
-async def generate_qa_dataset(overwrite: bool = False):
-    qa_datase = await rag_service.aload_evaluation_qa_dataset(overwrite)
-    return {"status": 200, "result": qa_datase}
-
-
 @router.post("/upload_data")
 async def upload_data(
-    files: List[UploadFile],
-    faiss_path: str = Form(None),
+    files: List[UploadFile] = Body(None),
+    oss_path: str = Form(None),
+    index_name: str = Form(None),
     enable_raptor: bool = Form(False),
+    enable_multimodal: bool = Form(False),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     task_id = uuid.uuid4().hex
-    if not files:
-        return {"message": "No upload file sent"}
-
-    tmpdir = tempfile.mkdtemp()
-    input_files = []
-    for file in files:
-        fn = file.filename
-        data = await file.read()
-        file_hash = hashlib.md5(data).hexdigest()
-        save_file = os.path.join(tmpdir, f"{file_hash}_{fn}")
-
-        with open(save_file, "wb") as f:
-            f.write(data)
-            f.close()
-        input_files.append(save_file)
-
-    background_tasks.add_task(
-        rag_service.add_knowledge,
-        task_id=task_id,
-        input_files=input_files,
-        filter_pattern=None,
-        oss_prefix=None,
-        faiss_path=faiss_path,
-        enable_qa_extraction=False,
-        enable_raptor=enable_raptor,
+    logger.info(
+        f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
     )
+    if oss_path:
+        background_tasks.add_task(
+            rag_service.add_knowledge,
+            task_id=task_id,
+            filter_pattern=None,
+            oss_path=oss_path,
+            from_oss=True,
+            index_name=index_name,
+            enable_raptor=enable_raptor,
+            enable_multimodal=enable_multimodal,
+        )
+    else:
+        if not files:
+            return {"message": "No upload file sent"}
+        tmpdir = tempfile.mkdtemp()
+        input_files = []
+        for file in files:
+            fn = file.filename
+            data = await file.read()
+            file_hash = hashlib.md5(data).hexdigest()
+            tmp_file_dir = os.path.join(
+                tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
+            )
+            os.makedirs(tmp_file_dir, exist_ok=True)
+            save_file = os.path.join(tmp_file_dir, fn)
 
-    return {"task_id": task_id}
+            with open(save_file, "wb") as f:
+                f.write(data)
+                f.close()
+            input_files.append(save_file)
 
-
-@router.post("/upload_data_from_oss")
-async def upload_oss_data(
-    oss_prefix: str = None,
-    faiss_path: str = None,
-    enable_raptor: bool = False,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-):
-    task_id = uuid.uuid4().hex
-    background_tasks.add_task(
-        rag_service.add_knowledge,
-        task_id=task_id,
-        input_files=None,
-        filter_pattern=None,
-        oss_prefix=oss_prefix,
-        faiss_path=faiss_path,
-        enable_qa_extraction=False,
-        enable_raptor=enable_raptor,
-        from_oss=True,
-    )
+        background_tasks.add_task(
+            rag_service.add_knowledge,
+            task_id=task_id,
+            input_files=input_files,
+            filter_pattern=None,
+            index_name=index_name,
+            oss_path=None,
+            enable_raptor=enable_raptor,
+            temp_file_dir=tmpdir,
+            enable_multimodal=enable_multimodal,
+        )
 
     return {"task_id": task_id}
 

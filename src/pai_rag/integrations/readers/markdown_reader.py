@@ -9,9 +9,7 @@ from typing import Any, Dict, List, Optional
 import re
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 REGEX_H1 = "=+"
 REGEX_H2 = "-+"

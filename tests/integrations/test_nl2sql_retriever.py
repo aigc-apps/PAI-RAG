@@ -9,10 +9,10 @@ from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 from llama_index.core import SQLDatabase
 
-from pai_rag.utils.prompt_template import DEFAULT_TEXT_TO_SQL_TMPL
 from pai_rag.integrations.data_analysis.nl2sql_retriever import (
     MyNLSQLRetriever,
     MySQLRetriever,
+    DEFAULT_TEXT_TO_SQL_TMPL,
 )
 
 load_dotenv()
@@ -32,18 +32,18 @@ def db_connection():
         host = os.getenv("host")
         port = os.getenv("port")
         path = os.getenv("path")
-        dbname = os.getenv("dbname")
+        database = os.getenv("database")
         desired_tables = os.getenv("tables")
         table_descriptions = os.getenv("descriptions")
     else:
         dialect = "sqlite"
         path = "./tests/testdata/data/db_data"
-        dbname = "pets.db"
+        database = "pets.db"
         desired_tables = []
         table_descriptions = {}
 
     if dialect == "sqlite":
-        db_path = os.path.join(path, dbname)
+        db_path = os.path.join(path, database)
         database_uri = f"{dialect}:///{db_path}"
     elif dialect == "mysql":
         dd_prefix = f"{dialect}+pymysql"
@@ -53,7 +53,7 @@ def db_connection():
             password=password,
             host=host,
             port=port,
-            database=dbname,
+            database=database,
         )
     else:
         raise ValueError(f"not supported SQL dialect: {dialect}")
@@ -63,7 +63,7 @@ def db_connection():
     inspector = inspect(engine)
     db_tables = inspector.get_table_names()
     if len(db_tables) == 0:
-        raise ValueError(f"No table found in db {dbname}.")
+        raise ValueError(f"No table found in db {database}.")
 
     if len(desired_tables) > 0:
         tables = desired_tables
@@ -101,6 +101,7 @@ def test_nl2sql_retriever(db_connection):
     sql_database, db_tables, table_descriptions = db_connection
     nl2sql_retriever = MyNLSQLRetriever(
         sql_database=sql_database,
+        dialect="sqlite",
         text_to_sql_prompt=DEFAULT_TEXT_TO_SQL_TMPL,
         tables=db_tables,
     )

@@ -8,10 +8,14 @@ import markdown
 import html
 import mimetypes
 from http import HTTPStatus
+from loguru import logger
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
+from pai_rag.core.rag_config import RagConfig
+from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 
 DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
 
 
 class RagApiError(Exception):
@@ -30,7 +34,7 @@ class dotdict(dict):
 
 class RagWebClient:
     def __init__(self):
-        self.endpoint = "http://127.0.0.1:8000/"  # default link
+        self.endpoint = DEFAULT_LOCAL_URL  # default link
         self.session_id = None
 
     def set_endpoint(self, endpoint: str):
@@ -41,55 +45,63 @@ class RagWebClient:
 
     @property
     def query_url(self):
-        return f"{self.endpoint}service/query"
+        return f"{self.endpoint}v1/query"
 
     @property
     def search_url(self):
-        return f"{self.endpoint}service/query/search"
+        return f"{self.endpoint}v1/query/search"
 
     @property
     def data_analysis_url(self):
-        return f"{self.endpoint}service/query/data_analysis"
+        return f"{self.endpoint}v1/query/data_analysis"
 
     @property
     def llm_url(self):
-        return f"{self.endpoint}service/query/llm"
+        return f"{self.endpoint}v1/query/llm"
 
     @property
     def retrieval_url(self):
-        return f"{self.endpoint}service/query/retrieval"
+        return f"{self.endpoint}v1/query/retrieval"
 
     @property
     def config_url(self):
-        return f"{self.endpoint}service/config"
+        return f"{self.endpoint}v1/config"
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}service/upload_data"
+        return f"{self.endpoint}v1/upload_data"
 
     @property
     def load_datasheet_url(self):
-        return f"{self.endpoint}service/upload_datasheet"
+        return f"{self.endpoint}v1/upload_datasheet"
 
     @property
     def load_agent_cfg_url(self):
-        return f"{self.endpoint}service/config/agent"
+        return f"{self.endpoint}v1/config/agent"
 
     @property
     def get_load_state_url(self):
-        return f"{self.endpoint}service/get_upload_state"
+        return f"{self.endpoint}v1/get_upload_state"
 
     @property
     def get_evaluate_generate_url(self):
-        return f"{self.endpoint}service/evaluate/generate"
+        return f"{self.endpoint}v1/evaluate/generate"
 
     @property
     def get_evaluate_retrieval_url(self):
-        return f"{self.endpoint}service/evaluate/retrieval"
+        return f"{self.endpoint}v1/evaluate/retrieval"
 
     @property
     def get_evaluate_response_url(self):
-        return f"{self.endpoint}service/evaluate/response"
+        return f"{self.endpoint}v1/evaluate/response"
+
+    @property
+    def index_url(self):
+        return f"{self.endpoint}v1/indexes/"
+
+    @property
+    def list_index_url(self):
+        return f"{self.endpoint}v1/indexes"
 
     def _format_rag_response(
         self, question, response, with_history: bool = False, stream: bool = False
@@ -112,8 +124,15 @@ class RagWebClient:
             self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
+                ref_table = doc["metadata"].get("query_tables", None)
+                invalid_flag = doc["metadata"].get("invalid_flag", 0)
+                ref_table = doc["metadata"].get("query_tables", None)
+                invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)
-                media_url = doc.get("metadata", {}).get("image_url", None)
+                if doc.get("image_url", None):
+                    media_url = doc.get("image_url")
+                else:
+                    media_url = doc.get("metadata", {}).get("image_info_list", None)
                 if media_url and doc["text"] == "":
                     formatted_image_name = re.sub(
                         "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
@@ -140,6 +159,30 @@ class RagWebClient:
 </span>
 <br>
 """
+                elif ref_table:
+                    ref_table_format = ", ".join([i for i in ref_table])
+                    formatted_table_name = f"查询数据库中相关表名包括： <b>{ref_table_format}</b>"
+
+                    if invalid_flag == 0:
+                        run_flag = " ✓ "
+                        ref_sql = doc["metadata"].get("query_code_instruction", None)
+                        formatted_sql_query = f"<b>{ref_sql}</b>"
+                        content = (
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
+                            f"""<span style="color:grey; font-size: 14px;">生成的sql语句为：</span> <pre style="color:grey; font-size: 12px;">{formatted_sql_query}</pre> """
+                            f"""<span style="color:grey; font-size: 14px;">sql查询是否有效：</span> <span style="color:green; font-size: 14px;">{run_flag}</span>"""
+                        )
+                    else:
+                        run_flag = " ✗ "
+                        ref_sql = doc["metadata"].get(
+                            "generated_query_code_instruction", None
+                        )
+                        formatted_sql_query = f"<b>{ref_sql}</b>"
+                        content = (
+                            f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
+                            f"""<span style="color:grey; font-size: 14px;">生成的sql语句为：</span> <pre style="color:grey; font-size: 12px;">{formatted_sql_query}</pre> """
+                            f"""<span style="color:grey; font-size: 14px;">sql查询是否有效：</span> <span style="color:red; font-size: 14px;">{run_flag}</span>"""
+                        )
                 else:
                     content = ""
                 content_list.append(content)
@@ -162,10 +205,15 @@ class RagWebClient:
         with_history: bool = False,
         stream: bool = False,
         with_intent: bool = False,
+        index_name: str = None,
     ):
         session_id = self.session_id if with_history else None
         q = dict(
-            question=text, session_id=session_id, stream=stream, with_intent=with_intent
+            question=text,
+            session_id=session_id,
+            stream=stream,
+            with_intent=with_intent,
+            index_name=index_name,
         )
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
@@ -178,7 +226,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
@@ -202,7 +252,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -228,7 +280,9 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
@@ -261,15 +315,17 @@ class RagWebClient:
         else:
             full_content = ""
             for chunk in r.iter_lines(chunk_size=8192, decode_unicode=True):
-                chunk_response = dotdict(json.loads(chunk))
+                if not chunk.startswith("data:"):
+                    continue
+                chunk_response = dotdict(json.loads(chunk[5:]))
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(
                     text, chunk_response, with_history=with_history, stream=stream
                 )
 
-    def query_vector(self, text: str):
-        q = dict(question=text)
+    def query_vector(self, text: str, index_name: str = None):
+        q = dict(question=text, index_name=index_name)
         r = requests.post(self.retrieval_url, json=q, timeout=DEFAULT_CLIENT_TIME_OUT)
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
@@ -284,11 +340,14 @@ class RagWebClient:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
                 file_url = doc.get("metadata", {}).get("file_url", None)
-                media_url = doc.get("metadata", {}).get("image_url", None)
+                if doc.get("image_url", None):
+                    media_url = doc.get("image_url")
+                else:
+                    media_url = doc.get("metadata", {}).get("image_info_list", None)
                 if media_url and isinstance(media_url, list):
                     media_url = "<br>".join(
                         [
-                            f'<img src="{url}" alt="Image {j + 1}"/>'
+                            f'<img src="{url.get("image_url", None)}" alt="Image {j + 1}"/>'
                             for j, url in enumerate(media_url)
                         ]
                     )
@@ -310,18 +369,29 @@ class RagWebClient:
 
     def add_knowledge(
         self,
-        input_files: str,
-        enable_qa_extraction: bool,
-        enable_raptor: bool,
+        oss_path: str = None,
+        input_files: str = None,
+        enable_raptor: bool = False,
+        enable_multimodal: bool = False,
+        index_name: str = None,
     ):
         files = []
         file_obj_list = []
-        for file_name in input_files:
-            file_obj = open(file_name, "rb")
-            mimetype = mimetypes.guess_type(file_name)[0]
-            files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
-            file_obj_list.append(file_obj)
-        para = {"enable_raptor": enable_raptor}
+        if input_files:
+            for file_name in input_files:
+                file_obj = open(file_name, "rb")
+                mimetype = mimetypes.guess_type(file_name)[0]
+                files.append(
+                    ("files", (os.path.basename(file_name), file_obj, mimetype))
+                )
+                file_obj_list.append(file_obj)
+
+        para = {
+            "enable_raptor": enable_raptor,
+            "oss_path": oss_path,
+            "index_name": index_name,
+            "enable_multimodal": enable_multimodal,
+        }
         try:
             r = requests.post(
                 self.load_data_url,
@@ -356,7 +426,7 @@ class RagWebClient:
             if r.status_code != HTTPStatus.OK:
                 raise RagApiError(code=r.status_code, msg=response.message)
         except Exception as e:
-            print(f"add_datasheet failed: {e}")
+            logger.exception(f"add_datasheet failed: {e}")
         finally:
             file_obj.close()
 
@@ -376,7 +446,6 @@ class RagWebClient:
         view_model: ViewModel = ViewModel.from_app_config(config)
         view_model.update(update_dict)
         new_config = view_model.to_app_config()
-
         r = requests.patch(
             self.config_url, json=new_config, timeout=DEFAULT_CLIENT_TIME_OUT
         )
@@ -386,10 +455,10 @@ class RagWebClient:
 
     def get_config(self):
         r = requests.get(self.config_url, timeout=DEFAULT_CLIENT_TIME_OUT)
-        response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
-            raise RagApiError(code=r.status_code, msg=response.message)
-        return response
+            raise RagApiError(code=r.status_code, msg=r.text)
+        config = RagConfig.model_validate_json(json_data=r.text)
+        return config
 
     def load_agent_config(self, file_name: str):
         files = []
@@ -439,48 +508,48 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=response.message)
-        print("evaluate_for_response_stage response", response)
-
-    def _format_data_analysis_rag_response(
-        self, question, response, session_id: str = None, stream: bool = False
-    ):
-        if stream:
-            text = response["delta"]
-        else:
-            text = response["answer"]
-
-        docs = response.get("docs", []) or []
-        is_finished = response.get("is_finished", True)
-
-        referenced_docs = ""
-        if is_finished and len(docs) == 0 and not text:
-            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=question)
-            return response
-        elif is_finished:
-            seen_filenames = set()
-            file_idx = 1
-            for i, doc in enumerate(docs):
-                filename = doc["metadata"].get("file_name", None)
-                if filename and filename not in seen_filenames:
-                    seen_filenames.add(filename)
-                    formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
-                    title = doc["metadata"].get("title")
-                    if not title:
-                        referenced_docs += f'[{file_idx}]: {formatted_file_name}   Score:{doc["score"]} \n'
-                    else:
-                        referenced_docs += f'[{file_idx}]: [{title}]({formatted_file_name})  Score:{doc["score"]} \n'
-
-                    file_idx += 1
-        formatted_answer = ""
-        if session_id:
-            new_query = response["new_query"]
-            formatted_answer += f"**Query Transformation**: {new_query} \n\n"
-        formatted_answer += f"**Answer**: {text} \n\n"
-        if referenced_docs:
-            formatted_answer += f"**Reference**:\n {referenced_docs}"
-
-        response["result"] = formatted_answer
         return response
+
+    def list_indexes(self) -> RagIndexMap:
+        r = requests.get(self.list_index_url, timeout=DEFAULT_CLIENT_TIME_OUT)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+
+        return RagIndexMap.model_validate_json(r.text)
+
+    def add_index(self, index_entry: RagIndexEntry):
+        r = requests.post(
+            f"{self.index_url}{index_entry.index_name}",
+            json=index_entry.model_dump(),
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code,
+                msg=f"update index {index_entry.index_name} failed. {r.text}",
+            )
+
+    def update_index(self, index_entry: RagIndexEntry):
+        r = requests.patch(
+            f"{self.index_url}{index_entry.index_name}",
+            json=index_entry.model_dump(),
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code,
+                msg=f"update index {index_entry.index_name} failed. {r.text}",
+            )
+
+    def delete_index(self, index_name: str):
+        r = requests.delete(
+            f"{self.index_url}{index_name}",
+            timeout=DEFAULT_CLIENT_TIME_OUT,
+        )
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(
+                code=r.status_code, msg=f"delete index {index_name} failed. {r.text}"
+            )
 
 
 rag_client = RagWebClient()
