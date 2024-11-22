@@ -32,9 +32,8 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
 
 
 DEFAULT_DESC_FILE_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.txt"
+    "./localdata/data_analysis/nl2sql/db_structured_description.json"
 )
-DEFAULT_HISTORY_FILE_PATH = "./localdata/data_analysis/nl2sql/db_query_history.txt"
 
 
 class DBDescriptor(PromptMixin):
@@ -197,18 +196,81 @@ class DBDescriptor(PromptMixin):
             "table_info": table_info_list,
             "column_info": column_info_list,
         }
-        structured_table_description_str = json.dumps(
-            structured_table_description_dict, indent=4, ensure_ascii=False
-        )
+        # structured_table_description_str = json.dumps(
+        #     structured_table_description_dict, indent=4, ensure_ascii=False
+        # )
         logger.info("structured_table_description generated.")
 
-        # 保存为txt文件
+        # 保存为json文件
         if file_path is None:
             file_path = self._db_description_file_path
-        self._save_to_txt(structured_table_description_str, file_path)
+        self._save_to_json(structured_table_description_dict, file_path)
         logger.info(f"structured_table_description saved to: {file_path}")
 
         return structured_table_description_dict
+
+    def get_enhanced_table_description(self, file_path: Optional[str] = None) -> None:
+        """
+        利用LLM总结table, 以及各个table/column的description
+        """
+
+        structured_table_description_dict = self.get_structured_table_description(
+            QueryBundle("")
+        )
+        (
+            schema_description_str,
+            table_info_df,
+            column_info_df,
+        ) = generate_schema_description(structured_table_description_dict)
+        logger.info(f"schema description for llm: \n {schema_description_str}")
+
+        sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
+        output_summary_str = sllm.predict(
+            prompt=self._db_summary_prompt,
+            db_name=self._dbname,
+            db_schema=schema_description_str,
+        )
+
+        saved_file_path = self._postprocess_enhanced_description(
+            table_info_df, column_info_df, output_summary_str, file_path
+        )
+        logger.info(
+            f"llm enhanced db description generated and saved to: {saved_file_path}"
+        )
+
+        return
+
+    async def aget_enhanced_table_description(
+        self, file_path: Optional[str] = None
+    ) -> None:
+        """
+        利用LLM总结table, 以及各个table/column的description
+        """
+        structured_table_description_dict = self.get_structured_table_description(
+            QueryBundle("")
+        )
+        (
+            schema_description_str,
+            table_info_df,
+            column_info_df,
+        ) = generate_schema_description(structured_table_description_dict)
+        logger.info(f"schema description for llm: \n {schema_description_str}")
+
+        sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
+        output_summary_str = await sllm.apredict(
+            prompt=self._db_summary_prompt,
+            db_name=self._dbname,
+            db_schema=schema_description_str,
+        )
+
+        saved_file_path = self._postprocess_enhanced_description(
+            table_info_df, column_info_df, output_summary_str, file_path
+        )
+        logger.info(
+            f"async llm enhanced db description generated and saved to: {saved_file_path}"
+        )
+
+        return
 
     def _load_get_tables_fn(
         self,
@@ -282,12 +344,18 @@ class DBDescriptor(PromptMixin):
         else:
             return data
 
-    def _merge_llm_info(
-        self, table_info_df, column_info_df, output_summary_dict: Dict
-    ) -> str:
+    def _postprocess_enhanced_description(
+        self,
+        table_info_df,
+        column_info_df,
+        output_summary_str: str,
+        file_path: Optional[str] = None,
+    ) -> None:
         """
-        将LLM生成的extra_description合并到table_info_df & column_info_df中
+        将LLM生成的description合并到table_info_df & column_info_df中 并保存
         """
+
+        output_summary_dict = json.loads(output_summary_str)
         table_info_df_with_overview = pd.merge(
             table_info_df.drop(columns=["overview"]),
             pd.DataFrame(output_summary_dict["table_info"]),
@@ -300,20 +368,21 @@ class DBDescriptor(PromptMixin):
             on=["table", "column"],
             how="left",
         )
-
         output_summary_dict["table_info"] = table_info_df_with_overview.to_dict(
             orient="records"
         )
         output_summary_dict["column_info"] = column_info_with_desc.to_dict(
             orient="records"
         )
-        output_summary_str = json.dumps(
-            output_summary_dict, indent=4, ensure_ascii=False
-        )
 
-        return output_summary_str
+        # 保存为json文件
+        if file_path is None:
+            file_path = self._db_description_file_path
+        self._save_to_json(output_summary_dict, file_path)
 
-    def _save_to_txt(self, content: str, file_path: str) -> None:
+        return file_path
+
+    def _save_to_json(self, content: Dict, file_path: str) -> None:
         """
         将内容保存到指定的文本文件中
         :param content: 要保存的内容
@@ -325,112 +394,10 @@ class DBDescriptor(PromptMixin):
             if not os.path.exists(directory):
                 os.makedirs(directory)
             with open(file_path, "w", encoding="utf-8") as file:
-                file.write(content)
+                json.dump(content, file, ensure_ascii=False, indent=4)
         except Exception as e:
             logger.error(f"Error saving content to file: {e}")
         return
-
-    def get_enhanced_table_description(self, file_path: Optional[str] = None):
-        """
-        利用LLM总结table, 以及各个table/column的description
-        """
-        # schema_description_str, table_info_df, column_info_df = self.generate_schema_description()
-        structured_table_description_dict = self.get_structured_table_description(
-            QueryBundle("")
-        )
-        structured_db_description_str = json.dumps(structured_table_description_dict)
-
-        (
-            schema_description_str,
-            table_info_df,
-            column_info_df,
-        ) = generate_schema_description(structured_db_description_str)
-        logger.info(f"schema description for llm: \n {schema_description_str}")
-
-        sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
-        output_summary_str = sllm.predict(
-            prompt=self._db_summary_prompt,
-            db_name=self._dbname,
-            db_schema=schema_description_str,
-        )
-        output_summary_dict = json.loads(output_summary_str)
-
-        # 更新table_info_df & column_info_df
-        output_description_str = self._merge_llm_info(
-            table_info_df, column_info_df, output_summary_dict
-        )
-        logger.info("llm enhanced db description generated.")
-
-        # 保存为txt文件
-        if file_path is None:
-            file_path = self._db_description_file_path
-        self._save_to_txt(output_description_str, file_path)
-        logger.info(f"llm enhanced db description saved to: {file_path}")
-
-        return output_description_str
-
-    async def aget_enhanced_table_description(self, file_path: Optional[str] = None):
-        """
-        利用LLM总结table, 以及各个table/column的description
-        """
-        structured_table_description_dict = self.get_structured_table_description(
-            QueryBundle("")
-        )
-        structured_db_description_str = json.dumps(structured_table_description_dict)
-
-        (
-            schema_description_str,
-            table_info_df,
-            column_info_df,
-        ) = generate_schema_description(structured_db_description_str)
-        logger.info(f"schema description for llm: \n {schema_description_str}")
-
-        sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
-        output_summary_str = await sllm.apredict(
-            prompt=self._db_summary_prompt,
-            db_name=self._dbname,
-            db_schema=schema_description_str,
-        )
-        output_summary_dict = json.loads(output_summary_str)
-
-        # 更新table_info_df & column_info_df
-        output_description_str = self._merge_llm_info(
-            table_info_df, column_info_df, output_summary_dict
-        )
-        logger.info("async llm enhanced db description generated.")
-
-        # 保存为txt文件
-        if file_path is None:
-            file_path = self._db_description_file_path
-        self._save_to_txt(output_description_str, file_path)
-        logger.info(f"async llm enhanced db description saved to: {file_path}")
-
-        return output_description_str
-
-    def collect_history(
-        self, db_query_history: Any, file_path: Optional[str] = None
-    ) -> None:
-        """collect db query history and save it into txt file"""
-        if file_path is None:
-            file_path = DEFAULT_HISTORY_FILE_PATH
-        db_query_history_str = str(db_query_history)  # TODO: some query_history parser
-        self._save_to_txt(db_query_history_str, file_path)
-        logger.info(f"db_query_history saved to: {file_path}")
-        return
-
-    # TODO
-    def embed_db_context(
-        self,
-        context: str,
-    ):
-        """
-        处理三类db_info的embedding
-        description 切分chunk，embedding，store，index
-        history
-        db_value
-        """
-
-        pass
 
 
 class ColumnDesc(BaseModel):

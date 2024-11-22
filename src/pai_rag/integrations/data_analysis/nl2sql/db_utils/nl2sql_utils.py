@@ -1,6 +1,4 @@
 import re
-import signal
-import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,10 +10,6 @@ from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextNode
 from llama_index.core.instrumentation import DispatcherSpanMixin
-
-
-def timeout_handler():
-    raise TimeoutError("Query time out")
 
 
 class MySQLRetriever(BaseRetriever):
@@ -96,20 +90,13 @@ class MySQLRetriever(BaseRetriever):
             query_bundle.query_str = self._limit_check(query_bundle.query_str)
         logger.info(f"Limited SQL query: {query_bundle.query_str}")
 
-        # set timeout to 10s
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(10)  # start
         try:
             raw_response_str, metadata = self._sql_database.run_sql(
                 query_bundle.query_str
             )
         except (TimeoutError, NotImplementedError) as error:
-            logger.info(
-                f"Invalid SQL or SQL Query Timed Out (>10s), error message: {error}"
-            )
+            logger.info(f"Invalid SQL, error message: {error}")
             raise error
-        finally:
-            signal.alarm(0)  # cancel
 
         if self._return_raw:
             return [
@@ -180,19 +167,20 @@ class DefaultSQLParser(BaseSQLParser):
                 response = response[len("SQLQuery:") :]
         sql_query_end = response.find(";")
         if sql_query_end != -1:
-            response = response[:sql_query_end].rstrip()
+            response = response[:sql_query_end].rstrip().replace("```", "")
         # if sql_result_start != -1:
         # response = response[:sql_result_start]
         # return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
-        return response.strip().lstrip("sql")
+        return response.strip().replace("```", "").lstrip("sql")
 
 
-def generate_schema_description(structured_db_description_str: str) -> str:
-    """ "
+def generate_schema_description(
+    structured_table_description_dict: Dict,
+) -> Tuple[str, pd.DataFrame, pd.DataFrame]:
+    """
     基于结构化的数据库信息，生成适合llm的数据库描述，包括表结构、表描述、列描述等
     """
 
-    structured_table_description_dict = json.loads(structured_db_description_str)
     if structured_table_description_dict["db_overview"]:
         schema_description_str = f"""Database overview: {structured_table_description_dict["db_overview"]}\n\n"""
     else:

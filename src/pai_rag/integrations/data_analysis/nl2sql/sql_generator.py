@@ -1,5 +1,6 @@
 from loguru import logger
 from typing import Any, Dict, List, Optional, Tuple
+from collections import namedtuple
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
@@ -26,6 +27,11 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
 )
 
 
+ExecutionResult = namedtuple(
+    "ExecutionResult", ["retrieved_nodes", "metadata", "final_sql"]
+)
+
+
 class SQLGenerator:
     """
     基于自然语言问题和db_info等生成候选的sql查询语句，pretriever 和 selector 非必选
@@ -42,7 +48,6 @@ class SQLGenerator:
         return_raw: bool = True,
         sql_only: bool = False,
         sql_parser_mode: SQLParserMode = SQLParserMode.DEFAULT,
-        handle_sql_errors: bool = True,
         **kwargs: Any,
     ) -> None:
         self._sql_database = sql_database
@@ -54,7 +59,6 @@ class SQLGenerator:
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_PROMPT
         self._sql_revision_prompt = sql_revision_prompt or DEFAULT_SQL_REVISION_PROMPT
         self._sql_parser = self._load_sql_parser(sql_parser_mode, embed_model)
-        self._handle_sql_errors = handle_sql_errors
         self._sql_only = sql_only
 
     def _get_prompts(self) -> Dict[str, Any]:
@@ -84,6 +88,283 @@ class SQLGenerator:
         else:
             raise ValueError(f"Unknown SQL parser mode: {sql_parser_mode}")
 
+    def generate_sql_candidates(
+        self,
+        query_bundle: QueryType,
+        selected_db_description_dict: Dict,
+        selected_db_history_str: str,
+        max_retry: int = 2,
+    ) -> Tuple[List[NodeWithScore], Dict]:
+        # step1: 生成description_str作为llm prompt参数
+        schema_description_str, _, _ = generate_schema_description(
+            selected_db_description_dict
+        )
+        logger.info(f"schema_description_str for llm: {schema_description_str}")
+
+        # step2: llm生成response
+        response_str = self._llm.predict(
+            prompt=self._text_to_sql_prompt,
+            dialect=self._dialect,
+            query_str=query_bundle.query_str,
+            db_schema=schema_description_str,
+            db_history=selected_db_history_str,
+        )
+        logger.info(f"> LLM response: {response_str}")
+
+        # step3: 解析response中的sql
+        sql_query_str = self._sql_parser.parse_response_to_sql(
+            response_str, query_bundle
+        )
+        logger.info(f"> Predicted SQL query: {sql_query_str}")
+
+        ## 如果只需要返回sql语句，无需执行查询
+        if self._sql_only:
+            sql_only_node = TextNode(
+                text=f"{sql_query_str}",
+            )
+            retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
+            _metadata = {"result": sql_query_str}
+
+        # step4: sql查询及纠错容错处理
+        else:
+            # 执行sql查询和纠错
+            execute_revise_result = self._execute_and_revise(
+                sql_query_str,
+                max_retry,
+                query_bundle,
+                schema_description_str,
+                selected_db_history_str,
+            )
+
+            if len(execute_revise_result.retrieved_nodes) != 0:
+                retrieved_nodes = execute_revise_result.retrieved_nodes
+                _metadata = execute_revise_result.metadata
+            else:
+                # 如果达到最大重试次数，使用朴素容错逻辑
+                retrieved_nodes, _metadata = self._naive_execute_as_backup(
+                    sql_query_str
+                )
+
+        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
+
+    async def agenerate_sql_candidates(
+        self,
+        query_bundle: QueryType,
+        selected_db_description_dict: Dict,
+        selected_db_history_str: str,
+        max_retry: int = 2,
+    ) -> Tuple[List[NodeWithScore], Dict]:
+        # step1: 生成description_str作为llm prompt参数
+        schema_description_str, _, _ = generate_schema_description(
+            selected_db_description_dict
+        )
+        logger.info(f"schema_description_str for llm: {schema_description_str}")
+
+        # step2: llm生成response
+        response_str = await self._llm.apredict(
+            prompt=self._text_to_sql_prompt,
+            dialect=self._dialect,
+            query_str=query_bundle.query_str,
+            db_schema=schema_description_str,
+            db_history=selected_db_history_str,
+        )
+        logger.info(f"> LLM response: {response_str}")
+
+        # step3: 解析response中的sql
+        sql_query_str = self._sql_parser.parse_response_to_sql(
+            response_str, query_bundle
+        )
+        logger.info(f"> Predicted SQL query: {sql_query_str}")
+
+        ## 如果只需要返回sql语句，无需执行查询
+        if self._sql_only:
+            sql_only_node = TextNode(
+                text=f"{sql_query_str}",
+            )
+            retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
+            _metadata = {"result": sql_query_str}
+
+        # step4: sql查询及纠错容错处理
+        else:
+            # 执行sql查询和纠错
+            execute_revise_result = await self._aexecute_and_revise(
+                sql_query_str,
+                max_retry,
+                query_bundle,
+                schema_description_str,
+                selected_db_history_str,
+            )
+
+            if len(execute_revise_result.retrieved_nodes) != 0:
+                retrieved_nodes = execute_revise_result.retrieved_nodes
+                _metadata = execute_revise_result.metadata
+            else:
+                # 如果达到最大重试次数，使用朴素容错逻辑
+                retrieved_nodes, _metadata = self._naive_execute_as_backup(
+                    sql_query_str
+                )
+
+        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
+
+    def _execute_and_revise(
+        self,
+        sql_query_str: str,
+        max_retry: int,
+        query_bundle: QueryBundle,
+        schema_description_str: str,
+        db_history_str: str,
+    ) -> ExecutionResult:
+        attempt = 0
+        last_exception = None
+        while attempt < max_retry:
+            attempt += 1
+
+            try:
+                execution_result = self._execute_sql_query(sql_query_str)
+                logger.info(
+                    f"> Attempt time: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
+                )
+                return execution_result
+
+            except NotImplementedError as error:
+                last_exception = error
+                logger.info(
+                    f"> Attempt time: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
+                )
+                sql_query_str = self._revise_sql(
+                    error,
+                    sql_query_str,
+                    query_bundle,
+                    schema_description_str,
+                    db_history_str,
+                )
+                logger.info(
+                    f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                )
+
+            except Exception as error:
+                last_exception = error
+                logger.info(f"> Attempt time: {attempt}, Unexpected error: {error}")
+                raise
+
+        logger.info(
+            f"> Max retries reached, final error: {last_exception}, SQL query: {sql_query_str}\n"
+        )
+
+        return ExecutionResult([], {}, sql_query_str)
+
+    async def _aexecute_and_revise(
+        self,
+        sql_query_str: str,
+        max_retry: int,
+        query_bundle: QueryBundle,
+        schema_description_str: str,
+        db_history_str: str,
+    ) -> ExecutionResult:
+        attempt = 0
+        last_exception = None
+        while attempt < max_retry:
+            attempt += 1
+
+            try:
+                execution_result = self._execute_sql_query(sql_query_str)
+                logger.info(
+                    f"> Attempt time: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
+                )
+                return execution_result
+
+            except NotImplementedError as error:
+                last_exception = error
+                logger.info(
+                    f"> Attempt time: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
+                )
+                sql_query_str = await self._arevise_sql(
+                    error,
+                    sql_query_str,
+                    query_bundle,
+                    schema_description_str,
+                    db_history_str,
+                )
+                logger.info(
+                    f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                )
+
+            except Exception as error:
+                last_exception = error
+                logger.info(f"> Attempt time: {attempt}, Unexpected error: {error}")
+                raise
+
+        logger.info(
+            f"> Max retries reached, final error: {last_exception}, SQL query: {sql_query_str}\n"
+        )
+
+        return ExecutionResult([], {}, sql_query_str)
+
+    def _revise_sql(
+        self,
+        error_message: str,
+        sql_query_str: str,
+        nl_query_bundle: QueryBundle,
+        db_schema_str: str,
+        db_history_str: str,
+    ) -> str:
+        # 修正执行错误的SQL，同步
+        response_str = self._llm.predict(
+            prompt=self._sql_revision_prompt,
+            dialect=self._dialect,
+            query_str=nl_query_bundle.query_str,
+            db_schema=db_schema_str,
+            db_history=db_history_str,
+            predicted_sql=sql_query_str,
+            sql_execution_result=error_message,
+        )
+        # 解析response中的sql
+        revised_sql_query = self._sql_parser.parse_response_to_sql(
+            response_str, nl_query_bundle
+        )
+        # logger.info(f"> Revised SQL query: {revised_sql_query}\n")
+
+        return revised_sql_query
+
+    async def _arevise_sql(
+        self,
+        error_message: str,
+        sql_query_str: str,
+        nl_query_bundle: QueryBundle,
+        db_schema_str: str,
+        db_history_str: str,
+    ):
+        # 修正执行错误的SQL，异步
+        response_str = await self._llm.apredict(
+            prompt=self._sql_revision_prompt,
+            dialect=self._dialect,
+            query_str=nl_query_bundle.query_str,
+            db_schema=db_schema_str,
+            db_history=db_history_str,
+            predicted_sql=sql_query_str,
+            sql_execution_result=error_message,
+        )
+        # 解析response中的sql
+        revised_sql_query = self._sql_parser.parse_response_to_sql(
+            response_str, nl_query_bundle
+        )
+        # logger.info(f"> Async Revised SQL query: {revised_sql_query}\n")
+
+        return revised_sql_query
+
+    def _execute_sql_query(self, sql_query_str: str) -> ExecutionResult:
+        (
+            retrieved_nodes,
+            _metadata,
+        ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
+
+        # 如果执行成功，标记flag，记录query_tables，并跳出循环
+        retrieved_nodes[0].metadata["invalid_flag"] = 0
+        query_tables = self._get_table_from_sql(self._tables, sql_query_str)
+        retrieved_nodes[0].metadata["query_tables"] = query_tables
+
+        return ExecutionResult(retrieved_nodes, _metadata, sql_query_str)
+
     def _get_table_from_sql(self, table_list: List[str], sql_query: str) -> List:
         """Get tables from sql query."""
         table_collection = list()
@@ -104,315 +385,56 @@ class SQLGenerator:
 
         return naive_sql_query_str
 
-    def generate_sql_candidates(
-        self,
-        str_or_query_bundle: QueryType,
-        selected_db_description_str: str,
-        selected_db_history_str: str,
-        max_retries: int = 1,
-        candidate_num: int = 1,
+    def _naive_execute_as_backup(
+        self, sql_query_str: str
     ) -> Tuple[List[NodeWithScore], Dict]:
-        # 生成sql查询语句，如果candidate_num>1, 需要接candidates_selection, 暂不用
-        if isinstance(str_or_query_bundle, str):
-            query_bundle = QueryBundle(str_or_query_bundle)
-        else:
-            query_bundle = str_or_query_bundle
+        # 先根据最后revised sql_query_str找到其中的tables，生成简单sql语句
+        query_tables = self._get_table_from_sql(self._tables, sql_query_str)
+        naive_sql_query_str = self._naive_sql_from_table(query_tables, sql_query_str)
+        # 如果找到table，生成新的sql_query，执行新sql_query
+        if naive_sql_query_str != sql_query_str:
+            (
+                retrieved_nodes,
+                _metadata,
+            ) = self._sql_retriever.retrieve_with_metadata(naive_sql_query_str)
 
-        # logger.info(f"> selected_db_description_str: {selected_db_description_str}\n")
-
-        schema_description_str, _, _ = generate_schema_description(
-            selected_db_description_str
-        )
-
-        # 生成sql回答
-        response_str = self._llm.predict(
-            prompt=self._text_to_sql_prompt,
-            dialect=self._dialect,
-            query_str=query_bundle.query_str,
-            db_schema=schema_description_str,
-            db_history=selected_db_history_str,
-        )
-        logger.info(f"> LLM response: {response_str}\n")
-        # 解析回答中的sql
-        sql_query_str = self._sql_parser.parse_response_to_sql(
-            response_str, query_bundle
-        )
-        logger.info(f"> Predicted SQL query: {sql_query_str}\n")
-
-        # 如果只需要返回sql语句，无需执行查询
-        if self._sql_only:
-            sql_only_node = TextNode(
-                text=f"{sql_query_str}",
-            )
-            retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
-            _metadata = {"result": sql_query_str}
-
-        # 执行sql查询
-        else:
-            attempt = 0
-            while attempt < max_retries:
-                attempt += 1
-                try:
-                    (
-                        retrieved_nodes,
-                        _metadata,
-                    ) = self._sql_retriever.retrieve_with_metadata(sql_query_str)
-                    retrieved_nodes[0].metadata["invalid_flag"] = 0
-                    logger.info(
-                        f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
-
-                    # 如果执行成功，记录query_tables，并跳出循环
-                    query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-                    break
-                except Exception as e:
-                    if self._handle_sql_errors:  # TODO: 直接返回错误提示，或者不需要这个功能，待定
-                        logger.info(
-                            f"> Attempt time: {attempt}, execution error message: {e}\n"
-                        )
-                    sql_execution_error_str = str(e)
-                    # 调用revision尝试更新sql
-                    sql_query_str = self._revise_sql(
-                        nl_query_bundle=query_bundle,
-                        db_schema_str=schema_description_str,
-                        db_history_str=selected_db_history_str,
-                        executed_sql=sql_query_str,
-                        error_message=sql_execution_error_str,
-                    )
-                    logger.info(
-                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
-                    )
-
-            else:
-                # 如果达到最大重试次数，使用朴素容错逻辑
-
-                # 先根据最后revised sql_query_str找到其中的tables，生成简单sql语句
-                query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-                naive_sql_query_str = self._naive_sql_from_table(
-                    query_tables, sql_query_str
-                )
-                # 如果找到table，生成新的sql_query，执行新sql_query
-                if naive_sql_query_str != sql_query_str:
-                    (
-                        retrieved_nodes,
-                        _metadata,
-                    ) = self._sql_retriever.retrieve_with_metadata(naive_sql_query_str)
-
-                    retrieved_nodes[0].metadata["invalid_flag"] = 1
-                    retrieved_nodes[0].metadata[
-                        "generated_query_code_instruction"
-                    ] = sql_query_str
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
-                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
-                else:
-                    logger.info(f"[{sql_query_str}] failed execution")
-                    retrieved_nodes = [
-                        NodeWithScore(
-                            node=TextNode(
-                                text=naive_sql_query_str,
-                                metadata={
-                                    "query_code_instruction": naive_sql_query_str,
-                                    "generated_query_code_instruction": sql_query_str,
-                                    "query_output": "",
-                                    "invalid_flag": 1,
-                                },
-                            ),
-                            score=1.0,
-                        ),
-                    ]
-                    _metadata = {}
-
-            # add query_tables into metadata
+            retrieved_nodes[0].metadata["invalid_flag"] = 1
+            retrieved_nodes[0].metadata[
+                "generated_query_code_instruction"
+            ] = sql_query_str
             retrieved_nodes[0].metadata["query_tables"] = query_tables
-
-        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
-
-    async def agenerate_sql_candidates(
-        self,
-        str_or_query_bundle: QueryType,
-        selected_db_description_str: str,
-        selected_db_history_str: str,
-        max_retries: int = 1,
-        candidate_num: int = 1,
-    ) -> Tuple[List[NodeWithScore], Dict]:
-        # 生成sql查询语句，如果candidate_num>1, 需要接candidates_selection, 暂不用
-        if isinstance(str_or_query_bundle, str):
-            query_bundle = QueryBundle(str_or_query_bundle)
-        else:
-            query_bundle = str_or_query_bundle
-
-        # logger.info(f"> selected_db_description_str: {selected_db_description_str}\n")
-
-        schema_description_str, _, _ = generate_schema_description(
-            selected_db_description_str
-        )
-
-        # 生成sql回答
-        response_str = await self._llm.apredict(
-            prompt=self._text_to_sql_prompt,
-            dialect=self._dialect,
-            query_str=query_bundle.query_str,
-            db_schema=schema_description_str,
-            db_history=selected_db_history_str,
-        )
-        logger.info(f"> LLM response: {response_str}\n")
-        # 解析回答中的sql
-        sql_query_str = self._sql_parser.parse_response_to_sql(
-            response_str, query_bundle
-        )
-        logger.info(f"> Predicted SQL query: {sql_query_str}\n")
-
-        # 如果只需要返回sql语句，无需执行查询
-        if self._sql_only:
-            sql_only_node = TextNode(
-                text=f"{sql_query_str}",
+            logger.info(
+                f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
             )
-            retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
-            _metadata = {"result": sql_query_str}
-
-        # 执行sql查询
+        # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
         else:
-            attempt = 0
-            while attempt < max_retries:
-                attempt += 1
-                try:
-                    (
-                        retrieved_nodes,
-                        _metadata,
-                    ) = await self._sql_retriever.aretrieve_with_metadata(sql_query_str)
-                    retrieved_nodes[0].metadata["invalid_flag"] = 0
-                    logger.info(
-                        f"> Attempt time: {attempt}, SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
-                    # 如果执行成功，记录query_tables，并跳出循环
-                    query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-                    break
-                except Exception as e:
-                    if self._handle_sql_errors:  # TODO: 直接返回错误提示，或者不需要这个功能，待定
-                        logger.info(
-                            f"> Attempt time: {attempt}, execution error message: {e}\n"
-                        )
-                    sql_execution_error_str = str(e)
-                    # 调用revision尝试更新sql
-                    sql_query_str = await self._arevise_sql(
-                        nl_query_bundle=query_bundle,
-                        db_schema_str=schema_description_str,
-                        db_history_str=selected_db_history_str,
-                        executed_sql=sql_query_str,
-                        error_message=sql_execution_error_str,
-                    )
-                    logger.info(
-                        f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
-                    )
+            logger.info(f"[{sql_query_str}] failed execution")
+            retrieved_nodes = [
+                NodeWithScore(
+                    node=TextNode(
+                        text=naive_sql_query_str,
+                        metadata={
+                            "query_code_instruction": naive_sql_query_str,
+                            "generated_query_code_instruction": sql_query_str,
+                            "query_output": "",
+                            "invalid_flag": 1,
+                            "query_tables": "",
+                        },
+                    ),
+                    score=1.0,
+                ),
+            ]
+            _metadata = {}
 
-            else:
-                # 如果达到最大纠错次数，使用朴素容错逻辑
-
-                # 先根据最后revised sql_query_str找到其中的tables，生成简单sql语句
-                query_tables = self._get_table_from_sql(self._tables, sql_query_str)
-                naive_sql_query_str = self._naive_sql_from_table(
-                    query_tables, sql_query_str
-                )
-                # 如果找到table，生成新的sql_query，执行新sql_query
-                if naive_sql_query_str != sql_query_str:
-                    (
-                        retrieved_nodes,
-                        _metadata,
-                    ) = await self._sql_retriever.aretrieve_with_metadata(
-                        naive_sql_query_str
-                    )
-
-                    retrieved_nodes[0].metadata["invalid_flag"] = 1
-                    retrieved_nodes[0].metadata[
-                        "generated_query_code_instruction"
-                    ] = sql_query_str
-                    logger.info(
-                        f"> Whole SQL query result: {retrieved_nodes[0].metadata['query_output']}\n"
-                    )
-                # 没有找到table，新旧sql_query一样，不再通过_sql_retriever执行，直接retrieved_nodes
-                else:
-                    logger.info(f"[{sql_query_str}] failed execution")
-                    retrieved_nodes = [
-                        NodeWithScore(
-                            node=TextNode(
-                                text=naive_sql_query_str,
-                                metadata={
-                                    "query_code_instruction": naive_sql_query_str,
-                                    "generated_query_code_instruction": sql_query_str,
-                                    "query_output": "",
-                                    "invalid_flag": 1,
-                                },
-                            ),
-                            score=1.0,
-                        ),
-                    ]
-                    _metadata = {}
-
-            # add query_tables into metadata
-            retrieved_nodes[0].metadata["query_tables"] = query_tables
-
-        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
+        return retrieved_nodes, _metadata
 
     def _select_sql_candidates(
         self,
     ):
+        """后续如需生成多个sql挑选最优时启用"""
         pass
 
     async def _aselect_sql_candidates(
         self,
     ):
         pass
-
-    def _revise_sql(
-        self,
-        nl_query_bundle: QueryBundle,
-        db_schema_str: str,
-        db_history_str: str,
-        executed_sql: str,
-        error_message: str,
-    ) -> str:
-        # 修正执行错误的SQL，同步
-        response_str = self._llm.predict(
-            prompt=self._sql_revision_prompt,
-            dialect=self._dialect,
-            query_str=nl_query_bundle.query_str,
-            db_schema=db_schema_str,
-            db_history=db_history_str,
-            predicted_sql=executed_sql,
-            sql_execution_result=error_message,
-        )
-        # 解析response中的sql
-        revised_sql_query = self._sql_parser.parse_response_to_sql(
-            response_str, nl_query_bundle
-        )
-        # logger.info(f"> Revised SQL query: {revised_sql_query}\n")
-
-        return revised_sql_query
-
-    async def _arevise_sql(
-        self,
-        nl_query_bundle: QueryBundle,
-        db_schema_str: str,
-        db_history_str: str,
-        executed_sql: str,
-        error_message: str,
-    ):
-        # 修正执行错误的SQL，异步
-        response_str = await self._llm.apredict(
-            prompt=self._sql_revision_prompt,
-            dialect=self._dialect,
-            query_str=nl_query_bundle.query_str,
-            db_schema=db_schema_str,
-            db_history=db_history_str,
-            predicted_sql=executed_sql,
-            sql_execution_result=error_message,
-        )
-        # 解析response中的sql
-        revised_sql_query = self._sql_parser.parse_response_to_sql(
-            response_str, nl_query_bundle
-        )
-        # logger.info(f"> Async Revised SQL query: {revised_sql_query}\n")
-
-        return revised_sql_query

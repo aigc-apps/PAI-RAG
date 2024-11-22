@@ -10,6 +10,7 @@ from llama_index.core.schema import QueryBundle
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 
 from pai_rag.integrations.data_analysis.nl2sql.db_descriptor import DBDescriptor
+from pai_rag.integrations.data_analysis.nl2sql.db_indexer import DBIndexer
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
 )
@@ -22,7 +23,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
 
 class DBLoader:
     """
-    offline work, including description
+    offline work, including description & index
     """
 
     def __init__(
@@ -42,6 +43,11 @@ class DBLoader:
         self._llm = llm or Settings.llm
         self._embed_model = embed_model or Settings.embed_model
         self._db_summary_prompt = db_summary_prompt or DEFAULT_DB_SUMMARY_PROMPT
+        self._enable_enhanced_description = self._db_config.get(
+            "enable_enhanced_description", False
+        )
+        self._enable_db_history = self._db_config.get("enable_db_history", False)
+        self._enable_db_embedding = self._db_config.get("enable_db_embedding", False)
         self._db_descriptor = DBDescriptor(
             sql_database=self._sql_database,
             db_name=self._dbname,
@@ -49,59 +55,59 @@ class DBLoader:
             llm=self._llm,
             embed_model=self._embed_model,
         )
+        self._db_indexer = DBIndexer(
+            sql_database=self._sql_database,
+            embed_model=self._embed_model,
+        )
         logger.info("db_loader init successfully")
 
     def load_db_info(
         self,
     ):
-        # 1 获得数据库描述信息
-        # 基础描述信息：ddl+sample 以及 基础描述是否需要增强
-        enable_enhanced_description = self._db_config.get(
-            "enable_enhanced_description", True
-        )
-        if enable_enhanced_description:
+        """处理数据库结构描述信息、历史查询和具体值信息, 存储json和索引"""
+        # get db_description
+        if self._enable_enhanced_description:
             self._db_descriptor.get_enhanced_table_description()
-            logger.info("db_description obtained from db_descriptor with llm.")
+            logger.info("db_description obtained from with llm.")
         else:
             self._db_descriptor.get_structured_table_description(QueryBundle(""))
-            logger.info("db_description obtained from db_descriptor without llm.")
+            logger.info("db_description obtained from without llm.")
 
-        # 2 是否包括历史查询记录 TODO
-        enable_db_history = self._db_config.get("enable_db_history", False)
-        if enable_db_history:
-            db_query_history = (
-                "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
-            )
-            self._db_descriptor.collect_history(db_query_history)
+        # get db_embedding, including db_description, db_history, db_value
+        if self._enable_db_embedding:
+            self._db_indexer.get_description_index()
+            logger.info("db_description index stored.")
 
-        # 3 embedding including db_description, db_history, db_value TODO
-        # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
+            self._db_indexer.get_value_index()
+            logger.info("db_value index stored.")
+
+            if self._enable_db_history:
+                self._db_indexer.get_history_index()
+                logger.info("db_history index stored.")
 
     async def aload_db_info(
         self,
     ):
-        # 1 获得数据库描述信息
-        # 基础描述信息：ddl+sample 以及 基础描述是否需要增强
-        enable_enhanced_description = self._db_config.get(
-            "enable_enhanced_description", True
-        )
-        if enable_enhanced_description:
+        """处理数据库结构描述信息、历史查询和具体值信息, 存储json和索引"""
+        # get db_description
+        if self._enable_enhanced_description:
             await self._db_descriptor.aget_enhanced_table_description()
-            logger.info("db_description obtained from db_descriptor with llm.")
+            logger.info("db_description obtained with llm.")
         else:
             self._db_descriptor.get_structured_table_description(QueryBundle(""))
-            logger.info("db_description obtained from db_descriptor without llm.")
+            logger.info("db_description obtained without llm.")
 
-        # 2 是否包括历史查询记录 TODO
-        # enable_db_history = self._db_config.get("enable_db_history", False)
-        # if enable_db_history:
-        #     db_query_history = (
-        #         "query_history1\nquery_history2\nquery_history3\n"  # simple mock data
-        #     )
-        #     self._db_descriptor.collect_history(db_query_history)
+        # get db_embedding, including db_description, db_history, db_value
+        if self._enable_db_embedding:
+            await self._db_indexer.aget_description_index()
+            logger.info("db_description index stored.")
 
-        # 3 embedding including db_description, db_history, db_value TODO
-        # enable_db_embedding = self._db_config.get("enable_db_embedding", False)
+            await self._db_indexer.aget_value_index()
+            logger.info("db_value index stored.")
+
+            if self._enable_db_history:
+                await self._db_indexer.aget_history_index()
+                logger.info("db_history index stored.")
 
     @classmethod
     def from_config(
