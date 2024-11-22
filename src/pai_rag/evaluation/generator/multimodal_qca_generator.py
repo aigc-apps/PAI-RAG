@@ -29,7 +29,6 @@ class MultimodalQcaGenerator(RagQcaGenerator):
         vector_index: VectorStoreIndex = None,
         query_engine: PaiRetrieverQueryEngine = None,
         persist_path: str = None,
-        qca_dataset_path: str = None,
         enable_multi_modal: bool = False,
         text_qa_template: Optional[BasePromptTemplate] = None,
         multimodal_qa_template: Optional[BasePromptTemplate] = None,
@@ -38,9 +37,7 @@ class MultimodalQcaGenerator(RagQcaGenerator):
             labelled_llm, vector_index, query_engine, persist_path, enable_multi_modal
         )
 
-        self.qca_dataset_path = qca_dataset_path or os.path.join(
-            self.persist_path, "qca_dataset.json"
-        )
+        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
 
         self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
             template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
@@ -53,13 +50,13 @@ class MultimodalQcaGenerator(RagQcaGenerator):
         if rag_qca_dataset and rag_qca_dataset.labelled:
             if stage == "labelled":
                 logger.info(
-                    "Labelled QCA dataset already exists. Skipping labelled stage."
+                    "Labelled [multi-modal] QCA dataset already exists. Skipping labelled stage."
                 )
                 return rag_qca_dataset.examples
             elif stage == "predicted":
                 if rag_qca_dataset.predicted:
                     logger.info(
-                        "Predicted QCA dataset already exists. Skipping predicted stage."
+                        "Predicted [multi-modal] QCA dataset already exists. Skipping predicted stage."
                     )
                     return rag_qca_dataset.examples
                 else:
@@ -70,7 +67,7 @@ class MultimodalQcaGenerator(RagQcaGenerator):
             return await self.agenerate_labelled_qca_dataset()
 
     async def agenerate_predicted_qca_dataset(self, rag_qca_dataset):
-        logger.info("Starting to generate QCA dataset for [[predicted]].")
+        logger.info("Starting to generate [multi-modal] QCA dataset for [[predicted]].")
         tasks = []
         for qca_sample in rag_qca_dataset.examples:
             if self.enable_multi_modal:

@@ -1,0 +1,95 @@
+dynaconf_merge = true
+
+[rag]
+name = "pai_rag"
+version = "0.1.1"
+
+[rag.agent]
+custom_agent_config_file = ""
+agent_tool_type = ""
+
+[rag.chat_store]
+type = "Local" # [Local, Aliyun-Redis]
+host = "Aliyun-Redis host"
+password = "Aliyun-Redis user:pwd"
+persist_path = "localdata/eval_exp_data/storage"
+
+[rag.data_analysis]
+type = "pandas"
+nl2sql_prompt = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行，不要从特定的表中查询所有列，只根据问题查询几个相关的列。请注意只使用你在schema descriptions 中看到的列名。\n=====\n 小心不要查询不存在的列。请注意哪个列位于哪个表中。必要时，请使用表名限定列名。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "
+
+[rag.data_reader]
+type = "SimpleDirectoryReader"
+
+# embedding configurations, source support API: OpenAI,DashScope; and local model:HuggingFace
+# if use API, need set OPENAI_API_KEY or DASHSCOPE_API_KEY in ENV, If HuggingFace, need set model
+# eg.
+# source = "HuggingFace"
+# model = "bge-large-zh-v1.5"
+# embed_batch_size = 10
+[rag.embedding]
+source = "DashScope"
+embed_batch_size = 10
+
+[rag.index]
+persist_path = "localdata/eval_exp_data/storage"
+enable_multimodal = false
+vector_store.type = "FAISS"
+
+# llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
+# eg.
+# source = "PaiEas"
+# model = ""
+# endpoint = ""
+# token = ""
+[rag.llm]
+source = "OpenAI"
+model = "gpt-4o-2024-08-06"
+
+[rag.multimodal_embedding]
+source = "cnclip"
+
+[rag.multimodal_llm]
+source = "dashscope"
+model = "qwen-vl-plus"
+
+[rag.node_enhancement]
+tree_depth = 3
+max_clusters = 52
+proba_threshold = 0.10
+
+[rag.node_parser]
+type = "Sentence"
+chunk_size = 500
+chunk_overlap = 10
+enable_multimodal = false
+
+[rag.oss_store]
+bucket = ""
+endpoint = "oss-cn-hangzhou.aliyuncs.com"
+
+[rag.postprocessor]
+reranker_type = "no-reranker" # [simple-weighted-reranker, model-based-reranker]
+reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
+keyword_weight = 0.3
+vector_weight = 0.7
+similarity_threshold = 0.5
+top_n = 2
+
+[rag.query_transform]
+type = ""
+
+[rag.retriever]
+similarity_top_k = 5
+retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
+query_rewrite_n = 1 # set to 1 to disable query generation
+
+[rag.search]
+search_api_key = ""
+
+[rag.synthesizer]
+type = "SimpleSummarize"
+text_qa_template = "You are a helpful assistant.\nYou are given a Question and References. The references may or may not help answer the question. Your task is to answer the question in as few words as possible.\nPlease follow these guidelines when formulating your answer:\n1. If the question contains a false premise or assumption, answer “invalid question”.\n2. If you are uncertain or don’t know the answer, respond with “I don’t know”.\n\n### Question \n{query_str} \n\n### References:\n {context_str} \n\n### Answer:\n"
+
+[rag.trace]
+type = "arize_phoenix"

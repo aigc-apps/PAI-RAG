@@ -103,12 +103,8 @@ class Faithfulness(LlmMetric):
 
     def parse_eval_result(self, eval_result: str):
         raw_response_txt = eval_result.lower()
-        if "yes" in raw_response_txt or "答案：是" in raw_response_txt:
-            passing = True
-        else:
-            passing = False
-            if self._raise_error:
-                raise ValueError("The response is invalid")
+        keywords = ["yes", "答案：是", "是\n\n"]
+        passing = any(keyword in raw_response_txt for keyword in keywords)
         score = 1.0 if passing else 0.0
         reasoning = raw_response_txt
         return [score, reasoning]
