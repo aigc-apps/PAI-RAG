@@ -13,8 +13,8 @@ import json
 
 class ModelScopeDownloader:
     def __init__(self, fetch_config: bool = False, download_directory_path: str = None):
-        self.download_directory_path = Path(download_directory_path) or Path(
-            DEFAULT_MODEL_DIR
+        self.download_directory_path = Path(
+            download_directory_path or DEFAULT_MODEL_DIR
         )
         if fetch_config or not os.path.exists(self.download_directory_path):
             os.makedirs(self.download_directory_path, exist_ok=True)
