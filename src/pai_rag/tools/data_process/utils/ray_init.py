@@ -15,5 +15,7 @@ def init_ray_env(working_dir):
             len(ray.nodes()), ray.cluster_resources()["CPU"]
         )
     )
-    NUM_WORKERS = len(ray.nodes())
-    return NUM_WORKERS
+
+
+def get_num_workers():
+    return len(ray.nodes())

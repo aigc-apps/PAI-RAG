@@ -3,17 +3,18 @@ import ray
 from loguru import logger
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.tasks.split_node import split_node_task
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_workers
 
 
 def main(args):
-    NUM_WORKERS = init_ray_env(args.working_dir)
+    init_ray_env(args.working_dir)
+    num_workers = get_num_workers()
     ds = ray.data.read_json(args.data_path)
     logger.info("Splitting nodes started.")
     ds = ds.flat_map(
         split_node_task,
         fn_kwargs={"config_file": args.config_file},
-        concurrency=NUM_WORKERS,
+        concurrency=num_workers,
     )
     logger.info("Splitting nodes completed.")
     ds = ds.repartition(1)

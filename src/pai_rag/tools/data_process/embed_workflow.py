@@ -3,17 +3,18 @@ from loguru import logger
 import ray
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.tasks.embed_node import embed_node_task
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_workers
 
 
 def main(args):
-    NUM_WORKERS = init_ray_env(args.working_dir)
+    init_ray_env(args.working_dir)
+    num_workers = get_num_workers()
     ds = ray.data.read_json(args.data_path)
     logger.info("Embedding nodes started.")
     ds = ds.map(
         embed_node_task,
         fn_kwargs={"config_file": args.config_file},
-        concurrency=NUM_WORKERS,
+        concurrency=num_workers,
     )
     logger.info("Embedding nodes completed.")
     ds = ds.repartition(1)

@@ -28,9 +28,8 @@ type = "SimpleDirectoryReader"
 # model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
-source = "HuggingFace"
+source = "DashScope"
 embed_batch_size = 10
-model = "bge-large-zh-v1.5"
 
 [rag.index]
 persist_path = "localdata/storage"
@@ -59,7 +58,7 @@ proba_threshold = 0.10
 
 [rag.node_parser]
 type = "Sentence"
-chunk_size = 200
+chunk_size = 500
 chunk_overlap = 10
 enable_multimodal = true
 

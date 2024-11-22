@@ -20,5 +20,5 @@ def load_and_parse_doc_task(config_file, input_file):
         reader_config=data_reader_config,
         oss_store=oss_store,
     )
-    document = data_reader.load_single_data(input_file)
-    return document_to_dict(document)
+    documents = data_reader.load_data(input_files=[input_file])
+    return document_to_dict(documents[0])
