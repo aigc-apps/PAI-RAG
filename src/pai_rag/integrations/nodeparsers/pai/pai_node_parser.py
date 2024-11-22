@@ -87,7 +87,7 @@ def get_data_parser(parser_config: NodeParserConfig):
     elif parser_type == "sentence":
         return SentenceSplitter(
             chunk_size=parser_config.chunk_size,
-            chunk_overlap=parser_config.sentence_chunk_overlap,
+            chunk_overlap=parser_config.chunk_overlap,
             paragraph_separator=parser_config.paragraph_separator,
             id_func=node_id_hash,
         )
@@ -95,7 +95,7 @@ def get_data_parser(parser_config: NodeParserConfig):
         return SentenceWindowNodeParser(
             sentence_splitter=SentenceSplitter(
                 chunk_size=parser_config.chunk_size,
-                chunk_overlap=parser_config.sentence_chunk_overlap,
+                chunk_overlap=parser_config.chunk_overlap,
                 paragraph_separator=parser_config.paragraph_separator,
                 id_func=node_id_hash,
             ).split_text,

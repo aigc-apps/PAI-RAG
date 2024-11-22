@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Any
 import os
+import pathlib
 from pai_rag.integrations.readers.markdown_reader import MarkdownReader
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
@@ -130,13 +131,11 @@ def get_input_files(
         file_path_or_directory
     ):
         # glob from directory
-        import pathlib
-
         directory = pathlib.Path(file_path_or_directory)
         input_files = [f for f in directory.rglob(filter_pattern) if os.path.isfile(f)]
     else:
         # Single file
-        input_files = [file_path_or_directory]
+        input_files = [pathlib.Path(file_path_or_directory)]
 
     if not input_files:
         raise ValueError(
@@ -156,7 +155,7 @@ class PaiDataReader(BaseReader):
 
     def load_data(
         self,
-        file_path_or_directory: str | List[str],
+        file_path_or_directory=None,
         filter_pattern: str = None,
         from_oss: bool = False,
         oss_path: str = None,
