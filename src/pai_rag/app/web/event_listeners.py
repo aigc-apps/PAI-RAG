@@ -66,14 +66,18 @@ def change_emb_source(source, model):
         EMBEDDING_DIM_DICT.get(source, DEFAULT_EMBED_SIZE)
         if source.lower() == "huggingface"
         else DEFAULT_EMBED_SIZE,
-        EMBEDDING_TYPE_DICT.get(model, "Default")
-        if source.lower() == "huggingface"
-        else "Default",
+        gr.update(
+            value=EMBEDDING_TYPE_DICT.get(model, "Default")
+            if source.lower() == "huggingface"
+            else "Default",
+            visible=True if source.lower() == "huggingface" else False,
+        ),
         gr.update(
             value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
             if source.lower() == "huggingface"
             else ""
         ),
+        gr.update(visible=True if source.lower() != "huggingface" else False),
     ]
 
 
@@ -114,13 +118,13 @@ def change_llm(value):
     eas_visible = value.lower() == "paieas"
     api_visible = value.lower() != "paieas"
     model_options = LLM_MODEL_KEY_DICT.get(value, [])
-
     cur_model = model_options[0] if model_options else ""
     return [
         gr.update(visible=eas_visible),
         gr.update(visible=eas_visible),
         gr.update(visible=eas_visible),
         gr.update(choices=model_options, value=cur_model, visible=api_visible),
+        gr.update(visible=api_visible),
     ]
 
 
@@ -133,6 +137,7 @@ def change_mllm(value):
         gr.update(visible=eas_visible),
         gr.update(visible=api_visible),
         gr.update(choices=model_options, value=cur_model),
+        gr.update(visible=api_visible),
     ]
 
 

@@ -16,8 +16,11 @@ class HitRate:
         use_granular_hit_rate (bool): Determines whether to use the granular method for calculation.
     """
 
-    metric_name: str = "hitrate"
-    use_granular_hit_rate: bool = False
+    def __init__(
+        self, metric_name: str = "hitrate", use_granular_hit_rate: bool = False
+    ):
+        self.metric_name = metric_name
+        self.use_granular_hit_rate = use_granular_hit_rate
 
     def compute(
         self,

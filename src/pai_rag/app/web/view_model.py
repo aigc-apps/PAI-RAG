@@ -21,7 +21,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     PandasAnalysisConfig,
     SqliteAnalysisConfig,
 )
-from pai_rag.integrations.llms.pai.llm_config import PaiEasLlmConfig
+from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig, PaiEasLlmConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
@@ -43,7 +43,7 @@ class ViewModel(BaseModel):
     llm: str = "PaiEas"
     llm_eas_url: str = None
     llm_eas_token: str = None
-    llm_eas_model_name: str = "model"
+    llm_eas_model_name: str = "default"
     llm_api_key: str = None
     llm_api_model_name: str = None
     llm_temperature: float = 0.1
@@ -53,7 +53,7 @@ class ViewModel(BaseModel):
     mllm: str = None
     mllm_eas_url: str = None
     mllm_eas_token: str = None
-    mllm_eas_model_name: str = "model"
+    mllm_eas_model_name: str = "default"
     mllm_api_key: str = None
     mllm_api_model_name: str = None
 
@@ -76,8 +76,6 @@ class ViewModel(BaseModel):
     enable_table_summary: bool = False
 
     config_file: str = None
-
-    vectordb_type: str = "faiss"
 
     # retriever
     similarity_top_k: int = 5
@@ -145,7 +143,7 @@ class ViewModel(BaseModel):
             view_model.llm_eas_model_name = config.llm.model
             view_model.llm_eas_url = config.llm.endpoint
             view_model.llm_eas_token = config.llm.token
-        else:
+        elif isinstance(config.llm, DashScopeLlmConfig):
             view_model.llm_api_key = config.llm.api_key
             view_model.llm_api_model_name = config.llm.model
 
@@ -434,8 +432,12 @@ class ViewModel(BaseModel):
             "value": self.llm_eas_token,
             "visible": self.llm.lower() == "paieas",
         }
+        settings["llm_api_key"] = {
+            "value": self.llm_api_key,
+            "visible": self.llm.lower() != "paieas",
+        }
         if self.llm.lower() == "paieas" and not self.llm_eas_model_name:
-            self.llm_eas_model_name = "model"
+            self.llm_eas_model_name = "default"
 
         settings["llm_eas_model_name"] = {
             "value": self.llm_eas_model_name,
@@ -457,6 +459,10 @@ class ViewModel(BaseModel):
         settings["mllm_api_model_name"] = {
             "value": self.mllm_api_model_name,
             "choices": MLLM_MODEL_KEY_DICT.get(self.mllm, []),
+            "visible": self.mllm.lower() != "paieas",
+        }
+        settings["mllm_api_key"] = {
+            "value": self.mllm_api_key,
             "visible": self.mllm.lower() != "paieas",
         }
         settings["m_eas_col"] = {"visible": self.mllm == "paieas"}

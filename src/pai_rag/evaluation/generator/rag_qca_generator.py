@@ -1,30 +1,31 @@
+import os
+import re
+import json
+from loguru import logger
 from typing import List
 from llama_index.core.indices import VectorStoreIndex
+from llama_index.core.base.response.schema import RESPONSE_TYPE
+from llama_index.core.prompts.base import PromptTemplate
+from llama_index.core.async_utils import run_jobs
+from llama_index.multi_modal_llms.openai import OpenAIMultiModal
+from llama_index.core.schema import TextNode, ImageNode
+from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
+from llama_index.core.llama_dataset import (
+    CreatedBy,
+    CreatedByType,
+)
+from pai_rag.evaluation.dataset.rag_qca_dataset import RagQcaSample, PaiRagQcaDataset
+from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
+from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
+    PaiRetrieverQueryEngine,
+)
+from pai_rag.evaluation.utils.file_utils import list_files_in_directory
 from pai_rag.utils.prompt_template import (
     DEFAULT_QUESTION_GENERATION_PROMPT,
     DEFAULT_MULTI_MODAL_QUESTION_GENERATION_PROMPT,
     DEFAULT_TEXT_QA_PROMPT_TMPL,
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
-from llama_index.core.base.response.schema import RESPONSE_TYPE
-from llama_index.core.prompts.base import PromptTemplate
-import re
-from llama_index.core.async_utils import run_jobs
-from pai_rag.evaluation.dataset.rag_qca_dataset import RagQcaSample, PaiRagQcaDataset
-from llama_index.core.llama_dataset import (
-    CreatedBy,
-    CreatedByType,
-)
-from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
-
-import os
-from loguru import logger
-from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
-    PaiRetrieverQueryEngine,
-)
-from llama_index.multi_modal_llms.openai import OpenAIMultiModal
-from llama_index.core.schema import TextNode, ImageNode
-from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 
 
 class RagQcaGenerator:
@@ -69,7 +70,7 @@ class RagQcaGenerator:
             )
             return None
 
-    async def agenerate_qca_dataset(self, stage):
+    async def agenerate_qca_dataset(self, stage, dataset=None, dataset_path=None):
         rag_qca_dataset = self.load_qca_dataset()
         if rag_qca_dataset and rag_qca_dataset.labelled:
             if stage == "labelled":
@@ -88,7 +89,10 @@ class RagQcaGenerator:
             else:
                 raise ValueError(f"Invalid stage: {stage}")
         else:
-            return await self.agenerate_labelled_qca_dataset()
+            if dataset == "crag":
+                return await self.agenerate_labelled_qca_dataset_for_crag(dataset_path)
+            else:
+                return await self.agenerate_labelled_qca_dataset()
 
     async def agenerate_labelled_multimodal_qca_sample(self, node):
         assert isinstance(
@@ -143,7 +147,7 @@ class RagQcaGenerator:
                 reference_answer=str(answer_response),
                 reference_contexts=[node.text],
                 reference_image_url_list=image_url_list,
-                reference_node_id=[node.node_id],
+                reference_node_ids=[node.node_id],
                 reference_answer_by=self.created_by,
                 query_by=self.created_by,
             )
@@ -182,7 +186,7 @@ class RagQcaGenerator:
                 query=question,
                 reference_answer=str(answer_response),
                 reference_contexts=[node.text],
-                reference_node_id=[node.node_id],
+                reference_node_ids=[node.node_id],
                 reference_answer_by=self.created_by,
                 query_by=self.created_by,
             )
@@ -212,14 +216,14 @@ class RagQcaGenerator:
 
         qca_sample.predicted_answer = response.response
         predicted_contexts = []
-        predicted_node_id = []
-        predicted_node_score = []
+        predicted_node_ids = []
+        predicted_node_scores = []
         predicted_image_url_list = []
         for node in response.source_nodes:
             if type(node.node) is TextNode:
                 predicted_contexts.append(node.node.text)
-                predicted_node_id.append(node.node.node_id)
-                predicted_node_score.append(node.score)
+                predicted_node_ids.append(node.node.node_id)
+                predicted_node_scores.append(node.score)
                 image_url_infos = node.node.metadata.get("image_info_list", None)
                 if image_url_infos:
                     predicted_image_url_list.extend(
@@ -234,8 +238,8 @@ class RagQcaGenerator:
                 )
 
         qca_sample.predicted_contexts = predicted_contexts
-        qca_sample.predicted_node_id = predicted_node_id
-        qca_sample.predicted_node_score = predicted_node_score
+        qca_sample.predicted_node_ids = predicted_node_ids
+        qca_sample.predicted_node_scores = predicted_node_scores
         qca_sample.predicted_image_url_list = predicted_image_url_list
         qca_sample.predicted_answer_by = self.created_by
         return qca_sample
@@ -248,10 +252,12 @@ class RagQcaGenerator:
         qca_sample.predicted_contexts = [
             node.node.text for node in response.source_nodes
         ]
-        qca_sample.predicted_node_id = [
+        qca_sample.predicted_node_ids = [
             node.node.node_id for node in response.source_nodes
         ]
-        qca_sample.predicted_node_score = [node.score for node in response.source_nodes]
+        qca_sample.predicted_node_scores = [
+            node.score for node in response.source_nodes
+        ]
         qca_sample.predicted_answer_by = self.created_by
         return qca_sample
 
@@ -269,3 +275,31 @@ class RagQcaGenerator:
         )
         predicted_qca_dataset.save_json(self.qca_dataset_path)
         return predicted_qca_dataset
+
+    ##### for crag #####
+    async def agenerate_labelled_qca_dataset_for_crag(self, dataset_path: str = None):
+        logger.info("Starting to generate QCA dataset for [[labelled]].")
+        data_files = list_files_in_directory(dataset_path)
+        samples = []
+        for data_file in data_files:
+            with open(data_file, "r", encoding="utf-8") as file:
+                json_lines = [line.strip() for line in file.readlines()]
+                for data in json_lines:
+                    json_data = json.loads(data)
+                    sample = RagQcaSample(
+                        query=json_data["query"],
+                        reference_answer=json_data["answer"],
+                        reference_contexts=[
+                            si["page_snippet"] for si in json_data["search_results"]
+                        ],
+                        reference_node_ids=[
+                            f"{json_data['interaction_id']}__{i}"
+                            for i, _ in enumerate(json_data["search_results"])
+                        ],
+                        reference_answer_by=None,
+                        query_by=None,
+                    )
+                    samples.append(sample)
+        labelled_qca_dataset = PaiRagQcaDataset(examples=samples, labelled=True)
+        labelled_qca_dataset.save_json(self.qca_dataset_path)
+        return labelled_qca_dataset.examples

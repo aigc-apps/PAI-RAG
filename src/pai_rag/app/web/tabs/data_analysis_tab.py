@@ -1,4 +1,3 @@
-import os
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
@@ -8,9 +7,6 @@ from pai_rag.app.web.ui_constants import (
     DA_SQL_PROMPTS,
     SYN_GENERAL_PROMPTS,
 )
-
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def upload_file_fn(input_file):

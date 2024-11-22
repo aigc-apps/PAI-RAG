@@ -18,11 +18,18 @@ from loguru import logger
 
 
 class BaseEvaluator:
-    def __init__(self, llm, persist_path: str = None, enable_multi_modal: bool = False):
+    def __init__(
+        self,
+        llm,
+        persist_path: str = None,
+        evaluation_dataset_path: str = None,
+        enable_multi_modal: bool = False,
+        use_granular_metrics: bool = False,
+    ):
         self._llm = llm
         self.persist_path = persist_path
-        self.hitrate = HitRate()
-        self.mrr = MRR()
+        self.hitrate = HitRate(use_granular_hit_rate=use_granular_metrics)
+        self.mrr = MRR(use_granular_mrr=use_granular_metrics)
         self.retrieval_evaluators = [self.hitrate, self.mrr]
         self.faithfulness_evaluator = Faithfulness(
             llm=self._llm,
@@ -34,7 +41,7 @@ class BaseEvaluator:
             self.faithfulness_evaluator,
             self.correctness_evaluator,
         ]
-        self.evaluation_dataset_path = os.path.join(
+        self.evaluation_dataset_path = evaluation_dataset_path or os.path.join(
             self.persist_path, "evaluation_dataset.json"
         )
         self.created_by = CreatedBy(
@@ -81,10 +88,10 @@ class BaseEvaluator:
 
     async def compute_retrieval_metrics(self, qca_sample):
         retrieval_eval_example = EvaluationSample(**vars(qca_sample))
-        reference_node_id = retrieval_eval_example.reference_node_id
-        predicted_node_id = retrieval_eval_example.predicted_node_id
+        reference_node_ids = retrieval_eval_example.reference_node_ids
+        predicted_node_ids = retrieval_eval_example.predicted_node_ids
         for metric in self.retrieval_evaluators:
-            metric_score = metric.compute(reference_node_id, predicted_node_id)
+            metric_score = metric.compute(reference_node_ids, predicted_node_ids)
             setattr(retrieval_eval_example, metric.metric_name, metric_score)
             setattr(retrieval_eval_example, "evaluated_by", self.created_by)
 
@@ -96,7 +103,10 @@ class BaseEvaluator:
         reference_answer = response_eval_example.reference_answer
         response_answer = response_eval_example.predicted_answer
         reference_image_url_list = response_eval_example.reference_image_url_list
-        contexts = response_eval_example.predicted_contexts
+        contexts = (
+            response_eval_example.predicted_contexts
+            or response_eval_example.reference_contexts
+        )
 
         for metric in self.response_evaluators:
             if self.enable_multi_modal:
@@ -106,7 +116,7 @@ class BaseEvaluator:
                     contexts,
                     reference_image_url_list,
                     response_answer,
-                    sleep_time_in_seconds=0.5,
+                    sleep_time_in_seconds=3,
                 )
             else:
                 metric_result = await metric.aevaluate(
@@ -114,7 +124,7 @@ class BaseEvaluator:
                     reference_answer,
                     contexts,
                     response_answer,
-                    sleep_time_in_seconds=0.5,
+                    sleep_time_in_seconds=3,
                 )
 
             setattr(

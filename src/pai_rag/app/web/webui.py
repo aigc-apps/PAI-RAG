@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 import gradio as gr
-import os
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
 from pai_rag.app.web.tabs.agent_tab import create_agent_tab
@@ -21,8 +20,6 @@ from pai_rag.app.web.ui_constants import (
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 
 from loguru import logger
-
-DEFAULT_IS_INTERACTIVE = os.environ.get("PAIRAG_RAG__SETTING__interactive", "true")
 
 
 def resume_ui():

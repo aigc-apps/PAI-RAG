@@ -44,15 +44,33 @@ class RagChatType(str, Enum):
     WEB = "web"
 
 
+class SseVersion(int, Enum):
+    V0 = 0  # Backward compatibility
+    V1 = 1  # New V1 version
+
+
+def _event_chunk_wrapper(chunk_content, sse_version: SseVersion = SseVersion.V0):
+    if sse_version == sse_version.V1:
+        return f"data: {chunk_content}\n\n"
+    else:
+        return f"{chunk_content}\n"
+
+
 async def event_generator_async(
-    response, extra_info=None, chat_store=None, session_id=None
+    response,
+    extra_info=None,
+    chat_store=None,
+    session_id=None,
+    sse_version: SseVersion = SseVersion.V0,
 ):
     content = ""
     async for token in response.async_response_gen():
         if token and token != DEFAULT_EMPTY_RESPONSE_GEN:
             chunk = {"delta": token, "is_finished": False}
             content += token
-            yield "data: " + json.dumps(chunk, ensure_ascii=False) + "\n\n"
+            yield _event_chunk_wrapper(
+                json.dumps(chunk, ensure_ascii=False), sse_version
+            )
 
     if chat_store:
         chat_store.add_message(
@@ -65,9 +83,10 @@ async def event_generator_async(
     else:
         last_chunk = {"delta": "", "is_finished": True}
 
-    yield "data: " + json.dumps(
+    last_chunk_data = json.dumps(
         last_chunk, default=lambda x: x.dict(), ensure_ascii=False
-    ) + "\n\n"
+    )
+    yield _event_chunk_wrapper(last_chunk_data, sse_version)
 
 
 class RagApplication:
@@ -143,7 +162,12 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def aquery(self, query: RagQuery, chat_type: RagChatType = RagChatType.RAG):
+    async def aquery(
+        self,
+        query: RagQuery,
+        chat_type: RagChatType = RagChatType.RAG,
+        sse_version: SseVersion = SseVersion.V0,
+    ):
         session_id = query.session_id or uuid_generator()
         logger.debug(f"Get session ID: {session_id}.")
         session_config = self.config.model_copy()
@@ -173,7 +197,7 @@ class RagApplication:
             intent = await intent_router.aselect(str_or_query_bundle=new_question)
             logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
-                return await self.aquery_agent(query)
+                return await self.aquery_agent(query, sse_version=sse_version)
             elif intent == Intents.WEBSEARCH:
                 chat_type = RagChatType.WEB
             elif intent == Intents.NL2SQL:
@@ -233,9 +257,12 @@ class RagApplication:
                 extra_info=result_info,
                 chat_store=chat_store,
                 session_id=session_id,
+                sse_version=sse_version,
             )
 
-    async def aquery_agent(self, query: RagQuery) -> RagResponse:
+    async def aquery_agent(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
 
         Generate answer from agent's achat interface.
@@ -252,7 +279,7 @@ class RagApplication:
         agent = resolve_agent(self.config)
         if query.stream:
             response = await agent.astream_chat(query.question)
-            return event_generator_async(response)
+            return event_generator_async(response, sse_version=sse_version)
         else:
             response = await agent.achat(query.question)
             return RagResponse(answer=response.response)
@@ -281,7 +308,9 @@ class RagApplication:
         else:
             return f"The agent config path {agent_cfg_path} not exists."
 
-    async def aquery_analysis(self, query: RagQuery):
+    async def aquery_analysis(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ):
         """Query answer from RAG App asynchronously.
 
         Generate answer from Data Analysis interface.
@@ -336,4 +365,4 @@ class RagApplication:
         if not query.stream:
             return RagResponse(answer=response.response, **result_info)
         else:
-            return event_generator_async(response=response, extra_info=result_info)
+            return event_generator_async(response=response, sse_version=sse_version)

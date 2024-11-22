@@ -12,7 +12,7 @@ agent_tool_type = ""
 type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
 password = "Aliyun-Redis user:pwd"
-persist_path = "localdata/storage"
+persist_path = "localdata/eval_exp_data/storage"
 
 [rag.data_analysis]
 type = "pandas"
@@ -28,13 +28,12 @@ type = "SimpleDirectoryReader"
 # model = "bge-large-zh-v1.5"
 # embed_batch_size = 10
 [rag.embedding]
-source = "HuggingFace"
+source = "DashScope"
 embed_batch_size = 10
-model = "bge-large-zh-v1.5"
 
 [rag.index]
-persist_path = "localdata/storage"
-enable_multimodal = true
+persist_path = "localdata/eval_exp_data/storage"
+enable_multimodal = false
 vector_store.type = "FAISS"
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
@@ -44,13 +43,15 @@ vector_store.type = "FAISS"
 # endpoint = ""
 # token = ""
 [rag.llm]
-source = "DashScope"
+source = "OpenAI"
+model = "gpt-4o-2024-08-06"
 
 [rag.multimodal_embedding]
 source = "cnclip"
 
 [rag.multimodal_llm]
 source = "dashscope"
+model = "qwen-vl-plus"
 
 [rag.node_enhancement]
 tree_depth = 3
@@ -59,9 +60,9 @@ proba_threshold = 0.10
 
 [rag.node_parser]
 type = "Sentence"
-chunk_size = 200
+chunk_size = 500
 chunk_overlap = 10
-enable_multimodal = true
+enable_multimodal = false
 
 [rag.oss_store]
 bucket = ""
@@ -79,7 +80,7 @@ top_n = 2
 type = ""
 
 [rag.retriever]
-similarity_top_k = 3
+similarity_top_k = 5
 retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
@@ -88,9 +89,7 @@ search_api_key = ""
 
 [rag.synthesizer]
 type = "SimpleSummarize"
-text_qa_template = "参考内容信息如下\n---------------------\n{context_str}\n---------------------根据提供内容而非其他知识回答问题.\n问题: {query_str}\n答案: \n"
+text_qa_template = "You are a helpful assistant.\nYou are given a Question and References. The references may or may not help answer the question. Your task is to answer the question in as few words as possible.\nPlease follow these guidelines when formulating your answer:\n1. If the question contains a false premise or assumption, answer “invalid question”.\n2. If you are uncertain or don’t know the answer, respond with “I don’t know”.\n\n### Question \n{query_str} \n\n### References:\n {context_str} \n\n### Answer:\n"
 
 [rag.trace]
-type = "pai_trace"
-endpoint = "http://tracing-analysis-dc-hz.aliyuncs.com:8090"
-token = ""
+type = "arize_phoenix"

@@ -10,7 +10,7 @@ from llama_index.core.prompts.default_prompt_selectors import (
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.service_context_elements.llm_predictor import LLMPredictorType
+from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.multi_modal_llms import MultiModalLLM
@@ -88,7 +88,7 @@ Will use Multi-modal LLM for inputs with images and LLM for pure text inputs.
 class PaiSynthesizer(BaseSynthesizer):
     def __init__(
         self,
-        llm: Optional[LLMPredictorType] = None,
+        llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
         text_qa_template: Optional[BasePromptTemplate] = None,
@@ -379,24 +379,25 @@ class PaiSynthesizer(BaseSynthesizer):
 
         logger.info("Synthsize using LLM with no image inputs.")
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        single_text_chunk = "\n".join(text_chunks)
         truncated_chunks = self._prompt_helper.truncate(
             prompt=text_qa_template,
-            text_chunks=[single_text_chunk],
+            text_chunks=text_chunks,
         )
+
+        context_str = "\n".join(truncated_chunks)
 
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = await self._llm.apredict(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **response_kwargs,
             )
         else:
             # customized modify [will be removed]
             response = await self._llm.astream(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **response_kwargs,
             )
 
@@ -428,23 +429,23 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        single_text_chunk = "\n".join(text_chunks)
         truncated_chunks = self._prompt_helper.truncate(
             prompt=text_qa_template,
-            text_chunks=[single_text_chunk],
+            text_chunks=text_chunks,
         )
 
+        context_str = "\n".join(truncated_chunks)
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = self._llm.predict(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **kwargs,
             )
         else:
             response = self._llm.stream(
                 text_qa_template,
-                context_str=truncated_chunks,
+                context_str=context_str,
                 **kwargs,
             )
 

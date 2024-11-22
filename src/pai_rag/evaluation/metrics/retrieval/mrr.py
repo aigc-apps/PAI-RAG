@@ -16,8 +16,9 @@ class MRR:
         use_granular_mrr (bool): Determines whether to use the granular method for calculation.
     """
 
-    metric_name: str = "mrr"
-    use_granular_mrr: bool = False
+    def __init__(self, metric_name: str = "mrr", use_granular_mrr: bool = False):
+        self.metric_name = metric_name
+        self.use_granular_mrr = use_granular_mrr
 
     def compute(
         self,
