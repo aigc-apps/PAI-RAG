@@ -155,24 +155,19 @@ class PaiDataReader(BaseReader):
 
     def load_data(
         self,
-        input_files=None,
         file_path_or_directory=None,
         filter_pattern: str = None,
         from_oss: bool = False,
         oss_path: str = None,
         show_progress: bool = False,
     ) -> List[Document]:
-        assert (input_files is not None) or (
-            file_path_or_directory is not None
-        ), "Must provide either input_files or file_path_or_directory."
-        if not input_files:
-            input_files = get_input_files(
-                file_path_or_directory=file_path_or_directory,
-                from_oss=from_oss,
-                oss_path=oss_path,
-                filter_pattern=filter_pattern,
-                oss_store=self.oss_store,
-            )
+        input_files = get_input_files(
+            file_path_or_directory=file_path_or_directory,
+            from_oss=from_oss,
+            oss_path=oss_path,
+            filter_pattern=filter_pattern,
+            oss_store=self.oss_store,
+        )
         directory_reader = SimpleDirectoryReader(
             input_files=input_files,
             file_extractor=self.file_readers,
