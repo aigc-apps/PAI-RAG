@@ -84,10 +84,10 @@ class MultimodalQcaGenerator(RagQcaGenerator):
     async def agenerate_predicted_multimodal_qca_sample(
         self, qca_sample, **response_kwargs: Any
     ):
-        image_url_list = qca_sample.reference_image_url_list
+        image_url_list = qca_sample.reference_image_url_list or []
         image_documents = load_image_urls(image_url_list)
         image_context_str = "\n\n".join(image_url_list)
-        reference_contexts = qca_sample.reference_contexts
+        reference_contexts = qca_sample.reference_contexts or []
         text_context_str = "\n\n".join(reference_contexts)
         query_str = qca_sample.query
         context_str = f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n"
@@ -107,7 +107,7 @@ class MultimodalQcaGenerator(RagQcaGenerator):
         return qca_sample
 
     async def agenerate_predicted_qca_sample(self, qca_sample, **response_kwargs: Any):
-        reference_contexts = qca_sample.reference_contexts
+        reference_contexts = qca_sample.reference_contexts or []
         text_context_str = "\n\n".join(reference_contexts)
         query_str = qca_sample.query
         text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
