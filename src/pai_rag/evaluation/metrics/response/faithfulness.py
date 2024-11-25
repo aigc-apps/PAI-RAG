@@ -166,6 +166,9 @@ class Faithfulness(LlmMetric):
         ) or response_answer is None:
             raise ValueError("contexts and response must be provided")
 
+        reference_image_url_list = reference_image_url_list or []
+        contexts = contexts or []
+
         image_context_str = "\n\n".join(reference_image_url_list)
         text_context_str = "\n\n".join(contexts)
 
