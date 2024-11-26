@@ -11,6 +11,8 @@ WORKDIR /app
 COPY . .
 
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
+RUN poetry run aliyun-bootstrap -a install
+
 FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
