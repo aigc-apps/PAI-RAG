@@ -7,6 +7,7 @@ import os
 import tempfile
 import shutil
 import pandas as pd
+import json
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
 from pai_rag.core.rag_service import rag_service
@@ -265,6 +266,23 @@ async def upload_datasheet(
 @router.post("/query/data_analysis")
 async def aquery_analysis(query: RagQuery):
     response = await rag_service.aquery_analysis(query)
+    if not query.stream:
+        return response
+    else:
+        return StreamingResponse(
+            response,
+            media_type="text/event-stream",
+        )
+
+
+@router.post("/query/custom_test")
+async def aquery_custom_test(query: RagQuery):
+    response = await rag_service.aquery_llm(query)
+    answer = json.loads(response.answer)
+    input_list = [res["型号"] for res in answer]
+    unique_input_list = list(set(input_list))
+    # TODO
+    response = await rag_service.aquery_analysis(unique_input_list)
     if not query.stream:
         return response
     else:
