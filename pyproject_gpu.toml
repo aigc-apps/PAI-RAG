@@ -92,7 +92,7 @@ detectron2 = [
 ]
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 peft = "^0.12.0"
-aliyun-bootstrap = "^1.0.1"
+aliyun-bootstrap = "^1.0.2"
 docx = "^0.2.4"
 python-pptx = "^1.0.2"
 aspose-slides = "^24.10.0"

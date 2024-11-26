@@ -25,6 +25,8 @@ def respond(
     response_gen = rag_client.query(agent_question, with_intent=True, stream=False)
     content = ""
     agent_chatbot.append((agent_question, content))
+    yield agent_chatbot
+
     for resp in response_gen:
         agent_chatbot[-1] = (agent_question, resp.result)
         yield agent_chatbot
