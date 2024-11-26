@@ -1,9 +1,10 @@
+# init trace
+from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize
+
 import os
 import click
 import uvicorn
 from fastapi import FastAPI
-from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pathlib import Path
 
 _BASE_DIR = Path(__file__).parent
@@ -16,9 +17,6 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
 DEFAULT_GRADIO_PORT = 8002
-
-
-app = FastAPI()
 
 
 @click.group(invoke_without_command=True)
@@ -56,6 +54,7 @@ def run(ctx, version):
 )
 def ui(host, port, rag_url):
     from pai_rag.app.web.webui import configure_webapp
+    app = FastAPI()
 
     configure_webapp(app=app, web_url=f"http://{host}:{port}/", rag_url=rag_url)
     uvicorn.run(app, host=host, port=port, loop="asyncio")
@@ -114,6 +113,8 @@ def ui(host, port, rag_url):
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
     from pai_rag.app.api.service import configure_app
     from pai_rag.utils.download_models import ModelScopeDownloader
+    from pai_rag.core.rag_config_manager import RagConfigManager
+    from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
     rag_configuration = RagConfigManager.from_file(config_file)
     rag_configuration.persist()
