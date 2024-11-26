@@ -91,6 +91,7 @@ class DBQuery:
         self._enable_query_preprocessor = self._db_config.get(
             "enable_query_preprocessor", False
         )
+        print("enable_query_preprocessor:", self._enable_query_preprocessor)
         self._enable_db_preretriever = self._db_config.get(
             "enable_db_preretriever", False
         )
@@ -128,17 +129,21 @@ class DBQuery:
         if isinstance(nl_query, str):
             nl_query = QueryBundle(nl_query)
 
-        # # 1. 查询问题预处理, 可选
-        # if self._query_preprocessor:
-        #     keyword_list = self._query_preprocessor.keyword_extraction()
-        # else:
-        #     keyword_list = None
+        # 1. 查询问题预处理, 可选
+        if self._query_preprocessor:
+            keywords = self._query_preprocessor.extract_keywords(nl_query)
+        else:
+            keywords = []
+        logger.info(f"Extracted keywords: {keywords}")
 
         # 2. pre_retrieval, 可选，后续性能稳定后为必选
         if self._db_preretriever:
             retrieved_db_description_dict = (
                 self._db_preretriever.get_retrieved_description(
-                    nl_query, top_k=5, db_description_dict=self._db_description_dict
+                    nl_query,
+                    keywords,
+                    top_k=3,
+                    db_description_dict=self._db_description_dict,
                 )
             )
             if len(self._db_history_list) != 0:
@@ -177,18 +182,21 @@ class DBQuery:
         if isinstance(nl_query, str):
             nl_query = QueryBundle(nl_query)
 
-        # # 1. 查询问题预处理, 可选
-        # if self._query_preprocessor:
-        #     keyword_list = self._query_preprocessor.keyword_extraction()
-        # else:
-        #     keyword_list = None
+        # 1. 查询问题预处理, 可选
+        if self._query_preprocessor:
+            keywords = self._query_preprocessor.extract_keywords(nl_query)
+            print("keywords:", keywords)
+        else:
+            keywords = []
+        logger.info(f"Extracted keywords: {keywords}")
 
         # 2. pre_retrieval, 可选，后续性能稳定后为必选
         if self._db_preretriever:
             retrieved_db_description_dict = (
                 await self._db_preretriever.aget_retrieved_description(
                     nl_query=nl_query,
-                    top_k=5,
+                    keywords=keywords,
+                    top_k=3,
                     db_description_dict=self._db_description_dict,
                 )
             )
@@ -203,12 +211,12 @@ class DBQuery:
         else:
             retrieved_db_description_dict = self._db_description_dict
             retrieved_db_history_list = self._db_history_list
-        logger.info(
-            f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
-        )
-        logger.info(
-            f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
-        )
+        # logger.info(
+        #     f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
+        # )
+        # logger.info(
+        #     f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
+        # )
 
         # 3. schema selector, 可选
         if self._db_schema_selector:

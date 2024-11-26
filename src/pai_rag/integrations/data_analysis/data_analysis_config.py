@@ -27,7 +27,7 @@ class PandasAnalysisConfig(BaseAnalysisConfig):
 
 
 class SqlAnalysisConfig(BaseAnalysisConfig):
-    db_name: str
+    database: str
     tables: List[str] = []
     descriptions: Dict[str, str] = {}
     # offline

@@ -140,7 +140,7 @@ class DBConnector:
         sql_config: SqlAnalysisConfig,
     ):
         db_config = {
-            "dbname": sql_config.db_name,
+            "dbname": sql_config.database,
             "dialect": sql_config.type.value,
             "tables": sql_config.tables,
             "descriptions": sql_config.descriptions,
@@ -150,7 +150,7 @@ class DBConnector:
         }
 
         if isinstance(sql_config, SqliteAnalysisConfig):
-            db_path = os.path.join(sql_config.db_path, sql_config.db_name)
+            db_path = os.path.join(sql_config.db_path, sql_config.database)
             db_config.update(
                 {
                     "path": db_path,

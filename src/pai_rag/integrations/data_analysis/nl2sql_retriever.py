@@ -244,7 +244,7 @@ class DefaultSQLParser(BaseSQLParser):
 
 def get_sql_info(sql_config: SqlAnalysisConfig):
     if isinstance(sql_config, SqliteAnalysisConfig):
-        db_path = os.path.join(sql_config.db_path, sql_config.db_name)
+        db_path = os.path.join(sql_config.db_path, sql_config.database)
         database_url = f"{sql_config.type.value}:///{db_path}"
     elif isinstance(sql_config, MysqlAnalysisConfig):
         dd_prefix = f"{sql_config.type.value}+pymysql"
@@ -254,7 +254,7 @@ def get_sql_info(sql_config: SqlAnalysisConfig):
             password=sql_config.password,
             host=sql_config.host,
             port=sql_config.port,
-            database=sql_config.db_name,
+            database=sql_config.database,
         )
         logger.info(f"Connecting to {database_url}.")
     else:

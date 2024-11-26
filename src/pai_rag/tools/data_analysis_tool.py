@@ -1,6 +1,5 @@
 import click
 import os
-import time
 import sys
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
@@ -71,12 +70,12 @@ def run(
         da_query_engine._sql_database,
         id(da_query_engine._sql_database),
     )
-    start_time1 = time.time()
-    response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
-    end_time1 = time.time()
-    print("sql time:", round(end_time1 - start_time1, 3))
+    # start_time1 = time.time()
+    # response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
+    # end_time1 = time.time()
+    # print("sql time:", round(end_time1 - start_time1, 3))
 
-    print("**SQL RESULT**:", response_nodes)
+    # print("**SQL RESULT**:", response_nodes)
 
     if not stream:
         query_bundle = QueryBundle(query_str=question, stream=False)

@@ -159,6 +159,7 @@ class SQLGenerator:
             selected_db_description_dict
         )
         logger.info(f"schema_description_str for llm: {schema_description_str}")
+        logger.info(f"selected_db_history_str for llm: {selected_db_history_str}")
 
         # step2: llm生成response
         response_str = await self._llm.apredict(

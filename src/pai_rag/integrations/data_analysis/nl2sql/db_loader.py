@@ -36,7 +36,7 @@ class DBLoader:
     ) -> None:
         self._db_config = db_config
         self._dialect = self._db_config.get("dialect", "mysql")
-        self._dbname = self._db_config.get("dbname", "")
+        self._dbname = self._db_config.get("database", "")
         self._desired_tables = self._db_config.get("tables", [])
         self._table_descriptions = self._db_config.get("descriptions", {})
         self._sql_database = sql_database
@@ -118,7 +118,7 @@ class DBLoader:
         embed_model: Optional[BaseEmbedding] = None,
     ):
         db_config = {
-            "dbname": sql_config.db_name,
+            "dbname": sql_config.database,
             "dialect": sql_config.type.value,
             "tables": sql_config.tables,
             "descriptions": sql_config.descriptions,
@@ -128,7 +128,7 @@ class DBLoader:
         }
 
         if isinstance(sql_config, SqliteAnalysisConfig):
-            db_path = os.path.join(sql_config.db_path, sql_config.db_name)
+            db_path = os.path.join(sql_config.db_path, sql_config.database)
             db_config.update(
                 {
                     "path": db_path,

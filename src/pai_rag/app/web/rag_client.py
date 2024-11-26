@@ -14,7 +14,7 @@ from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 
-DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_CLIENT_TIME_OUT = 120
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
 
 
@@ -448,6 +448,7 @@ class RagWebClient:
                 raise RagApiError(code=r.status_code, msg=r.text)
         except Exception as e:
             logger.exception(f"load db info failed: {e}")
+            raise  # 重新抛出异常
 
         return r.text
 

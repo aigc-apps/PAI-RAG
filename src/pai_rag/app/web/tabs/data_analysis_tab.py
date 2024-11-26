@@ -53,12 +53,15 @@ def load_db_info_fn(input_elements: List[Any]):
         update_dict["analysis_type"] = "nl2sql"
         # print("update_dict:", update_dict)
         rag_client.patch_config(update_dict)
-
-        rag_client.load_db_info()
-        return f"[{datetime.datetime.now()}] DB info loaded successfully!"
-
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+    try:
+        rag_client.load_db_info()
+        return f"[{datetime.datetime.now()}] DB info loaded successfully!"
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+        # return f"[{datetime.datetime.now()}] DB info loaded failed, HTTP {api_error.code} Error: {api_error.msg}"
 
 
 def respond(input_elements: List[Any]):
@@ -236,6 +239,10 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     tables,
                     descriptions,
                     enable_enhanced_description,
+                    enable_db_history,
+                    enable_db_embedding,
+                    enable_query_preprocessor,
+                    enable_db_preretriever,
                     enable_db_selector,
                 }
 
@@ -321,8 +328,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database,
             tables,
             descriptions,
+            # enable_enhanced_description,
+            # enable_db_history,
+            # enable_db_embedding,
+            # enable_query_preprocessor,
+            # enable_db_preretriever,
+            # enable_db_selector,
             db_nl2sql_prompt,
-            synthesizer_prompt,
             synthesizer_prompt,
             question,
             chatbot,

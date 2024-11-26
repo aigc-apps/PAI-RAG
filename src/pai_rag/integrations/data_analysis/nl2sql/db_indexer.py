@@ -223,6 +223,7 @@ class DBIndexer:
         unique_values: Dict[str, Dict[str, List[str]]] = {}
         for table in table_info_df["table"].tolist():
             # print("========table=====:", table)
+
             table_values: Dict[str, List[str]] = {}
             # 筛选是string类型但不是primary_key的column
             column_list = column_info_df[
@@ -413,7 +414,10 @@ class DBIndexer:
                     unique_value_nodes.append(
                         TextNode(
                             text=value,
-                            metadata={"table": table_name, "column": column_name},
+                            metadata={
+                                "table_name": table_name,
+                                "column_name": column_name,
+                            },
                         )
                     )
 

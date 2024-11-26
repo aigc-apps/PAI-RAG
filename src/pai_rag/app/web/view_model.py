@@ -214,11 +214,11 @@ class ViewModel(BaseModel):
         elif isinstance(config.data_analysis, SqliteAnalysisConfig):
             view_model.analysis_type = "nl2sql"
             view_model.db_dialect = config.data_analysis.type.value
-            view_model.database = config.data_analysis.db_name
+            view_model.database = config.data_analysis.database
         elif isinstance(config.data_analysis, MysqlAnalysisConfig):
             view_model.analysis_type = "nl2sql"
             view_model.db_dialect = config.data_analysis.type.value
-            view_model.database = config.data_analysis.db_name
+            view_model.database = config.data_analysis.database
             view_model.db_username = config.data_analysis.user
             view_model.db_password = config.data_analysis.password
             view_model.db_host = config.data_analysis.host
@@ -229,6 +229,14 @@ class ViewModel(BaseModel):
             )
             view_model.enable_enhanced_description = (
                 config.data_analysis.enable_enhanced_description
+            )
+            view_model.enable_db_history = config.data_analysis.enable_db_history
+            view_model.enable_db_embedding = config.data_analysis.enable_db_embedding
+            view_model.enable_query_preprocessor = (
+                config.data_analysis.enable_query_preprocessor
+            )
+            view_model.enable_db_preretriever = (
+                config.data_analysis.enable_db_preretriever
             )
             view_model.enable_db_selector = config.data_analysis.enable_db_selector
         view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
@@ -312,10 +320,18 @@ class ViewModel(BaseModel):
             config["data_analysis"]["password"] = self.db_password
             config["data_analysis"]["host"] = self.db_host
             config["data_analysis"]["port"] = self.db_port
-            config["data_analysis"]["db_name"] = self.database
+            config["data_analysis"]["database"] = self.database
             config["data_analysis"][
                 "enable_enhanced_description"
             ] = self.enable_enhanced_description
+            config["data_analysis"]["enable_db_embedding"] = self.enable_db_embedding
+            config["data_analysis"]["enable_db_history"] = self.enable_db_history
+            config["data_analysis"][
+                "enable_query_preprocessor"
+            ] = self.enable_query_preprocessor
+            config["data_analysis"][
+                "enable_db_preretriever"
+            ] = self.enable_db_preretriever
             config["data_analysis"]["enable_db_selector"] = self.enable_db_selector
             config["data_analysis"]["nl2sql_prompt"] = self.db_nl2sql_prompt
             config["data_analysis"]["synthesizer_prompt"] = self.synthesizer_prompt
