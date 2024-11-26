@@ -13,7 +13,7 @@ It's useful for realtime news and common sense questions.
 """
 
 DEFAULT_TOOL_DESCRIPTION = """
-This tool can help you get travel information about weather, flights, train and hotels.
+This tool can help you get travel information about time, weather, flights, train and hotels.
 """
 
 DEFAULT_RAG_DESCRIPTION = """
