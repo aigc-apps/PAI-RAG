@@ -24,6 +24,7 @@ from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRe
 from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
+from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -157,18 +158,20 @@ class DataAnalysisTool(BaseQueryEngine):
 
         return stream_response
 
-
     def sql_query(self, input_list: List) -> List[dict]:
         """Query the material database directly."""
         table_name = self._retriever._tables[0]
-        print("table:", table_name)
-        columns =  [item["name"] for item in self._retriever._sql_database.get_table_columns(table_name)]
-        print("columns:", columns)
+        logger.info(f"table: {table_name}")
+        columns = [
+            item["name"]
+            for item in self._retriever._sql_database.get_table_columns(table_name)
+        ]
+        logger.info(f"columns: {columns}")
         # 使用字符串格式化生成值列表
         value_list = ", ".join(f""" "{code}" """.strip() for code in input_list)
         # 构建 SQL 查询
         sql = f"SELECT * FROM material_data WHERE 物料编码 IN ({value_list})"
-        print("sql:", sql)
+        logger.info(f"sql: {sql}")
         try:
             with self._retriever._sql_database.engine.connect() as connection:
                 result = connection.execution_options(timeout=60).execute(text(sql))
@@ -176,7 +179,10 @@ class DataAnalysisTool(BaseQueryEngine):
             result_json = [dict(zip(columns, sublist)) for sublist in query_results]
             return result_json
         except NotImplementedError as error:
-            raise NotImplementedError(f"SQL execution not implemented: {error}") from error
+            raise NotImplementedError(
+                f"SQL execution not implemented: {error}"
+            ) from error
         except Exception as error:
-            raise Exception(f"Unexpected error during SQL execution: {error}") from error
-
+            raise Exception(
+                f"Unexpected error during SQL execution: {error}"
+            ) from error

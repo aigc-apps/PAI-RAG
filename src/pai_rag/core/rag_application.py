@@ -367,10 +367,7 @@ class RagApplication:
         else:
             return event_generator_async(response=response, sse_version=sse_version)
 
-
-    def sql_query(
-        self, input_list: list, sse_version: SseVersion = SseVersion.V0
-    ):
+    def sql_query(self, input_list: list, sse_version: SseVersion = SseVersion.V0):
         # session_id = query.session_id or uuid_generator()
         # logger.debug(f"Get session ID: {session_id}.")
 

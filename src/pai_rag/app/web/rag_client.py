@@ -56,6 +56,10 @@ class RagWebClient:
         return f"{self.endpoint}v1/query/data_analysis"
 
     @property
+    def custom_search_url(self):
+        return f"{self.endpoint}v1/query/custom_search"
+
+    @property
     def llm_url(self):
         return f"{self.endpoint}v1/query/llm"
 
@@ -286,6 +290,30 @@ class RagWebClient:
                 full_content += chunk_response.delta
                 chunk_response.delta = full_content
                 yield self._format_rag_response(text, chunk_response, stream=stream)
+
+    def query_custom_search(
+        self,
+        text: str,
+        with_history: bool = False,
+        stream: bool = False,
+    ):
+        session_id = None
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+        )
+        r = requests.post(self.custom_search_url, json=q, stream=False)
+        if r.status_code != HTTPStatus.OK:
+            raise RagApiError(code=r.status_code, msg=r.text)
+        response_json = dotdict(r.json())
+        output = json.dumps(
+            response_json["data"]["output"], ensure_ascii=False, indent=4
+        )
+        response_json[
+            "result"
+        ] = f"**Extracted Info**: {response_json['data']['input']} \n\n **SQL Results**: \n```json {output}"
+        yield response_json
 
     def query_llm(
         self,

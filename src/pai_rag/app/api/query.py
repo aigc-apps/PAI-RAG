@@ -7,7 +7,6 @@ import os
 import tempfile
 import shutil
 import pandas as pd
-import json
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
 from pai_rag.core.rag_service import rag_service
@@ -273,56 +272,3 @@ async def aquery_analysis(query: RagQuery):
             response,
             media_type="text/event-stream",
         )
-
-
-@router.post("/query/custom_search")
-async def aquery_custom_test(query: RagQuery):
-    try:
-        response = await rag_service.aquery_llm(query)
-
-        try:
-            answer = json.loads(response.answer)
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding JSON: {e}")
-            return {
-                "status": "error",
-                "message": "Parsing Error: The LLM response is not a valid JSON format.",
-                "status_code": 400,
-            }
-
-        input_list = [res.get("型号") for res in answer if "型号" in res]
-        logger.info(f"Extracted input list: {input_list}")
-        if not input_list:
-            logger.warning("No model information found in response.")
-            return {
-                "status": "error",
-                "message": "Parsing Error: The '型号' key is not found in the JSON.",
-                "status_code": 404,
-            }
-
-        unique_input_list = list(set(input_list))
-        logger.info(f"Unique input list: {unique_input_list}")
-
-        # TODO
-        try:
-            sql_response = rag_service.sql_query(unique_input_list)
-            return {
-                "status": "success",
-                "data": sql_response,
-                "status_code": 200,
-            }
-        except Exception as e:
-            logger.error(f"SQL query failed: {e}")
-            return {
-                "status": "error",
-                "message": "SQL query failed: No information found for the relevant input list.",
-                "status_code": 500,
-            }
-
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return {
-            "status": "error",
-            "message": "Unexpected error, please try again later.",
-            "status_code": 500,
-        }

@@ -71,7 +71,11 @@ def respond(input_elements: List[Any]):
         chatbot.append((question, ""))
 
     try:
-        response_gen = rag_client.query_data_analysis(question, stream=True)
+        if update_dict["custom_sql_query"] == "custom":
+            response_gen = rag_client.query_custom_search(question, stream=False)
+        else:
+            response_gen = rag_client.query_data_analysis(question, stream=True)
+
         for resp in response_gen:
             chatbot[-1] = (question, resp.result)
             yield chatbot
@@ -157,6 +161,16 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+                with gr.Row():
+                    custom_sql_query = gr.Radio(
+                        choices=[
+                            "default",
+                            "custom",
+                        ],
+                        value="default",
+                        label="Please choose the custom sql query type",
+                        elem_id="custom_sql_query",
+                    )
                 with gr.Column(visible=True):
                     with gr.Tab("Nl2sql Prompt"):
                         sql_prompt_type = gr.Radio(
@@ -268,6 +282,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database,
             tables,
             descriptions,
+            custom_sql_query,
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,

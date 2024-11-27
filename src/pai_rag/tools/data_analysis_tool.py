@@ -1,14 +1,11 @@
 import click
 import os
-import time
-import sys
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_data_analysis_tool
 from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 
 # from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
-from llama_index.core.schema import QueryBundle
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,15 +30,15 @@ DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml"
 #     help="input list",
 # )
 
+
 def run(
     config_file=None,
     # input_list=None,
 ):
-
     config = RagConfigManager.from_file(config_file).get_value()
     print("config:", config)
 
-    input_list = ["R5930 G2","0231A5QX"]
+    input_list = ["R5930 G2", "0231A5QX"]
     print("**Input List**: ", input_list)
 
     if isinstance(config.data_analysis, SqlAnalysisConfig):
@@ -51,7 +48,6 @@ def run(
     print("**Answer**: ", result)
     print([item["物料编码"] for item in result])
     print(len(result))
-
 
 
 if __name__ == "__main__":

@@ -207,7 +207,7 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Analysis failed: {ex}")
-        
+
     def sql_query(self, input_list: List):
         try:
             return self.rag.sql_query(input_list, sse_version=SseVersion.V1)
