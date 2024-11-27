@@ -6,6 +6,7 @@ import click
 import uvicorn
 from fastapi import FastAPI
 from pathlib import Path
+from pai_rag.utils.format_logging import format_logging
 
 _BASE_DIR = Path(__file__).parent
 _ROOT_BASE_DIR = Path(__file__).parent.parent.parent
@@ -17,7 +18,7 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
 DEFAULT_GRADIO_PORT = 8002
-
+format_logging()
 
 @click.group(invoke_without_command=True)
 @click.pass_context
