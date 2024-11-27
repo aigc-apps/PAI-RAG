@@ -4,7 +4,7 @@ from loguru import logger
 import time
 import json
 import hashlib
-from pai_rag.evaluation.utils.format_logging import format_logging
+from pai_rag.utils.format_logging import format_logging
 from pai_rag.evaluation.pipeline.run_evaluation_pipeline import (
     run_rag_evaluation_pipeline,
 )

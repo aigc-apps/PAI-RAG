@@ -6,6 +6,7 @@ import click
 import uvicorn
 from fastapi import FastAPI
 from pathlib import Path
+from pai_rag.utils.format_logging import format_logging
 
 _BASE_DIR = Path(__file__).parent
 _ROOT_BASE_DIR = Path(__file__).parent.parent.parent
@@ -53,6 +54,7 @@ def run(ctx, version):
     default=DEFAULT_RAG_URL,
 )
 def ui(host, port, rag_url):
+    format_logging()
     from pai_rag.app.web.webui import configure_webapp
     app = FastAPI()
 
@@ -111,6 +113,7 @@ def ui(host, port, rag_url):
     default=False,
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
+    format_logging()
     from pai_rag.app.api.service import configure_app
     from pai_rag.utils.download_models import ModelScopeDownloader
     from pai_rag.core.rag_config_manager import RagConfigManager
