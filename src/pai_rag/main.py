@@ -18,7 +18,7 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
 DEFAULT_RAG_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/"
 DEFAULT_GRADIO_PORT = 8002
-
+format_logging()
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -54,7 +54,6 @@ def run(ctx, version):
     default=DEFAULT_RAG_URL,
 )
 def ui(host, port, rag_url):
-    format_logging()
     from pai_rag.app.web.webui import configure_webapp
     app = FastAPI()
 
@@ -113,7 +112,6 @@ def ui(host, port, rag_url):
     default=False,
 )
 def serve(host, port, config_file, workers, enable_example, skip_download_models):
-    format_logging()
     from pai_rag.app.api.service import configure_app
     from pai_rag.utils.download_models import ModelScopeDownloader
     from pai_rag.core.rag_config_manager import RagConfigManager
