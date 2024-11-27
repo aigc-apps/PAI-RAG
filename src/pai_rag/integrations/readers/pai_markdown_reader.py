@@ -123,8 +123,6 @@ class PaiMarkdownReader(BaseReader):
             List[Document]: list of documents.
         """
         md_content = self.parse_markdown(file_path)
-        with open("tests/testdata/data/test_back_data/test_markdown_pai.md", "w") as f:
-            f.write(md_content)
 
         logger.info(
             f"[PaiMarkdownReader] successfully processed markdown file {file_path}."
