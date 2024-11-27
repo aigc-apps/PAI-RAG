@@ -275,18 +275,33 @@ async def aquery_analysis(query: RagQuery):
         )
 
 
-@router.post("/query/custom_test")
+@router.post("/query/custom_search")
 async def aquery_custom_test(query: RagQuery):
-    response = await rag_service.aquery_llm(query)
-    answer = json.loads(response.answer)
-    input_list = [res["型号"] for res in answer]
-    unique_input_list = list(set(input_list))
-    # TODO
-    response = await rag_service.aquery_analysis(unique_input_list)
-    if not query.stream:
-        return response
-    else:
-        return StreamingResponse(
-            response,
-            media_type="text/event-stream",
-        )
+    try:
+        response = await rag_service.aquery_llm(query)
+
+        try:
+            answer = json.loads(response.answer)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON: {e}")
+            return "Parsing Error: The LLM response is not a valid JSON format."
+
+        input_list = [res.get("型号") for res in answer if "型号" in res]
+        logger.info(f"Extracted input list: {input_list}")
+        if not input_list:
+            logger.warning("No model information found in response.")
+            return "Parsing Error: The '型号' key is not found in the JSON."
+
+        unique_input_list = list(set(input_list))
+        logger.info(f"Unique input list: {unique_input_list}")
+        # TODO
+        try:
+            sql_response = await rag_service.aquery_analysis(unique_input_list)
+            return sql_response
+        except Exception as e:
+            logger.error(f"SQL query failed: {e}")
+            return "SQL query failed: No information found for the relevant input list."
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return "Unexpected error, please try again later."
