@@ -305,10 +305,10 @@ async def aquery_custom_test(query: RagQuery):
 
         # TODO
         try:
-            sql_response = await rag_service.aquery_analysis(unique_input_list)
+            sql_response = rag_service.sql_query(unique_input_list)
             return {
                 "status": "success",
-                "data": sql_response.answer,
+                "data": sql_response,
                 "status_code": 200,
             }
         except Exception as e:

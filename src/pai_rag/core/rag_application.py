@@ -366,3 +366,18 @@ class RagApplication:
             return RagResponse(answer=response.response, **result_info)
         else:
             return event_generator_async(response=response, sse_version=sse_version)
+
+
+    def sql_query(
+        self, input_list: list, sse_version: SseVersion = SseVersion.V0
+    ):
+        # session_id = query.session_id or uuid_generator()
+        # logger.debug(f"Get session ID: {session_id}.")
+
+        analysis_tool = resolve_data_analysis_tool(self.config)
+        if not analysis_tool:
+            raise ValueError("Data Analysis not enabled. Please specify analysis type.")
+
+        result = analysis_tool.sql_query(input_list)
+
+        return result

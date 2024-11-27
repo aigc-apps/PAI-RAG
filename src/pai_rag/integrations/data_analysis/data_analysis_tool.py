@@ -12,6 +12,8 @@ from llama_index.core.schema import QueryBundle, NodeWithScore
 from llama_index.core.settings import Settings
 import llama_index.core.instrumentation as instrument
 
+from sqlalchemy import text
+
 from pai_rag.integrations.data_analysis.nl2sql_retriever import MyNLSQLRetriever
 from pai_rag.integrations.data_analysis.data_analysis_config import (
     BaseAnalysisConfig,
@@ -154,3 +156,27 @@ class DataAnalysisTool(BaseQueryEngine):
         self._synthesizer._streaming = streaming
 
         return stream_response
+
+
+    def sql_query(self, input_list: List) -> List[dict]:
+        """Query the material database directly."""
+        table_name = self._retriever._tables[0]
+        print("table:", table_name)
+        columns =  [item["name"] for item in self._retriever._sql_database.get_table_columns(table_name)]
+        print("columns:", columns)
+        # 使用字符串格式化生成值列表
+        value_list = ", ".join(f""" "{code}" """.strip() for code in input_list)
+        # 构建 SQL 查询
+        sql = f"SELECT * FROM material_data WHERE 物料编码 IN ({value_list})"
+        print("sql:", sql)
+        try:
+            with self._retriever._sql_database.engine.connect() as connection:
+                result = connection.execution_options(timeout=60).execute(text(sql))
+                query_results = result.fetchall()
+            result_json = [dict(zip(columns, sublist)) for sublist in query_results]
+            return result_json
+        except NotImplementedError as error:
+            raise NotImplementedError(f"SQL execution not implemented: {error}") from error
+        except Exception as error:
+            raise Exception(f"Unexpected error during SQL execution: {error}") from error
+
