@@ -284,24 +284,45 @@ async def aquery_custom_test(query: RagQuery):
             answer = json.loads(response.answer)
         except json.JSONDecodeError as e:
             logger.error(f"Error decoding JSON: {e}")
-            return "Parsing Error: The LLM response is not a valid JSON format."
+            return {
+                "status": "error",
+                "message": "Parsing Error: The LLM response is not a valid JSON format.",
+                "status_code": 400,
+            }
 
         input_list = [res.get("型号") for res in answer if "型号" in res]
         logger.info(f"Extracted input list: {input_list}")
         if not input_list:
             logger.warning("No model information found in response.")
-            return "Parsing Error: The '型号' key is not found in the JSON."
+            return {
+                "status": "error",
+                "message": "Parsing Error: The '型号' key is not found in the JSON.",
+                "status_code": 404,
+            }
 
         unique_input_list = list(set(input_list))
         logger.info(f"Unique input list: {unique_input_list}")
+
         # TODO
         try:
             sql_response = await rag_service.aquery_analysis(unique_input_list)
-            return sql_response
+            return {
+                "status": "success",
+                "data": sql_response.answer,
+                "status_code": 200,
+            }
         except Exception as e:
             logger.error(f"SQL query failed: {e}")
-            return "SQL query failed: No information found for the relevant input list."
+            return {
+                "status": "error",
+                "message": "SQL query failed: No information found for the relevant input list.",
+                "status_code": 500,
+            }
 
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        return "Unexpected error, please try again later."
+        return {
+            "status": "error",
+            "message": "Unexpected error, please try again later.",
+            "status_code": 500,
+        }
