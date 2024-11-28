@@ -1,0 +1,33 @@
+services:
+  api:
+    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0
+    ports:
+      - "8001:8001"
+    restart: always
+    environment:
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+
+    volumes:
+      - ../model_repository:/app/model_repository
+      - ./app_data:/app/localdata
+    entrypoint: ["pai_rag", "serve"]
+
+  web:
+    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
+    ports:
+      - "8002:8002"
+    restart: always
+    depends_on:
+      - api
+    entrypoint: ["pai_rag", "ui", "-c", "http://api:8001"]
+
+  nginx:
+    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-nginx
+    volumes:
+      - ./nginx/default.conf.compose:/etc/nginx/conf.d/default.conf
+    ports:
+      - "8000:8000"
+    entrypoint: ["/docker-entrypoint.sh", "nginx"]
+    restart: always
