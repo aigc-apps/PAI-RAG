@@ -1,6 +1,8 @@
+import os
 import ray
 import argparse
 import json
+import time
 from loguru import logger
 from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
 from pai_rag.tools.data_process.utils.ray_init import init_ray_env
@@ -32,16 +34,20 @@ def main(args):
     ]
     results = ray.get(run_tasks)
     logger.info("Master node completed processing files.")
-    write_to_file.remote(results, args.output_path)
-    logger.info(f"Results written to {args.output_path} asynchronously.")
+    os.makedirs(args.output_dir, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    save_file = os.path.join(args.output_dir, timestamp)
+    write_to_file.remote(results, save_file)
+    logger.info(f"Results written to {save_file} asynchronously.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--working_dir", type=str, default=None)
     parser.add_argument("--config_file", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
-    parser.add_argument("--output_path", type=str, default=None)
-    parser.add_argument("--working_dir", type=str, default=None)
+    parser.add_argument("--output_dir", type=str, default=None)
+
     args = parser.parse_args()
 
     logger.info(f"Init: args: {args}")
