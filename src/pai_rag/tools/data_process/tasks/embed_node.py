@@ -17,7 +17,8 @@ os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
 
 def embed_node_task(node, config_file):
     config = RagConfigManager.from_file(config_file).get_value()
-    ModelScopeDownloader(download_directory_path=RAY_ENV_MODEL_DIR).load_rag_models()
+    download_models = ModelScopeDownloader(download_directory_path=RAY_ENV_MODEL_DIR)
+    download_models.load_models()
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     format_node = dict_to_text_node(node)
