@@ -176,7 +176,10 @@ class StructuredNodeParser(NodeParser):
 
         for section_parts in self._cut(raw_section_without_image):
             section_image_urls_positions = []
-            node_text = f"{current_header}: {section_parts}"
+            if len(current_header) > 0:
+                node_text = f"{current_header}: {section_parts}"
+            else:
+                node_text = section_parts
             cur_chunk_end_position = cur_chunk_start_position + len(section_parts)
 
             for img_info in image_urls_positions:
