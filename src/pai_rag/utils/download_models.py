@@ -91,7 +91,7 @@ class ModelScopeDownloader:
             "Copy magic-pdf.template.json to ~/magic-pdf.json and modify models-dir to model path."
         )
 
-    def load_models(self, model):
+    def load_models(self, model=None):
         if model is None:
             models = [model for model in self.model_info["basic_models"].keys()] + [
                 model for model in self.model_info["extra_models"].keys()
