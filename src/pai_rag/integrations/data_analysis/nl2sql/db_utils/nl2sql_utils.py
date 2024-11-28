@@ -94,7 +94,7 @@ class MySQLRetriever(BaseRetriever):
             raw_response_str, metadata = self._sql_database.run_sql(
                 query_bundle.query_str
             )
-        except (TimeoutError, NotImplementedError) as error:
+        except NotImplementedError as error:
             logger.info(f"Invalid SQL, error message: {error}")
             raise error
 
@@ -108,16 +108,16 @@ class MySQLRetriever(BaseRetriever):
                             "query_output": str(metadata["result"]),
                             "col_keys": metadata["col_keys"],
                         },
-                        excluded_embed_metadata_keys=[
-                            "query_code_instruction",
-                            "query_output",
-                            "col_keys",
-                        ],
-                        excluded_llm_metadata_keys=[
-                            "query_code_instruction",
-                            "query_output",
-                            "col_keys",
-                        ],
+                        # excluded_embed_metadata_keys=[
+                        #     "query_code_instruction",
+                        #     "query_output",
+                        #     "col_keys",
+                        # ],
+                        # excluded_llm_metadata_keys=[
+                        #     "query_code_instruction",
+                        #     "query_output",
+                        #     "col_keys",
+                        # ],
                     ),
                     score=1.0,
                 ),
@@ -236,3 +236,54 @@ def _generate_single_table_description(
             table_desc += ".\n"
 
     return table_desc
+
+
+# class SchemaDescription:
+#     """Generate schema description str for llm"""
+#     def __init__(self, db_description_dict) -> None:
+#         self._db_description_dict = db_description_dict
+#         self._table_info_list = db_description_dict["table_info"]
+#         self._column_info_list = db_description_dict["column_info"]
+
+#     def get_db_description_str(self) -> str:
+#         """
+#         整理数据库所有表的描述
+#         """
+#         # 获取db_overview
+#         if self._db_description_dict["db_overview"]:
+#             schema_description_str = f"""Database overview: {self._db_description_dict["db_overview"]}\n\n"""
+#         else:
+#             schema_description_str = ""
+#         # 获取所有表的描述
+#         all_table_descriptions = []
+#         tables = [item["table"] for item in self._db_description_dict["table_info"]]
+#         for table_name in tables:
+#             all_table_descriptions.append(self._get_table_description_str(table_name))
+#         # 拼接所有表的描述
+#         schema_description_str += "\n".join(all_table_descriptions)
+
+#         return schema_description_str
+
+#     def _get_table_description_str(self, table_name: str) -> str:
+#         """
+#         根据table_name整理表的描述
+#         """
+#         table_column_info_list = [col for col in self._column_info_list if col["table"] == table_name]
+#         table_info_dict = [table for table in self._table_info_list if table["table"] == table_name][0]
+
+#         table_desc = f"Table {table_name} has columns: "
+#         for column in table_column_info_list:
+#             table_desc += f""" {column["column"]} ({column["type"]})"""
+#             if column["primary_key"]:
+#                 table_desc += ", primary key"
+#             if column["forign_key"]:
+#                 table_desc += f""", foreign key, referred table: {column["foreign_key_referred_table"]}"""
+#             table_desc += f""", with value sample: {column["value_sample"]}"""
+#             if column["comment"] or column["description"]:
+#                 table_desc += f""", with description: {column["comment"] or ""} {column['description'] or ""};"""
+#             else:
+#                 table_desc += ";"
+#         if table_info_dict["comment"] or table_info_dict["description"] or table_info_dict["overview"]:
+#             table_desc += f""" with table description: {table_info_dict["comment"] or ""} {table_info_dict["comment"] or ""} {table_info_dict["comment"] or ""}.\n"""
+#         else:
+#             table_desc += ".\n"

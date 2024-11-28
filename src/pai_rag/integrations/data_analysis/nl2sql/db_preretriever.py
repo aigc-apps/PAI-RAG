@@ -9,15 +9,13 @@ from llama_index.core.schema import QueryBundle
 from llama_index.core.schema import NodeWithScore
 from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
 
-
-DEFAULT_DB_DESCRIPTION_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.json"
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    DEFAULT_DB_DESCRIPTION_PATH,
+    DEFAULT_DB_HISTORY_PATH,
+    DESCRIPTION_STORAGE_PATH,
+    HISTORY_STORAGE_PATH,
+    VALUE_STORAGE_PATH,
 )
-DEFAULT_DB_HISTORY_PATH = "./localdata/data_analysis/nl2sql/db_query_history.json"
-
-DESCRIPTION_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/description_index"
-HISTORY_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/history_index"
-VALUE_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/value_index"
 
 
 class DBPreRetriever:

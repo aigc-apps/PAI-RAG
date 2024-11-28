@@ -15,10 +15,8 @@ from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     generate_schema_description,
 )
-
-
-DEFAULT_DB_DESCRIPTION_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.json"
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    DEFAULT_DB_DESCRIPTION_PATH,
 )
 
 
@@ -48,11 +46,6 @@ class DBSelector:
         """
         选择相关的表和列
         """
-        # if isinstance(nl_query, str):
-        #     nl_query = QueryBundle(nl_query)
-        # else:
-        #     nl_query = nl_query
-
         # 如果没有传入db_description_dict, 则从文件读取
         db_description_dict = self._get_schema_info(db_description_dict)
         schema_description_str, _, _ = generate_schema_description(db_description_dict)
@@ -80,11 +73,6 @@ class DBSelector:
         """
         选择相关的表和列
         """
-        # if isinstance(nl_query, str):
-        #     nl_query = QueryBundle(nl_query)
-        # else:
-        #     nl_query = nl_query
-
         # 如果没有传入db_description_dict, 则从文件读取
         db_description_dict = self._get_schema_info(db_description_dict)
         schema_description_str, _, _ = generate_schema_description(db_description_dict)

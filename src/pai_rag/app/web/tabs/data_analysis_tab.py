@@ -115,6 +115,35 @@ def reset_textbox():
     return gr.update(value="")
 
 
+# 处理history复选框变化
+def handle_history_checkbox_change(enable_db_history):
+    if enable_db_history:
+        return gr.File.update(visible=True), gr.Textbox.update(visible=True)
+    else:
+        return gr.File.update(visible=False), gr.Textbox.update(visible=False)
+
+
+def upload_history_fn(json_file):
+    if json_file is None:
+        return None
+    try:
+        # 调用接口
+        res = rag_client.add_db_history(json_file.name)
+        # 更新config
+        update_dict = {
+            "db_history_file_path": res["destination_path"],
+        }
+        rag_client.patch_config(update_dict)
+
+        if json_file.name.endswith(".json"):
+            return "Upload successfully!"
+        else:
+            return "Please upload a json file."
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
 def create_data_analysis_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
@@ -202,6 +231,35 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     info="Embed db info",
                                     elem_id="enable_db_embedding",
                                 )
+
+                                history_file_upload = gr.File(
+                                    label="Upload q-sql json file",
+                                    file_count="single",
+                                    file_types=[".json"],
+                                    elem_id="query_history_upload",
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                history_update_state = gr.Textbox(
+                                    label="History upload state",
+                                    container=False,
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                # 当复选框状态变化时，调用 handle_checkbox_change 函数
+                                enable_db_history.change(
+                                    fn=handle_history_checkbox_change,
+                                    inputs=[enable_db_history],
+                                    outputs=[history_file_upload, history_update_state],
+                                )
+
+                                history_file_upload.upload(
+                                    fn=upload_history_fn,
+                                    inputs=history_file_upload,
+                                    outputs=history_update_state,
+                                    api_name="upload_history_fn",
+                                )
+
                             with gr.Column(scale=1):
                                 enable_query_preprocessor = gr.Checkbox(
                                     label="Yes",

@@ -29,10 +29,8 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
 )
-
-
-DEFAULT_DESC_FILE_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.json"
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    DEFAULT_DB_DESCRIPTION_PATH,
 )
 
 
@@ -68,7 +66,7 @@ class DBDescriptor(PromptMixin):
         self._embed_model = embed_model or Settings.embed_model
         self._db_summary_prompt = db_summary_prompt or DEFAULT_DB_SUMMARY_PROMPT
         self._db_description_file_path = (
-            db_description_file_path or DEFAULT_DESC_FILE_PATH
+            db_description_file_path or DEFAULT_DB_DESCRIPTION_PATH
         )
 
     def _get_prompts(self) -> Dict[str, Any]:
@@ -113,19 +111,11 @@ class DBDescriptor(PromptMixin):
                     "overview": None,
                 }
             )
-
             # collect data samples
             data_sample = self._get_data_sample(table_name)
-
+            # get table primary key
+            table_pk_col = self._get_table_primary_key(table_name)
             # collect and structure table schema with data samples
-            table_pk = self._sql_database._inspector.get_pk_constraint(
-                table_name, self._sql_database._schema
-            )  # get primary key
-            if len(table_pk["constrained_columns"]) > 0:
-                table_pk_col = table_pk["constrained_columns"][0]
-            else:
-                table_pk_col = None
-
             for i, col in enumerate(
                 self._sql_database._inspector.get_columns(
                     table_name, self._sql_database._schema
@@ -133,72 +123,34 @@ class DBDescriptor(PromptMixin):
             ):
                 # print("col:", col, "data_sample:", data_sample)
                 column_value_sample = [row[i] for row in data_sample]
-                if col["name"] == table_pk_col:
-                    column_info_list.append(
-                        {
-                            "table": table_name,
-                            "column": col["name"],
-                            "type": str(col["type"]),
-                            "comment": col.get("comment"),
-                            "primary_key": True,
-                            "foreign_key": False,
-                            "foreign_key_referred_table": None,
-                            "value_sample": column_value_sample,
-                            "description": None,
-                        }
-                    )
-                else:
-                    column_info_list.append(
-                        {
-                            "table": table_name,
-                            "column": col["name"],
-                            "type": str(col["type"]),
-                            "comment": col.get("comment"),
-                            "primary_key": False,
-                            "foreign_key": False,
-                            "foreign_key_referred_table": None,
-                            "value_sample": column_value_sample,
-                            "description": None,
-                        }
-                    )
-            for foreign_key in self._sql_database._inspector.get_foreign_keys(
-                table_name, self._sql_database._schema
-            ):
-                table_foreign_key = {
-                    "table": table_name,
-                    "column": foreign_key["constrained_columns"][0],
-                    "foreign_key": True,
-                    "foreign_key_referred_table": foreign_key["referred_table"],
-                }
-                table_foreign_key_list.append(table_foreign_key)
+                column_info_list.append(
+                    {
+                        "table": table_name,
+                        "column": col["name"],
+                        "type": str(col["type"]),
+                        "comment": col.get("comment"),
+                        "primary_key": col["name"] == table_pk_col,
+                        "foreign_key": False,
+                        "foreign_key_referred_table": None,
+                        "value_sample": column_value_sample,
+                        "description": None,
+                    }
+                )
+            # get foreign keys
+            table_fks = self._get_table_foreign_keys(table_name)
+            table_foreign_key_list.extend(table_fks)
 
         # 处理table之间的foreign key一致性
-        for table_foreign_key in table_foreign_key_list:
-            for item in column_info_list:
-                if (
-                    item["table"] == table_foreign_key["table"]
-                    and item["column"] == table_foreign_key["column"]
-                ):
-                    item.update(table_foreign_key)
-                if (
-                    item["table"] == table_foreign_key["foreign_key_referred_table"]
-                    and item["column"] == table_foreign_key["column"]
-                ):
-                    item.update(
-                        {
-                            "foreign_key": True,
-                            "foreign_key_referred_table": table_foreign_key["table"],
-                        }
-                    )
+        column_info_list = self._keep_foreign_keys_consistency(
+            table_foreign_key_list, column_info_list
+        )
 
         structured_table_description_dict = {
             "db_overview": None,
             "table_info": table_info_list,
             "column_info": column_info_list,
         }
-        # structured_table_description_str = json.dumps(
-        #     structured_table_description_dict, indent=4, ensure_ascii=False
-        # )
+
         logger.info("structured_table_description generated.")
 
         # 保存为json文件
@@ -319,6 +271,53 @@ class DBDescriptor(PromptMixin):
         # print("converted_table_sample:", converted_table_sample)
 
         return converted_table_sample
+
+    def _get_table_primary_key(self, table_name: str) -> str:
+        table_pk = self._sql_database._inspector.get_pk_constraint(
+            table_name, self._sql_database._schema
+        )  # get primary key
+        if len(table_pk["constrained_columns"]) > 0:
+            table_pk_col = table_pk["constrained_columns"][0]
+        else:
+            table_pk_col = None
+
+        return table_pk_col
+
+    def _get_table_foreign_keys(self, table_name: str) -> List:
+        table_fks = []
+        for foreign_key in self._sql_database._inspector.get_foreign_keys(
+            table_name, self._sql_database._schema
+        ):
+            table_foreign_key = {
+                "table": table_name,
+                "column": foreign_key["constrained_columns"][0],
+                "foreign_key": True,
+                "foreign_key_referred_table": foreign_key["referred_table"],
+            }
+            table_fks.append(table_foreign_key)
+
+        return table_fks
+
+    def _keep_foreign_keys_consistency(self, table_foreign_key_list, column_info_list):
+        # 处理table之间的foreign key一致性
+        for table_foreign_key in table_foreign_key_list:
+            for item in column_info_list:
+                if (
+                    item["table"] == table_foreign_key["table"]
+                    and item["column"] == table_foreign_key["column"]
+                ):
+                    item.update(table_foreign_key)
+                if (
+                    item["table"] == table_foreign_key["foreign_key_referred_table"]
+                    and item["column"] == table_foreign_key["column"]
+                ):
+                    item.update(
+                        {
+                            "foreign_key": True,
+                            "foreign_key_referred_table": table_foreign_key["table"],
+                        }
+                    )
+        return column_info_list
 
     def _convert_data_sample_format(self, data):
         """递归地将数据中的特殊类型转换为常规类型"""

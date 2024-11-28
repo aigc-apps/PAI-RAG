@@ -88,32 +88,23 @@ class SQLGenerator:
         else:
             raise ValueError(f"Unknown SQL parser mode: {sql_parser_mode}")
 
-    def generate_sql_candidates(
+    def generate_sql_nodes(
         self,
         query_bundle: QueryType,
         selected_db_description_dict: Dict,
-        selected_db_history_str: str,
+        selected_db_history_list: List,
         max_retry: int = 2,
     ) -> Tuple[List[NodeWithScore], Dict]:
-        # step1: 生成description_str作为llm prompt参数
+        # step1: 获得description_str & history_str 作为llm prompt参数
         schema_description_str, _, _ = generate_schema_description(
             selected_db_description_dict
         )
+        selected_db_history_str = str(selected_db_history_list)
         logger.info(f"schema_description_str for llm: {schema_description_str}")
 
-        # step2: llm生成response
-        response_str = self._llm.predict(
-            prompt=self._text_to_sql_prompt,
-            dialect=self._dialect,
-            query_str=query_bundle.query_str,
-            db_schema=schema_description_str,
-            db_history=selected_db_history_str,
-        )
-        logger.info(f"> LLM response: {response_str}")
-
-        # step3: 解析response中的sql
-        sql_query_str = self._sql_parser.parse_response_to_sql(
-            response_str, query_bundle
+        # step2: llm生成sql
+        sql_query_str = self._agenerate_sql(
+            query_bundle, schema_description_str, selected_db_history_str
         )
         logger.info(f"> Predicted SQL query: {sql_query_str}")
 
@@ -125,7 +116,7 @@ class SQLGenerator:
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             _metadata = {"result": sql_query_str}
 
-        # step4: sql查询及纠错容错处理
+        # step3: sql查询及纠错容错处理
         else:
             # 执行sql查询和纠错
             execute_revise_result = self._execute_and_revise(
@@ -147,33 +138,24 @@ class SQLGenerator:
 
         return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
 
-    async def agenerate_sql_candidates(
+    async def agenerate_sql_nodes(
         self,
         query_bundle: QueryType,
         selected_db_description_dict: Dict,
-        selected_db_history_str: str,
+        selected_db_history_list: List,
         max_retry: int = 2,
     ) -> Tuple[List[NodeWithScore], Dict]:
-        # step1: 生成description_str作为llm prompt参数
+        # step1: 获得description_str & history_str 作为llm prompt参数
         schema_description_str, _, _ = generate_schema_description(
             selected_db_description_dict
         )
+        selected_db_history_str = str(selected_db_history_list)
         logger.info(f"schema_description_str for llm: {schema_description_str}")
         logger.info(f"selected_db_history_str for llm: {selected_db_history_str}")
 
-        # step2: llm生成response
-        response_str = await self._llm.apredict(
-            prompt=self._text_to_sql_prompt,
-            dialect=self._dialect,
-            query_str=query_bundle.query_str,
-            db_schema=schema_description_str,
-            db_history=selected_db_history_str,
-        )
-        logger.info(f"> LLM response: {response_str}")
-
-        # step3: 解析response中的sql
-        sql_query_str = self._sql_parser.parse_response_to_sql(
-            response_str, query_bundle
+        # step2: llm生成sql
+        sql_query_str = await self._agenerate_sql(
+            query_bundle, schema_description_str, selected_db_history_str
         )
         logger.info(f"> Predicted SQL query: {sql_query_str}")
 
@@ -185,7 +167,7 @@ class SQLGenerator:
             retrieved_nodes = [NodeWithScore(node=sql_only_node, score=1.0)]
             _metadata = {"result": sql_query_str}
 
-        # step4: sql查询及纠错容错处理
+        # step3: sql查询及纠错容错处理
         else:
             # 执行sql查询和纠错
             execute_revise_result = await self._aexecute_and_revise(
@@ -207,6 +189,52 @@ class SQLGenerator:
 
         return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
 
+    def _generate_sql(
+        self,
+        query_bundle: QueryBundle,
+        schema_description_str: str,
+        query_history_str: str,
+    ) -> str:
+        # llm生成response
+        response_str = self._llm.predict(
+            prompt=self._text_to_sql_prompt,
+            dialect=self._dialect,
+            query_str=query_bundle.query_str,
+            db_schema=schema_description_str,
+            db_history=query_history_str,
+        )
+        logger.info(f"> LLM response: {response_str}")
+
+        # 解析response中的sql
+        sql_query_str = self._sql_parser.parse_response_to_sql(
+            response_str, query_bundle
+        )
+
+        return sql_query_str
+
+    async def _agenerate_sql(
+        self,
+        query_bundle: QueryBundle,
+        schema_description_str: str,
+        query_history_str: str,
+    ) -> str:
+        # llm生成response
+        response_str = await self._llm.apredict(
+            prompt=self._text_to_sql_prompt,
+            dialect=self._dialect,
+            query_str=query_bundle.query_str,
+            db_schema=schema_description_str,
+            db_history=query_history_str,
+        )
+        logger.info(f"> LLM response: {response_str}")
+
+        # 解析response中的sql
+        sql_query_str = self._sql_parser.parse_response_to_sql(
+            response_str, query_bundle
+        )
+
+        return sql_query_str
+
     def _execute_and_revise(
         self,
         sql_query_str: str,
@@ -223,14 +251,14 @@ class SQLGenerator:
             try:
                 execution_result = self._execute_sql_query(sql_query_str)
                 logger.info(
-                    f"> Attempt time: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
+                    f"> Attempt: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
                 )
                 return execution_result
 
             except NotImplementedError as error:
                 last_exception = error
                 logger.info(
-                    f"> Attempt time: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
+                    f"> Attempt: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
                 )
                 sql_query_str = self._revise_sql(
                     error,
@@ -240,12 +268,12 @@ class SQLGenerator:
                     db_history_str,
                 )
                 logger.info(
-                    f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                    f"> Attempt: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                 )
 
             except Exception as error:
                 last_exception = error
-                logger.info(f"> Attempt time: {attempt}, Unexpected error: {error}")
+                logger.info(f"> Attempt: {attempt}, Unexpected error: {error}")
                 raise
 
         logger.info(
@@ -270,14 +298,14 @@ class SQLGenerator:
             try:
                 execution_result = self._execute_sql_query(sql_query_str)
                 logger.info(
-                    f"> Attempt time: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
+                    f"> Attempt: {attempt}, SQL query result: {execution_result.retrieved_nodes[0]}"
                 )
                 return execution_result
 
             except NotImplementedError as error:
                 last_exception = error
                 logger.info(
-                    f"> Attempt time: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
+                    f"> Attempt: {attempt}, SQL execution error: {error}, SQL query: {sql_query_str}\n"
                 )
                 sql_query_str = await self._arevise_sql(
                     error,
@@ -287,12 +315,12 @@ class SQLGenerator:
                     db_history_str,
                 )
                 logger.info(
-                    f"> Attempt time: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
+                    f"> Attempt: {attempt}, Revised Predicted SQL query: {sql_query_str}\n"
                 )
 
             except Exception as error:
                 last_exception = error
-                logger.info(f"> Attempt time: {attempt}, Unexpected error: {error}")
+                logger.info(f"> Attempt: {attempt}, Unexpected error: {error}")
                 raise
 
         logger.info(

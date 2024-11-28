@@ -24,16 +24,10 @@ from pai_rag.integrations.data_analysis.nl2sql.query_preprocessor import (
     QueryPreprocessor,
 )
 from pai_rag.integrations.data_analysis.nl2sql.sql_generator import SQLGenerator
-
-
-DEFAULT_DB_STRUCTURED_DESCRIPTION_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.json"
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    DEFAULT_DB_DESCRIPTION_PATH,
+    DEFAULT_DB_HISTORY_PATH,
 )
-DEFAULT_DB_QUERY_HISTORY_PATH = "./localdata/data_analysis/nl2sql/db_query_history.json"
-
-DESCRIPTION_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/description_index"
-HISTORY_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/history_index"
-VALUE_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/value_index"
 
 
 class DBQuery:
@@ -61,7 +55,7 @@ class DBQuery:
         self._dialect = self._sql_database.dialect
         self._tables = list(self._sql_database._usable_tables)
         db_structured_description_path = (
-            db_structured_description_path or DEFAULT_DB_STRUCTURED_DESCRIPTION_PATH
+            db_structured_description_path or DEFAULT_DB_DESCRIPTION_PATH
         )
         if os.path.exists(db_structured_description_path):
             with open(db_structured_description_path, "r") as f:
@@ -70,7 +64,7 @@ class DBQuery:
             raise FileNotFoundError(
                 f"Please load your db info first, db_structured_description_path: {db_structured_description_path} does not exist. "
             )
-        db_query_history_path = db_query_history_path or DEFAULT_DB_QUERY_HISTORY_PATH
+        db_query_history_path = db_query_history_path or DEFAULT_DB_HISTORY_PATH
         if os.path.exists(db_query_history_path):
             with open(db_query_history_path, "r") as f:
                 self._db_history_list = json.load(f)
@@ -91,7 +85,7 @@ class DBQuery:
         self._enable_query_preprocessor = self._db_config.get(
             "enable_query_preprocessor", False
         )
-        print("enable_query_preprocessor:", self._enable_query_preprocessor)
+        # print("enable_query_preprocessor:", self._enable_query_preprocessor)
         self._enable_db_preretriever = self._db_config.get(
             "enable_db_preretriever", False
         )
@@ -150,6 +144,8 @@ class DBQuery:
                 retrieved_db_history_list = self._db_preretriever.get_retrieved_history(
                     nl_query=nl_query, top_k=2, db_history_list=self._db_history_list
                 )
+            else:
+                retrieved_db_history_list = self._db_history_list
         else:
             retrieved_db_description_dict = self._db_description_dict
             retrieved_db_history_list = self._db_history_list
@@ -169,7 +165,7 @@ class DBQuery:
             selected_db_description_dict = retrieved_db_description_dict
 
         # 4. sql generator, 必须
-        response_nodes, _ = self._sql_generator.generate_sql_candidates(
+        response_nodes, _ = self._sql_generator.generate_sql_nodes(
             nl_query,
             selected_db_description_dict,
             retrieved_db_history_list,
@@ -185,7 +181,6 @@ class DBQuery:
         # 1. 查询问题预处理, 可选
         if self._query_preprocessor:
             keywords = self._query_preprocessor.extract_keywords(nl_query)
-            print("keywords:", keywords)
         else:
             keywords = []
         logger.info(f"Extracted keywords: {keywords}")
@@ -208,15 +203,17 @@ class DBQuery:
                         db_history_list=self._db_history_list,
                     )
                 )
+            else:
+                retrieved_db_history_list = self._db_history_list
         else:
             retrieved_db_description_dict = self._db_description_dict
             retrieved_db_history_list = self._db_history_list
-        # logger.info(
-        #     f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
-        # )
-        # logger.info(
-        #     f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
-        # )
+        logger.info(
+            f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
+        )
+        logger.info(
+            f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
+        )
 
         # 3. schema selector, 可选
         if self._db_schema_selector:
@@ -229,7 +226,7 @@ class DBQuery:
             selected_db_description_dict = retrieved_db_description_dict
 
         # 4. sql generator, 必须
-        response_nodes, _ = await self._sql_generator.agenerate_sql_candidates(
+        response_nodes, _ = await self._sql_generator.agenerate_sql_nodes(
             nl_query,
             selected_db_description_dict,
             retrieved_db_history_list,

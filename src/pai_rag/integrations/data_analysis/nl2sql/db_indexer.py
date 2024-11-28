@@ -10,15 +10,13 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core import VectorStoreIndex
 
-
-DEFAULT_DB_DESCRIPTION_PATH = (
-    "./localdata/data_analysis/nl2sql/db_structured_description.json"
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    DEFAULT_DB_DESCRIPTION_PATH,
+    DEFAULT_DB_HISTORY_PATH,
+    DESCRIPTION_STORAGE_PATH,
+    HISTORY_STORAGE_PATH,
+    VALUE_STORAGE_PATH,
 )
-DEFAULT_DB_HISTORY_PATH = "./localdata/data_analysis/nl2sql/db_query_history.json"
-
-DESCRIPTION_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/description_index"
-HISTORY_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/history_index"
-VALUE_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/value_index"
 
 
 class DBIndexer:
@@ -114,6 +112,7 @@ class DBIndexer:
     async def aget_value_index(self):
         # get unique_values
         unique_values = self._get_unique_values()
+        print("unique_values:", unique_values)
         # get nodes with embedding
         value_nodes = await self._aget_value_nodes_with_embedding(unique_values)
         # create & store index
@@ -228,9 +227,12 @@ class DBIndexer:
             # 筛选是string类型但不是primary_key的column
             column_list = column_info_df[
                 (column_info_df["table"] == table)
-                & (column_info_df["type"].str.contains("VARCHAR"))
+                & (
+                    column_info_df["type"].str.contains("VARCHAR")
+                    | column_info_df["type"].str.contains("TEXT")
+                )
                 & (column_info_df["type"] != "VARCHAR(1)")
-                & (column_info_df["primary_key"] is False)
+                & (~column_info_df["primary_key"])
             ]["column"].tolist()
             # print("column_list:", column_list)
             for column in column_list:

@@ -80,6 +80,10 @@ class RagWebClient:
         return f"{self.endpoint}v1/upload_datasheet"
 
     @property
+    def load_db_history_url(self):
+        return f"{self.endpoint}v1/upload_db_history"
+
+    @property
     def load_agent_cfg_url(self):
         return f"{self.endpoint}v1/config/agent"
 
@@ -428,6 +432,30 @@ class RagWebClient:
                 raise RagApiError(code=r.status_code, msg=response.message)
         except Exception as e:
             logger.exception(f"add_datasheet failed: {e}")
+        finally:
+            file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def add_db_history(
+        self,
+        input_file: str,
+    ):
+        file_obj = open(input_file, "rb")
+        mimetype = mimetypes.guess_type(input_file)[0]
+        files = {"file": (input_file, file_obj, mimetype)}
+        try:
+            r = requests.post(
+                self.load_db_history_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        except Exception as e:
+            logger.exception(f"add_db_history failed: {e}")
         finally:
             file_obj.close()
 
