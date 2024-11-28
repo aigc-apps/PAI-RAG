@@ -36,7 +36,7 @@ def main(args):
     logger.info("Master node completed processing files.")
     os.makedirs(args.output_dir, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    save_file = os.path.join(args.output_dir, timestamp)
+    save_file = os.path.join(args.output_dir, f"{timestamp}.jsonl")
     write_to_file.remote(results, save_file)
     logger.info(f"Results written to {save_file} asynchronously.")
 
