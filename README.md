@@ -53,7 +53,7 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
    ```bash
    docker compose up -d
    ```
-3. Now you can open http://localhost:8000 to check whether it works.
+3. Now you can open http://localhost:8000 to check whether it works. The service will need to download the model weights, which may take a while (usually 20 minutes).
 
 ## Run in Local Environment
 

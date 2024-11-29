@@ -55,7 +55,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    docker-compose up -d
    ```
 
-3. 打开浏览器中的 http://localhost:8000 访问web ui.
+3. 打开浏览器中的 http://localhost:8000 访问web ui. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
 
 ## 本地启动
 
