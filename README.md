@@ -12,12 +12,12 @@
 <details open>
 <summary></b>📕 Contents</b></summary>
 
-- 💡 [What is PAI-RAG?](#💡-what-is-pai-rag)
-- 🌟 [Key Features](#🌟-key-features)
-- 🔎 [Get Started](#🔎-get-started)
+- 💡 [What is PAI-RAG?](#-what-is-pai-rag)
+- 🌟 [Key Features](#-key-features)
+- 🔎 [Get Started](#-get-started)
   - [Docker](#run-in-docker)
   - [Local](#run-in-local-environment)
-- 📜 [Documents](#📜-documents)
+- 📜 [Documents](#-documents)
   - [API specification](#api-specification)
   - [Agentic RAG](#agentic-rag)
   - [Data Analysis](#data-analysis)
