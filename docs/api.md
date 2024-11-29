@@ -1,8 +1,8 @@
 # 🔧 API Service
 
-You can use the command line to send API requests to the server, for example, calling the [Upload API](#upload-api) to upload a knowledge base file.
+You can use the command line to send API requests to the server, for example, calling the [Upload Data API](#upload-data-api) to upload a knowledge base file.
 
-## Upload DATA API
+## Upload Data API
 
 It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
 

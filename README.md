@@ -12,12 +12,15 @@
 <details open>
 <summary></b>📕 Contents</b></summary>
 
-- 💡 [What is PAI-RAG?](#what-is-pai-rag)
-- 🌟 [Key Features](#key-features)
-- 🔎 [Get Started](#get-started)
+- 💡 [What is PAI-RAG?](#💡-what-is-pai-rag)
+- 🌟 [Key Features](#🌟-key-features)
+- 🔎 [Get Started](#🔎-get-started)
   - [Docker](#run-in-docker)
   - [Local](#run-in-local-environment)
-- 🔧 [Documents](#documents)
+- 📜 [Documents](#📜-documents)
+  - [API specification](#api-specification)
+  - [Agentic RAG](#agentic-rag)
+  - [Data Analysis](#data-analysis)
 
 </details>
 
@@ -55,11 +58,11 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 If you want to start running/developing pai_rag locally, please refer to [local development](./docs/develop/local_develop.md)
 
-# Documents
+# 📜 Documents
 
-## API Service
+## API specification
 
-You can access our RAG service to upload data or query via [our API](./docs/api.md).
+You can access and integrate our RAG service according to our [API specification](./docs/api.md).
 
 ## Agentic RAG
 

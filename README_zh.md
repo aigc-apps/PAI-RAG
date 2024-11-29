@@ -7,12 +7,15 @@
 <details open>
 <summary></b>📕 目录</b></summary>
 
-- 💡 [什么是PAI-RAG?](#什么是pai-rag)
-- 🌟 [主要模块和功能](#主要模块和功能)
-- 🔎 [快速开始](#快速开始)
+- 💡 [什么是PAI-RAG?](#💡-什么是pai-rag)
+- 🌟 [主要模块和功能](#🌟-主要模块和功能)
+- 🔎 [快速开始](#🔎-快速开始)
   - [Docker镜像](#Docker镜像启动)
   - [本地环境](#本地启动)
-- 🔧 [文档](#文档)
+- 📜 [文档](#📜-文档)
+  - [API服务](#api服务)
+  - [Agentic RAG](#agentic-rag)
+  - [数据分析Nl2sql](#数据分析-nl2sql)
 
 </details>
 
@@ -57,7 +60,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 如果想在本地启动或者进行代码开发，可以参考文档：[本地运行](./docs/develop/local_develop_zh.md)
 
-# 🔧 文档
+# 📜 文档
 
 ## API服务
 
@@ -68,9 +71,9 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
 [Agentic RAG](./docs/agentic_rag.md)
 
-## Data Analysis
+## 数据分析 NL2sql
 
-您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[Data Analysis](./docs/data_analysis_doc.md)
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc.md)
 
 ## 参数配置
 
