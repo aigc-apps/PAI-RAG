@@ -13,6 +13,11 @@ services:
       - ../model_repository:/app/model_repository
       - ./app_data:/app/localdata
     entrypoint: ["pai_rag", "serve"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      retries: 40
+      start_period: 20s
 
   web:
     image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
