@@ -8,12 +8,13 @@ MODEL_NAME = "bge-m3"
 
 
 class BGEM3SparseEmbeddingFunction:
-    def __init__(self) -> None:
+    def __init__(self, model_name_or_path: str = None) -> None:
         try:
             from FlagEmbedding import BGEM3FlagModel
 
             self.model = BGEM3FlagModel(
-                model_name_or_path=os.path.join(DEFAULT_MODEL_DIR, MODEL_NAME),
+                model_name_or_path=model_name_or_path
+                or os.path.join(DEFAULT_MODEL_DIR, MODEL_NAME),
                 use_fp16=False,
             )
         except Exception:

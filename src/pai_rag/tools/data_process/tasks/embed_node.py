@@ -25,7 +25,9 @@ def embed_node_task(node, config_file):
     embed_nodes = embed_model([format_node])
     sparse_embedding = None
     if config.embedding.enable_sparse:
-        sparse_embed_model = BGEM3SparseEmbeddingFunction()
+        sparse_embed_model = BGEM3SparseEmbeddingFunction(
+            model_name_or_path=RAY_ENV_MODEL_DIR
+        )
         sparse_embedding = sparse_embed_model.encode_documents([embed_nodes[0].text])[0]
     nodes_dict = text_node_to_dict(embed_nodes[0], sparse_embedding)
     return nodes_dict
