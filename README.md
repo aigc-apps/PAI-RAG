@@ -21,6 +21,7 @@
   - [API specification](#api-specification)
   - [Agentic RAG](#agentic-rag)
   - [Data Analysis](#data-analysis)
+  - [Supported File Types](#supported-file-types)
 
 </details>
 
@@ -72,12 +73,6 @@ You can use agent with function calling api-tools in PAI-RAG, please refer to th
 ## Data Analysis
 
 You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc.md)
-
-## Parameter Configuration
-
-For more customization options, please refer to the documentation:
-
-[Parameter Configuration Instruction](./docs/config_guide_en.md)
 
 ## Supported File Types
 

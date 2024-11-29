@@ -16,6 +16,7 @@
   - [API服务](#api服务)
   - [Agentic RAG](#agentic-rag)
   - [数据分析Nl2sql](#数据分析-nl2sql)
+  - [支持文件类型](#支持文件类型)
 
 </details>
 
@@ -74,12 +75,6 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 ## 数据分析 NL2sql
 
 您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc.md)
-
-## 参数配置
-
-如需实现更多个性化配置，请参考文档：
-
-[参数配置说明](./docs/config_guide_cn.md)
 
 ## 支持文件类型
 
