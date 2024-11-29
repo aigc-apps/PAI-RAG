@@ -20,13 +20,13 @@ def embed_node_task(node, config_file):
     download_models = ModelScopeDownloader(
         fetch_config=True, download_directory_path=RAY_ENV_MODEL_DIR
     )
-    download_models.load_models()
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     format_node = dict_to_text_node(node)
     embed_nodes = embed_model([format_node])
     sparse_embedding = None
     if config.embedding.enable_sparse:
+        download_models.load_models(model="bge-m3")
         sparse_embed_model = BGEM3SparseEmbeddingFunction(
             model_name_or_path=RAY_ENV_MODEL_DIR
         )
