@@ -12,7 +12,9 @@ os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
 
 def load_and_parse_doc_task(config_file, input_file):
     config = RagConfigManager.from_file(config_file).get_value()
-    download_models = ModelScopeDownloader(download_directory_path=RAY_ENV_MODEL_DIR)
+    download_models = ModelScopeDownloader(
+        fetch_config=True, download_directory_path=RAY_ENV_MODEL_DIR
+    )
     download_models.load_mineru_config()
 
     data_reader_config = config.data_reader
