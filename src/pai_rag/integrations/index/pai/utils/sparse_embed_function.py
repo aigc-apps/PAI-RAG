@@ -13,8 +13,9 @@ class BGEM3SparseEmbeddingFunction:
             from FlagEmbedding import BGEM3FlagModel
 
             self.model = BGEM3FlagModel(
-                model_name_or_path=model_name_or_path
-                or os.path.join(DEFAULT_MODEL_DIR, MODEL_NAME),
+                model_name_or_path=os.path.join(
+                    model_name_or_path or DEFAULT_MODEL_DIR, MODEL_NAME
+                ),
                 use_fp16=False,
             )
         except Exception:
