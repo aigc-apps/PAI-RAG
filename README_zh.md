@@ -111,7 +111,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    **请求**
 
    ```shell
-   curl http://localhost:8000/api/v1/get_upload_state\?task_id\=1bcea36a1db740d28194df8af40c7226
+   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
    **响应**

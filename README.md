@@ -111,7 +111,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
    **Request**
 
    ```shell
-   curl http://localhost:8000/api/v1/get_upload_state\?task_id\=1bcea36a1db740d28194df8af40c7226
+   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
    **Response**

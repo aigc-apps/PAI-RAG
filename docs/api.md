@@ -17,7 +17,7 @@ curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multip
 - get_upload_state
 
 ```bash
-curl http://localhost:8000/api/v1/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
+curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
 
 # Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
 ```
