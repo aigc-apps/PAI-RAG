@@ -1,9 +1,10 @@
+import os
 import re
+import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
-import pandas as pd
 
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.callbacks.base import CallbackManager
@@ -174,116 +175,146 @@ class DefaultSQLParser(BaseSQLParser):
         return response.strip().replace("```", "").lstrip("sql")
 
 
-def generate_schema_description(
-    structured_table_description_dict: Dict,
-) -> Tuple[str, pd.DataFrame, pd.DataFrame]:
-    """
-    基于结构化的数据库信息，生成适合llm的数据库描述，包括表结构、表描述、列描述等
-    """
+def count_total_columns(db_description_dict: Dict) -> int:
+    if len(db_description_dict) == 0:
+        raise ValueError("db_description_dict is Empty")
+    total_columns = 0
+    for table in db_description_dict["table_info"]:
+        total_columns += len(table["column_info"])
 
-    if structured_table_description_dict["db_overview"]:
-        schema_description_str = f"""Database overview: {structured_table_description_dict["db_overview"]}\n\n"""
+    return total_columns
+
+
+def get_schema_desc4llm(db_description_dict: Dict) -> str:
+    """get schema description for llm"""
+    if len(db_description_dict) == 0:
+        raise ValueError("db_description_dict is Empty")
+    # 获取db_overview
+    if db_description_dict["db_overview"]:
+        schema_description_str = (
+            f"""Database overview: {db_description_dict["db_overview"]}\n\n"""
+        )
     else:
         schema_description_str = ""
-
-    table_info_list = structured_table_description_dict["table_info"]
-    column_info_list = structured_table_description_dict["column_info"]
-    table_info_df = pd.DataFrame(table_info_list)
-    column_info_df = pd.DataFrame(column_info_list)
-
-    # 生成所有表的描述
+    # 获取所有表的描述
     all_table_descriptions = []
-    for table_name in table_info_df["table"]:
+    tables = [item["table_name"] for item in db_description_dict["table_info"]]
+    for table_name in tables:
         all_table_descriptions.append(
-            _generate_single_table_description(
-                table_name, table_info_df, column_info_df
-            )
+            _get_table_desc(table_name, db_description_dict["table_info"])
         )
-
-    # 将所有表的描述合并成一个字符串
+    # 拼接所有表的描述
     schema_description_str += "\n".join(all_table_descriptions)
 
-    return schema_description_str, table_info_df, column_info_df
+    return schema_description_str
 
 
-def _generate_single_table_description(
-    table_name, table_info_df: pd.DataFrame, column_info_df: pd.DataFrame
-) -> str:
-    """
-    基于单表的结构化信息，生成适合llm的数据库描述，包括表结构、表描述、列描述等
-    """
-    if table_name not in column_info_df["table"].to_list():
-        table_desc = ""
-    else:
-        table_row = table_info_df[table_info_df["table"] == table_name].iloc[0]
-        columns = column_info_df[column_info_df["table"] == table_name]
+def _get_table_desc(table_name: str, table_info_list: List) -> str:
+    """get single table description"""
 
-        table_desc = f"Table {table_name} has columns: "
-        for _, column in columns.iterrows():
-            table_desc += f""" {column["column"]} ({column["type"]})"""
-            if column["primary_key"]:
-                table_desc += ", Primary Key"
-            if column["foreign_key"]:
-                table_desc += f""", Foreign Key, Referred Table: {column["foreign_key_referred_table"]}"""
-            table_desc += f""", with Value Sample: {column["value_sample"]}"""
-            if column["comment"] or column["description"]:
-                table_desc += f""", with Description: {column["comment"] or ""}, {column['description'] or ""};"""
-            else:
-                table_desc += ";"
-        if table_row["comment"] or table_row["description"] or table_row["overview"]:
-            table_desc += f""" with Table Description: {table_row["comment"] or ""}, {table_row["description"] or ""}, {table_row["overview"] or ""}.\n"""
+    table_desc = f"Table {table_name} has columns: "
+    target_table_dict = [
+        table for table in table_info_list if table["table_name"] == table_name
+    ][0]
+    for column in target_table_dict["column_info"]:
+        table_desc += f"""{column["column_name"]} ({column["column_type"]})"""
+        if column["primary_key"]:
+            table_desc += ", primary key"
+        if column["foreign_key"]:
+            table_desc += f""", foreign key, referred table: {column["foreign_key_referred_table"]}"""
+        table_desc += f""", with value sample: {column["column_value_sample"]}"""
+        col_comment = [
+            value
+            for value in [column["column_comment"], column["column_description"]]
+            if value is not None
+        ]
+        if len(col_comment) > 0:
+            table_desc += f""", with description: {", ".join(col_comment)}; """
         else:
-            table_desc += ".\n"
+            table_desc += "; "
+    table_comment = [
+        value
+        for value in [
+            target_table_dict["table_comment"],
+            target_table_dict["table_description"],
+        ]
+        if value is not None
+    ]
+    if len(table_comment) > 0:
+        table_desc += f""" with table description: {", ".join(table_comment)}."""
+    else:
+        table_desc += "."
 
     return table_desc
 
 
-# class SchemaDescription:
-#     """Generate schema description str for llm"""
-#     def __init__(self, db_description_dict) -> None:
-#         self._db_description_dict = db_description_dict
-#         self._table_info_list = db_description_dict["table_info"]
-#         self._column_info_list = db_description_dict["column_info"]
+def get_target_info(
+    target_path: str,
+    target_file: Optional[Dict | List] = None,
+    flag: str = "description",
+) -> Dict | List:
+    # 正常情况下接受传入的description dict 或 history list，否则从本地加载
+    if target_file is None:
+        if flag == "description":
+            if not os.path.exists(target_path):
+                raise ValueError(
+                    f"db_description_file_path: {target_path} does not exist"
+                )
+        if flag == "history":
+            if not os.path.exists(target_path):
+                raise ValueError(f"db_history_file_path: {target_path} does not exist")
+        try:
+            with open(target_path, "r") as f:
+                target_file = json.load(f)
+        except Exception as e:
+            # raise ValueError(f"Load target object from {file_path} failed: {e}")
+            if flag == "description":
+                target_file = {}
+                logger.error(f"Error loading db_description_dict: {e}")
+            if flag == "history":
+                target_file = []
+                logger.error(f"Error loading db_history_list: {e}")
 
-#     def get_db_description_str(self) -> str:
-#         """
-#         整理数据库所有表的描述
-#         """
-#         # 获取db_overview
-#         if self._db_description_dict["db_overview"]:
-#             schema_description_str = f"""Database overview: {self._db_description_dict["db_overview"]}\n\n"""
-#         else:
-#             schema_description_str = ""
-#         # 获取所有表的描述
-#         all_table_descriptions = []
-#         tables = [item["table"] for item in self._db_description_dict["table_info"]]
-#         for table_name in tables:
-#             all_table_descriptions.append(self._get_table_description_str(table_name))
-#         # 拼接所有表的描述
-#         schema_description_str += "\n".join(all_table_descriptions)
+    return target_file
 
-#         return schema_description_str
 
-#     def _get_table_description_str(self, table_name: str) -> str:
-#         """
-#         根据table_name整理表的描述
-#         """
-#         table_column_info_list = [col for col in self._column_info_list if col["table"] == table_name]
-#         table_info_dict = [table for table in self._table_info_list if table["table"] == table_name][0]
-
-#         table_desc = f"Table {table_name} has columns: "
-#         for column in table_column_info_list:
-#             table_desc += f""" {column["column"]} ({column["type"]})"""
-#             if column["primary_key"]:
-#                 table_desc += ", primary key"
-#             if column["forign_key"]:
-#                 table_desc += f""", foreign key, referred table: {column["foreign_key_referred_table"]}"""
-#             table_desc += f""", with value sample: {column["value_sample"]}"""
-#             if column["comment"] or column["description"]:
-#                 table_desc += f""", with description: {column["comment"] or ""} {column['description'] or ""};"""
-#             else:
-#                 table_desc += ";"
-#         if table_info_dict["comment"] or table_info_dict["description"] or table_info_dict["overview"]:
-#             table_desc += f""" with table description: {table_info_dict["comment"] or ""} {table_info_dict["comment"] or ""} {table_info_dict["comment"] or ""}.\n"""
-#         else:
-#             table_desc += ".\n"
+def extract_subset_from_description(
+    retrieved_nodes_dict: Dict, db_description_dict: Dict
+) -> Dict:
+    if len(retrieved_nodes_dict) > 0:
+        sub_db_description_dict = {
+            "db_overview": db_description_dict["db_overview"],
+            "table_info": [],
+        }
+        for table_item in db_description_dict["table_info"]:
+            filter_columns = []
+            for column_item in table_item["column_info"]:
+                key = (table_item["table_name"], column_item["column_name"])
+                # 筛选满足条件的列并更新value sample
+                if key in retrieved_nodes_dict:
+                    if len(retrieved_nodes_dict[key]) > 0:
+                        column_item["column_value_sample"].extend(
+                            retrieved_nodes_dict[key]
+                        )
+                        column_item["column_value_sample"] = list(
+                            set(column_item["column_value_sample"])
+                        )
+                    filter_columns.append(column_item)
+                # 保留主键和外键
+                if ((column_item["primary_key"]) or (column_item["foreign_key"])) and (
+                    column_item not in filter_columns
+                ):
+                    filter_columns.append(column_item)
+            if len(filter_columns) > 0:
+                sub_db_description_dict["table_info"].append(
+                    {
+                        "table_name": table_item["table_name"],
+                        "table_comment": table_item["table_comment"],
+                        "table_description": table_item["table_description"],
+                        "column_info": filter_columns,
+                    }
+                )
+        logger.info(f"sub_db_description_dict: {sub_db_description_dict}")
+        return sub_db_description_dict
+    else:
+        return db_description_dict

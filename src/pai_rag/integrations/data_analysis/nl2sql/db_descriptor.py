@@ -4,7 +4,6 @@ from typing import Any, Callable, Dict, List, Optional, Union, cast
 from decimal import Decimal
 from loguru import logger
 import datetime
-import pandas as pd
 from pydantic.v1 import BaseModel, Field
 from sqlalchemy import Table
 
@@ -24,7 +23,7 @@ from llama_index.core.prompts.mixin import (
 )
 
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
-    generate_schema_description,
+    get_schema_desc4llm,
 )
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_DB_SUMMARY_PROMPT,
@@ -38,7 +37,6 @@ class DBDescriptor(PromptMixin):
     """
     收集数据库结构信息(表名、列名、采样数据等): DDL + data sample + opt description
     基于结构信息利用LLM进行信息总结补充
-    收集历史查询记录: sql_history
     """
 
     def __init__(
@@ -84,7 +82,7 @@ class DBDescriptor(PromptMixin):
         """Get prompt modules."""
         return {}
 
-    def get_structured_table_description(
+    def get_structured_db_description(
         self, query_bundle: QueryBundle, file_path: Optional[str] = None
     ) -> Dict:
         """
@@ -94,28 +92,27 @@ class DBDescriptor(PromptMixin):
             query_bundle.query_str
         )  # get a list of SQLTableSchema, e.g. [SQLTableSchema(table_name='has_pet', context_str=None),]
         table_info_list = []
-        column_info_list = []
         table_foreign_key_list = []
 
         for table_schema_obj in table_schema_objs:
             table_name = table_schema_obj.table_name
-            table_comment = self._sql_database._inspector.get_table_comment(
+            comment_from_db = self._sql_database._inspector.get_table_comment(
                 table_name, schema=self._sql_database._schema
             )["text"]
-            # collect table level info
-            table_info_list.append(
-                {
-                    "table": table_name,
-                    "comment": table_comment,
-                    "description": table_schema_obj.context_str,
-                    "overview": None,
-                }
+            additional_desc = table_schema_obj.context_str
+            # get table description
+            table_comment = self._merge_comment_and_desc(
+                comment_from_db, additional_desc
             )
-            # collect data samples
+            # get table data samples
             data_sample = self._get_data_sample(table_name)
             # get table primary key
             table_pk_col = self._get_table_primary_key(table_name)
-            # collect and structure table schema with data samples
+            # get foreign keys
+            table_fks = self._get_table_foreign_keys(table_name)
+            table_foreign_key_list.extend(table_fks)
+            # get column info
+            column_info_list = []
             for i, col in enumerate(
                 self._sql_database._inspector.get_columns(
                     table_name, self._sql_database._schema
@@ -123,57 +120,56 @@ class DBDescriptor(PromptMixin):
             ):
                 # print("col:", col, "data_sample:", data_sample)
                 column_value_sample = [row[i] for row in data_sample]
+                # collect and structure table schema with data samples
                 column_info_list.append(
                     {
-                        "table": table_name,
-                        "column": col["name"],
-                        "type": str(col["type"]),
-                        "comment": col.get("comment"),
+                        "column_name": col["name"],
+                        "column_type": str(col["type"]),
+                        "column_comment": col.get("comment"),
                         "primary_key": col["name"] == table_pk_col,
                         "foreign_key": False,
                         "foreign_key_referred_table": None,
-                        "value_sample": column_value_sample,
-                        "description": None,
+                        "column_value_sample": column_value_sample,
+                        "column_description": None,
                     }
                 )
-            # get foreign keys
-            table_fks = self._get_table_foreign_keys(table_name)
-            table_foreign_key_list.extend(table_fks)
+
+            table_info_list.append(
+                {
+                    "table_name": table_name,
+                    "table_comment": table_comment,
+                    "table_description": None,
+                    "column_info": column_info_list,
+                }
+            )
 
         # 处理table之间的foreign key一致性
-        column_info_list = self._keep_foreign_keys_consistency(
-            table_foreign_key_list, column_info_list
+        table_info_list = self._keep_foreign_keys_consistency(
+            table_foreign_key_list, table_info_list
         )
 
-        structured_table_description_dict = {
+        structured_db_description_dict = {
             "db_overview": None,
             "table_info": table_info_list,
-            "column_info": column_info_list,
         }
 
-        logger.info("structured_table_description generated.")
+        logger.info("structured_db_description generated.")
 
         # 保存为json文件
         if file_path is None:
             file_path = self._db_description_file_path
-        self._save_to_json(structured_table_description_dict, file_path)
-        logger.info(f"structured_table_description saved to: {file_path}")
+        self._save_to_json(structured_db_description_dict, file_path)
+        logger.info(f"structured_db_description saved to: {file_path}")
 
-        return structured_table_description_dict
+        return structured_db_description_dict
 
-    def get_enhanced_table_description(self, file_path: Optional[str] = None) -> None:
+    def get_enhanced_db_description(self, file_path: Optional[str] = None) -> None:
         """
         利用LLM总结table, 以及各个table/column的description
         """
 
-        structured_table_description_dict = self.get_structured_table_description(
-            QueryBundle("")
-        )
-        (
-            schema_description_str,
-            table_info_df,
-            column_info_df,
-        ) = generate_schema_description(structured_table_description_dict)
+        db_description_dict = self.get_structured_db_description(QueryBundle(""))
+        schema_description_str = get_schema_desc4llm(db_description_dict)
         logger.info(f"schema description for llm: \n {schema_description_str}")
 
         sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
@@ -184,7 +180,7 @@ class DBDescriptor(PromptMixin):
         )
 
         saved_file_path = self._postprocess_enhanced_description(
-            table_info_df, column_info_df, output_summary_str, file_path
+            db_description_dict, output_summary_str, file_path
         )
         logger.info(
             f"llm enhanced db description generated and saved to: {saved_file_path}"
@@ -192,20 +188,14 @@ class DBDescriptor(PromptMixin):
 
         return
 
-    async def aget_enhanced_table_description(
+    async def aget_enhanced_db_description(
         self, file_path: Optional[str] = None
     ) -> None:
         """
         利用LLM总结table, 以及各个table/column的description
         """
-        structured_table_description_dict = self.get_structured_table_description(
-            QueryBundle("")
-        )
-        (
-            schema_description_str,
-            table_info_df,
-            column_info_df,
-        ) = generate_schema_description(structured_table_description_dict)
+        db_description_dict = self.get_structured_db_description(QueryBundle(""))
+        schema_description_str = get_schema_desc4llm(db_description_dict)
         logger.info(f"schema description for llm: \n {schema_description_str}")
 
         sllm = self._llm.as_structured_llm(output_cls=AnalysisOutput)
@@ -216,7 +206,7 @@ class DBDescriptor(PromptMixin):
         )
 
         saved_file_path = self._postprocess_enhanced_description(
-            table_info_df, column_info_df, output_summary_str, file_path
+            db_description_dict, output_summary_str, file_path
         )
         logger.info(
             f"async llm enhanced db description generated and saved to: {saved_file_path}"
@@ -289,8 +279,8 @@ class DBDescriptor(PromptMixin):
             table_name, self._sql_database._schema
         ):
             table_foreign_key = {
-                "table": table_name,
-                "column": foreign_key["constrained_columns"][0],
+                "table_name": table_name,
+                "column_name": foreign_key["constrained_columns"][0],
                 "foreign_key": True,
                 "foreign_key_referred_table": foreign_key["referred_table"],
             }
@@ -298,26 +288,48 @@ class DBDescriptor(PromptMixin):
 
         return table_fks
 
-    def _keep_foreign_keys_consistency(self, table_foreign_key_list, column_info_list):
+    def _merge_comment_and_desc(self, comment_from_db: str, additional_desc: str):
+        target_comment = [
+            value for value in [comment_from_db, additional_desc] if value is not None
+        ]
+        if len(target_comment) > 0:
+            return ", ".join(target_comment)
+        else:
+            return None
+
+    def _keep_foreign_keys_consistency(self, table_foreign_key_list, table_info_list):
         # 处理table之间的foreign key一致性
         for table_foreign_key in table_foreign_key_list:
-            for item in column_info_list:
-                if (
-                    item["table"] == table_foreign_key["table"]
-                    and item["column"] == table_foreign_key["column"]
-                ):
-                    item.update(table_foreign_key)
-                if (
-                    item["table"] == table_foreign_key["foreign_key_referred_table"]
-                    and item["column"] == table_foreign_key["column"]
-                ):
-                    item.update(
-                        {
-                            "foreign_key": True,
-                            "foreign_key_referred_table": table_foreign_key["table"],
-                        }
-                    )
-        return column_info_list
+            for table_item in table_info_list:
+                for column_item in table_item["column_info"]:
+                    if (
+                        table_item["table_name"] == table_foreign_key["table_name"]
+                        and column_item["column_name"]
+                        == table_foreign_key["column_name"]
+                    ):
+                        column_item.update(
+                            {
+                                "foreign_key": True,
+                                "foreign_key_referred_table": table_foreign_key[
+                                    "foreign_key_referred_table"
+                                ],
+                            }
+                        )
+                    if (
+                        table_item["table_name"]
+                        == table_foreign_key["foreign_key_referred_table"]
+                        and column_item["column_name"]
+                        == table_foreign_key["column_name"]
+                    ):
+                        column_item.update(
+                            {
+                                "foreign_key": True,
+                                "foreign_key_referred_table": table_foreign_key[
+                                    "table_name"
+                                ],
+                            }
+                        )
+        return table_info_list
 
     def _convert_data_sample_format(self, data):
         """递归地将数据中的特殊类型转换为常规类型"""
@@ -345,39 +357,34 @@ class DBDescriptor(PromptMixin):
 
     def _postprocess_enhanced_description(
         self,
-        table_info_df,
-        column_info_df,
+        db_description_dict: Dict,
         output_summary_str: str,
         file_path: Optional[str] = None,
     ) -> None:
-        """
-        将LLM生成的description合并到table_info_df & column_info_df中 并保存
-        """
-
+        """将LLM生成的description合并到table_info_df & column_info_df中 并保存"""
         output_summary_dict = json.loads(output_summary_str)
-        table_info_df_with_overview = pd.merge(
-            table_info_df.drop(columns=["overview"]),
-            pd.DataFrame(output_summary_dict["table_info"]),
-            on=["table"],
-            how="left",
-        )
-        column_info_with_desc = pd.merge(
-            column_info_df.drop(columns=["description"]),
-            pd.DataFrame(output_summary_dict["column_info"]),
-            on=["table", "column"],
-            how="left",
-        )
-        output_summary_dict["table_info"] = table_info_df_with_overview.to_dict(
-            orient="records"
-        )
-        output_summary_dict["column_info"] = column_info_with_desc.to_dict(
-            orient="records"
-        )
+        db_description_dict["db_overview"] = output_summary_dict["db_overview"]
+        for table in db_description_dict["table_info"]:
+            table_name = table["table_name"]
+            output_summary_table = [
+                item
+                for item in output_summary_dict["table_info"]
+                if item["table"] == table_name
+            ][0]
+            table["table_description"] = output_summary_table["description"]
+            for column in table["column_info"]:
+                column_name = column["column_name"]
+                output_summary_column = [
+                    item
+                    for item in output_summary_table["column_info"]
+                    if item["column"] == column_name
+                ][0]
+                column["column_description"] = output_summary_column["description"]
 
         # 保存为json文件
         if file_path is None:
             file_path = self._db_description_file_path
-        self._save_to_json(output_summary_dict, file_path)
+        self._save_to_json(db_description_dict, file_path)
 
         return file_path
 
@@ -402,16 +409,16 @@ class DBDescriptor(PromptMixin):
 class ColumnDesc(BaseModel):
     """Data model for ColumnDesc"""
 
-    table: str = Field(description="表名")
     column: str = Field(description="字段名")
-    description: str = Field(description="字段的描述，包括专业术语解释，时间格式解释等")
+    description: str = Field(description="字段的描述，包括专业术语解释，时间格式解释等，无需重复字段类型等已知信息")
 
 
 class TableDesc(BaseModel):
     """Data model for TableDesc."""
 
     table: str = Field(description="表名")
-    overview: str = Field(description="表的概述")
+    description: str = Field(description="表的概述")
+    column_info: List[ColumnDesc] = Field(description="每个字段的补充描述")
 
 
 class AnalysisOutput(BaseModel):
@@ -419,4 +426,3 @@ class AnalysisOutput(BaseModel):
 
     db_overview: str = Field(description="数据库信息分析总结")
     table_info: List[TableDesc] = Field(description="每个表的补充描述")
-    column_info: List[ColumnDesc] = Field(description="每个字段的补充描述, 无需重复字段类型等已知信息")

@@ -67,10 +67,12 @@ class DBLoader:
         """处理数据库结构描述信息、历史查询和具体值信息, 存储json和索引"""
         # get db_description
         if self._enable_enhanced_description:
-            self._db_descriptor.get_enhanced_table_description()
+            self._llm.max_tokens = 8000
+            self._db_descriptor.get_enhanced_db_description()
             logger.info("db_description obtained from with llm.")
         else:
-            self._db_descriptor.get_structured_table_description(QueryBundle(""))
+            self._llm.max_tokens = 4000
+            self._db_descriptor.get_structured_db_description(QueryBundle(""))
             logger.info("db_description obtained from without llm.")
 
         # get db_embedding, including db_description, db_history, db_value
@@ -91,10 +93,12 @@ class DBLoader:
         """处理数据库结构描述信息、历史查询和具体值信息, 存储json和索引"""
         # get db_description
         if self._enable_enhanced_description:
-            await self._db_descriptor.aget_enhanced_table_description()
+            self._llm.max_tokens = 8000
+            await self._db_descriptor.aget_enhanced_db_description()
             logger.info("db_description obtained with llm.")
         else:
-            self._db_descriptor.get_structured_table_description(QueryBundle(""))
+            self._llm.max_tokens = 4000
+            self._db_descriptor.get_structured_db_description(QueryBundle(""))
             logger.info("db_description obtained without llm.")
 
         # get db_embedding, including db_description, db_history, db_value

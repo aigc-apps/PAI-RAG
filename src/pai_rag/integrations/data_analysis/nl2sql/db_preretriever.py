@@ -1,5 +1,3 @@
-import os
-import json
 from typing import Optional, Dict, List
 from loguru import logger
 
@@ -15,6 +13,11 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
     DESCRIPTION_STORAGE_PATH,
     HISTORY_STORAGE_PATH,
     VALUE_STORAGE_PATH,
+)
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
+    count_total_columns,
+    get_target_info,
+    extract_subset_from_description,
 )
 
 
@@ -69,30 +72,32 @@ class DBPreRetriever:
     ) -> Dict:
         """get retrieved schema description"""
 
-        db_description_dict = self._get_target_info(db_description_dict, "description")
-        column_nums = len(db_description_dict["column_info"])
+        db_description_dict = get_target_info(
+            self._db_description_path, db_description_dict, "description"
+        )
+        total_columns = count_total_columns(db_description_dict)
 
         # 检索description返回List[NodeWithScore]
         retrieved_description_nodes = self._retrieve_context_nodes(
             self._db_description_index, nl_query, top_k
         )
         logger.info(
-            f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes)}"
+            f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes), retrieved_description_nodes}"
         )
         # 检索entity返回List[NodeWithScore]
         retrieved_value_nodes = self._retrieve_entity_nodes(
             self._db_value_index, keywords, top_k
         )
         logger.info(
-            f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes)}"
+            f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes), retrieved_value_nodes}."
         )
-
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
-        retrieved_description_dict = self._description_filter(
+        retrieved_description_dict = self._filter_description(
             retrieved_description_nodes, retrieved_value_nodes, db_description_dict
         )
+        retrieved_total_columns = count_total_columns(retrieved_description_dict)
         logger.info(
-            f"""Description dict filtered, number from {column_nums} to {len(retrieved_description_dict["column_info"])}"""
+            f"Description dict filtered, number from {total_columns} to {retrieved_total_columns}."
         )
 
         return retrieved_description_dict
@@ -106,30 +111,33 @@ class DBPreRetriever:
     ) -> Dict:
         """get retrieved schema description"""
 
-        db_description_dict = self._get_target_info(db_description_dict, "description")
-        column_nums = len(db_description_dict["column_info"])
+        db_description_dict = get_target_info(
+            self._db_description_path, db_description_dict, "description"
+        )
+        total_columns = count_total_columns(db_description_dict)
 
         # 检索返回List[NodeWithScore]
         retrieved_description_nodes = await self._aretrieve_context_nodes(
             self._db_description_index, nl_query, top_k
         )
         logger.info(
-            f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes)}"
+            f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes), retrieved_description_nodes}"
         )
         # 检索entity返回List[NodeWithScore]
         retrieved_value_nodes = await self._aretrieve_entity_nodes(
             self._db_value_index, keywords, top_k
         )
         logger.info(
-            f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes)}"
+            f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes), retrieved_value_nodes}"
         )
 
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
-        retrieved_description_dict = self._description_filter(
+        retrieved_description_dict = self._filter_description(
             retrieved_description_nodes, retrieved_value_nodes, db_description_dict
         )
+        retrieved_total_columns = count_total_columns(retrieved_description_dict)
         logger.info(
-            f"""Description dict filtered, number from {column_nums} to {len(retrieved_description_dict["column_info"])}"""
+            f"Description dict filtered, number from {total_columns} to {retrieved_total_columns}."
         )
 
         return retrieved_description_dict
@@ -142,7 +150,9 @@ class DBPreRetriever:
     ) -> List[Dict]:
         """get retrieved query history"""
 
-        db_history_list = self._get_target_info(db_history_list, "history")
+        db_history_list = get_target_info(
+            self._db_description_path, db_history_list, "history"
+        )
         history_nums = len(db_history_list)
 
         # 检索返回List[NodeWithScore]
@@ -154,7 +164,7 @@ class DBPreRetriever:
         )
 
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
-        retrieved_history_list = self._history_filter(
+        retrieved_history_list = self._filter_history(
             retrieved_history_nodes, db_history_list
         )
         logger.info(
@@ -171,7 +181,9 @@ class DBPreRetriever:
     ) -> List[Dict]:
         """get retrieved query history"""
 
-        db_history_list = self._get_target_info(db_history_list, "history")
+        db_history_list = get_target_info(
+            self._db_history_path, db_history_list, "history"
+        )
         history_nums = len(db_history_list)
 
         # 检索返回List[NodeWithScore]
@@ -183,7 +195,7 @@ class DBPreRetriever:
         )
 
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
-        retrieved_history_list = self._history_filter(
+        retrieved_history_list = self._filter_history(
             retrieved_history_nodes, db_history_list
         )
         logger.info(
@@ -191,34 +203,6 @@ class DBPreRetriever:
         )
 
         return retrieved_history_list
-
-    def _get_target_info(
-        self, target: Optional[Dict | List] = None, flag: str = "description"
-    ) -> Dict | List:
-        # 正常情况下接受传入的description dict 或 history list，否则从本地加载
-        if target is None:
-            if flag == "description":
-                if os.path.exists(self._db_description_path):
-                    file_path = self._db_description_path
-                else:
-                    raise ValueError(
-                        f"db_description_file_path: {self._db_description_path} does not exist"
-                    )
-            if flag == "history":
-                if os.path.exists(self._db_history_path):
-                    file_path = self._db_history_path
-                else:
-                    raise ValueError(
-                        f"db_history_file_path: {self._db_history_path} does not exist"
-                    )
-            try:
-                with open(file_path, "r") as f:
-                    target = json.load(f)
-            except Exception as e:
-                raise ValueError(f"Load target object from {file_path} failed: {e}")
-                # logger.info(f"Load target object from {file_path} failed: {e}")
-
-        return target
 
     def _retrieve_context_nodes(
         self,
@@ -250,46 +234,7 @@ class DBPreRetriever:
 
         return retrieved_nodes
 
-    # def _description_filter(
-    #     self,
-    #     retrieved_description_nodes: List[NodeWithScore],
-    #     db_description_dict: Dict,
-    # ) -> Dict:
-    #     """根据retrieve结果缩小db_description中column_info"""
-
-    #     if len(retrieved_description_nodes) == 0:
-    #         logger.info(
-    #             "Empty retrieved_description_nodes, use original description instead."
-    #         )
-    #         return db_description_dict
-
-    #     else:
-    #         retrieved_nodes_list = []
-    #         for node in retrieved_description_nodes:
-    #             retrieved_nodes_list.append(
-    #                 {
-    #                     "table": node.metadata["table_name"],
-    #                     "column": node.metadata["column_name"],
-    #                 }
-    #             )
-
-    #         retrieved_db_description_list = []
-    #         for item in db_description_dict["column_info"]:
-    #             if {
-    #                 "table": item["table"],
-    #                 "column": item["column"],
-    #             } in retrieved_nodes_list:
-    #                 retrieved_db_description_list.append(item)
-    #             if (item["primary_key"] is True or item["foreign_key"] is True) and (
-    #                 item not in retrieved_db_description_list
-    #             ):  # 保留主键和外键
-    #                 retrieved_db_description_list.append(item)
-    #         # update with selected_db_description_list
-    #         db_description_dict["column_info"] = retrieved_db_description_list
-
-    #         return db_description_dict
-
-    def _description_filter(
+    def _filter_description(
         self,
         retrieved_description_nodes: List[NodeWithScore],
         retrieved_value_nodes: List[NodeWithScore],
@@ -307,6 +252,9 @@ class DBPreRetriever:
                     retrieved_nodes_dict[key] = [str(value)]
                 else:
                     retrieved_nodes_dict[key].append(str(value))
+            logger.info(
+                f"retrieved_nodes_dict from value_nodes: {len(retrieved_nodes_dict)},\n {retrieved_nodes_dict}"
+            )
         else:
             logger.info("Empty retrieved_value_nodes")
         if len(retrieved_description_nodes) > 0:
@@ -320,27 +268,14 @@ class DBPreRetriever:
         else:
             logger.info("Empty retrieved_description_nodes")
 
-        # 从db_description_dict中获取满足过滤key的column_info
-        if len(retrieved_nodes_dict) > 0:
-            retrieved_db_description_list = []
-            for item in db_description_dict["column_info"]:
-                key = (item["table"], item["column"])
-                if key in retrieved_nodes_dict:
-                    if len(retrieved_nodes_dict[key]) > 0:
-                        item["value_sample"].extend(retrieved_nodes_dict[key])
-                        item["value_sample"] = list(set(item["value_sample"]))
-                    retrieved_db_description_list.append(item)
-                if (item["primary_key"] is True or item["foreign_key"] is True) and (
-                    item not in retrieved_db_description_list
-                ):  # 保留主键和外键
-                    retrieved_db_description_list.append(item)
+        # 过滤db_description_dict
+        filterd_db_description_dict = extract_subset_from_description(
+            retrieved_nodes_dict, db_description_dict
+        )
 
-            # update with retrieved_db_description_list
-            db_description_dict["column_info"] = retrieved_db_description_list
+        return filterd_db_description_dict
 
-        return db_description_dict
-
-    def _history_filter(
+    def _filter_history(
         self, retrieved_history_nodes: List[NodeWithScore], db_history_list: List
     ) -> List:
         """根据retrieve结果缩小db_history"""

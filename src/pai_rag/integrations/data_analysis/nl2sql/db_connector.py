@@ -167,29 +167,3 @@ class DBConnector:
             )
 
         return cls(db_config=db_config)
-
-
-if __name__ == "__main__":
-    config = {
-        "dialect": "sqlite",
-        "path": "/Users/chuyu/Documents/gitlab/rag/pairag_github/pairag_v0.4/PAI-RAG/tests/testdata/data/db_data",
-        "dbname": "pets.db",
-        "desired_tables": [],
-        "table_descriptions": {},
-    }
-
-    db_connector = DBConnector(db_config=config)
-    print(id(db_connector), db_connector.sql_database, id(db_connector.sql_database))
-    # 连接数据库，创建实例
-    db_connector.connect()
-    print(id(db_connector), db_connector.sql_database, id(db_connector.sql_database))
-    print(id(db_connector), db_connector.sql_database._usable_tables)
-
-    # 执行SQL查询
-    results = db_connector.execute_sql_query("SELECT * FROM pets")
-    print(results)
-
-    db_connector1 = DBConnector(db_config=config)
-    print(id(db_connector1), db_connector1.sql_database, id(db_connector1.sql_database))
-    db_connector1.connect()
-    print(id(db_connector1), db_connector1.sql_database, id(db_connector1.sql_database))

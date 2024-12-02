@@ -51,7 +51,13 @@ def load_db_info_fn(input_elements: List[Any]):
     # update snapshot
     try:
         update_dict["analysis_type"] = "nl2sql"
-        # print("update_dict:", update_dict)
+        if update_dict["enable_db_embedding"] is True:
+            update_dict["enable_query_preprocessor"] = True
+            update_dict["enable_db_preretriever"] = True
+        else:
+            update_dict["enable_query_preprocessor"] = False
+            update_dict["enable_db_preretriever"] = False
+        print("update_dict:", update_dict)
         rag_client.patch_config(update_dict)
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -223,13 +229,18 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                 )
                                 enable_db_history = gr.Checkbox(
                                     label="Yes",
-                                    info="Load db history",
+                                    info="Upload db query history/example",
                                     elem_id="enable_db_history",
                                 )
                                 enable_db_embedding = gr.Checkbox(
                                     label="Yes",
-                                    info="Embed db info",
+                                    info="Enhance db retrieval by embedding",
                                     elem_id="enable_db_embedding",
+                                )
+                                enable_db_selector = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db schema selector",
+                                    elem_id="enable_db_selector",
                                 )
 
                                 history_file_upload = gr.File(
@@ -260,23 +271,6 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     api_name="upload_history_fn",
                                 )
 
-                            with gr.Column(scale=1):
-                                enable_query_preprocessor = gr.Checkbox(
-                                    label="Yes",
-                                    info="Enable query processor",
-                                    elem_id="enable_query_preprocessor",
-                                )
-                                enable_db_preretriever = gr.Checkbox(
-                                    label="Yes",
-                                    info="Enable db preretriever",
-                                    elem_id="enable_db_preretriever",
-                                )
-                                enable_db_selector = gr.Checkbox(
-                                    label="Yes",
-                                    info="Enable db selector",
-                                    elem_id="enable_db_selector",
-                                )
-
                 # load db info
                 with gr.Row():
                     load_db_info_btn = gr.Button(
@@ -299,8 +293,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     enable_enhanced_description,
                     enable_db_history,
                     enable_db_embedding,
-                    enable_query_preprocessor,
-                    enable_db_preretriever,
+                    # enable_query_preprocessor,
+                    # enable_db_preretriever,
                     enable_db_selector,
                 }
 
@@ -370,7 +364,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=6):
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
+            chatbot = gr.Chatbot(height=600, elem_id="chatbot")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
@@ -386,12 +380,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database,
             tables,
             descriptions,
-            # enable_enhanced_description,
-            # enable_db_history,
-            # enable_db_embedding,
-            # enable_query_preprocessor,
-            # enable_db_preretriever,
-            # enable_db_selector,
+            enable_db_selector,
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,
@@ -445,8 +434,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             enable_enhanced_description.elem_id: enable_enhanced_description,
             enable_db_history.elem_id: enable_db_history,
             enable_db_embedding.elem_id: enable_db_embedding,
-            enable_query_preprocessor.elem_id: enable_query_preprocessor,
-            enable_db_preretriever.elem_id: enable_db_preretriever,
+            # enable_query_preprocessor.elem_id: enable_query_preprocessor,
+            # enable_db_preretriever.elem_id: enable_db_preretriever,
             enable_db_selector.elem_id: enable_db_selector,
             db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
             synthesizer_prompt.elem_id: synthesizer_prompt,

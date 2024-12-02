@@ -40,9 +40,9 @@ class DBQuery:
         db_config: Dict,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
-        sql_database: Optional[SQLDatabase] = None,  # from offline output
-        db_structured_description_path: Optional[str] = None,  # from offline output
-        db_query_history_path: Optional[str] = None,  # from offline output
+        sql_database: Optional[SQLDatabase] = None,
+        db_structured_description_path: Optional[str] = None,
+        db_query_history_path: Optional[str] = None,
         keyword_extraction_prompt: Optional[BasePromptTemplate] = None,
         db_schema_select_prompt: Optional[BasePromptTemplate] = None,
         text_to_sql_prompt: Optional[BasePromptTemplate] = None,
@@ -64,8 +64,9 @@ class DBQuery:
             raise FileNotFoundError(
                 f"Please load your db info first, db_structured_description_path: {db_structured_description_path} does not exist. "
             )
+        self._enable_db_history = self._db_config.get("enable_db_history", False)
         db_query_history_path = db_query_history_path or DEFAULT_DB_HISTORY_PATH
-        if os.path.exists(db_query_history_path):
+        if self._enable_db_history and os.path.exists(db_query_history_path):
             with open(db_query_history_path, "r") as f:
                 self._db_history_list = json.load(f)
         else:
@@ -149,12 +150,6 @@ class DBQuery:
         else:
             retrieved_db_description_dict = self._db_description_dict
             retrieved_db_history_list = self._db_history_list
-        logger.info(
-            f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
-        )
-        logger.info(
-            f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
-        )
 
         # 3. schema selector, 可选
         if self._db_schema_selector:
@@ -208,12 +203,6 @@ class DBQuery:
         else:
             retrieved_db_description_dict = self._db_description_dict
             retrieved_db_history_list = self._db_history_list
-        logger.info(
-            f"""Number of retrieved_db_description_dict (column info): {len(retrieved_db_description_dict["column_info"])}"""
-        )
-        logger.info(
-            f"Number of retrieved_db_history_list: {len(retrieved_db_history_list)}"
-        )
 
         # 3. schema selector, 可选
         if self._db_schema_selector:

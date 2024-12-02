@@ -19,7 +19,7 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     DefaultSQLParser,
 )
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
-    generate_schema_description,
+    get_schema_desc4llm,
 )
 from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
     DEFAULT_TEXT_TO_SQL_PROMPT,
@@ -96,14 +96,12 @@ class SQLGenerator:
         max_retry: int = 2,
     ) -> Tuple[List[NodeWithScore], Dict]:
         # step1: 获得description_str & history_str 作为llm prompt参数
-        schema_description_str, _, _ = generate_schema_description(
-            selected_db_description_dict
-        )
+        schema_description_str = get_schema_desc4llm(selected_db_description_dict)
         selected_db_history_str = str(selected_db_history_list)
         logger.info(f"schema_description_str for llm: {schema_description_str}")
 
         # step2: llm生成sql
-        sql_query_str = self._agenerate_sql(
+        sql_query_str = self._generate_sql(
             query_bundle, schema_description_str, selected_db_history_str
         )
         logger.info(f"> Predicted SQL query: {sql_query_str}")
@@ -146,9 +144,7 @@ class SQLGenerator:
         max_retry: int = 2,
     ) -> Tuple[List[NodeWithScore], Dict]:
         # step1: 获得description_str & history_str 作为llm prompt参数
-        schema_description_str, _, _ = generate_schema_description(
-            selected_db_description_dict
-        )
+        schema_description_str = get_schema_desc4llm(selected_db_description_dict)
         selected_db_history_str = str(selected_db_history_list)
         logger.info(f"schema_description_str for llm: {schema_description_str}")
         logger.info(f"selected_db_history_str for llm: {selected_db_history_str}")
@@ -273,7 +269,7 @@ class SQLGenerator:
 
             except Exception as error:
                 last_exception = error
-                logger.info(f"> Attempt: {attempt}, Unexpected error: {error}")
+                logger.exception(f"> Attempt: {attempt}, Unexpected error: {error}")
                 raise
 
         logger.info(
@@ -320,7 +316,7 @@ class SQLGenerator:
 
             except Exception as error:
                 last_exception = error
-                logger.info(f"> Attempt: {attempt}, Unexpected error: {error}")
+                logger.exception(f"> Attempt: {attempt}, Unexpected error: {error}")
                 raise
 
         logger.info(

@@ -1,9 +1,6 @@
 """Used for schema description, q-sql history, and db value embedding"""
-import os
-import json
 from loguru import logger
-from typing import Dict, List, Optional, Tuple
-import pandas as pd
+from typing import Dict, List, Optional
 
 from llama_index.core.schema import TextNode
 from llama_index.core.base.embeddings.base import BaseEmbedding
@@ -16,6 +13,9 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
     DESCRIPTION_STORAGE_PATH,
     HISTORY_STORAGE_PATH,
     VALUE_STORAGE_PATH,
+)
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
+    get_target_info,
 )
 
 
@@ -42,10 +42,13 @@ class DBIndexer:
 
     def get_description_index(self, db_description_dict: Optional[Dict] = None):
         # get schema info
-        table_info_df, column_info_df = self._get_schema_info(db_description_dict)
+        # db_description_dict = self._get_schema_info(db_description_dict)
+        db_description_dict = get_target_info(
+            self._db_description_path, db_description_dict, flag="description"
+        )
         # get nodes with embedding
         description_nodes = self._get_description_nodes_with_embedding(
-            table_info_df, column_info_df
+            db_description_dict
         )
         # create & store index
         description_index = self._store_nodes_to_index(
@@ -57,10 +60,13 @@ class DBIndexer:
 
     async def aget_description_index(self, db_description_dict: Optional[Dict] = None):
         # get schema info
-        table_info_df, column_info_df = self._get_schema_info(db_description_dict)
+        # db_description_dict = self._get_schema_info(db_description_dict)
+        db_description_dict = get_target_info(
+            self._db_description_path, db_description_dict, flag="description"
+        )
         # get nodes with embedding
         description_nodes = await self._aget_description_nodes_with_embedding(
-            table_info_df, column_info_df
+            db_description_dict
         )
         # create & store index
         description_index = self._store_nodes_to_index(
@@ -72,7 +78,10 @@ class DBIndexer:
 
     def get_history_index(self, db_history_list: Optional[List] = None):
         # get history info
-        db_history_list = self._get_history_info(db_history_list)
+        #  db_history_list = self._get_history_info(db_history_list)
+        db_history_list = get_target_info(
+            self._db_history_path, db_history_list, flag="history"
+        )
         # get nodes with embedding
         history_nodes = self._get_history_nodes_with_embedding(db_history_list)
         # create & store index
@@ -85,7 +94,10 @@ class DBIndexer:
 
     async def aget_history_index(self, db_history_list: Optional[List] = None):
         # get history info
-        db_history_list = self._get_history_info(db_history_list)
+        # db_history_list = self._get_history_info(db_history_list)
+        db_history_list = get_target_info(
+            self._db_history_path, db_history_list, flag="history"
+        )
         # get nodes with embedding
         history_nodes = await self._aget_history_nodes_with_embedding(db_history_list)
         # create & store index
@@ -96,9 +108,10 @@ class DBIndexer:
 
         return history_index
 
-    def get_value_index(self):
+    def get_value_index(self, db_description_dict: Optional[Dict] = None):
         # get unique_values
-        unique_values = self._get_unique_values()
+        unique_values = self._get_unique_values(db_description_dict)
+        logger.info(f"unique_values: {unique_values}")
         # get nodes with embedding
         value_nodes = self._get_value_nodes_with_embedding(unique_values)
         # create & store index
@@ -109,10 +122,10 @@ class DBIndexer:
 
         return value_index
 
-    async def aget_value_index(self):
+    async def aget_value_index(self, db_description_dict: Optional[Dict] = None):
         # get unique_values
-        unique_values = self._get_unique_values()
-        print("unique_values:", unique_values)
+        unique_values = self._get_unique_values(db_description_dict)
+        logger.info(f"unique_values: {unique_values}")
         # get nodes with embedding
         value_nodes = await self._aget_value_nodes_with_embedding(unique_values)
         # create & store index
@@ -124,11 +137,11 @@ class DBIndexer:
         return value_index
 
     def _get_description_nodes_with_embedding(
-        self, table_info_df: pd.DataFrame, column_info_df: pd.DataFrame
+        self, db_description_dict: Dict
     ) -> List[TextNode]:
         # get description nodes
         schema_description_nodes = self._get_nodes_from_db_description(
-            table_info_df, column_info_df
+            db_description_dict
         )
         # get description nodes with embeddings
         schema_description_nodes = self._get_nodes_with_embeddings(
@@ -138,11 +151,11 @@ class DBIndexer:
         return schema_description_nodes
 
     async def _aget_description_nodes_with_embedding(
-        self, table_info_df: pd.DataFrame, column_info_df: pd.DataFrame
+        self, db_description_dict: Dict
     ) -> List[TextNode]:
         # get description nodes
         schema_description_nodes = self._get_nodes_from_db_description(
-            table_info_df, column_info_df
+            db_description_dict
         )
         # get description nodes with embeddings
         schema_description_nodes = await self._aget_nodes_with_embeddings(
@@ -214,131 +227,93 @@ class DBIndexer:
         return nodes
 
     def _get_unique_values(
-        self,
+        self, db_description_dict: Optional[Dict] = None
     ) -> Dict[str, Dict[str, List[str]]]:
-        """Retrieves unique text values from the database excluding primary keys."""
-        table_info_df, column_info_df = self._get_schema_info()
+        """
+        Retrieves unique text values from the database excluding primary keys.
+        """
 
+        # db_description_dict = self._get_schema_info(db_description_dict)
+        db_description_dict = get_target_info(
+            self._db_description_path, db_description_dict, "description"
+        )
         unique_values: Dict[str, Dict[str, List[str]]] = {}
-        for table in table_info_df["table"].tolist():
-            # print("========table=====:", table)
 
+        for table in db_description_dict["table_info"]:
+            table_name = table["table_name"]
+            print("========table=====:", table_name)
             table_values: Dict[str, List[str]] = {}
             # 筛选是string类型但不是primary_key的column
-            column_list = column_info_df[
-                (column_info_df["table"] == table)
-                & (
-                    column_info_df["type"].str.contains("VARCHAR")
-                    | column_info_df["type"].str.contains("TEXT")
-                )
-                & (column_info_df["type"] != "VARCHAR(1)")
-                & (~column_info_df["primary_key"])
-            ]["column"].tolist()
-            # print("column_list:", column_list)
-            for column in column_list:
-                if any(
-                    keyword in column.lower()
-                    for keyword in [
-                        "_id",
-                        " id",
-                        "url",
-                        "email",
-                        "web",
-                        "time",
-                        "phone",
-                        "date",
-                        "address",
-                    ]
-                ) or column.endswith("Id"):
-                    continue
-                # 获取column数值的统计信息
-                try:
-                    result = self._sql_database.run_sql(
-                        f"""
-                        SELECT SUM(LENGTH(unique_values)), COUNT(unique_values)
-                        FROM (
-                            SELECT DISTINCT `{column}` AS unique_values
-                            FROM `{table}`
-                            WHERE `{column}` IS NOT NULL
-                        ) AS subquery
-                    """
-                    )
-                    result = result[1]["result"][0]
-                except Exception as e:
-                    logger.info(f"no unique values found: {e}")
-                    result = 0, 0
-
-                sum_of_lengths, count_distinct = result
-                if sum_of_lengths is None or count_distinct == 0:
-                    continue
-
-                average_length = round(sum_of_lengths / count_distinct, 3)
-                logger.info(
-                    f"Column: {column}, sum_of_lengths: {sum_of_lengths}, count_distinct: {count_distinct}, average_length: {average_length}"
-                )
-
-                # 获取满足条件的字段数值
-                if (
-                    ("name" in column.lower() and sum_of_lengths < 5000000)
-                    or (sum_of_lengths < 2000000 and average_length < 25)
-                    or count_distinct < 100
+            for column in table["column_info"]:
+                column_name = column["column_name"]
+                column_type = column["column_type"]
+                if (("VARCHAR" in column_type) and (column_type != "VARCHAR(1)")) or (
+                    "TEXT" in column_type
                 ):
-                    logger.info(f"Fetching distinct values for {column}")
+                    if column["primary_key"]:
+                        continue
+                    if any(
+                        keyword in column_name.lower()
+                        for keyword in [
+                            "_id",
+                            " id",
+                            "url",
+                            "email",
+                            "web",
+                            "time",
+                            "phone",
+                            "date",
+                            "address",
+                        ]
+                    ) or column_name.endswith("Id"):
+                        continue
+                    # 获取column数值的统计信息
                     try:
-                        fetched_values = self._sql_database.run_sql(
-                            f"SELECT DISTINCT `{column}` FROM `{table}` WHERE `{column}` IS NOT NULL"
+                        result = self._sql_database.run_sql(
+                            f"""
+                            SELECT SUM(LENGTH(unique_values)), COUNT(unique_values)
+                            FROM (
+                                SELECT DISTINCT `{column_name}` AS unique_values
+                                FROM `{table_name}`
+                                WHERE `{column_name}` IS NOT NULL
+                            ) AS subquery
+                        """
                         )
-                        fetched_values = fetched_values[1]["result"]
-                        values = [str(value[0]) for value in fetched_values]
-                    except Exception:
-                        values = []
-                    logger.info(f"Number of different values: {len(values)}")
-                    table_values[column] = values
+                        result = result[1]["result"][0]
+                    except Exception as e:
+                        logger.info(f"no unique values found: {e}")
+                        result = 0, 0
 
-                unique_values[table] = table_values
+                    sum_of_lengths, count_distinct = result
+                    if sum_of_lengths is None or count_distinct == 0:
+                        continue
+
+                    average_length = round(sum_of_lengths / count_distinct, 3)
+                    logger.info(
+                        f"Column: {column_name}, sum_of_lengths: {sum_of_lengths}, count_distinct: {count_distinct}, average_length: {average_length}"
+                    )
+
+                    # 获取满足条件的字段数值
+                    if (
+                        ("name" in column_name.lower() and sum_of_lengths < 5000000)
+                        or (sum_of_lengths < 2000000 and average_length < 25)
+                        or count_distinct < 100
+                    ):
+                        logger.info(f"Fetching distinct values for {column_name}")
+                        try:
+                            fetched_values = self._sql_database.run_sql(
+                                f"SELECT DISTINCT `{column_name}` FROM `{table_name}` WHERE `{column_name}` IS NOT NULL"
+                            )
+                            fetched_values = fetched_values[1]["result"]
+                            values = [str(value[0]) for value in fetched_values]
+                        except Exception:
+                            values = []
+                        logger.info(f"Number of different values: {len(values)}")
+                        table_values[column_name] = values
+
+            unique_values[table_name] = table_values
 
         return unique_values
-
-    def _get_schema_info(
-        self, db_description_dict: Optional[Dict] = None
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """get schema info dataframe"""
-        if db_description_dict is None:
-            if os.path.exists(self._db_description_path):
-                file_path = self._db_description_path
-            else:
-                raise ValueError(
-                    f"db_description_file_path: {self._db_description_path} does not exist"
-                )
-            try:
-                with open(file_path, "r") as f:
-                    db_description_dict = json.load(f)
-            except Exception as e:
-                db_description_dict = {}
-                logger.error(f"Error loading db_description_dict: {e}")
-
-        table_info_df = pd.DataFrame(db_description_dict["table_info"])
-        column_info_df = pd.DataFrame(db_description_dict["column_info"])
-
-        return table_info_df, column_info_df
-
-    def _get_history_info(self, db_history_list: Optional[List] = None) -> List:
-        """get query history list"""
-        if db_history_list is None:
-            if os.path.exists(self._db_history_path):
-                file_path = self._db_history_path
-            else:
-                raise ValueError(
-                    f"db_history_file_path: {self._db_history_path} does not exist"
-                )
-            try:
-                with open(file_path, "r") as f:
-                    db_history_list = json.load(f)
-            except Exception as e:
-                db_history_list = []
-                logger.error(f"Error loading db_history_list: {e}")
-
-        return db_history_list
 
     def _store_nodes_to_index(
         self, nodes: List[TextNode], storage_path: str
@@ -351,48 +326,42 @@ class DBIndexer:
         return index
 
     def _get_nodes_from_db_description(
-        self, table_info_df: pd.DataFrame, column_info_df: pd.DataFrame
-    ):
+        self, db_description_dict: Dict
+    ) -> List[TextNode]:
         schema_description_nodes = []
-        for row in column_info_df.itertuples():
-            col_desc = ""
-            if row.comment:
-                col_desc += str(row.comment)
-            if row.description:
-                col_desc += " "
-                col_desc += str(row.description)
-            table_desc = ""
-            if table_info_df[table_info_df["table"] == row.table]["comment"].values[0]:
-                table_desc += str(
-                    table_info_df[table_info_df["table"] == row.table][
-                        "comment"
-                    ].values[0]
-                )
-            if table_info_df[table_info_df["table"] == row.table]["description"].values[
-                0
-            ]:
-                table_desc += " "
-                table_desc += str(
-                    table_info_df[table_info_df["table"] == row.table][
-                        "description"
-                    ].values[0]
-                )
-            if table_info_df[table_info_df["table"] == row.table]["overview"].values[0]:
-                table_desc += " "
-                table_desc += str(
-                    table_info_df[table_info_df["table"] == row.table][
-                        "overview"
-                    ].values[0]
-                )
+        for table in db_description_dict["table_info"]:
+            table_desc = [
+                value
+                for value in [table["table_comment"], table["table_description"]]
+                if value is not None
+            ]
+            if len(table_desc) > 0:
+                table_desc = ", ".join(table_desc)
+            else:
+                table_desc = ""
+            for column in table["column_info"]:
+                column_desc = [
+                    value
+                    for value in [
+                        column["column_comment"],
+                        column["column_description"],
+                    ]
+                    if value is not None
+                ]
+                if len(column_desc) > 0:
+                    column_desc = ", ".join(column_desc)
+                else:
+                    column_desc = ""
 
-            metadata = {
-                "table_name": row.table,
-                "column_name": row.column,
-                "column_type": row.type,
-                "column_description": col_desc,
-                "table_description": table_desc,
-            }
-            schema_description_nodes.append(TextNode(text=col_desc, metadata=metadata))
+                metadata = {
+                    "table_name": table["table_name"],
+                    "column_name": column["column_name"],
+                    "column_type": column["column_type"],
+                    "table_description": table_desc,
+                }
+                schema_description_nodes.append(
+                    TextNode(text=column_desc, metadata=metadata)
+                )
 
         return schema_description_nodes
 
