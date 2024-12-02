@@ -18,8 +18,11 @@ from pai_rag.utils.tokenization_qwen import QWenTokenizer
 VOCAB_FILE = os.path.join(DEFAULT_DATAFILE_DIR, "tokenization/qwen.tiktoken")
 
 # Set a random seed for reproducibility
-RANDOM_SEED = 224
-random.seed(RANDOM_SEED)
+RANDOM_SEED = 2024
+# 创建独立的随机数生成器
+local_random = random.Random()
+# 设置种子
+local_random.seed(RANDOM_SEED)
 
 
 def global_cluster_embeddings(
