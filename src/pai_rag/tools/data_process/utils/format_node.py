@@ -2,10 +2,11 @@ from datetime import datetime
 from llama_index.core.schema import TextNode
 
 
-def text_node_to_dict(node):
+def text_node_to_dict(node, sparse_embedding=None):
     return {
         "id": node.id_,
         "embedding": node.embedding,
+        "sparse_embedding": sparse_embedding,
         "metadata": {
             k: str(v) if isinstance(v, datetime) else v
             for k, v in node.metadata.items()

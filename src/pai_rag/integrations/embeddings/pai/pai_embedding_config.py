@@ -17,6 +17,7 @@ class PaiBaseEmbeddingConfig(BaseModel):
     source: SupportedEmbedType
     model: str
     embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE
+    enable_sparse: bool = False
 
     class Config:
         frozen = True

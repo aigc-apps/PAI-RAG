@@ -30,6 +30,7 @@ type = "SimpleDirectoryReader"
 [rag.embedding]
 source = "DashScope"
 embed_batch_size = 10
+enable_sparse = false
 
 [rag.index]
 persist_path = "localdata/storage"
