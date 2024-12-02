@@ -108,6 +108,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
    ```
 
 3. Check the status of the upload job:
+
    **Request**
 
    ```shell
