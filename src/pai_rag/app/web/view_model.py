@@ -144,7 +144,9 @@ class ViewModel(BaseModel):
             view_model.llm_eas_url = config.llm.endpoint
             view_model.llm_eas_token = config.llm.token
         elif isinstance(config.llm, DashScopeLlmConfig):
-            view_model.llm_api_key = config.llm.api_key
+            view_model.llm_api_key = config.llm.api_key or os.getenv(
+                "DASHSCOPE_API_KEY"
+            )
             view_model.llm_api_model_name = config.llm.model
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
@@ -156,7 +158,9 @@ class ViewModel(BaseModel):
             view_model.mllm_eas_token = config.multimodal_llm.token
         else:
             view_model.mllm_api_model_name = config.multimodal_llm.model
-            view_model.mllm_api_key = config.multimodal_llm.api_key
+            view_model.mllm_api_key = config.multimodal_llm.api_key or os.getenv(
+                "DASHSCOPE_API_KEY"
+            )
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -433,7 +437,7 @@ class ViewModel(BaseModel):
             "visible": self.llm.lower() == "paieas",
         }
         settings["llm_api_key"] = {
-            "value": self.llm_api_key,
+            "value": self.llm_api_key or os.getenv("DASHSCOPE_API_KEY"),
             "visible": self.llm.lower() != "paieas",
         }
         if self.llm.lower() == "paieas" and not self.llm_eas_model_name:
@@ -462,7 +466,7 @@ class ViewModel(BaseModel):
             "visible": self.mllm.lower() != "paieas",
         }
         settings["mllm_api_key"] = {
-            "value": self.mllm_api_key,
+            "value": self.mllm_api_key or os.getenv("DASHSCOPE_API_KEY"),
             "visible": self.mllm.lower() != "paieas",
         }
         settings["m_eas_col"] = {"visible": self.mllm == "paieas"}
