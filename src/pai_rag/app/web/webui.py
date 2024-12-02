@@ -24,6 +24,15 @@ from loguru import logger
 
 def resume_ui():
     outputs = {}
+
+    if not rag_client.check_health():
+        gr.Warning(
+            "RAG service is not ready. Please check the service status and refresh later."
+        )
+        elems = elem_manager.get_elem_list()
+        outputs = {elem: gr.update() for elem in elems}
+        return outputs
+
     rag_config = rag_client.get_config()
     view_model = ViewModel.from_app_config(rag_config)
     index_map = get_index_map()
@@ -46,7 +55,6 @@ def resume_ui():
             #     outputs[elem] = elem_attr["value"]
             # else:
             #     outputs[elem] = elem.__class__(**elem_attr).value
-
     return outputs
 
 

@@ -12,12 +12,14 @@ import json
 
 
 class ModelScopeDownloader:
-    def __init__(self, fetch_config: bool = False):
-        self.download_directory_path = Path(DEFAULT_MODEL_DIR)
+    def __init__(self, fetch_config: bool = False, download_directory_path: str = None):
+        self.download_directory_path = Path(
+            download_directory_path or DEFAULT_MODEL_DIR
+        )
         if fetch_config or not os.path.exists(self.download_directory_path):
             os.makedirs(self.download_directory_path, exist_ok=True)
             logger.info(
-                f"Create model directory: {self.download_directory_path} and get model info from oss {OSS_URL}."
+                f"Create model directory: {self.download_directory_path.resolve()} and get model info from oss {OSS_URL}."
             )
             response = requests.get(OSS_URL)
             response.raise_for_status()
@@ -25,7 +27,7 @@ class ModelScopeDownloader:
             logger.info(f"Model info loaded {self.model_info}.")
 
     def load_model(self, model):
-        model_path = os.path.join(self.download_directory_path, model)
+        model_path = self.download_directory_path / model
         with TemporaryDirectory() as temp_dir:
             if not os.path.exists(model_path):
                 logger.info(f"start downloading model {model}.")
@@ -37,12 +39,14 @@ class ModelScopeDownloader:
                 else:
                     raise ValueError(f"{model} is not a valid model name.")
                 temp_model_dir = snapshot_download(model_id, cache_dir=temp_dir)
-
+                logger.info(
+                    f"Downloaded model {model} to {temp_model_dir} and move to {model_path}."
+                )
                 shutil.move(temp_model_dir, model_path)
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info(
-                    f"Finished downloading model {model} to {model_path}, took {duration:.2f} seconds."
+                    f"Finished downloading model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
                 )
 
     def load_rag_models(self, skip_download_models: bool = False):
@@ -89,7 +93,7 @@ class ModelScopeDownloader:
             "Copy magic-pdf.template.json to ~/magic-pdf.json and modify models-dir to model path."
         )
 
-    def load_models(self, model):
+    def load_models(self, model=None):
         if model is None:
             models = [model for model in self.model_info["basic_models"].keys()] + [
                 model for model in self.model_info["extra_models"].keys()

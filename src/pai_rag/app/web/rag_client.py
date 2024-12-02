@@ -111,6 +111,10 @@ class RagWebClient:
     def list_index_url(self):
         return f"{self.endpoint}v1/indexes"
 
+    @property
+    def health_check_url(self):
+        return f"{self.endpoint}health"
+
     def _format_rag_response(
         self, question, response, with_history: bool = False, stream: bool = False
     ):
@@ -203,6 +207,14 @@ class RagWebClient:
 
         response["result"] = formatted_answer
         return response
+
+    def check_health(self):
+        try:
+            r = requests.get(self.health_check_url)
+            return r.status_code == HTTPStatus.OK
+        except Exception as ex:
+            logger.error(f"Check health failed: {ex}")
+            return False
 
     def query(
         self,

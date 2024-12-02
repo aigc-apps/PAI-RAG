@@ -10,7 +10,7 @@ from llama_index.core.prompts.default_prompt_selectors import (
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.service_context_elements.llm_predictor import LLMPredictorType
+from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.multi_modal_llms import MultiModalLLM
@@ -88,7 +88,7 @@ Will use Multi-modal LLM for inputs with images and LLM for pure text inputs.
 class PaiSynthesizer(BaseSynthesizer):
     def __init__(
         self,
-        llm: Optional[LLMPredictorType] = None,
+        llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
         text_qa_template: Optional[BasePromptTemplate] = None,

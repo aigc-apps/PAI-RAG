@@ -37,6 +37,7 @@ def respond(input_elements: List[Any]):
 
     if chatbot is not None:
         chatbot.append((msg, ""))
+        yield chatbot
 
     try:
         if query_type == "LLM":

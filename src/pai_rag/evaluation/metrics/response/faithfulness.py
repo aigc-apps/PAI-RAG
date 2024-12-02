@@ -38,9 +38,9 @@ DEFAULT_EVAL_TEMPLATE = PromptTemplate(
 
 DEFAULT_MULTIMODAL_EVAL_TEMPLATE = PromptTemplate(
     """
-    请告诉我一段信息是否得到上下文的支持。
+    请告诉我一段信息是否得到上下文的支持。如果上下文中有图片链接，请读取图片获取信息。\n\n"
     你需要回答“是”或“否”。
-    如果任何上下文支持该信息，即使大部分上下文无关，也请回答“是”。
+    如果任何上下文或者图片中的信息支持该信息，即使大部分上下文无关或者图片内容无关，也请回答“是”。
     下面提供了一些示例。\n\n
     信息：苹果派通常是双皮的。
     上下文：苹果派是一种水果派，主要填充成分是苹果。
@@ -103,12 +103,8 @@ class Faithfulness(LlmMetric):
 
     def parse_eval_result(self, eval_result: str):
         raw_response_txt = eval_result.lower()
-        if "yes" in raw_response_txt:
-            passing = True
-        else:
-            passing = False
-            if self._raise_error:
-                raise ValueError("The response is invalid")
+        keywords = ["yes", "答案：是", "是\n\n"]
+        passing = any(keyword in raw_response_txt for keyword in keywords)
         score = 1.0 if passing else 0.0
         reasoning = raw_response_txt
         return [score, reasoning]
@@ -165,12 +161,19 @@ class Faithfulness(LlmMetric):
 
         await asyncio.sleep(sleep_time_in_seconds)
 
-        if contexts is None or response_answer is None:
+        if (
+            contexts is None and reference_image_url_list is None
+        ) or response_answer is None:
             raise ValueError("contexts and response must be provided")
+
+        reference_image_url_list = reference_image_url_list or []
+        contexts = contexts or []
+        image_context_str = "\n\n".join(reference_image_url_list)
+        text_context_str = "\n\n".join(contexts)
 
         prompt_str = self._multimodal_eval_template.format(
             response_str=response_answer,
-            context_str="\n".join(contexts),
+            context_str=f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n",
             reference_image_url_list=reference_image_url_list or "(没有提供参考图片链接)",
         )
         image_documents = load_image_urls(reference_image_url_list)

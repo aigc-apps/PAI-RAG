@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Any
 import os
-from pai_rag.integrations.readers.markdown_reader import MarkdownReader
+import pathlib
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
@@ -10,6 +10,7 @@ from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
 from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
 from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
+from pai_rag.integrations.readers.pai_markdown_reader import PaiMarkdownReader
 
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
@@ -51,6 +52,10 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
             enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pptx images
         ),
+        ".md": PaiMarkdownReader(
+            enable_table_summary=reader_config.enable_table_summary,
+            oss_cache=oss_store,  # Storing markdown images
+        ),
         ".csv": PaiPandasCSVReader(
             concat_rows=reader_config.concat_csv_rows,
             format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
@@ -66,7 +71,6 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
             format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
             sheet_column_filters=reader_config.sheet_column_filters,
         ),
-        ".md": MarkdownReader(),
         ".jsonl": PaiJsonLReader(),
         ".jpg": image_reader,
         ".jpeg": image_reader,
@@ -130,13 +134,11 @@ def get_input_files(
         file_path_or_directory
     ):
         # glob from directory
-        import pathlib
-
         directory = pathlib.Path(file_path_or_directory)
         input_files = [f for f in directory.rglob(filter_pattern) if os.path.isfile(f)]
     else:
         # Single file
-        input_files = [file_path_or_directory]
+        input_files = [pathlib.Path(file_path_or_directory)]
 
     if not input_files:
         raise ValueError(
@@ -156,7 +158,7 @@ class PaiDataReader(BaseReader):
 
     def load_data(
         self,
-        file_path_or_directory: str | List[str],
+        file_path_or_directory=None,
         filter_pattern: str = None,
         from_oss: bool = False,
         oss_path: str = None,
