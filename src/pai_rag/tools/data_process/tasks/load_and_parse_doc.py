@@ -16,6 +16,7 @@ def load_and_parse_doc_task(config_file, input_file):
         fetch_config=True, download_directory_path=RAY_ENV_MODEL_DIR
     )
     download_models.load_mineru_config()
+    download_models.load_models(model="PDF-Extract-Kit")
 
     data_reader_config = config.data_reader
     oss_store = None
