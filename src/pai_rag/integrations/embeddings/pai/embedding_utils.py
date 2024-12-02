@@ -61,10 +61,13 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
         )
 
     elif isinstance(embed_config, CnClipEmbeddingConfig):
+        pai_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        download_root = os.path.join(pai_model_dir, "chinese-clip-vit-large-patch14")
         embed_model = CnClipEmbedding(
             model_name=embed_config.model,
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
+            download_root=download_root,
         )
         logger.info(
             f"Initialized CnClip embedding model {embed_config.model} with {embed_config.embed_batch_size} batch size."

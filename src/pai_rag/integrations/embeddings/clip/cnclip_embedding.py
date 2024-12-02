@@ -29,6 +29,7 @@ class CnClipEmbedding(MultiModalEmbedding):
         self,
         model_name: str = DEFAULT_CNCLIP_MODEL,
         embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
+        download_root: str = DEFAULT_CNCLIP_MODEL_DIR,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -43,7 +44,7 @@ class CnClipEmbedding(MultiModalEmbedding):
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self._model, self._preprocess = load_from_name(
-            self.model_name, device=self._device, download_root=DEFAULT_CNCLIP_MODEL_DIR
+            self.model_name, device=self._device, download_root=download_root
         )
         self._model.eval()
 
