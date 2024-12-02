@@ -83,7 +83,11 @@ def index_to_components_settings(
     if is_new_index:
         index_component_settings = [
             {"value": "NEW", "choices": index_list + ["NEW"]},
-            {"placeholder": index_entry.index_name, "visible": True},
+            {
+                "placeholder": index_entry.index_name,
+                "value": index_entry.index_name,
+                "visible": True,
+            },
             {"visible": True},
             {"visible": False},
             {"visible": False},
@@ -91,7 +95,7 @@ def index_to_components_settings(
     else:
         index_component_settings = [
             {"value": index_entry.index_name, "choices": index_list + ["NEW"]},
-            {"placeholder": "", "visible": False},
+            {"placeholder": "", "value": "", "visible": False},
             {"visible": False},
             {"visible": True},
             {"visible": False},
@@ -135,7 +139,8 @@ def index_to_components_settings(
         embed_api_key_setting = {"value": "", "visible": False}
     else:
         embed_api_key_setting = {
-            "value": index_entry.embedding_config.api_key,
+            "value": index_entry.embedding_config.api_key
+            or os.getenv("DASHSCOPE_API_KEY"),
             "visible": True,
         }
 

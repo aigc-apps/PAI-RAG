@@ -8,13 +8,15 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+      PAIRAG_RAG__oss_store__bucket: ${OSS_BUCKET}
+      PAIRAG_RAG__oss_store__endpoint: ${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}
 
     volumes:
       - ../model_repository:/app/model_repository
       - ./app_data:/app/localdata
     entrypoint: ["pai_rag", "serve"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
       interval: 30s
       retries: 40
       start_period: 20s
@@ -24,6 +26,8 @@ services:
     ports:
       - "8002:8002"
     restart: always
+    environment:
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
     depends_on:
       - api
     entrypoint: ["pai_rag", "ui", "-c", "http://api:8001"]

@@ -38,18 +38,21 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 ## Docker镜像启动
 
-为了更方便使用，节省较长时间的环境安装问题，我们也提供了直接基于镜像启动的方式。
+您可以通过两种方式在本地运行 PAI-RAG：Docker 环境或直接从源代码运行。
 
-1. 配置环境变量
+1. 设置环境变量
 
    ```bash
-   cd docker
+   git clone git@github.com:aigc-apps/PAI-RAG.git
+   cd PAI-RAG/docker
    cp .env.example .env
    ```
 
-   如果你需要使用dashscope api或者OSS存储，可以根据需要修改.env中的环境变量。
+   如果您需要使用通义千问API或者阿里云OSS存储，请编辑 .env 文件。
+   其中DASHSCOPE_API_KEY获取地址为 https://dashscope.console.aliyun.com/apiKey。
+   当服务启动后您依然可以在WEB UI中配置这些API_KEY信息，但是我们建议您通过环境变量的方式配置。
 
-2. 启动
+2. 使用`docker compose`命令启动服务：
 
    ```bash
    docker-compose up -d
@@ -59,7 +62,89 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 ## 本地启动
 
-如果想在本地启动或者进行代码开发，可以参考文档：[本地运行](./docs/develop/local_develop_zh.md)
+如果想在本地启动或者进行代码开发，可以参考文档：[本地开发指南](./docs/develop/local_develop_zh.md)
+
+## 通过Web UI查询的示例
+
+1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+
+   <img src="docs/figures/quick_start/setting.png" width="600px"/>
+
+2. 访问"上传"页面，上传测试数据：./example_data/paul_graham/paul_graham_essay.txt。
+
+   <img src="docs/figures/quick_start/upload.png" width="600px"/>
+
+3. 切换到"聊天"页面, 进行对话。
+
+   <img src="docs/figures/quick_start/query.png" width="600px"/>
+
+## 通过API接口查询的示例
+
+1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+
+2. 使用API上传数据：
+
+   切换到`PAI-RAG`目录
+
+   ```shell
+   cd PAI-RAG
+   ```
+
+   **请求**
+
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/upload_data \
+   -H 'Content-Type: multipart/form-data' \
+      -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
+   ```
+
+   **响应**
+
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226"
+   }
+   ```
+
+3. 检查上传任务的状态：
+
+   **请求**
+
+   ```shell
+   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+   ```
+
+   **响应**
+
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226",
+     "status": "completed",
+     "detail": null
+   }
+   ```
+
+4. Perform a RAG query:
+
+   **请求**
+
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/query \
+      -H "Content-Type: application/json" \
+      -d '{"question":"What did the author do growing up?"}'
+   ```
+
+   **响应**
+
+   ```json
+   {
+      "answer":"Growing up, the author worked on writing and programming outside of school. Specifically, he wrote short stories, which he now considers to be awful due to their lack of plot and focus on characters with strong feelings. In terms of programming, he first tried writing programs on an IBM 1401 in 9th grade, using an early version of Fortran. The experience was limited because the only form of input for programs was data stored on punched cards, and he didn't have much data to work with. Later, after getting a TRS-80 microcomputer around 1980, he really started programming by creating simple games, a program to predict the flight height of model rockets, and even a word processor that his father used to write at least one book.",
+      "session_id":"ba245d630f4d44a295514345a05c24a3",
+      "docs":[
+         ...
+      ]
+   }
+   ```
 
 # 📜 文档
 
