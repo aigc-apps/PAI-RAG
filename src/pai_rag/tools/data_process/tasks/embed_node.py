@@ -30,7 +30,7 @@ def embed_node_task(node, config_file):
         embed_nodes = embed_model([format_node])
         sparse_embedding = None
         if config.embedding.enable_sparse:
-            download_models.load_models(model="bge-m3")
+            download_models.load_model(model="bge-m3")
             sparse_embed_model = BGEM3SparseEmbeddingFunction(
                 model_name_or_path=RAY_ENV_MODEL_DIR
             )
