@@ -8,7 +8,6 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_MODEL_DEPRECATED,
     EMBEDDING_MODEL_LIST,
     EMBEDDING_TYPE_DICT,
-    EMBEDDING_MODEL_LINK_DICT,
 )
 from pai_rag.core.rag_index_manager import RagIndexEntry
 from pai_rag.integrations.index.pai.vector_store_config import (
@@ -33,7 +32,6 @@ index_related_component_keys = [
     "embed_model",
     "embed_dim",
     "embed_type",
-    "embed_link",
     "embed_batch_size",
     "embed_api_key",
     "vectordb_type",
@@ -129,11 +127,6 @@ def index_to_components_settings(
         else "Default",
         "visible": True if embed_source == "huggingface" else False,
     }
-    embed_link_setting = {
-        "value": f"Model Introduction: [{embed_model}]({EMBEDDING_MODEL_LINK_DICT[embed_model]})"
-        if embed_source == "huggingface"
-        else ""
-    }
     embed_batch_size_setting = {"value": index_entry.embedding_config.embed_batch_size}
     if index_entry.embedding_config.source.value == "huggingface":
         embed_api_key_setting = {"value": "", "visible": False}
@@ -149,7 +142,6 @@ def index_to_components_settings(
         embed_model_setting,
         embed_dim_setting,
         embed_type_setting,
-        embed_link_setting,
         embed_batch_size_setting,
         embed_api_key_setting,
     ]

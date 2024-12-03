@@ -12,7 +12,6 @@ from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
     EMBEDDING_TYPE_DICT,
-    EMBEDDING_MODEL_LINK_DICT,
 )
 from pai_rag.core.rag_index_manager import RagIndexEntry
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
@@ -72,11 +71,6 @@ def change_emb_source(source, model):
             else "Default",
             visible=True if source.lower() == "huggingface" else False,
         ),
-        gr.update(
-            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
-            if source.lower() == "huggingface"
-            else ""
-        ),
         gr.update(visible=True if source.lower() != "huggingface" else False),
     ]
 
@@ -92,11 +86,6 @@ def change_emb_model(source, model):
         EMBEDDING_TYPE_DICT.get(model, "Default")
         if source.lower() == "huggingface"
         else "Default",
-        gr.update(
-            value=f"Model Introduction: [{model}]({EMBEDDING_MODEL_LINK_DICT[model]})"
-            if source.lower() == "huggingface"
-            else ""
-        ),
     )
 
 
