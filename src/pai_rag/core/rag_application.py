@@ -26,7 +26,6 @@ from llama_index.core.schema import (
 )
 import json
 from loguru import logger
-import os
 from enum import Enum
 from uuid import uuid4
 
@@ -283,30 +282,6 @@ class RagApplication:
         else:
             response = await agent.achat(query.question)
             return RagResponse(answer=response.response)
-
-    async def aload_agent_config(self, agent_cfg_path: str):
-        if os.path.exists(agent_cfg_path):
-            sessioned_config = self.config.as_dict().copy()
-            sessioned_config["RAG"]["llm"]["function_calling_llm"][
-                "source"
-            ] = "DashScope"
-            sessioned_config["RAG"]["llm"]["function_calling_llm"][
-                "name"
-            ] = "qwen2-7b-instruct"
-            sessioned_config["RAG"]["agent"]["type"] = "function_calling"
-            sessioned_config["RAG"]["agent"]["custom_config"][
-                "agent_file_path"
-            ] = agent_cfg_path
-            sessioned_config["RAG"]["agent"]["intent_detection"]["type"] = "single"
-            sessioned_config["RAG"]["agent"]["tool"]["type"] = "api"
-
-            new_settings = self.config
-            new_settings.update(sessioned_config)
-
-            self.reload(new_settings)
-            return "Update agent config successfully."
-        else:
-            return f"The agent config path {agent_cfg_path} not exists."
 
     async def aquery_analysis(
         self, query: RagQuery, sse_version: SseVersion = SseVersion.V0

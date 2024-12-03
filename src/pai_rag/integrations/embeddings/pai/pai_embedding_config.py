@@ -1,7 +1,8 @@
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
+import os
 
 DEFAULT_HF_EMBED_MODEL = "bge-large-zh-v1.5"
 
@@ -17,6 +18,7 @@ class PaiBaseEmbeddingConfig(BaseModel):
     source: SupportedEmbedType
     model: str
     embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE
+    enable_sparse: bool = False
 
     class Config:
         frozen = True
@@ -33,7 +35,7 @@ class PaiBaseEmbeddingConfig(BaseModel):
 class DashScopeEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.dashscope] = SupportedEmbedType.dashscope
     model: str | None = None  # use default
-    api_key: str | None = None  # use default
+    api_key: str | None = Field(default=os.getenv("DASHSCOPE_API_KEY"))  # use default
 
 
 class OpenAIEmbeddingConfig(PaiBaseEmbeddingConfig):

@@ -12,12 +12,16 @@
 <details open>
 <summary></b>📕 Contents</b></summary>
 
-- 💡 [What is PAI-RAG?](#what-is-pai-rag)
-- 🌟 [Key Features](#key-features)
-- 🔎 [Get Started](#get-started)
-  - [Local](#run-in-local-environment)
+- 💡 [What is PAI-RAG?](#-what-is-pai-rag)
+- 🌟 [Key Features](#-key-features)
+- 🔎 [Get Started](#-get-started)
   - [Docker](#run-in-docker)
-- 🔧 [API Service](#api-service)
+  - [Local](#run-in-local-environment)
+- 📜 [Documents](#-documents)
+  - [API specification](#api-specification)
+  - [Agentic RAG](#agentic-rag)
+  - [Data Analysis](#data-analysis)
+  - [Supported File Types](#supported-file-types)
 
 </details>
 
@@ -27,9 +31,8 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 # 🌟 Key Features
 
-![framework](docs/figures/framework.jpg)
-
 - Modular design, flexible and configurable
+- Powerful RAG capability: multi-modal rag, agentic-rag and nl2sql support
 - Built on community open source components, low customization threshold
 - Multi-dimensional automatic evaluation system, easy to grasp the performance quality of each module
 - Integrated llm-based-application tracing and evaluation visualization tools
@@ -38,304 +41,128 @@ PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmen
 
 # 🔎 Get Started
 
-## Run in Local Environment
+You can run PAI-RAG locally using either a Docker environment or directly from the source code.
 
-1. Clone Repo
+## Run with Docker
+
+1. Set up the environmental variables.
 
    ```bash
    git clone git@github.com:aigc-apps/PAI-RAG.git
+   cd PAI-RAG/docker
+   cp .env.example .env
    ```
 
-2. Development Environment Settings
+   Edit `.env` file if you are using dashscope api or oss store. See [.env.example](./docker/.env.example) for more details.
+   Note you can also configure these settings from our console ui, but it's more safe to configure from environmental variables.
 
-   This project uses poetry for management. To ensure environmental consistency and avoid problems caused by Python version differences, we specify Python version 3.11.
-
+2. Start the Docker containers with the following command
    ```bash
-   conda create -n rag_env python==3.11
-   conda activate rag_env
+   docker compose up -d
+   ```
+3. Open your web browser and navigate to http://localhost:8000 to verify that the service is running. The service will need to download the model weights, which may take around 20 minutes.
+
+## Run in a Local Environment
+
+If you prefer to run or develop PAI-RAG locally, please refer to [local development guide](./docs/develop/local_develop.md)
+
+## Simple Query Using the Web UI
+
+1. Open http://localhost:8000 in your web browser. Adjust the index and LLM settings to your preferred models
+
+<img src="docs/figures/quick_start/setting.png" width="600px"/>
+
+2. Go to the "Upload" tab and upload the test data: ./example_data/paul_graham/paul_graham_essay.txt.
+
+<img src="docs/figures/quick_start/upload.png" width="600px"/>
+
+3. Once the upload is complete, switch to the "Chat" tab.
+
+<img src="docs/figures/quick_start/query.png" width="600px"/>
+
+## Simple Query Using the RAG API
+
+1. Open http://localhost:8000 in your web browser. Adjust the index and LLM settings to your preferred models
+
+2. Upload data via API:
+   Go to the PAI-RAG base directory
+
+   ```shell
+   cd PAI-RAG
    ```
 
-   if you use macOS and need to process PPTX files, you need use the following command to install the dependencies to process PPTX files:
+   **Request**
 
-   ```bash
-      brew install mono-libgdiplus
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/upload_data \
+      -H 'Content-Type: multipart/form-data' \
+      -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
    ```
 
-### (1) CPU
+   **Response**
 
-Use poetry to install project dependency packages directly:
-
-```bash
-pip install poetry
-poetry install
-poetry run aliyun-bootstrap -a install
-```
-
-### (2) GPU
-
-First replace the default pyproject.toml with the GPU version, and then use poetry to install the project dependency package:
-
-```bash
-mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-pip install poetry
-poetry install
-poetry run aliyun-bootstrap -a install
-```
-
-- Common network timeout issues
-
-  Note: During the installation, if you encounter a network connection timeout, you can add the Alibaba Cloud or Tsinghua mirror source and append the following lines to the end of the pyproject.toml file:
-
-  ```bash
-  [[tool.poetry.source]]
-  name = "mirrors"
-  url = "http://mirrors.aliyun.com/pypi/simple/" # Aliyun
-  # url = "https://pypi.tuna.tsinghua.edu.cn/simple/" # Qsinghua
-  priority = "default"
-  ```
-
-  After that, execute the following commands:
-
-  ```bash
-  poetry lock
-  poetry install
-  ```
-
-3. Load Data
-
-   Insert new files in the data_path into the current index storage:
-
-   ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226"
+   }
    ```
 
-   path examples:
+3. Check the status of the upload job:
 
-   ```
-   a. load_data -d test/example
-   b. load_data -d test/example_data/pai_document.pdf
-   c. load_data -d test/example_data -p *.pdf
+   **Request**
 
-   ```
-
-4. Run RAG Service
-
-   To use the OpenAI or DashScope API, you need to introduce environment variables:
-
-   ```bash
-   export OPENAI_API_KEY=""
-   export DASHSCOPE_API_KEY=""
+   ```shell
+   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
-   To utilize Object Storage Service (OSS) for file storage, particularly when operating in multimodal mode, you must first configure settings in both the src/pai_rag/config/settings.toml and src/pai_rag/config/settings_multi_modal.toml configuration files. Append the following TOML configuration snippet within these files:
+   **Response**
 
-   ```toml
-   [rag.oss_store]
-   bucket = ""
-   endpoint = ""
-   prefix = ""
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226",
+     "status": "completed",
+     "detail": null
+   }
    ```
 
-   Additionally, you need to introduce environment variables:
+4. Perform a RAG query:
 
-   ```bash
-   export OSS_ACCESS_KEY_ID=""
-   export OSS_ACCESS_KEY_SECRET=""
+   **Request**
+
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/query \
+      -H "Content-Type: application/json" \
+      -d '{"question":"What did the author do growing up?"}'
    ```
 
-   ```bash
-   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), enable-example (default True), skip-download-models (default False)
-   # Download [bge-large-zh-v1.5, easyocr] by default, you can skip it by setting --skip-download-models.
-   # you can use tool "load_model" to download other models including [bge-large-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
+   **Response**
+
+   ```json
+   {
+      "answer":"Growing up, the author worked on writing and programming outside of school. Specifically, he wrote short stories, which he now considers to be awful due to their lack of plot and focus on characters with strong feelings. In terms of programming, he first tried writing programs on an IBM 1401 in 9th grade, using an early version of Fortran. The experience was limited because the only form of input for programs was data stored on punched cards, and he didn't have much data to work with. Later, after getting a TRS-80 microcomputer around 1980, he really started programming by creating simple games, a program to predict the flight height of model rockets, and even a word processor that his father used to write at least one book.",
+      "session_id":"ba245d630f4d44a295514345a05c24a3",
+      "docs":[
+         ...
+      ]
+   }
    ```
 
-   The default configuration file is src/pai_rag/config/settings.yaml. However, if you require the multimodal llm module, you should switch to the src/pai_rag/config/settings_multi_modal.yaml file instead.
+# 📜 Documents
 
-   ```bash
-   pai_rag serve -c src/pai_rag/config/settings_multi_modal.yaml
-   ```
+## API specification
 
-5. Download provided models to local directory
+You can access and integrate our RAG service according to our [API specification](./docs/api.md).
 
-   ```bash
-   # Support model name (default ""), download all models mentioned before without parameter model_name.
-   load_model [--model-name MODEL_NAME]
-   ```
-
-6. Run RAG WebUI
-
-   ```bash
-   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
-   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
-   ```
-
-   You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
-
-## Run in Docker
-
-To make it easier to use and save time on environment installation, we also provide a method to start directly based on the image.
-
-### Use public images directly
-
-1. RAG Service
-
-- CPU
-
-  ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0
-
-  # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, need to be introduced) -w (number of workers, can be specified as the approximate number of CPU cores)
-  docker run --name pai_rag \
-              -p 8001:8001 \
-              -v /huggingface:/huggingface \
-              -v /your_local_documents_path:/data \
-              -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
-              -d \
-              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
-  ```
-
-- GPU
-
-  ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu
-
-  # -p (port) -v (mount embedding and rerank model directories) -e (set environment variables, if using Dashscope LLM/Embedding, you need to introduce it) -w (number of workers, which can be specified as the approximate number of CPU cores)
-  docker run --name pai_rag \
-              -p 8001:8001 \
-              -v /huggingface:/huggingface \
-              -v /your_local_documents_path:/data \
-              --gpus all \
-              -e DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY} \
-              -d \
-              mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
-  ```
-
-2. Load Data
-
-   Insert new files in the /data into the current index storage:
-
-   ```bash
-   sudo docker exec -ti pai_rag bash
-   load_data -c src/pai_rag/config/settings.yaml -d /data -p pattern
-   ```
-
-   path examples:
-
-   ```
-   a. load_data -d /data/test/example
-   b. load_data -d /data/test/example_data/pai_document.pdf
-   c. load_data -d /data/test/example_data -p *.pdf
-   ```
-
-3. RAG UI
-   Linux:
-
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-
-docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-```
-
-Mac/Windows:
-
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-
-docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0_ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
-```
-
-You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
-
-### Build your own image based on Dockerfile
-
-You can refer to [How to Build Docker](docs/docker_build.md) to build the image yourself.
-
-After the image is built, you can refer to the above steps to start the Rag service and WebUI.
-
-# 🔧 API Service
-
-You can use the command line to send API requests to the server, for example, calling the [Upload API](#upload-api) to upload a knowledge base file.
-
-## Upload API
-
-It supports uploading local files through API and supports specifying different failure_paths. Each time an API request is sent, a task_id will be returned. The file upload status (processing, completed, failed) can then be checked through the task_id.
-
-- upload_data
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
-
-# Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
-```
-
-- get_upload_state
-
-```bash
-curl http://127.0.0.1:8001/service/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
-
-# Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
-```
-
-## Query API
-
-- Supports three dialogue modes:
-  - /query/retrieval
-  - /query/llm
-  - /query: (default) RAG (retrieval + llm)
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-```
-
-- Multi-round dialogue
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What is PAI?"}'
-```
-
-> Parameters: session_id
->
-> The unique identifier of the conversation history session. After the session_id is passed in, the conversation history will be recorded. Calling the large model will automatically carry the stored conversation history.
->
-> ```bash
-> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What are its advantages?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-> ```
-
-> Parameters: chat_history
->
-> The conversation history between the user and the model. Each element in the list is a round of conversation in the form of {"user":"user input","bot":"model output"}. Multiple rounds of conversations are arranged in chronological order.
->
-> ```bash
-> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What are its features？", "chat_history": [{"user":"What is PAI?", "bot":"PAI is Alibaba Cloud's artificial intelligence platform, which provides a one-stop machine learning solution. This platform supports various machine learning tasks, including supervised learning, unsupervised learning, and reinforcement learning, and is suitable for multiple scenarios such as marketing, finance, and social networks."}]}'
-> ```
-
-> Parameters: session_id + chat_history
->
-> Chat_history will be used to append and update the conversation history corresponding to the stored session_id
->
-> ```bash
-> curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"What are its advantages?", "chat_history": [{"user":"PAI是什么？", "bot":"PAI is Alibaba Cloud's artificial intelligence platform, which provides a one-stop machine learning solution. This platform supports various machine learning tasks, including supervised learning, unsupervised learning, and reinforcement learning, and is suitable for multiple scenarios such as marketing, finance, and social networks."}], "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-> ```
-
-- Agent And Function Tool
-
-# Agentic RAG
+## Agentic RAG
 
 You can use agent with function calling api-tools in PAI-RAG, please refer to the documentation:
 [Agentic RAG](./docs/agentic_rag.md)
 
-# Data Analysis
+## Data Analysis
 
 You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc.md)
 
-# Parameter Configuration
-
-For more customization options, please refer to the documentation:
-
-[Parameter Configuration Instruction](./docs/config_guide_en.md)
-
-# Supported File Types
+## Supported File Types
 
 | 文件类型     | 文件格式                               |
 | ------------ | -------------------------------------- |

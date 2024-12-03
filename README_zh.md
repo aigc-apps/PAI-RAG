@@ -7,12 +7,16 @@
 <details open>
 <summary></b>📕 目录</b></summary>
 
-- 💡 [什么是PAI-RAG?](#什么是pai-rag)
-- 🌟 [主要模块和功能](#主要模块和功能)
-- 🔎 [快速开始](#快速开始)
-  - [本地环境](#方式一本地环境)
-  - [Docker镜像](#方式二docker镜像)
-- 🔧 [API服务](#api服务)
+- 💡 [什么是PAI-RAG?](#-什么是pai-rag)
+- 🌟 [主要模块和功能](#-主要模块和功能)
+- 🔎 [快速开始](#-快速开始)
+  - [Docker镜像](#Docker镜像启动)
+  - [本地环境](#本地启动)
+- 📜 [文档](#-文档)
+  - [API服务](#api服务)
+  - [Agentic RAG](#agentic-rag)
+  - [数据分析Nl2sql](#数据分析-nl2sql)
+  - [支持文件类型](#支持文件类型)
 
 </details>
 
@@ -22,9 +26,8 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 # 🌟 主要模块和功能
 
-![framework](docs/figures/framework.jpg)
-
 - 模块化设计，灵活可配置
+- 功能丰富，包括Agentic RAG, 多模态问答和nl2sql等
 - 基于社区开源组件构建，定制化门槛低
 - 多维度自动评估体系，轻松掌握各模块性能质量
 - 集成全链路可观测和评估可视化工具
@@ -33,262 +36,132 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 # 🔎 快速开始
 
-## 方式一：本地环境
+## Docker镜像启动
 
-1. 克隆仓库
+您可以通过两种方式在本地运行 PAI-RAG：Docker 环境或直接从源代码运行。
+
+1. 设置环境变量
 
    ```bash
    git clone git@github.com:aigc-apps/PAI-RAG.git
+   cd PAI-RAG/docker
+   cp .env.example .env
    ```
 
-2. 配置开发环境
+   如果您需要使用通义千问API或者阿里云OSS存储，请编辑 .env 文件。
+   其中DASHSCOPE_API_KEY获取地址为 https://dashscope.console.aliyun.com/apiKey。
+   当服务启动后您依然可以在WEB UI中配置这些API_KEY信息，但是我们建议您通过环境变量的方式配置。
 
-   本项目使用poetry进行管理，若在本地环境下使用，建议在安装环境之前先创建一个空环境。为了确保环境一致性并避免因Python版本差异造成的问题，我们指定Python版本为3.11。
+2. 使用`docker compose`命令启动服务：
 
    ```bash
-   conda create -n rag_env python==3.11
-   conda activate rag_env
+   docker-compose up -d
    ```
 
-   如果使用macOS且需要处理PPTX文件，需要下载依赖库处理PPTX文件
+3. 打开浏览器中的 http://localhost:8000 访问web ui. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
 
-   ```bash
-   brew install mono-libgdiplus
+## 本地启动
+
+如果想在本地启动或者进行代码开发，可以参考文档：[本地开发指南](./docs/develop/local_develop_zh.md)
+
+## 通过Web UI查询的示例
+
+1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+
+   <img src="docs/figures/quick_start/setting.png" width="600px"/>
+
+2. 访问"上传"页面，上传测试数据：./example_data/paul_graham/paul_graham_essay.txt。
+
+   <img src="docs/figures/quick_start/upload.png" width="600px"/>
+
+3. 切换到"聊天"页面, 进行对话。
+
+   <img src="docs/figures/quick_start/query.png" width="600px"/>
+
+## 通过API接口查询的示例
+
+1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+
+2. 使用API上传数据：
+
+   切换到`PAI-RAG`目录
+
+   ```shell
+   cd PAI-RAG
    ```
 
-   ### (1) CPU环境
+   **请求**
 
-   直接使用poetry安装项目依赖包：
-
-   ```bash
-    pip install poetry
-    poetry install
-    poetry run aliyun-bootstrap -a install
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/upload_data \
+   -H 'Content-Type: multipart/form-data' \
+      -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
    ```
 
-   ### (2) GPU环境
+   **响应**
 
-   首先替换默认 pyproject.toml 为 GPU 版本, 再使用poetry安装项目依赖包：
-
-   ```bash
-   mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
-   pip install poetry
-   poetry install
-   poetry run aliyun-bootstrap -a install
-
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226"
+   }
    ```
 
-- 常见网络超时问题
+3. 检查上传任务的状态：
 
-  注：在安装过程中，若遇到网络连接超时的情况，可以添加阿里云或清华的镜像源，在 pyproject.toml 文件末尾追加以下几行：
+   **请求**
 
-  ```bash
-  [[tool.poetry.source]]
-  name = "mirrors"
-  url = "http://mirrors.aliyun.com/pypi/simple/" # 阿里云
-  # url = "https://pypi.tuna.tsinghua.edu.cn/simple/" # 清华
-  priority = "default"
-  ```
-
-  之后，再依次执行以下命令：
-
-  ```bash
-  poetry lock
-  poetry install
-  ```
-
-3. 加载数据
-
-   向当前索引存储中插入data_path路径下的新文件
-
-   ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
+   ```shell
+   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
-   path examples:
+   **响应**
 
-   ```
-   a. load_data -d test/example
-   b. load_data -d test/example_data/pai_document.pdf
-   c. load_data -d test/example_data -p *.pdf
-
-   ```
-
-4. 启动RAG服务
-
-   使用OpenAI API，需要在命令行引入环境变量
-
-   ```bash
-   export OPENAI_API_KEY=""
+   ```json
+   {
+     "task_id": "1bcea36a1db740d28194df8af40c7226",
+     "status": "completed",
+     "detail": null
+   }
    ```
 
-   使用DashScope API，需要在命令行引入环境变量
+4. Perform a RAG query:
 
-   ```bash
-   export DASHSCOPE_API_KEY=""
+   **请求**
+
+   ```shell
+   curl -X 'POST' http://localhost:8000/api/v1/query \
+      -H "Content-Type: application/json" \
+      -d '{"question":"What did the author do growing up?"}'
    ```
 
-   使用OSS存储文件(使用多模态模式时必须提前配置)，在配置文件src/pai_rag/config/settings.toml和src/pai_rag/config/settings_multi_modal.toml中添加以下配置:
+   **响应**
 
-   ```toml
-   [rag.oss_store]
-   bucket = ""
-   endpoint = ""
-   prefix = ""
+   ```json
+   {
+      "answer":"Growing up, the author worked on writing and programming outside of school. Specifically, he wrote short stories, which he now considers to be awful due to their lack of plot and focus on characters with strong feelings. In terms of programming, he first tried writing programs on an IBM 1401 in 9th grade, using an early version of Fortran. The experience was limited because the only form of input for programs was data stored on punched cards, and he didn't have much data to work with. Later, after getting a TRS-80 microcomputer around 1980, he really started programming by creating simple games, a program to predict the flight height of model rockets, and even a word processor that his father used to write at least one book.",
+      "session_id":"ba245d630f4d44a295514345a05c24a3",
+      "docs":[
+         ...
+      ]
+   }
    ```
 
-   并需要在命令行引入环境变量
+# 📜 文档
 
-   ```bash
-   export OSS_ACCESS_KEY_ID=""
-   export OSS_ACCESS_KEY_SECRET=""
-   ```
+## API服务
 
-   启动RAG服务
+可以直接通过API服务调用RAG能力（上传数据，RAG查询，检索，NL2SQL, Function call等等）。更多细节可以查看[API文档](./docs/api_zh.md)
 
-   ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), enable-example(默认True), skip-download-models(不加为False)
-   # 默认启动时下载模型 [bge-large-zh-v1.5, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
-   # 可使用命令行 "load_model" 下载模型 including [bge-large-zh-v1.5, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-m3, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--enable-example False] [--skip-download-models]
-   ```
-
-   启动默认配置文件为src/pai_rag/config/settings.yaml，若需要使用多模态，请切换到src/pai_rag/config/settings_multi_modal.yaml
-
-   ```bash
-   pai_rag serve -c src/pai_rag/config/settings_multi_modal.yaml
-   ```
-
-5. 下载其他模型到本地
-
-   ```bash
-   # 支持 model name (默认 ""), 没有参数时, 默认下载上述所有模型。
-   load_model [--model-name MODEL_NAME]
-   ```
-
-6. 启动RAG WebUI
-
-   ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8001)
-   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
-   ```
-
-   你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
-
-## 方式二：Docker镜像
-
-为了更方便使用，节省较长时间的环境安装问题，我们也提供了直接基于镜像启动的方式。
-
-### 使用公开镜像
-
-1. 启动RAG服务
-
-- CPU
-
-  ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0
-
-  # 启动: -p(端口) -v(挂载embedding和rerank模型目录) -e(设置环境变量，若使用Dashscope LLM/Embedding，需要引入) -w(worker数量，可以指定为近似cpu核数)
-  docker run -p 8001:8001 -v /huggingface:/huggingface -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0 gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
-  ```
-
-- GPU
-
-  ```bash
-  docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu
-
-  # 启动: -p(端口) -v(挂载embedding和rerank模型目录) -e(设置环境变量，若使用Dashscope LLM/Embedding，需要引入) -w(worker数量，可以指定为近似cpu核数)
-  docker run -p 8001:8001 -v /huggingface:/huggingface --gpus all -e DASHSCOPE_API_KEY=sk-xxxx -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-gpu gunicorn -b 0.0.0.0:8001 -w 16 -k uvicorn.workers.UvicornH11Worker pai_rag.main:app
-  ```
-
-2. 启动RAG WebUI
-   Linux:
-
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-
-docker run --network host -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-```
-
-Mac/Windows:
-
-```bash
-docker pull mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui
-
-docker run -p 8002:8002 -d mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:0.1.0-ui pai_rag ui -p 8002 -c http://host.docker.internal:8001/
-```
-
-### 基于Dockerfile自行构建镜像
-
-可以参考[How to Build Docker](docs/docker_build.md)来自行构建镜像。
-
-镜像构建完成后可参考【使用公开镜像】的步骤启动RAG服务和WebUI。
-
-# 🔧 API服务
-
-你可以使用命令行向服务侧发送API请求。比如调用[Upload API](#upload-api)上传知识库文件。
-
-## Upload API
-
-支持通过API的方式上传本地文件，并支持指定不同的faiss_path，每次发送API请求会返回一个task_id，之后可以通过task_id来查看文件上传状态（processing、completed、failed）。
-
-- 上传（upload_data）
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
-
-# Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
-```
-
-- 查看上传状态（get_upload_state）
-
-```bash
-curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
-
-# Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
-```
-
-## Query API
-
-- Rag Query请求
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-```
-
-- 多轮对话请求
-
-```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-
-# 传入session_id：对话历史会话唯一标识，传入session_id后，将对话历史进行记录，调用大模型将自动携带存储的对话历史。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-
-# 传入chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有哪些功能？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}]}'
-
-# 同时传入session_id和chat_history：会用chat_history对存储的session_id所对应的对话历史进行追加更新
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}], "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-```
-
-- Agent及调用Function Tool的简单对话
-
-# Agentic RAG
+## Agentic RAG
 
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
 [Agentic RAG](./docs/agentic_rag.md)
 
-# Data Analysis
+## 数据分析 NL2sql
 
-您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[Data Analysis](./docs/data_analysis_doc.md)
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc.md)
 
-# 参数配置
-
-如需实现更多个性化配置，请参考文档：
-
-[参数配置说明](./docs/config_guide_cn.md)
-
-# 支持文件类型
+## 支持文件类型
 
 | 文件类型 | 文件格式                               |
 | -------- | -------------------------------------- |

@@ -13,6 +13,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from pai_rag.integrations.embeddings.clip.cnclip_embedding import CnClipEmbedding
 import os
 from loguru import logger
+from pai_rag.utils.download_models import ModelScopeDownloader
 
 
 def create_embedding(embed_config: PaiBaseEmbeddingConfig):
@@ -36,8 +37,20 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
         )
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
         pai_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        pai_model_name = os.path.join(pai_model_dir, embed_config.model)
+        if not os.path.exists(pai_model_name):
+            logger.info(
+                f"Embedding model {embed_config.model} not found in {pai_model_dir}, try download it."
+            )
+            download_models = ModelScopeDownloader(
+                fetch_config=True, download_directory_path=pai_model_dir
+            )
+            download_models.load_models(model=embed_config.model)
+            logger.info(
+                f"Embedding model {embed_config.model} downloaded to {pai_model_name}."
+            )
         embed_model = HuggingFaceEmbedding(
-            model_name=os.path.join(pai_model_dir, embed_config.model),
+            model_name=pai_model_name,
             embed_batch_size=embed_config.embed_batch_size,
             trust_remote_code=True,
             callback_manager=Settings.callback_manager,
