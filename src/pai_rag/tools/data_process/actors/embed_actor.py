@@ -12,7 +12,7 @@ from loguru import logger
 class EmbedActor:
     def __init__(self, config_file):
         logger.info("Init EmbedActor.")
-        RAY_ENV_MODEL_DIR = "/PAI-RAG/pai_rag_model_repository"
+        RAY_ENV_MODEL_DIR = "/PAI-RAG/model_repository"
         os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
         config = RagConfigManager.from_file(config_file).get_value()
         download_models = ModelScopeDownloader(
