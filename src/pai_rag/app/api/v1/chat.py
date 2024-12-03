@@ -296,9 +296,17 @@ async def upload_history_json(
     except Exception as e:
         return StreamingResponse(status_code=500, content={"message": str(e)})
 
+    # 重命名
+    try:
+        unified_destination_path = os.path.join(persist_path, "db_query_history.json")
+        os.rename(destination_path, unified_destination_path)
+        logger.info("History file renamed successfully")
+    except Exception as e:
+        return StreamingResponse(status_code=500, content={"message": str(e)})
+
     return {
         "task_id": task_id,
-        "destination_path": destination_path,
+        "destination_path": unified_destination_path,
     }
 
 

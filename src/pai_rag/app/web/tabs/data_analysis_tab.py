@@ -159,7 +159,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "database",
                 ],
                 value="database",
-                label="Please choose the data analysis type",
+                label="Please choose the analysis type",
                 elem_id="analysis_type",
             )
 

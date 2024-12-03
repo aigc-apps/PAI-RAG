@@ -4,6 +4,8 @@ import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+import jieba
+from datasketch import MinHash
 from loguru import logger
 
 from llama_index.core.base.base_retriever import BaseRetriever
@@ -318,3 +320,65 @@ def extract_subset_from_description(
         return sub_db_description_dict
     else:
         return db_description_dict
+
+
+def is_chinese_char(char):
+    """检查单个字符是否是中文字符"""
+    return "\u4e00" <= char <= "\u9fff"
+
+
+def is_chinese_string(value: str) -> bool:
+    """检查字符串是否主要由中文字符组成"""
+    chinese_count = sum(is_chinese_char(char) for char in value)
+    return chinese_count / len(value) > 0.5
+
+
+def is_english_string(value: str) -> bool:
+    """检查字符串是否主要由英文字符组成"""
+    english_count = sum(c.isascii() for c in value)
+    return english_count / len(value) > 0.5
+
+
+def create_minhash(signature_size: int, value: str, n_gram: int) -> MinHash:
+    """
+    Creates a MinHash object for a given string.
+
+    Args:
+        signature_size (int): The size of the MinHash signature.
+        string (str): The input string to create the MinHash for.
+        n_gram (int): The n-gram size for the MinHash.
+
+    Returns:
+        MinHash: The MinHash object for the input string.
+    """
+    m = MinHash(num_perm=signature_size)
+    if is_chinese_string(value):
+        words = list(jieba.cut(value, cut_all=True))
+        # 生成 n-gram
+        n = n_gram
+        words_gram = []
+        while n > 1:
+            grams_n = ["".join(words[i : i + n]) for i in range(len(words) - n + 1)]
+            words_gram.extend(grams_n)
+            n -= 1
+        words_gram.extend(words)
+        for w in words_gram:
+            m.update(w.encode("utf8"))
+    else:
+        for d in [value[i : i + n_gram] for i in range(len(value) - n_gram + 1)]:
+            m.update(d.encode("utf8"))
+    return m
+
+
+def jaccard_similarity(m1: MinHash, m2: MinHash) -> float:
+    """
+    Computes the Jaccard similarity between two MinHash objects.
+
+    Args:
+        m1 (MinHash): The first MinHash object.
+        m2 (MinHash): The second MinHash object.
+
+    Returns:
+        float: The Jaccard similarity between the two MinHash objects.
+    """
+    return m1.jaccard(m2)

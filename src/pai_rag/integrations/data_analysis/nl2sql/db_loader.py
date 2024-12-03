@@ -83,6 +83,9 @@ class DBLoader:
             self._db_indexer.get_value_index()
             logger.info("db_value index stored.")
 
+            self._db_indexer.get_value_lsh()
+            logger.info("db_value lsh stored.")
+
             if self._enable_db_history:
                 self._db_indexer.get_history_index()
                 logger.info("db_history index stored.")
@@ -108,6 +111,9 @@ class DBLoader:
 
             await self._db_indexer.aget_value_index()
             logger.info("db_value index stored.")
+
+            self._db_indexer.get_value_lsh()
+            logger.info("db_value lsh stored.")
 
             if self._enable_db_history:
                 await self._db_indexer.aget_history_index()
