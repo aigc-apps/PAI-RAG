@@ -45,7 +45,7 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
             download_models = ModelScopeDownloader(
                 fetch_config=True, download_directory_path=pai_model_dir
             )
-            download_models.load_models(model=embed_config.model)
+            download_models.load_model(model=embed_config.model)
             logger.info(
                 f"Embedding model {embed_config.model} downloaded to {pai_model_name}."
             )
