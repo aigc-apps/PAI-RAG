@@ -8,15 +8,14 @@ from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_cpus
 
 
 def main(args):
-    init_ray_env(args.working_dir)
+    init_ray_env(args.working_dir, args.num_cpus)
     num_cpus_total = get_num_cpus()
-    logger.info(f"Init completed with {num_cpus_total} workers.")
     ds = ray.data.read_json(args.data_path)
     logger.info("Embedding nodes started.")
     ds = ds.map_batches(
         EmbedActor(config_file=args.config_file),
         num_cpus=args.num_cpus,
-        concurrency=(num_cpus_total // args.num_cpus),
+        concurrency=int(num_cpus_total / args.num_cpus),
     )
     logger.info("Embedding nodes completed.")
     logger.info(f"Write to {args.output_dir}")
