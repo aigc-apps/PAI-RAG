@@ -1,6 +1,7 @@
 from loguru import logger
 import os
 import ray
+import json
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.utils.oss_client import OssClient
 from pai_rag.core.rag_module import resolve
@@ -41,3 +42,9 @@ class ParseActor:
     def load_and_parse(self, input_file):
         documents = self.data_reader.load_data(file_path_or_directory=input_file)
         return document_to_dict(documents[0])
+
+    def write_to_file(self, results, filename):
+        with open(filename, "a", encoding="utf-8") as f:
+            for result in results:
+                json_line = json.dumps(result, ensure_ascii=False)
+                f.write(json_line + "\n")
