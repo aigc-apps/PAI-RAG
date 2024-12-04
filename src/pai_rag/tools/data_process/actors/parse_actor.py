@@ -6,7 +6,7 @@ from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.utils.oss_client import OssClient
 from pai_rag.core.rag_module import resolve
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.tools.data_process.utils.format_document import document_to_dict
+from pai_rag.tools.data_process.utils.format_document import convert_document_to_dict
 from pai_rag.utils.download_models import ModelScopeDownloader
 
 
@@ -41,7 +41,7 @@ class ParseActor:
 
     def load_and_parse(self, input_file):
         documents = self.data_reader.load_data(file_path_or_directory=input_file)
-        return document_to_dict(documents[0])
+        return convert_document_to_dict(documents[0])
 
     def write_to_file(self, results, filename):
         with open(filename, "a", encoding="utf-8") as f:

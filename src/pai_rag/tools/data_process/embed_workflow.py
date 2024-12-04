@@ -13,9 +13,14 @@ def main(args):
     ds = ray.data.read_json(args.data_path)
     logger.info("Embedding nodes started.")
     ds = ds.map_batches(
-        EmbedActor(config_file=args.config_file),
+        EmbedActor,
+        fn_constructor_kwargs={
+            "working_dir": args.working_dir,
+            "config_file": args.config_file,
+        },
         num_cpus=args.num_cpus,
-        concurrency=int(num_cpus_total / args.num_cpus),
+        concurrency=int(num_cpus_total / args.num_cpus) - 1,
+        batch_size=args.batch_size,
     )
     logger.info("Embedding nodes completed.")
     logger.info(f"Write to {args.output_dir}")
@@ -38,6 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--num_cpus", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=10)
     args = parser.parse_args()
 
     print(f"Init: args: {args}")

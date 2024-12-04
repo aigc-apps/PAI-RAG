@@ -10,10 +10,10 @@ from loguru import logger
 
 
 class EmbedActor:
-    def __init__(self, config_file):
-        logger.info("Init EmbedActor.")
-        RAY_ENV_MODEL_DIR = "/PAI-RAG/model_repository"
+    def __init__(self, working_dir, config_file):
+        RAY_ENV_MODEL_DIR = os.path.join(working_dir, "model_repository")
         os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
+        logger.info(f"Init EmbedActor with working dir: {RAY_ENV_MODEL_DIR}.")
         config = RagConfigManager.from_file(config_file).get_value()
         download_models = ModelScopeDownloader(
             fetch_config=True, download_directory_path=RAY_ENV_MODEL_DIR

@@ -1,7 +1,7 @@
 from llama_index.core.schema import Document
 
 
-def document_to_dict(doc):
+def convert_document_to_dict(doc):
     return {
         "id": doc.id_,
         "embedding": doc.embedding,
@@ -14,14 +14,21 @@ def document_to_dict(doc):
     }
 
 
-def dict_to_document(doc_dict):
-    return Document(
-        id_=doc_dict["id"],
-        embedding=doc_dict["embedding"],
-        metadata=doc_dict["metadata"],
-        excluded_embed_metadata_keys=doc_dict["excluded_embed_metadata_keys"],
-        excluded_llm_metadata_keys=doc_dict["excluded_llm_metadata_keys"],
-        relationships=doc_dict["relationships"],
-        text=doc_dict["text"],
-        mimetype=doc_dict["mimetype"],
-    )
+def convert_dict_to_documents(doc_dict):
+    length = len(doc_dict["id"])
+    documents = []
+    for i in range(length):
+        document = Document(
+            id_=doc_dict["id"][i],
+            embedding=doc_dict["embedding"][i],
+            metadata=doc_dict["metadata"][i],
+            excluded_embed_metadata_keys=list(
+                doc_dict["excluded_embed_metadata_keys"][i]
+            ),
+            excluded_llm_metadata_keys=list(doc_dict["excluded_llm_metadata_keys"][i]),
+            relationships=doc_dict["relationships"][i],
+            text=doc_dict["text"][i],
+            mimetype=doc_dict["mimetype"][i],
+        )
+        documents.append(document)
+    return documents
