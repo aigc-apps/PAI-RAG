@@ -71,10 +71,11 @@ class PaiHtmlReader(BaseReader):
                 row_cells = [""] * max_cols
             if current_row_index >= max_rows:
                 table_matrix.append(row_cells)
+                max_rows += 1
             for cell in row.find_all(["th", "td"]):
                 if cell.name != "th":
                     row_header_flag = False
-                else:
+                elif cell.name == "th" and current_row_index != 0:
                     col_header_index_max = max(col_header_index_max, current_col_index)
                 cell_content = self._parse_cell_content(cell)
                 col_span = int(cell.get("colspan", 1))
@@ -96,16 +97,26 @@ class PaiHtmlReader(BaseReader):
                         table_matrix[current_row_index][
                             current_col_index + i
                         ] = cell_content
-                for i in range(1, row_span):
-                    if current_row_index + i > max_rows:
-                        table_matrix.append(row_cells)
-                        table_matrix[current_row_index + i][
-                            current_col_index
-                        ] = cell_content
-                max_rows = max(current_row_index + row_span, max_rows)
-                current_col_index += col_span
+
                 if current_row_index == 0:
                     max_cols += col_span
+                # print("row_span", row_span)
+                # print("max_rows", max_rows)
+                # print("current_row_index", current_row_index)
+                # print("table_matrix", table_matrix)
+                # print("current_col_index", current_col_index)
+                # print("row_cells", row_cells)
+                # print("max_cols", max_cols)
+                for i in range(1, row_span):
+                    if current_row_index + i >= max_rows:
+                        row_cells = [""] * max_cols
+                        table_matrix.append(row_cells)
+                        max_rows += 1
+                    table_matrix[current_row_index + i][
+                        current_col_index
+                    ] = cell_content
+                max_rows = max(current_row_index + row_span, max_rows)
+                current_col_index += col_span
             if row_header_flag:
                 row_headers_index.append(current_row_index)
             current_row_index += 1
@@ -230,6 +241,8 @@ class PaiHtmlReader(BaseReader):
         """
 
         md_content = self.convert_html_to_markdown(file_path)
+        with open("tests/testdata/data/test_back_data/test_html_pai.md", "w") as f:
+            f.write(md_content)
         logger.info(f"[PaiHtmlReader] successfully processed html file {file_path}.")
         docs = []
         if metadata and extra_info:
