@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.base.base_query_engine import BaseQueryEngine
@@ -84,30 +84,40 @@ class DataAnalysisTool(BaseQueryEngine):
         return {}
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = self._retriever.retrieve(query_bundle)
-        return nodes
+        nodes = self._retriever._retrieve_sql(query_bundle)
+        if isinstance(nodes, Tuple):
+            return nodes[0], nodes[1]
+        else:
+            return nodes, ""
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = await self._retriever.aretrieve(query_bundle)
-        return nodes
+        nodes = await self._retriever._aretrieve_sql(query_bundle)
+        if isinstance(nodes, Tuple):
+            return nodes[0], nodes[1]
+        else:
+            return nodes, ""
 
     def synthesize(
         self,
         query_bundle: QueryBundle,
+        db_schema: str,
         nodes: List[NodeWithScore],
     ) -> RESPONSE_TYPE:
         return self._synthesizer.synthesize(
             query=query_bundle,
+            db_schema=db_schema,
             nodes=nodes,
         )
 
     async def asynthesize(
         self,
         query_bundle: QueryBundle,
+        db_schema: str,
         nodes: List[NodeWithScore],
     ) -> RESPONSE_TYPE:
         return await self._synthesizer.asynthesize(
             query=query_bundle,
+            db_schema=db_schema,
             nodes=nodes,
         )
 
@@ -117,9 +127,10 @@ class DataAnalysisTool(BaseQueryEngine):
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
-            nodes = self.retrieve(query_bundle)
+            nodes, db_schema = self.retrieve(query_bundle)
             response = self._synthesizer.synthesize(
                 query=query_bundle,
+                db_schema=db_schema,
                 nodes=nodes,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
@@ -132,9 +143,10 @@ class DataAnalysisTool(BaseQueryEngine):
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
-            nodes = await self.aretrieve(query_bundle)
+            nodes, db_schema = await self.aretrieve(query_bundle)
             response = await self._synthesizer.asynthesize(
                 query=query_bundle,
+                db_schema=db_schema,
                 nodes=nodes,
             )
 
@@ -146,10 +158,10 @@ class DataAnalysisTool(BaseQueryEngine):
         streaming = self._synthesizer._streaming
         self._synthesizer._streaming = True
 
-        nodes = await self.aretrieve(query_bundle)
+        nodes, db_schema = await self.aretrieve(query_bundle)
 
         stream_response = await self._synthesizer.asynthesize(
-            query=query_bundle, nodes=nodes
+            query=query_bundle, db_schema=db_schema, nodes=nodes
         )
         self._synthesizer._streaming = streaming
 
