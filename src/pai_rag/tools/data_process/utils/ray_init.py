@@ -17,7 +17,7 @@ def init_ray_env(working_dir, num_cpus: int = 1):
             len(ray.nodes()),
             ray.cluster_resources()["CPU"],
             num_cpus,
-            int(ray.cluster_resources()["CPU"] / num_cpus),
+            int(ray.cluster_resources()["CPU"] / num_cpus) - 1,
         )
     )
 

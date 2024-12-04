@@ -1,5 +1,6 @@
 from datetime import datetime
 from llama_index.core.schema import TextNode, ImageNode
+import numpy as np
 
 
 def convert_dict_to_nodes(node_dict: dict):
@@ -103,8 +104,12 @@ def convert_nodes_to_dict(input_nodes):
         ),
         data["metadata_template"].append(node.metadata_template),
         data["metadata_seperator"].append(node.metadata_seperator),
-        data["excluded_embed_metadata_keys"].append(node.excluded_embed_metadata_keys),
-        data["excluded_llm_metadata_keys"].append(node.excluded_llm_metadata_keys),
+        data["excluded_embed_metadata_keys"].append(
+            np.array(node.excluded_embed_metadata_keys)
+        ),
+        data["excluded_llm_metadata_keys"].append(
+            np.array(node.excluded_llm_metadata_keys)
+        ),
         # image
         data["image"].append(node.image if type(node) is ImageNode else None),
         data["image_path"].append(node.image_path if type(node) is ImageNode else None),

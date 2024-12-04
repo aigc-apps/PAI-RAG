@@ -7,6 +7,7 @@ from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
 from loguru import logger
+import numpy as np
 
 
 class EmbedActor:
@@ -32,9 +33,9 @@ class EmbedActor:
 
     def __call__(self, nodes):
         text_contents = list(nodes["text"])
-        nodes["embedding"] = self.embed_model.get_text_embedding_batch(text_contents)
+        embeddings = self.embed_model.get_text_embedding_batch(text_contents)
+        nodes["embedding"] = np.array(embeddings)
         if self.sparse_embed_model:
-            nodes["sparse_embedding"] = self.sparse_embed_model.encode_documents(
-                text_contents
-            )
+            sparse_embeddings = self.sparse_embed_model.encode_documents(text_contents)
+            nodes["sparse_embedding"] = sparse_embeddings
         return nodes
