@@ -36,7 +36,6 @@ from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextN
 from llama_index.core.service_context import ServiceContext
 from llama_index.core.settings import (
     Settings,
-    callback_manager_from_settings_or_context,
     embed_model_from_settings_or_context,
     llm_from_settings_or_context,
 )
@@ -310,7 +309,7 @@ def inspect_db_connection(
     return sql_database, tables, table_descriptions
 
 
-class MyNLSQLRetriever(BaseRetriever, PromptMixin):
+class MyNLSQLRetriever(PromptMixin):
     """Text-to-SQL Retriever.
 
     Retrieves via text.
@@ -374,10 +373,10 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
         self._handle_sql_errors = handle_sql_errors
         self._sql_only = sql_only
         self._verbose = verbose
-        super().__init__(
-            callback_manager=callback_manager
-            or callback_manager_from_settings_or_context(Settings, service_context)
-        )
+        # super().__init__(
+        #     callback_manager=callback_manager
+        #     or callback_manager_from_settings_or_context(Settings, service_context)
+        # )
 
     @classmethod
     def from_config(
@@ -546,7 +545,11 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             # add query_tables into metadata
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
-        return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": table_desc_str,
+            **metadata,
+        }
 
     async def aretrieve_with_metadata(
         self, str_or_query_bundle: QueryType
@@ -645,7 +648,11 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
             # add query_tables into metadata
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
-        return retrieved_nodes, {"sql_query": sql_query_str, **metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": table_desc_str,
+            **metadata,
+        }
 
     def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
         table_collection = list()
@@ -672,13 +679,13 @@ class MyNLSQLRetriever(BaseRetriever, PromptMixin):
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""
-        retrieved_nodes, _ = self.retrieve_with_metadata(query_bundle)
-        return retrieved_nodes
+        retrieved_nodes, metadata = self.retrieve_with_metadata(query_bundle)
+        return retrieved_nodes, metadata["schema_description"]
 
     async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Async retrieve nodes given query."""
-        retrieved_nodes, _ = await self.aretrieve_with_metadata(query_bundle)
-        return retrieved_nodes
+        retrieved_nodes, metadata = await self.aretrieve_with_metadata(query_bundle)
+        return retrieved_nodes, metadata["schema_description"]
 
     def _get_table_context(self, query_bundle: QueryBundle) -> str:
         """Get table context.
