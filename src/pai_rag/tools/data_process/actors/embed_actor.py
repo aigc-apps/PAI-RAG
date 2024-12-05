@@ -6,8 +6,13 @@ from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
+from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
+    PaiMultiModalEmbedding,
+)
+from pai_rag.utils.embed_utils import download_url
 from loguru import logger
 import numpy as np
+import asyncio
 
 
 class EmbedActor:
@@ -28,14 +33,57 @@ class EmbedActor:
                 model_name_or_path=RAY_ENV_MODEL_DIR
             )
             logger.info("Sparse embed model loaded.")
-
+        self.multimodal_embed_model = resolve(
+            cls=PaiMultiModalEmbedding,
+            multimodal_embed_config=config.multimodal_embedding,
+        )
         logger.info("EmbedActor init finished.")
 
     def __call__(self, nodes):
-        text_contents = list(nodes["text"])
-        embeddings = self.embed_model.get_text_embedding_batch(text_contents)
-        nodes["embedding"] = np.array(embeddings)
-        if self.sparse_embed_model:
-            sparse_embeddings = self.sparse_embed_model.encode_documents(text_contents)
-            nodes["sparse_embedding"] = sparse_embeddings
+        text_indices = np.where(nodes["type"] == "text")[0]
+        image_indices = np.where(nodes["type"] == "image")[0]
+        if text_indices.size > 0:
+            text_contents = nodes["text"][text_indices]
+            text_embeddings = self.embed_model.get_text_embedding_batch(text_contents)
+            for idx, emb in zip(text_indices, text_embeddings):
+                nodes["embedding"][idx] = np.array(emb)
+            if self.sparse_embed_model:
+                print("text_contents", text_contents, type(text_contents))
+                sparse_embeddings = self.sparse_embed_model.encode_documents(
+                    list(text_contents)
+                )
+                for idx, emb in zip(text_indices, sparse_embeddings):
+                    nodes["sparse_embedding"][idx] = emb
+        else:
+            logger.info("No image nodes to process.")
+
+        if image_indices.size > 0:
+            images = asyncio.run(
+                self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
+            )
+            image_embeddings = self.multimodal_embed_model.get_image_embedding_batch(
+                images
+            )
+            for idx, emb in zip(image_indices, image_embeddings):
+                nodes["embedding"][idx] = np.array(emb)
+        else:
+            logger.info("No image nodes to process.")
+
+        nodes["embedding"] = np.array(nodes["embedding"], dtype=object)
+        return self.process_extra_metadata(nodes)
+
+    def process_extra_metadata(self, nodes):
+        excluded_embed_metadata_keys = nodes["excluded_embed_metadata_keys"]
+        nodes["excluded_embed_metadata_keys"] = np.array(
+            [list(a) for a in excluded_embed_metadata_keys]
+        )
+        excluded_llm_metadata_keys = nodes["excluded_llm_metadata_keys"]
+        nodes["excluded_llm_metadata_keys"] = np.array(
+            [list(a) for a in excluded_llm_metadata_keys]
+        )
         return nodes
+
+    async def load_images_from_nodes(self, iamge_urls):
+        tasks = [download_url(url) for url in iamge_urls]
+        results = await asyncio.gather(*tasks)
+        return results
