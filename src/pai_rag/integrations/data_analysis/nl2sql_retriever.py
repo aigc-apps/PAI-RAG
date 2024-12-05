@@ -677,12 +677,12 @@ class MyNLSQLRetriever(PromptMixin):
 
         return new_sql_query_str
 
-    def _retrieve_sql(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""
         retrieved_nodes, metadata = self.retrieve_with_metadata(query_bundle)
         return retrieved_nodes, metadata["schema_description"]
 
-    async def _aretrieve_sql(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+    async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Async retrieve nodes given query."""
         retrieved_nodes, metadata = await self.aretrieve_with_metadata(query_bundle)
         return retrieved_nodes, metadata["schema_description"]

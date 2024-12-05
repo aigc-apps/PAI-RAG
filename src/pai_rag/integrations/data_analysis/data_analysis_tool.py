@@ -84,14 +84,14 @@ class DataAnalysisTool(BaseQueryEngine):
         return {}
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = self._retriever._retrieve_sql(query_bundle)
+        nodes = self._retriever._retrieve(query_bundle)
         if isinstance(nodes, Tuple):
             return nodes[0], nodes[1]
         else:
             return nodes, ""
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = await self._retriever._aretrieve_sql(query_bundle)
+        nodes = await self._retriever._aretrieve(query_bundle)
         if isinstance(nodes, Tuple):
             return nodes[0], nodes[1]
         else:
