@@ -106,6 +106,6 @@ def test_nl2sql_retriever(db_connection):
         tables=db_tables,
     )
 
-    res = nl2sql_retriever.retrieve("找出体重大于10的宠物的数量")
+    res, _ = nl2sql_retriever._retrieve("找出体重大于10的宠物的数量")
 
     assert res[0].score == 1
