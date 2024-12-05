@@ -35,16 +35,16 @@ async def empty_response_agenerator() -> AsyncGenerator[str, None]:
     yield "Empty Response"
 
 
-DEFAULT_RESPONSE_SYNTHESIS_PROMPT_TMPL = (
-    "Given an input question, synthesize a response in Chinese from the query results.\n"
-    "Query: {query_str}\n\n"
-    "SQL or Python Code Instructions (optional):\n{query_code_instruction}\n\n"
-    "Code Query Output: {query_output}\n\n"
-    "Response: "
-)
-
 DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
-    DEFAULT_RESPONSE_SYNTHESIS_PROMPT_TMPL,
+    "给定一个输入问题，根据数据表信息描述、查询代码指令以及查询结果生成最终回复。\n"
+    "要求: \n"
+    "1.生成的回复语言需要与输入问题的语言保持一致。\n"
+    "2.生成的回复需要关注数据表信息描述中可能存在的字段单位或其他补充信息。\n"
+    "输入问题: {query_str} \n"
+    "数据表信息描述: {db_schema} \n"
+    "SQL 或 Python 查询代码指令（可选）: {query_code_instruction} \n"
+    "查询结果: {query_output} \n\n"
+    "最终回复: \n\n"
 )
 
 
@@ -88,6 +88,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     async def aget_response(
         self,
         query_str: str,
+        db_schema: str,
         retrieved_nodes: List[NodeWithScore],
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
@@ -110,6 +111,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = await self._llm.apredict(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_schema,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],  # sql or pandas query
@@ -120,6 +122,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = await self._llm.astream(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_schema,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],
@@ -137,6 +140,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     def get_response(
         self,
         query_str: str,
+        db_schema: str,
         retrieved_nodes: List[NodeWithScore],
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
@@ -159,6 +163,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = self._llm.predict(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_schema,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],  # sql or pandas query
@@ -169,6 +174,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = self._llm.stream(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_schema,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],
@@ -187,6 +193,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     def synthesize(
         self,
         query: QueryType,
+        db_schema: str,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         **response_kwargs: Any,
@@ -228,6 +235,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         ) as event:
             response_str = self.get_response(
                 query_str=query.query_str,
+                db_schema=db_schema,
                 retrieved_nodes=nodes,
                 **response_kwargs,
             )
@@ -251,6 +259,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     async def asynthesize(
         self,
         query: QueryType,
+        db_schema: str,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         **response_kwargs: Any,
@@ -291,6 +300,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         ) as event:
             response_str = await self.aget_response(
                 query_str=query.query_str,
+                db_schema=db_schema,
                 retrieved_nodes=nodes,
                 **response_kwargs,
             )
