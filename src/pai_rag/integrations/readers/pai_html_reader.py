@@ -100,13 +100,6 @@ class PaiHtmlReader(BaseReader):
 
                 if current_row_index == 0:
                     max_cols += col_span
-                # print("row_span", row_span)
-                # print("max_rows", max_rows)
-                # print("current_row_index", current_row_index)
-                # print("table_matrix", table_matrix)
-                # print("current_col_index", current_col_index)
-                # print("row_cells", row_cells)
-                # print("max_cols", max_cols)
                 for i in range(1, row_span):
                     if current_row_index + i >= max_rows:
                         row_cells = [""] * max_cols
@@ -241,8 +234,6 @@ class PaiHtmlReader(BaseReader):
         """
 
         md_content = self.convert_html_to_markdown(file_path)
-        with open("tests/testdata/data/test_back_data/test_html_pai.md", "w") as f:
-            f.write(md_content)
         logger.info(f"[PaiHtmlReader] successfully processed html file {file_path}.")
         docs = []
         if metadata and extra_info:

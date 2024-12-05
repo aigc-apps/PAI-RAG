@@ -48,8 +48,8 @@ class PaiTable(BaseModel):
         else:
             data_col_start_index = 0
         return [
-            [row[i] for i in range(data_col_start_index, self.get_col_numbers())]
-            for row in self.data
+            [row[col] for row in self.data]
+            for col in range(data_col_start_index, self.get_col_numbers())
         ]
 
 
@@ -114,11 +114,10 @@ def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:
     if len(table.get_column_headers()) > 0:
         headers = table.get_column_headers()
         rows = table.get_columns()
+        total_cols = table.get_row_numbers()
     else:
         headers = table.get_row_headers()
         rows = table.get_rows()
-    print(headers)
-    print(rows)
     if headers:
         for header in headers:
             markdown.append("| " + " | ".join(header) + " |")
