@@ -36,7 +36,6 @@ from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextN
 from llama_index.core.service_context import ServiceContext
 from llama_index.core.settings import (
     Settings,
-    callback_manager_from_settings_or_context,
     embed_model_from_settings_or_context,
     llm_from_settings_or_context,
 )
@@ -546,7 +545,11 @@ class MyNLSQLRetriever(PromptMixin):
             # add query_tables into metadata
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
-        return retrieved_nodes, {"sql_query": sql_query_str, "schema_description": table_desc_str, **metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": table_desc_str,
+            **metadata,
+        }
 
     async def aretrieve_with_metadata(
         self, str_or_query_bundle: QueryType
@@ -645,7 +648,11 @@ class MyNLSQLRetriever(PromptMixin):
             # add query_tables into metadata
             retrieved_nodes[0].metadata["query_tables"] = query_tables
 
-        return retrieved_nodes, {"sql_query": sql_query_str, "schema_description": table_desc_str, **metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": table_desc_str,
+            **metadata,
+        }
 
     def _get_table_from_sql(self, table_list: list, sql_query: str) -> list:
         table_collection = list()
