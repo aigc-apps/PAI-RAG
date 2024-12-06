@@ -136,6 +136,7 @@ class StructuredNodeParser(NodeParser):
         ref_doc = ref_doc or node
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         image_urls_positions = []
+        current_section = current_section.replace(" ", "").strip()
         raw_section_without_image = current_section
         for match in re.finditer(IMAGE_URL_PATTERN, current_section):
             alt_text = match.group("alt_text")
@@ -180,7 +181,9 @@ class StructuredNodeParser(NodeParser):
                 node_text = f"{current_header}: {section_parts}"
             else:
                 node_text = section_parts
-            cur_chunk_end_position = cur_chunk_start_position + len(section_parts)
+            cur_chunk_end_position = (
+                cur_chunk_start_position + len(section_parts) + len("\n\n")
+            )
 
             for img_info in image_urls_positions:
                 if (
@@ -197,7 +200,7 @@ class StructuredNodeParser(NodeParser):
                         - cur_chunk_start_position,
                     }
                     section_image_urls_positions.append(img_info)
-                    cur_chunk_end_position += len(img_info["image_text"])
+                    cur_chunk_end_position += len(img_info["image_text"]) + len("\n\n")
                     if self.enable_multimodal:
                         image_node = ImageNode(
                             embedding=node.embedding,

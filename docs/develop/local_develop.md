@@ -64,8 +64,10 @@ For local development, please refer to the following steps:
    To use the DashScope API, you need to export environment variables:
 
    ```bash
-   export DASHSCOPE_API_KEY=""
+   export DASHSCOPE_API_KEY="xxx"
    ```
+
+   Please replace xxx with your own DASHSCOPE API key. You can find your keys here: https://dashscope.console.aliyun.com/apiKey
 
    ```bash
    # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), skip-download-models (default False)
@@ -85,7 +87,7 @@ For local development, please refer to the following steps:
    pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
    ```
 
-   You can also open http://127.0.0.1:8002/ to configure the RAG service and upload local data.
+   You can also open http://localhost:8002/ to configure the RAG service and upload local data.
 
 6. [Optional] Local load_data tool
 

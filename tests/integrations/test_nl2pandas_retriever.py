@@ -69,13 +69,13 @@ def test_data_analysis_synthesizer():
     data_analysis_synthesizer = DataAnalysisSynthesizer()
 
     res_get_response = data_analysis_synthesizer.get_response(
-        query_str=query, retrieved_nodes=retrieved_nodes
+        query_str=query, db_schema="", retrieved_nodes=retrieved_nodes
     )
 
     assert len(res_get_response) > 0
 
     res_synthesize = data_analysis_synthesizer.synthesize(
-        query=query, nodes=retrieved_nodes
+        query=query, db_schema="", nodes=retrieved_nodes
     )
 
     assert len(res_synthesize.response) > 0

@@ -83,13 +83,13 @@ repos:
         exclude: |
           poetry.lock|
           (\/.*?\.[\w:]+)/pyproject.toml|
-          (\/.*?\.[\w:]+)/poetry.lock
+          (\/.*?\.[\w:]+)/poetry.lock|
         args:
           [
             "--exclude",
             "./data/tokenization/qwen.tiktoken",
             "--skip",
-            "*.json",
+            "*.json,*.txt",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
           ]
