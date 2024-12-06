@@ -13,35 +13,52 @@ from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
 from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
     PaiMultiModalEmbedding,
 )
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 
 class EmbedActor:
     def __init__(self, working_dir, config_file):
         RAY_ENV_MODEL_DIR = os.path.join(working_dir, "model_repository")
         os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
-        logger.info(f"Init EmbedActor with working dir: {RAY_ENV_MODEL_DIR}.")
-        config = RagConfigManager.from_file(config_file).get_value()
+        logger.info(f"Init EmbedActor with model dir: {RAY_ENV_MODEL_DIR}.")
+        self.config = RagConfigManager.from_file(config_file).get_value()
+
+        self.download_model_list = []
+        if self.config.embedding.source == "HuggingFace":
+            self.download_model_list.append(self.config.embedding.model)
+        if self.config.embedding.enable_sparse:
+            self.download_model_list.append("bge-m3")
+        if self.config.index.enable_multimodal:
+            self.download_model_list.append("chinese-clip-vit-large-patch14")
+        self.load_models(self.download_model_list)
+        logger.info("EmbedActor init finished.")
+
+    def load_models(self, model_list):
+        logger.info(f"Downloading models {model_list}.")
         download_models = ModelScopeDownloader(
-            fetch_config=True, download_directory_path=RAY_ENV_MODEL_DIR
+            fetch_config=True,
+            download_directory_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR),
         )
-        self.embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-        logger.info(f"Dense embed model loaded {config.embedding}.")
+        for model_name in model_list:
+            download_models.load_model(model=model_name)
+
+        logger.info("Loading models.")
+        self.embed_model = resolve(cls=PaiEmbedding, embed_config=self.config.embedding)
+        logger.info(f"Dense embed model loaded {self.config.embedding}.")
         self.sparse_embed_model = None
-        if config.embedding.enable_sparse:
-            download_models.load_model(model="bge-m3")
+        if self.config.embedding.enable_sparse:
             self.sparse_embed_model = BGEM3SparseEmbeddingFunction(
-                model_name_or_path=RAY_ENV_MODEL_DIR
+                model_name_or_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR)
             )
             logger.info("Sparse embed model loaded.")
+
         self.multimodal_embed_model = None
-        if config.index.enable_multimodal:
-            download_models.load_model(model="chinese-clip-vit-large-patch14")
+        if self.config.index.enable_multimodal:
             self.multimodal_embed_model = resolve(
                 cls=PaiMultiModalEmbedding,
-                multimodal_embed_config=config.multimodal_embedding,
+                multimodal_embed_config=self.config.multimodal_embedding,
             )
             logger.info("Multimodal embed model loaded.")
-        logger.info("EmbedActor init finished.")
 
     def __call__(self, nodes):
         text_indices = np.where(nodes["type"] == "text")[0]
@@ -84,6 +101,8 @@ class EmbedActor:
         nodes["excluded_llm_metadata_keys"] = np.array(
             [list(a) for a in excluded_llm_metadata_keys]
         )
+        nodes["start_char_idx"] = np.nan_to_num(nodes["start_char_idx"]).astype(int)
+        nodes["end_char_idx"] = np.nan_to_num(nodes["start_char_idx"]).astype(int)
         return nodes
 
     async def load_images_from_nodes(self, iamge_urls):

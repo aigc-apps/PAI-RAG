@@ -3,13 +3,12 @@ import ray
 import time
 from loguru import logger
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_cpus
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_concurrency
 from pai_rag.tools.data_process.actors.split_actor import SplitActor
 
 
 def main(args):
     init_ray_env(args.working_dir)
-    num_cpus_total = get_num_cpus()
     ds = ray.data.read_json(args.data_path)
     logger.info("Splitting nodes started.")
 
@@ -20,7 +19,7 @@ def main(args):
             "config_file": args.config_file,
         },
         num_cpus=args.num_cpus,
-        concurrency=int(num_cpus_total / args.num_cpus) - 1,
+        concurrency=get_concurrency(),
         batch_size=args.batch_size,
     )
     logger.info("Splitting nodes completed.")

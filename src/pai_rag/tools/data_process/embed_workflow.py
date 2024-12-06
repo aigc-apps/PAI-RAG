@@ -4,12 +4,11 @@ import ray
 import time
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.actors.embed_actor import EmbedActor
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_cpus
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 
 
 def main(args):
     init_ray_env(args.working_dir, args.num_cpus)
-    num_cpus_total = get_num_cpus()
     ds = ray.data.read_json(args.data_path)
     logger.info("Embedding nodes started.")
     ds = ds.map_batches(
@@ -19,7 +18,7 @@ def main(args):
             "config_file": args.config_file,
         },
         num_cpus=args.num_cpus,
-        concurrency=int(num_cpus_total / args.num_cpus) - 1,
+        concurrency=1,
         batch_size=args.batch_size,
     )
     logger.info("Embedding nodes completed.")

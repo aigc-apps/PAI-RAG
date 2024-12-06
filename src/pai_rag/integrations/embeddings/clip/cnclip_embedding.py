@@ -11,9 +11,6 @@ from llama_index.core.schema import ImageType
 from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
-DEFAULT_CNCLIP_MODEL_DIR = os.path.join(
-    DEFAULT_MODEL_DIR, "chinese-clip-vit-large-patch14"
-)
 DEFAULT_CNCLIP_MODEL = "ViT-L-14"
 
 
@@ -29,7 +26,6 @@ class CnClipEmbedding(MultiModalEmbedding):
         self,
         model_name: str = DEFAULT_CNCLIP_MODEL,
         embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
-        download_root: str = DEFAULT_CNCLIP_MODEL_DIR,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -42,9 +38,13 @@ class CnClipEmbedding(MultiModalEmbedding):
             raise ValueError(f"Unknown ChineseClip model: {model_name}.")
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-
+        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR)
         self._model, self._preprocess = load_from_name(
-            self.model_name, device=self._device, download_root=download_root
+            self.model_name,
+            device=self._device,
+            download_root=os.path.join(
+                pai_rag_model_dir, "chinese-clip-vit-large-patch14"
+            ),
         )
         self._model.eval()
 
