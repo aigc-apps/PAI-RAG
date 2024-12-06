@@ -52,7 +52,6 @@ class EmbedActor:
             for idx, emb in zip(text_indices, text_embeddings):
                 nodes["embedding"][idx] = np.array(emb)
             if self.sparse_embed_model:
-                print("text_contents", text_contents, type(text_contents))
                 sparse_embeddings = self.sparse_embed_model.encode_documents(
                     list(text_contents)
                 )
