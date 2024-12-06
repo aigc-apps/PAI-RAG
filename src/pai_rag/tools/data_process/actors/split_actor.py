@@ -1,10 +1,10 @@
 import os
 from loguru import logger
 from pai_rag.core.rag_module import resolve
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.tools.data_process.utils.format_document import convert_dict_to_documents
-from pai_rag.tools.data_process.utils.format_node import convert_nodes_to_dict
+from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
+from pai_rag.tools.data_process.utils.formatters import convert_dict_to_documents
+from pai_rag.tools.data_process.utils.formatters import convert_nodes_to_dict
 
 
 class SplitActor:

@@ -1,18 +1,18 @@
 import os
+import asyncio
+import numpy as np
+from loguru import logger
 from pai_rag.core.rag_module import resolve
-from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
+from pai_rag.utils.embed_utils import download_url
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
 from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
     PaiMultiModalEmbedding,
 )
-from pai_rag.utils.embed_utils import download_url
-from loguru import logger
-import numpy as np
-import asyncio
 
 
 class EmbedActor:

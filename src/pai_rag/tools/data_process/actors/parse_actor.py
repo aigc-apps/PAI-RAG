@@ -1,13 +1,13 @@
-from loguru import logger
 import os
 import ray
 import json
-from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-from pai_rag.utils.oss_client import OssClient
+from loguru import logger
 from pai_rag.core.rag_module import resolve
+from pai_rag.tools.data_process.utils.formatters import convert_document_to_dict
+from pai_rag.utils.oss_client import OssClient
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.tools.data_process.utils.format_document import convert_document_to_dict
 from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 
 
 @ray.remote(num_cpus=4)
