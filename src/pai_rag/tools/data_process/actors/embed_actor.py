@@ -33,10 +33,14 @@ class EmbedActor:
                 model_name_or_path=RAY_ENV_MODEL_DIR
             )
             logger.info("Sparse embed model loaded.")
-        self.multimodal_embed_model = resolve(
-            cls=PaiMultiModalEmbedding,
-            multimodal_embed_config=config.multimodal_embedding,
-        )
+        self.multimodal_embed_model = None
+        if config.index.enable_multimodal:
+            download_models.load_model(model="chinese-clip-vit-large-patch14")
+            self.multimodal_embed_model = resolve(
+                cls=PaiMultiModalEmbedding,
+                multimodal_embed_config=config.multimodal_embedding,
+            )
+            logger.info("Multimodal embed model loaded.")
         logger.info("EmbedActor init finished.")
 
     def __call__(self, nodes):
@@ -57,7 +61,7 @@ class EmbedActor:
         else:
             logger.info("No image nodes to process.")
 
-        if image_indices.size > 0:
+        if image_indices.size > 0 and self.multimodal_embed_model:
             images = asyncio.run(
                 self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
             )
