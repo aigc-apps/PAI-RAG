@@ -26,6 +26,7 @@ class CnClipEmbedding(MultiModalEmbedding):
         self,
         model_name: str = DEFAULT_CNCLIP_MODEL,
         embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
+        model_path: str = DEFAULT_MODEL_DIR,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -38,13 +39,10 @@ class CnClipEmbedding(MultiModalEmbedding):
             raise ValueError(f"Unknown ChineseClip model: {model_name}.")
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR)
         self._model, self._preprocess = load_from_name(
             self.model_name,
             device=self._device,
-            download_root=os.path.join(
-                pai_rag_model_dir, "chinese-clip-vit-large-patch14"
-            ),
+            download_root=model_path,
         )
         self._model.eval()
 
@@ -97,7 +95,9 @@ class CnClipEmbedding(MultiModalEmbedding):
 
 
 if __name__ == "__main__":
-    clip_embedding = CnClipEmbedding()
+    clip_embedding = CnClipEmbedding(
+        os.path.join(DEFAULT_MODEL_DIR, "chinese-clip-vit-large-patch14")
+    )
 
     image_embedding = clip_embedding.get_image_embedding(
         "example_data/cn_clip/pokemon.jpeg"

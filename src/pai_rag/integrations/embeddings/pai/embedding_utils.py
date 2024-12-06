@@ -36,35 +36,51 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."
         )
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
-        pai_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
-        pai_model_name = os.path.join(pai_model_dir, embed_config.model)
-        if not os.path.exists(pai_model_name):
+        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        pai_model_path = os.path.join(pai_rag_model_dir, embed_config.model)
+        if not os.path.exists(pai_model_path):
             logger.info(
-                f"Embedding model {embed_config.model} not found in {pai_model_dir}, try download it."
+                f"Embedding model {embed_config.model} not found in {pai_rag_model_dir}, try download it."
             )
             download_models = ModelScopeDownloader(
-                fetch_config=True, download_directory_path=pai_model_dir
+                fetch_config=True, download_directory_path=pai_rag_model_dir
             )
             download_models.load_model(model=embed_config.model)
             logger.info(
-                f"Embedding model {embed_config.model} downloaded to {pai_model_name}."
+                f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
             )
         embed_model = HuggingFaceEmbedding(
-            model_name=pai_model_name,
+            model_name=pai_model_path,
             embed_batch_size=embed_config.embed_batch_size,
             trust_remote_code=True,
             callback_manager=Settings.callback_manager,
         )
 
         logger.info(
-            f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {pai_model_dir} with {embed_config.embed_batch_size} batch size."
+            f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {pai_rag_model_dir} with {embed_config.embed_batch_size} batch size."
         )
 
     elif isinstance(embed_config, CnClipEmbeddingConfig):
+        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        pai_model_path = os.path.join(
+            pai_rag_model_dir, "chinese-clip-vit-large-patch14"
+        )
+        if not os.path.exists(pai_model_path):
+            logger.info(
+                f"Embedding model {embed_config.model} not found in {pai_rag_model_dir}, try download it."
+            )
+            download_models = ModelScopeDownloader(
+                fetch_config=True, download_directory_path=pai_rag_model_dir
+            )
+            download_models.load_model(model="chinese-clip-vit-large-patch14")
+            logger.info(
+                f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
+            )
         embed_model = CnClipEmbedding(
             model_name=embed_config.model,
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
+            model_path=pai_model_path,
         )
         logger.info(
             f"Initialized CnClip embedding model {embed_config.model} with {embed_config.embed_batch_size} batch size."
