@@ -92,8 +92,8 @@ detectron2 = [
 ]
 magic-pdf = {version = "0.7.0b1", extras = ["full"]}
 paddlepaddle-gpu = [
-  {markers = "sys_platform == 'linux'", version = "3.0.0b1", url = "https://paddle-whl.bj.bcebos.com/stable/cu118/paddlepaddle-gpu/paddlepaddle_gpu-3.0.0b1-cp311-cp311-linux_x86_64.whl"},
-  {markers = "sys_platform == 'win32'", version = "3.0.0b1", url = "https://paddle-whl.bj.bcebos.com/stable/cu118/paddlepaddle-gpu/paddlepaddle_gpu-3.0.0b1-cp311-cp311-win_amd64.whl"}
+  {markers = "sys_platform == 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/paddlepaddle_gpu-3.0.0b1-cp311-cp311-linux_x86_64.whl"},
+  {markers = "sys_platform != 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/paddlepaddle_gpu-3.0.0b1-cp311-cp311-win_amd64.whl"}
 ]
 peft = "^0.12.0"
 aliyun-bootstrap = "^1.0.2"
