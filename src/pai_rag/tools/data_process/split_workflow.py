@@ -18,7 +18,6 @@ def main(args):
             "working_dir": args.working_dir,
             "config_file": args.config_file,
         },
-        num_cpus=args.num_cpus,
         concurrency=get_concurrency(),
         batch_size=args.batch_size,
     )
