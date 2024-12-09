@@ -34,6 +34,7 @@ def respond(input_elements: List[Any]):
     chatbot = update_dict["chatbot"]
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
+    citation = update_dict["citation"]
 
     if chatbot is not None:
         chatbot.append((msg, ""))
@@ -51,13 +52,17 @@ def respond(input_elements: List[Any]):
 
         elif query_type == "RAG (Search Web)":
             response_gen = rag_client.query_search(
-                msg, with_history=update_dict["include_history"], stream=is_streaming
+                msg,
+                with_history=update_dict["include_history"],
+                stream=is_streaming,
+                citation=citation,
             )
         else:
             response_gen = rag_client.query(
                 msg,
                 with_history=update_dict["include_history"],
                 stream=is_streaming,
+                citation=citation,
                 index_name=index_name,
             )
 
@@ -92,6 +97,12 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Streaming Output",
                 info="Streaming Output",
                 elem_id="is_streaming",
+                value=True,
+            )
+            citation = gr.Checkbox(
+                label="Citation",
+                info="Need Citation",
+                elem_id="citation",
                 value=True,
             )
             need_image = gr.Checkbox(
@@ -281,19 +292,35 @@ def create_chat_tab() -> Dict[str, Any]:
                 search_args = {search_api_key, search_count, search_lang}
 
             with gr.Column(visible=True) as lc_col:
-                with gr.Tab("LLM Prompt"):
+                with gr.Tab("Prompt"):
                     text_qa_template = gr.Textbox(
                         label="Prompt Template",
                         value="",
                         elem_id="text_qa_template",
                         lines=10,
+                        interactive=True,
                     )
-                with gr.Tab("MultiModal LLM Prompt"):
+                    citation_text_qa_template = gr.Textbox(
+                        label="Citation Prompt Template",
+                        value="",
+                        elem_id="citation_text_qa_template",
+                        lines=10,
+                        interactive=True,
+                    )
+                with gr.Tab("MultiModal Prompt"):
                     multimodal_qa_template = gr.Textbox(
-                        label="Multi-modal LLM Prompt Template",
+                        label="Multi-modal Prompt Template",
                         value="",
                         elem_id="multimodal_qa_template",
                         lines=12,
+                        interactive=True,
+                    )
+                    citation_multimodal_qa_template = gr.Textbox(
+                        label="Citation Multi-modal Prompt Template",
+                        value="",
+                        elem_id="citation_multimodal_qa_template",
+                        lines=12,
+                        interactive=True,
                     )
 
             cur_tokens = gr.Textbox(
@@ -367,10 +394,13 @@ def create_chat_tab() -> Dict[str, Any]:
             {
                 text_qa_template,
                 multimodal_qa_template,
+                citation_text_qa_template,
+                citation_multimodal_qa_template,
                 question,
                 query_type,
                 chatbot,
                 is_streaming,
+                citation,
                 need_image,
                 include_history,
                 chat_index,
@@ -419,6 +449,8 @@ def create_chat_tab() -> Dict[str, Any]:
             similarity_threshold.elem_id: similarity_threshold,
             reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
             multimodal_qa_template.elem_id: multimodal_qa_template,
+            citation_multimodal_qa_template.elem_id: citation_multimodal_qa_template,
+            citation_text_qa_template.elem_id: citation_text_qa_template,
             text_qa_template.elem_id: text_qa_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,

@@ -4,8 +4,6 @@ from collections import defaultdict
 from pai_rag.app.web.ui_constants import (
     LLM_MODEL_KEY_DICT,
     MLLM_MODEL_KEY_DICT,
-    DEFAULT_TEXT_QA_PROMPT_TMPL,
-    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
 import pandas as pd
 import os
@@ -115,8 +113,10 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
-    text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_TMPL
-    multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
+    text_qa_template: str = None
+    multimodal_qa_template: str = None
+    citation_text_qa_template: str = None
+    citation_multimodal_qa_template: str = None
 
     # agent
     agent_api_definition: str = None  # API tool definition
@@ -199,6 +199,12 @@ class ViewModel(BaseModel):
 
         view_model.text_qa_template = config.synthesizer.text_qa_template
         view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
+        view_model.citation_text_qa_template = (
+            config.synthesizer.citation_text_qa_template
+        )
+        view_model.citation_multimodal_qa_template = (
+            config.synthesizer.citation_multimodal_qa_template
+        )
 
         view_model.search_api_key = config.search.search_api_key or os.environ.get(
             "BING_SEARCH_KEY"
@@ -340,6 +346,12 @@ class ViewModel(BaseModel):
         config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
         config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
+        config["synthesizer"][
+            "citation_text_qa_template"
+        ] = self.citation_text_qa_template
+        config["synthesizer"][
+            "citation_multimodal_qa_template"
+        ] = self.citation_multimodal_qa_template
 
         config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
             "BING_SEARCH_KEY"
@@ -518,6 +530,12 @@ class ViewModel(BaseModel):
 
         settings["text_qa_template"] = {"value": self.text_qa_template}
         settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
+        settings["citation_text_qa_template"] = {
+            "value": self.citation_text_qa_template
+        }
+        settings["citation_multimodal_qa_template"] = {
+            "value": self.citation_multimodal_qa_template
+        }
 
         # search
         settings["search_api_key"] = {"value": self.search_api_key}
