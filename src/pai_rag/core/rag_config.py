@@ -1,7 +1,6 @@
 from typing import Annotated, Dict, Union
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from pai_rag.core.models.config import (
-    BaseTraceConfig,
     NodeEnhancementConfig,
     OssStoreConfig,
     RetrieverConfig,
@@ -133,10 +132,3 @@ class RagConfig(BaseModel):
 
     # synthesizer
     synthesizer: SynthesizerConfig
-
-    # trace
-    trace: Annotated[
-        Union[BaseTraceConfig.get_subclasses()],
-        Field(discriminator="type"),
-        BeforeValidator(validate_case_insensitive),
-    ] | None = None

@@ -213,6 +213,7 @@ class RagWebClient:
         text: str,
         with_history: bool = False,
         stream: bool = False,
+        citation: bool = False,
         with_intent: bool = False,
         index_name: str = None,
     ):
@@ -221,9 +222,11 @@ class RagWebClient:
             question=text,
             session_id=session_id,
             stream=stream,
+            citation=citation,
             with_intent=with_intent,
             index_name=index_name,
         )
+        print(q)
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -248,10 +251,17 @@ class RagWebClient:
         self,
         text: str,
         with_history: bool = False,
+        citation: bool = False,
         stream: bool = False,
     ):
         session_id = self.session_id if with_history else None
-        q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+            with_intent=False,
+            citation=citation,
+        )
         r = requests.post(self.search_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
