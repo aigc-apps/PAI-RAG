@@ -14,6 +14,7 @@ class RagQuery(BaseModel):
     session_id: str | None = None
     vector_db: VectorDbConfig | None = None
     stream: bool | None = False
+    citation: bool | None = False
     with_intent: bool | None = False
     index_name: str | None = None
 

@@ -204,7 +204,9 @@ class RagApplication:
             elif intent != Intents.RAG:
                 return ValueError(f"Invalid intent {intent}")
 
-        query_bundle = PaiQueryBundle(query_str=new_question, stream=query.stream)
+        query_bundle = PaiQueryBundle(
+            query_str=new_question, stream=query.stream, citation=query.citation
+        )
         chat_store.add_message(
             session_id, ChatMessage(role=MessageRole.USER, content=query.question)
         )

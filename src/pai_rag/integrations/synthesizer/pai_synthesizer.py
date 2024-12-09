@@ -4,9 +4,6 @@ from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cas
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
 from llama_index.core.prompts import BasePromptTemplate
-from llama_index.core.prompts.default_prompt_selectors import (
-    DEFAULT_TEXT_QA_PROMPT_SEL,
-)
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
@@ -41,6 +38,43 @@ from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
 
+DEFAULT_TEXT_QA_TMPL = (
+    "参考内容信息如下"
+    "-------\n"
+    "{context_str}\n"
+    "-------\n"
+    "根据提供内容而非其他知识回答问题. "
+    "问题: {query_str}\n"
+    "答案: \n"
+)
+
+CITATION_TEXT_QA_TMPL = (
+    "请完全根据提供的参考内容回答问题。\n"
+    "参考内容由几段文本内容组成,"
+    "当你生成的内容引用到了某段文本来源，请在内容中引用对应文本的数字序号来显示相关的信息源，"
+    "比如[1]，这样可以让你的回复看起来更加可靠。"
+    "你的答案需要包含至少一个相关的引用标记。"
+    "只有在你真正引用了文本的时候才会插入引用标记，当你没找到任何值得引用的内容时，请直接回复你不知道。\n"
+    "注意仅在引用标记中插入数字。你可以用和提问相同的语言回答。\n\n"
+    "例如:\n"
+    "参考材料\n"
+    "-------\n"
+    "Source 1:\n"
+    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。\n\n"
+    "Source 2:\n"
+    "Model 3拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。\n\n"
+    "------\n"
+    "问题：model3的轮毂和内饰是什么配置？\n"
+    "答案：Model 3配置了19英寸新星轮毂和深色高级内饰[2]。\n\n"
+    "现在轮到你了：\n"
+    "参考材料\n"
+    "-------\n"
+    "{context_str}"
+    "-------\n"
+    "问题: {query_str}\n"
+    "答案："
+)
+
 
 DEFAULT_LLM_CHAT_TMPL = (
     "You are a helpful assistant."
@@ -49,18 +83,64 @@ DEFAULT_LLM_CHAT_TMPL = (
     "Answer:"
 )
 
+
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
-    "结合上面给出的图片和下面给出的参考材料来回答用户的问题。材料中包含一组图片链接，分别对应到前面给出的图片的地址。\n\n"
-    "材料:"
-    "---------------------\n\n"
-    "{context_str}\n"
-    "---------------------\n\n"
-    "请根据给定的材料回答给出的问题，回答中需要有文字描述和图片。如果材料中没有找到答案，就说没有找到相关的信息，不要编造答案。\n\n"
+    "根据上面给出的图片和下面给出的参考材料来回答用户的问题。\n"
+    "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
+    "请根据给定的材料回答给出的问题，回答中需要有文字描述和图片链接。如果材料中没有答案相关的信息，就回复你不知道。\n"
     "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。\n\n"
-    "---------------------\n\n"
-    "问题: {query_str}\n请返回文字和展示图片，不需要标明图片顺序"
-    "答案: "
+    "例如：\n"
+    "参考材料\n"
+    "------\n"
+    "Source 1:\n"
+    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。\n\n"
+    "Source 2:\n"
+    "Model 3拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。\n\n"
+    "Image 1:\n"
+    "http://www.tesla.cn/model3.jpg\n\n"
+    "------\n"
+    "问题：model3的轮毂和内饰是什么配置?\n"
+    "答案：Model 3配置了19英寸新星轮毂和深色高级内饰。"
+    "![](http://www.tesla.cn/model3.jpg)\n\n"
+    "现在轮到你了：\n"
+    "参考材料\n"
+    "------\n"
+    "{context_str}"
+    "------\n"
+    "问题: {query_str}\n"
+    "答案："
 )
+
+
+CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
+    "根据上面给出的图片和下面给出的参考材料来回答用户的问题。\n"
+    "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
+    "请根据给定的材料回答给出的问题，如果你当前生成的内容引用到了某一段文字描述，请直接在内容里引用他的数字序号，如[1]。\n"
+    "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。"
+    "请至少列出一个文本和图片引用。如果材料中没有答案相关的信息，就回复你不知道。\n"
+    "例如：\n"
+    "参考材料\n"
+    "------\n"
+    "Source 1:\n"
+    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。\n\n"
+    "Source 2:\n"
+    "Model 3拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。\n\n"
+    "Image 1:\n"
+    "http://www.tesla.cn/model3.jpg\n\n"
+    "------\n"
+    "问题：model3的轮毂和内饰是什么配置?\n"
+    "答案：Model 3配置了19英寸新星轮毂和深色高级内饰[2]。"
+    "![](http://www.tesla.cn/model3.jpg)\n\n"
+    "现在轮到你了：\n"
+    "参考材料\n"
+    "------\n"
+    "{context_str}"
+    "------\n"
+    "问题: {query_str}\n"
+    "答案："
+)
+
+
 QueryTextType = QueryType
 
 
@@ -76,6 +156,7 @@ async def empty_response_agenerator() -> AsyncGenerator[str, None]:
 class PaiQueryBundle(QueryBundle):
     stream: bool = False
     no_retrieval: bool = False
+    citation: bool = False
 
 
 """
@@ -94,6 +175,8 @@ class PaiSynthesizer(BaseSynthesizer):
         text_qa_template: Optional[BasePromptTemplate] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
         multimodal_qa_template: Optional[BasePromptTemplate] = None,
+        citation_text_qa_template: Optional[BasePromptTemplate] = None,
+        citation_multimodal_qa_template: Optional[BasePromptTemplate] = None,
         streaming: bool = False,
     ) -> None:
         super().__init__(
@@ -102,9 +185,18 @@ class PaiSynthesizer(BaseSynthesizer):
             prompt_helper=prompt_helper,
             streaming=streaming,
         )
-        self._text_qa_template = text_qa_template or DEFAULT_TEXT_QA_PROMPT_SEL
+        self._text_qa_template = text_qa_template or PromptTemplate(
+            template=DEFAULT_TEXT_QA_TMPL
+        )
         self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
             template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
+        )
+        self._citation_text_qa_template = citation_text_qa_template or PromptTemplate(
+            template=CITATION_TEXT_QA_TMPL
+        )
+        self._citation_multimodal_qa_template = (
+            citation_multimodal_qa_template
+            or PromptTemplate(template=CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL)
         )
         self._llm_only_template = PromptTemplate(template=DEFAULT_LLM_CHAT_TMPL)
         self._multimodal_llm = multimodal_llm
@@ -183,6 +275,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     ],
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
+                    citation=query.citation,
                     **response_kwargs,
                 )
 
@@ -265,6 +358,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     ],
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
+                    citation=query.citation,
                     **response_kwargs,
                 )
 
@@ -289,15 +383,30 @@ class PaiSynthesizer(BaseSynthesizer):
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
+        citation: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         image_documents = load_image_urls(image_url_list)
-        image_context_str = "\n\n".join(image_url_list)
-        text_context_str = "\n\n".join(text_chunks)
-        context_str = f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n"
-        fmt_prompt = self._multimodal_qa_template.format(
-            context_str=context_str, query_str=query_str
+
+        context_str = (
+            "\n".join(
+                [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+            )
+            + "\n"
         )
+        context_str += "\n".join(
+            [f"Image {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
+        )
+
+        if not citation:
+            fmt_prompt = self._multimodal_qa_template.format(
+                context_str=context_str, query_str=query_str
+            )
+        else:
+            fmt_prompt = self._citation_multimodal_qa_template.format(
+                context_str=context_str, query_str=query_str
+            )
+
         if streaming:
             completion_response_gen = self._multimodal_llm.stream_complete(
                 prompt=fmt_prompt,
@@ -323,16 +432,29 @@ class PaiSynthesizer(BaseSynthesizer):
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
+        citation: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         image_documents = load_image_urls(image_url_list)
 
-        image_context_str = "\n\n".join(image_url_list)
-        text_context_str = "\n\n".join(text_chunks)
-        context_str = f"{text_context_str}\n\n图片链接列表: \n\n{image_context_str}\n\n"
-        fmt_prompt = self._multimodal_qa_template.format(
-            context_str=context_str, query_str=query_str
+        context_str = (
+            "\n".join(
+                [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+            )
+            + "\n"
         )
+        context_str += "\n".join(
+            [f"Image {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
+        )
+
+        if not citation:
+            fmt_prompt = self._multimodal_qa_template.format(
+                context_str=context_str, query_str=query_str
+            )
+        else:
+            fmt_prompt = self._citation_multimodal_qa_template.format(
+                context_str=context_str, query_str=query_str
+            )
 
         if streaming:
             completion_response_gen = await self._multimodal_llm.astream_complete(
@@ -359,6 +481,7 @@ class PaiSynthesizer(BaseSynthesizer):
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
+        citation: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -367,24 +490,30 @@ class PaiSynthesizer(BaseSynthesizer):
             ), "Multi-modal LLM must be provided to understand image documents."
 
             logger.info(
-                f"Synthsize using Multi-modal LLM with images {image_url_list}."
+                f"Synthsize using Multi-modal LLM with images {image_url_list}. citation: {citation}"
             )
             return await self._aget_multi_modal_response(
                 query_str=query_str,
                 text_chunks=text_chunks,
                 image_url_list=image_url_list,
                 streaming=streaming,
+                citation=citation,
                 **response_kwargs,
             )
 
-        logger.info("Synthsize using LLM with no image inputs.")
-        text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        truncated_chunks = self._prompt_helper.truncate(
-            prompt=text_qa_template,
-            text_chunks=text_chunks,
-        )
+        logger.info(f"Synthsize using LLM with no image inputs. citation: {citation}")
+        if not citation:
+            text_qa_template = self._text_qa_template.partial_format(
+                query_str=query_str
+            )
+        else:
+            text_qa_template = self._citation_text_qa_template.partial_format(
+                query_str=query_str
+            )
 
-        context_str = "\n".join(truncated_chunks)
+        context_str = "\n".join(
+            [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+        )
 
         response: RESPONSE_TEXT_TYPE
         if not streaming:
@@ -414,6 +543,7 @@ class PaiSynthesizer(BaseSynthesizer):
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
+        citation: bool = False,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -428,13 +558,18 @@ class PaiSynthesizer(BaseSynthesizer):
                 **kwargs,
             )
 
-        text_qa_template = self._text_qa_template.partial_format(query_str=query_str)
-        truncated_chunks = self._prompt_helper.truncate(
-            prompt=text_qa_template,
-            text_chunks=text_chunks,
-        )
+        if not citation:
+            text_qa_template = self._text_qa_template.partial_format(
+                query_str=query_str
+            )
+        else:
+            text_qa_template = self._citation_text_qa_template.partial_format(
+                query_str=query_str
+            )
 
-        context_str = "\n".join(truncated_chunks)
+        context_str = "\n".join(
+            [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+        )
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = self._llm.predict(

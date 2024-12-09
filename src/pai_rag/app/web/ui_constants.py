@@ -1,9 +1,7 @@
 from pai_rag.integrations.synthesizer.pai_synthesizer import (
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
-from pai_rag.utils.prompt_template import DEFAULT_TEXT_QA_PROMPT_TMPL
 
-DEFAULT_TEXT_QA_PROMPT_TMPL = DEFAULT_TEXT_QA_PROMPT_TMPL
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
 DA_GENERAL_PROMPTS = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行，不要从特定的表中查询所有列，只根据问题查询几个相关的列。请注意只使用你在schema descriptions 中看到的列名。\n=====\n 小心不要查询不存在的列。请注意哪个列位于哪个表中。必要时，请使用表名限定列名。\n=====\n 你必须使用以下格式，每项占一行：\n\n Question: Question here\n SQLQuery: SQL Query to run \n\n Only use tables listed below.\n {schema}\n\n Question: {query_str} \n SQLQuery: "

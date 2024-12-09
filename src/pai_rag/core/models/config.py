@@ -1,12 +1,12 @@
 from enum import Enum
 from typing import List, Literal
 from pydantic import BaseModel
-from llama_index.core.prompts.default_prompt_selectors import (
-    DEFAULT_TEXT_QA_PROMPT_SEL,
-)
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.synthesizer.pai_synthesizer import (
+    DEFAULT_TEXT_QA_TMPL,
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
+    CITATION_TEXT_QA_TMPL,
+    CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
 
 
@@ -46,8 +46,10 @@ class SearchWebConfig(BaseModel):
 
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
-    text_qa_template: str = DEFAULT_TEXT_QA_PROMPT_SEL
+    text_qa_template: str = DEFAULT_TEXT_QA_TMPL
+    citation_text_qa_template: str = CITATION_TEXT_QA_TMPL
     multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
+    citation_multimodal_qa_template: str = CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
 
 class TraceType(str, Enum):
