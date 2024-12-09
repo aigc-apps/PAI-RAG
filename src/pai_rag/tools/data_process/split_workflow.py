@@ -3,21 +3,24 @@ import ray
 import time
 from loguru import logger
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
-from pai_rag.tools.data_process.tasks.split_node import split_node_task
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_num_workers
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_concurrency
+from pai_rag.tools.data_process.actors.split_actor import SplitActor
 
 
 def main(args):
-    init_ray_env(args.working_dir)
-    num_workers = get_num_workers()
+    init_ray_env(args.working_dir, args.num_cpus)
     ds = ray.data.read_json(args.data_path)
     logger.info("Splitting nodes started.")
-    ds = ds.flat_map(
-        split_node_task,
-        fn_kwargs={"config_file": args.config_file},
-        concurrency=num_workers,
+
+    ds = ds.map_batches(
+        SplitActor,
+        fn_constructor_kwargs={
+            "working_dir": args.working_dir,
+            "config_file": args.config_file,
+        },
+        concurrency=get_concurrency(args.num_cpus),
+        batch_size=args.batch_size,
     )
-    logger.info("Splitting nodes completed.")
     logger.info(f"Write to {args.output_dir}")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     ds = ds.repartition(1)
@@ -28,6 +31,7 @@ def main(args):
         ),
         force_ascii=False,
     )
+    logger.info(f"Write to {args.output_dir} successfully.")
 
 
 if __name__ == "__main__":
@@ -36,7 +40,8 @@ if __name__ == "__main__":
     parser.add_argument("--config_file", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
-
+    parser.add_argument("--num_cpus", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=10)
     args = parser.parse_args()
 
     logger.info(f"Init: args: {args}")
