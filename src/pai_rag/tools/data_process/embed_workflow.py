@@ -17,10 +17,9 @@ def main(args):
             "working_dir": args.working_dir,
             "config_file": args.config_file,
         },
-        concurrency=get_concurrency(),
+        concurrency=get_concurrency(args.num_cpus),
         batch_size=args.batch_size,
     )
-    logger.info("Embedding nodes completed.")
     logger.info(f"Write to {args.output_dir}")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     ds = ds.repartition(1)
@@ -31,7 +30,7 @@ def main(args):
         ),
         force_ascii=False,
     )
-    logger.info("Write completed.")
+    logger.info(f"Write to {args.output_dir} successfully.")
 
 
 if __name__ == "__main__":

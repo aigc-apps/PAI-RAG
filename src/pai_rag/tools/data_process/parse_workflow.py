@@ -16,10 +16,11 @@ def main(args):
     results = ray.get(run_tasks)
     logger.info("Master node completed processing files.")
     os.makedirs(args.output_dir, exist_ok=True)
+    logger.info(f"Write to {args.output_dir}")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     save_file = os.path.join(args.output_dir, f"{timestamp}.jsonl")
     parser.write_to_file.remote(results, save_file)
-    logger.info(f"Results written to {save_file} asynchronously.")
+    logger.info(f"Write to {save_file} successfully.")
 
 
 if __name__ == "__main__":

@@ -18,11 +18,10 @@ def main(args):
             "working_dir": args.working_dir,
             "config_file": args.config_file,
         },
-        concurrency=get_concurrency(),
+        concurrency=get_concurrency(args.num_cpus),
         batch_size=args.batch_size,
     )
-    logger.info("Splitting nodes completed.")
-
+    logger.info(f"Write to {args.output_dir}")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     ds = ds.repartition(1)
     ds.write_json(
