@@ -43,14 +43,19 @@ class ModelScopeDownloader:
                     raise ValueError(f"{model} is not a valid model name.")
                 temp_model_dir = snapshot_download(model_id, cache_dir=temp_dir)
                 logger.info(
-                    f"Downloaded model {model} to {temp_model_dir} and move to {model_path}."
+                    f"Downloaded model {model} to {temp_model_dir} and start moving to {model_path}."
                 )
-                shutil.move(temp_model_dir, model_path)
-                end_time = time.time()
-                duration = end_time - start_time
-                logger.info(
-                    f"Finished downloading model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
-                )
+                if not os.path.exists(model_path):
+                    shutil.move(temp_model_dir, model_path)
+                    end_time = time.time()
+                    duration = end_time - start_time
+                    logger.info(
+                        f"Finished moving model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
+                    )
+                else:
+                    logger.info(
+                        f"Model {model} already exists in {model_path.resolve()}, skip moving."
+                    )
         else:
             logger.info(
                 f"Model {model} already exists in {model_path}, skip downloading."

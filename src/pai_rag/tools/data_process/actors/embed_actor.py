@@ -24,7 +24,7 @@ class EmbedActor:
         self.config = RagConfigManager.from_file(config_file).get_value()
 
         self.download_model_list = []
-        if self.config.embedding.source == "HuggingFace":
+        if self.config.embedding.source.lower() == "huggingface":
             self.download_model_list.append(self.config.embedding.model)
         if self.config.embedding.enable_sparse:
             self.download_model_list.append("bge-m3")
