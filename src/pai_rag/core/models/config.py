@@ -1,5 +1,4 @@
-from enum import Enum
-from typing import List, Literal
+from typing import List
 from pydantic import BaseModel
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.synthesizer.pai_synthesizer import (
@@ -50,30 +49,3 @@ class SynthesizerConfig(BaseModel):
     citation_text_qa_template: str = CITATION_TEXT_QA_TMPL
     multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
     citation_multimodal_qa_template: str = CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
-
-
-class TraceType(str, Enum):
-    """Trace types."""
-
-    arize_pheonix = "arize_phoenix"
-    pai_trace = "pai_trace"
-    default = "no_trace"
-
-
-class BaseTraceConfig(BaseModel):
-    type: str = TraceType.default
-
-    @classmethod
-    def get_subclasses(cls):
-        return tuple(cls.__subclasses__())
-
-
-class PaiTraceConfig(BaseTraceConfig):
-    type: Literal[TraceType.pai_trace] = TraceType.pai_trace
-    endpoint: str | None = None
-    token: str | None = None
-    app_name: str = "PAIRAG-Service"
-
-
-class ArizeTraceConfig(BaseTraceConfig):
-    type: Literal[TraceType.arize_pheonix] = TraceType.arize_pheonix
