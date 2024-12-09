@@ -4,7 +4,7 @@ import ray
 import time
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.actors.embed_actor import EmbedActor
-from pai_rag.tools.data_process.utils.ray_init import init_ray_env
+from pai_rag.tools.data_process.utils.ray_init import init_ray_env, get_concurrency
 
 
 def main(args):
@@ -18,7 +18,7 @@ def main(args):
             "config_file": args.config_file,
         },
         num_cpus=args.num_cpus,
-        concurrency=1,
+        concurrency=get_concurrency(),
         batch_size=args.batch_size,
     )
     logger.info("Embedding nodes completed.")
