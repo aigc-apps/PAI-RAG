@@ -25,6 +25,6 @@ def init_ray_env(working_dir, num_cpus_per_actor: int = 1):
 def get_concurrency(num_cpus_per_actor: int = 1):
     num_cpus_total = ray.cluster_resources()["CPU"] or 1
     if num_cpus_total > 1:
-        return int((num_cpus_total - 1) / num_cpus_per_actor)
+        return int((num_cpus_total - 2) / num_cpus_per_actor)
     else:
         return 1

@@ -8,7 +8,7 @@ from pai_rag.tools.data_process.actors.split_actor import SplitActor
 
 
 def main(args):
-    init_ray_env(args.working_dir)
+    init_ray_env(args.working_dir, args.num_cpus)
     ds = ray.data.read_json(args.data_path)
     logger.info("Splitting nodes started.")
 
