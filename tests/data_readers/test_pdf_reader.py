@@ -13,7 +13,8 @@ BASE_DIR = Path(__file__).parent.parent.parent
 
 
 @pytest.mark.skipif(
-    os.getenv("SKIP_GPU_TESTS", False), reason="Need to execute in a CUDA environment."
+    os.getenv("SKIP_GPU_TESTS", "false") == "true",
+    reason="Need to execute in a CUDA environment.",
 )
 def test_pai_pdf_reader():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
