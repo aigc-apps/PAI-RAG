@@ -10156,18 +10156,21 @@ files = [
 
 [[package]]
 name = "ultralytics"
-version = "8.3.20"
+version = "8.3.43"
 description = "Ultralytics YOLO 🚀 for SOTA object detection, multi-object tracking, instance segmentation, pose estimation and image classification."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "ultralytics-8.3.20-py3-none-any.whl", hash = "sha256:38fa887a30bf994b17301fee92d9d4d60aea8888711363321bf90d0e5dd30959"},
-    {file = "ultralytics-8.3.20.tar.gz", hash = "sha256:7dc61814b650f4684a4264c5f7aeba4df1eab3b332a874c767831997a4df8f40"},
+    {file = "ultralytics-8.3.43-py3-none-any.whl", hash = "sha256:b438a4f11b6a418f4592a72e25dec910539ebc6834b9002e5019e2984ec95081"},
+    {file = "ultralytics-8.3.43.tar.gz", hash = "sha256:ef17ec842e7b10e6e97028ae1d1af70108b59c4511c9799881f00f6ff4b3a93e"},
 ]
 
 [package.dependencies]
 matplotlib = ">=3.3.0"
-numpy = ">=1.23.0"
+numpy = [
+    {version = ">=1.23.0", markers = "sys_platform != \"darwin\""},
+    {version = ">=1.23.0,<2.0.0", markers = "sys_platform == \"darwin\""},
+]
 opencv-python = ">=4.6.0"
 pandas = ">=1.1.4"
 pillow = ">=7.1.2"
@@ -11002,4 +11005,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "f4c93ae898541e001b1db8a8f760f2ee6b87c3867e30f342dad0d501206013a5"
+content-hash = "b84a6f549076a0625fb4f104790fc7e2482585ed064e00a50a34ab4251d27bac"
