@@ -14,7 +14,6 @@ from llama_index.core import Settings
 
 from magic_pdf.pipe.UNIPipe import UNIPipe
 from magic_pdf.pipe.OCRPipe import OCRPipe
-from magic_pdf.pipe.TXTPipe import TXTPipe
 import magic_pdf.model as model_config
 from rapidocr_onnxruntime import RapidOCR
 from rapid_table import RapidTable
@@ -52,13 +51,18 @@ class PaiPDFReader(BaseReader):
 
     def __init__(
         self,
+        enable_mandatory_ocr: bool = False,
         enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
         self.enable_table_summary = enable_table_summary
+        self.enable_mandatory_ocr = enable_mandatory_ocr
         self._oss_cache = oss_cache
         logger.info(
             f"PaiPdfReader created with enable_table_summary : {self.enable_table_summary}"
+        )
+        logger.info(
+            f"PaiPdfReader created with enable_mandatory_ocr : {self.enable_mandatory_ocr}"
         )
 
     def _transform_local_to_oss(self, pdf_name: str, local_url: str):
@@ -270,7 +274,7 @@ class PaiPDFReader(BaseReader):
         执行从 pdf 转换到 json、md 的过程，输出 md 和 json 文件到 pdf 文件所在的目录
 
         :param pdf_path: .pdf 文件的路径，可以是相对路径，也可以是绝对路径
-        :param parse_method: 解析方法， 共 auto、ocr、txt 三种，默认 auto，如果效果不好，可以尝试 ocr
+        :param parse_method: 解析方法， 共 auto、ocr两种，默认 auto。auto会根据文件类型选择TXT模式或者OCR模式解析。ocr会直接使用OCR模式。
         :param model_json_path: 已经存在的模型数据文件，如果为空则使用内置模型，pdf 和 model_json 务必对应
         """
         try:
@@ -294,8 +298,6 @@ class PaiPDFReader(BaseReader):
                 if parse_method == "auto":
                     jso_useful_key = {"_pdf_type": "", "model_list": model_json}
                     pipe = UNIPipe(pdf_bytes, jso_useful_key, image_writer)
-                elif parse_method == "txt":
-                    pipe = TXTPipe(pdf_bytes, model_json, image_writer)
                 elif parse_method == "ocr":
                     pipe = OCRPipe(pdf_bytes, model_json, image_writer)
                 else:
@@ -358,8 +360,11 @@ class PaiPDFReader(BaseReader):
         Returns:
             List[Document]: list of documents.
         """
-
-        md_content = self.parse_pdf(file_path, "auto")
+        if self.enable_mandatory_ocr:
+            parse_method = "ocr"
+        else:
+            parse_method = "auto"
+        md_content = self.parse_pdf(file_path, parse_method)
         logger.info(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
         if metadata:

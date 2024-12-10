@@ -71,6 +71,7 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_raptor: bool = False
+    enable_mandatory_ocr: bool = False
     enable_table_summary: bool = False
 
     config_file: str = None
@@ -174,6 +175,7 @@ class ViewModel(BaseModel):
         view_model.chunk_overlap = config.node_parser.chunk_overlap
         view_model.chunk_size = config.node_parser.chunk_size
 
+        view_model.enable_mandatory_ocr = config.data_reader.enable_mandatory_ocr
         view_model.enable_table_summary = config.data_reader.enable_table_summary
 
         view_model.similarity_top_k = config.retriever.similarity_top_k
@@ -282,6 +284,7 @@ class ViewModel(BaseModel):
         config["node_parser"]["chunk_size"] = int(self.chunk_size)
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
+        config["data_reader"]["enable_mandatory_ocr"] = self.enable_mandatory_ocr
         config["data_reader"]["enable_table_summary"] = self.enable_table_summary
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
@@ -506,6 +509,7 @@ class ViewModel(BaseModel):
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_raptor"] = {"value": self.enable_raptor}
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
+        settings["enable_mandatory_ocr"] = {"value": self.enable_mandatory_ocr}
         settings["enable_table_summary"] = {"value": self.enable_table_summary}
 
         # retrieval and rerank
