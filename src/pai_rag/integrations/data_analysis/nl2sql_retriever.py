@@ -253,6 +253,7 @@ class DefaultSQLParser(BaseSQLParser):
             response = response[:sql_query_end].rstrip().replace("```", "")
         return response.strip().replace("```", "").lstrip("sql")
 
+
 def get_sql_info(sql_config: SqlAnalysisConfig):
     if isinstance(sql_config, SqliteAnalysisConfig):
         db_path = os.path.join(sql_config.db_path, sql_config.database)
