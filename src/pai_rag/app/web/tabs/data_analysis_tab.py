@@ -99,7 +99,7 @@ def respond(input_elements: List[Any]):
         chatbot.append((question, ""))
 
     try:
-        response_gen = rag_client.query_data_analysis(question, stream=True)
+        response_gen = rag_client.query_data_analysis(question, stream=False)
         for resp in response_gen:
             chatbot[-1] = (question, resp.result)
             yield chatbot

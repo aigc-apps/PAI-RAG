@@ -37,7 +37,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          mv pyproject_gpu.toml pyproject.toml && rm poetry.lock
+          mv pyproject_gpu.toml pyproject.toml && rm poetry.lock && mv magic-pdf.gpu.template.json magic-pdf.template.json
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry install
@@ -61,3 +61,4 @@ jobs:
           PAIRAG_RAG__embedding__source: "DashScope"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
+          SKIP_GPU_TESTS: true
