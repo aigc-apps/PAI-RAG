@@ -70,3 +70,16 @@ DEFAULT_SQL_REVISION_PROMPT = PromptTemplate(
     "Question: Question here\n"
     "SQLQuery: SQL Query (end with ;) to run \n\n"
 )
+
+
+DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
+    "给定一个输入问题，根据数据表信息描述、查询代码指令以及查询结果生成最终回复。\n"
+    "要求: \n"
+    "1.生成的回复语言需要与输入问题的语言保持一致。\n"
+    "2.生成的回复需要关注数据表信息描述中可能存在的字段单位或其他补充信息。\n"
+    "输入问题: {query_str} \n"
+    "数据表信息描述: {db_schema} \n"
+    "SQL 或 Python 查询代码指令（可选）: {query_code_instruction} \n"
+    "查询结果: {query_output} \n\n"
+    "最终回复: \n\n"
+)

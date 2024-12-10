@@ -129,6 +129,14 @@ def handle_history_checkbox_change(enable_db_history):
         return gr.File.update(visible=False), gr.Textbox.update(visible=False)
 
 
+# 处理embedding复选框变化
+def handle_embedding_checkbox_change(enable_db_embedding):
+    if enable_db_embedding:
+        return gr.Slider.update(visible=True), gr.Slider.update(visible=True)
+    else:
+        return gr.Slider.update(visible=False), gr.Slider.update(visible=False)
+
+
 def upload_history_fn(json_file):
     if json_file is None:
         return None
@@ -217,30 +225,59 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                 with gr.Column(visible=True):
                     enhance_argument = gr.Accordion(
-                        "Parameters of Enhancement", open=False
+                        "Enhancement options for larger database", open=False
                     )
                     with enhance_argument:
                         with gr.Row():
                             with gr.Column(scale=1):
-                                enable_enhanced_description = gr.Checkbox(
-                                    label="Yes",
-                                    info="Enhance db description by llm",
-                                    elem_id="enable_enhanced_description",
-                                )
-                                enable_db_history = gr.Checkbox(
-                                    label="Yes",
-                                    info="Upload db query history/example",
-                                    elem_id="enable_db_history",
-                                )
+                                # enable_enhanced_description = gr.Checkbox(
+                                #     label="Yes",
+                                #     info="Enhance db description by llm",
+                                #     elem_id="enable_enhanced_description",
+                                # )
                                 enable_db_embedding = gr.Checkbox(
                                     label="Yes",
                                     info="Enhance db retrieval by embedding",
                                     elem_id="enable_db_embedding",
                                 )
+
+                                max_column_num = gr.Slider(
+                                    minimum=50,
+                                    maximum=200,
+                                    step=10,
+                                    label="Max Column Number",
+                                    info="Max number of columns to extract unique values.",
+                                    elem_id="max_column_num",
+                                    value=100,
+                                    visible=False,  # 初始状态为不可见
+                                )
+                                max_value_num = gr.Slider(
+                                    minimum=5000,
+                                    maximum=20000,
+                                    step=1000,
+                                    label="Max Value Number",
+                                    info="Maximum number of unique values to be embedded. Larger number may take longer time.",
+                                    elem_id="max_value_num",
+                                    value=10000,
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                enable_db_embedding.change(
+                                    fn=handle_embedding_checkbox_change,
+                                    inputs=[enable_db_embedding],
+                                    outputs=[max_column_num, max_value_num],
+                                )
+
                                 enable_db_selector = gr.Checkbox(
                                     label="Yes",
-                                    info="Enable db schema selector",
+                                    info="Enable db schema selection by llm",
                                     elem_id="enable_db_selector",
+                                )
+
+                                enable_db_history = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db query history/example",
+                                    elem_id="enable_db_history",
                                 )
 
                                 history_file_upload = gr.File(
@@ -290,9 +327,11 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     database,
                     tables,
                     descriptions,
-                    enable_enhanced_description,
+                    # enable_enhanced_description,
                     enable_db_history,
                     enable_db_embedding,
+                    max_column_num,
+                    max_value_num,
                     # enable_query_preprocessor,
                     # enable_db_preretriever,
                     enable_db_selector,
@@ -431,9 +470,11 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
-            enable_enhanced_description.elem_id: enable_enhanced_description,
+            # enable_enhanced_description.elem_id: enable_enhanced_description,
             enable_db_history.elem_id: enable_db_history,
             enable_db_embedding.elem_id: enable_db_embedding,
+            max_column_num.elem_id: max_column_num,
+            max_value_num.elem_id: max_value_num,
             # enable_query_preprocessor.elem_id: enable_query_preprocessor,
             # enable_db_preretriever.elem_id: enable_db_preretriever,
             enable_db_selector.elem_id: enable_db_selector,

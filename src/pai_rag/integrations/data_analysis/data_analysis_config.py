@@ -34,6 +34,8 @@ class SqlAnalysisConfig(BaseAnalysisConfig):
     enable_enhanced_description: bool = False
     enable_db_history: bool = False
     enable_db_embedding: bool = False
+    max_col_num: int = 100
+    max_val_num: int = 10000
     # online
     enable_query_preprocessor: bool = False
     enable_db_preretriever: bool = False

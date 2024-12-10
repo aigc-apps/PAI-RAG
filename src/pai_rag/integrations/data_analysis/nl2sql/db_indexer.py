@@ -1,6 +1,7 @@
 """Used for schema description, q-sql history, and db value embedding"""
 import os
 import pickle
+import hashlib
 from tqdm import tqdm
 from loguru import logger
 from typing import Dict, List, Optional, Tuple
@@ -9,48 +10,51 @@ from datasketch import MinHash, MinHashLSH
 from llama_index.core.schema import TextNode
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
-from llama_index.core import VectorStoreIndex
 
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
     DEFAULT_DB_DESCRIPTION_PATH,
     DEFAULT_DB_HISTORY_PATH,
-    DESCRIPTION_STORAGE_PATH,
-    HISTORY_STORAGE_PATH,
-    VALUE_STORAGE_PATH,
     VALUE_LSH_PATH,
 )
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     get_target_info,
     create_minhash,
 )
+from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBIndexer:
     def __init__(
         self,
         sql_database: SQLDatabase,
-        embed_model: Optional[BaseEmbedding] = None,
+        embed_model: BaseEmbedding,
+        description_index: PaiVectorStoreIndex,
+        history_index: PaiVectorStoreIndex,
+        value_index: PaiVectorStoreIndex,
         db_description_path: Optional[str] = None,
         db_history_path: Optional[str] = None,
-        description_storage_path: Optional[str] = None,
-        history_storage_path: Optional[str] = None,
-        value_storage_path: Optional[str] = None,
+        # description_storage_path: Optional[str] = None,
+        # history_storage_path: Optional[str] = None,
+        # value_storage_path: Optional[str] = None,
         value_lsh_path: Optional[str] = None,
     ) -> None:
         self._sql_database = sql_database
         self._embed_model = embed_model
         self._db_description_path = db_description_path or DEFAULT_DB_DESCRIPTION_PATH
         self._db_history_path = db_history_path or DEFAULT_DB_HISTORY_PATH
-        self._description_storage_path = (
-            description_storage_path or DESCRIPTION_STORAGE_PATH
-        )
-        self._history_storage_path = history_storage_path or HISTORY_STORAGE_PATH
-        self._value_storage_path = value_storage_path or VALUE_STORAGE_PATH
+        self._description_index = description_index
+        self._history_index = history_index
+        self._value_index = value_index
+
+        # self._description_storage_path = (
+        #     description_storage_path or os.path.join(DESCRIPTION_STORAGE_PATH, db_name)
+        # )
+        # self._history_storage_path = history_storage_path or os.path.join(HISTORY_STORAGE_PATH, db_name)
+        # self._value_storage_path = value_storage_path or os.path.join(VALUE_STORAGE_PATH, db_name)
         self._value_lsh_path = value_lsh_path or VALUE_LSH_PATH
 
     def get_description_index(self, db_description_dict: Optional[Dict] = None):
         # get schema info
-        # db_description_dict = self._get_schema_info(db_description_dict)
         db_description_dict = get_target_info(
             self._db_description_path, db_description_dict, flag="description"
         )
@@ -59,16 +63,18 @@ class DBIndexer:
             db_description_dict
         )
         # create & store index
-        description_index = self._store_nodes_to_index(
-            nodes=description_nodes, storage_path=self._description_storage_path
-        )  # 后续考虑根据db_name分别存储
-        logger.info("DB Description Index created and stored.")
+        self._description_index.insert_nodes(description_nodes)
+        # description_index = self._store_nodes_to_index(
+        #     nodes=description_nodes, storage_path=self._description_storage_path
+        # )  # 后续考虑根据db_name分别存储
+        logger.info(
+            f"DB Description Index created and stored. Number of nodes: {len(description_nodes)}"
+        )
 
-        return description_index
+        # return description_index
 
     async def aget_description_index(self, db_description_dict: Optional[Dict] = None):
         # get schema info
-        # db_description_dict = self._get_schema_info(db_description_dict)
         db_description_dict = get_target_info(
             self._db_description_path, db_description_dict, flag="description"
         )
@@ -77,72 +83,99 @@ class DBIndexer:
             db_description_dict
         )
         # create & store index
-        description_index = self._store_nodes_to_index(
-            nodes=description_nodes, storage_path=self._description_storage_path
+        self._description_index.insert_nodes(description_nodes)
+        # description_index = self._store_nodes_to_index(
+        #     nodes=description_nodes, storage_path=self._description_storage_path
+        # )
+        logger.info(
+            f"DB Description Index created and stored. Number of nodes: {len(description_nodes)}"
         )
-        logger.info("DB Description Index created and stored.")
 
-        return description_index
+        # return description_index
 
     def get_history_index(self, db_history_list: Optional[List] = None):
         # get history info
-        #  db_history_list = self._get_history_info(db_history_list)
         db_history_list = get_target_info(
             self._db_history_path, db_history_list, flag="history"
         )
         # get nodes with embedding
         history_nodes = self._get_history_nodes_with_embedding(db_history_list)
         # create & store index
-        history_index = self._store_nodes_to_index(
-            nodes=history_nodes, storage_path=self._history_storage_path
+        self._history_index.insert_nodes(history_nodes)
+        # history_index = self._store_nodes_to_index(
+        #     nodes=history_nodes, storage_path=self._history_storage_path
+        # )
+        logger.info(
+            f"DB History Index created and stored. Number of nodes: {len(history_nodes)}"
         )
-        logger.info("DB History Index created and stored.")
 
-        return history_index
+        # return history_index
 
     async def aget_history_index(self, db_history_list: Optional[List] = None):
         # get history info
-        # db_history_list = self._get_history_info(db_history_list)
         db_history_list = get_target_info(
             self._db_history_path, db_history_list, flag="history"
         )
         # get nodes with embedding
         history_nodes = await self._aget_history_nodes_with_embedding(db_history_list)
         # create & store index
-        history_index = self._store_nodes_to_index(
-            nodes=history_nodes, storage_path=self._history_storage_path
+        self._history_index.insert_nodes(history_nodes)
+        # history_index = self._store_nodes_to_index(
+        #     nodes=history_nodes, storage_path=self._history_storage_path
+        # )
+        logger.info(
+            f"DB History Index created and stored. Number of nodes: {len(history_nodes)}"
         )
-        logger.info("DB History Index created and stored.")
 
-        return history_index
+        # return history_index
 
-    def get_value_index(self, db_description_dict: Optional[Dict] = None):
+    def get_value_index(
+        self,
+        db_description_dict: Optional[Dict] = None,
+        max_col_num: int = 100,
+        max_val_num: int = 10000,
+    ):
         # get unique_values
-        unique_values = self._get_unique_values(db_description_dict)
+        unique_values = self._get_unique_values(
+            db_description_dict, max_col_num, max_val_num
+        )
         logger.info(f"unique_values: {unique_values}")
         # get nodes with embedding
         value_nodes = self._get_value_nodes_with_embedding(unique_values)
         # create & store index
-        value_index = self._store_nodes_to_index(
-            nodes=value_nodes, storage_path=self._value_storage_path
+        self._value_index.insert_nodes(value_nodes)
+        # value_index = self._store_nodes_to_index(
+        #     nodes=value_nodes, storage_path=self._value_storage_path
+        # )
+        logger.info(
+            f"DB Value Index created and stored. Number of nodes: {len(value_nodes)}"
         )
-        logger.info("DB Value Index created and stored.")
 
-        return value_index
+        # return value_index
 
-    async def aget_value_index(self, db_description_dict: Optional[Dict] = None):
+    async def aget_value_index(
+        self,
+        db_description_dict: Optional[Dict] = None,
+        max_col_num: int = 100,
+        max_val_num: int = 10000,
+    ):
         # get unique_values
-        unique_values = self._get_unique_values(db_description_dict)
+        unique_values = self._get_unique_values(
+            db_description_dict, max_col_num, max_val_num
+        )
         logger.info(f"unique_values: {unique_values}")
         # get nodes with embedding
         value_nodes = await self._aget_value_nodes_with_embedding(unique_values)
         # create & store index
-        value_index = self._store_nodes_to_index(
-            nodes=value_nodes, storage_path=self._value_storage_path
+        self._value_index.insert_nodes(value_nodes)
+        # value_index = self._store_nodes_to_index(
+        #     nodes=value_nodes, storage_path=self._value_storage_path
+        # )
+        logger.info(
+            f"DB Value Index created and stored. Number of nodes: {len(value_nodes)}"
         )
-        logger.info("DB Value Index created and stored.")
 
-        return value_index
+        # return value_index
 
     def _get_description_nodes_with_embedding(
         self, db_description_dict: Dict
@@ -220,6 +253,7 @@ class DBIndexer:
         # update nodes embedding
         for node, embedding in zip(nodes, embeddings):
             node.embedding = embedding
+            node.id_ = hashlib.sha256(node.text.encode()).hexdigest()
 
         return nodes
 
@@ -231,11 +265,15 @@ class DBIndexer:
         # update nodes embedding
         for node, embedding in zip(nodes, embeddings):
             node.embedding = embedding
+            node.id_ = hashlib.sha256(node.text.encode()).hexdigest()
 
         return nodes
 
     def _get_unique_values(
-        self, db_description_dict: Optional[Dict] = None
+        self,
+        db_description_dict: Optional[Dict] = None,
+        max_col_num: int = 100,
+        max_val_num: int = 10000,
     ) -> Dict[str, Dict[str, List[str]]]:
         """
         Retrieves unique text values from the database excluding primary keys.
@@ -246,6 +284,7 @@ class DBIndexer:
             self._db_description_path, db_description_dict, "description"
         )
         unique_values: Dict[str, Dict[str, List[str]]] = {}
+        column_count, value_count = 0, 0
 
         for table in db_description_dict["table_info"]:
             table_name = table["table_name"]
@@ -253,6 +292,11 @@ class DBIndexer:
             table_values: Dict[str, List[str]] = {}
             # 筛选是string类型但不是primary_key的column
             for column in table["column_info"]:
+                if (column_count > max_col_num) or (value_count > max_val_num):
+                    logger.warning(
+                        f"Maximum limit reached, column_count is {column_count}, value_count is {value_count}."
+                    )
+                    break
                 column_name = column["column_name"]
                 column_type = column["column_type"]
                 if (("VARCHAR" in column_type) and (column_type != "VARCHAR(1)")) or (
@@ -275,33 +319,19 @@ class DBIndexer:
                         ]
                     ) or column_name.endswith("Id"):
                         continue
-                    # 获取column数值的统计信息
-                    try:
-                        result = self._sql_database.run_sql(
-                            f"""
-                            SELECT SUM(LENGTH(unique_values)), COUNT(unique_values)
-                            FROM (
-                                SELECT DISTINCT `{column_name}` AS unique_values
-                                FROM `{table_name}`
-                                WHERE `{column_name}` IS NOT NULL
-                            ) AS subquery
-                        """
-                        )
-                        result = result[1]["result"][0]
-                    except Exception as e:
-                        logger.info(f"no unique values found: {e}")
-                        result = 0, 0
 
-                    sum_of_lengths, count_distinct = result
+                    # 获取column数值的统计信息
+                    sum_of_lengths, count_distinct = self._get_column_stats(
+                        table_name, column_name
+                    )
                     if sum_of_lengths is None or count_distinct == 0:
                         continue
-
                     average_length = round(sum_of_lengths / count_distinct, 3)
                     logger.info(
                         f"Column: {column_name}, sum_of_lengths: {sum_of_lengths}, count_distinct: {count_distinct}, average_length: {average_length}"
                     )
 
-                    # 获取满足条件的字段数值
+                    # 根据统计信息筛选字段
                     if (
                         ("name" in column_name.lower() and sum_of_lengths < 5000000)
                         or (sum_of_lengths < 2000000 and average_length < 25)
@@ -314,6 +344,8 @@ class DBIndexer:
                             )
                             fetched_values = fetched_values[1]["result"]
                             values = [str(value[0]) for value in fetched_values]
+                            column_count += 1
+                            value_count += len(values)
                         except Exception:
                             values = []
                         logger.info(f"Number of different values: {len(values)}")
@@ -321,17 +353,40 @@ class DBIndexer:
 
             unique_values[table_name] = table_values
 
+        logger.info(f"column_count is {column_count}, value_count is {value_count}.")
+
         return unique_values
 
-    def _store_nodes_to_index(
-        self, nodes: List[TextNode], storage_path: str
-    ) -> VectorStoreIndex:
-        # create index
-        index = VectorStoreIndex(nodes, embed_model=self._embed_model)
-        # store index
-        index.storage_context.persist(persist_dir=storage_path)
+    def _get_column_stats(self, table_name, column_name):
+        try:
+            result = self._sql_database.run_sql(
+                f"""
+                SELECT SUM(LENGTH(unique_values)), COUNT(unique_values)
+                FROM (
+                    SELECT DISTINCT `{column_name}` AS unique_values
+                    FROM `{table_name}`
+                    WHERE `{column_name}` IS NOT NULL
+                ) AS subquery
+            """
+            )
+            result = result[1]["result"][0]
+        except Exception as e:
+            logger.info(f"no unique values found: {e}")
+            result = 0, 0
 
-        return index
+        sum_of_lengths, count_distinct = result
+
+        return sum_of_lengths, count_distinct
+
+    # def _store_nodes_to_index(
+    #     self, nodes: List[TextNode], storage_path: str
+    # ) -> VectorStoreIndex:
+    #     # create index
+    #     index = VectorStoreIndex(nodes, embed_model=self._embed_model, storage_context=self._storage_context)
+    #     # store index
+    #     index.storage_context.persist(persist_dir=storage_path)
+
+    #     return index
 
     def _get_nodes_from_db_description(
         self, db_description_dict: Dict
@@ -357,9 +412,12 @@ class DBIndexer:
                     if value is not None
                 ]
                 if len(column_desc) > 0:
-                    column_desc = ", ".join(column_desc)
+                    column_desc = (
+                        f"""{table["table_name"]} {column["column_name"]}: """
+                        + ", ".join(column_desc)
+                    )
                 else:
-                    column_desc = ""
+                    column_desc = f"""{table["table_name"]} {column["column_name"]}"""
 
                 metadata = {
                     "table_name": table["table_name"],

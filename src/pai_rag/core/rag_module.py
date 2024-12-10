@@ -35,6 +35,7 @@ from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
 
+
 cls_cache = {}
 
 
@@ -131,37 +132,31 @@ def resolve_data_analysis_connector(config: RagConfig):
         cls=DataAnalysisConnector,
         analysis_config=config.data_analysis,
     )
-    # db_connector = DataAnalysisConnector(config.data_analysis)
     return db_connector
 
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    sql_database = resolve_data_analysis_connector(config).connect_db()
-    # print("loader sql_database:", sql_database)
+    sql_database = DataAnalysisConnector(config.data_analysis).connect_db()
+    # sql_database = resolve_data_analysis_connector(config).connect_db()
 
     return resolve(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm,
-        embed_model=embed_model,
     )
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     sql_database = resolve_data_analysis_connector(config).connect_db()
-    # print("query sql_database:", sql_database)
 
     return resolve(
         cls=DataAnalysisQuery,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm,
-        embed_model=embed_model,
         callback_manager=None,
     )
 

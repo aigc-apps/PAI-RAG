@@ -134,7 +134,11 @@ class SQLGenerator:
                     sql_query_str
                 )
 
-        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": schema_description_str,
+            **_metadata,
+        }
 
     async def agenerate_sql_nodes(
         self,
@@ -183,7 +187,11 @@ class SQLGenerator:
                     sql_query_str
                 )
 
-        return retrieved_nodes, {"sql_query": sql_query_str, **_metadata}
+        return retrieved_nodes, {
+            "sql_query": sql_query_str,
+            "schema_description": schema_description_str,
+            **_metadata,
+        }
 
     def _generate_sql(
         self,

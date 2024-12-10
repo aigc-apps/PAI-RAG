@@ -65,11 +65,11 @@ def run(
         da_loader.load_db_info()
 
     da_query_engine = resolve_data_analysis_query(config)
-    print(
-        "check_instance:",
-        da_query_engine._sql_database,
-        id(da_query_engine._sql_database),
-    )
+    # print(
+    #     "check_instance:",
+    #     da_query_engine._sql_database,
+    #     id(da_query_engine._sql_database),
+    # )
     # start_time1 = time.time()
     # response_nodes = da_query_engine.retrieve(QueryBundle(query_str=question))
     # end_time1 = time.time()

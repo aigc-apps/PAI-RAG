@@ -5,10 +5,9 @@ from loguru import logger
 from datasketch import MinHash, MinHashLSH
 
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from llama_index.core import Settings
 from llama_index.core.schema import QueryBundle
 from llama_index.core.schema import NodeWithScore
-from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
+from llama_index.core import VectorStoreIndex
 
 from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
     DEFAULT_DB_DESCRIPTION_PATH,
@@ -25,6 +24,7 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     create_minhash,
     jaccard_similarity,
 )
+from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBPreRetriever:
@@ -34,8 +34,10 @@ class DBPreRetriever:
 
     def __init__(
         self,
-        keywords: Optional[List] = None,
-        embed_model: Optional[BaseEmbedding] = None,
+        embed_model: BaseEmbedding,
+        description_index: PaiVectorStoreIndex,
+        history_index: PaiVectorStoreIndex,
+        value_index: PaiVectorStoreIndex,
         db_description_path: Optional[str] = None,
         db_history_path: Optional[str] = None,
         description_storage_path: Optional[str] = None,
@@ -43,8 +45,11 @@ class DBPreRetriever:
         value_storage_path: Optional[str] = None,
         value_lsh_path: Optional[str] = None,
     ) -> None:
-        self._keywords = keywords
-        self._embed_model = embed_model or Settings.embed_model
+        self._embed_model = embed_model
+        self._description_index = description_index
+        self._history_index = history_index
+        self._value_index = value_index
+
         self._db_description_path = db_description_path or DEFAULT_DB_DESCRIPTION_PATH
         self._db_history_path = db_history_path or DEFAULT_DB_HISTORY_PATH
         self._description_storage_path = (
@@ -53,26 +58,27 @@ class DBPreRetriever:
         self._history_storage_path = history_storage_path or HISTORY_STORAGE_PATH
         self._value_storage_path = value_storage_path or VALUE_STORAGE_PATH
         self._value_lsh_path = value_lsh_path or VALUE_LSH_PATH
-        self._db_description_index = self._load_index(self._description_storage_path)
-        self._db_history_index = self._load_index(self._history_storage_path)
-        self._db_value_index = self._load_index(self._value_storage_path)
-        self._db_value_lsh, self._db_value_minhashes = self._load_lsh(
-            self._value_lsh_path
-        )
+        # self._vector_store, self._storage_context = get_vector_store(embed_model_type, vector_store_type)
+        # self._db_description_index = self._load_index(self._description_storage_path)
+        # self._db_history_index = self._load_index(self._history_storage_path)
+        # self._db_value_index = self._load_index(self._value_storage_path)
+        # self._db_value_lsh, self._db_value_minhashes = self._load_lsh(
+        #     self._value_lsh_path
+        # )
 
-    def _load_index(self, file_path: str) -> VectorStoreIndex:
-        """从本地加载索引"""
-        try:
-            loaded_storage_context = StorageContext.from_defaults(persist_dir=file_path)
-            loaded_index = load_index_from_storage(
-                loaded_storage_context, embed_model=self._embed_model
-            )
-            logger.info(f"Index loaded from {file_path}")
-        except Exception as e:
-            loaded_index = None
-            logger.info(f"Index loaded from {file_path} failed: {e}")
+    # def _load_index(self, file_path: str) -> VectorStoreIndex:
+    #     """从本地加载索引"""
+    #     try:
+    #         loaded_storage_context = StorageContext.from_defaults(vector_store=self._vector_store, persist_dir=file_path)
+    #         loaded_index = load_index_from_storage(
+    #             loaded_storage_context, embed_model=self._embed_model
+    #         )
+    #         logger.info(f"Index loaded from {file_path}")
+    #     except Exception as e:
+    #         loaded_index = None
+    #         logger.warning(f"Index not loaded from {file_path}: {e}")
 
-        return loaded_index
+    #     return loaded_index
 
     def get_retrieved_description(
         self,
@@ -88,25 +94,28 @@ class DBPreRetriever:
         )
         total_columns = count_total_columns(db_description_dict)
 
+        # db_description_index = self._load_index(self._description_storage_path)
         # 检索description返回List[NodeWithScore]
         retrieved_description_nodes = self._retrieve_context_nodes(
-            self._db_description_index, nl_query, top_k
+            self._description_index, nl_query, top_k
         )
         logger.info(
             f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes), retrieved_description_nodes}"
         )
+        # db_value_index = self._load_index(self._value_storage_path)
         # 检索entity返回List[NodeWithScore]
         retrieved_value_nodes = self._retrieve_entity_nodes(
-            self._db_value_index, keywords, top_k
+            self._value_index, keywords, top_k
         )
         logger.info(
             f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes), retrieved_value_nodes}."
         )
         # LSH检索entity返回List
-        similar_entities_via_LSH = self._get_similar_entities_via_LSH(keywords)
-        logger.info(
-            f"Value item retrieved from LSH, number of items: {len(similar_entities_via_LSH), similar_entities_via_LSH}."
-        )
+        # similar_entities_via_LSH = self._get_similar_entities_via_LSH(keywords)
+        # logger.info(
+        #     f"Value item retrieved from LSH, number of items: {len(similar_entities_via_LSH), similar_entities_via_LSH}."
+        # )
+        similar_entities_via_LSH = []
 
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
         retrieved_description_dict = self._filter_description(
@@ -136,25 +145,28 @@ class DBPreRetriever:
         )
         total_columns = count_total_columns(db_description_dict)
 
+        # db_description_index = self._load_index(self._description_storage_path)
         # 检索返回List[NodeWithScore]
         retrieved_description_nodes = await self._aretrieve_context_nodes(
-            self._db_description_index, nl_query, top_k
+            self._description_index, nl_query, top_k
         )
         logger.info(
             f"Description nodes retrieved from index, number of nodes: {len(retrieved_description_nodes), retrieved_description_nodes}"
         )
+        # db_value_index = self._load_index(self._value_storage_path)
         # 检索entity返回List[NodeWithScore]
         retrieved_value_nodes = await self._aretrieve_entity_nodes(
-            self._db_value_index, keywords, top_k
+            self._value_index, keywords, top_k
         )
         logger.info(
             f"Value nodes retrieved from index, number of nodes: {len(retrieved_value_nodes), retrieved_value_nodes}"
         )
         # LSH检索entity返回List
-        similar_entities_via_LSH = self._get_similar_entities_via_LSH(keywords)
-        logger.info(
-            f"Value item retrieved from LSH, number of items: {len(similar_entities_via_LSH), similar_entities_via_LSH}."
-        )
+        # similar_entities_via_LSH = self._get_similar_entities_via_LSH(keywords)
+        # logger.info(
+        #     f"Value item retrieved from LSH, number of items: {len(similar_entities_via_LSH), similar_entities_via_LSH}."
+        # )
+        similar_entities_via_LSH = []
 
         # 如有检索结果，进一步缩小db_description_dict，否则返回原始dict
         retrieved_description_dict = self._filter_description(
@@ -183,9 +195,10 @@ class DBPreRetriever:
         )
         history_nums = len(db_history_list)
 
+        # db_history_index = self._load_index(self._history_storage_path)
         # 检索返回List[NodeWithScore]
         retrieved_history_nodes = self._retrieve_context_nodes(
-            self._db_history_index, nl_query, top_k
+            self._history_index, nl_query, top_k
         )
         logger.info(
             f"History nodes retrieved from index, number of nodes: {len(retrieved_history_nodes)}"
@@ -214,9 +227,10 @@ class DBPreRetriever:
         )
         history_nums = len(db_history_list)
 
+        # db_history_index = self._load_index(self._history_storage_path)
         # 检索返回List[NodeWithScore]
         retrieved_history_nodes = await self._aretrieve_context_nodes(
-            self._db_history_index, nl_query, top_k
+            self._history_index, nl_query, top_k
         )
         logger.info(
             f"History nodes retrieved from index, number of nodes: {len(retrieved_history_nodes)}"
@@ -425,11 +439,12 @@ class DBPreRetriever:
             Dict[str, Dict[str, List[str]]]: A dictionary containing the top similar values.
         """
         query_minhash = create_minhash(signature_size, keyword, n_gram)
-        results = self._db_value_lsh.query(query_minhash)
+        db_value_lsh, db_value_minhashes = self._load_lsh(self._value_lsh_path)
+        results = db_value_lsh.query(query_minhash)
         similarities = [
             (
                 result,
-                jaccard_similarity(query_minhash, self._db_value_minhashes[result][0]),
+                jaccard_similarity(query_minhash, db_value_minhashes[result][0]),
             )
             for result in results
         ]
@@ -437,7 +452,7 @@ class DBPreRetriever:
 
         similar_values_trimmed: Dict[str, Dict[str, List[str]]] = {}
         for result, similarity in similarities:
-            table_name, column_name, value = self._db_value_minhashes[result][1:]
+            table_name, column_name, value = db_value_minhashes[result][1:]
             if table_name not in similar_values_trimmed:
                 similar_values_trimmed[table_name] = {}
             if column_name not in similar_values_trimmed[table_name]:

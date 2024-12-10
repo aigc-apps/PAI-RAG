@@ -7,12 +7,19 @@ from typing import Any, Dict, List, Optional, Tuple
 import jieba
 from datasketch import MinHash
 from loguru import logger
+import faiss
 
+from llama_index.vector_stores.faiss import FaissVectorStore
+from llama_index.core import StorageContext
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextNode
 from llama_index.core.instrumentation import DispatcherSpanMixin
+
+from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
+    EMBEDDING_DIM_DICT,
+)
 
 
 class MySQLRetriever(BaseRetriever):
@@ -382,3 +389,17 @@ def jaccard_similarity(m1: MinHash, m2: MinHash) -> float:
         float: The Jaccard similarity between the two MinHash objects.
     """
     return m1.jaccard(m2)
+
+
+def get_vector_store(
+    embed_model_type: str = "bge-large-zh-v1.5", vector_store_type: str = "faiss"
+):
+    if vector_store_type == "faiss":
+        print("embed_model_dict:", EMBEDDING_DIM_DICT[embed_model_type])
+        faiss_index = faiss.IndexFlatL2(EMBEDDING_DIM_DICT[embed_model_type])
+        vector_store = FaissVectorStore(faiss_index=faiss_index)
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    else:
+        raise ValueError("currently support faiss")
+
+    return vector_store, storage_context

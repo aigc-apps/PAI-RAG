@@ -1,8 +1,9 @@
 from typing import Any, List, Generator, Optional, Sequence, cast, AsyncGenerator
+from loguru import logger
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
-from llama_index.core.prompts import BasePromptTemplate, PromptTemplate
+from llama_index.core.prompts import BasePromptTemplate
 from llama_index.core.settings import Settings
 from llama_index.core.schema import NodeWithScore, QueryType, QueryBundle
 from llama_index.core.prompts.mixin import PromptDictType
@@ -22,7 +23,11 @@ from llama_index.core.instrumentation.events.synthesis import (
 )
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 import llama_index.core.instrumentation as instrument
-from loguru import logger
+
+from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
+    DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
+)
+
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -33,19 +38,6 @@ def empty_response_generator() -> Generator[str, None, None]:
 
 async def empty_response_agenerator() -> AsyncGenerator[str, None]:
     yield "Empty Response"
-
-
-DEFAULT_RESPONSE_SYNTHESIS_PROMPT_TMPL = (
-    "Given an input question, synthesize a response in Chinese from the query results.\n"
-    "Query: {query_str}\n\n"
-    "SQL or Python Code Instructions (optional):\n{query_code_instruction}\n\n"
-    "Code Query Output: {query_output}\n\n"
-    "Response: "
-)
-
-DEFAULT_RESPONSE_SYNTHESIS_PROMPT = PromptTemplate(
-    DEFAULT_RESPONSE_SYNTHESIS_PROMPT_TMPL,
-)
 
 
 class DataAnalysisSynthesizer(BaseSynthesizer):
@@ -88,13 +80,16 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     async def aget_response(
         self,
         query_str: str,
+        db_description_str: str,
         retrieved_nodes: List[NodeWithScore],
+        streaming: bool = False,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         query_df_output = [n.node.get_content() for n in retrieved_nodes]
-
+        logger.info(f"db_description_str: {db_description_str}")
         partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
             query_str=query_str,
+            db_schema=db_description_str,
             query_code_instruction=[
                 n.node.metadata["query_code_instruction"] for n in retrieved_nodes
             ],
@@ -106,10 +101,11 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         logger.info(f"truncated_df_output: {str(truncated_df_output)}")
 
         response: RESPONSE_TEXT_TYPE
-        if not self._streaming:
+        if not streaming:
             response = await self._llm.apredict(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_description_str,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],  # sql or pandas query
@@ -120,6 +116,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = await self._llm.astream(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_description_str,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],
@@ -137,13 +134,17 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     def get_response(
         self,
         query_str: str,
+        db_description_str: str,
         retrieved_nodes: List[NodeWithScore],
+        streaming: bool = False,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         query_df_output = [n.node.get_content() for n in retrieved_nodes]
+        logger.info(f"db_description_str: {db_description_str}")
 
         partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
             query_str=query_str,
+            db_schema=db_description_str,
             query_code_instruction=[
                 n.node.metadata["query_code_instruction"] for n in retrieved_nodes
             ],
@@ -155,10 +156,11 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         logger.info(f"truncated_df_output: {truncated_df_output}")
 
         response: RESPONSE_TEXT_TYPE
-        if not self._streaming:
+        if not streaming:
             response = self._llm.predict(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_description_str,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],  # sql or pandas query
@@ -169,6 +171,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             response = self._llm.stream(
                 self._response_synthesis_prompt,
                 query_str=query_str,
+                db_schema=db_description_str,
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],
@@ -187,7 +190,9 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     def synthesize(
         self,
         query: QueryType,
+        description: str,
         nodes: List[NodeWithScore],
+        streaming: bool = False,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
@@ -198,7 +203,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         )
 
         if len(nodes) == 0:
-            if self._streaming:
+            if streaming:
                 empty_response = StreamingResponse(
                     response_gen=empty_response_generator()
                 )
@@ -228,7 +233,9 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         ) as event:
             response_str = self.get_response(
                 query_str=query.query_str,
+                db_description_str=description,
                 retrieved_nodes=nodes,
+                streaming=streaming,
                 **response_kwargs,
             )
 
@@ -251,7 +258,9 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     async def asynthesize(
         self,
         query: QueryType,
+        description: str,
         nodes: List[NodeWithScore],
+        streaming: bool = False,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
@@ -261,7 +270,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             )
         )
         if len(nodes) == 0:
-            if self._streaming:
+            if streaming:
                 empty_response = AsyncStreamingResponse(
                     response_gen=empty_response_agenerator()
                 )
@@ -291,7 +300,9 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         ) as event:
             response_str = await self.aget_response(
                 query_str=query.query_str,
+                db_description_str=description,
                 retrieved_nodes=nodes,
+                streaming=streaming,
                 **response_kwargs,
             )
 

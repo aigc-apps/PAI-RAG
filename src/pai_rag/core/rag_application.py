@@ -202,7 +202,7 @@ class RagApplication:
             elif intent == Intents.WEBSEARCH:
                 chat_type = RagChatType.WEB
             elif intent == Intents.NL2SQL:
-                return await self.aquery_analysis(query)
+                return await self.aquery_data_analysis(query)
             elif intent != Intents.RAG:
                 return ValueError(f"Invalid intent {intent}")
 

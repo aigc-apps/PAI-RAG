@@ -9,3 +9,7 @@ DESCRIPTION_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/description
 HISTORY_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/history_index"
 VALUE_STORAGE_PATH = "./localdata/data_analysis/nl2sql/storage/value_index"
 VALUE_LSH_PATH = "./localdata/data_analysis/nl2sql/storage/value_lsh"
+
+EMBEDDING_DIM_DICT = {
+    "bge-large-zh-v1.5": 1024,
+}

@@ -103,6 +103,8 @@ class ViewModel(BaseModel):
     enable_enhanced_description: bool = False
     enable_db_history: bool = False
     enable_db_embedding: bool = False
+    max_col_num: int = 100
+    max_val_num: int = 10000
     enable_query_preprocessor: bool = False
     enable_db_preretriever: bool = False
     enable_db_selector: bool = False
@@ -232,6 +234,8 @@ class ViewModel(BaseModel):
             )
             view_model.enable_db_history = config.data_analysis.enable_db_history
             view_model.enable_db_embedding = config.data_analysis.enable_db_embedding
+            view_model.max_col_num = config.data_analysis.max_col_num
+            view_model.max_val_num = config.data_analysis.max_val_num
             view_model.enable_query_preprocessor = (
                 config.data_analysis.enable_query_preprocessor
             )
@@ -325,6 +329,8 @@ class ViewModel(BaseModel):
                 "enable_enhanced_description"
             ] = self.enable_enhanced_description
             config["data_analysis"]["enable_db_embedding"] = self.enable_db_embedding
+            config["data_analysis"]["max_col_num"] = self.max_col_num
+            config["data_analysis"]["max_val_num"] = self.max_val_num
             config["data_analysis"]["enable_db_history"] = self.enable_db_history
             config["data_analysis"][
                 "enable_query_preprocessor"
@@ -566,6 +572,8 @@ class ViewModel(BaseModel):
         }
         settings["enable_db_history"] = {"value": self.enable_db_history}
         settings["enable_db_embedding"] = {"value": self.enable_db_embedding}
+        settings["max_col_num"] = {"value": self.max_col_num}
+        settings["max_val_num"] = {"value": self.max_val_num}
         settings["enable_query_preprocessor"] = {
             "value": self.enable_query_preprocessor
         }
