@@ -227,19 +227,31 @@ class BaseSQLParser(DispatcherSpanMixin, ABC):
 class DefaultSQLParser(BaseSQLParser):
     """Default SQL Parser."""
 
+    # def parse_response_to_sql(self, response: str, query_bundle: QueryBundle) -> str:
+    #     """Parse response to SQL."""
+    #     sql_query_start = response.find("SQLQuery:")
+    #     if sql_query_start != -1:
+    #         response = response[sql_query_start:]
+    #         # TODO: move to removeprefix after Python 3.9+
+    #         if response.startswith("SQLQuery:"):
+    #             response = response[len("SQLQuery:") :]
+    #     sql_result_start = response.find("SQLResult:")
+    #     if sql_result_start != -1:
+    #         response = response[:sql_result_start]
+    #     return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
+
     def parse_response_to_sql(self, response: str, query_bundle: QueryBundle) -> str:
         """Parse response to SQL."""
         sql_query_start = response.find("SQLQuery:")
-        if sql_query_start != -1:
+        if sql_query_start != -1:  # -1 means not found
             response = response[sql_query_start:]
             # TODO: move to removeprefix after Python 3.9+
             if response.startswith("SQLQuery:"):
                 response = response[len("SQLQuery:") :]
-        sql_result_start = response.find("SQLResult:")
-        if sql_result_start != -1:
-            response = response[:sql_result_start]
-        return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
-
+        sql_query_end = response.find(";")
+        if sql_query_end != -1:
+            response = response[:sql_query_end].rstrip().replace("```", "")
+        return response.strip().replace("```", "").lstrip("sql")
 
 def get_sql_info(sql_config: SqlAnalysisConfig):
     if isinstance(sql_config, SqliteAnalysisConfig):
