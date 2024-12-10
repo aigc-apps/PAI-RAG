@@ -16,6 +16,7 @@ def upload_oss_knowledge(
     chunk_overlap,
     enable_raptor,
     enable_multimodal,
+    enable_mandatory_ocr,
     enable_table_summary,
     upload_index,
 ):
@@ -35,6 +36,7 @@ def upload_oss_knowledge(
         chunk_overlap=chunk_overlap,
         enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
+        enable_mandatory_ocr=enable_mandatory_ocr,
         enable_table_summary=enable_table_summary,
         index_name=upload_index,
         from_oss=True,
@@ -48,6 +50,7 @@ def upload_files(
     chunk_overlap,
     enable_raptor,
     enable_multimodal,
+    enable_mandatory_ocr,
     enable_table_summary,
     upload_index,
 ):
@@ -67,6 +70,7 @@ def upload_files(
         chunk_overlap=chunk_overlap,
         enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
+        enable_mandatory_ocr=enable_mandatory_ocr,
         enable_table_summary=enable_table_summary,
         index_name=upload_index,
     ):
@@ -80,6 +84,7 @@ def upload_knowledge(
     chunk_overlap,
     enable_raptor,
     enable_multimodal,
+    enable_mandatory_ocr,
     enable_table_summary,
     index_name,
     from_oss: bool = False,
@@ -89,6 +94,7 @@ def upload_knowledge(
             {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
+                "enable_mandatory_ocr": enable_mandatory_ocr,
                 "enable_table_summary": enable_table_summary,
             }
         )
@@ -188,6 +194,12 @@ def create_upload_tab() -> Dict[str, Any]:
                 elem_id="enable_multimodal",
                 visible=True,
             )
+            enable_mandatory_ocr = gr.Checkbox(
+                label="Yes",
+                info="Process PDF with OCR",
+                elem_id="enable_mandatory_ocr",
+                visible=True,
+            )
             enable_table_summary = gr.Checkbox(
                 label="Yes",
                 info="Process with Table Summary ",
@@ -232,6 +244,7 @@ def create_upload_tab() -> Dict[str, Any]:
                         chunk_overlap,
                         enable_raptor,
                         enable_multimodal,
+                        enable_mandatory_ocr,
                         enable_table_summary,
                         upload_index,
                     ],
@@ -247,6 +260,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_raptor,
                     enable_multimodal,
+                    enable_mandatory_ocr,
                     enable_table_summary,
                     upload_index,
                 ],
@@ -269,6 +283,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     chunk_overlap,
                     enable_raptor,
                     enable_multimodal,
+                    enable_mandatory_ocr,
                     enable_table_summary,
                     upload_index,
                 ],
@@ -287,5 +302,6 @@ def create_upload_tab() -> Dict[str, Any]:
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_raptor.elem_id: enable_raptor,
                 enable_multimodal.elem_id: enable_multimodal,
+                enable_mandatory_ocr.elem_id: enable_mandatory_ocr,
                 enable_table_summary.elem_id: enable_table_summary,
             }
