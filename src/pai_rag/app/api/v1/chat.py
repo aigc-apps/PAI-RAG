@@ -77,19 +77,6 @@ async def aquery_agent(query: RagQuery):
         )
 
 
-@router_v1.post("/config/agent")
-async def aload_agent_config(file: UploadFile):
-    fn = file.filename
-    data = await file.read()
-    file_hash = hashlib.md5(data).hexdigest()
-    save_file = os.path.join("localdata", f"{file_hash}_{fn}")
-
-    with open(save_file, "wb") as f:
-        f.write(data)
-        f.close()
-    return await rag_service.aload_agent_config(save_file)
-
-
 @router_v1.patch("/config")
 async def aupdate(new_config: Any = Body(None)):
     rag_service.reload(new_config)
@@ -326,3 +313,8 @@ async def aquery_analysis(query: RagQuery):
             response,
             media_type="text/event-stream",
         )
+
+
+@router_v1.get("/health")
+def health_check():
+    return {"status": "OK"}

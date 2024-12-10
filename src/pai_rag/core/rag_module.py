@@ -184,6 +184,12 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
         multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.multimodal_qa_template
         ),
+        citation_text_qa_template=PromptTemplate(
+            template=config.synthesizer.citation_text_qa_template
+        ),
+        citation_multimodal_qa_template=PromptTemplate(
+            template=config.synthesizer.citation_multimodal_qa_template
+        ),
     )
     return synthesizer
 

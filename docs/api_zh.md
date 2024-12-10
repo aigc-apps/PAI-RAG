@@ -7,7 +7,7 @@
 - 上传（upload_data）
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@local_path/PAI.txt' -F 'faiss_path=localdata/storage'
+curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
@@ -15,7 +15,7 @@ curl -X 'POST' http://127.0.0.1:8000/service/upload_data -H 'Content-Type: multi
 - 查看上传状态（get_upload_state）
 
 ```bash
-curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9fefa063538914da
+curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
 
 # Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
 ```
@@ -25,32 +25,31 @@ curl http://127.0.0.1:8077/service/get_upload_state\?task_id\=2c1e557733764fdb9f
 - Rag Query请求
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
+curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
 ```bash
 # 流式输出
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？", "stream": true}'
+curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?", "stream":true}'
 ```
 
 ```bash
 # 意图识别
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"现在几点了", "with_intent": true}'
+curl -X 'POST' http://localhost:8000/service/query -H "Content-Type: application/json" -d '{"question":"现在几点了", "with_intent": true}'
 ```
 
 - 多轮对话请求
 
 ```bash
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"PAI是什么？"}'
-
-# 传入session_id：对话历史会话唯一标识，传入session_id后，将对话历史进行记录，调用大模型将自动携带存储的对话历史。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
-
-# 传入chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有哪些功能？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}]}'
-
-# 同时传入session_id和chat_history：会用chat_history对存储的session_id所对应的对话历史进行追加更新
-curl -X 'POST' http://127.0.0.1:8000/service/query -H "Content-Type: application/json" -d '{"question":"它有什么优势？", "chat_history": [{"user":"PAI是什么？", "bot":"PAI是阿里云的人工智能平台，它提供一站式的机器学习解决方案。这个平台支持各种机器学习任务，包括有监督学习、无监督学习和增强学习，适用于营销、金融、社交网络等多个场景。"}], "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
-- Agent及调用Function Tool的简单对话
+```bash
+# 传入session_id：对话历史会话唯一标识，传入session_id后，将对话历史进行记录，调用大模型将自动携带存储的对话历史。
+curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+```
+
+```bash
+# 传入chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。
+curl -X 'POST' http://localhost:8001/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "chat_history": [{"user":"What did the author do growing up?", "bot":"Growing up, the author worked on writing and programming outside of school. Specifically, he wrote short stories, which he now considers to be awful due to their lack of plot and focus on characters with strong feelings. In terms of programming, he started experimenting with coding in 9th grade using an IBM 1401 at his junior high school, where he and a friend, Rich Draves, got permission to use the machine. They used an early version of Fortran, typing programs on punch cards and running them on the 1401. The experience was limited by the technology, as the only form of input for programs was data stored on punched cards, and the author did not have much data to work with. Later, with the advent of microcomputers, the author''s engagement with programming deepened. He eventually convinced his father to buy a TRS-80, on which he wrote simple games, a program to predict the flight height of model rockets, and even a word processor that his father used to write at least one book."}]}'
+```

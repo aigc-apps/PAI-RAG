@@ -13,6 +13,7 @@ from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
+from urllib.parse import urljoin
 
 DEFAULT_CLIENT_TIME_OUT = 120
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
@@ -45,75 +46,76 @@ class RagWebClient:
 
     @property
     def query_url(self):
-        return f"{self.endpoint}v1/query"
+        return urljoin(self.endpoint, "api/v1/query")
 
     @property
     def search_url(self):
-        return f"{self.endpoint}v1/query/search"
+        return urljoin(self.endpoint, "api/v1/query/search")
 
     @property
     def data_analysis_url(self):
-        return f"{self.endpoint}v1/query/data_analysis"
+        return urljoin(self.endpoint, "api/v1/query/data_analysis")
 
     @property
     def db_loder_url(self):
-        return f"{self.endpoint}v1/query/load_db_info"
+        return urljoin(self.endpoint, "api/v1/query/load_db_info")
 
     @property
     def llm_url(self):
-        return f"{self.endpoint}v1/query/llm"
+        return urljoin(self.endpoint, "api/v1/query/llm")
 
     @property
     def retrieval_url(self):
-        return f"{self.endpoint}v1/query/retrieval"
+        return urljoin(self.endpoint, "api/v1/query/retrieval")
 
     @property
     def config_url(self):
-        return f"{self.endpoint}v1/config"
+        return urljoin(self.endpoint, "api/v1/config")
 
     @property
     def load_data_url(self):
-        return f"{self.endpoint}v1/upload_data"
+        return urljoin(self.endpoint, "api/v1/upload_data")
 
     @property
     def load_datasheet_url(self):
-        return f"{self.endpoint}v1/upload_datasheet"
+        return urljoin(self.endpoint, "api/v1/upload_datasheet")
 
     @property
     def load_db_history_url(self):
-        return f"{self.endpoint}v1/upload_db_history"
+        return urljoin(self.endpoint, "api/v1/upload_db_history")
 
     @property
     def load_agent_cfg_url(self):
-        return f"{self.endpoint}v1/config/agent"
+        # return f"{self.endpoint}v1/config/agent"
+        return urljoin(self.endpoint, "api/v1/config/agent")
 
     @property
     def get_load_state_url(self):
-        return f"{self.endpoint}v1/get_upload_state"
+        return urljoin(self.endpoint, "api/v1/get_upload_state")
 
     @property
     def get_evaluate_generate_url(self):
-        return f"{self.endpoint}v1/evaluate/generate"
+        return urljoin(self.endpoint, "api/v1/evaluate/generate")
 
     @property
     def get_evaluate_retrieval_url(self):
-        return f"{self.endpoint}v1/evaluate/retrieval"
+        return urljoin(self.endpoint, "api/v1/evaluate/retrieval")
 
     @property
     def get_evaluate_response_url(self):
-        return f"{self.endpoint}v1/evaluate/response"
+        return urljoin(self.endpoint, "api/v1/evaluate/response")
 
     @property
     def index_url(self):
-        return f"{self.endpoint}v1/indexes/"
+        return urljoin(self.endpoint, "api/v1/indexes/")
 
     @property
     def list_index_url(self):
-        return f"{self.endpoint}v1/indexes"
+        return urljoin(self.endpoint, "api/v1/indexes")
 
     @property
     def health_check_url(self):
-        return f"{self.endpoint}health"
+        return urljoin(self.endpoint, "api/v1/health")
 
     def _format_rag_response(
         self, question, response, with_history: bool = False, stream: bool = False
@@ -221,6 +223,7 @@ class RagWebClient:
         text: str,
         with_history: bool = False,
         stream: bool = False,
+        citation: bool = False,
         with_intent: bool = False,
         index_name: str = None,
     ):
@@ -229,9 +232,11 @@ class RagWebClient:
             question=text,
             session_id=session_id,
             stream=stream,
+            citation=citation,
             with_intent=with_intent,
             index_name=index_name,
         )
+        print(q)
         r = requests.post(self.query_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -256,10 +261,17 @@ class RagWebClient:
         self,
         text: str,
         with_history: bool = False,
+        citation: bool = False,
         stream: bool = False,
     ):
         session_id = self.session_id if with_history else None
-        q = dict(question=text, session_id=session_id, stream=stream, with_intent=False)
+        q = dict(
+            question=text,
+            session_id=session_id,
+            stream=stream,
+            with_intent=False,
+            citation=citation,
+        )
         r = requests.post(self.search_url, json=q, stream=True)
         if r.status_code != HTTPStatus.OK:
             raise RagApiError(code=r.status_code, msg=r.text)
@@ -520,25 +532,6 @@ class RagWebClient:
         config = RagConfig.model_validate_json(json_data=r.text)
         return config
 
-    def load_agent_config(self, file_name: str):
-        files = []
-        file_obj = open(file_name, "rb")
-        mimetype = mimetypes.guess_type(file_name)[0]
-        files.append(("file", (os.path.basename(file_name), file_obj, mimetype)))
-        try:
-            r = requests.post(
-                self.load_agent_cfg_url,
-                files=files,
-                timeout=DEFAULT_CLIENT_TIME_OUT,
-            )
-            response = json.loads(r.text)
-            if r.status_code != HTTPStatus.OK:
-                raise RagApiError(code=r.status_code, msg=response.message)
-        finally:
-            file_obj.close()
-
-        return response
-
     def evaluate_for_generate_qa(self, overwrite):
         r = requests.post(
             self.get_evaluate_generate_url,
@@ -579,7 +572,7 @@ class RagWebClient:
 
     def add_index(self, index_entry: RagIndexEntry):
         r = requests.post(
-            f"{self.index_url}{index_entry.index_name}",
+            urljoin(self.index_url, index_entry.index_name),
             json=index_entry.model_dump(),
             timeout=DEFAULT_CLIENT_TIME_OUT,
         )
@@ -591,7 +584,7 @@ class RagWebClient:
 
     def update_index(self, index_entry: RagIndexEntry):
         r = requests.patch(
-            f"{self.index_url}{index_entry.index_name}",
+            urljoin(self.index_url, index_entry.index_name),
             json=index_entry.model_dump(),
             timeout=DEFAULT_CLIENT_TIME_OUT,
         )
@@ -603,7 +596,7 @@ class RagWebClient:
 
     def delete_index(self, index_name: str):
         r = requests.delete(
-            f"{self.index_url}{index_name}",
+            urljoin(self.index_url, index_name),
             timeout=DEFAULT_CLIENT_TIME_OUT,
         )
         if r.status_code != HTTPStatus.OK:

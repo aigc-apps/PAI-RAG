@@ -59,11 +59,13 @@
 
 4. 启动RAG服务
 
-   使用DashScope API，需要在命令行引入环境变量
+   使用DashScope API，需要在命令行引入环境变量：
 
    ```bash
-   export DASHSCOPE_API_KEY=""
+   export DASHSCOPE_API_KEY="xxx"
    ```
+
+   请替换xxx为你自己的DASHSCOPE_API_KEY，DASHSCOPE_API_KEY获取地址为 https://dashscope.console.aliyun.com/apiKey
 
    启动:
 
@@ -85,7 +87,7 @@
    pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
    ```
 
-   你也可以打开http://127.0.0.1:8002/ 来配置RAG服务以及上传本地数据。
+   你也可以打开http://localhost:8002/ 来配置RAG服务以及上传本地数据。
 
 6. 【可选】本地工具-上传数据
 

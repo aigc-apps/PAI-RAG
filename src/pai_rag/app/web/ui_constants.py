@@ -1,9 +1,7 @@
 from pai_rag.integrations.synthesizer.pai_synthesizer import (
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
-from pai_rag.utils.prompt_template import DEFAULT_TEXT_QA_PROMPT_TMPL
 
-DEFAULT_TEXT_QA_PROMPT_TMPL = DEFAULT_TEXT_QA_PROMPT_TMPL
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
 
 NL2SQL_GENERAL_PROMPTS = "给定一个输入问题，创建一个语法正确的{dialect}查询语句来执行。要求：\n----------\n1.只根据问题查询几个相关的列。\n2.请注意只使用提供的数据库结构信息db_schema以及可能历史查询db_history中看到的列名，不要查询不存在的列。\n3.请注意哪个列位于哪个表中，必要时请使用表名限定列名。\n4.如果问题中包含了SQL语句，请提取并基于提供的db_schema和db_history校验优化。\n----------\n用户问题: {query_str} \n数据表结构信息和数据样例: {db_schema} \n历史查询: {db_history} \n\n你必须使用以下格式，每项占一行：\nQuestion: Question here \nSQLQuery: SQL Query (end with ;) to run"

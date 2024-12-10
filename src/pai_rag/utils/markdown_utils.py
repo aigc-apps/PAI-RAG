@@ -39,16 +39,17 @@ class PaiTable(BaseModel):
     def get_column_headers(self):
         if not self.column_headers_index or len(self.column_headers_index) == 0:
             return []
-        return [[row[i] for i in self.column_headers_index] for row in self.data]
+        # return [self.data[:, col] for col in self.column_headers_index]
+        return [[row[col] for row in self.data] for col in self.column_headers_index]
 
     def get_columns(self):
         if self.column_headers_index and len(self.column_headers_index) > 0:
-            data_col_start_index = max(self.col_headers_index) + 1
+            data_col_start_index = max(self.column_headers_index) + 1
         else:
             data_col_start_index = 0
         return [
-            [row[i] for i in range(data_col_start_index, self.get_col_numbers())]
-            for row in self.data
+            [row[col] for row in self.data]
+            for col in range(data_col_start_index, self.get_col_numbers())
         ]
 
 
@@ -113,6 +114,7 @@ def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:
     if len(table.get_column_headers()) > 0:
         headers = table.get_column_headers()
         rows = table.get_columns()
+        total_cols = table.get_row_numbers()
     else:
         headers = table.get_row_headers()
         rows = table.get_rows()

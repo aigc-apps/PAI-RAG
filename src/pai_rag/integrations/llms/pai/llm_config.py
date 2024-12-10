@@ -1,5 +1,6 @@
+import os
 from typing import Literal
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -142,7 +143,7 @@ class PaiBaseLlmConfig(BaseModel):
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
-    api_key: str | None = None
+    api_key: str | None = Field(default=os.getenv("DASHSCOPE_API_KEY"))  # use default
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     model: str = "qwen-max"
 

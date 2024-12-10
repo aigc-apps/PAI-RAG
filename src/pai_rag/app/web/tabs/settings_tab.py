@@ -61,10 +61,6 @@ def create_setting_tab() -> Dict[str, Any]:
                         visible=False,
                         type="password",
                     )
-                    embed_link = gr.Markdown(
-                        label="Model URL Link",
-                        elem_id="embed_link",
-                    )
             vector_db_elems, vector_db_components = create_vector_db_panel()
 
             add_index_button = gr.Button(
@@ -89,19 +85,18 @@ def create_setting_tab() -> Dict[str, Any]:
             embed_source.input(
                 fn=ev_listeners.change_emb_source,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_model, embed_dim, embed_type, embed_link, embed_api_key],
+                outputs=[embed_model, embed_dim, embed_type, embed_api_key],
             )
             embed_model.input(
                 fn=ev_listeners.change_emb_model,
                 inputs=[embed_source, embed_model],
-                outputs=[embed_dim, embed_type, embed_link],
+                outputs=[embed_dim, embed_type],
             )
             components.extend(
                 [
                     embed_source,
                     embed_dim,
                     embed_type,
-                    embed_link,
                     embed_model,
                     embed_api_key,
                     embed_batch_size,
