@@ -90,7 +90,7 @@ def make_homepage():
         with gr.Tab("\N{rocket} Agent"):
             agent_elements = create_agent_tab()
             elem_manager.add_elems(agent_elements)
-        with gr.Tab("\N{bar chart} Data Analysis"):
+        with gr.Tab("\N{bar chart} DBChat"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
 

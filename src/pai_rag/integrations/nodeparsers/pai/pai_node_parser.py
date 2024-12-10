@@ -60,6 +60,7 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
     "total_pages",
     "source",
     "row_number",
+    "image_info_list",
 ]
 
 

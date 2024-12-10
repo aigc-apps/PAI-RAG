@@ -28,8 +28,11 @@ class ModelScopeDownloader:
 
     def load_model(self, model):
         model_path = self.download_directory_path / model
-        with TemporaryDirectory() as temp_dir:
-            if not os.path.exists(model_path):
+        if not os.path.exists(model_path):
+            logger.info(
+                f"Model {model} not found in {self.download_directory_path}, start downloading."
+            )
+            with TemporaryDirectory() as temp_dir:
                 logger.info(f"start downloading model {model}.")
                 start_time = time.time()
                 if model in self.model_info["basic_models"]:
@@ -40,14 +43,23 @@ class ModelScopeDownloader:
                     raise ValueError(f"{model} is not a valid model name.")
                 temp_model_dir = snapshot_download(model_id, cache_dir=temp_dir)
                 logger.info(
-                    f"Downloaded model {model} to {temp_model_dir} and move to {model_path}."
+                    f"Downloaded model {model} to {temp_model_dir} and start moving to {model_path}."
                 )
-                shutil.move(temp_model_dir, model_path)
-                end_time = time.time()
-                duration = end_time - start_time
-                logger.info(
-                    f"Finished downloading model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
-                )
+                if not os.path.exists(model_path):
+                    shutil.move(temp_model_dir, model_path)
+                    end_time = time.time()
+                    duration = end_time - start_time
+                    logger.info(
+                        f"Finished moving model {model} to {model_path.resolve()}, took {duration:.2f} seconds."
+                    )
+                else:
+                    logger.info(
+                        f"Model {model} already exists in {model_path.resolve()}, skip moving."
+                    )
+        else:
+            logger.info(
+                f"Model {model} already exists in {model_path}, skip downloading."
+            )
 
     def load_rag_models(self, skip_download_models: bool = False):
         if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
