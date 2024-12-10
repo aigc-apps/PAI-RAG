@@ -2,7 +2,6 @@ import os
 from typing import Optional, List, Tuple
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.callbacks.base import CallbackManager
@@ -42,18 +41,12 @@ from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreC
 dispatcher = instrument.get_dispatcher(__name__)
 
 
-embed_model_bge_large = HuggingFaceEmbedding(
-    model_name="./model_repository/bge-large-zh-v1.5"
-)
-
-
-# cls_cache = {}
-
-# def resolve(cls: Any, **kwargs):
-#     cls_key = kwargs.__repr__()
-#     if cls_key not in cls_cache:
-#         cls_cache[cls_key] = cls(**kwargs)
-#     return cls_cache[cls_key]
+if os.path.exists("./model_repository/bge-large-zh-v1.5"):
+    embed_model_bge_large = HuggingFaceEmbedding(
+        model_name="./model_repository/bge-large-zh-v1.5"
+    )
+else:
+    embed_model_bge_large = None
 
 
 def create_db_connctor(analysis_config: BaseAnalysisConfig):
