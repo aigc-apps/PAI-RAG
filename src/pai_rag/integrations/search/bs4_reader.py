@@ -145,7 +145,7 @@ async def fetch_url(url):
             response = await client.get(url)
             return response
         except Exception:
-            logger.warn(f"Fetch {url} failed. Skipping")
+            logger.warning(f"Fetch {url} failed. Skipping")
 
 
 def fetch_multiple(urls):
