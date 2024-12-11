@@ -87,13 +87,12 @@ class ModelScopeDownloader:
             data = json.load(source_file)  # 加载 JSON 数据
 
         if "models-dir" in data:
-            data["models-dir"] = (
-                str(self.download_directory_path) + "/PDF-Extract-Kit/models"
+            data["models-dir"] = os.path.join(
+                str(self.download_directory_path), "PDF-Extract-Kit/models"
             )
         if "layoutreader-model-dir" in data:
-            data["layoutreader-model-dir"] = (
-                str(self.download_directory_path)
-                + "/PDF-Extract-Kit/models/layoutreader"
+            data["layoutreader-model-dir"] = os.path.join(
+                str(self.download_directory_path), "PDF-Extract-Kit/models/layoutreader"
             )
 
         # 将修改后的内容写入destination_path
