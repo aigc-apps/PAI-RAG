@@ -136,7 +136,7 @@ class StructuredNodeParser(NodeParser):
         ref_doc = ref_doc or node
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         image_urls_positions = []
-        current_section = current_section.replace(" ", "").strip()
+        current_section = current_section.strip()
         raw_section_without_image = current_section
         for match in re.finditer(IMAGE_URL_PATTERN, current_section):
             alt_text = match.group("alt_text")

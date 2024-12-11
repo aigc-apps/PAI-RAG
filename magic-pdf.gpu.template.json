@@ -4,7 +4,7 @@
     "bucket-name-2": ["ak", "sk", "endpoint"]
   },
   "models-dir": "/tmp/models",
-  "device-mode": "gpu",
+  "device-mode": "cuda",
   "table-config": {
     "is_table_recog_enable": false,
     "max_time": 400
