@@ -82,12 +82,6 @@ class ModelScopeDownloader:
         source_path = "magic-pdf.template.json"
         destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
 
-        if os.path.exists(destination_path):
-            logger.info(
-                "magic-pdf.json already exists, skip modifying ~/magic-pdf.json."
-            )
-            return
-
         # 读取 source_path 文件的内容
         with open(source_path, "r") as source_file:
             data = json.load(source_file)  # 加载 JSON 数据
