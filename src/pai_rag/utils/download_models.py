@@ -90,6 +90,11 @@ class ModelScopeDownloader:
             data["models-dir"] = (
                 str(self.download_directory_path) + "/PDF-Extract-Kit/models"
             )
+        if "layoutreader-model-dir" in data:
+            data["layoutreader-model-dir"] = (
+                str(self.download_directory_path)
+                + "/PDF-Extract-Kit/models/layoutreader"
+            )
 
         # 将修改后的内容写入destination_path
         with open(destination_path, "w") as destination_file:
