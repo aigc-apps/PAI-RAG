@@ -13,13 +13,15 @@ from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 @ray.remote(num_cpus=4)
 class ParseActor:
-    def __init__(self, working_dir, config_file):
+    def __init__(self, working_dir, config_file, device):
         RAY_ENV_MODEL_DIR = os.path.join(working_dir, "model_repository")
         os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
-        logger.info(f"Init ParseActor with working dir: {RAY_ENV_MODEL_DIR}.")
+        logger.info(
+            f"Init ParseActor with working dir: {RAY_ENV_MODEL_DIR} on device {device}."
+        )
         config = RagConfigManager.from_file(config_file).get_value()
         self.download_model_list = ["PDF-Extract-Kit"]
-        self.load_models(self.download_model_list)
+        self.load_models(self.download_model_list, device)
 
         data_reader_config = config.data_reader
         oss_store = None
@@ -37,14 +39,14 @@ class ParseActor:
 
         logger.info("ParseActor init finished.")
 
-    def load_models(self, model_list):
+    def load_models(self, model_list, device):
         download_models = ModelScopeDownloader(
             fetch_config=True,
             download_directory_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR),
         )
         for model_name in model_list:
             download_models.load_model(model=model_name)
-        download_models.load_mineru_config()
+        download_models.load_mineru_config(device)
 
     def load_and_parse(self, input_file):
         documents = self.data_reader.load_data(file_path_or_directory=input_file)

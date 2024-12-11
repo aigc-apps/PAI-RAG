@@ -13,11 +13,13 @@ def init_ray_env(working_dir, num_cpus_per_actor: int = 1):
         {} CPU resources in total
         {} CPU needed per actor
         {} concurrency
+        {} cluster_resources
     """.format(
             len(ray.nodes()),
             ray.cluster_resources()["CPU"],
             num_cpus_per_actor,
             get_concurrency(num_cpus_per_actor),
+            ray.cluster_resources(),
         )
     )
 
