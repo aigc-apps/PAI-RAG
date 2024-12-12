@@ -1,5 +1,4 @@
 import json
-from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 import pytest
 import os
 
@@ -53,6 +52,8 @@ md_str = """#  $\leftarrow$  """
     reason="Need to execute in a CUDA environment.",
 )
 def test_post_process_multi_level_headings():
+    from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+
     pdf_process = PaiPDFReader()
     json_content = json.loads(json_str)
     md_content_escape = pdf_process.post_process_multi_level_headings(
