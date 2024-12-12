@@ -1,5 +1,8 @@
 import json
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+import pytest
+import os
+
 
 json_str = r"""{
     "pdf_info": [
@@ -45,6 +48,10 @@ json_str = r"""{
 md_str = """#  $\leftarrow$  """
 
 
+@pytest.mark.skipif(
+    os.getenv("SKIP_GPU_TESTS", "false") == "true",
+    reason="Need to execute in a CUDA environment.",
+)
 def test_post_process_multi_level_headings():
     pdf_process = PaiPDFReader()
     json_content = json.loads(json_str)

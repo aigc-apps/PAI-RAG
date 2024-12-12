@@ -13,6 +13,10 @@ TEST_INDEX_PATH = "localdata/teststorage"
 EXPECTED_EMPTY_RESPONSE = """Empty query. Please input your question."""
 
 
+@pytest.mark.skipif(
+    os.getenv("SKIP_GPU_TESTS", "false") == "true",
+    reason="Need to execute in a CUDA environment.",
+)
 @pytest.fixture(scope="module", autouse=True)
 def rag_app():
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
