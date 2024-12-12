@@ -10,7 +10,7 @@ DEFAULT_SENTENCE_WINDOW_SIZE = 3
 DEFAULT_BREAKPOINT = 95
 DEFAULT_BUFFER_SIZE = 1
 
-EAS_DEFAULT_MODEL_DIR = "/huggingface/pai_rag_model_repository"
+EAS_DEFAULT_MODEL_DIR = "/huggingface/pai_rag_model_repository_01"
 if not os.path.exists(EAS_DEFAULT_MODEL_DIR):
     DEFAULT_MODEL_DIR = "./model_repository"
 else:
