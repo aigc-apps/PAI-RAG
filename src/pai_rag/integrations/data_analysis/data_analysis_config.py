@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 
-from pai_rag.app.web.ui_constants import DA_GENERAL_PROMPTS, SYN_GENERAL_PROMPTS
+from pai_rag.app.web.ui_constants import NL2SQL_GENERAL_PROMPTS, SYN_GENERAL_PROMPTS
 
 
 class DataAnalysisType(str, Enum):
@@ -17,7 +17,7 @@ class BaseAnalysisConfig(BaseModel):
     """Base class for data analysis config."""
 
     type: DataAnalysisType
-    nl2sql_prompt: str = DA_GENERAL_PROMPTS
+    nl2sql_prompt: str = NL2SQL_GENERAL_PROMPTS
     synthesizer_prompt: str = SYN_GENERAL_PROMPTS
 
 
@@ -30,6 +30,16 @@ class SqlAnalysisConfig(BaseAnalysisConfig):
     database: str
     tables: List[str] = []
     descriptions: Dict[str, str] = {}
+    # offline
+    enable_enhanced_description: bool = False
+    enable_db_history: bool = False
+    enable_db_embedding: bool = False
+    max_col_num: int = 100
+    max_val_num: int = 10000
+    # online
+    enable_query_preprocessor: bool = False
+    enable_db_preretriever: bool = False
+    enable_db_selector: bool = False
 
 
 class SqliteAnalysisConfig(SqlAnalysisConfig):

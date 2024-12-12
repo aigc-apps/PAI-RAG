@@ -249,9 +249,63 @@ async def upload_datasheet(
     }
 
 
+@router_v1.post("/upload_db_history")
+async def upload_history_json(
+    file: UploadFile,
+):
+    task_id = uuid.uuid4().hex
+    if not file:
+        return None
+
+    persist_path = "./localdata/data_analysis/nl2sql/history"
+
+    os.makedirs(name=persist_path, exist_ok=True)
+
+    # 清空目录中的文件
+    for filename in os.listdir(persist_path):
+        file_path = os.path.join(persist_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            logger.info(f"Failed to delete {file_path}. Reason: {e}")
+
+    # 指定持久化存储位置
+    file_name = os.path.basename(file.filename)  # 获取文件名
+    destination_path = os.path.join(persist_path, file_name)
+    # 写入文件
+    try:
+        # shutil.copy(file.filename, destination_path)
+        with open(destination_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        logger.info("History file saved successfully")
+
+    except Exception as e:
+        return StreamingResponse(status_code=500, content={"message": str(e)})
+
+    # 重命名
+    try:
+        unified_destination_path = os.path.join(persist_path, "db_query_history.json")
+        os.rename(destination_path, unified_destination_path)
+        logger.info("History file renamed successfully")
+    except Exception as e:
+        return StreamingResponse(status_code=500, content={"message": str(e)})
+
+    return {
+        "task_id": task_id,
+        "destination_path": unified_destination_path,
+    }
+
+
+@router_v1.post("/query/load_db_info")
+async def aload_db_info():
+    return await rag_service.aload_db_info()
+
+
 @router_v1.post("/query/data_analysis")
 async def aquery_analysis(query: RagQuery):
-    response = await rag_service.aquery_analysis_v1(query)
+    # await rag_service.aload_db_info()
+    response = await rag_service.aquery_data_analysis_v1(query)
     if not query.stream:
         return response
     else:

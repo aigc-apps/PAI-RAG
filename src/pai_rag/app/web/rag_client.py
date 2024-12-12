@@ -15,7 +15,7 @@ from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 from urllib.parse import urljoin
 
-DEFAULT_CLIENT_TIME_OUT = 60
+DEFAULT_CLIENT_TIME_OUT = 120
 DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
 
 
@@ -57,6 +57,10 @@ class RagWebClient:
         return urljoin(self.endpoint, "api/v1/query/data_analysis")
 
     @property
+    def db_loder_url(self):
+        return urljoin(self.endpoint, "api/v1/query/load_db_info")
+
+    @property
     def llm_url(self):
         return urljoin(self.endpoint, "api/v1/query/llm")
 
@@ -75,6 +79,15 @@ class RagWebClient:
     @property
     def load_datasheet_url(self):
         return urljoin(self.endpoint, "api/v1/upload_datasheet")
+
+    @property
+    def load_db_history_url(self):
+        return urljoin(self.endpoint, "api/v1/upload_db_history")
+
+    @property
+    def load_agent_cfg_url(self):
+        # return f"{self.endpoint}v1/config/agent"
+        return urljoin(self.endpoint, "api/v1/config/agent")
 
     @property
     def get_load_state_url(self):
@@ -111,7 +124,6 @@ class RagWebClient:
             text = response["delta"]
         else:
             text = response["answer"]
-
         docs = response.get("docs", []) or []
         session_id = response.get("session_id", None)
         is_finished = response.get("is_finished", True)
@@ -125,8 +137,6 @@ class RagWebClient:
             self.session_id = session_id
             for i, doc in enumerate(docs):
                 filename = doc["metadata"].get("file_name", None)
-                ref_table = doc["metadata"].get("query_tables", None)
-                invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 ref_table = doc["metadata"].get("query_tables", None)
                 invalid_flag = doc["metadata"].get("invalid_flag", 0)
                 file_url = doc["metadata"].get("file_url", None)
@@ -452,6 +462,48 @@ class RagWebClient:
         response = dotdict(json.loads(r.text))
         return response
 
+    def add_db_history(
+        self,
+        input_file: str,
+    ):
+        file_obj = open(input_file, "rb")
+        mimetype = mimetypes.guess_type(input_file)[0]
+        files = {"file": (input_file, file_obj, mimetype)}
+        try:
+            r = requests.post(
+                self.load_db_history_url,
+                files=files,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        except Exception as e:
+            logger.exception(f"add_db_history failed: {e}")
+        finally:
+            file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def load_db_info(
+        self,
+    ):
+        try:
+            r = requests.post(
+                self.db_loder_url,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+            # response = dotdict(json.loads(r.text))
+            # print("response:", r, r.text)
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=r.text)
+        except Exception as e:
+            logger.exception(f"load db info failed: {e}")
+            raise  # 重新抛出异常
+
+        return r.text
+
     async def get_knowledge_state(self, task_id: str):
         async with httpx.AsyncClient(timeout=DEFAULT_CLIENT_TIME_OUT) as client:
             r = await client.get(self.get_load_state_url, params={"task_id": task_id})
@@ -462,6 +514,7 @@ class RagWebClient:
 
     def patch_config(self, update_dict: Any):
         config = self.get_config()
+        # print("config:", config)
         view_model: ViewModel = ViewModel.from_app_config(config)
         view_model.update(update_dict)
         new_config = view_model.to_app_config()

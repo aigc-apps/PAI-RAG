@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
+from magic_pdf.data.data_reader_writer import FileBasedDataWriter
 from pai_rag.utils.markdown_utils import (
     transform_local_to_oss,
     is_horizontal_table,
@@ -292,7 +292,7 @@ class PaiPDFReader(BaseReader):
                     model_json = []
 
                 # 执行解析步骤
-                image_writer = DiskReaderWriter(temp_file_path)
+                image_writer = FileBasedDataWriter(temp_file_path)
 
                 # 选择解析方式
                 if parse_method == "auto":
@@ -308,12 +308,8 @@ class PaiPDFReader(BaseReader):
                 pipe.pipe_classify()
 
                 # 如果没有传入模型数据，则使用内置模型解析
-                if not model_json:
-                    if model_config.__use_inside_model__:
-                        pipe.pipe_analyze()  # 解析
-                    else:
-                        logger.error("need model list input")
-                        exit(1)
+                if len(model_json) == 0:
+                    pipe.pipe_analyze()  # 解析
 
                 # 执行解析
                 pipe.pipe_parse()
