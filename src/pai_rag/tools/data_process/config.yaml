@@ -1,0 +1,14 @@
+# process schedule
+# a list of several process operators with their arguments
+process:
+  - pai_rag_parser:
+  # - splitter:
+  #   type: 'Sentence'
+  #   chunk_size: 100
+  #   chunk_overlap: 20
+  #   enable_multimodal: true
+  # - embed:
+  #   source: 'HuggingFace'
+  #   model: 'bge-large-zh-v1.5'
+  #   mem_required: '8GB'
+  #   enable_sparse: false

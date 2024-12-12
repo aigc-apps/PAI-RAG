@@ -6,12 +6,14 @@ from loguru import logger
 from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
 from pai_rag.tools.data_process.utils.ray_init import init_ray_env
 from pai_rag.tools.data_process.actors.parse_actor import ParseActor
+from pai_rag.tools.data_process.utils.cuda_util import infer_torch_device
 
 
 def main(args):
     init_ray_env(args.working_dir)
     input_files = get_input_files(args.data_path)
-    parser = ParseActor.remote(args.working_dir, args.config_file, args.device)
+    _device = args.device or infer_torch_device()
+    parser = ParseActor.remote(args.working_dir, args.config_file, _device)
     run_tasks = [parser.load_and_parse.remote(input_file) for input_file in input_files]
     results = ray.get(run_tasks)
     logger.info("Master node completed processing files.")
@@ -29,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--config_file", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
 
     logger.info(f"Init: args: {args}")
