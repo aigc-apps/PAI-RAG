@@ -29,4 +29,4 @@ def test_markdown_parser():
     for doc_node in documents:
         splitted_nodes.extend(md_node_parser.get_nodes_from_documents([doc_node]))
 
-    assert len(splitted_nodes) == 6
+    assert len(splitted_nodes) == 8
