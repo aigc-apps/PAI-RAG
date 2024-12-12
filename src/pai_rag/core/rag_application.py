@@ -3,7 +3,8 @@ from pai_rag.core.rag_index_manager import index_manager
 from pai_rag.core.rag_module import (
     resolve_agent,
     resolve_chat_store,
-    resolve_data_analysis_tool,
+    resolve_data_analysis_loader,
+    resolve_data_analysis_query,
     resolve_data_loader,
     resolve_intent_router,
     resolve_query_engine,
@@ -25,6 +26,7 @@ from llama_index.core.schema import (
     ImageNode,
 )
 import json
+import os
 from loguru import logger
 from enum import Enum
 from uuid import uuid4
@@ -200,7 +202,7 @@ class RagApplication:
             elif intent == Intents.WEBSEARCH:
                 chat_type = RagChatType.WEB
             elif intent == Intents.NL2SQL:
-                return await self.aquery_analysis(query)
+                return await self.aquery_data_analysis(query)
             elif intent != Intents.RAG:
                 return ValueError(f"Invalid intent {intent}")
 
@@ -285,7 +287,37 @@ class RagApplication:
             response = await agent.achat(query.question)
             return RagResponse(answer=response.response)
 
-    async def aquery_analysis(
+    async def aload_agent_config(self, agent_cfg_path: str):
+        if os.path.exists(agent_cfg_path):
+            sessioned_config = self.config.as_dict().copy()
+            sessioned_config["RAG"]["llm"]["function_calling_llm"][
+                "source"
+            ] = "DashScope"
+            sessioned_config["RAG"]["llm"]["function_calling_llm"][
+                "name"
+            ] = "qwen2-7b-instruct"
+            sessioned_config["RAG"]["agent"]["type"] = "function_calling"
+            sessioned_config["RAG"]["agent"]["custom_config"][
+                "agent_file_path"
+            ] = agent_cfg_path
+            sessioned_config["RAG"]["agent"]["intent_detection"]["type"] = "single"
+            sessioned_config["RAG"]["agent"]["tool"]["type"] = "api"
+
+            new_settings = self.config
+            new_settings.update(sessioned_config)
+
+            self.reload(new_settings)
+            return "Update agent config successfully."
+        else:
+            return f"The agent config path {agent_cfg_path} not exists."
+
+    async def aload_db_info(self):
+        db_info_loader = resolve_data_analysis_loader(self.config)
+        await db_info_loader.aload_db_info()
+
+        return "Load database info successfully."
+
+    async def aquery_data_analysis(
         self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
     ):
         """Query answer from RAG App asynchronously.
@@ -305,14 +337,14 @@ class RagApplication:
                 answer="Empty query. Please input your question.", session_id=session_id
             )
 
-        analysis_tool = resolve_data_analysis_tool(self.config)
-        if not analysis_tool:
+        analysis_query = resolve_data_analysis_query(self.config)
+        if not analysis_query:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")
 
         if not query.stream:
-            response = await analysis_tool.aquery(query.question)
+            response = await analysis_query.aquery(query.question)
         else:
-            response = await analysis_tool.astream_query(query.question)
+            response = await analysis_query.astream_query(query.question)
 
         node_results = response.source_nodes
         new_query = query.question
@@ -343,5 +375,5 @@ class RagApplication:
             return RagResponse(answer=response.response, **result_info)
         else:
             return event_generator_async(
-                response=response, sse_version=sse_version, extra_info=result_info
+                response=response, extra_info=result_info, sse_version=sse_version
             )

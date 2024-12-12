@@ -1,11 +1,16 @@
 from typing import Any
+
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_data_loader import RagDataLoader
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
-from pai_rag.integrations.data_analysis.data_analysis_tool import DataAnalysisTool
+from pai_rag.integrations.data_analysis.data_analysis_tool import (
+    DataAnalysisConnector,
+    DataAnalysisLoader,
+    DataAnalysisQuery,
+)
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
 # cnclip import should come before others. otherwise will segment fault.
@@ -29,6 +34,7 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
+
 
 cls_cache = {}
 
@@ -121,15 +127,37 @@ def resolve_llm(config: RagConfig) -> PaiLlm:
     return llm
 
 
-def resolve_data_analysis_tool(config: RagConfig) -> DataAnalysisTool:
+def resolve_data_analysis_connector(config: RagConfig):
+    db_connector = resolve(
+        cls=DataAnalysisConnector,
+        analysis_config=config.data_analysis,
+    )
+    return db_connector
+
+
+def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+    sql_database = DataAnalysisConnector(config.data_analysis).connect_db()
+    # sql_database = resolve_data_analysis_connector(config).connect_db()
 
     return resolve(
-        cls=DataAnalysisTool,
+        cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
+        sql_database=sql_database,
         llm=llm,
-        embed_model=embed_model,
+    )
+
+
+def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
+    llm = resolve_llm(config)
+    sql_database = resolve_data_analysis_connector(config).connect_db()
+
+    return resolve(
+        cls=DataAnalysisQuery,
+        analysis_config=config.data_analysis,
+        sql_database=sql_database,
+        llm=llm,
+        callback_manager=None,
     )
 
 

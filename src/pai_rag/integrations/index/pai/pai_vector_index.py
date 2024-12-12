@@ -115,6 +115,8 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             self._local_bm25_index = LocalBm25IndexStore(self._persist_path)
             self._retriever_weights = retriever_weights
             logger.info("Using local bm25 index.")
+        else:
+            self._retriever_weights = None
 
         logger.info(
             f"""

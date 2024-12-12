@@ -1,10 +1,10 @@
 from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
+import datetime
 from pai_rag.app.web.rag_client import rag_client, RagApiError
 from pai_rag.app.web.ui_constants import (
-    DA_GENERAL_PROMPTS,
-    DA_SQL_PROMPTS,
+    NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,
 )
 
@@ -17,7 +17,7 @@ def upload_file_fn(input_file):
         res = rag_client.add_datasheet(input_file.name)
         # 更新config
         update_dict = {
-            "analysis_type": "nl2pandas",
+            "analysis_type": "pandas",
             "analysis_file_path": res["destination_path"],
         }
         rag_client.patch_config(update_dict)
@@ -43,6 +43,33 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
+def load_db_info_fn(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+
+    # update snapshot
+    try:
+        update_dict["analysis_type"] = "nl2sql"
+        if update_dict["enable_db_embedding"] is True:
+            update_dict["enable_query_preprocessor"] = True
+            update_dict["enable_db_preretriever"] = True
+        else:
+            update_dict["enable_query_preprocessor"] = False
+            update_dict["enable_db_preretriever"] = False
+        print("update_dict:", update_dict)
+        rag_client.patch_config(update_dict)
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+    try:
+        rag_client.load_db_info()
+        return f"[{datetime.datetime.now()}] DB info loaded successfully!"
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+        # return f"[{datetime.datetime.now()}] DB info loaded failed, HTTP {api_error.code} Error: {api_error.msg}"
+
+
 def respond(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
@@ -60,6 +87,7 @@ def respond(input_elements: List[Any]):
 
     # update snapshot
     try:
+        # print("respond udpate_dict:", update_dict)
         rag_client.patch_config(update_dict)
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -71,7 +99,7 @@ def respond(input_elements: List[Any]):
         chatbot.append((question, ""))
 
     try:
-        response_gen = rag_client.query_data_analysis(question, stream=False)
+        response_gen = rag_client.query_data_analysis(question, stream=True)
         for resp in response_gen:
             chatbot[-1] = (question, resp.result)
             yield chatbot
@@ -93,6 +121,43 @@ def reset_textbox():
     return gr.update(value="")
 
 
+# 处理history复选框变化
+def handle_history_checkbox_change(enable_db_history):
+    if enable_db_history:
+        return gr.File.update(visible=True), gr.Textbox.update(visible=True)
+    else:
+        return gr.File.update(visible=False), gr.Textbox.update(visible=False)
+
+
+# 处理embedding复选框变化
+def handle_embedding_checkbox_change(enable_db_embedding):
+    if enable_db_embedding:
+        return gr.Slider.update(visible=True), gr.Slider.update(visible=True)
+    else:
+        return gr.Slider.update(visible=False), gr.Slider.update(visible=False)
+
+
+def upload_history_fn(json_file):
+    if json_file is None:
+        return None
+    try:
+        # 调用接口
+        res = rag_client.add_db_history(json_file.name)
+        # 更新config
+        update_dict = {
+            "db_history_file_path": res["destination_path"],
+        }
+        rag_client.patch_config(update_dict)
+
+        if json_file.name.endswith(".json"):
+            return "Upload successfully!"
+        else:
+            return "Please upload a json file."
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
 def create_data_analysis_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
@@ -102,7 +167,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "database",
                 ],
                 value="database",
-                label="Please choose the data analysis type",
+                label="Please choose the analysis type",
                 elem_id="analysis_type",
             )
 
@@ -157,81 +222,167 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     elem_id="db_descriptions",
                     placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
                 )
+
+                with gr.Column(visible=True):
+                    enhance_argument = gr.Accordion(
+                        "Enhancement options for larger database", open=False
+                    )
+                    with enhance_argument:
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                # enable_enhanced_description = gr.Checkbox(
+                                #     label="Yes",
+                                #     info="Enhance db description by llm",
+                                #     elem_id="enable_enhanced_description",
+                                # )
+                                enable_db_embedding = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enhance db retrieval by embedding",
+                                    elem_id="enable_db_embedding",
+                                )
+
+                                max_column_num = gr.Slider(
+                                    minimum=50,
+                                    maximum=200,
+                                    step=10,
+                                    label="Max Column Number",
+                                    info="Max number of columns to extract unique values.",
+                                    elem_id="max_column_num",
+                                    value=100,
+                                    visible=False,  # 初始状态为不可见
+                                )
+                                max_value_num = gr.Slider(
+                                    minimum=5000,
+                                    maximum=20000,
+                                    step=1000,
+                                    label="Max Value Number",
+                                    info="Maximum number of unique values to be embedded. Larger number may take longer time.",
+                                    elem_id="max_value_num",
+                                    value=10000,
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                enable_db_embedding.change(
+                                    fn=handle_embedding_checkbox_change,
+                                    inputs=[enable_db_embedding],
+                                    outputs=[max_column_num, max_value_num],
+                                )
+
+                                enable_db_selector = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db schema selection by llm",
+                                    elem_id="enable_db_selector",
+                                )
+
+                                enable_db_history = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db query history/example",
+                                    elem_id="enable_db_history",
+                                )
+
+                                history_file_upload = gr.File(
+                                    label="Upload q-sql json file",
+                                    file_count="single",
+                                    file_types=[".json"],
+                                    elem_id="query_history_upload",
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                history_update_state = gr.Textbox(
+                                    label="History upload state",
+                                    container=False,
+                                    visible=False,  # 初始状态为不可见
+                                )
+
+                                # 当复选框状态变化时，调用 handle_checkbox_change 函数
+                                enable_db_history.change(
+                                    fn=handle_history_checkbox_change,
+                                    inputs=[enable_db_history],
+                                    outputs=[history_file_upload, history_update_state],
+                                )
+
+                                history_file_upload.upload(
+                                    fn=upload_history_fn,
+                                    inputs=history_file_upload,
+                                    outputs=history_update_state,
+                                    api_name="upload_history_fn",
+                                )
+
+                # load db info
+                with gr.Row():
+                    load_db_info_btn = gr.Button(
+                        value="Load DB Info", variant="primary", scale=4
+                    )
+                    save_state = gr.Textbox(
+                        label="DB Load Info: ", container=False, scale=6
+                    )
+
+                load_args = {
+                    data_analysis_type,
+                    dialect,
+                    user,
+                    password,
+                    host,
+                    port,
+                    database,
+                    tables,
+                    descriptions,
+                    # enable_enhanced_description,
+                    enable_db_history,
+                    enable_db_embedding,
+                    max_column_num,
+                    max_value_num,
+                    # enable_query_preprocessor,
+                    # enable_db_preretriever,
+                    enable_db_selector,
+                }
+
+                load_db_info_btn.click(
+                    fn=load_db_info_fn,
+                    inputs=load_args,
+                    outputs=[save_state],
+                )
+
                 with gr.Column(visible=True):
                     with gr.Tab("Nl2sql Prompt"):
-                        sql_prompt_type = gr.Radio(
-                            [
-                                "general",
-                                "sql",
-                                "custom",
-                            ],
-                            value="general",
-                            label="\N{rocket} Please choose the nl2sql prompt template",
-                            elem_id="nl2sql_prompt_type",
-                        )
-
                         db_nl2sql_prompt = gr.Textbox(
                             label="nl2sql template",
                             elem_id="db_nl2sql_prompt",
-                            value=DA_GENERAL_PROMPTS,
-                            lines=4,
+                            value=NL2SQL_GENERAL_PROMPTS,
+                            lines=6,
                         )
 
-                    with gr.Tab("Synthesize Prompt"):
-                        syn_prompt_type = gr.Radio(
-                            [
-                                "general",
-                                "custom",
-                            ],
-                            value="general",
-                            label="\N{rocket} Please choose the synthesizer prompt template",
-                            elem_id="synthesizer_prompt_type",
-                        )
-
+                    with gr.Tab("Synthesizer Prompt"):
                         synthesizer_prompt = gr.Textbox(
                             label="synthesizer template",
                             elem_id="synthesizer_prompt",
                             value=SYN_GENERAL_PROMPTS,
-                            lines=4,
+                            lines=6,
+                        )
+                    with gr.Tab("Prompt Reset"):
+                        reset_nl2sql_prompt_btn = gr.Button("Reset Nl2sql Prompt")
+                        reset_synthesizer_prompt_btn = gr.Button(
+                            "Reset Synthesizer Prompt"
                         )
 
-            def change_sql_prompt_template(prompt_type):
-                if prompt_type == "general":
-                    return {
-                        db_nl2sql_prompt: gr.update(
-                            value=DA_GENERAL_PROMPTS, interactive=True
-                        )
-                    }
-                elif prompt_type == "sql":
-                    return {
-                        db_nl2sql_prompt: gr.update(
-                            value=DA_SQL_PROMPTS, interactive=True
-                        )
-                    }
-                else:
-                    return {db_nl2sql_prompt: gr.update(value="", interactive=True)}
+                    def reset_nl2sql_prompt():
+                        return gr.update(value=NL2SQL_GENERAL_PROMPTS)
 
-            sql_prompt_type.input(
-                fn=change_sql_prompt_template,
-                inputs=sql_prompt_type,
-                outputs=[db_nl2sql_prompt],
-            )
+                    def reset_synthesizer_prompt():
+                        return gr.update(value=SYN_GENERAL_PROMPTS)
 
-            def change_syn_prompt_template(prompt_type):
-                if prompt_type == "general":
-                    return {
-                        synthesizer_prompt: gr.update(
-                            value=SYN_GENERAL_PROMPTS, interactive=True
-                        )
-                    }
-                else:
-                    return {synthesizer_prompt: gr.update(value="", interactive=True)}
-
-            syn_prompt_type.input(
-                fn=change_syn_prompt_template,
-                inputs=syn_prompt_type,
-                outputs=[synthesizer_prompt],
-            )
+                    reset_nl2sql_prompt_btn.click(
+                        fn=reset_nl2sql_prompt,
+                        inputs=[],
+                        outputs=[db_nl2sql_prompt],
+                        api_name="reset_nl2sql_prompt_clk",
+                    )
+                    reset_synthesizer_prompt_btn.click(
+                        fn=reset_synthesizer_prompt,
+                        inputs=[],
+                        outputs=[synthesizer_prompt],
+                        api_name="reset_synthesizer_prompt_clk",
+                    )
 
             def data_analysis_type_change(type_value):
                 if type_value == "datafile":
@@ -252,7 +403,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=6):
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
+            chatbot = gr.Chatbot(height=600, elem_id="chatbot")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
@@ -268,6 +419,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database,
             tables,
             descriptions,
+            enable_db_selector,
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,
@@ -318,8 +470,14 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
-            sql_prompt_type.elem_id: sql_prompt_type,
+            # enable_enhanced_description.elem_id: enable_enhanced_description,
+            enable_db_history.elem_id: enable_db_history,
+            enable_db_embedding.elem_id: enable_db_embedding,
+            max_column_num.elem_id: max_column_num,
+            max_value_num.elem_id: max_value_num,
+            # enable_query_preprocessor.elem_id: enable_query_preprocessor,
+            # enable_db_preretriever.elem_id: enable_db_preretriever,
+            enable_db_selector.elem_id: enable_db_selector,
             db_nl2sql_prompt.elem_id: db_nl2sql_prompt,
-            syn_prompt_type.elem_id: syn_prompt_type,
             synthesizer_prompt.elem_id: synthesizer_prompt,
         }
