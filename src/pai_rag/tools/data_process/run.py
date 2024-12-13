@@ -1,6 +1,6 @@
 from loguru import logger
 from pai_rag.tools.data_process.ray_executor import RayExecutor
-from jsonargparse import ActionConfigFile, ArgumentParser
+import argparse
 from typing import List, Optional
 
 
@@ -15,11 +15,10 @@ def init_configs(args: Optional[List[str]] = None):
     :param args: list of params, e.g., ['--conifg', 'cfg.yaml'], default None.
     :return: a global cfg object used by the Executor or Analyzer
     """
-    parser = ArgumentParser(default_env=True, default_config_files=None)
+    parser = argparse.ArgumentParser()
 
     parser.add_argument(
         "--config",
-        action=ActionConfigFile,
         help="Path to a dj basic configuration file.",
         required=True,
     )
