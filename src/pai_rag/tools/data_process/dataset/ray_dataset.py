@@ -37,7 +37,10 @@ class RayDataset(BaseDataset):
         )
         num_gpus = get_num_gpus(op, op_proc)
         try:
-            batch_size = getattr(op, "batch_size", 1) if op.is_batched_op() else 1
+            batch_size = getattr(op, "batch_size", 1)
+            logger.info(
+                f"Start processing with Op [{op._name}], batch_size: {batch_size}, op_proc: {op_proc}, num_gpus: {num_gpus}"
+            )
             self.data = self.data.map_batches(
                 op.process,
                 batch_size=batch_size,

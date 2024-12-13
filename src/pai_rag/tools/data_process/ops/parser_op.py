@@ -20,12 +20,12 @@ class Parser(BaseOP):
     another model and the figure."""
 
     _accelerator = "cpu"
-    _batched_op = True
+    _batched_op = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.download_model_list = ["PDF-Extract-Kit"]
-        self.load_models(self.download_model_list, self.accelerator)
+        self.load_models(self.download_model_list)
         data_reader_config = BaseDataReaderConfig()
         if kwargs.get("oss_store", None):
             oss_store = resolve(
@@ -44,14 +44,14 @@ class Parser(BaseOP):
 
         logger.info("ParseActor init finished.")
 
-    def load_models(self, model_list, accelerator):
+    def load_models(self, model_list):
         download_models = ModelScopeDownloader(
             fetch_config=True,
             download_directory_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR),
         )
         for model_name in model_list:
             download_models.load_model(model=model_name)
-        download_models.load_mineru_config(accelerator)
+        download_models.load_mineru_config(self.accelerator)
 
     def process(self, input_file):
         documents = self.data_reader.load_data(file_path_or_directory=input_file)

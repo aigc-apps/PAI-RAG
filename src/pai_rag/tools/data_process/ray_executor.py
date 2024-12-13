@@ -60,9 +60,8 @@ class RayExecutor:
             dataset.write_json(self.cfg.export_path)
             self.cfg.dataset_path = self.cfg.export_path
 
-        # convert all the path in dataset to absolute path
-        dataset = RayDataset(self.cfg.dataset_path, self.cfg)
         # 3.2 data process - RayDataset
+        dataset = RayDataset(self.cfg.dataset_path, self.cfg)
         logger.info("Processing ray data...")
         tstart = time.time()
         dataset.process(ops)

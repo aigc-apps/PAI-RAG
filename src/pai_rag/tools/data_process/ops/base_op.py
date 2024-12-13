@@ -1,6 +1,6 @@
 from pai_rag.tools.data_process.utils.registry import Registry
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
-from pai_rag.tools.data_process.utils.cuda_utils import is_cuda_available, calculate_np
+from pai_rag.tools.data_process.utils.cuda_utils import is_cuda_available
 from loguru import logger
 import os
 
@@ -9,7 +9,7 @@ OPERATORS = Registry("Operators")
 
 class BaseOP:
     _accelerator = "cpu"
-    _batched_op = False
+    _batched_op = True
 
     def __init__(self, *args, **kwargs):
         self.batch_size = kwargs.get("batch_size", 1000)
@@ -27,7 +27,14 @@ class BaseOP:
         self.working_dir = kwargs.get("working_dir", None)
         RAY_ENV_MODEL_DIR = os.path.join(self.working_dir, "model_repository")
         os.environ["PAI_RAG_MODEL_DIR"] = RAY_ENV_MODEL_DIR
-        logger.info(f"Init OP with working dir: {RAY_ENV_MODEL_DIR}.")
+        logger.info(
+            f"""Init OP with the following parameters:
+                        Working dir: {RAY_ENV_MODEL_DIR}
+                        Accelerator: {self.accelerator}
+                        Num proc: {self.num_proc}
+                        CPU required: {self.cpu_required}
+                        Mem required: {self.mem_required}"""
+        )
 
     @classmethod
     def is_batched_op(cls):
@@ -38,14 +45,3 @@ class BaseOP:
 
     def use_cuda(self):
         return self.accelerator == "cuda" and is_cuda_available()
-
-    def runtime_np(self):
-        op_proc = calculate_np(
-            self._name,
-            self.mem_required,
-            self.cpu_required,
-            self.num_proc,
-            self.use_cuda(),
-        )
-        logger.debug(f"Op [{self._name}] running with number of procs:{op_proc}")
-        return op_proc

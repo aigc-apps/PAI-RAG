@@ -5,6 +5,8 @@ process:
     oss_store:
       bucket: "pai-rag"
       endpoint: "oss-cn-hangzhou.aliyuncs.com"
+    accelerator: "cpu"
+    mem_required: "6GB"
 
   - op: "pai_rag_splitter"
     type: "Sentence"
@@ -15,7 +17,8 @@ process:
   - op: "pai_rag_embedder"
     source: "huggingface"
     model: "bge-large-zh-v1.5"
-    mem_required: "8GB"
     enable_sparse: true
     enable_multimodal: true
     multimodal_source: "cnclip"
+    accelerator: "cpu"
+    mem_required: "8GB"

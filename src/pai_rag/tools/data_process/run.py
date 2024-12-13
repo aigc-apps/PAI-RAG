@@ -1,7 +1,6 @@
 from loguru import logger
 from pai_rag.tools.data_process.ray_executor import RayExecutor
 import argparse
-from typing import List, Optional
 from pai_rag.tools.data_process.ops.base_op import OPERATORS
 import yaml
 
@@ -30,7 +29,7 @@ def update_op_process(cfg):
     return cfg
 
 
-def init_configs(args: Optional[List[str]] = None):
+def init_configs():
     """
     initialize the jsonargparse parser and parse configs from one of:
         1. POSIX-style commands line args;
@@ -38,7 +37,6 @@ def init_configs(args: Optional[List[str]] = None):
         3. environment variables
         4. hard-coded defaults
 
-    :param args: list of params, e.g., ['--conifg', 'cfg.yaml'], default None.
     :return: a global cfg object used by the Executor or Analyzer
     """
     parser = argparse.ArgumentParser()
