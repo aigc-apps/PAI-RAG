@@ -2,6 +2,32 @@ from loguru import logger
 from pai_rag.tools.data_process.ray_executor import RayExecutor
 import argparse
 from typing import List, Optional
+from pai_rag.tools.data_process.ops.base_op import OPERATORS
+import yaml
+
+
+def extract_parameters(yaml_dict, cfg):
+    extracted_params = {key: value for key, value in yaml_dict.items() if key != "op"}
+    extracted_params["working_dir"] = cfg.working_dir
+    extracted_params["dataset_path"] = cfg.dataset_path
+    extracted_params["export_path"] = cfg.export_path
+    return extracted_params
+
+
+def update_op_process(cfg):
+    op_keys = list(OPERATORS.modules.keys())
+
+    if cfg.process is None:
+        cfg.process = []
+
+    with open(cfg.config) as file:
+        process_cfg = yaml.safe_load(file)
+    for i, process_op in enumerate(process_cfg["process"]):
+        if process_op["op"] in op_keys:
+            cfg.process.append(process_op["op"])
+            cfg.process[i] = {process_op["op"]: extract_parameters(process_op, cfg)}
+
+    return cfg
 
 
 def init_configs(args: Optional[List[str]] = None):
@@ -16,7 +42,6 @@ def init_configs(args: Optional[List[str]] = None):
     :return: a global cfg object used by the Executor or Analyzer
     """
     parser = argparse.ArgumentParser()
-
     parser.add_argument(
         "--config",
         help="Path to a dj basic configuration file.",
@@ -39,8 +64,15 @@ def init_configs(args: Optional[List[str]] = None):
         "directory of this process.",
     )
     parser.add_argument(
-        "--working_dir", type=str, default="/home/xiaowen/xiaowen/github_code/PAI-RAG"
+        "--working_dir",
+        type=str,
+        default="/home/xiaowen/xiaowen/github_code/PAI-RAG",
+        help="Path to working dir for ray cluster.",
     )
+    parser.add_argument("--process", type=int, default=None, help="name of processes")
+    cfg = parser.parse_args()
+    cfg = update_op_process(cfg)
+    return cfg
 
 
 @logger.catch(reraise=True)

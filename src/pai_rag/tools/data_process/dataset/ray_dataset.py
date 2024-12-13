@@ -1,19 +1,25 @@
+import os
 import ray
-from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
-from loguru import logger
-from pai_rag.tools.data_process.utils.process_utils import calculate_np
-from pai_rag.tools.data_process.utils.cuda_util import get_num_gpus
-from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 import time
+from pathlib import Path
+from loguru import logger
+from ray.data.datasource.filename_provider import _DefaultFilenameProvider
+from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
+from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
 
 
 class RayDataset(BaseDataset):
     def __init__(self, dataset_path: str = None, cfg=None) -> None:
-        self.data = ray.data.read_json(dataset_path)
-        self.export_path = self.cfg.export_path
+        if os.path.isfile(dataset_path):
+            self.data = ray.data.read_json(dataset_path)
+        else:
+            files = [
+                str(file) for file in Path(dataset_path).rglob("*") if file.is_file()
+            ]
+            self.data = ray.data.read_json(files)
         self.num_proc = None
         if cfg:
-            self.num_proc = cfg.np
+            self.export_path = cfg.export_path
 
     def process(self, operators):
         if operators is None:
@@ -22,7 +28,7 @@ class RayDataset(BaseDataset):
             operators = [operators]
         for op in operators:
             self._run_single_op(op)
-            self.write_json(f"{self.export_path}/{op._name}")
+            self.write_json(self.export_path, status=op._name)
         return self
 
     def _run_single_op(self, op):
@@ -35,7 +41,6 @@ class RayDataset(BaseDataset):
             self.data = self.data.map_batches(
                 op.process,
                 batch_size=batch_size,
-                batch_format="pyarrow",
                 num_gpus=num_gpus,
             )
         except:  # noqa: E722
@@ -45,9 +50,10 @@ class RayDataset(BaseDataset):
             traceback.print_exc()
             exit(1)
 
-    def write_json(self, export_path):
-        self.data = self.data.repartition(1)
+    def write_json(self, export_path, status):
+        export_path = os.path.join(export_path, status)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
+        self.data = self.data.repartition(1)
         self.data.write_json(
             export_path,
             filename_provider=_DefaultFilenameProvider(

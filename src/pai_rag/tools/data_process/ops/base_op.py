@@ -1,7 +1,6 @@
 from pai_rag.tools.data_process.utils.registry import Registry
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
-from pai_rag.tools.data_process.utils.cuda_util import is_cuda_available
-from pai_rag.tools.data_process.utils.process_utils import calculate_np
+from pai_rag.tools.data_process.utils.cuda_utils import is_cuda_available, calculate_np
 from loguru import logger
 import os
 

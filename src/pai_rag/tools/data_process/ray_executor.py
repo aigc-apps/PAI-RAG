@@ -25,6 +25,7 @@ class RayExecutor:
         :param cfg: optional config dict.
         """
         self.cfg = cfg
+        print("self.cfg", self.cfg)
         # init ray
         logger.info("Initing Ray ...")
         ray.init(runtime_env={"working_dir": self.cfg.working_dir})
@@ -42,29 +43,33 @@ class RayExecutor:
 
         # 2. load data
         logger.info("Loading dataset with Ray...")
-        if op_names[0] == "pai_rag_parser":
+        if "pai_rag_parser" in op_names:
+            idx = op_names.index("pai_rag_parser")
+            op_names.pop(idx)
+            parser_op = ops[idx]
+            ops.pop(idx)
             dataset = FileDataset(self.cfg.dataset_path, self.cfg)
             # 3.1 data process - FileDataset
             logger.info("Processing file data...")
             tstart = time.time()
-            dataset.process([ops[0]])
+            dataset.process([parser_op])
             tend = time.time()
-            logger.info(f"Op {op_names[0]} is done in {tend - tstart:.3f}s.")
+            logger.info(f"Op pai_rag_parser is done in {tend - tstart:.3f}s.")
             # 4.1 data export - FileDataset
             logger.info("Exporting dataset to disk...")
             dataset.write_json(self.cfg.export_path)
-        else:
-            # convert all the path in dataset to absolute path
-            dataset = RayDataset(self.cfg.dataset_path, self.cfg)
+            self.cfg.dataset_path = self.cfg.export_path
 
-            # 3.2 data process - RayDataset
-            logger.info("Processing ray data...")
-            tstart = time.time()
-            dataset.process(ops)
-            tend = time.time()
-            logger.info(f"All Ops are done in {tend - tstart:.3f}s.")
+        # convert all the path in dataset to absolute path
+        dataset = RayDataset(self.cfg.dataset_path, self.cfg)
+        # 3.2 data process - RayDataset
+        logger.info("Processing ray data...")
+        tstart = time.time()
+        dataset.process(ops)
+        tend = time.time()
+        logger.info(f"All Ops are done in {tend - tstart:.3f}s.")
 
-            # 4.2 data export - RayDataset
-            logger.info("Exporting dataset to disk...")
-            dataset.write_json(self.cfg.export_path)
+        # 4.2 data export - RayDataset
+        logger.info("Exporting dataset to disk...")
+        dataset.write_json(self.cfg.export_path, status="overall")
         return dataset

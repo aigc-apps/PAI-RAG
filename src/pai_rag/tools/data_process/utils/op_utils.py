@@ -16,7 +16,10 @@ def load_ops(process_list):
     op_names = []
     for process in process_list:
         op_name, args = list(process.items())[0]
-        ops.append(OPERATORS.modules[op_name](**args))
+        if op_name == "pai_rag_parser":
+            ops.append(OPERATORS.modules[op_name].remote(**args))
+        else:
+            ops.append(OPERATORS.modules[op_name](**args))
         new_process_list.append(process)
         op_names.append(op_name)
 

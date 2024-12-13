@@ -1,14 +1,21 @@
 # process schedule
-# a list of several process operators with their arguments
+# a list of several pai_rag offline process operators with their arguments
 process:
-  - pai_rag_parser:
-  # - splitter:
-  #   type: 'Sentence'
-  #   chunk_size: 100
-  #   chunk_overlap: 20
-  #   enable_multimodal: true
-  # - embed:
-  #   source: 'HuggingFace'
-  #   model: 'bge-large-zh-v1.5'
-  #   mem_required: '8GB'
-  #   enable_sparse: false
+  - op: "pai_rag_parser"
+    oss_store:
+      bucket: "pai-rag"
+      endpoint: "oss-cn-hangzhou.aliyuncs.com"
+
+  - op: "pai_rag_splitter"
+    type: "Sentence"
+    chunk_size: 800
+    chunk_overlap: 20
+    enable_multimodal: true
+
+  - op: "pai_rag_embedder"
+    source: "huggingface"
+    model: "bge-large-zh-v1.5"
+    mem_required: "8GB"
+    enable_sparse: true
+    enable_multimodal: true
+    multimodal_source: "cnclip"
