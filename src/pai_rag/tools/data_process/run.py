@@ -6,6 +6,7 @@ import yaml
 
 
 def extract_parameters(yaml_dict, cfg):
+    print("yaml_dict", yaml_dict)
     extracted_params = {key: value for key, value in yaml_dict.items() if key != "op"}
     extracted_params["working_dir"] = cfg.working_dir
     extracted_params["dataset_path"] = cfg.dataset_path
@@ -15,6 +16,7 @@ def extract_parameters(yaml_dict, cfg):
 
 def update_op_process(cfg):
     op_keys = list(OPERATORS.modules.keys())
+    logger.info(f"Loading all operation keys: {op_keys}")
 
     if cfg.process is None:
         cfg.process = []
@@ -64,7 +66,7 @@ def init_configs():
     parser.add_argument(
         "--working_dir",
         type=str,
-        default="/home/xiaowen/xiaowen/github_code/PAI-RAG",
+        default="/PAI-RAG",
         help="Path to working dir for ray cluster.",
     )
     parser.add_argument("--process", type=int, default=None, help="name of processes")

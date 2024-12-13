@@ -39,10 +39,11 @@ class RayExecutor:
         """
         # 1. extract processes
         logger.info("Preparing process operators...")
+        print("self.cfg.process", self.cfg.process)
         ops, op_names = load_ops(self.cfg.process)
 
         # 2. load data
-        logger.info("Loading dataset with Ray...")
+        logger.info(f"Loading dataset with Ray for {op_names}...")
         if "pai_rag_parser" in op_names:
             idx = op_names.index("pai_rag_parser")
             op_names.pop(idx)
