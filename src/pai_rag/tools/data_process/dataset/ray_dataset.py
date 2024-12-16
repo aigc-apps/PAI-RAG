@@ -6,6 +6,7 @@ from loguru import logger
 from ray.data.datasource.filename_provider import _DefaultFilenameProvider
 from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
+import copy
 
 
 class RayDataset(BaseDataset):
@@ -16,7 +17,7 @@ class RayDataset(BaseDataset):
             files = [
                 str(file) for file in Path(dataset_path).rglob("*") if file.is_file()
             ]
-            self.data = ray.data.read_json(files, override_num_blocks=cfg.num_blocks)
+            self.data = ray.data.read_json(files)
         self.num_proc = None
         if cfg:
             self.export_path = cfg.export_path
@@ -44,6 +45,7 @@ class RayDataset(BaseDataset):
             self.data = self.data.map_batches(
                 op.process,
                 batch_size=batch_size,
+                num_cpus=op.cpu_required,
                 num_gpus=num_gpus,
             )
         except:  # noqa: E722
@@ -58,7 +60,8 @@ class RayDataset(BaseDataset):
         export_path = os.path.join(self.export_path, status)
         os.makedirs(export_path, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        self.data.write_json(
+        export_data = copy.deepcopy(self.data)
+        export_data.write_json(
             export_path,
             filename_provider=_DefaultFilenameProvider(
                 dataset_uuid=timestamp, file_format="jsonl"
