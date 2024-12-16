@@ -34,13 +34,13 @@ class FileDataset(BaseDataset):
             exit(1)
 
     def write_json(self, export_path):
-        if os.path.isdir(export_path):
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            export_path = os.path.join(
-                export_path, "pai_rag_parser", f"results_{timestamp}.jsonl"
-            )
-            os.makedirs(os.path.dirname(export_path), exist_ok=True)
-        with open(export_path, "a", encoding="utf-8") as f:
+        if not os.path.exists(export_path):
+            os.makedirs(export_path, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        export_file_path = os.path.join(
+            export_path, "pai_rag_parser", f"results_{timestamp}.jsonl"
+        )
+        with open(export_file_path, "a", encoding="utf-8") as f:
             for result in self.data:
                 json_line = json.dumps(result, ensure_ascii=False)
                 f.write(json_line + "\n")

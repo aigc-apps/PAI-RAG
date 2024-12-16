@@ -54,9 +54,11 @@ class RayDataset(BaseDataset):
             exit(1)
 
     def write_json(self, export_path, status):
+        if not os.path.exists(export_path):
+            os.makedirs(export_path, exist_ok=True)
         export_path = os.path.join(export_path, status)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        self.data = self.data.repartition(1)
+        # self.data = self.data.repartition(1)
         self.data.write_json(
             export_path,
             filename_provider=_DefaultFilenameProvider(

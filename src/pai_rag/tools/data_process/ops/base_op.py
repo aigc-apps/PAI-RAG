@@ -12,7 +12,7 @@ class BaseOP:
     _batched_op = True
 
     def __init__(self, *args, **kwargs):
-        self.batch_size = kwargs.get("batch_size", 1000)
+        self.batch_size = kwargs.get("batch_size", 10)
         _accelerator = kwargs.get("accelerator", None)
         if _accelerator is not None:
             self.accelerator = _accelerator
