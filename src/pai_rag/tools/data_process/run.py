@@ -69,6 +69,13 @@ def init_configs():
         default="/PAI-RAG",
         help="Path to working dir for ray cluster.",
     )
+    parser.add_argument(
+        "--num_blocks",
+        type=int,
+        default=4,
+        help="Number of blocks to split the dataset into. This is useful "
+        "for large datasets that cannot fit into memory.",
+    )
     parser.add_argument("--process", type=int, default=None, help="name of processes")
     cfg = parser.parse_args()
     cfg = update_op_process(cfg)

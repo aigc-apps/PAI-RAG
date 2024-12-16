@@ -16,7 +16,7 @@ class RayDataset(BaseDataset):
             files = [
                 str(file) for file in Path(dataset_path).rglob("*") if file.is_file()
             ]
-            self.data = ray.data.read_json(files)
+            self.data = ray.data.read_json(files, override_num_blocks=cfg.num_blocks)
         self.num_proc = None
         if cfg:
             self.export_path = cfg.export_path

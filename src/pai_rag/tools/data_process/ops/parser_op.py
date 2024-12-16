@@ -6,7 +6,6 @@ from pai_rag.tools.data_process.utils.formatters import convert_document_to_dict
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.integrations.readers.pai.pai_data_reader import BaseDataReaderConfig
-from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.core.rag_module import resolve
 from pai_rag.utils.oss_client import OssClient
 
@@ -26,21 +25,15 @@ class Parser(BaseOP):
         super().__init__(*args, **kwargs)
         self.download_model_list = ["PDF-Extract-Kit"]
         self.load_models(self.download_model_list)
-        data_reader_config = BaseDataReaderConfig()
+        self.data_reader_config = BaseDataReaderConfig()
         if kwargs.get("oss_store", None):
-            oss_store = resolve(
+            self.oss_store = resolve(
                 cls=OssClient,
                 bucket_name=kwargs["oss_store"]["bucket"],
                 endpoint=kwargs["oss_store"]["endpoint"],
             )
         else:
-            oss_store = None
-
-        self.data_reader = resolve(
-            cls=PaiDataReader,
-            reader_config=data_reader_config,
-            oss_store=oss_store,
-        )
+            self.oss_store = None
 
         logger.info("ParseActor init finished.")
 
@@ -54,5 +47,13 @@ class Parser(BaseOP):
         download_models.load_mineru_config(self.accelerator)
 
     def process(self, input_file):
-        documents = self.data_reader.load_data(file_path_or_directory=input_file)
+        from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
+
+        data_reader = resolve(
+            cls=PaiDataReader,
+            reader_config=self.data_reader_config,
+            oss_store=self.oss_store,
+        )
+
+        documents = data_reader.load_data(file_path_or_directory=input_file)
         return convert_document_to_dict(documents[0])
