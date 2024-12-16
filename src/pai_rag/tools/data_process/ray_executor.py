@@ -50,26 +50,22 @@ class RayExecutor:
             parser_op = ops[idx]
             ops.pop(idx)
             dataset = FileDataset(self.cfg.dataset_path, self.cfg)
-            # 3.1 data process - FileDataset
+            # 3.1 data process and export - FileDataset
             logger.info("Processing file data...")
             tstart = time.time()
             dataset.process([parser_op])
             tend = time.time()
             logger.info(f"Op pai_rag_parser is done in {tend - tstart:.3f}s.")
-            # 4.1 data export - FileDataset
-            logger.info("Exporting dataset to disk...")
-            dataset.write_json(self.cfg.export_path)
+            ray.kill(parser_op)
             self.cfg.dataset_path = self.cfg.export_path
 
-        # 3.2 data process - RayDataset
-        dataset = RayDataset(self.cfg.dataset_path, self.cfg)
-        logger.info("Processing ray data...")
-        tstart = time.time()
-        dataset.process(ops)
-        tend = time.time()
-        logger.info(f"All Ops are done in {tend - tstart:.3f}s.")
+        if len(ops) > 0:
+            # 3.2 data process and export - RayDataset
+            dataset = RayDataset(self.cfg.dataset_path, self.cfg)
+            logger.info("Processing ray data...")
+            tstart = time.time()
+            dataset.process(ops)
+            tend = time.time()
+            logger.info(f"All Ops are done in {tend - tstart:.3f}s.")
 
-        # 4.2 data export - RayDataset
-        logger.info("Exporting dataset to disk...")
-        dataset.write_json(self.cfg.export_path, status="overall")
-        return dataset
+        logger.info("Done.")

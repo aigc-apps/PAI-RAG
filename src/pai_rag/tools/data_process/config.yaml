@@ -5,7 +5,8 @@ process:
     oss_store:
       bucket: "pai-rag"
       endpoint: "oss-cn-hangzhou.aliyuncs.com"
-    accelerator: "cpu"
+    accelerator: "cpu" # cpu or cuda
+    cpu_required: 6
     mem_required: "6GB"
 
   - op: "pai_rag_splitter"
@@ -13,6 +14,7 @@ process:
     chunk_size: 800
     chunk_overlap: 20
     enable_multimodal: true
+    cpu_required: 2
 
   - op: "pai_rag_embedder"
     source: "huggingface"
@@ -20,5 +22,6 @@ process:
     enable_sparse: true
     enable_multimodal: true
     multimodal_source: "cnclip"
-    accelerator: "cpu"
-    mem_required: "8GB"
+    accelerator: "cpu" # cpu or cuda
+    cpu_required: 6
+    mem_required: "6GB"

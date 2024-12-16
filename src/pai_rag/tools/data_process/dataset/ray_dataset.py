@@ -28,14 +28,14 @@ class RayDataset(BaseDataset):
             operators = [operators]
         for op in operators:
             self._run_single_op(op)
-            self.write_json(self.export_path, status=op._name)
+            self.write_json(status=op._name)
         return self
 
     def _run_single_op(self, op):
         op_proc = calculate_np(
             op._name, op.mem_required, op.cpu_required, self.num_proc, op.use_cuda()
         )
-        num_gpus = get_num_gpus(op, op_proc)
+        num_gpus = get_num_gpus(op.use_cuda(), op_proc)
         try:
             batch_size = getattr(op, "batch_size", 1)
             logger.info(
@@ -53,12 +53,11 @@ class RayDataset(BaseDataset):
             traceback.print_exc()
             exit(1)
 
-    def write_json(self, export_path, status):
-        if not os.path.exists(export_path):
-            os.makedirs(export_path, exist_ok=True)
-        export_path = os.path.join(export_path, status)
+    def write_json(self, status):
+        logger.info(f"Exporting {status} dataset to disk...")
+        export_path = os.path.join(self.export_path, status)
+        os.makedirs(export_path, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        # self.data = self.data.repartition(1)
         self.data.write_json(
             export_path,
             filename_provider=_DefaultFilenameProvider(
@@ -66,3 +65,4 @@ class RayDataset(BaseDataset):
             ),
             force_ascii=False,
         )
+        logger.info(f"Exported dataset to {export_path} completed.")

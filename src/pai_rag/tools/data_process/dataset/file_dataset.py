@@ -1,10 +1,10 @@
-from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
-from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
 import ray
 import json
-from loguru import logger
 import os
 import time
+from loguru import logger
+from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
+from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
 
 
 class FileDataset(BaseDataset):
@@ -20,6 +20,7 @@ class FileDataset(BaseDataset):
             operators = [operators]
         for op in operators:
             self._run_single_op(op)
+            self.write_json("pai_rag_parser")
         return self
 
     def _run_single_op(self, op):
@@ -33,14 +34,14 @@ class FileDataset(BaseDataset):
             traceback.print_exc()
             exit(1)
 
-    def write_json(self, export_path):
-        if not os.path.exists(export_path):
-            os.makedirs(export_path, exist_ok=True)
+    def write_json(self, status):
+        logger.info("Exporting parser dataset to disk...")
+        export_path = os.path.join(self.export_path, status)
+        os.makedirs(export_path, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        export_file_path = os.path.join(
-            export_path, "pai_rag_parser", f"results_{timestamp}.jsonl"
-        )
-        with open(export_file_path, "a", encoding="utf-8") as f:
+        export_file_path = os.path.join(export_path, f"results_{timestamp}.jsonl")
+        with open(export_file_path, "w") as f:
             for result in self.data:
                 json_line = json.dumps(result, ensure_ascii=False)
                 f.write(json_line + "\n")
+        logger.info(f"Exported dataset to {export_file_path} completed.")
