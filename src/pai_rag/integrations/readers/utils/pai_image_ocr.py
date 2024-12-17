@@ -20,15 +20,15 @@ def check_merge_method(in_region):
     if len(in_region["res"]) > 0:
         text_bbox = in_region["bbox"]
         text_x1 = text_bbox[0]
-        frist_line_box = in_region["res"][0]["text_region"]
-        point_1 = frist_line_box[0]
-        point_2 = frist_line_box[2]
-        frist_line_x1 = point_1[0]
-        frist_line_height = abs(point_2[1] - point_1[1])
-        x1_distance = frist_line_x1 - text_x1
+        first_line_box = in_region["res"][0]["text_region"]
+        point_1 = first_line_box[0]
+        point_2 = first_line_box[2]
+        first_line_x1 = point_1[0]
+        first_line_height = abs(point_2[1] - point_1[1])
+        x1_distance = first_line_x1 - text_x1
         return (
             convert_text_space_head
-            if x1_distance > frist_line_height
+            if x1_distance > first_line_height
             else convert_text_space_tail
         )
 
@@ -46,7 +46,7 @@ def convert_text_space_head(in_region):
     """
     text = ""
     pre_x = None
-    frist_line = True
+    first_line = True
     for i, res in enumerate(in_region["res"]):
         point1 = res["text_region"][0]
         point2 = res["text_region"][2]
@@ -58,23 +58,23 @@ def convert_text_space_head(in_region):
             continue
 
         x1 = point1[0]
-        if frist_line:
+        if first_line:
             if abs(pre_x - x1) < h:
                 text += "\n\n"
                 text += res["text"]
-                frist_line = True
+                first_line = True
             else:
                 text += res["text"]
-                frist_line = False
+                first_line = False
         else:
             same_paragh = abs(pre_x - x1) < h
             if same_paragh:
                 text += res["text"]
-                frist_line = False
+                first_line = False
             else:
                 text += "\n\n"
                 text += res["text"]
-                frist_line = True
+                first_line = True
         pre_x = x1
     return text
 
@@ -91,7 +91,7 @@ def convert_text_space_tail(in_region):
         The text content of the current text box.
     """
     text = ""
-    frist_line = True
+    first_line = True
     text_bbox = in_region["bbox"]
     width = text_bbox[2] - text_bbox[0]
     for i, res in enumerate(in_region["res"]):
@@ -102,13 +102,13 @@ def convert_text_space_tail(in_region):
         full_row_threshold = width - row_height
         is_full = row_width >= full_row_threshold
 
-        if frist_line:
+        if first_line:
             text += "\n\n"
             text += res["text"]
         else:
             text += res["text"]
 
-        frist_line = not is_full
+        first_line = not is_full
     return text
 
 
@@ -144,3 +144,6 @@ def plain_image_ocr(image_path):
     _, w, _ = img.shape
     res = sorted_layout_boxes(result, w)
     return convert_info_to_text(res, image_name)
+
+
+print(plain_image_ocr("tests/testdata/data/image_data/用户故事.jpg"))
