@@ -1,3 +1,4 @@
+import ray
 import asyncio
 import numpy as np
 from loguru import logger
@@ -14,6 +15,7 @@ OP_NAME = "pai_rag_embedder"
 
 
 @OPERATORS.register_module(OP_NAME)
+@ray.remote
 class Embedder(BaseOP):
     """Mapper to generate samples whose captions are generated based on
     another model and the figure."""
@@ -84,38 +86,36 @@ class Embedder(BaseOP):
         return results
 
     def process(self, nodes):
-        text_indices = np.where(nodes["type"] == "text")[0]
-        image_indices = np.where(nodes["type"] == "image")[0]
-        if text_indices.size > 0:
-            text_contents = nodes["text"][text_indices]
-            text_embeddings = self.embed_model.get_text_embedding_batch(text_contents)
-            for idx, emb in zip(text_indices, text_embeddings):
-                nodes["embedding"][idx] = np.array(emb)
+        text_nodes = [node for node in nodes if node["type"] == "text"]
+        image_nodes = [node for node in nodes if node["type"] == "image"]
+        if len(text_nodes) > 0:
+            text_contents = [node["text"] for node in text_nodes]
+            embeddings = self.embed_model.get_text_embedding_batch(text_contents)
             if self.sparse_embed_model:
                 sparse_embeddings = self.sparse_embed_model.encode_documents(
-                    list(text_contents)
+                    text_contents
                 )
-                for idx, emb in zip(text_indices, sparse_embeddings):
-                    nodes["sparse_embedding"][idx] = emb
+            else:
+                sparse_embeddings = [None] * len(text_contents)
+            # 回填embedding字段
+            for node, embedding, sparse_embedding in zip(
+                text_nodes, embeddings, sparse_embeddings
+            ):
+                node["embedding"] = embedding
+                node["sparse_embedding"] = sparse_embedding
         else:
-            logger.info("No image nodes to process.")
+            logger.info("No text nodes to process.")
 
-        if image_indices.size > 0 and self.enable_multimodal:
+        if len(image_nodes) > 0:
             multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
-            logger.info(
-                f"Multimodal embed model loaded on {self.model_dir} {self.mm_embedder_cfg}."
-            )
-            images = asyncio.run(
-                self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
-            )
-
+            image_urls = [node["image_url"] for node in image_nodes]
+            images = asyncio.run(self.load_images_from_nodes(image_urls))
             image_embeddings = multimodal_embed_model.get_image_embedding_batch(images)
-            for idx, emb in zip(image_indices, image_embeddings):
-                nodes["embedding"][idx] = np.array(emb)
+            for node, emb in zip(image_nodes, image_embeddings):
+                node["embedding"] = emb
         else:
             logger.info("No image nodes to process.")
 
-        nodes["embedding"] = np.array(nodes["embedding"], dtype=object)
-        return self.process_extra_metadata(nodes)
+        return text_nodes + image_nodes

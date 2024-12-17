@@ -32,7 +32,14 @@ class RayExecutor:
         logger.info(
             f"Initing Ray with working_dir: {self.cfg.working_dir}, set env: PAI_RAG_MODEL_DIR = {ray_env_model_dir}..."
         )
-        ray.init(runtime_env={"working_dir": self.cfg.working_dir})
+        ray.init(
+            runtime_env={
+                "excludes": [
+                    "/home/xiaowen/xiaowen/github_code/PAI-RAG/model_repository"
+                ],
+                "working_dir": self.cfg.working_dir,
+            }
+        )
 
     def run(self):
         """

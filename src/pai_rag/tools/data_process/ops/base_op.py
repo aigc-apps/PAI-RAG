@@ -1,8 +1,9 @@
+import os
+from loguru import logger
 from pai_rag.tools.data_process.utils.registry import Registry
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import is_cuda_available
-from loguru import logger
-import os
+
 
 OPERATORS = Registry("Operators")
 
@@ -12,6 +13,7 @@ class BaseOP:
     _batched_op = True
 
     def __init__(self, *args, **kwargs):
+        self.op_name = kwargs.get("op_name", "default")
         self.batch_size = kwargs.get("batch_size", 10)
         _accelerator = kwargs.get("accelerator", None)
         if _accelerator is not None:
@@ -46,3 +48,6 @@ class BaseOP:
 
     def use_cuda(self):
         return self.accelerator == "cuda" and is_cuda_available()
+
+    def get_name(self):
+        return self.op_name

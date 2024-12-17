@@ -20,11 +20,12 @@ class FileDataset(BaseDataset):
             operators = [operators]
         for op in operators:
             self._run_single_op(op)
-            self.write_json("pai_rag_parser")
+            self.write_json(status=ray.get(op.get_name.remote()))
         return self
 
     def _run_single_op(self, op):
         try:
+            logger.info(f"Running Op [{ray.get(op.get_name.remote())}].")
             run_tasks = [op.process.remote(input_file) for input_file in self.data]
             self.data = ray.get(run_tasks)
         except:  # noqa: E722
