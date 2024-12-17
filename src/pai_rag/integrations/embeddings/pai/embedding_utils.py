@@ -16,7 +16,9 @@ from loguru import logger
 from pai_rag.utils.download_models import ModelScopeDownloader
 
 
-def create_embedding(embed_config: PaiBaseEmbeddingConfig):
+def create_embedding(
+    embed_config: PaiBaseEmbeddingConfig, pai_rag_model_dir: str = None
+):
     if isinstance(embed_config, OpenAIEmbeddingConfig):
         embed_model = OpenAIEmbedding(
             api_key=embed_config.api_key,
@@ -36,7 +38,9 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."
         )
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
-        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        pai_rag_model_dir = pai_rag_model_dir or os.getenv(
+            "PAI_RAG_MODEL_DIR", "./model_repository"
+        )
         pai_model_path = os.path.join(pai_rag_model_dir, embed_config.model)
         if not os.path.exists(pai_model_path):
             logger.info(
@@ -61,7 +65,6 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
         )
 
     elif isinstance(embed_config, CnClipEmbeddingConfig):
-        pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
         print("create_embedding pai_rag_model_dir:", pai_rag_model_dir)
         pai_model_path = os.path.join(
             pai_rag_model_dir, "chinese-clip-vit-large-patch14"

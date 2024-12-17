@@ -101,8 +101,12 @@ class Embedder(BaseOP):
         else:
             logger.info("No image nodes to process.")
 
-        multimodal_embed_model = create_embedding(self.mm_embedder_cfg)
-        logger.info(f"Multimodal embed model loaded {self.mm_embedder_cfg}.")
+        multimodal_embed_model = create_embedding(
+            self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
+        )
+        logger.info(
+            f"Multimodal embed model loaded on {self.model_dir} {self.mm_embedder_cfg}."
+        )
         if image_indices.size > 0 and self.enable_multimodal:
             images = asyncio.run(
                 self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
