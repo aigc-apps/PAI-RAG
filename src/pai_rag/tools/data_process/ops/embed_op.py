@@ -64,10 +64,7 @@ class Embedder(BaseOP):
             )
             logger.info("Sparse embed model loaded.")
 
-        self.multimodal_embed_model = None
-        if kwargs.get("enable_multimodal", None):
-            self.multimodal_embed_model = create_embedding(self.mm_embedder_cfg)
-            logger.info(f"Multimodal embed model loaded {self.mm_embedder_cfg}.")
+        self.enable_multimodal = kwargs.get("enable_multimodal", None)
 
     def process_extra_metadata(self, nodes):
         excluded_embed_metadata_keys = nodes["excluded_embed_metadata_keys"]
@@ -104,13 +101,14 @@ class Embedder(BaseOP):
         else:
             logger.info("No image nodes to process.")
 
-        if image_indices.size > 0 and self.multimodal_embed_model:
+        multimodal_embed_model = create_embedding(self.mm_embedder_cfg)
+        logger.info(f"Multimodal embed model loaded {self.mm_embedder_cfg}.")
+        if image_indices.size > 0 and self.enable_multimodal:
             images = asyncio.run(
                 self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
             )
-            image_embeddings = self.multimodal_embed_model.get_image_embedding_batch(
-                images
-            )
+
+            image_embeddings = multimodal_embed_model.get_image_embedding_batch(images)
             for idx, emb in zip(image_indices, image_embeddings):
                 nodes["embedding"][idx] = np.array(emb)
         else:

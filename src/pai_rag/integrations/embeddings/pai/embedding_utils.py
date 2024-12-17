@@ -62,6 +62,7 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig):
 
     elif isinstance(embed_config, CnClipEmbeddingConfig):
         pai_rag_model_dir = os.getenv("PAI_RAG_MODEL_DIR", "./model_repository")
+        print("create_embedding pai_rag_model_dir:", pai_rag_model_dir)
         pai_model_path = os.path.join(
             pai_rag_model_dir, "chinese-clip-vit-large-patch14"
         )

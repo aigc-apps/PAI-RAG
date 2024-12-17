@@ -1,3 +1,4 @@
+import os
 import ray
 import time
 from loguru import logger
@@ -25,10 +26,11 @@ class RayExecutor:
         :param cfg: optional config dict.
         """
         self.cfg = cfg
-        print("self.cfg", self.cfg)
         # init ray
-        logger.info("Initing Ray ...")
-        ray.init(runtime_env={"working_dir": self.cfg.working_dir})
+        ray_env_model_dir = os.path.join(self.cfg.working_dir, "model_repository")
+        logger.info(f"Initing Ray with env: PAI_RAG_MODEL_DIR = {ray_env_model_dir}...")
+        os.environ["PAI_RAG_MODEL_DIR"] = ray_env_model_dir
+        ray.init(runtime_env={"PAI_RAG_MODEL_DIR": ray_env_model_dir})
 
     def run(self):
         """
