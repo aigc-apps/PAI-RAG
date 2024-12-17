@@ -28,9 +28,11 @@ class RayExecutor:
         self.cfg = cfg
         # init ray
         ray_env_model_dir = os.path.join(self.cfg.working_dir, "model_repository")
-        logger.info(f"Initing Ray with env: PAI_RAG_MODEL_DIR = {ray_env_model_dir}...")
         os.environ["PAI_RAG_MODEL_DIR"] = ray_env_model_dir
-        ray.init(runtime_env={"PAI_RAG_MODEL_DIR": ray_env_model_dir})
+        logger.info(
+            f"Initing Ray with working_dir: {self.cfg.working_dir}, set env: PAI_RAG_MODEL_DIR = {ray_env_model_dir}..."
+        )
+        ray.init(runtime_env={"working_dir": self.cfg.working_dir})
 
     def run(self):
         """
