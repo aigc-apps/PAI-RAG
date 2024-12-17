@@ -1,4 +1,3 @@
-import os
 import asyncio
 import numpy as np
 from loguru import logger
@@ -10,7 +9,6 @@ from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 OP_NAME = "pai_rag_embedder"
 
@@ -38,6 +36,7 @@ class Embedder(BaseOP):
         if self.embedder_cfg.enable_sparse:
             self.download_model_list.append("bge-m3")
         if kwargs.get("enable_multimodal", None):
+            self.enable_multimodal = True
             self.mm_embedder_cfg = parse_embed_config(
                 {"source": kwargs.get("multimodal_source", None)}
             )
@@ -49,7 +48,7 @@ class Embedder(BaseOP):
         logger.info(f"Downloading models {model_list}.")
         download_models = ModelScopeDownloader(
             fetch_config=True,
-            download_directory_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR),
+            download_directory_path=self.model_dir,
         )
         for model_name in model_list:
             download_models.load_model(model=model_name)
@@ -60,11 +59,9 @@ class Embedder(BaseOP):
         self.sparse_embed_model = None
         if self.embedder_cfg.enable_sparse:
             self.sparse_embed_model = BGEM3SparseEmbeddingFunction(
-                model_name_or_path=os.getenv("PAI_RAG_MODEL_DIR", DEFAULT_MODEL_DIR)
+                model_name_or_path=self.model_dir
             )
             logger.info("Sparse embed model loaded.")
-
-        self.enable_multimodal = kwargs.get("enable_multimodal", None)
 
     def process_extra_metadata(self, nodes):
         excluded_embed_metadata_keys = nodes["excluded_embed_metadata_keys"]
@@ -101,13 +98,13 @@ class Embedder(BaseOP):
         else:
             logger.info("No image nodes to process.")
 
-        multimodal_embed_model = create_embedding(
-            self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
-        )
-        logger.info(
-            f"Multimodal embed model loaded on {self.model_dir} {self.mm_embedder_cfg}."
-        )
         if image_indices.size > 0 and self.enable_multimodal:
+            multimodal_embed_model = create_embedding(
+                self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
+            )
+            logger.info(
+                f"Multimodal embed model loaded on {self.model_dir} {self.mm_embedder_cfg}."
+            )
             images = asyncio.run(
                 self.load_images_from_nodes(list(nodes["image_url"][image_indices]))
             )
