@@ -35,8 +35,10 @@ class Embedder(BaseOP):
             self.download_model_list.append(self.embedder_cfg.model)
         if self.embedder_cfg.enable_sparse:
             self.download_model_list.append("bge-m3")
-        if kwargs.get("enable_multimodal", None):
-            self.enable_multimodal = True
+        self.enable_multimodal = (
+            True if kwargs.get("enable_multimodal", None) else False
+        )
+        if self.enable_multimodal:
             self.mm_embedder_cfg = parse_embed_config(
                 {"source": kwargs.get("multimodal_source", None)}
             )
