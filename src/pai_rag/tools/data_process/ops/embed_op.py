@@ -108,11 +108,11 @@ class Embedder(BaseOP):
             logger.info("No text nodes to process.")
 
         if len(image_nodes) > 0:
-            print("image_nodes", image_nodes)
+            print("image_nodes", len(image_nodes), image_nodes)
             multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
-            image_urls = [node["image_url"] for node in image_nodes]
+            image_urls = [node["metadata"]["image_url"] for node in image_nodes]
             logger.info("image_urls", image_urls)
             image_list = await self.load_images_from_nodes(image_urls)
             # active_image_list = []
