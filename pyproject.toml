@@ -105,6 +105,7 @@ python-pptx = "^1.0.2"
 aspose-slides = "^24.10.0"
 ultralytics = "8.3.43"
 datasketch = "^1.6.5"
+primp = "0.9.1"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:run"
