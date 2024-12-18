@@ -86,6 +86,7 @@ class Embedder(BaseOP):
         return results
 
     async def process(self, nodes):
+        print("nodes", nodes)
         text_nodes = [node for node in nodes if node["type"] == "text"]
         image_nodes = [node for node in nodes if node["type"] == "image"]
         if len(text_nodes) > 0:
@@ -107,6 +108,7 @@ class Embedder(BaseOP):
             logger.info("No text nodes to process.")
 
         if len(image_nodes) > 0:
+            print("image_nodes", image_nodes)
             multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
