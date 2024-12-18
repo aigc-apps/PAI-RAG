@@ -35,26 +35,7 @@ class RayDataset(ABC):
                 if batch:
                     yield batch
 
-    # def process(self, operators):
-    #     if operators is None:
-    #         return self
-    #     if not isinstance(operators, list):
-    #         operators = [operators]
-    #     for op in operators:
-    #         op_name= ray.get(op.get_name.remote())
-    #         self._run_single_op(op, op_name)
-    #         self.write_json(status=op_name)
-    #     return self
     def process(self, operator, op_name):
-        # if operators is None:
-        #     return self
-        # if not isinstance(operators, list):
-        #     operators = [operators]
-        # for op in operators:
-        #     op_name= ray.get(op.get_name.remote())
-        #     self._run_single_op(op, op_name)
-        #     self.write_json(status=op_name)
-        # return self
         self._run_single_op(operator, op_name)
         self.write_json(status=op_name)
 
@@ -71,7 +52,7 @@ class RayDataset(ABC):
             exit(1)
 
     def write_json(self, status):
-        logger.info("Exporting parser dataset to disk...")
+        logger.info(f"Exporting {status} dataset to disk...")
         export_path = os.path.join(self.export_path, status)
         os.makedirs(export_path, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")

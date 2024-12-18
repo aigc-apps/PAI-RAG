@@ -40,7 +40,7 @@ class FileDataset(ABC):
             exit(1)
 
     def write_json(self, status):
-        logger.info("Exporting parser dataset to disk...")
+        logger.info(f"Exporting {status} dataset to disk...")
         export_path = os.path.join(self.export_path, status)
         os.makedirs(export_path, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")

@@ -63,12 +63,12 @@ class RayExecutor:
                     self.cfg,
                 )
             op = load_op(op_name, self.cfg.process)
-            logger.info("Processing op {op_name} ...")
+            logger.info(f"Processing op {op_name} ...")
             tstart = time.time()
             dataset.process(op, op_name)
             tend = time.time()
-            logger.info(f"Op {op_name} is done in {tend - tstart:.3f}s.")
             ray.kill(op)
+            logger.info(f"Op {op_name} is done in {tend - tstart:.3f}s.")
 
         all_tend = time.time()
         logger.info(f"All ops are done in {all_tend - all_tstart:.3f}s.")

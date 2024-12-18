@@ -3,7 +3,6 @@ from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
 
-
 OPERATIONS = ["pai_rag_parser", "pai_rag_splitter", "pai_rag_embedder"]
 
 
@@ -30,7 +29,7 @@ def load_op(op_name, process_list):
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
                 num_gpus = get_num_gpus(True, op_proc)
                 logger.info(
-                    f"Op {op_name} will be executed on {num_cpus} cpus and {num_gpus} GPUs."
+                    f"Op {op_name} will be executed on cuda env and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
                 RemoteGpuOp = OPERATORS.modules[op_name].options(
                     num_cpus=num_cpus, num_gpus=num_gpus
@@ -38,7 +37,9 @@ def load_op(op_name, process_list):
                 return RemoteGpuOp.remote(**op_args)
             else:
                 num_cpus = op_args.get("cpu_required", 1)
-                logger.info(f"Op {op_name} will be executed on {num_cpus} cpus.")
+                logger.info(
+                    f"Op {op_name} will be executed on cpu env and use {num_cpus} cpus."
+                )
                 RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
                 return RemoteCpuOp.remote(**op_args)
         else:
