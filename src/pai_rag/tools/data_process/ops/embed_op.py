@@ -85,7 +85,7 @@ class Embedder(BaseOP):
         results = await asyncio.gather(*tasks)
         return results
 
-    def process(self, nodes):
+    async def process(self, nodes):
         text_nodes = [node for node in nodes if node["type"] == "text"]
         image_nodes = [node for node in nodes if node["type"] == "image"]
         if len(text_nodes) > 0:
@@ -111,7 +111,7 @@ class Embedder(BaseOP):
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
             image_urls = [node["image_url"] for node in image_nodes]
-            images = asyncio.run(self.load_images_from_nodes(image_urls))
+            images = await self.load_images_from_nodes(image_urls)
             image_embeddings = multimodal_embed_model.get_image_embedding_batch(images)
             for node, emb in zip(image_nodes, image_embeddings):
                 node["embedding"] = emb

@@ -21,26 +21,26 @@ def load_op(op_name, process_list):
     for process in process_list:
         name, op_args = list(process.items())[0]
         if name == op_name:
+            mem_required = size_to_bytes(op_args.get("mem_required", "1GB")) / 1024**3
+            num_cpus = op_args.get("cpu_required", 1)
             if op_args.get("accelerator", "cpu") == "cuda":
-                mem_required = (
-                    size_to_bytes(op_args.get("mem_required", "1GB")) / 1024**3
-                )
-                num_cpus = op_args.get("cpu_required", 1)
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
                 num_gpus = get_num_gpus(True, op_proc)
                 logger.info(
-                    f"Op {op_name} will be executed on cuda env and use {num_cpus} cpus and {num_gpus} GPUs."
+                    f"Op {op_name} will be executed on cuda env with op_proc {op_proc} and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
                 RemoteGpuOp = OPERATORS.modules[op_name].options(
-                    num_cpus=num_cpus, num_gpus=num_gpus
+                    num_cpus=num_cpus, num_gpus=num_gpus, max_concurrency=op_proc
                 )
                 return RemoteGpuOp.remote(**op_args)
             else:
-                num_cpus = op_args.get("cpu_required", 1)
+                op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
                 logger.info(
-                    f"Op {op_name} will be executed on cpu env and use {num_cpus} cpus."
+                    f"Op {op_name} will be executed on cpu env with op_proc {op_proc} and use {num_cpus} cpus."
                 )
-                RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
+                RemoteCpuOp = OPERATORS.modules[op_name].options(
+                    num_cpus=num_cpus, max_concurrency=op_proc
+                )
                 return RemoteCpuOp.remote(**op_args)
         else:
             continue

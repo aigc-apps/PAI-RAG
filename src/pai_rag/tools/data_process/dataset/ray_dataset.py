@@ -45,7 +45,7 @@ class RayDataset(ABC):
             run_tasks = [op.process.remote(batch_data) for batch_data in self.data]
             self.data = ray.get(run_tasks)
         except:  # noqa: E722
-            logger.error(f"An error occurred during Op [{op._name}].")
+            logger.error(f"An error occurred during Op [{op_name}].")
             import traceback
 
             traceback.print_exc()
