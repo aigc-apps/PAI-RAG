@@ -112,6 +112,10 @@ class Embedder(BaseOP):
             multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
+            for node in image_nodes:
+                print("image_nodes node", node)
+                print('node["metadata"]', node["metadata"])
+                print('node["metadata"]["image_url"]', node["metadata"]["image_url"])
             image_urls = [node["metadata"]["image_url"] for node in image_nodes]
             logger.info("image_urls", image_urls)
             image_list = await self.load_images_from_nodes(image_urls)

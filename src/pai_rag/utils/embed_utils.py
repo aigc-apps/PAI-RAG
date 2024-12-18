@@ -25,9 +25,11 @@ async def download_url(url):
         logger.info("download_url url", url)
         try:
             response = await client.get(url, timeout=timeout)
-            logger.info(response.text)
+            logger.debug(response.text)
         except httpx.RequestError as exc:
-            logger.info(f"An error occurred while requesting {exc.request.url!r}.")
+            logger.info(
+                f"An error occurred while requesting {exc.request.url!r} ,  exc: {exc}."
+            )
         except httpx.TimeoutException as exc:
             logger.info(f"Request timed out: {exc.request.url!r}.")
         except httpx.HTTPStatusError as exc:
