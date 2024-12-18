@@ -16,7 +16,23 @@ async def download_url(url):
     image_stream = BytesIO()
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, timeout=60.0)
+        timeout = httpx.Timeout(
+            connect=5.0,  # 连接超时时间为5秒
+            read=10.0,  # 读取超时时间为10秒
+            write=10.0,  # 写入超时时间为10秒
+            pool=20.0,  # 连接池超时时间为20秒
+        )
+        logger.info("download_url url", url)
+        try:
+            response = await client.get(url, timeout=timeout)
+            logger.info(response.text)
+        except httpx.RequestError as exc:
+            logger.info(f"An error occurred while requesting {exc.request.url!r}.")
+        except httpx.TimeoutException as exc:
+            logger.info(f"Request timed out: {exc.request.url!r}.")
+        except httpx.HTTPStatusError as exc:
+            logger.info(f"HTTP error: {exc}")
+
         if response.status_code == 200:
             # Create a temporary file in the temporary directory
             image_stream.write(response.content)
