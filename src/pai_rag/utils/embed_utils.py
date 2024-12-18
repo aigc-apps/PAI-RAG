@@ -16,7 +16,7 @@ async def download_url(url):
     image_stream = BytesIO()
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+        response = await client.get(url, timeout=60.0)
         if response.status_code == 200:
             # Create a temporary file in the temporary directory
             image_stream.write(response.content)
