@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
-DEFAULT_MAX_TOKENS = 4000
+DEFAULT_MAX_TOKENS = 2000
 
 
 class DashScopeGenerationModels:
