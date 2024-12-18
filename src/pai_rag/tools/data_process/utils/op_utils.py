@@ -1,59 +1,53 @@
+from loguru import logger
 from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
 
 
-def load_ops(process_list):
-    """
-    Load op list according to the process list from config file.
+OPERATIONS = ["pai_rag_parser", "pai_rag_splitter", "pai_rag_embedder"]
 
-    :param process_list: A process list. Each item is an op name and its
-        arguments.
-    :param op_fusion: whether to fuse ops that share the same intermediate
-        variables.
-    :return: The op instance list.
-    """
-    ops = []
-    new_process_list = []
+
+def get_previous_operation(operation):
+    try:
+        index = OPERATIONS.index(operation)
+        if index > 0:
+            return OPERATIONS[index - 1]
+        else:
+            return None
+    except ValueError:
+        return None
+
+
+def load_op(op_name, process_list):
+    for process in process_list:
+        name, op_args = list(process.items())[0]
+        if name == op_name:
+            if op_args.get("accelerator", "cpu") == "cuda":
+                mem_required = (
+                    size_to_bytes(op_args.get("mem_required", "1GB")) / 1024**3
+                )
+                num_cpus = op_args.get("cpu_required", 1)
+                op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
+                num_gpus = get_num_gpus(True, op_proc)
+                logger.info(
+                    f"Op {op_name} will be executed on {num_cpus} cpus and {num_gpus} GPUs."
+                )
+                RemoteGpuOp = OPERATORS.modules[op_name].options(
+                    num_cpus=num_cpus, num_gpus=num_gpus
+                )
+                return RemoteGpuOp.remote(**op_args)
+            else:
+                num_cpus = op_args.get("cpu_required", 1)
+                logger.info(f"Op {op_name} will be executed on {num_cpus} cpus.")
+                RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
+                return RemoteCpuOp.remote(**op_args)
+        else:
+            continue
+
+
+def load_op_names(process_list):
     op_names = []
     for process in process_list:
-        op_name, args = list(process.items())[0]
-        args["op_name"] = op_name
-        if args.get("accelerator", "cpu") == "cuda":
-            mem_required = size_to_bytes(args.get("mem_required", "1GB")) / 1024**3
-            cpu_required = args.get("cpu_required", 1)
-            op_proc = calculate_np(op_name, mem_required, cpu_required, None, True)
-            num_gpus = get_num_gpus(True, op_proc)
-            RemoteGpuOp = OPERATORS.modules[op_name].options(
-                num_cpus=cpu_required, num_gpus=num_gpus
-            )
-            ops.append(RemoteGpuOp.remote(**args))
-        else:
-            num_cpus = args.get("cpu_required", 1)
-            RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
-            ops.append(RemoteCpuOp.remote(**args))
-        # if op_name == "pai_rag_parser":
-        #     if args.get("accelerator", "cpu") == "cuda":
-        #         mem_required = (
-        #             size_to_bytes(args.get("mem_required", "1GB")) / 1024**3
-        #         )
-        #         cpu_required = args.get("cpu_required", 1)
-        #         op_proc = calculate_np(op_name, mem_required, cpu_required, None, True)
-        #         num_gpus = get_num_gpus(True, op_proc)
-        #         RemoteGPUParser = Parser.options(
-        #             num_cpus=cpu_required, num_gpus=num_gpus
-        #         )
-        #         ops.append(RemoteGPUParser.remote(**args))
-        #     else:
-        #         num_cpus = args.get("cpu_required", 1)
-        #         RemoteCPUParser = Parser.options(num_cpus=num_cpus)
-        #         ops.append(RemoteCPUParser.remote(**args))
-        # else:
-        #     ops.append(OPERATORS.modules[op_name](**args))
-        new_process_list.append(process)
+        op_name, _ = list(process.items())[0]
         op_names.append(op_name)
-
-    for op_cfg, op in zip(new_process_list, ops):
-        op._op_cfg = op_cfg
-
-    return ops, op_names
+    return op_names

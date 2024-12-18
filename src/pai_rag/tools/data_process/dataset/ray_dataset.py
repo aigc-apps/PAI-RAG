@@ -2,17 +2,18 @@ import os
 import ray
 import time
 import json
+from abc import ABC
 from pathlib import Path
 from loguru import logger
 from pai_rag.tools.data_process.utils.formatters import NumpyEncoder
-from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
 
 
-class RayDataset(BaseDataset):
+class RayDataset(ABC):
     def __init__(self, dataset_path: str = None, cfg=None) -> None:
         self.batch_size = 10
+        logger.info(f"Loading json dataset from {dataset_path}.")
         if os.path.isfile(dataset_path):
-            self.data = ray.data.read_json(dataset_path)
+            self.data = self.read_jsonl_in_batches([dataset_path])
         else:
             files = [
                 str(file) for file in Path(dataset_path).rglob("*") if file.is_file()
@@ -34,19 +35,32 @@ class RayDataset(BaseDataset):
                 if batch:
                     yield batch
 
-    def process(self, operators):
-        if operators is None:
-            return self
-        if not isinstance(operators, list):
-            operators = [operators]
-        for op in operators:
-            self._run_single_op(op)
-            self.write_json(status=ray.get(op.get_name.remote()))
-        return self
+    # def process(self, operators):
+    #     if operators is None:
+    #         return self
+    #     if not isinstance(operators, list):
+    #         operators = [operators]
+    #     for op in operators:
+    #         op_name= ray.get(op.get_name.remote())
+    #         self._run_single_op(op, op_name)
+    #         self.write_json(status=op_name)
+    #     return self
+    def process(self, operator, op_name):
+        # if operators is None:
+        #     return self
+        # if not isinstance(operators, list):
+        #     operators = [operators]
+        # for op in operators:
+        #     op_name= ray.get(op.get_name.remote())
+        #     self._run_single_op(op, op_name)
+        #     self.write_json(status=op_name)
+        # return self
+        self._run_single_op(operator, op_name)
+        self.write_json(status=op_name)
 
-    def _run_single_op(self, op):
+    def _run_single_op(self, op, op_name):
         try:
-            logger.info(f"Running Op [{ray.get(op.get_name.remote())}].")
+            logger.info(f"Running Op [{op_name}].")
             run_tasks = [op.process.remote(batch_data) for batch_data in self.data]
             self.data = ray.get(run_tasks)
         except:  # noqa: E722

@@ -2,9 +2,13 @@ import os
 import ray
 import time
 from loguru import logger
-from pai_rag.tools.data_process.utils.op_utils import load_ops
 from pai_rag.tools.data_process.dataset.ray_dataset import RayDataset
 from pai_rag.tools.data_process.dataset.file_dataset import FileDataset
+from pai_rag.tools.data_process.utils.op_utils import (
+    load_op_names,
+    load_op,
+    get_previous_operation,
+)
 
 
 class RayExecutor:
@@ -34,9 +38,6 @@ class RayExecutor:
         )
         ray.init(
             runtime_env={
-                "excludes": [
-                    "/home/xiaowen/xiaowen/github_code/PAI-RAG/model_repository"
-                ],
                 "working_dir": self.cfg.working_dir,
             }
         )
@@ -48,35 +49,26 @@ class RayExecutor:
         :param load_data_np: number of workers when loading the dataset.
         :return: processed dataset.
         """
-        # 1. extract processes
-        logger.info("Preparing process operators...")
-        print("self.cfg.process", self.cfg.process)
-        ops, op_names = load_ops(self.cfg.process)
-
-        # 2. load data
-        logger.info(f"Loading dataset with Ray for {op_names}...")
-        if "pai_rag_parser" in op_names:
-            idx = op_names.index("pai_rag_parser")
-            op_names.pop(idx)
-            parser_op = ops[idx]
-            ops.pop(idx)
-            dataset = FileDataset(self.cfg.dataset_path, self.cfg)
-            # 3.1 data process and export - FileDataset
-            logger.info("Processing file data...")
+        op_names = load_op_names(self.cfg.process)
+        all_tstart = time.time()
+        for op_name in op_names:
+            if op_name == "pai_rag_parser":
+                dataset = FileDataset(self.cfg.dataset_path, self.cfg)
+                self.cfg.dataset_path = self.cfg.export_path
+            else:
+                dataset = RayDataset(
+                    os.path.join(
+                        self.cfg.dataset_path, get_previous_operation(op_name)
+                    ),
+                    self.cfg,
+                )
+            op = load_op(op_name, self.cfg.process)
+            logger.info("Processing op {op_name} ...")
             tstart = time.time()
-            dataset.process([parser_op])
+            dataset.process(op, op_name)
             tend = time.time()
-            logger.info(f"Op pai_rag_parser is done in {tend - tstart:.3f}s.")
-            ray.kill(parser_op)
-            self.cfg.dataset_path = self.cfg.export_path
+            logger.info(f"Op {op_name} is done in {tend - tstart:.3f}s.")
+            ray.kill(op)
 
-        if len(ops) > 0:
-            # 3.2 data process and export - RayDataset
-            dataset = RayDataset(self.cfg.dataset_path, self.cfg)
-            logger.info("Processing ray data...")
-            tstart = time.time()
-            dataset.process(ops)
-            tend = time.time()
-            logger.info(f"All Ops are done in {tend - tstart:.3f}s.")
-
-        logger.info("Done.")
+        all_tend = time.time()
+        logger.info(f"All ops are done in {all_tend - all_tstart:.3f}s.")

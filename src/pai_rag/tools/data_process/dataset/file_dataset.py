@@ -2,34 +2,38 @@ import ray
 import json
 import os
 import time
+from abc import ABC
 from loguru import logger
-from pai_rag.tools.data_process.dataset.base_dataset import BaseDataset
 from pai_rag.integrations.readers.pai.pai_data_reader import get_input_files
 
 
-class FileDataset(BaseDataset):
+class FileDataset(ABC):
     def __init__(self, dataset_path: str = None, cfg=None) -> None:
+        logger.info(f"Loading file dataset from {dataset_path}.")
         self.data = get_input_files(dataset_path)
         if cfg:
             self.export_path = cfg.export_path
 
-    def process(self, operators):
-        if operators is None:
-            return self
-        if not isinstance(operators, list):
-            operators = [operators]
-        for op in operators:
-            self._run_single_op(op)
-            self.write_json(status=ray.get(op.get_name.remote()))
-        return self
+    def process(self, operator, op_name):
+        # if operators is None:
+        #     return self
+        # if not isinstance(operators, list):
+        #     operators = [operators]
+        # for op in operators:
+        #     op_name= ray.get(op.get_name.remote())
+        #     self._run_single_op(op, op_name)
+        #     self.write_json(status=op_name)
+        # return self
+        self._run_single_op(operator, op_name)
+        self.write_json(status=op_name)
 
-    def _run_single_op(self, op):
+    def _run_single_op(self, op, op_name):
         try:
-            logger.info(f"Running Op [{ray.get(op.get_name.remote())}].")
-            run_tasks = [op.process.remote(input_file) for input_file in self.data]
+            logger.info(f"Running Op [{op_name}].")
+            run_tasks = [op.process.remote(batch_data) for batch_data in self.data]
             self.data = ray.get(run_tasks)
         except:  # noqa: E722
-            logger.error(f"An error occurred during Op [{op._name}].")
+            logger.error(f"An error occurred during Op [{op_name}].")
             import traceback
 
             traceback.print_exc()

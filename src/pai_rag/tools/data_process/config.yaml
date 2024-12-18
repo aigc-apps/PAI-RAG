@@ -7,7 +7,7 @@ process:
       endpoint: "oss-cn-hangzhou.aliyuncs.com"
     accelerator: "cpu" # cpu or cuda
     cpu_required: 6
-    mem_required: "6GB"
+    mem_required: "4GB"
 
   - op: "pai_rag_splitter"
     type: "Sentence"
@@ -24,4 +24,4 @@ process:
     multimodal_source: "cnclip"
     accelerator: "cpu" # cpu or cuda
     cpu_required: 6
-    mem_required: "6GB"
+    mem_required: "4GB"
