@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 from loguru import logger
 from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS
-from pai_rag.utils.embed_utils import download_url
+from pai_rag.utils.embed_utils import sync_download_url
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import parse_embed_config
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
@@ -80,12 +80,11 @@ class Embedder(BaseOP):
         nodes["end_char_idx"] = np.nan_to_num(nodes["start_char_idx"]).astype(int)
         return nodes
 
-    async def load_images_from_nodes(self, iamge_urls):
-        tasks = [download_url(url) for url in iamge_urls]
-        results = await asyncio.gather(*tasks)
+    def load_images_from_nodes(self, iamge_urls):
+        results = [sync_download_url(url) for url in iamge_urls]
         return results
 
-    async def process(self, nodes):
+    def process(self, nodes):
         print("nodes", nodes)
         text_nodes = [node for node in nodes if node["type"] == "text"]
         image_nodes = [node for node in nodes if node["type"] == "image"]
@@ -114,17 +113,10 @@ class Embedder(BaseOP):
             )
             for node in image_nodes:
                 print("image_nodes node", node)
-                print('node["metadata"]', node["metadata"])
                 print('node["metadata"]["image_url"]', node["metadata"]["image_url"])
             image_urls = [node["metadata"]["image_url"] for node in image_nodes]
             logger.info("image_urls", image_urls)
-            image_list = await self.load_images_from_nodes(image_urls)
-            # active_image_list = []
-            # active_image_nodes = []
-            # for i, image in enumerate(image_list):
-            #     if image:
-            #         active_image_list.append(image_list[i])
-            #         active_image_nodes.append(image_nodes[i])
+            image_list = self.load_images_from_nodes(image_urls)
             image_embeddings = multimodal_embed_model.get_image_embedding_batch(
                 image_list
             )

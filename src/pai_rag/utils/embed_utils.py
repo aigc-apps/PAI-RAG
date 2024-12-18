@@ -7,7 +7,37 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 from typing import Dict, List, Sequence
+import requests
 
+def sync_download_url(url):
+    if not url:
+        return None
+
+    image_stream = BytesIO()
+
+    # Set the timeout in seconds
+    timeout = (5, 10)  # (connect timeout, read timeout)
+    
+    logger.info("download_url url: %s", url)
+    try:
+        response = requests.get(url, timeout=timeout)
+        logger.debug(response.text)
+    except requests.RequestException as exc:
+        logger.info(
+            f"An error occurred while requesting {url!r} , exc: {exc.strerror}."
+        )
+        return None
+
+    if response.status_code == 200:
+        # Create a temporary file in the temporary directory
+        image_stream.write(response.content)
+        image_stream.seek(0)
+        return image_stream
+    else:
+        logger.error(
+            f"Failed to download {url}: Status code {response.status_code}"
+        )
+        return None
 
 async def download_url(url):
     if not url:
