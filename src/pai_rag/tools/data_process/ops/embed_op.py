@@ -85,7 +85,6 @@ class Embedder(BaseOP):
         return results
 
     def process(self, nodes):
-        print("nodes", nodes)
         text_nodes = [node for node in nodes if node["type"] == "text"]
         image_nodes = [node for node in nodes if node["type"] == "image"]
         if len(text_nodes) > 0:
@@ -107,15 +106,10 @@ class Embedder(BaseOP):
             logger.info("No text nodes to process.")
 
         if len(image_nodes) > 0:
-            print("image_nodes", len(image_nodes), image_nodes)
             multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
-            for node in image_nodes:
-                print("image_nodes node", node)
-                print('node["metadata"]["image_url"]', node["metadata"]["image_url"])
             image_urls = [node["metadata"]["image_url"] for node in image_nodes]
-            logger.info("image_urls", image_urls)
             image_list = self.load_images_from_nodes(image_urls)
             image_embeddings = multimodal_embed_model.get_image_embedding_batch(
                 image_list

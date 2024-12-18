@@ -18,7 +18,6 @@ def sync_download_url(url):
     # Set the timeout in seconds
     timeout = (5, 10)  # (connect timeout, read timeout)
     
-    logger.info("download_url url: %s", url)
     try:
         response = requests.get(url, timeout=timeout)
         logger.debug(response.text)
