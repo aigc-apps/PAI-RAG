@@ -52,6 +52,7 @@ class RayExecutor:
         op_names = load_op_names(self.cfg.process)
         all_tstart = time.time()
         for op_name in op_names:
+            op = load_op(op_name, self.cfg.process)
             if op_name == "pai_rag_parser":
                 dataset = FileDataset(self.cfg.dataset_path, self.cfg)
                 self.cfg.dataset_path = self.cfg.export_path
@@ -62,7 +63,6 @@ class RayExecutor:
                     ),
                     self.cfg,
                 )
-            op = load_op(op_name, self.cfg.process)
             logger.info(f"Processing op {op_name} ...")
             tstart = time.time()
             dataset.process(op, op_name)
