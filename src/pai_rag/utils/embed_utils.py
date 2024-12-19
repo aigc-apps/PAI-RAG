@@ -9,6 +9,7 @@ from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 from typing import Dict, List, Sequence
 import requests
 
+
 def sync_download_url(url):
     if not url:
         return None
@@ -17,7 +18,7 @@ def sync_download_url(url):
 
     # Set the timeout in seconds
     timeout = (5, 10)  # (connect timeout, read timeout)
-    
+
     try:
         response = requests.get(url, timeout=timeout)
         logger.debug(response.text)
@@ -33,10 +34,9 @@ def sync_download_url(url):
         image_stream.seek(0)
         return image_stream
     else:
-        logger.error(
-            f"Failed to download {url}: Status code {response.status_code}"
-        )
+        logger.error(f"Failed to download {url}: Status code {response.status_code}")
         return None
+
 
 async def download_url(url):
     if not url:

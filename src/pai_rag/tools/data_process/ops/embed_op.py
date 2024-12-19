@@ -1,5 +1,4 @@
 import ray
-import asyncio
 import numpy as np
 from loguru import logger
 from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS

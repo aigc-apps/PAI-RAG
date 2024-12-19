@@ -15,15 +15,6 @@ class FileDataset(ABC):
             self.export_path = cfg.export_path
 
     def process(self, operator, op_name):
-        # if operators is None:
-        #     return self
-        # if not isinstance(operators, list):
-        #     operators = [operators]
-        # for op in operators:
-        #     op_name= ray.get(op.get_name.remote())
-        #     self._run_single_op(op, op_name)
-        #     self.write_json(status=op_name)
-        # return self
         self._run_single_op(operator, op_name)
         self.write_json(status=op_name)
 

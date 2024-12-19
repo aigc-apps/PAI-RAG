@@ -37,8 +37,8 @@ def load_op(op_name, process_list):
                 logger.info(
                     f"Op {op_name} will be executed on cpu env and use {num_cpus} cpus."
                 )
-                RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
-                return RemoteCpuOp.remote(**op_args)
+                # RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
+                return OPERATORS.modules[op_name].remote(**op_args)
         else:
             continue
 
