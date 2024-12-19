@@ -1,16 +1,13 @@
 import ray
 from loguru import logger
-from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS
+from pai_rag.tools.data_process.ops.base_op import BaseOP
 from pai_rag.tools.data_process.utils.formatters import convert_document_to_dict
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.readers.pai.pai_data_reader import BaseDataReaderConfig
 from pai_rag.core.rag_module import resolve
 from pai_rag.utils.oss_client import OssClient
 
-OP_NAME = "pai_rag_parser"
 
-
-@OPERATORS.register_module(OP_NAME)
 @ray.remote
 class Parser(BaseOP):
     """Mapper to generate samples whose captions are generated based on
@@ -21,6 +18,7 @@ class Parser(BaseOP):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.op_name = "pai_rag_parser"
         self.download_model_list = ["PDF-Extract-Kit"]
         self.load_models(self.download_model_list)
         self.data_reader_config = BaseDataReaderConfig()

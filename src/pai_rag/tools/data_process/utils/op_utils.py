@@ -1,10 +1,12 @@
 from loguru import logger
-from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
 import ray
 from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+from pai_rag.tools.data_process.ops.parser_op import Parser
+from pai_rag.tools.data_process.ops.splitter_op import Splitter
+from pai_rag.tools.data_process.ops.embed_op import Embedder
 
 OPERATIONS = ["pai_rag_parser", "pai_rag_splitter", "pai_rag_embedder"]
 
@@ -37,14 +39,39 @@ def load_op(op_name, process_list):
                 logger.info(
                     f"Op {op_name} will be executed on cuda env with op_proc: {op_proc} and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
-                RemoteGpuOp = OPERATORS.modules[op_name].options(
-                    num_cpus=num_cpus,
-                    num_gpus=num_gpus,
-                    scheduling_strategy=PlacementGroupSchedulingStrategy(
-                        placement_group=pg
-                    ),
-                )
-                return RemoteGpuOp.remote(**op_args), pg
+                if op_name == "pai_rag_parser":
+                    return (
+                        Parser.options(
+                            num_cpus=num_cpus,
+                            num_gpus=num_gpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
+                elif op_name == "pai_rag_splitter":
+                    return (
+                        Splitter.options(
+                            num_cpus=num_cpus,
+                            num_gpus=num_gpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
+                elif op_name == "pai_rag_embedder":
+                    return (
+                        Embedder.options(
+                            num_cpus=num_cpus,
+                            num_gpus=num_gpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
             else:
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
                 logger.info(
@@ -54,13 +81,36 @@ def load_op(op_name, process_list):
                     [{"CPU": num_cpus}] * int(op_proc), strategy="SPREAD"
                 )
                 ray.get(pg.ready())
-                RemoteCpuOp = OPERATORS.modules[op_name].options(
-                    num_cpus=num_cpus,
-                    scheduling_strategy=PlacementGroupSchedulingStrategy(
-                        placement_group=pg
-                    ),
-                )
-                return RemoteCpuOp.remote(**op_args), pg
+                if op_name == "pai_rag_parser":
+                    return (
+                        Parser.options(
+                            num_cpus=num_cpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
+                elif op_name == "pai_rag_splitter":
+                    return (
+                        Splitter.options(
+                            num_cpus=num_cpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
+                elif op_name == "pai_rag_embedder":
+                    return (
+                        Embedder.options(
+                            num_cpus=num_cpus,
+                            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                                placement_group=pg
+                            ),
+                        ).remote(**op_args),
+                        pg,
+                    )
         else:
             continue
 

@@ -1,11 +1,7 @@
 import os
 from loguru import logger
-from pai_rag.tools.data_process.utils.registry import Registry
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import is_cuda_available
-
-
-OPERATORS = Registry("Operators")
 
 
 class BaseOP:

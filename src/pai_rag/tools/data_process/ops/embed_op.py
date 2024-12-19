@@ -1,7 +1,7 @@
 import ray
 import numpy as np
 from loguru import logger
-from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS
+from pai_rag.tools.data_process.ops.base_op import BaseOP
 from pai_rag.utils.embed_utils import sync_download_url
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import parse_embed_config
@@ -10,10 +10,7 @@ from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
 )
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 
-OP_NAME = "pai_rag_embedder"
 
-
-@OPERATORS.register_module(OP_NAME)
 @ray.remote
 class Embedder(BaseOP):
     """Mapper to generate samples whose captions are generated based on
@@ -24,6 +21,7 @@ class Embedder(BaseOP):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.op_name = "pai_rag_embedder"
         self.embedder_cfg = parse_embed_config(
             {
                 "source": kwargs.get("source", None),

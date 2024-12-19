@@ -1,7 +1,6 @@
 from loguru import logger
 from pai_rag.tools.data_process.ray_executor import RayExecutor
 import argparse
-from pai_rag.tools.data_process.ops.base_op import OPERATORS
 import yaml
 
 
@@ -15,7 +14,7 @@ def extract_parameters(yaml_dict, cfg):
 
 
 def update_op_process(cfg):
-    op_keys = list(OPERATORS.modules.keys())
+    op_keys = ["pai_rag_parser", "pai_rag_splitter", "pai_rag_embedder"]
     logger.info(f"Loading all operation keys: {op_keys}")
 
     if cfg.process is None:
