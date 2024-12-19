@@ -2,6 +2,9 @@ from loguru import logger
 from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
+import ray
+from ray.util.placement_group import placement_group
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 OPERATIONS = ["pai_rag_parser", "pai_rag_splitter", "pai_rag_embedder"]
 
@@ -26,19 +29,38 @@ def load_op(op_name, process_list):
             if op_args.get("accelerator", "cpu") == "cuda":
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
                 num_gpus = get_num_gpus(True, op_proc)
+                pg = placement_group(
+                    [{"CPU": num_cpus, "GPU": num_gpus}] * len(op_proc),
+                    strategy="SPREAD",
+                )
+                ray.get(pg.ready())
                 logger.info(
                     f"Op {op_name} will be executed on cuda env and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
                 RemoteGpuOp = OPERATORS.modules[op_name].options(
-                    num_cpus=num_cpus, num_gpus=num_gpus
+                    num_cpus=num_cpus,
+                    num_gpus=num_gpus,
+                    scheduling_strategy=PlacementGroupSchedulingStrategy(
+                        placement_group=pg
+                    ),
                 )
-                return RemoteGpuOp.remote(**op_args)
+                return RemoteGpuOp.remote(**op_args), pg
             else:
                 logger.info(
                     f"Op {op_name} will be executed on cpu env and use {num_cpus} cpus."
                 )
-                # RemoteCpuOp = OPERATORS.modules[op_name].options(num_cpus=num_cpus)
-                return OPERATORS.modules[op_name].remote(**op_args)
+                op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
+                pg = placement_group(
+                    [{"CPU": num_cpus}] * len(op_proc), strategy="SPREAD"
+                )
+                ray.get(pg.ready())
+                RemoteCpuOp = OPERATORS.modules[op_name].options(
+                    num_cpus=num_cpus,
+                    scheduling_strategy=PlacementGroupSchedulingStrategy(
+                        placement_group=pg
+                    ),
+                )
+                return RemoteCpuOp.remote(**op_args), pg
         else:
             continue
 
