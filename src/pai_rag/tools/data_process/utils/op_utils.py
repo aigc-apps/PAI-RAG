@@ -30,7 +30,7 @@ def load_op(op_name, process_list):
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
                 num_gpus = get_num_gpus(True, op_proc)
                 pg = placement_group(
-                    [{"CPU": num_cpus, "GPU": num_gpus}] * len(op_proc),
+                    [{"CPU": num_cpus, "GPU": num_gpus}] * int(op_proc),
                     strategy="SPREAD",
                 )
                 ray.get(pg.ready())
@@ -51,7 +51,7 @@ def load_op(op_name, process_list):
                 )
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
                 pg = placement_group(
-                    [{"CPU": num_cpus}] * len(op_proc), strategy="SPREAD"
+                    [{"CPU": num_cpus}] * int(op_proc), strategy="SPREAD"
                 )
                 ray.get(pg.ready())
                 RemoteCpuOp = OPERATORS.modules[op_name].options(
