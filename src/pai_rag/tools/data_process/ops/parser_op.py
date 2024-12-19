@@ -11,7 +11,7 @@ OP_NAME = "pai_rag_parser"
 
 
 @OPERATORS.register_module(OP_NAME)
-@ray.remote(num_cpus=8)
+@ray.remote
 class Parser(BaseOP):
     """Mapper to generate samples whose captions are generated based on
     another model and the figure."""

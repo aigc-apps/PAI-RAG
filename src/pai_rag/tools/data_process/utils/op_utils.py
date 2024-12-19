@@ -35,7 +35,7 @@ def load_op(op_name, process_list):
                 )
                 ray.get(pg.ready())
                 logger.info(
-                    f"Op {op_name} will be executed on cuda env and use {num_cpus} cpus and {num_gpus} GPUs."
+                    f"Op {op_name} will be executed on cuda env with op_proc: {op_proc} and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
                 RemoteGpuOp = OPERATORS.modules[op_name].options(
                     num_cpus=num_cpus,
@@ -46,10 +46,10 @@ def load_op(op_name, process_list):
                 )
                 return RemoteGpuOp.remote(**op_args), pg
             else:
-                logger.info(
-                    f"Op {op_name} will be executed on cpu env and use {num_cpus} cpus."
-                )
                 op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
+                logger.info(
+                    f"Op {op_name} will be executed on cpu env with op_proc: {op_proc} and use {num_cpus} cpus."
+                )
                 pg = placement_group(
                     [{"CPU": num_cpus}] * int(op_proc), strategy="SPREAD"
                 )
