@@ -55,7 +55,7 @@ def validate_case_insensitive(value: Dict) -> Dict:
     if value.get("source") == "paieas":
         value["source"] = "openai_compatible"
         value["base_url"] = value["endpoint"]
-        value["api_key"] = value["token"]
+        value["api_key"] = str(value["token"])
     elif value.get("source") == "dashscope" and "embed_batch_size" not in value:
         value["source"] = "openai_compatible"
     return value

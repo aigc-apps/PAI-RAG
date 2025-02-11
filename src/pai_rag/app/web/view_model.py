@@ -153,7 +153,7 @@ class ViewModel(BaseModel):
         if isinstance(config.llm, PaiEasLlmConfig):
             view_model.llm_model_name = config.llm.model
             view_model.llm_base_url = config.llm.endpoint
-            view_model.llm_api_key = config.llm.token
+            view_model.llm_api_key = str(config.llm.token)
         elif isinstance(config.llm, DashScopeLlmConfig):
             view_model.llm_api_key = config.llm.api_key or os.getenv(
                 "DASHSCOPE_API_KEY"
