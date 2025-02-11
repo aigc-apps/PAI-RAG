@@ -60,7 +60,7 @@ def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        if query_type == "Chat":
+        if query_type == "LLM":
             response_gen = rag_client.query_llm(
                 question,
                 with_history=update_dict["include_history"],
@@ -130,7 +130,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="chat_index",
             )
             query_type = gr.Radio(
-                ["Retrieval", "Chat", "Chat（Web Search）", "Chat（Knowledge Base）"],
+                ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
                 value="Chat（Knowledge Base）",
@@ -423,7 +423,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
                     }
-                elif query_type == "Chat":
+                elif query_type == "LLM":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
