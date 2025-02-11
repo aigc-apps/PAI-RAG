@@ -337,19 +337,37 @@ class RagApplication:
         """
         session_id = query.session_id or uuid_generator()
         logger.debug(f"Get session ID: {session_id}.")
+        session_config = self.config.model_copy()
         if not query.question:
             return RagResponse(
                 answer="Empty query. Please input your question.", session_id=session_id
             )
+
+        # enable chat_history
+        chat_store = resolve_chat_store(session_config)
+        chat_store.add_message(
+            session_id, ChatMessage(role=MessageRole.USER, content=query.question)
+        )
+        condense_query_transform = resolve_query_transform(session_config)
+        # Condense question
+        new_query_bundle = await condense_query_transform.arun(
+            query_bundle_or_str=query.question,
+            session_id=session_id,
+            chat_history=query.chat_history,
+        )
+        new_question = new_query_bundle.query_str
+        logger.info(f"Querying with question: '{new_question}'.")
 
         analysis_query = resolve_data_analysis_query(self.config)
         if not analysis_query:
             raise ValueError("Data Analysis not enabled. Please specify analysis type.")
 
         if not query.stream:
-            response = await analysis_query.aquery(query.question)
+            # response = await analysis_query.aquery(query.question)
+            response = await analysis_query.aquery(new_query_bundle)
         else:
-            response = await analysis_query.astream_query(query.question)
+            # response = await analysis_query.astream_query(query.question)
+            response = await analysis_query.astream_query(new_query_bundle)
 
         node_results = response.source_nodes
         new_query = query.question
@@ -379,11 +397,22 @@ class RagApplication:
             content = re.sub(
                 r"<think>.*?</think>\n*", "", response.response, flags=re.DOTALL
             )
+            chat_store.add_message(
+                session_id,
+                ChatMessage(role=MessageRole.ASSISTANT, content=content),
+            )
             return RagResponse(answer=content, **result_info)
 
         # if not query.stream:
         #     return RagResponse(answer=response.response, **result_info)
         else:
+            # return event_generator_async(
+            #     response=response, extra_info=result_info, sse_version=sse_version
+            # )
             return event_generator_async(
-                response=response, extra_info=result_info, sse_version=sse_version
+                response=response,
+                extra_info=result_info,
+                chat_store=chat_store,
+                session_id=session_id,
+                sse_version=sse_version,
             )
