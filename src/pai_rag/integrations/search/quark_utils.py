@@ -97,7 +97,6 @@ def process_wenda(item):
         {
             "url": wenda_info["url"],
             "text": f'{wenda_info["name"]}\n\n{wenda_info["content"]}\n\n',
-            "time": wenda_info["time"],
             "title": wenda_info["name"],
         }
     )

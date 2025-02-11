@@ -21,9 +21,6 @@ from llama_index.core.schema import (
 )
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
-    Response,
-    StreamingResponse,
-    AsyncStreamingResponse,
 )
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
@@ -327,28 +324,6 @@ class PaiSynthesizer(BaseSynthesizer):
             )
         )
 
-        if not query.no_retrieval and len(nodes) == 0:
-            if query.stream:
-                empty_response = StreamingResponse(
-                    response_gen=empty_response_generator()
-                )
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-            else:
-                empty_response = Response(DEFAULT_EMPTY_RESPONSE_GEN)
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
 
@@ -410,27 +385,6 @@ class PaiSynthesizer(BaseSynthesizer):
                 query=query,
             )
         )
-        if not query.no_retrieval and len(nodes) == 0:
-            if query.stream:
-                empty_response = AsyncStreamingResponse(
-                    response_gen=empty_response_agenerator()
-                )
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-            else:
-                empty_response = Response(DEFAULT_EMPTY_RESPONSE_GEN)
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
 
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
