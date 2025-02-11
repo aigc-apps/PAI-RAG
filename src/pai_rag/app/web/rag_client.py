@@ -348,7 +348,7 @@ class RagWebClient:
             "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
         )
         if len(response["docs"]) == 0:
-            response["result"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
+            response["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
         else:
             for i, doc in enumerate(response["docs"]):
                 html_content = markdown.markdown(doc["text"])
@@ -377,7 +377,7 @@ class RagWebClient:
             formatted_text = (
                 "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
             )
-            response["result"] = formatted_text
+            response["delta"] = formatted_text
         yield response
 
     def add_knowledge(
