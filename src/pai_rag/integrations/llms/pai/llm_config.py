@@ -163,7 +163,7 @@ class OpenAICompatibleLlmConfig(PaiBaseLlmConfig):
     ] = SupportedLlmType.openai_compatible
     base_url: str | None = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     api_key: str | None = None
-    model: str = "gpt-3.5-turbo"
+    model: str = ""
 
 
 class PaiEasLlmConfig(PaiBaseLlmConfig):
