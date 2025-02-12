@@ -7,10 +7,10 @@ from llama_index.core.output_parsers.selection import SelectionOutputParser
 from llama_index.core.llms.llm import LLM
 from llama_index.core.schema import QueryType
 
-DEFAULT_WEBSEARCH_DESCRIPTION = """
-This tool is to help you get information from web.
-It's useful for realtime news and common sense questions.
-"""
+# DEFAULT_WEBSEARCH_DESCRIPTION = """
+# This tool is to help you get information from web.
+# It's useful for realtime news and common sense questions.
+# """
 
 DEFAULT_TOOL_DESCRIPTION = """
 This tool can help you get travel information about time, weather, flights, train and hotels.
@@ -20,17 +20,31 @@ DEFAULT_RAG_DESCRIPTION = """
 This tool can help you get more specific information from the knowledge base.
 """
 
+DEFAULT_CHAT_DESCRIPTION = """
+用于处理常规对话和互动，适用于日常交流、讨论、情感支持、提供建议或回答基于现有知识库的问题。不需要访问实时网络信息，能够基于预先训练的数据进行回应。
+"""
+
+DEFAULT_WEBSEARCH_DESCRIPTION = """
+用于需要获取最新信息、查找具体数据或进行实时在线搜索以回答用户问题的场景。适合处理涉及当前事件、统计数据、特定事实或需要访问外部资源的查询，以确保提供最新和准确的回答。
+"""
+
 
 class Intents(str, Enum):
     WEBSEARCH = "websearch"
     RAG = "rag"
     TOOL = "tool"
     NL2SQL = "nl2sql"
+    CHAT = "chat"
 
 
 DEFAULT_INTENT_DESCRIPTIONS = {
     Intents.RAG: DEFAULT_RAG_DESCRIPTION,
     Intents.TOOL: DEFAULT_TOOL_DESCRIPTION,
+}
+
+DEFAULT_WEBSEARCH_DESCRIPTIONS = {
+    Intents.WEBSEARCH: DEFAULT_WEBSEARCH_DESCRIPTION,
+    Intents.CHAT: DEFAULT_CHAT_DESCRIPTION,
 }
 
 
