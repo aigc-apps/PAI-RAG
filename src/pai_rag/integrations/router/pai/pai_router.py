@@ -21,7 +21,7 @@ This tool can help you get more specific information from the knowledge base.
 """
 
 DEFAULT_CHAT_DESCRIPTION = """
-用于处理常规对话和互动，适用于日常交流、讨论、情感支持、提供建议或回答基于现有知识库的问题。不需要访问实时网络信息，能够基于预先训练的数据进行回应。
+用于处理常规对话和互动，适用于日常交流、讨论、情感支持。不需要访问实时网络信息。
 """
 
 DEFAULT_WEBSEARCH_DESCRIPTION = """
