@@ -142,8 +142,17 @@ def _create_sqldatabase(database_uri, dbname, desired_tables, table_descriptions
     if len(db_tables) == 0:
         raise ValueError(f"No table found in db {dbname}.")
 
-    if desired_tables and len(desired_tables) > 0:
-        tables = desired_tables
+    if desired_tables:
+        valid_tables = []
+        for table in desired_tables:
+            if table in db_tables:
+                valid_tables.append(table)
+            else:
+                logger.warning(f"Table {table} not found in db {dbname}.")
+        if not valid_tables:
+            tables = db_tables
+        else:
+            tables = valid_tables
     else:
         tables = db_tables
 

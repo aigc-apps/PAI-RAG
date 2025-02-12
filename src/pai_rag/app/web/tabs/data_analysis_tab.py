@@ -73,12 +73,15 @@ def upload_description_fn(input_files: List, database):
         res = rag_client.add_db_description(
             [file.name for file in input_files], database
         )
-        yield gr.update(visible=True, value="Upload successfully!")
+        # yield gr.update(visible=True, value="Upload successfully!")
+
         # 更新config
         update_dict = {
             "database_file_path": res["destination_path"],
         }
         rag_client.patch_config(update_dict)
+
+        return "Upload successfully!"
 
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -195,6 +198,14 @@ def reset_textbox():
     return gr.update(value="")
 
 
+# 处理description复选框变化
+def handle_description_checkbox_change(db_description_upload):
+    if db_description_upload:
+        return gr.update(visible=True), gr.update(visible=True)
+    else:
+        return gr.update(visible=False), gr.update(visible=False)
+
+
 # 处理history复选框变化
 def handle_history_checkbox_change(enable_db_history):
     if enable_db_history:
@@ -269,30 +280,11 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         elem_id="db_tables",
                         placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
                     )
-                comments = gr.Textbox(
+                descriptions = gr.Textbox(
                     label="Table Comment",
                     lines=2,
-                    elem_id="table_comment",
+                    elem_id="db_descriptions",
                     placeholder='A dict of table comments, e.g. {"table_A": "text_A_comment", "table_B": "text_comment"}',
-                )
-                db_description_file_upload = gr.File(
-                    label="Upload db description files",
-                    file_count="multiple",
-                    file_types=[".csv"],
-                    elem_id="db_description_file_upload",
-                    scale=6,
-                )
-                description_update_state = gr.Textbox(
-                    label="Description upload state",
-                    visible=False,  # 初始状态为不可见
-                    container=False,
-                )
-
-                db_description_file_upload.upload(
-                    fn=upload_description_fn,
-                    inputs=[db_description_file_upload, database],
-                    outputs=description_update_state,
-                    api_name="upload_description_fn",
                 )
 
                 with gr.Column(visible=True):
@@ -352,6 +344,12 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     elem_id="enable_db_history",
                                 )
 
+                                db_description_upload = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db description upload",
+                                    elem_id="enable_db_description_upload",
+                                )
+
                                 history_file_upload = gr.File(
                                     label="Upload q-sql json file",
                                     file_count="single",
@@ -364,6 +362,36 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     label="History upload state",
                                     container=False,
                                     visible=False,  # 初始状态为不可见
+                                )
+
+                                db_description_file_upload = gr.File(
+                                    label="Upload db description files",
+                                    file_count="multiple",
+                                    file_types=[".csv"],
+                                    elem_id="db_description_file_upload",
+                                    scale=6,
+                                )
+                                description_update_state = gr.Textbox(
+                                    label="Description upload state",
+                                    visible=False,  # 初始状态为不可见
+                                    container=False,
+                                )
+
+                                # 当复选框状态变化时，调用 handle_checkbox_change 函数
+                                db_description_upload.change(
+                                    fn=handle_description_checkbox_change,
+                                    inputs=[db_description_upload],
+                                    outputs=[
+                                        db_description_file_upload,
+                                        description_update_state,
+                                    ],
+                                )
+
+                                db_description_file_upload.upload(
+                                    fn=upload_description_fn,
+                                    inputs=[db_description_file_upload, database],
+                                    outputs=description_update_state,
+                                    api_name="upload_description_fn",
                                 )
 
                                 # 当复选框状态变化时，调用 handle_checkbox_change 函数
@@ -398,7 +426,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     port,
                     database,
                     tables,
-                    comments,
+                    descriptions,
                     # enable_enhanced_description,
                     enable_db_history,
                     enable_db_embedding,
@@ -501,7 +529,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             port,
             database,
             tables,
-            comments,
+            descriptions,
             enable_db_selector,
             db_nl2sql_prompt,
             synthesizer_prompt,
@@ -553,7 +581,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             port.elem_id: port,
             database.elem_id: database,
             tables.elem_id: tables,
-            comments.elem_id: comments,
+            descriptions.elem_id: descriptions,
             # enable_enhanced_description.elem_id: enable_enhanced_description,
             enable_db_history.elem_id: enable_db_history,
             enable_db_embedding.elem_id: enable_db_embedding,
