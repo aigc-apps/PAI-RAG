@@ -45,6 +45,7 @@ DEFAULT_TEXT_QA_TMPL = (
     "-------\n"
     "请仅依据上述内容回答问题，避免使用其他来源的知识。 "
     "如果参考内容与问题无关，请根据自己的知识进行回答。"
+    "在回答中不要使用“根据提供的信息”“参考资料显示”等类似表述。"
     "问题: {query_str}\n"
     "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
 )
@@ -57,6 +58,7 @@ DEFAULT_TEXT_QA_TMPL_EN = (
     "-------\n"
     "Answer the question based on the provided content rather than other knowledge. "
     "If the reference content is not related to the question, please answer based on your own knowledge."
+    "Do not use phrases like 'based on the provided information,' 'the reference materials indicate,' or similar expressions in your answers."
     "Question: {query_str}\n"
     "Please think carefully and use the same language as the question to give your answer: \n"
 )
@@ -580,8 +582,8 @@ class PaiSynthesizer(BaseSynthesizer):
             prompt_template = prompt_template or self._text_qa_template
         else:
             prompt_template = prompt_template or self._citation_text_qa_template
-
         text_qa_template = prompt_template.partial_format(query_str=query_str)
+        logger.info(f"Synthsize using LLM with prompt template: {text_qa_template}")
 
         context_str = (
             "\n-------\n"
