@@ -9,7 +9,7 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.storage.chat_store.base import BaseChatStore
-
+from llama_index.core.base.llms.types import ChatMessage
 from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
@@ -272,4 +272,65 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
 
         return await self._arun(
             query_bundle, session_id=session_id, chat_history=chat_history
+        )
+
+
+class OpenAICompatibleQueryTransform:
+    def __init__(
+        self,
+        llm: Optional[LLMType] = None,
+        condense_question_prompt: Optional[BasePromptTemplate] = None,
+        callback_manager: Optional[CallbackManager] = None,
+    ) -> None:
+        super().__init__()
+
+        self._llm = (
+            resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
+        )
+        self._condense_question_prompt = (
+            condense_question_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+        )
+
+    def run(
+        self,
+        chat_messages: List[ChatMessage],
+    ) -> QueryBundle:
+        chat_history_str = messages_to_history_str(chat_messages)
+        logger.debug(f"Chat history: {chat_history_str}")
+        query_bundle_str = self._llm.predict(
+            self._condense_question_prompt,
+            question=chat_messages[-1].content,
+            chat_history=chat_history_str,
+        )
+        # 修复thought输出
+        query_bundle_str = re.sub(
+            r"<think>.*?</think>\n*", "", query_bundle_str, flags=re.DOTALL
+        )
+
+        return QueryBundle(
+            query_str=query_bundle_str,
+            custom_embedding_strs=[query_bundle_str],
+        )
+
+    async def arun(
+        self,
+        chat_messages: List[ChatMessage],
+    ) -> QueryBundle:
+        """Run query transform.
+        Generate standalone question from conversation context and last message."""
+        chat_history_str = messages_to_history_str(chat_messages[-7:])
+        logger.debug(f"Chat history: {chat_history_str}")
+        query_bundle_str = await self._llm.apredict(
+            self._condense_question_prompt,
+            question=chat_messages[-1].content,
+            chat_history=chat_history_str,
+        )
+        # 修复thought输出
+        query_bundle_str = re.sub(
+            r"<think>.*?</think>\n*", "", query_bundle_str, flags=re.DOTALL
+        )
+
+        return QueryBundle(
+            query_str=query_bundle_str,
+            custom_embedding_strs=[query_bundle_str],
         )

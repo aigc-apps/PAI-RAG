@@ -68,6 +68,7 @@ class BingSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
         lang: str = None,
+        prompt_template_str: Optional[str] = None,
         search_top_k: Optional[int] = None,
     ):
         if lang:
@@ -83,7 +84,9 @@ class BingSearchTool(BaseQueryEngine):
             doc_node = TextNode(text=doc.text[:800], metadata=doc.metadata)
             nodes.append(NodeWithScore(node=doc_node, score=1))
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError

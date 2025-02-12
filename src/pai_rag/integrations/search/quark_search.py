@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import Optional
 from pai_rag.integrations.search.quark_utils import (
     get_access_token,
     postprocess_items,
@@ -103,11 +104,14 @@ class QuarkSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        prompt_template_str: Optional[str] = None,
     ):
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError

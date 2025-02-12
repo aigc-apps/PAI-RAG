@@ -1,3 +1,4 @@
+from pai_rag.app.api.models import ChatCompletionRequest
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import index_manager
 from pai_rag.core.rag_module import (
@@ -10,9 +11,20 @@ from pai_rag.core.rag_module import (
     resolve_query_engine,
     resolve_query_transform,
     resolve_searcher,
+    resolve_openai_query_transform,
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
+from openai.types.chat import (
+    ChatCompletionMessage,
+    ChatCompletion,
+    ChatCompletionChunk,
+)
+from openai.types.chat.chat_completion import Choice
+
+import openai.types.chat.chat_completion_chunk as chat_completion_chunk
+
+from openai.types.completion_usage import CompletionUsage
 from pai_rag.app.api.models import (
     RagQuery,
     RetrievalQuery,
@@ -30,6 +42,8 @@ import os
 from loguru import logger
 from enum import Enum
 from uuid import uuid4
+from llama_index.core import Settings
+import time
 import re
 
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
@@ -89,6 +103,58 @@ async def event_generator_async(
         last_chunk, default=lambda x: x.dict(), ensure_ascii=False
     )
     yield _event_chunk_wrapper(last_chunk_data, sse_version)
+
+
+def _make_chat_completion_response(session_id, response):
+    return ChatCompletion(
+        id=session_id,
+        created=int(time.time()),
+        model=Settings.llm.metadata.model_name,
+        choices=[
+            Choice(
+                index=0,
+                message=ChatCompletionMessage(
+                    role=MessageRole.ASSISTANT.value,
+                    content=response.response,
+                ),
+                finish_reason="stop",
+            )
+        ],
+        object="chat.completion",
+        usage=CompletionUsage(
+            completion_tokens=0,
+            prompt_tokens=0,
+            total_tokens=0,
+        ),
+    )
+
+
+async def _make_chat_completion_chunk_response(session_id, response):
+    content = ""
+    i = 0
+    created_ts = int(time.time())
+    model_name = Settings.llm.metadata.model_name
+    async for token in response.async_response_gen():
+        if token:
+            content += token
+            chunk = ChatCompletionChunk(
+                id=session_id,
+                created=created_ts,
+                model=model_name,
+                choices=[
+                    chat_completion_chunk.Choice(
+                        index=i,
+                        delta=chat_completion_chunk.ChoiceDelta(
+                            role=MessageRole.ASSISTANT.value,
+                            content=token,
+                        ),
+                        finish_reason=None,
+                    )
+                ],
+                object="chat.completion.chunk",
+            )
+            i += 1
+            yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=True)}\n\n"
 
 
 class RagApplication:
@@ -165,6 +231,71 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
+    async def achat(
+        self,
+        chat_request: ChatCompletionRequest,
+    ):
+        session_id = uuid_generator()
+        session_config = self.config.model_copy()
+        index_entry = index_manager.get_index_by_name(chat_request.index_name)
+        session_config.embedding = index_entry.embedding_config
+        session_config.index.vector_store = index_entry.vector_store_config
+
+        question = chat_request.messages[-1].content
+        chat_history = []
+        for msg in chat_request.messages[:-1]:
+            if msg.role == MessageRole.USER:
+                role = "user"
+            else:
+                role = "bot"
+            chat_history.append({role: msg.content})
+
+        print(chat_history)
+        if not question:
+            return RagResponse(answer="请输入您的消息.", session_id=session_id)
+
+        openai_query_transform = resolve_openai_query_transform(session_config)
+        new_query_bundle = await openai_query_transform.arun(
+            chat_messages=chat_request.messages,
+        )
+
+        new_question = new_query_bundle.query_str
+        logger.info(f"Querying with question '{new_question}'.")
+        query_bundle = PaiQueryBundle(
+            query_str=new_question,
+            stream=chat_request.stream,
+            citation=chat_request.citation,
+        )
+
+        if chat_request.search_web:
+            search_engine = resolve_searcher(session_config)
+            response = await search_engine.aquery(
+                query_bundle, prompt_template_str=chat_request.prompt_template
+            )
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response=response,
+                )
+            else:
+                return _make_chat_completion_response(
+                    session_id=session_id, response=response
+                )
+
+        query_engine = resolve_query_engine(session_config)
+        response = await query_engine.aquery(
+            query_bundle, prompt_template_str=chat_request.prompt_template
+        )
+        if chat_request.stream:
+            return _make_chat_completion_chunk_response(
+                session_id=session_id,
+                response=response,
+            )
+        else:
+            return _make_chat_completion_response(
+                session_id=session_id, response=response
+            )
+
     async def aquery(
         self,
         query: RagQuery,
@@ -216,39 +347,47 @@ class RagApplication:
         )
         if chat_type == RagChatType.RAG:
             query_engine = resolve_query_engine(session_config)
-            response = await query_engine.aquery(query_bundle)
+            response = await query_engine.aquery(
+                query_bundle, prompt_template_str=query.prompt_template
+            )
         elif chat_type == RagChatType.WEB:
             search_engine = resolve_searcher(session_config)
             if not search_engine:
                 raise ValueError("AI search not enabled. Please add search API key.")
-            response = await search_engine.aquery(query_bundle)
+            response = await search_engine.aquery(
+                query_bundle, prompt_template_str=query.prompt_template
+            )
         elif chat_type == RagChatType.LLM:
             query_engine = resolve_query_engine(session_config)
             query_bundle.no_retrieval = True
-            response = await query_engine.asynthesize(query_bundle, nodes=[])
+            response = await query_engine.asynthesize(
+                query_bundle, nodes=[], prompt_template_str=query.prompt_template
+            )
 
         node_results = response.source_nodes
-        reference_docs = [
-            ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-                image_url=score_node.node.image_url,
-            )
-            if isinstance(score_node.node, ImageNode)
-            else ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-            )
-            for score_node in node_results
-        ]
-
         result_info = {
             "session_id": session_id,
-            "docs": reference_docs,
             "new_query": new_question,
         }
+
+        if query.return_reference:
+            reference_docs = [
+                ContextDoc(
+                    text=score_node.node.get_content(),
+                    metadata=score_node.node.metadata,
+                    score=score_node.score,
+                    image_url=score_node.node.image_url,
+                )
+                if isinstance(score_node.node, ImageNode)
+                else ContextDoc(
+                    text=score_node.node.get_content(),
+                    metadata=score_node.node.metadata,
+                    score=score_node.score,
+                )
+                for score_node in node_results
+            ]
+
+            result_info["docs"] = reference_docs
 
         if not query.stream:
             content = re.sub(
@@ -258,7 +397,7 @@ class RagApplication:
                 session_id,
                 ChatMessage(role=MessageRole.ASSISTANT, content=content),
             )
-            return RagResponse(answer=content, **result_info)
+            return RagResponse(answer=response.response, **result_info)
         else:
             return event_generator_async(
                 response=response,

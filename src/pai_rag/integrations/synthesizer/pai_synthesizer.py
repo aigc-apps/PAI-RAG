@@ -316,6 +316,7 @@ class PaiSynthesizer(BaseSynthesizer):
         query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+        prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
         dispatcher.event(
@@ -323,6 +324,9 @@ class PaiSynthesizer(BaseSynthesizer):
                 query=query,
             )
         )
+        prompt_template = None
+        if prompt_template_str:
+            prompt_template = PromptTemplate(template=prompt_template_str)
 
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
@@ -342,6 +346,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 response_str = self.get_llm_only_response(
                     query_str=query.query_str,
                     streaming=query.stream,
+                    prompt_template=prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -354,6 +359,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
+                    prompt_template=prompt_template,
                     **response_kwargs,
                 )
 
@@ -378,8 +384,13 @@ class PaiSynthesizer(BaseSynthesizer):
         query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+        prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
+        prompt_template = None
+        if prompt_template_str:
+            prompt_template = PromptTemplate(template=prompt_template_str)
+
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -404,6 +415,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 response_str = await self.aget_llm_only_response(
                     query_str=query.query_str,
                     streaming=query.stream,
+                    prompt_template=prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -416,6 +428,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
+                    prompt_template=prompt_template,
                     **response_kwargs,
                 )
 
@@ -537,6 +550,7 @@ class PaiSynthesizer(BaseSynthesizer):
         query_str: str,
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
+        prompt_template: Optional[PromptTemplate] = None,
         streaming: bool = False,
         citation: bool = False,
         **response_kwargs: Any,
@@ -560,16 +574,16 @@ class PaiSynthesizer(BaseSynthesizer):
 
         logger.info(f"Synthsize using LLM with no image inputs. citation: {citation}")
         if not citation:
-            text_qa_template = self._text_qa_template.partial_format(
-                query_str=query_str
-            )
+            prompt_template = prompt_template or self._text_qa_template
         else:
-            text_qa_template = self._citation_text_qa_template.partial_format(
-                query_str=query_str
-            )
+            prompt_template = prompt_template or self._citation_text_qa_template
 
-        context_str = "\n".join(
-            [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+        text_qa_template = prompt_template.partial_format(query_str=query_str)
+
+        context_str = (
+            "\n-------\n"
+            + "\n".join([f"\n{text}\n\n-------" for i, text in enumerate(text_chunks)])
+            + "\n"
         )
 
         response: RESPONSE_TEXT_TYPE
@@ -599,6 +613,7 @@ class PaiSynthesizer(BaseSynthesizer):
         query_str: str,
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
+        prompt_template: Optional[PromptTemplate] = None,
         streaming: bool = False,
         citation: bool = False,
         **kwargs: Any,
@@ -616,17 +631,17 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         if not citation:
-            text_qa_template = self._text_qa_template.partial_format(
-                query_str=query_str
-            )
+            prompt_template = prompt_template or self._text_qa_template
         else:
-            text_qa_template = self._citation_text_qa_template.partial_format(
-                query_str=query_str
-            )
+            prompt_template = prompt_template or self._citation_text_qa_template
 
-        context_str = "\n".join(
-            [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
+        text_qa_template = prompt_template.partial_format(query_str=query_str)
+        context_str = (
+            "\n-------\n"
+            + "\n".join([f"\n{text}\n\n-------" for i, text in enumerate(text_chunks)])
+            + "\n"
         )
+
         response: RESPONSE_TEXT_TYPE
         if not streaming:
             response = self._llm.predict(
@@ -651,19 +666,23 @@ class PaiSynthesizer(BaseSynthesizer):
     async def aget_llm_only_response(
         self,
         query_str: str,
+        prompt_template: PromptTemplate,
         streaming: bool = False,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
+
+        prompt_template = prompt_template or self._llm_only_template
+
         if not streaming:
             response = await self._llm.apredict(
-                self._llm_only_template,
+                prompt_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = await self._llm.astream(
-                self._llm_only_template,
+                prompt_template,
                 query_str=query_str,
                 **kwargs,
             )
@@ -678,19 +697,23 @@ class PaiSynthesizer(BaseSynthesizer):
     def get_llm_only_response(
         self,
         query_str: str,
+        prompt_template: PromptTemplate,
         streaming: bool = False,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
+
+        prompt_template = prompt_template or self._llm_only_template
+
         if not streaming:
             response = self._llm.predict(
-                self._llm_only_template,
+                prompt_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = self._llm.stream(
-                self._llm_only_template,
+                prompt_template,
                 query_str=query_str,
                 **kwargs,
             )

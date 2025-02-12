@@ -1,15 +1,19 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Sequence
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode
+from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode, QueryType
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
 from llama_index.core.callbacks.base import CallbackManager
 import llama_index.core.instrumentation as instrument
 from llama_index.core.response_synthesizers import BaseSynthesizer
+from llama_index.core.instrumentation.events.query import (
+    QueryEndEvent,
+    QueryStartEvent,
+)
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -93,7 +97,9 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         return [n for n in text_nodes] + image_nodes
 
     @dispatcher.span
-    def _query(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
+    def _query(
+        self, query_bundle: PaiQueryBundle, prompt_template_str: str = None
+    ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
@@ -102,13 +108,16 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
             response = self._response_synthesizer.synthesize(
                 query=query_bundle,
                 nodes=nodes,
+                prompt_template_str=prompt_template_str,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
         return response
 
     @dispatcher.span
-    async def _aquery(self, query_bundle: PaiQueryBundle) -> RESPONSE_TYPE:
+    async def _aquery(
+        self, query_bundle: PaiQueryBundle, prompt_template_str: str = None
+    ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
@@ -117,7 +126,68 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
             response = await self._response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
+                prompt_template_str=prompt_template_str,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
         return response
+
+    @dispatcher.span
+    def query(
+        self, str_or_query_bundle: QueryType, prompt_template_str: str = None
+    ) -> RESPONSE_TYPE:
+        dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
+        with self.callback_manager.as_trace("query"):
+            if isinstance(str_or_query_bundle, str):
+                str_or_query_bundle = QueryBundle(str_or_query_bundle)
+            query_result = self._query(
+                str_or_query_bundle, prompt_template_str=prompt_template_str
+            )
+        dispatcher.event(
+            QueryEndEvent(query=str_or_query_bundle, response=query_result)
+        )
+        return query_result
+
+    @dispatcher.span
+    async def aquery(
+        self, str_or_query_bundle: QueryType, prompt_template_str: str = None
+    ) -> RESPONSE_TYPE:
+        dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
+        with self.callback_manager.as_trace("query"):
+            if isinstance(str_or_query_bundle, str):
+                str_or_query_bundle = QueryBundle(str_or_query_bundle)
+            query_result = await self._aquery(
+                str_or_query_bundle, prompt_template_str=prompt_template_str
+            )
+        dispatcher.event(
+            QueryEndEvent(query=str_or_query_bundle, response=query_result)
+        )
+        return query_result
+
+    def synthesize(
+        self,
+        query_bundle: QueryBundle,
+        nodes: List[NodeWithScore],
+        prompt_template_str: str = None,
+        additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+    ) -> RESPONSE_TYPE:
+        return self._response_synthesizer.synthesize(
+            query=query_bundle,
+            nodes=nodes,
+            prompt_template_str=prompt_template_str,
+            additional_source_nodes=additional_source_nodes,
+        )
+
+    async def asynthesize(
+        self,
+        query_bundle: QueryBundle,
+        nodes: List[NodeWithScore],
+        prompt_template_str: str = None,
+        additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+    ) -> RESPONSE_TYPE:
+        return await self._response_synthesizer.asynthesize(
+            query=query_bundle,
+            nodes=nodes,
+            prompt_template_str=prompt_template_str,
+            additional_source_nodes=additional_source_nodes,
+        )
