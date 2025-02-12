@@ -1,5 +1,6 @@
 DEFAULT_DB_DESCRIPTION_PATH = "./localdata/data_analysis/text2sql/description"
 DEFAULT_DB_DESCRIPTION_NAME = "db_structured_description.json"
+DEFAULT_DESCRIPTION_FOLDER_PATH = "./localdata/data_analysis/text2sql/input_description"
 
 DEFAULT_DB_HISTORY_PATH = "./localdata/data_analysis/text2sql/history"
 DEFAULT_DB_HISTORY_NAME = "db_query_history.json"

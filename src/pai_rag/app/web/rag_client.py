@@ -85,6 +85,10 @@ class RagWebClient:
         return urljoin(self.endpoint, "api/v1/upload_db_history")
 
     @property
+    def load_db_description_url(self):
+        return urljoin(self.endpoint, "api/v1/upload_db_description")
+
+    @property
     def load_agent_cfg_url(self):
         # return f"{self.endpoint}v1/config/agent"
         return urljoin(self.endpoint, "api/v1/config/agent")
@@ -469,6 +473,41 @@ class RagWebClient:
             logger.exception(f"add_db_history failed: {e}")
         finally:
             file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def add_db_description(
+        self,
+        input_files: str,
+        db_name: str,
+    ):
+        files = []
+        file_obj_list = []
+        if input_files:
+            for file_name in input_files:
+                file_obj = open(file_name, "rb")
+                mimetype = mimetypes.guess_type(file_name)[0]
+                files.append(
+                    ("files", (os.path.basename(file_name), file_obj, mimetype))
+                )
+                file_obj_list.append(file_obj)
+
+        para = {"db_name": db_name}
+        try:
+            r = requests.post(
+                self.load_db_description_url,
+                files=files,
+                data=para,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        finally:
+            for file_obj in file_obj_list:
+                file_obj.close()
 
         response = dotdict(json.loads(r.text))
         return response

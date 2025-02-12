@@ -21,6 +21,7 @@ from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
 )
 from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
+    DEFAULT_DESCRIPTION_FOLDER_PATH,
     DEFAULT_DB_HISTORY_PATH,
     DEFAULT_DB_HISTORY_NAME,
 )
@@ -301,6 +302,43 @@ async def upload_history_json(
     return {
         "task_id": task_id,
         "destination_path": unified_destination_path,
+    }
+
+
+@router_v1.post("/upload_db_description")
+async def upload_description(
+    files: List[UploadFile] = Body(None),
+    db_name: str = Form(None),
+):
+    task_id = uuid.uuid4().hex
+    if not files:
+        return {"message": "No upload files"}
+
+    persist_path = DEFAULT_DESCRIPTION_FOLDER_PATH
+    file_destination_folder = os.path.join(
+        persist_path, db_name, "database_description"
+    )
+    os.makedirs(name=file_destination_folder, exist_ok=True)
+
+    # 指定持久化存储位置
+    for file in files:
+        file_name = os.path.basename(file.filename)  # 获取文件名
+        file_destination_path = os.path.join(
+            persist_path, db_name, "database_description", file_name
+        )
+        # 写入文件
+        try:
+            # shutil.copy(file.filename, destination_path)
+            with open(file_destination_path, "wb") as f:
+                shutil.copyfileobj(file.file, f)
+            logger.info("History file saved successfully")
+
+        except Exception as e:
+            return StreamingResponse(status_code=500, content={"message": str(e)})
+
+    return {
+        "task_id": task_id,
+        "destination_path": persist_path,
     }
 
 

@@ -16,6 +16,7 @@ from llama_index.core.objects.table_node_mapping import SQLTableSchema
 from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DB_DESCRIPTION_PATH,
     DEFAULT_DB_DESCRIPTION_NAME,
+    DEFAULT_DESCRIPTION_FOLDER_PATH,
     DEFAULT_TABLE_COMMENT_PATH,
     DEFAULT_TABLE_COMMENT_NAME,
     DEFAULT_DB_HISTORY_PATH,
@@ -765,7 +766,7 @@ class BirdSchemaCollector(DBInfoCollector):
         self._db_description_save_path = os.path.join(
             DEFAULT_DB_DESCRIPTION_PATH, f"{db_name}_{DEFAULT_DB_DESCRIPTION_NAME}"
         )
-        self._database_file_path = database_file_path
+        self._database_file_path = database_file_path or DEFAULT_DESCRIPTION_FOLDER_PATH
 
     def collect(self):
         structured_db_description_dict = self._get_structured_db_description()
@@ -832,8 +833,9 @@ class BirdSchemaCollector(DBInfoCollector):
                         except Exception as e:
                             logger.error(f"Failed to read {file}: {e}")
                             raise
-            else:
-                table_desc_df = None
+                else:
+                    table_desc_df = None
+
             # get column info
             column_info_list = []
             for i, col in enumerate(
