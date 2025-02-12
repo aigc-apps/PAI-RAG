@@ -6,6 +6,7 @@ from typing import Literal
 class SupportedSearchType(str, Enum):
     bing = "bing"
     quark = "quark"
+    aliyun = "aliyun"
 
 
 class BaseSearchConfig(BaseModel):
@@ -35,3 +36,9 @@ class QuarkSearchConfig(BaseSearchConfig):
     host: str = "https://zx-dsc.sm.cn/"
     user: str | None = None
     secret: str | None = None
+
+class AliyunSearchConfig(BaseSearchConfig):
+    source: Literal[SupportedSearchType.aliyun] = SupportedSearchType.aliyun
+    endpoint: str = "iqs.cn-zhangjiakou.aliyuncs.com"
+    accessid: str | None = None
+    accesskey: str | None = None
