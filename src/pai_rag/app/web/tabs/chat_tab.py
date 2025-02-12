@@ -14,6 +14,17 @@ def reset_textbox():
     return gr.update(value="")
 
 
+def change_search_model_argument(search_type):
+    return [
+        gr.update(visible=True if search_type == "bing" else False),
+        gr.update(visible=True),
+        gr.update(visible=True if search_type == "bing" else False),
+        gr.update(visible=False if search_type == "bing" else True),
+        gr.update(visible=False if search_type == "bing" else True),
+        gr.update(visible=False if search_type == "bing" else True),
+    ]
+
+
 def respond(input_elements: List[Any]):
     update_dict = {}
 
@@ -58,7 +69,7 @@ def respond(input_elements: List[Any]):
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(question, index_name=index_name)
 
-        elif query_type == "RAG (Search Web)":
+        elif query_type == "Chat（Web Search）":
             response_gen = rag_client.query_search(
                 question,
                 with_history=update_dict["include_history"],
@@ -119,10 +130,10 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="chat_index",
             )
             query_type = gr.Radio(
-                ["Retrieval", "LLM", "RAG (Search Web)", "RAG (Retrieval + LLM)"],
+                ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
-                value="RAG (Retrieval + LLM)",
+                value="Chat（Knowledge Base）",
             )
             is_streaming = gr.Checkbox(
                 label="Streaming Output",
@@ -134,7 +145,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Citation",
                 info="Need Citation",
                 elem_id="citation",
-                value=True,
+                value=False,
             )
             need_image = gr.Checkbox(
                 label="Display Image",
@@ -303,6 +314,11 @@ def create_chat_tab() -> Dict[str, Any]:
                     "Parameters of Web Search", open=False
                 )
                 with search_model_argument:
+                    search_type = gr.Radio(
+                        ["bing", "夸克"],
+                        label="Search Engine",
+                        elem_id="search_type",
+                    )
                     search_api_key = gr.Text(
                         label="Bing API Key",
                         value="",
@@ -312,7 +328,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     search_count = gr.Slider(
                         label="Search Count",
                         minimum=5,
-                        maximum=30,
+                        maximum=50,
                         step=1,
                         elem_id="search_count",
                     )
@@ -322,7 +338,43 @@ def create_chat_tab() -> Dict[str, Any]:
                         value="zh-CN",
                         elem_id="search_lang",
                     )
-                search_args = {search_api_key, search_count, search_lang}
+                    quark_host = gr.Text(
+                        label="Quark Host",
+                        value="",
+                        elem_id="quark_host",
+                    )
+                    quark_user = gr.Text(
+                        label="Quark User",
+                        value="",
+                        elem_id="quark_user",
+                    )
+                    quark_secret = gr.Text(
+                        label="Quark Secret",
+                        value="",
+                        type="password",
+                        elem_id="quark_secret",
+                    )
+                search_args = {
+                    search_type,
+                    search_api_key,
+                    search_count,
+                    search_lang,
+                    quark_host,
+                    quark_user,
+                    quark_secret,
+                }
+                search_type.input(
+                    fn=change_search_model_argument,
+                    inputs=[search_type],
+                    outputs=[
+                        search_api_key,
+                        search_count,
+                        search_lang,
+                        quark_host,
+                        quark_user,
+                        quark_secret,
+                    ],
+                )
 
             with gr.Column(visible=True) as lc_col:
                 with gr.Tab("Prompt"):
@@ -381,7 +433,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=False),
                     }
-                elif query_type == "RAG (Retrieval + LLM)":
+                elif query_type == "Chat（Knowledge Base）":
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=False),
@@ -391,7 +443,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                     }
-                elif query_type == "RAG (Search Web)":
+                elif query_type == "Chat（Web Search）":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
@@ -423,7 +475,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     label="Chat history",
                     info="Query with chat history.",
                     elem_id="include_history",
-                    value=True,
+                    value=False,
                     scale=1,
                 )
                 question = gr.Textbox(
@@ -499,6 +551,10 @@ def create_chat_tab() -> Dict[str, Any]:
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,
             search_count.elem_id: search_count,
+            search_type.elem_id: search_type,
+            quark_host.elem_id: quark_host,
+            quark_secret.elem_id: quark_secret,
+            quark_user.elem_id: quark_user,
             model_reranker_col.elem_id: model_reranker_col,
             llm_temperature.elem_id: llm_temperature,
         }

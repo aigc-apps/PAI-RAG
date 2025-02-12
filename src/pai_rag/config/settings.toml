@@ -81,7 +81,7 @@ retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
 [rag.search]
-search_api_key = ""
+source = "quark"
 
 [rag.synthesizer]
 type = "SimpleSummarize"

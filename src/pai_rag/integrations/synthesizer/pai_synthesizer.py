@@ -21,9 +21,6 @@ from llama_index.core.schema import (
 )
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
-    Response,
-    StreamingResponse,
-    AsyncStreamingResponse,
 )
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
@@ -41,34 +38,37 @@ dispatcher = instrument.get_dispatcher(__name__)
 DEFAULT_EMPTY_RESPONSE_GEN = "Sorry, I don't know about that."
 
 DEFAULT_TEXT_QA_TMPL = (
+    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。"
     "参考内容信息如下"
     "-------\n"
     "{context_str}\n"
     "-------\n"
-    "根据提供内容而非其他知识回答问题. "
-    '如果参考内容与问题无关，请直接回复"Sorry, I don\'t know about that."'
+    "请仅依据上述内容回答问题，避免使用其他来源的知识。 "
+    "如果参考内容与问题无关，请根据自己的知识进行回答。"
     "问题: {query_str}\n"
-    "请仔细思考，必须使用和提问相同的语言，给出你的答案: \n"
+    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
 )
 
 DEFAULT_TEXT_QA_TMPL_EN = (
+    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
     "Reference content information is as follows"
     "-------\n"
     "{context_str}\n"
     "-------\n"
     "Answer the question based on the provided content rather than other knowledge. "
-    'If the reference content is not relevant to the question, please reply with "Sorry, I don\'t know about that."'
+    "If the reference content is not related to the question, please answer based on your own knowledge."
     "Question: {query_str}\n"
     "Please think carefully and use the same language as the question to give your answer: \n"
 )
 
 CITATION_TEXT_QA_TMPL = (
+    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。"
     "请完全根据提供的参考内容回答问题。\n"
     "参考内容由几段文本内容组成,"
     "当你生成的内容引用到了某段文本来源，请在内容中引用对应文本的数字序号来显示相关的信息源，"
     "比如[1]，这样可以让你的回复看起来更加可靠。"
     "你的答案需要包含至少一个相关的引用标记。"
-    '只有在你真正引用了文本的时候才会插入引用标记，当你没找到任何值得引用的内容时，请直接回复"Sorry, I don\'t know about that."\n'
+    "只有在你真正引用了文本的时候才会插入引用标记，当你没找到任何值得引用的内容时，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。\n"
     "注意仅在引用标记中插入数字。你必须使用和提问相同的语言进行回答。\n\n"
     "例如:\n"
     "参考材料\n"
@@ -88,13 +88,18 @@ CITATION_TEXT_QA_TMPL = (
     "{context_str}\n"
     "-------\n"
     "问题: {query_str}\n"
-    "请仔细思考，必须使用和提问相同的语言，给出你的答案："
+    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
 )
 
 CITATION_TEXT_QA_TMPL_EN = (
+    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
     "Please answer the question based on the following reference materials rather than other knowledge.\n"
     "The references consist of several paragraphs of text,"
     "When you generate content that references a text source, please quote the corresponding text number in the content to indicate the relevant information source, which will make your answer look more reliable."
+    "Your answer must contain at least one relevant reference mark. \n"
+    "Only insert reference marks when you actually quote the text. "
+    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
+    "Note that only numbers are inserted in reference marks. \n\n"
     "For example:\n"
     "References\n"
     "-------\n"
@@ -112,10 +117,6 @@ CITATION_TEXT_QA_TMPL_EN = (
     "-------\n"
     "{context_str}\n"
     "-------\n"
-    "Your answer must contain at least one relevant reference mark. \n"
-    "Only insert reference marks when you actually quote the text. "
-    'If the reference materials is not relevant to the question, please reply with "Sorry, I don\'t know about that.".\n'
-    "Note that only numbers are inserted in reference marks. \n\n"
     "Question: {query_str}\n"
     "Please MUST use the same language as the question to answer. Please think carefully and give your answer:"
 )
@@ -130,11 +131,11 @@ DEFAULT_LLM_CHAT_TMPL = (
 
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
-    "根据上面给出的图片和下面给出的参考材料来回答用户的问题。\n"
+    "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"
     "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
-    '请根据给定的材料回答给出的问题，回答中需要有文字描述和图片链接。如果材料中没有答案相关的信息，直接回复"Sorry, I don\'t know about that."\n'
+    "请根据给定的材料回答给出的问题，回答中需要有文字描述和图片链接。"
     "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。\n\n"
-    "你必须使用和提问相同的语言进行回答。"
+    "如果材料中没有答案相关的信息，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。"
     "例如：\n"
     "参考材料\n"
     "------\n"
@@ -154,16 +155,16 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "{context_str}\n"
     "------\n"
     "问题: {query_str}\n"
-    "请必须使用和提问相同的语言，仔细思考，给出你的答案："
+    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
 )
 
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN = (
-    "Answer the user's question based on the pictures given above and the reference materials given below.\n"
+    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
     "The reference materials contain a set of text descriptions and a set of image links, which correspond to the addresses of the pictures given above.\n"
-    'Please answer the given questions based on the given materials. The answers need to have text descriptions and image links. If there is no information related to the answer in the reference materials, please reply with "Sorry, I don\'t know about that."\n'
+    "Please answer the given questions based on the given materials. The answers need to have text descriptions and image links."
     "If there are pictures above that help you generate answers, please find the image link and give it in markdown format, such as ![](image_url).\n\n"
-    "You must answer in the same language as the question."
+    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
     "For example:\n"
     "Reference materials\n"
     "------\n"
@@ -188,12 +189,12 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN = (
 
 
 CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
-    "根据上面给出的图片和下面给出的参考材料来回答用户的问题。\n"
+    "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"
     "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
     "请根据给定的材料回答给出的问题，如果你当前生成的内容引用到了某一段文字描述，请直接在内容里引用他的数字序号，如[1]。\n"
     "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。"
-    "请至少列出一个文本和图片引用。如果材料中没有答案相关的信息，就回复你不知道。\n"
-    "你必须使用和提问相同的语言进行回答。"
+    "请至少列出一个文本和图片引用。"
+    "如果材料中没有答案相关的信息，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。\n"
     "例如：\n"
     "参考材料\n"
     "------\n"
@@ -217,12 +218,11 @@ CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
 )
 
 CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN = (
-    "Answer the user's question based on the pictures given above and the reference materials given below.\n"
+    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
     "The reference materials contain a set of text descriptions and a set of image links. The image links correspond to the addresses of the pictures given above.\n"
     "Please answer the given questions based on the given materials. If the content you are currently generating refers to a certain text description, please directly quote its numerical serial number in the content, such as [1].\n"
     "If there are pictures above that help you generate the answer, please find the image link and give it in markdown format, such as ![](image_url)."
-    'Please list at least one text and image reference. If there is no information related to the answer in the material, please reply with "Sorry, I don\'t know about that."\n'
-    "You must answer in the same language as the question."
+    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
     "For example:\n"
     "Reference materials\n"
     "------\n"
@@ -327,28 +327,6 @@ class PaiSynthesizer(BaseSynthesizer):
             )
         )
 
-        if not query.no_retrieval and len(nodes) == 0:
-            if query.stream:
-                empty_response = StreamingResponse(
-                    response_gen=empty_response_generator()
-                )
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-            else:
-                empty_response = Response(DEFAULT_EMPTY_RESPONSE_GEN)
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
 
@@ -410,27 +388,6 @@ class PaiSynthesizer(BaseSynthesizer):
                 query=query,
             )
         )
-        if not query.no_retrieval and len(nodes) == 0:
-            if query.stream:
-                empty_response = AsyncStreamingResponse(
-                    response_gen=empty_response_agenerator()
-                )
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
-            else:
-                empty_response = Response(DEFAULT_EMPTY_RESPONSE_GEN)
-                dispatcher.event(
-                    SynthesizeEndEvent(
-                        query=query,
-                        response=empty_response,
-                    )
-                )
-                return empty_response
 
         if isinstance(query, str):
             query = QueryBundle(query_str=query)

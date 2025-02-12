@@ -23,6 +23,10 @@ from pai_rag.integrations.llms.pai.llm_config import (
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
+from pai_rag.integrations.search.search_config import (
+    BingSearchConfig,
+    QuarkSearchConfig,
+)
 
 
 def recursive_dict():
@@ -77,9 +81,14 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
+    search_type: str = "夸克"
     search_api_key: str = None
-    search_count: int = 10
+    search_count: int = 30
     search_lang: str = "zh-CN"
+
+    quark_host: str = None
+    quark_user: str = None
+    quark_secret: str = None
 
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
@@ -144,7 +153,7 @@ class ViewModel(BaseModel):
         if isinstance(config.llm, PaiEasLlmConfig):
             view_model.llm_model_name = config.llm.model
             view_model.llm_base_url = config.llm.endpoint
-            view_model.llm_api_key = config.llm.token
+            view_model.llm_api_key = str(config.llm.token)
         elif isinstance(config.llm, DashScopeLlmConfig):
             view_model.llm_api_key = config.llm.api_key or os.getenv(
                 "DASHSCOPE_API_KEY"
@@ -218,11 +227,19 @@ class ViewModel(BaseModel):
             config.synthesizer.citation_multimodal_qa_template
         )
 
-        view_model.search_api_key = config.search.search_api_key or os.environ.get(
-            "BING_SEARCH_KEY"
-        )
-        view_model.search_lang = config.search.search_lang
-        view_model.search_count = config.search.search_count
+        if isinstance(config.search, BingSearchConfig):
+            view_model.search_type = "bing"
+            view_model.search_api_key = config.search.search_api_key or os.environ.get(
+                "BING_SEARCH_KEY"
+            )
+            view_model.search_lang = config.search.search_lang
+            view_model.search_count = config.search.search_count
+        elif isinstance(config.search, QuarkSearchConfig):
+            view_model.search_type = "夸克"
+            view_model.quark_host = config.search.host
+            view_model.quark_secret = config.search.secret
+            view_model.quark_user = config.search.user
+            view_model.search_count = config.search.search_count
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
             view_model.analysis_type = "nl2pandas"
@@ -387,11 +404,19 @@ class ViewModel(BaseModel):
             "citation_multimodal_qa_template"
         ] = self.citation_multimodal_qa_template
 
-        config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
-            "BING_SEARCH_KEY"
-        )
-        config["search"]["search_lang"] = self.search_lang
-        config["search"]["search_count"] = self.search_count
+        if self.search_type == "bing":
+            config["search"]["source"] = "bing"
+            config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
+                "BING_SEARCH_KEY"
+            )
+            config["search"]["search_lang"] = self.search_lang
+            config["search"]["search_count"] = self.search_count
+        else:
+            config["search"]["source"] = "quark"
+            config["search"]["host"] = self.quark_host
+            config["search"]["user"] = self.quark_user
+            config["search"]["secret"] = self.quark_secret
+            config["search"]["search_count"] = self.search_count
 
         config["intent"]["descriptions"] = json.loads(self.intent_description)
 
@@ -547,9 +572,24 @@ class ViewModel(BaseModel):
         }
 
         # search
-        settings["search_api_key"] = {"value": self.search_api_key}
-        settings["search_lang"] = {"value": self.search_lang}
-        settings["search_count"] = {"value": self.search_count}
+        settings["search_type"] = {"value": self.search_type}
+        if self.search_type == "bing":
+            settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
+            settings["search_lang"] = {"value": self.search_lang, "visible": True}
+            settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["quark_host"] = {"value": self.quark_host, "visible": False}
+            settings["quark_user"] = {"value": self.quark_user, "visible": False}
+            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
+        else:
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
+            settings["search_lang"] = {"value": self.search_lang, "visible": False}
+            settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["quark_host"] = {"value": self.quark_host, "visible": True}
+            settings["quark_user"] = {"value": self.quark_user, "visible": True}
+            settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
 
         # data_analysis
         settings["analysis_type"] = {"value": self.analysis_type}

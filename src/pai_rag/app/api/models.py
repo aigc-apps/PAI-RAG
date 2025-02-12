@@ -17,6 +17,7 @@ class RagQuery(BaseModel):
     citation: bool | None = False
     with_intent: bool | None = False
     index_name: str | None = None
+    search_web: bool | None = False
 
 
 class RetrievalQuery(BaseModel):

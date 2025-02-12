@@ -225,7 +225,7 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
                 extra_info.update(metadata)
 
             else:
-                data = soup.getText()
+                data = soup.getText(strip=True)
 
             if data:
                 documents.append(Document(text=data, id_=url, extra_info=extra_info))

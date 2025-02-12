@@ -118,6 +118,10 @@ class RagService:
 
     async def aquery_v1(self, query: RagQuery):
         try:
+            if query.search_web:
+                return await self.rag.aquery(
+                    query, RagChatType.WEB, sse_version=SseVersion.V1
+                )
             return await self.rag.aquery(
                 query, RagChatType.RAG, sse_version=SseVersion.V1
             )
@@ -145,6 +149,8 @@ class RagService:
 
     async def aquery(self, query: RagQuery):
         try:
+            if query.search_web:
+                return await self.rag.aquery(query, RagChatType.WEB)
             return await self.rag.aquery(query, RagChatType.RAG)
         except Exception as ex:
             logger.error(traceback.format_exc())

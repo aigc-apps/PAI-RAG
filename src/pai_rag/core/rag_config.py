@@ -4,7 +4,6 @@ from pai_rag.core.models.config import (
     NodeEnhancementConfig,
     OssStoreConfig,
     RetrieverConfig,
-    SearchWebConfig,
     SynthesizerConfig,
 )
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
@@ -35,6 +34,10 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import BaseDataReaderConfig
 from pai_rag.integrations.router.pai.pai_router import IntentConfig
+from pai_rag.integrations.search.search_config import (
+    BingSearchConfig,
+    QuarkSearchConfig,
+)
 
 
 def validate_case_insensitive(value: Dict) -> Dict:
@@ -52,7 +55,7 @@ def validate_case_insensitive(value: Dict) -> Dict:
     if value.get("source") == "paieas":
         value["source"] = "openai_compatible"
         value["base_url"] = value["endpoint"]
-        value["api_key"] = value["token"]
+        value["api_key"] = str(value["token"])
     elif value.get("source") == "dashscope" and "embed_batch_size" not in value:
         value["source"] = "openai_compatible"
     return value
@@ -139,7 +142,11 @@ class RagConfig(BaseModel):
     retriever: RetrieverConfig
 
     # search web
-    search: SearchWebConfig
+    search: Annotated[
+        Union[BingSearchConfig, QuarkSearchConfig],
+        Field(discriminator="source"),
+        BeforeValidator(validate_case_insensitive),
+    ]
 
     # synthesizer
     synthesizer: SynthesizerConfig

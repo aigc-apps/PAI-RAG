@@ -31,7 +31,7 @@ def respond(retrieve_only, question, chatbot):
                 question,
                 with_history=False,
                 stream=True,
-                citation=True,
+                citation=False,
                 index_name="default_index",
             )
         for resp in response_gen:

@@ -2,6 +2,8 @@ from typing import Any
 
 from llama_index.core import Settings
 from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import BaseQueryEngine
+
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_data_loader import RagDataLoader
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
@@ -30,10 +32,15 @@ from pai_rag.integrations.query_transform.pai_query_transform import (
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter
 from pai_rag.integrations.search.bing_search import BingSearchTool
+from pai_rag.integrations.search.quark_search import QuarkSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
+from pai_rag.integrations.search.search_config import (
+    BingSearchConfig,
+    QuarkSearchConfig,
+)
 
 
 cls_cache = {}
@@ -242,17 +249,26 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
     return query_engine
 
 
-def resolve_searcher(config: RagConfig) -> BingSearchTool:
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
     synthesizer = resolve_synthesizer(config)
 
-    searcher = resolve(
-        cls=BingSearchTool,
-        api_key=config.search.search_api_key,
-        synthesizer=synthesizer,
-        embed_model=embed_model,
-        search_count=config.search.search_count,
-        search_lang=config.search.search_lang,
-    )
+    searcher = None
+    if isinstance(config.search, BingSearchConfig):
+        searcher = resolve(
+            cls=BingSearchTool,
+            api_key=config.search.search_api_key,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+            search_lang=config.search.search_lang,
+        )
+    elif isinstance(config.search, QuarkSearchConfig):
+        searcher = resolve(
+            cls=QuarkSearchTool,
+            user=config.search.user,
+            secret=config.search.secret,
+            host=config.search.host,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+        )
 
     return searcher
