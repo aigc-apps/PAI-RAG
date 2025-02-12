@@ -358,20 +358,16 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="quark_secret",
                     )
                     aliyun_endpoint = gr.Text(
-                        label="Endpoint",
-                        value="",
-                        elem_id="aliyun_endpoint"
+                        label="Endpoint", value="", elem_id="aliyun_endpoint"
                     )
                     aliyun_accessid = gr.Text(
-                        label="AccessId",
-                        value="",
-                        elem_id="aliyun_accessid"
+                        label="AccessId", value="", elem_id="aliyun_accessid"
                     )
                     aliyun_accesskey = gr.Text(
                         label="AccessKey",
                         value="",
                         type="password",
-                        elem_id="aliyun_accesskey"
+                        elem_id="aliyun_accesskey",
                     )
                 search_args = {
                     search_type,
@@ -476,7 +472,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_col: gr.update(visible=True),
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
-                        lc_col: gr.update(visible=False),
+                        lc_col: gr.update(visible=True),
                     }
 
             query_type.input(

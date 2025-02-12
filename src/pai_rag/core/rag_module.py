@@ -33,6 +33,7 @@ from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
+from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
@@ -266,6 +267,15 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             user=config.search.user,
             secret=config.search.secret,
             host=config.search.host,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+        )
+    elif isinstance(config.search, AliyunSearchTool):
+        searcher = resolve(
+            cls=AliyunSearchTool,
+            accessid=config.search.accessid,
+            accesskey=config.search.accesskey,
+            endpoint=config.search.endpoint,
             synthesizer=synthesizer,
             search_count=config.search.search_count,
         )
