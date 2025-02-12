@@ -69,7 +69,7 @@ def respond(input_elements: List[Any]):
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(question, index_name=index_name)
 
-        elif query_type == "RAG (Search Web)":
+        elif query_type == "Chat（Web Search）":
             response_gen = rag_client.query_search(
                 question,
                 with_history=update_dict["include_history"],
@@ -130,10 +130,10 @@ def create_chat_tab() -> Dict[str, Any]:
                 elem_id="chat_index",
             )
             query_type = gr.Radio(
-                ["Retrieval", "LLM", "RAG (Search Web)", "RAG (Retrieval + LLM)"],
+                ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
-                value="RAG (Retrieval + LLM)",
+                value="Chat（Knowledge Base）",
             )
             is_streaming = gr.Checkbox(
                 label="Streaming Output",
@@ -433,7 +433,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=False),
                     }
-                elif query_type == "RAG (Retrieval + LLM)":
+                elif query_type == "Chat（Knowledge Base）":
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=False),
@@ -443,7 +443,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                     }
-                elif query_type == "RAG (Search Web)":
+                elif query_type == "Chat（Web Search）":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
