@@ -11,7 +11,7 @@ from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.storage.chat_store.base import BaseChatStore
 
 from pai_rag.utils.prompt_template import (
-    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
+    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
 )
 
@@ -158,7 +158,7 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
         self._condense_question_prompt = (
-            condense_question_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+            condense_question_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
         )
         self._chat_store = chat_store
 
