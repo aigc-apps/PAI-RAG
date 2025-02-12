@@ -11,6 +11,7 @@ class SupportedSearchType(str, Enum):
 class BaseSearchConfig(BaseModel):
     source: SupportedSearchType
     search_count: int = 30
+    with_intent: bool = True
 
     class Config:
         frozen = True

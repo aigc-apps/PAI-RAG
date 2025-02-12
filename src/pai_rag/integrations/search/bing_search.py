@@ -3,10 +3,10 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.query_engine import BaseQueryEngine
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
+from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
+from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 import httpx
 from loguru import logger
-
-from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
@@ -19,12 +19,14 @@ class BingSearchTool(BaseQueryEngine):
         self,
         api_key: str,
         synthesizer: BaseSynthesizer = None,
+        intent_router: PaiIntentRouter = None,
         endpoint: str = DEFAULT_ENDPOINT_BASE_URL,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
     ):
         self.api_key = api_key
         self.synthesizer = synthesizer
+        self.intent_router = intent_router
 
         self.search_count = search_count
         self.search_lang = search_lang
@@ -76,6 +78,13 @@ class BingSearchTool(BaseQueryEngine):
         if search_top_k:
             self.search_count = search_top_k
 
+        if self.intent_router:
+            logger.info("Intent router detected, start selecting intent.")
+            intent = await self.intent_router.aselect(query)
+            if intent == Intents.CHAT:
+                logger.info("Chat intent detected, return direct response.")
+                return await self.synthesizer.asynthesize(query=query, nodes=[])
+        logger.info("Search intent detected, return search result.")
         docs = await self._asearch(query=query.query_str)
         logger.info(f"Get {len(docs)} docs from url.")
 
