@@ -6,6 +6,21 @@ from pai_rag.core.rag_service import rag_service
 router_openai = APIRouter()
 
 
+@router_openai.get("/models")
+async def get_models():
+    return {
+        "data": [
+            {
+                "id": "default",
+                "object": "model",
+                "created": 1739298766,
+                "owned_by": "pai",
+                "permission": [],
+            }
+        ]
+    }
+
+
 @router_openai.post("/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     response = await rag_service.achat(request)

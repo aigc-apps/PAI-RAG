@@ -11,6 +11,7 @@ from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
 from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
+from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 import httpx
 from loguru import logger
 
@@ -114,7 +115,14 @@ class QuarkSearchTool(BaseQueryEngine):
             intent = await self.intent_router.aselect(query)
             if intent == Intents.CHAT:
                 logger.info("Chat intent detected, return direct response.")
-                return await self.synthesizer.asynthesize(query=query, nodes=[])
+                no_search_query = PaiQueryBundle(
+                    query_str=query.query_str, no_retrieval=True, stream=query.stream
+                )
+                return await self.synthesizer.asynthesize(
+                    query=no_search_query,
+                    nodes=[],
+                    prompt_template_str=prompt_template_str,
+                )
 
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")

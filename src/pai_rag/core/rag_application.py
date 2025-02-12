@@ -250,7 +250,6 @@ class RagApplication:
                 role = "bot"
             chat_history.append({role: msg.content})
 
-        print(chat_history)
         if not question:
             return RagResponse(answer="请输入您的消息.", session_id=session_id)
 
