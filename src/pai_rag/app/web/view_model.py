@@ -125,11 +125,10 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
-    llm_chat_prompt: str = None
-    text_qa_template: str = None
-    multimodal_qa_template: str = None
-    citation_text_qa_template: str = None
-    citation_multimodal_qa_template: str = None
+    system_role_template: str = None
+    custom_prompt_template: str = None
+    # multimodal_qa_template: str = None
+    # citation_multimodal_qa_template: str = None
 
     # agent
     agent_api_definition: str = None  # API tool definition
@@ -219,15 +218,12 @@ class ViewModel(BaseModel):
                 config.postprocessor.similarity_threshold
             )
 
-        view_model.llm_chat_prompt = config.synthesizer.llm_chat_prompt
-        view_model.text_qa_template = config.synthesizer.text_qa_template
-        view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
-        view_model.citation_text_qa_template = (
-            config.synthesizer.citation_text_qa_template
-        )
-        view_model.citation_multimodal_qa_template = (
-            config.synthesizer.citation_multimodal_qa_template
-        )
+        view_model.system_role_template = config.synthesizer.system_role_template
+        view_model.custom_prompt_template = config.synthesizer.custom_prompt_template
+        # view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
+        # view_model.citation_multimodal_qa_template = (
+        #     config.synthesizer.citation_multimodal_qa_template
+        # )
 
         if isinstance(config.search, BingSearchConfig):
             view_model.search_type = "bing"
@@ -397,15 +393,12 @@ class ViewModel(BaseModel):
             config["postprocessor"]["top_n"] = self.reranker_similarity_top_k
 
         config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
-        config["synthesizer"]["text_qa_template"] = self.text_qa_template
-        config["synthesizer"]["llm_chat_prompt"] = self.llm_chat_prompt
-        config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
-        config["synthesizer"][
-            "citation_text_qa_template"
-        ] = self.citation_text_qa_template
-        config["synthesizer"][
-            "citation_multimodal_qa_template"
-        ] = self.citation_multimodal_qa_template
+        config["synthesizer"]["custom_prompt_template"] = self.custom_prompt_template
+        config["synthesizer"]["system_role_template"] = self.system_role_template
+        # config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
+        # config["synthesizer"][
+        #     "citation_multimodal_qa_template"
+        # ] = self.citation_multimodal_qa_template
 
         if self.search_type == "bing":
             config["search"]["source"] = "bing"
@@ -565,17 +558,14 @@ class ViewModel(BaseModel):
             "visible": self.reranker_type == "model-based-reranker"
         }
 
-        settings["llm_chat_prompt"] = {
-            "value": self.llm_chat_prompt,
+        settings["system_role_template"] = {
+            "value": self.system_role_template,
         }
-        settings["text_qa_template"] = {"value": self.text_qa_template}
-        settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
-        settings["citation_text_qa_template"] = {
-            "value": self.citation_text_qa_template
-        }
-        settings["citation_multimodal_qa_template"] = {
-            "value": self.citation_multimodal_qa_template
-        }
+        settings["custom_prompt_template"] = {"value": self.custom_prompt_template}
+        # settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
+        # settings["citation_multimodal_qa_template"] = {
+        #     "value": self.citation_multimodal_qa_template
+        # }
 
         # search
         settings["search_type"] = {"value": self.search_type}

@@ -16,7 +16,8 @@ class RagQuery(BaseModel):
     with_intent: bool | None = False  # 是否使用意图
     index_name: str | None = None  # 索引名称
     search_web: bool | None = False  # 是否搜索网页
-    prompt_template: str | None = None  # system prompt模板
+    system_role_template: str | None = None  # system prompt模板
+    custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
 
 

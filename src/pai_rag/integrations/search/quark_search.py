@@ -108,6 +108,7 @@ class QuarkSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        system_role_str: Optional[str] = None,
         prompt_template_str: Optional[str] = None,
     ):
         if self.intent_router:
@@ -124,6 +125,7 @@ class QuarkSearchTool(BaseQueryEngine):
                 return await self.synthesizer.asynthesize(
                     query=no_search_query,
                     nodes=[],
+                    system_role_str=system_role_str,
                     prompt_template_str=prompt_template_str,
                 )
 
@@ -131,7 +133,10 @@ class QuarkSearchTool(BaseQueryEngine):
         logger.info(f"Get {len(nodes)} docs from url.")
 
         return await self.synthesizer.asynthesize(
-            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
         )
 
     def _get_prompt_modules(self):

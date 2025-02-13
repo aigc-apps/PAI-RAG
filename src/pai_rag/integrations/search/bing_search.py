@@ -71,6 +71,7 @@ class BingSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
         lang: str = None,
+        system_role_str: Optional[str] = None,
         prompt_template_str: Optional[str] = None,
         search_top_k: Optional[int] = None,
     ):
@@ -93,6 +94,7 @@ class BingSearchTool(BaseQueryEngine):
                 return await self.synthesizer.asynthesize(
                     query=no_search_query,
                     nodes=[],
+                    system_role_str=system_role_str,
                     prompt_template_str=prompt_template_str,
                 )
         logger.info("Search intent detected, return search result.")
@@ -105,7 +107,10 @@ class BingSearchTool(BaseQueryEngine):
             nodes.append(NodeWithScore(node=doc_node, score=1))
 
         return await self.synthesizer.asynthesize(
-            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
         )
 
     def _get_prompt_modules(self):

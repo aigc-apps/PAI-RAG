@@ -280,7 +280,7 @@ class RagApplication:
         if chat_request.search_web:
             search_engine = resolve_searcher(session_config)
             response = await search_engine.aquery(
-                query_bundle, prompt_template_str=system_prompt
+                query_bundle, system_role=system_prompt, prompt_template_str=" "
             )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response(
@@ -294,7 +294,7 @@ class RagApplication:
 
         query_engine = resolve_query_engine(session_config)
         response = await query_engine.aquery(
-            query_bundle, prompt_template_str=system_prompt
+            query_bundle, system_role=system_prompt, prompt_template_str=" "
         )
         if chat_request.stream:
             return _make_chat_completion_chunk_response(
@@ -363,20 +363,27 @@ class RagApplication:
         if chat_type == RagChatType.RAG:
             query_engine = resolve_query_engine(session_config)
             response = await query_engine.aquery(
-                query_bundle, prompt_template_str=query.prompt_template
+                query_bundle,
+                system_role_str=query.system_role_template,
+                prompt_template_str=query.custom_prompt_template,
             )
         elif chat_type == RagChatType.WEB:
             search_engine = resolve_searcher(session_config)
             if not search_engine:
                 raise ValueError("AI search not enabled. Please add search API key.")
             response = await search_engine.aquery(
-                query_bundle, prompt_template_str=query.prompt_template
+                query_bundle,
+                system_role_str=query.system_role_template,
+                prompt_template_str=query.custom_prompt_template,
             )
         elif chat_type == RagChatType.LLM:
             query_engine = resolve_query_engine(session_config)
             query_bundle.no_retrieval = True
             response = await query_engine.asynthesize(
-                query_bundle, nodes=[], prompt_template_str=query.prompt_template
+                query_bundle,
+                nodes=[],
+                system_role_str=query.system_role_template,
+                prompt_template_str=query.custom_prompt_template,
             )
 
         node_results = response.source_nodes

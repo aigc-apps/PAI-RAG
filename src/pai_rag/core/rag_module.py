@@ -198,13 +198,10 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
         cls=PaiSynthesizer,
         llm=llm,
         multimodal_llm=multimodal_llm,
-        llm_chat_prompt=PromptTemplate(template=config.synthesizer.llm_chat_prompt),
-        text_qa_template=PromptTemplate(template=config.synthesizer.text_qa_template),
+        system_role_template=config.synthesizer.system_role_template,
+        custom_prompt_template=config.synthesizer.custom_prompt_template,
         multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.multimodal_qa_template
-        ),
-        citation_text_qa_template=PromptTemplate(
-            template=config.synthesizer.citation_text_qa_template
         ),
         citation_multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.citation_multimodal_qa_template
