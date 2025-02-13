@@ -2144,12 +2144,12 @@ description = "Doclayout_yolo"
 optional = false
 python-versions = "*"
 files = [
-    {file = "doclayout_yolo-0.0.2-py3-none-any.whl", hash = "sha256:ba236120481b9dad5b0dbb54c5d64a818d28aacccd362dd7120f048b400e08d3"},
+    {file = "doclayout_yolo-0.0.2-v2-py3-none-any.whl", hash = "sha256:b58ece7b73ab74d825c280273212afb89394228c665ea953a7fd6515a4f25273"},
 ]
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/doclayout_yolo-0.0.2-py3-none-any.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/doclayout_yolo-0.0.2-v2-py3-none-any.whl"
 
 [[package]]
 name = "docx"
@@ -10716,4 +10716,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "f44f52b527cb0aa20b7186d21c19fc78b895e10218e518be5e2de6a76ff8374e"
+content-hash = "003362e8b47058c1933bdd672d1f463a958f021c0ff8baed9a3986d2329dc7a2"
