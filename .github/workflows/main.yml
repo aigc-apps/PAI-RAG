@@ -36,10 +36,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
-          poetry install --no-cache
+          poetry install
           pip install ray[default]
         env:
-          POETRY_VIRTUALENVS_CREATE: true
+          POETRY_VIRTUALENVS_CREATE: false
 
       - name: Install pre-commit
         shell: bash
