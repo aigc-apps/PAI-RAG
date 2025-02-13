@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import resolve_query_engine
-from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
+from pai_rag.app.api.models import PaiQueryBundle
 from loguru import logger
 
 _BASE_DIR = Path(__file__).parent.parent

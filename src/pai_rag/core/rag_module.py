@@ -28,11 +28,17 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 )
 from pai_rag.integrations.query_transform.pai_query_transform import (
     PaiCondenseQueryTransform,
+    OpenAICompatibleQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter
+from pai_rag.integrations.router.pai.pai_router import (
+    PaiIntentRouter,
+    IntentConfig,
+    DEFAULT_WEBSEARCH_DESCRIPTIONS,
+)
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
+from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
@@ -40,8 +46,8 @@ from pai_rag.utils.oss_client import OssClient
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
-
 
 cls_cache = {}
 
@@ -177,16 +183,24 @@ def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
     return condense_query_transform
 
 
+def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
+    llm = resolve_llm(config)
+    openai_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    return openai_query_transform
+
+
 def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     multimodal_llm = None
     if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
         multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
         multimodal_llm=multimodal_llm,
+        llm_chat_prompt=PromptTemplate(template=config.synthesizer.llm_chat_prompt),
         text_qa_template=PromptTemplate(template=config.synthesizer.text_qa_template),
         multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.multimodal_qa_template
@@ -250,13 +264,20 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
 
 def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
     synthesizer = resolve_synthesizer(config)
-
     searcher = None
+    intent_router = None
+    if config.search.with_intent:
+        llm = resolve(cls=PaiLlm, llm_config=config.llm)
+        intent_config = IntentConfig(descriptions=DEFAULT_WEBSEARCH_DESCRIPTIONS)
+        intent_router = resolve(
+            cls=PaiIntentRouter, intent_config=intent_config, llm=llm
+        )
     if isinstance(config.search, BingSearchConfig):
         searcher = resolve(
             cls=BingSearchTool,
             api_key=config.search.search_api_key,
             synthesizer=synthesizer,
+            intent_router=intent_router,
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
         )
@@ -267,6 +288,17 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             secret=config.search.secret,
             host=config.search.host,
             synthesizer=synthesizer,
+            intent_router=intent_router,
+            search_count=config.search.search_count,
+        )
+    elif isinstance(config.search, AliyunSearchConfig):
+        searcher = resolve(
+            cls=AliyunSearchTool,
+            accessid=config.search.accessid,
+            accesskey=config.search.accesskey,
+            endpoint=config.search.endpoint,
+            synthesizer=synthesizer,
+            intent_router=intent_router,
             search_count=config.search.search_count,
         )
 

@@ -24,8 +24,12 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
 from pai_rag.integrations.search.search_config import (
+    DEFAULT_ALIYUN_SEARCH_ENDPOINT,
+    DEFAULT_QUARK_SEARCH_ENDPOINT,
+    DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
 
 
@@ -81,14 +85,19 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
-    search_type: str = "夸克"
+    default_web_search: bool = False
+    search_type: str = "bing"
     search_api_key: str = None
-    search_count: int = 30
+    search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
 
-    quark_host: str = None
+    quark_host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
     quark_user: str = None
     quark_secret: str = None
+
+    aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
+    aliyun_accessid: str = None
+    aliyun_accesskey: str = None
 
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
@@ -125,6 +134,7 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
+    llm_chat_prompt: str = None
     text_qa_template: str = None
     multimodal_qa_template: str = None
     citation_text_qa_template: str = None
@@ -148,6 +158,8 @@ class ViewModel(BaseModel):
     @staticmethod
     def from_app_config(config: RagConfig):
         view_model = ViewModel()
+
+        view_model.default_web_search = config.system.default_web_search
 
         # llm
         if isinstance(config.llm, PaiEasLlmConfig):
@@ -218,6 +230,7 @@ class ViewModel(BaseModel):
                 config.postprocessor.similarity_threshold
             )
 
+        view_model.llm_chat_prompt = config.synthesizer.llm_chat_prompt
         view_model.text_qa_template = config.synthesizer.text_qa_template
         view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
         view_model.citation_text_qa_template = (
@@ -239,6 +252,12 @@ class ViewModel(BaseModel):
             view_model.quark_host = config.search.host
             view_model.quark_secret = config.search.secret
             view_model.quark_user = config.search.user
+            view_model.search_count = config.search.search_count
+        elif isinstance(config.search, AliyunSearchConfig):
+            view_model.search_type = "aliyun"
+            view_model.aliyun_endpoint = config.search.endpoint
+            view_model.aliyun_accessid = config.search.accessid
+            view_model.aliyun_accesskey = config.search.accesskey
             view_model.search_count = config.search.search_count
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
@@ -290,6 +309,8 @@ class ViewModel(BaseModel):
 
     def to_app_config(self):
         config = recursive_dict()
+
+        config["system"]["default_web_search"] = self.default_web_search
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -396,6 +417,7 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+        config["synthesizer"]["llm_chat_prompt"] = self.llm_chat_prompt
         config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         config["synthesizer"][
             "citation_text_qa_template"
@@ -411,11 +433,17 @@ class ViewModel(BaseModel):
             )
             config["search"]["search_lang"] = self.search_lang
             config["search"]["search_count"] = self.search_count
-        else:
+        elif self.search_type == "夸克":
             config["search"]["source"] = "quark"
             config["search"]["host"] = self.quark_host
             config["search"]["user"] = self.quark_user
             config["search"]["secret"] = self.quark_secret
+            config["search"]["search_count"] = self.search_count
+        else:
+            config["search"]["source"] = "aliyun"
+            config["search"]["endpoint"] = self.aliyun_endpoint
+            config["search"]["accessid"] = self.aliyun_accessid
+            config["search"]["accesskey"] = self.aliyun_accesskey
             config["search"]["search_count"] = self.search_count
 
         config["intent"]["descriptions"] = json.loads(self.intent_description)
@@ -562,6 +590,9 @@ class ViewModel(BaseModel):
             "visible": self.reranker_type == "model-based-reranker"
         }
 
+        settings["llm_chat_prompt"] = {
+            "value": self.llm_chat_prompt,
+        }
         settings["text_qa_template"] = {"value": self.text_qa_template}
         settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
         settings["citation_text_qa_template"] = {
@@ -580,7 +611,19 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": False}
             settings["quark_user"] = {"value": self.quark_user, "visible": False}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-        else:
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
+        elif self.search_type == "夸克":
             settings["search_api_key"] = {
                 "value": self.search_api_key,
                 "visible": False,
@@ -590,6 +633,41 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": True}
             settings["quark_user"] = {"value": self.quark_user, "visible": True}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
+        # aliyun
+        else:
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
+            settings["search_lang"] = {"value": self.search_lang, "visible": False}
+            settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["quark_host"] = {"value": self.quark_host, "visible": False}
+            settings["quark_user"] = {"value": self.quark_user, "visible": False}
+            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": True,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": True,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": True,
+            }
 
         # data_analysis
         settings["analysis_type"] = {"value": self.analysis_type}
@@ -624,8 +702,9 @@ class ViewModel(BaseModel):
             "value": self.agent_function_definition
         }
 
-        settings["intent_description"] = {"value": self.intent_description}
+        settings["default_web_search"] = {"value": self.default_web_search}
 
+        settings["intent_description"] = {"value": self.intent_description}
         # print("view model settings:", settings)
 
         return settings

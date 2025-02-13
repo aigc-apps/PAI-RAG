@@ -9,7 +9,6 @@ from pai_rag.core.rag_module import (
 )
 from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 
-# from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
 from llama_index.core.schema import QueryBundle
 import logging
 

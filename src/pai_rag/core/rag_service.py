@@ -129,6 +129,13 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
+    async def achat(self, query):
+        try:
+            return await self.rag.achat(query)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat RAG failed: {ex}")
+
     async def aquery_search_v1(self, query: RagQuery):
         try:
             return await self.rag.aquery(

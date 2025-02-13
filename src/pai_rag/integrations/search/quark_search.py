@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import Optional
 from pai_rag.integrations.search.quark_utils import (
     get_access_token,
     postprocess_items,
@@ -9,8 +10,12 @@ from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
+from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
+from pai_rag.app.api.models import PaiQueryBundle
 import httpx
 from loguru import logger
+
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
 
 
 class QuarkAccessTokenProvider:
@@ -45,7 +50,8 @@ class QuarkSearchTool(BaseQueryEngine):
         secret: str,
         host: str,
         synthesizer: BaseSynthesizer = None,
-        search_count: int = 30,
+        search_count: int = DEFAULT_SEARCH_COUNT,
+        intent_router: PaiIntentRouter = None,
     ):
         self.host = host
         self.user = user
@@ -53,6 +59,7 @@ class QuarkSearchTool(BaseQueryEngine):
 
         self.token_provider = QuarkAccessTokenProvider(host, user, secret)
         self.synthesizer = synthesizer
+        self.intent_router = intent_router
         self.search_count = search_count
 
     async def _search_quark_single_page(self, query: str, token: str, page: int = 1):
@@ -76,7 +83,7 @@ class QuarkSearchTool(BaseQueryEngine):
     async def asearch(self, query: str):
         search_tasks = []
         token = await self.token_provider.get_token()
-        for i in range(0, 1 + int(self.search_count / 10), 1):
+        for i in range(0, 1 + int((self.search_count - 1) / 10), 1):
             search_tasks.append(
                 self._search_quark_single_page(query=query, token=token, page=i + 1)
             )
@@ -103,11 +110,31 @@ class QuarkSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        prompt_template_str: Optional[str] = None,
     ):
+        if self.intent_router:
+            logger.info("Intent router detected, start selecting intent.")
+            intent = await self.intent_router.aselect(query.chat_messages_str)
+            if intent == Intents.CHAT:
+                logger.info("Chat intent detected, return direct response.")
+                no_search_query = PaiQueryBundle(
+                    query_str=query.query_str,
+                    no_retrieval=True,
+                    stream=query.stream,
+                    chat_messages_str=query.chat_messages_str,
+                )
+                return await self.synthesizer.asynthesize(
+                    query=no_search_query,
+                    nodes=[],
+                    prompt_template_str=prompt_template_str,
+                )
+
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError
