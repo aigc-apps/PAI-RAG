@@ -39,7 +39,7 @@ jobs:
           poetry install --no-cache
           pip install ray[default]
         env:
-          POETRY_VIRTUALENVS_CREATE: false
+          POETRY_VIRTUALENVS_CREATE: true
 
       - name: Install pre-commit
         shell: bash
