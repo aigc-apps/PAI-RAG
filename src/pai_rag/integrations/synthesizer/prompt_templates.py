@@ -5,7 +5,7 @@ DEFAULT_SYSTEM_ROLE_TEMPLATE = """你是一个知识问答小助手，乐于解�
 DEFAULT_SYSTEM_ROLE_TEMPLATE_EN = """You are a knowledge-based Q&A assistant, eager to help answer users' questions.
 """
 
-DEFAULT_CUSTOM_PROMPR_TEMPLATE = """你的目标是提供准确、有用且易于理解的信息。在回应时，请确保遵循以下指导原则：
+DEFAULT_CUSTOM_PROMPT_TEMPLATE = """你的目标是提供准确、有用且易于理解的信息。在回应时，请确保遵循以下指导原则：
 - 参考内容优先：优先使用提供的参考内容回答问题。
 - 基于自身知识：若参考内容不足或无关，基于已有知识进行回答。
 - 语言一致：使用与提问相同的语言。
@@ -17,7 +17,7 @@ DEFAULT_CUSTOM_PROMPR_TEMPLATE = """你的目标是提供准确、有用且易�
 - 无引用时说明：未引用时说明参考信息不足，并基于自身知识回答。
 """
 
-DEFAULT_CUSTOM_PROMPR_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easy-to-understand information. When responding, please ensure you follow the guidelines below:
+DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easy-to-understand information. When responding, please ensure you follow the guidelines below:
 - Priority to reference content: Prioritize using the provided reference content to answer questions.
 - Based on your own knowledge: If the reference content is insufficient or irrelevant, answer based on your existing knowledge.
 - Consistent language: Use the same language as the question.

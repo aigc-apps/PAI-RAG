@@ -33,7 +33,7 @@ from pai_rag.app.api.models import PaiQueryBundle
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_EMPTY_RESPONSE_GEN,
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
-    DEFAULT_CUSTOM_PROMPR_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
     DEFAULT_ANSWER_TEMPLATE,
     DEFAULT_CONTEXT_ANSWER_TEMPLATE,
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
@@ -99,7 +99,7 @@ class PaiSynthesizer(BaseSynthesizer):
         """Update prompts."""
         self._system_role_template = system_role_str or DEFAULT_SYSTEM_ROLE_TEMPLATE
         self._custom_prompt_template = (
-            prompt_template_str or DEFAULT_CUSTOM_PROMPR_TEMPLATE
+            prompt_template_str or DEFAULT_CUSTOM_PROMPT_TEMPLATE
         )
 
         self._llm_only_template = PromptTemplate(

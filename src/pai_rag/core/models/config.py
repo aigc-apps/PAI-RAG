@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
-    DEFAULT_CUSTOM_PROMPR_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
 
 
@@ -38,4 +38,4 @@ class RetrieverConfig(BaseModel):
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
     system_role_template: str = DEFAULT_SYSTEM_ROLE_TEMPLATE
-    custom_prompt_template: str = DEFAULT_CUSTOM_PROMPR_TEMPLATE
+    custom_prompt_template: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE
