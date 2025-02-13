@@ -315,7 +315,6 @@ class RagApplication:
         chat_type: RagChatType = RagChatType.RAG,
         sse_version: SseVersion = SseVersion.V0,
     ):
-        t1 = time.time()
         session_id = query.session_id or uuid_generator()
         logger.debug(f"Get session ID: {session_id}.")
         session_config = self.config.model_copy()
@@ -337,8 +336,6 @@ class RagApplication:
             session_id=session_id,
             chat_history=query.chat_history,
         )
-        t2 = time.time()
-        logger.info(f"================Condense query time: {t2 - t1}============")
         new_question = new_query_bundle.query_str
         logger.info(f"Querying with question '{new_question}'.")
 
@@ -347,9 +344,6 @@ class RagApplication:
             intent = await intent_router.aselect(
                 str_or_query_bundle=new_query_bundle.chat_messages_str
             )
-            t3 = time.time()
-            logger.info(f"================Intent Detection time: {t3 - t2}============")
-            t2 = t3
             logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
                 return await self.aquery_agent(query, sse_version=sse_version)
@@ -395,8 +389,6 @@ class RagApplication:
                 system_role_str=query.system_role_template,
                 prompt_template_str=query.custom_prompt_template,
             )
-        t4 = time.time()
-        logger.info(f"================Final Response time: {t4 - t2}============")
         node_results = response.source_nodes
         result_info = {
             "session_id": session_id,
@@ -432,8 +424,6 @@ class RagApplication:
             )
             return RagResponse(answer=response.response, **result_info)
         else:
-            t5 = time.time()
-            logger.info(f"================First Token time: {t5 - t1}============")
             return event_generator_async(
                 response=response,
                 extra_info=result_info,
