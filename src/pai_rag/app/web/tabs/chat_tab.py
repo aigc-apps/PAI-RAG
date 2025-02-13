@@ -154,6 +154,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
+                visible=False,
+            )
+            default_web_search = gr.Checkbox(
+                label="Default search web",
+                info="Default search web for openai endpoint",
+                elem_id="default_web_search",
+                value=False,
             )
 
             with gr.Column(visible=True) as vs_col:
@@ -299,6 +306,50 @@ def create_chat_tab() -> Dict[str, Any]:
                     reranker_similarity_top_k,
                 }
 
+            with gr.Column(visible=True) as lc_col:
+                prompt_argument = gr.Accordion("Prompt Templates", open=False)
+                with prompt_argument:
+                    with gr.Tab("Chat Prompt") as qa_prompt_col:
+                        text_qa_template = gr.Textbox(
+                            label="Prompt Template",
+                            value="",
+                            elem_id="text_qa_template",
+                            lines=10,
+                            interactive=True,
+                        )
+                        citation_text_qa_template = gr.Textbox(
+                            label="Citation Prompt Template",
+                            value="",
+                            elem_id="citation_text_qa_template",
+                            lines=10,
+                            interactive=True,
+                        )
+                    with gr.Tab(
+                        "MultiModal Prompt", interactive=True
+                    ) as multimodal_prompt_col:
+                        multimodal_qa_template = gr.Textbox(
+                            label="Multi-modal Prompt Template",
+                            value="",
+                            elem_id="multimodal_qa_template",
+                            lines=12,
+                            interactive=True,
+                        )
+                        citation_multimodal_qa_template = gr.Textbox(
+                            label="Citation Multi-modal Prompt Template",
+                            value="",
+                            elem_id="citation_multimodal_qa_template",
+                            lines=12,
+                            interactive=True,
+                        )
+                    with gr.Tab("LLM Prompt", visible=False) as llm_prompt_col:
+                        llm_chat_prompt = gr.Textbox(
+                            label="LLM Prompt Template",
+                            value="",
+                            elem_id="llm_chat_prompt",
+                            lines=10,
+                            interactive=True,
+                        )
+
             with gr.Column(visible=True) as llm_col:
                 model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
@@ -397,38 +448,6 @@ def create_chat_tab() -> Dict[str, Any]:
                     ],
                 )
 
-            with gr.Column(visible=True) as lc_col:
-                with gr.Tab("Prompt"):
-                    text_qa_template = gr.Textbox(
-                        label="Prompt Template",
-                        value="",
-                        elem_id="text_qa_template",
-                        lines=10,
-                        interactive=True,
-                    )
-                    citation_text_qa_template = gr.Textbox(
-                        label="Citation Prompt Template",
-                        value="",
-                        elem_id="citation_text_qa_template",
-                        lines=10,
-                        interactive=True,
-                    )
-                with gr.Tab("MultiModal Prompt"):
-                    multimodal_qa_template = gr.Textbox(
-                        label="Multi-modal Prompt Template",
-                        value="",
-                        elem_id="multimodal_qa_template",
-                        lines=12,
-                        interactive=True,
-                    )
-                    citation_multimodal_qa_template = gr.Textbox(
-                        label="Citation Multi-modal Prompt Template",
-                        value="",
-                        elem_id="citation_multimodal_qa_template",
-                        lines=12,
-                        interactive=True,
-                    )
-
             cur_tokens = gr.Textbox(
                 label="\N{fire} Current total count of tokens", visible=False
             )
@@ -443,6 +462,10 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
+                        llm_prompt_col: gr.update(visible=False),
+                        qa_prompt_col: gr.update(visible=False),
+                        multimodal_prompt_col: gr.update(visible=False),
+                        prompt_argument: gr.update(open=False),
                     }
                 elif query_type == "LLM":
                     return {
@@ -452,7 +475,11 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_col: gr.update(visible=False),
                         llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=True),
-                        lc_col: gr.update(visible=False),
+                        lc_col: gr.update(visible=True),
+                        llm_prompt_col: gr.update(visible=True),
+                        qa_prompt_col: gr.update(visible=False),
+                        multimodal_prompt_col: gr.update(visible=False),
+                        prompt_argument: gr.update(open=True),
                     }
                 elif query_type == "Chat（Knowledge Base）":
                     return {
@@ -463,6 +490,10 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
+                        llm_prompt_col: gr.update(visible=False),
+                        qa_prompt_col: gr.update(visible=True),
+                        multimodal_prompt_col: gr.update(visible=True),
+                        prompt_argument: gr.update(open=True),
                     }
                 elif query_type == "Chat（Web Search）":
                     return {
@@ -470,6 +501,10 @@ def create_chat_tab() -> Dict[str, Any]:
                         vec_model_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=True),
                         search_col: gr.update(visible=True),
+                        llm_prompt_col: gr.update(visible=True),
+                        qa_prompt_col: gr.update(visible=True),
+                        multimodal_prompt_col: gr.update(visible=False),
+                        prompt_argument: gr.update(open=True),
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
@@ -479,6 +514,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 fn=change_query_radio,
                 inputs=query_type,
                 outputs=[
+                    prompt_argument,
                     vs_col,
                     vec_model_argument,
                     search_model_argument,
@@ -486,6 +522,9 @@ def create_chat_tab() -> Dict[str, Any]:
                     llm_col,
                     model_argument,
                     lc_col,
+                    llm_prompt_col,
+                    qa_prompt_col,
+                    multimodal_prompt_col,
                 ],
             )
 
@@ -508,6 +547,8 @@ def create_chat_tab() -> Dict[str, Any]:
 
         chat_args = (
             {
+                default_web_search,
+                llm_chat_prompt,
                 text_qa_template,
                 multimodal_qa_template,
                 citation_text_qa_template,
@@ -553,6 +594,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
+            default_web_search.elem_id: default_web_search,
             chat_index.elem_id: chat_index,
             similarity_top_k.elem_id: similarity_top_k,
             image_similarity_top_k.elem_id: image_similarity_top_k,
@@ -568,6 +610,7 @@ def create_chat_tab() -> Dict[str, Any]:
             multimodal_qa_template.elem_id: multimodal_qa_template,
             citation_multimodal_qa_template.elem_id: citation_multimodal_qa_template,
             citation_text_qa_template.elem_id: citation_text_qa_template,
+            llm_chat_prompt.elem_id: llm_chat_prompt,
             text_qa_template.elem_id: text_qa_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,

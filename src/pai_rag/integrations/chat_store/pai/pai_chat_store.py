@@ -76,13 +76,13 @@ class PaiChatStore(BaseChatStore):
     def get_messages(self, key: str) -> List[ChatMessage]:
         """Get messages for a key."""
         default_messages = self._chat_store.get_messages(key)
-        recent_messages = deque(default_messages[-20:], maxlen=20)
+        recent_messages = deque(default_messages[-8:], maxlen=8)
         assistant_count = 0
         ret_messages = []
         for msg in reversed(recent_messages):
             if msg.role == "assistant":
                 if assistant_count < 2:
-                    msg.content = msg.content[:200]
+                    msg.content = msg.content[:800]
                     ret_messages.append(msg)
                     assistant_count += 1
             else:

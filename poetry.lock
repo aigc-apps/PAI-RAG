@@ -2161,7 +2161,7 @@ description = "Doclayout_yolo"
 optional = false
 python-versions = "*"
 files = [
-    {file = "doclayout_yolo-0.0.2-py3-none-any.whl", hash = "sha256:ba236120481b9dad5b0dbb54c5d64a818d28aacccd362dd7120f048b400e08d3"},
+    {file = "doclayout_yolo-0.0.2-py3-none-any.whl", hash = "sha256:b58ece7b73ab74d825c280273212afb89394228c665ea953a7fd6515a4f25273"},
 ]
 
 [package.source]

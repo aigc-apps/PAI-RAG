@@ -85,6 +85,7 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
+    default_web_search: bool = False
     search_type: str = "bing"
     search_api_key: str = None
     search_count: int = DEFAULT_SEARCH_COUNT
@@ -133,6 +134,7 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
+    llm_chat_prompt: str = None
     text_qa_template: str = None
     multimodal_qa_template: str = None
     citation_text_qa_template: str = None
@@ -156,6 +158,8 @@ class ViewModel(BaseModel):
     @staticmethod
     def from_app_config(config: RagConfig):
         view_model = ViewModel()
+
+        view_model.default_web_search = config.system.default_web_search
 
         # llm
         if isinstance(config.llm, PaiEasLlmConfig):
@@ -226,6 +230,7 @@ class ViewModel(BaseModel):
                 config.postprocessor.similarity_threshold
             )
 
+        view_model.llm_chat_prompt = config.synthesizer.llm_chat_prompt
         view_model.text_qa_template = config.synthesizer.text_qa_template
         view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
         view_model.citation_text_qa_template = (
@@ -304,6 +309,8 @@ class ViewModel(BaseModel):
 
     def to_app_config(self):
         config = recursive_dict()
+
+        config["system"]["default_web_search"] = self.default_web_search
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -410,6 +417,7 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+        config["synthesizer"]["llm_chat_prompt"] = self.llm_chat_prompt
         config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         config["synthesizer"][
             "citation_text_qa_template"
@@ -582,6 +590,9 @@ class ViewModel(BaseModel):
             "visible": self.reranker_type == "model-based-reranker"
         }
 
+        settings["llm_chat_prompt"] = {
+            "value": self.llm_chat_prompt,
+        }
         settings["text_qa_template"] = {"value": self.text_qa_template}
         settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
         settings["citation_text_qa_template"] = {
@@ -691,8 +702,9 @@ class ViewModel(BaseModel):
             "value": self.agent_function_definition
         }
 
-        settings["intent_description"] = {"value": self.intent_description}
+        settings["default_web_search"] = {"value": self.default_web_search}
 
+        settings["intent_description"] = {"value": self.intent_description}
         # print("view model settings:", settings)
 
         return settings

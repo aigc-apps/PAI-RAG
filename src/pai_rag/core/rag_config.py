@@ -62,8 +62,15 @@ def validate_case_insensitive(value: Dict) -> Dict:
     return value
 
 
+class SystemConfig(BaseModel):
+    default_web_search: bool = False
+
+
 class RagConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    # system
+    system: SystemConfig = SystemConfig()
 
     # reader, parser
     data_reader: BaseDataReaderConfig

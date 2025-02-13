@@ -28,6 +28,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 )
 from pai_rag.integrations.query_transform.pai_query_transform import (
     PaiCondenseQueryTransform,
+    OpenAICompatibleQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
@@ -182,16 +183,24 @@ def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
     return condense_query_transform
 
 
+def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
+    llm = resolve_llm(config)
+    openai_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    return openai_query_transform
+
+
 def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     multimodal_llm = None
     if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
         multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
         multimodal_llm=multimodal_llm,
+        llm_chat_prompt=PromptTemplate(template=config.synthesizer.llm_chat_prompt),
         text_qa_template=PromptTemplate(template=config.synthesizer.text_qa_template),
         multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.multimodal_qa_template
@@ -289,6 +298,7 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             accesskey=config.search.accesskey,
             endpoint=config.search.endpoint,
             synthesizer=synthesizer,
+            intent_router=intent_router,
             search_count=config.search.search_count,
         )
 

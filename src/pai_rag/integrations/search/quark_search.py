@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import Optional
 from pai_rag.integrations.search.quark_utils import (
     get_access_token,
     postprocess_items,
@@ -10,6 +11,7 @@ from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
 from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
+from pai_rag.app.api.models import PaiQueryBundle
 import httpx
 from loguru import logger
 
@@ -108,18 +110,31 @@ class QuarkSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        prompt_template_str: Optional[str] = None,
     ):
         if self.intent_router:
             logger.info("Intent router detected, start selecting intent.")
-            intent = await self.intent_router.aselect(query)
+            intent = await self.intent_router.aselect(query.chat_messages_str)
             if intent == Intents.CHAT:
                 logger.info("Chat intent detected, return direct response.")
-                return await self.synthesizer.asynthesize(query=query, nodes=[])
+                no_search_query = PaiQueryBundle(
+                    query_str=query.query_str,
+                    no_retrieval=True,
+                    stream=query.stream,
+                    chat_messages_str=query.chat_messages_str,
+                )
+                return await self.synthesizer.asynthesize(
+                    query=no_search_query,
+                    nodes=[],
+                    prompt_template_str=prompt_template_str,
+                )
 
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query, nodes=nodes, prompt_template_str=prompt_template_str
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError
