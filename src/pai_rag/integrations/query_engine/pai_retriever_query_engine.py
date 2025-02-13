@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import List, Optional, Sequence
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -14,13 +13,9 @@ from llama_index.core.instrumentation.events.query import (
     QueryEndEvent,
     QueryStartEvent,
 )
+from pai_rag.app.api.models import PaiQueryBundle
 
 dispatcher = instrument.get_dispatcher(__name__)
-
-
-@dataclass
-class PaiQueryBundle(QueryBundle):
-    stream: bool = False
 
 
 class PaiRetrieverQueryEngine(RetrieverQueryEngine):

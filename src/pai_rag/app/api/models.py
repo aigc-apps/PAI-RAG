@@ -1,39 +1,34 @@
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from llama_index.core.schema import QueryBundle
 from llama_index.core.base.llms.types import ChatMessage
-
-
-# To Do: remove vector db config
-class VectorDbConfig(BaseModel):
-    faiss_path: str | None = None
+from dataclasses import dataclass
 
 
 class RagQuery(BaseModel):
-    question: str
-    temperature: float | None = 0.1
-    chat_history: List[Dict[str, str]] | None = None
-    session_id: str | None = None
-    vector_db: VectorDbConfig | None = None
-    stream: bool | None = False
-    citation: bool | None = False
-    with_intent: bool | None = False
-    index_name: str | None = None
-    search_web: bool | None = False
-    prompt_template: str | None = None
-    return_reference: bool | None = False
+    question: str  # 输入的问题
+    chat_history: List[
+        Dict[str, str]
+    ] | None = None  # chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。默认为空
+    session_id: str | None = None  # 会话id，用于区分不同会话
+    stream: bool | None = False  # 是否流式输出
+    citation: bool | None = False  # 是否使用引用标签
+    with_intent: bool | None = False  # 是否使用意图
+    index_name: str | None = None  # 索引名称
+    search_web: bool | None = False  # 是否搜索网页
+    prompt_template: str | None = None  # system prompt模板
+    return_reference: bool | None = False  # 是否返回参考文档
 
 
 class RetrievalQuery(BaseModel):
-    question: str
-    index_name: str | None = None
-    vector_db: VectorDbConfig | None = None
+    question: str  # 检索问题
+    index_name: str | None = None  # 检索目标索引名称
 
 
 class ContextDoc(BaseModel):
-    text: str
-    score: float
-    metadata: Dict
-    image_url: str | None = None
+    text: str  # 文档文本
+    score: float  # 文档得分
+    metadata: Dict  # 文档元数据
 
 
 class RetrievalResponse(BaseModel):
@@ -41,20 +36,26 @@ class RetrievalResponse(BaseModel):
 
 
 class RagResponse(BaseModel):
-    answer: str
-    session_id: str | None = None
-    docs: List[ContextDoc] | None = None
-    new_query: str | None = None
+    answer: str  # 答案
+    session_id: str | None = None  # 会话id，用于区分不同会话
+    docs: List[ContextDoc] | None = None  # 搜索到的文档
+    new_query: str | None = None  # 改写生成的查询
 
 
 class ChatCompletionRequest(BaseModel):
-    model: str
-    messages: List[ChatMessage]
-    max_tokens: Optional[int] = 1024
-    temperature: Optional[float] = 0.1
-    stream: Optional[bool] = False
-    index_name: Optional[str] = None
-    search_web: Optional[bool] = False
-    nl2sql: Optional[bool] = False
-    citation: Optional[bool] = False
-    prompt_template: Optional[str] = None
+    model: str  # 模型名称
+    messages: List[ChatMessage]  # 上下文聊天
+    max_tokens: Optional[int] = 1024  # 最大输出长度
+    temperature: Optional[float] = 0.1  # temperature
+    stream: Optional[bool] = False  # 流式输出
+    index_name: Optional[str] = None  # 索引名称
+    search_web: Optional[bool] = False  # 搜索网络
+    citation: Optional[bool] = False  # 生成引用
+
+
+@dataclass
+class PaiQueryBundle(QueryBundle):
+    stream: bool = False
+    no_retrieval: bool = False
+    citation: bool = False
+    chat_messages_str: str = None

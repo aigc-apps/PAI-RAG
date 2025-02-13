@@ -125,6 +125,7 @@ class ViewModel(BaseModel):
 
     synthesizer_type: str = None
 
+    llm_chat_prompt: str = None
     text_qa_template: str = None
     multimodal_qa_template: str = None
     citation_text_qa_template: str = None
@@ -218,6 +219,7 @@ class ViewModel(BaseModel):
                 config.postprocessor.similarity_threshold
             )
 
+        view_model.llm_chat_prompt = config.synthesizer.llm_chat_prompt
         view_model.text_qa_template = config.synthesizer.text_qa_template
         view_model.multimodal_qa_template = config.synthesizer.multimodal_qa_template
         view_model.citation_text_qa_template = (
@@ -396,6 +398,7 @@ class ViewModel(BaseModel):
 
         config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["text_qa_template"] = self.text_qa_template
+        config["synthesizer"]["llm_chat_prompt"] = self.llm_chat_prompt
         config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         config["synthesizer"][
             "citation_text_qa_template"
@@ -562,6 +565,9 @@ class ViewModel(BaseModel):
             "visible": self.reranker_type == "model-based-reranker"
         }
 
+        settings["llm_chat_prompt"] = {
+            "value": self.llm_chat_prompt,
+        }
         settings["text_qa_template"] = {"value": self.text_qa_template}
         settings["multimodal_qa_template"] = {"value": self.multimodal_qa_template}
         settings["citation_text_qa_template"] = {
@@ -625,7 +631,6 @@ class ViewModel(BaseModel):
         }
 
         settings["intent_description"] = {"value": self.intent_description}
-
         # print("view model settings:", settings)
 
         return settings

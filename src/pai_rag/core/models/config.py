@@ -6,6 +6,7 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import (
     DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
     CITATION_TEXT_QA_TMPL,
     CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
+    DEFAULT_LLM_CHAT_TMPL,
 )
 
 
@@ -39,6 +40,7 @@ class RetrieverConfig(BaseModel):
 
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
+    llm_chat_prompt: str = DEFAULT_LLM_CHAT_TMPL
     text_qa_template: str = DEFAULT_TEXT_QA_TMPL
     citation_text_qa_template: str = CITATION_TEXT_QA_TMPL
     multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL

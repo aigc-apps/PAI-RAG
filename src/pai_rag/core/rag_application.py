@@ -14,7 +14,7 @@ from pai_rag.core.rag_module import (
     resolve_openai_query_transform,
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
-from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
+from pai_rag.app.api.models import PaiQueryBundle
 from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletion,
@@ -32,6 +32,7 @@ from pai_rag.app.api.models import (
     ContextDoc,
     RetrievalResponse,
 )
+from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.schema import QueryBundle
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.schema import (
@@ -235,15 +236,24 @@ class RagApplication:
         self,
         chat_request: ChatCompletionRequest,
     ):
+        if len(chat_request.messages) == 0:
+            raise Exception("消息列表为空.")
+
+        messages = chat_request.messages
+        system_prompt = None
+        if messages[0].role == MessageRole.SYSTEM:
+            system_prompt = messages[0].content
+            messages = messages[1:]
+
         session_id = uuid_generator()
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(chat_request.index_name)
         session_config.embedding = index_entry.embedding_config
         session_config.index.vector_store = index_entry.vector_store_config
 
-        question = chat_request.messages[-1].content
+        question = messages[-1].content
         chat_history = []
-        for msg in chat_request.messages[:-1]:
+        for msg in messages[:-1]:
             if msg.role == MessageRole.USER:
                 role = "user"
             else:
@@ -255,7 +265,7 @@ class RagApplication:
 
         openai_query_transform = resolve_openai_query_transform(session_config)
         new_query_bundle = await openai_query_transform.arun(
-            chat_messages=chat_request.messages,
+            chat_messages=messages,
         )
 
         new_question = new_query_bundle.query_str
@@ -264,12 +274,13 @@ class RagApplication:
             query_str=new_question,
             stream=chat_request.stream,
             citation=chat_request.citation,
+            chat_messages_str=messages_to_history_str(messages=messages[-8:]),
         )
 
         if chat_request.search_web:
             search_engine = resolve_searcher(session_config)
             response = await search_engine.aquery(
-                query_bundle, prompt_template_str=chat_request.prompt_template
+                query_bundle, prompt_template_str=system_prompt
             )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response(
@@ -283,7 +294,7 @@ class RagApplication:
 
         query_engine = resolve_query_engine(session_config)
         response = await query_engine.aquery(
-            query_bundle, prompt_template_str=chat_request.prompt_template
+            query_bundle, prompt_template_str=system_prompt
         )
         if chat_request.stream:
             return _make_chat_completion_chunk_response(
@@ -327,7 +338,9 @@ class RagApplication:
 
         if query.with_intent:
             intent_router = resolve_intent_router(session_config)
-            intent = await intent_router.aselect(str_or_query_bundle=new_question)
+            intent = await intent_router.aselect(
+                str_or_query_bundle=new_query_bundle.chat_messages_str
+            )
             logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
                 return await self.aquery_agent(query, sse_version=sse_version)
@@ -339,7 +352,10 @@ class RagApplication:
                 return ValueError(f"Invalid intent {intent}")
 
         query_bundle = PaiQueryBundle(
-            query_str=new_question, stream=query.stream, citation=query.citation
+            query_str=new_question,
+            stream=query.stream,
+            citation=query.citation,
+            chat_messages_str=new_query_bundle.chat_messages_str,
         )
         chat_store.add_message(
             session_id, ChatMessage(role=MessageRole.USER, content=query.question)

@@ -193,10 +193,12 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     multimodal_llm = None
     if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
         multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
         multimodal_llm=multimodal_llm,
+        llm_chat_prompt=PromptTemplate(template=config.synthesizer.llm_chat_prompt),
         text_qa_template=PromptTemplate(template=config.synthesizer.text_qa_template),
         multimodal_qa_template=PromptTemplate(
             template=config.synthesizer.multimodal_qa_template

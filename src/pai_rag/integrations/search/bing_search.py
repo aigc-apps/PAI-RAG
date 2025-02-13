@@ -4,7 +4,7 @@ from llama_index.core.query_engine import BaseQueryEngine
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
-from pai_rag.integrations.synthesizer.pai_synthesizer import PaiQueryBundle
+from pai_rag.app.api.models import PaiQueryBundle
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 import httpx
 from loguru import logger
@@ -81,11 +81,14 @@ class BingSearchTool(BaseQueryEngine):
 
         if self.intent_router:
             logger.info("Intent router detected, start selecting intent.")
-            intent = await self.intent_router.aselect(query)
+            intent = await self.intent_router.aselect(query.chat_messages_str)
             if intent == Intents.CHAT:
                 logger.info("Chat intent detected, return direct response.")
                 no_search_query = PaiQueryBundle(
-                    query_str=query.query_str, no_retrieval=True, stream=query.stream
+                    query_str=query.query_str,
+                    no_retrieval=True,
+                    stream=query.stream,
+                    chat_messages_str=query.chat_messages_str,
                 )
                 return await self.synthesizer.asynthesize(
                     query=no_search_query,

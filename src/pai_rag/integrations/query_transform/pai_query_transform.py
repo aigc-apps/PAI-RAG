@@ -18,6 +18,7 @@ from pai_rag.utils.prompt_template import (
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.utils.messages_utils import parse_chat_messages
+from pai_rag.app.api.models import PaiQueryBundle
 from loguru import logger
 import re
 
@@ -234,25 +235,32 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 self._chat_store.add_message(key=session_id, message=hist_mes)
 
         chat_history = self._chat_store.get_messages(key=session_id)
+        chat_history.append(ChatMessage(role="user", content=query_str))
+        chat_history_str = messages_to_history_str(chat_history)
+
         if not chat_history:
             # Keep the question as is if there's no conversation context.
-            return query_bundle
+            return PaiQueryBundle(
+                query_str=query_str,
+                custom_embedding_strs=[query_str],
+                chat_messages_str=chat_history_str,
+            )
 
-        chat_history_str = messages_to_history_str(chat_history)
         logger.debug(f"Chat history: {chat_history_str}")
-        query_bundle_str = await self._llm.apredict(
+        transformed_query_str = await self._llm.apredict(
             self._condense_question_prompt,
             question=query_str,
             chat_history=chat_history_str,
         )
         # 修复thought输出
-        query_bundle_str = re.sub(
-            r"<think>.*?</think>\n*", "", query_bundle_str, flags=re.DOTALL
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
 
-        return QueryBundle(
-            query_str=query_bundle_str,
-            custom_embedding_strs=[query_bundle_str],
+        return PaiQueryBundle(
+            query_str=transformed_query_str,
+            custom_embedding_strs=[query_str, transformed_query_str],
+            chat_messages_str=chat_history_str,
         )
 
     async def arun(
@@ -297,19 +305,19 @@ class OpenAICompatibleQueryTransform:
     ) -> QueryBundle:
         chat_history_str = messages_to_history_str(chat_messages)
         logger.debug(f"Chat history: {chat_history_str}")
-        query_bundle_str = self._llm.predict(
+        transformed_query_str = self._llm.predict(
             self._condense_question_prompt,
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
         # 修复thought输出
-        query_bundle_str = re.sub(
-            r"<think>.*?</think>\n*", "", query_bundle_str, flags=re.DOTALL
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
 
         return QueryBundle(
-            query_str=query_bundle_str,
-            custom_embedding_strs=[query_bundle_str],
+            query_str=transformed_query_str,
+            custom_embedding_strs=[chat_messages[-1].content, transformed_query_str],
         )
 
     async def arun(

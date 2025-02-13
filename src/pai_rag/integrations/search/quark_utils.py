@@ -134,11 +134,14 @@ def process_weibo(item):
 
 def process_structured_web(item):
     results = []
+    text = item.get("MainBody")
+    if not text:
+        text = item.get("desc")
     results.append(
         {
             "url": item["url"],
             "title": item["article_title"],
-            "text": f'{item["title"]}\n\n{item["MainBody"]}',
+            "text": f'{item["title"]}\n\n{text}',
             "time": item["time"],
         }
     )

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cast
 
 from llama_index.core.callbacks.base import CallbackManager
@@ -31,6 +30,7 @@ from llama_index.core.llms.llm import (
     astream_completion_response_to_tokens,
 )
 from llama_index.core.prompts import PromptTemplate
+from pai_rag.app.api.models import PaiQueryBundle
 from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
@@ -38,15 +38,18 @@ dispatcher = instrument.get_dispatcher(__name__)
 DEFAULT_EMPTY_RESPONSE_GEN = "Sorry, I don't know about that."
 
 DEFAULT_TEXT_QA_TMPL = (
-    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。"
-    "参考内容信息如下"
-    "-------\n"
+    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。\n"
+    "你的目标是提供准确、有用且易于理解的信息。\n\n"
+    "**参考内容：**\n"
+    "------\n"
     "{context_str}\n"
-    "-------\n"
-    "请仅依据上述内容回答问题，避免使用其他来源的知识。 "
-    "如果参考内容与问题无关，请根据自己的知识进行回答。"
-    "问题: {query_str}\n"
-    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
+    "------\n"
+    "**任务要求：** \n"
+    "- 请严格按照上述提供的参考内容回答问题。如果参考内容中没有相关信息或与问题无关，请基于你的已有知识进行回答。\n"
+    "- 确保答案准确、简洁，并且使用与提问相同的语言。\n"
+    "- 回答时不要出现“从参考内容得出”、“从材料得出”等字眼。\n\n"
+    "**需要回答的问题：** \n"
+    "{query_str}"
 )
 
 DEFAULT_TEXT_QA_TMPL_EN = (
@@ -122,12 +125,15 @@ CITATION_TEXT_QA_TMPL_EN = (
 )
 
 
-DEFAULT_LLM_CHAT_TMPL = (
-    "You are a helpful assistant."
-    "Please answer the following question. \n\n"
-    "Question: {query_str}\n\n"
-    "Answer:"
-)
+DEFAULT_LLM_CHAT_TMPL = """
+你是一个智能助手，乐于回答用户可能提出的各种问题。您的目标是提供准确、有用且易于理解的信息。在回应时，请确保遵循以下指导原则：
+- 保持回答的专业性和友好性。
+- 如果需要更多信息来更好地回答问题，请礼貌地询问。
+- 对于复杂的问题，尽量简化解释，使信息易于理解。
+- 请使用与提问相同的语言。
+
+{query_str}
+"""
 
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
@@ -145,7 +151,7 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "Model 3 拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。Model 3 还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。 \n\n"
     "Image 1:\n"
     "http://www.tesla.cn/model3.jpg\n\n"
-    "------\n"
+    "------\n\n"
     "问题：model3的轮毂和内饰是什么配置?\n"
     "答案：Model 3 配置了 19 英寸新星轮毂和深色高级内饰。它还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。下图是 Model 3 的图片:"
     "![](http://www.tesla.cn/model3.jpg)\n\n"
@@ -255,13 +261,6 @@ async def empty_response_agenerator() -> AsyncGenerator[str, None]:
     yield DEFAULT_EMPTY_RESPONSE_GEN
 
 
-@dataclass
-class PaiQueryBundle(QueryBundle):
-    stream: bool = False
-    no_retrieval: bool = False
-    citation: bool = False
-
-
 """
 PaiSynthesizer:
 Supports multi-modal inputs synthesizer.
@@ -275,6 +274,7 @@ class PaiSynthesizer(BaseSynthesizer):
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
+        llm_chat_prompt: Optional[BasePromptTemplate] = None,
         text_qa_template: Optional[BasePromptTemplate] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
         multimodal_qa_template: Optional[BasePromptTemplate] = None,
@@ -301,7 +301,9 @@ class PaiSynthesizer(BaseSynthesizer):
             citation_multimodal_qa_template
             or PromptTemplate(template=CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL)
         )
-        self._llm_only_template = PromptTemplate(template=DEFAULT_LLM_CHAT_TMPL)
+        self._llm_only_template = llm_chat_prompt or PromptTemplate(
+            template=DEFAULT_LLM_CHAT_TMPL
+        )
         self._multimodal_llm = multimodal_llm
 
     def _get_prompts(self) -> PromptDictType:
@@ -345,16 +347,20 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
+            query_str = query.query_str
+            if query.chat_messages_str:
+                query_str = query.chat_messages_str + "\nassistant: "
+
             if query.no_retrieval:
                 response_str = self.get_llm_only_response(
-                    query_str=query.query_str,
+                    query_str=query_str,
                     streaming=query.stream,
                     prompt_template=prompt_template,
                     **response_kwargs,
                 )
             else:
                 response_str = self.get_response(
-                    query_str=query.query_str,
+                    query_str=query_str,
                     text_chunks=[
                         n.node.get_content(metadata_mode=MetadataMode.LLM)
                         for n in text_nodes
@@ -414,16 +420,20 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
+            query_str = query.query_str
+            if query.chat_messages_str:
+                query_str = query.chat_messages_str + "\nassistant: "
+
             if query.no_retrieval:
                 response_str = await self.aget_llm_only_response(
-                    query_str=query.query_str,
+                    query_str=query_str,
                     streaming=query.stream,
                     prompt_template=prompt_template,
                     **response_kwargs,
                 )
             else:
                 response_str = await self.aget_response(
-                    query_str=query.query_str,
+                    query_str=query_str,
                     text_chunks=[
                         n.node.get_content(metadata_mode=MetadataMode.LLM)
                         for n in text_nodes
@@ -462,13 +472,11 @@ class PaiSynthesizer(BaseSynthesizer):
         image_documents = load_image_urls(image_url_list)
 
         context_str = (
-            "\n".join(
-                [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
-            )
+            "\n".join([f"材料 {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)])
             + "\n"
         )
         context_str += "\n".join(
-            [f"Image {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
+            [f"图片 {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
         )
 
         if not citation:
@@ -511,13 +519,11 @@ class PaiSynthesizer(BaseSynthesizer):
         image_documents = load_image_urls(image_url_list)
 
         context_str = (
-            "\n".join(
-                [f"Source {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
-            )
+            "\n".join([f"材料 {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)])
             + "\n"
         )
         context_str += "\n".join(
-            [f"Image {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
+            [f"图片 {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
         )
 
         if not citation:
@@ -583,10 +589,8 @@ class PaiSynthesizer(BaseSynthesizer):
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
 
-        context_str = (
-            "\n-------\n"
-            + "\n".join([f"\n{text}\n\n-------" for i, text in enumerate(text_chunks)])
-            + "\n"
+        context_str = "\n".join(
+            [f"材料{i}:\n{text}\n" for i, text in enumerate(text_chunks)]
         )
 
         response: RESPONSE_TEXT_TYPE
@@ -639,10 +643,8 @@ class PaiSynthesizer(BaseSynthesizer):
             prompt_template = prompt_template or self._citation_text_qa_template
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
-        context_str = (
-            "\n-------\n"
-            + "\n".join([f"\n{text}\n\n-------" for i, text in enumerate(text_chunks)])
-            + "\n"
+        context_str = "\n".join(
+            [f"材料{i}:\n{text}\n" for i, text in enumerate(text_chunks)]
         )
 
         response: RESPONSE_TEXT_TYPE
