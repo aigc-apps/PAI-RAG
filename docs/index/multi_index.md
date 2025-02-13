@@ -42,31 +42,31 @@
 ** Retrieval **
 
 ```sh
-curl -X POST http://localhost:8001/service/query/retrieval -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
+curl -X POST http://localhost:8680/service/query/retrieval -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
 ```
 
 ** Query **
 
 ```sh
-curl -X POST http://localhost:8001/service/query -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
+curl -X POST http://localhost:8680/service/query -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
 ```
 
 ### 上传接口(Upload)
 
 ```sh
-curl -X POST http://localhost:8001/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@/localpath/PAI.txt' -F "index_name=es_test_1"
+curl -X POST http://localhost:8680/service/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@/localpath/PAI.txt' -F "index_name=es_test_1"
 ```
 
 ### List Index
 
 ```sh
-curl -X GET http://localhost:8001/service/indexes
+curl -X GET http://localhost:8680/service/indexes
 ```
 
 ### Add Index
 
 ```sh
-curl -X POST http://localhost:8001/service/indexes/index3 -H "Content-Type: Application/json" -d '{"index_name":"index3","vector_store_config":{"persist_path":"localdata/storage3","type":"faiss","is_image_store":false},"embedding_config":{"source":"dashscope","embed_batch_size":10}}'
+curl -X POST http://localhost:8680/service/indexes/index3 -H "Content-Type: Application/json" -d '{"index_name":"index3","vector_store_config":{"persist_path":"localdata/storage3","type":"faiss","is_image_store":false},"embedding_config":{"source":"dashscope","embed_batch_size":10}}'
 ```
 
 response:
@@ -78,7 +78,7 @@ response:
 ### Update Index
 
 ```sh
-curl -X PATCH http://localhost:8001/service/indexes/index3 -H "Content-Type: Application/json" -d '{"index_name":"index3","vector_store_config":{"persist_path":"localdata/storage4","type":"faiss","is_image_store":false},"embedding_config":{"source":"dashscope","embed_batch_size":10}}'
+curl -X PATCH http://localhost:8680/service/indexes/index3 -H "Content-Type: Application/json" -d '{"index_name":"index3","vector_store_config":{"persist_path":"localdata/storage4","type":"faiss","is_image_store":false},"embedding_config":{"source":"dashscope","embed_batch_size":10}}'
 ```
 
 response:
@@ -90,7 +90,7 @@ response:
 ### Delete Index
 
 ```sh
-curl -X DELETE http://localhost:8001/service/indexes/index3
+curl -X DELETE http://localhost:8680/service/indexes/index3
 ```
 
 response:

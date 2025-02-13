@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pai_rag"
-version = "1.0.0"
+version = "1.1.0"
 description = "Open source RAG framework built on Aliyun PAI"
 authors = []
 readme = "README.md"
@@ -99,7 +99,6 @@ dashvector = "^1.0.18"
 dashtext = "^0.0.7"
 
 [tool.poetry.scripts]
-pai_rag = "pai_rag.main:run"
 load_data = "pai_rag.tools.load_data_tool:run"
 load_model = "pai_rag.utils.download_models:load_models"
 run_eval_exp = "pai_rag.evaluation.run_evaluation_experiments:run"

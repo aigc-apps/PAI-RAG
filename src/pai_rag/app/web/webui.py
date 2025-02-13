@@ -9,7 +9,6 @@ from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
-from pai_rag.app.web.chatonly_page import create_chat_ui
 from pai_rag.app.web.index_utils import index_related_component_keys
 
 # from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
@@ -130,15 +129,10 @@ def make_homepage():
     return homepage
 
 
-def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blocks:
+def configure_webapp(app: FastAPI, rag_url=DEFAULT_LOCAL_URL) -> gr.Blocks:
     rag_client.set_endpoint(rag_url)
 
-    chat_page = create_chat_ui()
-    chat_page.queue(api_open=True, max_size=64)
-    gr.mount_gradio_app(app, chat_page, path="/chat")
-
     home = make_homepage()
-    chat_page.queue(api_open=True, max_size=64)
-    logger.info(f"web_url: {web_url}")
+    logger.info(f"web_url: {rag_url}")
     gr.mount_gradio_app(app, home, path="/")
     return

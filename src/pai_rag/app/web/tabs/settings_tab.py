@@ -20,6 +20,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value="NEW",
                     interactive=True,
                     elem_id="vector_index",
+                    allow_custom_value=True,
                 )
 
                 new_index_name = gr.Textbox(
@@ -30,7 +31,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     visible=False,
                 )
 
-                # _ = gr.Markdown(value="**Index - Embedding Model**")
+                _ = gr.Markdown(value="**Index - Embedding Model**")
                 embed_source = gr.Radio(
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",

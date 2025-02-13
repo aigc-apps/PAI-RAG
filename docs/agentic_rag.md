@@ -76,7 +76,7 @@ RAG提供了非常好的知识库查询能力，然而在现实场景中问答�
       }
     },
     "required": ["from_city", "to_city", "date"],
-    "url": "http://localhost:8001/demo/api/flights"
+    "url": "http://localhost:8680/demo/api/flights"
   },
   {
     "content_type": "application/json",
@@ -101,7 +101,7 @@ RAG提供了非常好的知识库查询能力，然而在现实场景中问答�
       }
     },
     "required": ["city", "checkin_date", "checkout_date"],
-    "url": "http://localhost:8001/demo/api/hotels"
+    "url": "http://localhost:8680/demo/api/hotels"
   }
 ]
 ```
@@ -220,7 +220,7 @@ Agentic RAG支持通过API调用的方式，以支持更多复杂的业务场景
 ### RAG - 知识库问答
 
 ```sh
-curl -X POST http://localhost:8001/api/v1/query \
+curl -X POST http://localhost:8680/api/v1/query \
 -H "Authorization: YOUR_TOKEN" \
 -H "Content-Type: application/json" \
 -d '{"question": "什么是组件化技术", "with_intent": true, "stream": true}'
@@ -348,7 +348,7 @@ data: {"delta": "", "is_finished": true, "session_id": "671bb4e8ca324a34ac6fe7f1
 ### 使用工具 - 查询时间（内置工具）
 
 ```sh
-curl -X POST http://localhost:8001/api/v1/query \
+curl -X POST http://localhost:8680/api/v1/query \
 -H "Authorization: YOUR_TOKEN" \
 -H "Content-Type: application/json" \
 -d '{"question": "今天的日期", "with_intent": true, "stream": true}'
@@ -381,7 +381,7 @@ data: {"delta": "", "is_finished": true}
 ### 使用工具 - 查询天气
 
 ```sh
-curl -X POST http://localhost:8001/api/v1/query \
+curl -X POST http://localhost:8680/api/v1/query \
 -H "Authorization: YOUR_TOKEN" \
 -H "Content-Type: application/json" \
 -d '{"question": "杭州的天气", "with_intent": true, "stream": true}'

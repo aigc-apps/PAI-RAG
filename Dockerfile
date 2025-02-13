@@ -43,4 +43,4 @@ WORKDIR /app
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 COPY . .
-CMD ["pai_rag", "serve"]
+CMD ["./scripts/start.sh", "-w", "1"]

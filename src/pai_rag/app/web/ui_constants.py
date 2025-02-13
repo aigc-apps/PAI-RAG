@@ -102,7 +102,7 @@ EMBEDDING_MODEL_LINK_DICT = {
     "paraphrase-multilingual-MiniLM-L12-v2": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 }
 
-EMBEDDING_API_KEY_DICT = {"huggingface": False, "dashscope": True}
+EMBEDDING_API_KEY_DICT = {"huggingface": False}
 
 LLM_MODEL_KEY_DICT = {
     "dashscope": [

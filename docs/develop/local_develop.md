@@ -83,11 +83,11 @@ For local development, please refer to the following steps:
 5. Run RAG WebUI
 
    ```bash
-   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
+   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8680)
    pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
    ```
 
-   You can also open http://localhost:8002/ to configure the RAG service and upload local data.
+   You can also open http://localhost:8680/ to configure the RAG service and upload local data.
 
 6. [Optional] Local load_data tool
 

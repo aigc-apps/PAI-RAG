@@ -42,32 +42,18 @@ jobs:
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
 
-      - name: Build and push base data process image
-        env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-rag-data-operator
-        run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f src/pai_rag/tools/data_process/docker/Dockerfile_cpu .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
-
-      - name: Build and push UI image
-        env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-ui
-        run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_ui .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
-
-      - name: Build and push nginx image
-        env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-nginx
-        run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_nginx .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
-
       - name: Build and push GPU image
         env:
           IMAGE_TAG: ${{env.VERSION_TAG}}-gpu
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_gpu .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+
+      - name: Build and push base data process image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}-rag-data-operator
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f src/pai_rag/tools/data_process/docker/Dockerfile_cpu .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
 
       - name: Free disk space

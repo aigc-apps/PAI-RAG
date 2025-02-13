@@ -58,7 +58,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    docker-compose up -d
    ```
 
-3. 打开浏览器中的 http://localhost:8000 访问web ui. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
+3. 打开浏览器中的 http://localhost:8680 访问web ui. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
 
 ## 本地启动
 
@@ -66,7 +66,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 ## 通过Web UI查询的示例
 
-1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+1. 打开 http://localhost:8680 在浏览器中。根据需要调整索引和LLM设置。
 
    <img src="docs/figures/quick_start/setting.png" width="600px"/>
 
@@ -80,7 +80,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
 
 ## 通过API接口查询的示例
 
-1. 打开 http://localhost:8000 在浏览器中。根据需要调整索引和LLM设置。
+1. 打开 http://localhost:8680 在浏览器中。根据需要调整索引和LLM设置。
 
 2. 使用API上传数据：
 
@@ -93,7 +93,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    **请求**
 
    ```shell
-   curl -X 'POST' http://localhost:8000/api/v1/upload_data \
+   curl -X 'POST' http://localhost:8680/api/v1/upload_data \
    -H 'Content-Type: multipart/form-data' \
       -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
    ```
@@ -111,7 +111,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    **请求**
 
    ```shell
-   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+   curl 'http://localhost:8680/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
    **响应**
@@ -129,7 +129,7 @@ PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框�
    **请求**
 
    ```shell
-   curl -X 'POST' http://localhost:8000/api/v1/query \
+   curl -X 'POST' http://localhost:8680/api/v1/query \
       -H "Content-Type: application/json" \
       -d '{"question":"What did the author do growing up?"}'
    ```

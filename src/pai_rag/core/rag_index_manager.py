@@ -2,6 +2,7 @@ import os
 import threading
 from typing import Annotated, Union, Dict
 from pydantic import BaseModel, Field
+from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
@@ -59,6 +60,7 @@ class RagIndexManager:
         self._index_file = index_file
         self._index_map = index_map
         self._lock = threading.Lock()
+        self._state = FileServiceState(DEFAULT_INDEX_FILE)
 
     def add_default_index(self, rag_config: RagConfig):
         if DEFAULT_INDEX_NAME not in self._index_map.indexes:
@@ -85,6 +87,11 @@ class RagIndexManager:
     def get_index_by_name(self, index_name) -> RagIndexEntry:
         if not index_name:
             return self._index_map.indexes[self._index_map.current_index_name]
+
+        if index_name not in self._index_map.indexes:
+            self.reload_indexes()  # try to reload index if index not exists.
+            if index_name not in self._index_map.indexes:
+                raise ValueError(f"Index name '{index_name}' not exists.")
         return self._index_map.indexes[index_name]
 
     def save_index_map(self):
@@ -95,6 +102,8 @@ class RagIndexManager:
         with open(self._index_file, "w") as fp:
             fp.write(index_json)
 
+        return os.path.getmtime(self._index_file)
+
     def add_index(self, index_entry: RagIndexEntry):
         with self._lock:
             assert (
@@ -104,7 +113,8 @@ class RagIndexManager:
                 index_entry.index_name not in self._index_map.indexes
             ), f"Index name '{index_entry.index_name}' already exists."
             self._index_map.indexes[index_entry.index_name] = index_entry
-            self.save_index_map()
+            new_state = self.save_index_map()
+            self._state.update_state(new_state)
             logger.info(f"Index '{index_entry.index_name}' created successfully.")
 
     def update_index(self, index_entry: RagIndexEntry):
@@ -113,7 +123,8 @@ class RagIndexManager:
                 index_entry.index_name in self._index_map.indexes
             ), f"Index name '{index_entry.index_name}' not exists."
             self._index_map.indexes[index_entry.index_name] = index_entry
-            self.save_index_map()
+            new_state = self.save_index_map()
+            self._state.update_state(new_state)
             logger.info(
                 f"Index '{index_entry.index_name}' updated successfully {self._index_map}."
             )
@@ -124,11 +135,31 @@ class RagIndexManager:
                 index_name in self._index_map.indexes
             ), f"Index name '{index_name}' not exists."
             del self._index_map.indexes[index_name]
-            self.save_index_map()
+            new_state = self.save_index_map()
+            self._state.update_state(new_state)
             logger.info(f"Index '{index_name}' removed.")
 
     def list_indexes(self):
         return self._index_map
+
+    def check_updates(self):
+        new_state = self._state.check_state()
+        if new_state != 0:
+            logger.info(f"Detected changes for config file {new_state}.")
+            self.reload_indexes(new_state)
+            logger.info("Index reloaded successfully.")
+
+    def reload_indexes(self, new_state):
+        with self._lock:
+            if self._state.state_value != new_state:
+                logger.info("Need reload index from background.")
+                if os.path.exists(DEFAULT_INDEX_FILE):
+                    with open(DEFAULT_INDEX_FILE, "r") as f:
+                        index_json_str = f.read()
+                        self._index_map = RagIndexMap.model_validate_json(
+                            index_json_str
+                        )
+                        self._state.update_state(new_state)
 
 
 index_manager = RagIndexManager.from_file(index_file=DEFAULT_INDEX_FILE)

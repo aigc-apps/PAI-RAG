@@ -71,6 +71,7 @@ class RagConfigManager:
         data = self.config.as_dict()
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())
+        return self.get_config_mtime()
 
     def get_config_mtime(self):
         try:
