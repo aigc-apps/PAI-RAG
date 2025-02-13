@@ -9,6 +9,7 @@ from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
+from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
 import httpx
 from loguru import logger
 
@@ -48,6 +49,7 @@ class QuarkSearchTool(BaseQueryEngine):
         host: str,
         synthesizer: BaseSynthesizer = None,
         search_count: int = DEFAULT_SEARCH_COUNT,
+        intent_router: PaiIntentRouter = None,
     ):
         self.host = host
         self.user = user
@@ -55,6 +57,7 @@ class QuarkSearchTool(BaseQueryEngine):
 
         self.token_provider = QuarkAccessTokenProvider(host, user, secret)
         self.synthesizer = synthesizer
+        self.intent_router = intent_router
         self.search_count = search_count
 
     async def _search_quark_single_page(self, query: str, token: str, page: int = 1):
@@ -106,6 +109,13 @@ class QuarkSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
     ):
+        if self.intent_router:
+            logger.info("Intent router detected, start selecting intent.")
+            intent = await self.intent_router.aselect(query)
+            if intent == Intents.CHAT:
+                logger.info("Chat intent detected, return direct response.")
+                return await self.synthesizer.asynthesize(query=query, nodes=[])
+
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
