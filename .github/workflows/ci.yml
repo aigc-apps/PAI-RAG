@@ -57,4 +57,4 @@ jobs:
           IS_PAI_RAG_CI_TEST: true
           PAIRAG_RAG__embedding__source: "DashScope"
           PAIRAG_RAG__llm__source: "DashScope"
-          PAIRAG_RAG__llm__name: "qwen-max"
+          PAIRAG_RAG__llm__model: "qwen-max"
