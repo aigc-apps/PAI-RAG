@@ -155,7 +155,7 @@ async def _make_chat_completion_chunk_response(session_id, response):
                 object="chat.completion.chunk",
             )
             i += 1
-            yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=True)}\n\n"
+            yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
 
 class RagApplication:
