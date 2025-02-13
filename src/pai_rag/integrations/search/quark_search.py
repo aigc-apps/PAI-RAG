@@ -15,6 +15,8 @@ from pai_rag.app.api.models import PaiQueryBundle
 import httpx
 from loguru import logger
 
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
+
 
 class QuarkAccessTokenProvider:
     def __init__(self, host: str, user: str, secret: str):
@@ -48,8 +50,8 @@ class QuarkSearchTool(BaseQueryEngine):
         secret: str,
         host: str,
         synthesizer: BaseSynthesizer = None,
+        search_count: int = DEFAULT_SEARCH_COUNT,
         intent_router: PaiIntentRouter = None,
-        search_count: int = 30,
     ):
         self.host = host
         self.user = user

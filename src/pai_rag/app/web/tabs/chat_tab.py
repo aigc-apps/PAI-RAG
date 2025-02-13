@@ -19,9 +19,12 @@ def change_search_model_argument(search_type):
         gr.update(visible=True if search_type == "bing" else False),
         gr.update(visible=True),
         gr.update(visible=True if search_type == "bing" else False),
-        gr.update(visible=False if search_type == "bing" else True),
-        gr.update(visible=False if search_type == "bing" else True),
-        gr.update(visible=False if search_type == "bing" else True),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
     ]
 
 
@@ -151,6 +154,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
+                visible=False,
+            )
+            default_web_search = gr.Checkbox(
+                label="Default search web",
+                info="Default search web for openai endpoint",
+                elem_id="default_web_search",
+                value=False,
             )
 
             with gr.Column(visible=True) as vs_col:
@@ -350,7 +360,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 )
                 with search_model_argument:
                     search_type = gr.Radio(
-                        ["bing", "夸克"],
+                        ["bing", "夸克", "aliyun"],
                         label="Search Engine",
                         elem_id="search_type",
                     )
@@ -389,6 +399,18 @@ def create_chat_tab() -> Dict[str, Any]:
                         type="password",
                         elem_id="quark_secret",
                     )
+                    aliyun_endpoint = gr.Text(
+                        label="Endpoint", value="", elem_id="aliyun_endpoint"
+                    )
+                    aliyun_accessid = gr.Text(
+                        label="AccessId", value="", elem_id="aliyun_accessid"
+                    )
+                    aliyun_accesskey = gr.Text(
+                        label="AccessKey",
+                        value="",
+                        type="password",
+                        elem_id="aliyun_accesskey",
+                    )
                 search_args = {
                     search_type,
                     search_api_key,
@@ -397,6 +419,9 @@ def create_chat_tab() -> Dict[str, Any]:
                     quark_host,
                     quark_user,
                     quark_secret,
+                    aliyun_endpoint,
+                    aliyun_accessid,
+                    aliyun_accesskey,
                 }
                 search_type.input(
                     fn=change_search_model_argument,
@@ -408,6 +433,9 @@ def create_chat_tab() -> Dict[str, Any]:
                         quark_host,
                         quark_user,
                         quark_secret,
+                        aliyun_endpoint,
+                        aliyun_accessid,
+                        aliyun_accesskey,
                     ],
                 )
 
@@ -456,6 +484,9 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_model_argument: gr.update(open=True),
                         search_col: gr.update(visible=True),
                         prompt_argument: gr.update(open=True),
+                        llm_col: gr.update(visible=False),
+                        model_argument: gr.update(open=False),
+                        lc_col: gr.update(visible=True),
                     }
 
             query_type.input(
@@ -492,6 +523,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         chat_args = (
             {
+                default_web_search,
                 system_role_template,
                 custom_prompt_template,
                 question,
@@ -535,6 +567,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
+            default_web_search.elem_id: default_web_search,
             chat_index.elem_id: chat_index,
             similarity_top_k.elem_id: similarity_top_k,
             image_similarity_top_k.elem_id: image_similarity_top_k,
@@ -556,6 +589,9 @@ def create_chat_tab() -> Dict[str, Any]:
             quark_host.elem_id: quark_host,
             quark_secret.elem_id: quark_secret,
             quark_user.elem_id: quark_user,
+            aliyun_endpoint.elem_id: aliyun_endpoint,
+            aliyun_accessid.elem_id: aliyun_accessid,
+            aliyun_accesskey.elem_id: aliyun_accesskey,
             model_reranker_col.elem_id: model_reranker_col,
             llm_temperature.elem_id: llm_temperature,
         }

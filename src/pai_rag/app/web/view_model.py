@@ -24,8 +24,12 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
 from pai_rag.integrations.search.search_config import (
+    DEFAULT_ALIYUN_SEARCH_ENDPOINT,
+    DEFAULT_QUARK_SEARCH_ENDPOINT,
+    DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
 
 
@@ -81,14 +85,19 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
-    search_type: str = "夸克"
+    default_web_search: bool = False
+    search_type: str = "bing"
     search_api_key: str = None
-    search_count: int = 30
+    search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
 
-    quark_host: str = None
+    quark_host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
     quark_user: str = None
     quark_secret: str = None
+
+    aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
+    aliyun_accessid: str = None
+    aliyun_accesskey: str = None
 
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
@@ -148,6 +157,8 @@ class ViewModel(BaseModel):
     @staticmethod
     def from_app_config(config: RagConfig):
         view_model = ViewModel()
+
+        view_model.default_web_search = config.system.default_web_search
 
         # llm
         if isinstance(config.llm, PaiEasLlmConfig):
@@ -238,6 +249,12 @@ class ViewModel(BaseModel):
             view_model.quark_secret = config.search.secret
             view_model.quark_user = config.search.user
             view_model.search_count = config.search.search_count
+        elif isinstance(config.search, AliyunSearchConfig):
+            view_model.search_type = "aliyun"
+            view_model.aliyun_endpoint = config.search.endpoint
+            view_model.aliyun_accessid = config.search.accessid
+            view_model.aliyun_accesskey = config.search.accesskey
+            view_model.search_count = config.search.search_count
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
             view_model.analysis_type = "nl2pandas"
@@ -288,6 +305,8 @@ class ViewModel(BaseModel):
 
     def to_app_config(self):
         config = recursive_dict()
+
+        config["system"]["default_web_search"] = self.default_web_search
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -407,11 +426,17 @@ class ViewModel(BaseModel):
             )
             config["search"]["search_lang"] = self.search_lang
             config["search"]["search_count"] = self.search_count
-        else:
+        elif self.search_type == "夸克":
             config["search"]["source"] = "quark"
             config["search"]["host"] = self.quark_host
             config["search"]["user"] = self.quark_user
             config["search"]["secret"] = self.quark_secret
+            config["search"]["search_count"] = self.search_count
+        else:
+            config["search"]["source"] = "aliyun"
+            config["search"]["endpoint"] = self.aliyun_endpoint
+            config["search"]["accessid"] = self.aliyun_accessid
+            config["search"]["accesskey"] = self.aliyun_accesskey
             config["search"]["search_count"] = self.search_count
 
         config["intent"]["descriptions"] = json.loads(self.intent_description)
@@ -576,7 +601,19 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": False}
             settings["quark_user"] = {"value": self.quark_user, "visible": False}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-        else:
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
+        elif self.search_type == "夸克":
             settings["search_api_key"] = {
                 "value": self.search_api_key,
                 "visible": False,
@@ -586,6 +623,41 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": True}
             settings["quark_user"] = {"value": self.quark_user, "visible": True}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
+        # aliyun
+        else:
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
+            settings["search_lang"] = {"value": self.search_lang, "visible": False}
+            settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["quark_host"] = {"value": self.quark_host, "visible": False}
+            settings["quark_user"] = {"value": self.quark_user, "visible": False}
+            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": True,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": True,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": True,
+            }
 
         # data_analysis
         settings["analysis_type"] = {"value": self.analysis_type}
@@ -619,6 +691,8 @@ class ViewModel(BaseModel):
         settings["agent_function_definition"] = {
             "value": self.agent_function_definition
         }
+
+        settings["default_web_search"] = {"value": self.default_web_search}
 
         settings["intent_description"] = {"value": self.intent_description}
         # print("view model settings:", settings)
