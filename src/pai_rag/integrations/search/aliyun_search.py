@@ -9,11 +9,11 @@ from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 
+from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
+from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
 
 
-DEFAULT_ENDPOINT_BASE_URL = "iqs.cn-zhangjiakou.aliyuncs.com"
-DEFAULT_SEARCH_COUNT = 30
 DEFAULT_LANG = "zh-CN"
 DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 
@@ -24,7 +24,7 @@ class AliyunSearchTool(BaseQueryEngine):
         accessid: str,
         accesskey: str,
         synthesizer: BaseSynthesizer = None,
-        endpoint: str = DEFAULT_ENDPOINT_BASE_URL,
+        endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
         time_range: str = DEFAULT_TIMERANGE,
@@ -34,7 +34,7 @@ class AliyunSearchTool(BaseQueryEngine):
 
         config = open_api_models.Config(
             access_key_id=accessid,
-            access_key_secret=accessid,
+            access_key_secret=accesskey,
         )
         self.synthesizer = synthesizer
 
@@ -58,7 +58,7 @@ class AliyunSearchTool(BaseQueryEngine):
                 f"Aliyun Search API failed, status code {response.status_code}, detail {response}"
             )
             return []
-        logger.info(f"Finished searching query {request}. {response.json()}")
+        logger.info(f"Finished searching query {request}.")
         return response.body.to_map()
 
     async def _asearch(
@@ -66,7 +66,7 @@ class AliyunSearchTool(BaseQueryEngine):
         query: str,
     ):
         search_tasks = []
-        for i in range(0, 1 + int(self.search_count / 10), 1):
+        for i in range(0, 1 + int((self.search_count - 1) / 10), 1):
             search_tasks.append(
                 self._search_aliyun_single_page(query=query, page=i + 1)
             )
@@ -97,7 +97,7 @@ class AliyunSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
     ):
-        nodes = await self.asearch(query=query.query_str)
+        nodes = await self._asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
         return await self.synthesizer.asynthesize(query=query, nodes=nodes)

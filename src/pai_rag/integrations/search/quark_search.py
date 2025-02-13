@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlencode
 import httpx
 from loguru import logger
 
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
+
 
 class QuarkAccessTokenProvider:
     def __init__(self, host: str, user: str, secret: str):
@@ -45,7 +47,7 @@ class QuarkSearchTool(BaseQueryEngine):
         secret: str,
         host: str,
         synthesizer: BaseSynthesizer = None,
-        search_count: int = 30,
+        search_count: int = DEFAULT_SEARCH_COUNT,
     ):
         self.host = host
         self.user = user
@@ -76,7 +78,7 @@ class QuarkSearchTool(BaseQueryEngine):
     async def asearch(self, query: str):
         search_tasks = []
         token = await self.token_provider.get_token()
-        for i in range(0, 1 + int(self.search_count / 10), 1):
+        for i in range(0, 1 + int((self.search_count - 1) / 10), 1):
             search_tasks.append(
                 self._search_quark_single_page(query=query, token=token, page=i + 1)
             )

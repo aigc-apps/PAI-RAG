@@ -24,6 +24,9 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
 from pai_rag.integrations.search.search_config import (
+    DEFAULT_ALIYUN_SEARCH_ENDPOINT,
+    DEFAULT_QUARK_SEARCH_ENDPOINT,
+    DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
@@ -82,19 +85,19 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
-    search_type: str = "aliyun"
+    search_type: str = "bing"
     search_api_key: str = None
-    search_count: int = 30
+    search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
 
-    quark_host: str = None
+    quark_host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
     quark_user: str = None
     quark_secret: str = None
-    
-    aliyun_endpoint: str = None
+
+    aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_accessid: str = None
     aliyun_accesskey: str = None
-    
+
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
     analysis_file_path: str = None
@@ -597,9 +600,18 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": False}
             settings["quark_user"] = {"value": self.quark_user, "visible": False}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-            settings["aliyun_endpoint"] = {"value": self.aliyun_endpoint, "visible": False}
-            settings["aliyun_accessid"] = {"value": self.aliyun_accessid, "visible": False}
-            settings["aliyun_accesskey"] = {"value": self.aliyun_accesskey, "visible": False}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
         elif self.search_type == "夸克":
             settings["search_api_key"] = {
                 "value": self.search_api_key,
@@ -610,20 +622,41 @@ class ViewModel(BaseModel):
             settings["quark_host"] = {"value": self.quark_host, "visible": True}
             settings["quark_user"] = {"value": self.quark_user, "visible": True}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
-            settings["aliyun_endpoint"] = {"value": self.aliyun_endpoint, "visible": False}
-            settings["aliyun_accessid"] = {"value": self.aliyun_accessid, "visible": False}
-            settings["aliyun_accesskey"] = {"value": self.aliyun_accesskey, "visible": False}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": False,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": False,
+            }
         # aliyun
         else:
-            settings["search_api_key"] = {"value": self.search_api_key,"visible": False}
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
             settings["search_lang"] = {"value": self.search_lang, "visible": False}
             settings["search_count"] = {"value": self.search_count, "visible": True}
             settings["quark_host"] = {"value": self.quark_host, "visible": False}
             settings["quark_user"] = {"value": self.quark_user, "visible": False}
             settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-            settings["aliyun_endpoint"] = {"value": self.aliyun_endpoint, "visible": True}
-            settings["aliyun_accessid"] = {"value": self.aliyun_accessid, "visible": True}
-            settings["aliyun_accesskey"] = {"value": self.aliyun_accesskey, "visible": True}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": True,
+            }
+            settings["aliyun_accessid"] = {
+                "value": self.aliyun_accessid,
+                "visible": True,
+            }
+            settings["aliyun_accesskey"] = {
+                "value": self.aliyun_accesskey,
+                "visible": True,
+            }
 
         # data_analysis
         settings["analysis_type"] = {"value": self.analysis_type}

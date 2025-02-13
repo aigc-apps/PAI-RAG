@@ -41,6 +41,7 @@ from pai_rag.utils.oss_client import OssClient
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
 
 
@@ -270,7 +271,7 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             synthesizer=synthesizer,
             search_count=config.search.search_count,
         )
-    elif isinstance(config.search, AliyunSearchTool):
+    elif isinstance(config.search, AliyunSearchConfig):
         searcher = resolve(
             cls=AliyunSearchTool,
             accessid=config.search.accessid,

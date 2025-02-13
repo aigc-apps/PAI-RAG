@@ -2,6 +2,10 @@ from pydantic import BaseModel
 from enum import Enum
 from typing import Literal
 
+DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
+DEFAULT_QUARK_SEARCH_ENDPOINT = "https://zx-dsc.sm.cn/"
+DEFAULT_SEARCH_COUNT = 10
+
 
 class SupportedSearchType(str, Enum):
     bing = "bing"
@@ -11,7 +15,7 @@ class SupportedSearchType(str, Enum):
 
 class BaseSearchConfig(BaseModel):
     source: SupportedSearchType
-    search_count: int = 30
+    search_count: int = DEFAULT_SEARCH_COUNT
 
     class Config:
         frozen = True
@@ -33,12 +37,13 @@ class BingSearchConfig(BaseSearchConfig):
 
 class QuarkSearchConfig(BaseSearchConfig):
     source: Literal[SupportedSearchType.quark] = SupportedSearchType.quark
-    host: str = "https://zx-dsc.sm.cn/"
+    host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
     user: str | None = None
     secret: str | None = None
 
+
 class AliyunSearchConfig(BaseSearchConfig):
     source: Literal[SupportedSearchType.aliyun] = SupportedSearchType.aliyun
-    endpoint: str = "iqs.cn-zhangjiakou.aliyuncs.com"
+    endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     accessid: str | None = None
     accesskey: str | None = None
