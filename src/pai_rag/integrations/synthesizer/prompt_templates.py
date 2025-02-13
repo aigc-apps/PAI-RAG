@@ -43,16 +43,14 @@ DEFAULT_ANSWER_TEMPLATE_EN = """**Question to Answer:**
 """
 
 
-DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"现在，轮到你了。
-**参考内容：**
+DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"**参考内容：**
 ------
 {context_str}
 ------
 **需要回答的问题：**
 {query_str}
 """
-DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """Now, it's your turn.
-**Reference Content:**
+DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """**Reference Content:**
 ------
 {context_str}
 ------
