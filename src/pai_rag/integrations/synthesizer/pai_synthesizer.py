@@ -2,7 +2,6 @@ from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cas
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
-from llama_index.core.prompts import BasePromptTemplate
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
@@ -38,8 +37,6 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     DEFAULT_CONTEXT_ANSWER_TEMPLATE,
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
-    CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
 )
 from loguru import logger
 
@@ -72,8 +69,6 @@ class PaiSynthesizer(BaseSynthesizer):
         system_role_template: Optional[str] = None,
         custom_prompt_template: Optional[str] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
-        multimodal_qa_template: Optional[BasePromptTemplate] = None,
-        citation_multimodal_qa_template: Optional[BasePromptTemplate] = None,
         streaming: bool = False,
     ) -> None:
         super().__init__(
@@ -82,20 +77,11 @@ class PaiSynthesizer(BaseSynthesizer):
             prompt_helper=prompt_helper,
             streaming=streaming,
         )
-        self._system_role_template = None
-        self._custom_prompt_template = None
+        self._multimodal_llm = multimodal_llm
         self._update_prompts(
             system_role_str=system_role_template,
             prompt_template_str=custom_prompt_template,
         )
-        self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
-            template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
-        )
-        self._citation_multimodal_qa_template = (
-            citation_multimodal_qa_template
-            or PromptTemplate(template=CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL)
-        )
-        self._multimodal_llm = multimodal_llm
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
@@ -111,15 +97,9 @@ class PaiSynthesizer(BaseSynthesizer):
         self, system_role_str: str = None, prompt_template_str: str = None
     ) -> None:
         """Update prompts."""
-        self._system_role_template = (
-            system_role_str
-            or self._system_role_template
-            or DEFAULT_SYSTEM_ROLE_TEMPLATE
-        )
+        self._system_role_template = system_role_str or DEFAULT_SYSTEM_ROLE_TEMPLATE
         self._custom_prompt_template = (
-            prompt_template_str
-            or self._custom_prompt_template
-            or DEFAULT_CUSTOM_PROMPR_TEMPLATE
+            prompt_template_str or DEFAULT_CUSTOM_PROMPR_TEMPLATE
         )
 
         self._llm_only_template = PromptTemplate(
@@ -144,6 +124,8 @@ class PaiSynthesizer(BaseSynthesizer):
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
         )
+        self._multimodal_qa_template = self._text_qa_template
+        self._citation_multimodal_qa_template = self._citation_text_qa_template
 
     @dispatcher.span
     def synthesize(
@@ -155,9 +137,6 @@ class PaiSynthesizer(BaseSynthesizer):
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
-        self._update_prompts(
-            system_role_str=system_role_str, prompt_template_str=prompt_template_str
-        )
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -186,6 +165,9 @@ class PaiSynthesizer(BaseSynthesizer):
                 response_str = self.get_llm_only_response(
                     query_str=query_str,
                     streaming=query.stream,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -198,6 +180,9 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
 
@@ -226,9 +211,6 @@ class PaiSynthesizer(BaseSynthesizer):
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
-        self._update_prompts(
-            system_role_str=system_role_str, prompt_template_str=prompt_template_str
-        )
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -252,11 +234,13 @@ class PaiSynthesizer(BaseSynthesizer):
             query_str = query.query_str
             if query.chat_messages_str:
                 query_str = query.chat_messages_str + "\nassistant: "
-
             if query.no_retrieval:
                 response_str = await self.aget_llm_only_response(
                     query_str=query_str,
                     streaming=query.stream,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -269,6 +253,9 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
 
@@ -314,7 +301,9 @@ class PaiSynthesizer(BaseSynthesizer):
             fmt_prompt = self._citation_multimodal_qa_template.format(
                 context_str=context_str, query_str=query_str
             )
-
+        logger.info(
+            f"Synthsize using Multi-modal LLM with fmt_prompt {fmt_prompt}. citation: {citation}"
+        )
         if streaming:
             completion_response_gen = self._multimodal_llm.stream_complete(
                 prompt=fmt_prompt,
@@ -362,6 +351,9 @@ class PaiSynthesizer(BaseSynthesizer):
                 context_str=context_str, query_str=query_str
             )
 
+        logger.info(
+            f"Synthsize using Multi-modal LLM with fmt_prompt {fmt_prompt}. citation: {citation}"
+        )
         if streaming:
             completion_response_gen = await self._multimodal_llm.astream_complete(
                 prompt=fmt_prompt,
@@ -388,6 +380,8 @@ class PaiSynthesizer(BaseSynthesizer):
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
         citation: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -395,9 +389,6 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._multimodal_llm is not None
             ), "Multi-modal LLM must be provided to understand image documents."
 
-            logger.info(
-                f"Synthsize using Multi-modal LLM with images {image_url_list}. citation: {citation}"
-            )
             return await self._aget_multi_modal_response(
                 query_str=query_str,
                 text_chunks=text_chunks,
@@ -409,9 +400,28 @@ class PaiSynthesizer(BaseSynthesizer):
 
         logger.info(f"Synthsize using LLM with no image inputs. citation: {citation}")
         if not citation:
-            prompt_template = self._text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._text_qa_template
+            )
         else:
-            prompt_template = self._citation_text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._citation_text_qa_template
+            )
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
 
@@ -449,6 +459,8 @@ class PaiSynthesizer(BaseSynthesizer):
         image_url_list: Sequence[str] = None,
         streaming: bool = False,
         citation: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -464,9 +476,28 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         if not citation:
-            prompt_template = self._text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._text_qa_template
+            )
         else:
-            prompt_template = self._citation_text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._citation_text_qa_template
+            )
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
         context_str = "\n".join(
@@ -499,21 +530,30 @@ class PaiSynthesizer(BaseSynthesizer):
         self,
         query_str: str,
         streaming: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
+        _llm_only_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                system_role_str,
+                prompt_template_str,
+                DEFAULT_ANSWER_TEMPLATE,
+            )
+        )
         logger.info(
-            f"Synthsize using LLM only. \n Prompt: {self._llm_only_template}. \n Query: {query_str}"
+            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
         )
         if not streaming:
             response = await self._llm.apredict(
-                self._llm_only_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = await self._llm.astream(
-                self._llm_only_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
@@ -529,21 +569,31 @@ class PaiSynthesizer(BaseSynthesizer):
         self,
         query_str: str,
         streaming: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
+
+        _llm_only_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                system_role_str,
+                prompt_template_str,
+                DEFAULT_ANSWER_TEMPLATE,
+            )
+        )
         logger.info(
-            f"Synthsize using LLM only. \n Prompt: {self._llm_only_template}. \n Query: {query_str}"
+            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
         )
         if not streaming:
             response = self._llm.predict(
-                self._llm_only_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = self._llm.stream(
-                self._llm_only_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )

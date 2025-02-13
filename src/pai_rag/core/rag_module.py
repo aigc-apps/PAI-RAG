@@ -1,7 +1,6 @@
 from typing import Any
 
 from llama_index.core import Settings
-from llama_index.core.prompts import PromptTemplate
 from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
@@ -202,12 +201,6 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
         multimodal_llm=multimodal_llm,
         system_role_template=config.synthesizer.system_role_template,
         custom_prompt_template=config.synthesizer.custom_prompt_template,
-        multimodal_qa_template=PromptTemplate(
-            template=config.synthesizer.multimodal_qa_template
-        ),
-        citation_multimodal_qa_template=PromptTemplate(
-            template=config.synthesizer.citation_multimodal_qa_template
-        ),
     )
     return synthesizer
 

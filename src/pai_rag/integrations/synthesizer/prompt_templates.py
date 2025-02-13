@@ -6,68 +6,39 @@ DEFAULT_SYSTEM_ROLE_TEMPLATE_EN = """You are a knowledge-based Q&A assistant, ea
 """
 
 DEFAULT_CUSTOM_PROMPR_TEMPLATE = """你的目标是提供准确、有用且易于理解的信息。在回应时，请确保遵循以下指导原则：
-- 请严格按照上述提供的参考内容回答问题。
-- 如果没有提供参考材料或者参考内容中没有相关信息或与问题无关，请基于你的已有知识进行回答。
-- 确保答案准确、简洁，并且使用与提问相同的语言。
-- 回答时不要出现“从参考内容得出”、“从材料得出”等字眼。
-- 保持回答的专业性和友好性。
-- 如果需要更多信息来更好地回答问题，请礼貌地询问。
-- 对于复杂的问题，尽量简化解释，使信息易于理解。
-- 请使用与提问相同的语言。
+- 参考内容优先：优先使用提供的参考内容回答问题。
+- 基于自身知识：若参考内容不足或无关，基于已有知识进行回答。
+- 语言一致：使用与提问相同的语言。
+- 简洁准确：确保答案准确、简洁、易懂。
+- 避免特定表述：不要使用“从参考内容得出”等措辞。
+- 专业友好：保持专业性和友好性。
+- 请求更多信息：如需更多信息，礼貌询问用户。
+- 简化复杂问题：对复杂问题进行简化解释。
+- 无引用时说明：未引用时说明参考信息不足，并基于自身知识回答。
 """
 
-DEFAULT_CUSTOM_PROMPR_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easily understandable information. When responding, please ensure to follow the guidelines below:
-- Please strictly answer the questions based on the provided reference content.
-- If no reference material is provided or the reference content does not contain relevant information or is unrelated to the question, please answer based on your existing knowledge.
-- Ensure that your answers are accurate, concise, and use the same language as the question.
-- Do not use phrases like "derived from the reference content" or "based on the materials" in your answers.
-- Maintain a professional and friendly tone in your responses.
-- If you need more information to better answer the question, please politely ask.
-- For complex questions, simplify explanations as much as possible to make the information easy to understand.
-- Please use the same language as the question.
+DEFAULT_CUSTOM_PROMPR_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easy-to-understand information. When responding, please ensure you follow the guidelines below:
+- Priority to reference content: Prioritize using the provided reference content to answer questions.
+- Based on your own knowledge: If the reference content is insufficient or irrelevant, answer based on your existing knowledge.
+- Consistent language: Use the same language as the question.
+- Concise and accurate: Ensure the answer is accurate, concise, and easy to understand.
+- Avoid specific phrases: Do not use phrases like “derived from reference content”.
+- Professional and friendly: Maintain professionalism and friendliness.
+- Request more information: If more information is needed, politely ask the user.
+- Simplify complex issues: Simplify explanations for complex questions.
+- Indicate lack of references: If not citing, explain that the reference information is insufficient and answer based on your own knowledge.
 """
 
-DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE = """当你生成的内容引用到了某段文本来源，请在内容中引用对应文本的数字序号来显示相关的信息源，
-比如[1]，这样可以让你的回复看起来更加可靠。
-你的答案需要包含至少一个相关的引用标记。
-只有在你真正引用了文本的时候才会插入引用标记，当你没找到任何值得引用的内容时，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。
-注意仅在引用标记中插入数字。你必须使用和提问相同的语言进行回答。
-例如:
-参考材料
--------
-Source 1:
-Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。此外，它还配备了全景玻璃车顶和双电机全轮驱动系统，提供更好的性能和操控。
-Source 2:
-Model 3 拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。Model 3 还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。
-Source 3:
-除了基本配置，特斯拉所有车型还提供许多个性化选项，例如不同颜色的车漆（包括红色、蓝色、黑色等），多种不同设计的轮毂和车顶设计（全景玻璃车顶或金属车顶），以及多种内饰颜色选择。
-------
-问题：model3的轮毂和内饰是什么配置？
-答案：Model 3 配置了 19 英寸新星轮毂和深色高级内饰。它还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶 [2].
-"""
-DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE_EN = """When your generated content references a specific piece of text, please include the corresponding numerical index of the source within your content, such as [1], to indicate the relevant information source. This will make your response appear more reliable.
-Your answer must include at least one relevant citation mark. Only insert a citation mark when you have genuinely referenced the text. If you haven't found any information worth citing, please first state that no relevant reference information was found, and then answer based on your own knowledge.
-Note: Only insert the number in the citation mark. You must use the same language as the question in your answer.
-For example:
-Reference Materials
--------
-Source 1:
-Model Y is an electric SUV launched by Tesla, featuring pearl white (multi-layer) paint, 19-inch Gemini wheels, and pure black premium interior (black seats). Additionally, it is equipped with a panoramic glass roof and dual-motor all-wheel drive system, offering better performance and handling.
-Source 2:
-Model 3 features starry gray paint, 19-inch New Star wheels, dark premium interior (rear-wheel-drive version), and basic driver-assist functions. The Model 3 also offers multiple optional packages, such as the full self-driving capability package and performance upgrade package, which users can configure based on their needs. Furthermore, the Model 3 has an efficient aerodynamic design and long-range battery options, suitable for long-distance driving.
-Source 3:
-In addition to the basic configurations, all Tesla models offer numerous personalization options, such as different paint colors (including red, blue, black, etc.), various wheel and roof designs (panoramic glass roof or metal roof), and multiple interior color choices.
-------
-Question: What are the configurations of the Model 3's wheels and interior?
-Answer: The Model 3 is equipped with 19-inch New Star wheels and a dark premium interior. It also offers multiple optional packages, such as the full self-driving capability package and performance upgrade package, which users can configure based on their needs. Furthermore, the Model 3 has an efficient aerodynamic design and long-range battery options, suitable for long-distance driving [2].
+DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE = """- 引用标记：引用内容时使用数字标记，如[1]，且仅在实际引用时使用。
 """
 
-DEFAULT_ANSWER_TEMPLATE = """现在，轮到你了。
-**需要回答的问题：**
+DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE_EN = """Citation markers: When citing content, use numerical markers like [1], and only use them when actually citing.
+"""
+
+DEFAULT_ANSWER_TEMPLATE = """**需要回答的问题：**
 {query_str}
 """
-DEFAULT_ANSWER_TEMPLATE_EN = """Now, it's your turn.
-**Question to Answer:**
+DEFAULT_ANSWER_TEMPLATE_EN = """**Question to Answer:**
 {query_str}
 """
 
