@@ -245,6 +245,8 @@ class RagApplication:
             system_prompt = messages[0].content
             messages = messages[1:]
 
+        if self.config.system.default_web_search:
+            chat_request.search_web = True
         session_id = uuid_generator()
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(chat_request.index_name)

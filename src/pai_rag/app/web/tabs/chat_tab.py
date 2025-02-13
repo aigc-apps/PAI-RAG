@@ -151,6 +151,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
+                visible=False,
+            )
+            default_web_search = gr.Checkbox(
+                label="Default search web",
+                info="Default search web for openai endpoint",
+                elem_id="default_web_search",
+                value=False,
             )
 
             with gr.Column(visible=True) as vs_col:
@@ -516,6 +523,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         chat_args = (
             {
+                default_web_search,
                 llm_chat_prompt,
                 text_qa_template,
                 multimodal_qa_template,
@@ -562,6 +570,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
+            default_web_search.elem_id: default_web_search,
             chat_index.elem_id: chat_index,
             similarity_top_k.elem_id: similarity_top_k,
             image_similarity_top_k.elem_id: image_similarity_top_k,

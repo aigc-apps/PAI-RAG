@@ -81,6 +81,7 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
+    default_web_search: bool = False
     search_type: str = "夸克"
     search_api_key: str = None
     search_count: int = 30
@@ -149,6 +150,8 @@ class ViewModel(BaseModel):
     @staticmethod
     def from_app_config(config: RagConfig):
         view_model = ViewModel()
+
+        view_model.default_web_search = config.system.default_web_search
 
         # llm
         if isinstance(config.llm, PaiEasLlmConfig):
@@ -292,6 +295,8 @@ class ViewModel(BaseModel):
 
     def to_app_config(self):
         config = recursive_dict()
+
+        config["system"]["default_web_search"] = self.default_web_search
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -629,6 +634,8 @@ class ViewModel(BaseModel):
         settings["agent_function_definition"] = {
             "value": self.agent_function_definition
         }
+
+        settings["default_web_search"] = {"value": self.default_web_search}
 
         settings["intent_description"] = {"value": self.intent_description}
         # print("view model settings:", settings)
