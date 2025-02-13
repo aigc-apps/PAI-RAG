@@ -1,4 +1,4 @@
-from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cast
+from typing import Any, Generator, List, Optional, Sequence, cast
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
@@ -37,21 +37,14 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     DEFAULT_CONTEXT_ANSWER_TEMPLATE,
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+    CURRENT_TIME_PROMPT,
 )
 from loguru import logger
+from datetime import datetime
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 QueryTextType = QueryType
-
-
-def empty_response_generator() -> Generator[str, None, None]:
-    yield DEFAULT_EMPTY_RESPONSE_GEN
-
-
-async def empty_response_agenerator() -> AsyncGenerator[str, None]:
-    yield DEFAULT_EMPTY_RESPONSE_GEN
-
 
 """
 PaiSynthesizer:
@@ -103,22 +96,31 @@ class PaiSynthesizer(BaseSynthesizer):
         )
 
         self._llm_only_template = PromptTemplate(
-            template="{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
                 self._custom_prompt_template,
                 DEFAULT_ANSWER_TEMPLATE,
             )
         )
         self._text_qa_template = PromptTemplate(
-            template="{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
                 self._custom_prompt_template,
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
         )
         self._citation_text_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}\n{}".format(
                 self._system_role_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
                 self._custom_prompt_template,
                 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
@@ -402,8 +404,13 @@ class PaiSynthesizer(BaseSynthesizer):
         if not citation:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}".format(
                         system_role_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime(
+                                "%Y年%m月%d日 %H:%M:%S"
+                            )
+                        ),
                         prompt_template_str,
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
@@ -413,8 +420,13 @@ class PaiSynthesizer(BaseSynthesizer):
         else:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}\n{}".format(
                         system_role_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime(
+                                "%Y年%m月%d日 %H:%M:%S"
+                            )
+                        ),
                         prompt_template_str,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
@@ -430,7 +442,9 @@ class PaiSynthesizer(BaseSynthesizer):
         )
 
         response: RESPONSE_TEXT_TYPE
-        logger.info(f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template}")
+        logger.info(
+            f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Query: {query_str}"
+        )
         if not streaming:
             response = await self._llm.apredict(
                 text_qa_template,
@@ -478,8 +492,13 @@ class PaiSynthesizer(BaseSynthesizer):
         if not citation:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}".format(
                         system_role_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime(
+                                "%Y年%m月%d日 %H:%M:%S"
+                            )
+                        ),
                         prompt_template_str,
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
@@ -489,8 +508,13 @@ class PaiSynthesizer(BaseSynthesizer):
         else:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}\n{}".format(
                         system_role_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime(
+                                "%Y年%m月%d日 %H:%M:%S"
+                            )
+                        ),
                         prompt_template_str,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
@@ -536,8 +560,11 @@ class PaiSynthesizer(BaseSynthesizer):
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
         _llm_only_template = PromptTemplate(
-            template="{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 system_role_str,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
                 prompt_template_str,
                 DEFAULT_ANSWER_TEMPLATE,
             )
@@ -576,8 +603,11 @@ class PaiSynthesizer(BaseSynthesizer):
         response: RESPONSE_TEXT_TYPE
 
         _llm_only_template = PromptTemplate(
-            template="{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 system_role_str,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
                 prompt_template_str,
                 DEFAULT_ANSWER_TEMPLATE,
             )
