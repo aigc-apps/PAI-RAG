@@ -38,6 +38,7 @@ from pai_rag.integrations.router.pai.pai_router import (
 )
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
+from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
@@ -45,6 +46,7 @@ from pai_rag.utils.oss_client import OssClient
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
 
 cls_cache = {}
@@ -285,6 +287,16 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             user=config.search.user,
             secret=config.search.secret,
             host=config.search.host,
+            synthesizer=synthesizer,
+            intent_router=intent_router,
+            search_count=config.search.search_count,
+        )
+    elif isinstance(config.search, AliyunSearchConfig):
+        searcher = resolve(
+            cls=AliyunSearchTool,
+            accessid=config.search.accessid,
+            accesskey=config.search.accesskey,
+            endpoint=config.search.endpoint,
             synthesizer=synthesizer,
             intent_router=intent_router,
             search_count=config.search.search_count,

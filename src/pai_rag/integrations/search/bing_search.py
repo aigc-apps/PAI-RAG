@@ -9,9 +9,9 @@ from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReade
 import httpx
 from loguru import logger
 
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
-DEFAULT_SEARCH_COUNT = 30
 DEFAULT_LANG = "zh-CN"
 
 
