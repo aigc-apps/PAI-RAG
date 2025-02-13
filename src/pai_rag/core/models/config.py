@@ -1,12 +1,9 @@
 from typing import List
 from pydantic import BaseModel
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from pai_rag.integrations.synthesizer.pai_synthesizer import (
-    DEFAULT_TEXT_QA_TMPL,
-    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
-    CITATION_TEXT_QA_TMPL,
-    CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL,
-    DEFAULT_LLM_CHAT_TMPL,
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_SYSTEM_ROLE_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
 
 
@@ -40,8 +37,5 @@ class RetrieverConfig(BaseModel):
 
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
-    llm_chat_prompt: str = DEFAULT_LLM_CHAT_TMPL
-    text_qa_template: str = DEFAULT_TEXT_QA_TMPL
-    citation_text_qa_template: str = CITATION_TEXT_QA_TMPL
-    multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
-    citation_multimodal_qa_template: str = CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
+    system_role_template: str = DEFAULT_SYSTEM_ROLE_TEMPLATE
+    custom_prompt_template: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE

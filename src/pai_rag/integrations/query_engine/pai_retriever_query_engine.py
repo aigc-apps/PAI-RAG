@@ -93,7 +93,10 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
 
     @dispatcher.span
     def _query(
-        self, query_bundle: PaiQueryBundle, prompt_template_str: str = None
+        self,
+        query_bundle: PaiQueryBundle,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
@@ -103,6 +106,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
             response = self._response_synthesizer.synthesize(
                 query=query_bundle,
                 nodes=nodes,
+                system_role_str=system_role_str,
                 prompt_template_str=prompt_template_str,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
@@ -111,7 +115,10 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
 
     @dispatcher.span
     async def _aquery(
-        self, query_bundle: PaiQueryBundle, prompt_template_str: str = None
+        self,
+        query_bundle: PaiQueryBundle,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
@@ -121,6 +128,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
             response = await self._response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
+                system_role_str=system_role_str,
                 prompt_template_str=prompt_template_str,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
@@ -129,14 +137,19 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
 
     @dispatcher.span
     def query(
-        self, str_or_query_bundle: QueryType, prompt_template_str: str = None
+        self,
+        str_or_query_bundle: QueryType,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
         with self.callback_manager.as_trace("query"):
             if isinstance(str_or_query_bundle, str):
                 str_or_query_bundle = QueryBundle(str_or_query_bundle)
             query_result = self._query(
-                str_or_query_bundle, prompt_template_str=prompt_template_str
+                str_or_query_bundle,
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
             )
         dispatcher.event(
             QueryEndEvent(query=str_or_query_bundle, response=query_result)
@@ -145,14 +158,19 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
 
     @dispatcher.span
     async def aquery(
-        self, str_or_query_bundle: QueryType, prompt_template_str: str = None
+        self,
+        str_or_query_bundle: QueryType,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
         with self.callback_manager.as_trace("query"):
             if isinstance(str_or_query_bundle, str):
                 str_or_query_bundle = QueryBundle(str_or_query_bundle)
             query_result = await self._aquery(
-                str_or_query_bundle, prompt_template_str=prompt_template_str
+                str_or_query_bundle,
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
             )
         dispatcher.event(
             QueryEndEvent(query=str_or_query_bundle, response=query_result)
@@ -163,12 +181,14 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         self,
         query_bundle: QueryBundle,
         nodes: List[NodeWithScore],
+        system_role_str: str = None,
         prompt_template_str: str = None,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
     ) -> RESPONSE_TYPE:
         return self._response_synthesizer.synthesize(
             query=query_bundle,
             nodes=nodes,
+            system_role_str=system_role_str,
             prompt_template_str=prompt_template_str,
             additional_source_nodes=additional_source_nodes,
         )
@@ -177,12 +197,14 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         self,
         query_bundle: QueryBundle,
         nodes: List[NodeWithScore],
+        system_role_str: str = None,
         prompt_template_str: str = None,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
     ) -> RESPONSE_TYPE:
         return await self._response_synthesizer.asynthesize(
             query=query_bundle,
             nodes=nodes,
+            system_role_str=system_role_str,
             prompt_template_str=prompt_template_str,
             additional_source_nodes=additional_source_nodes,
         )

@@ -2,7 +2,6 @@ from typing import Any, Generator, List, Optional, Sequence, AsyncGenerator, cas
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
-from llama_index.core.prompts import BasePromptTemplate
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
@@ -31,225 +30,18 @@ from llama_index.core.llms.llm import (
 )
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_EMPTY_RESPONSE_GEN,
+    DEFAULT_SYSTEM_ROLE_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
+    DEFAULT_ANSWER_TEMPLATE,
+    DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+    DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+)
 from loguru import logger
 
 dispatcher = instrument.get_dispatcher(__name__)
 
-DEFAULT_EMPTY_RESPONSE_GEN = "Sorry, I don't know about that."
-
-DEFAULT_TEXT_QA_TMPL = (
-    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。\n"
-    "你的目标是提供准确、有用且易于理解的信息。\n\n"
-    "**参考内容：**\n"
-    "------\n"
-    "{context_str}\n"
-    "------\n"
-    "**任务要求：** \n"
-    "- 请严格按照上述提供的参考内容回答问题。如果参考内容中没有相关信息或与问题无关，请基于你的已有知识进行回答。\n"
-    "- 确保答案准确、简洁，并且使用与提问相同的语言。\n"
-    "- 回答时不要出现“从参考内容得出”、“从材料得出”等字眼。\n\n"
-    "**需要回答的问题：** \n"
-    "{query_str}"
-)
-
-DEFAULT_TEXT_QA_TMPL_EN = (
-    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
-    "Reference content information is as follows"
-    "-------\n"
-    "{context_str}\n"
-    "-------\n"
-    "Answer the question based on the provided content rather than other knowledge. "
-    "If the reference content is not related to the question, please answer based on your own knowledge."
-    "Question: {query_str}\n"
-    "Please think carefully and use the same language as the question to give your answer: \n"
-)
-
-CITATION_TEXT_QA_TMPL = (
-    "你是一个知识问答小助手，专门根据提供的参考内容解答用户的问题。"
-    "请完全根据提供的参考内容回答问题。\n"
-    "参考内容由几段文本内容组成,"
-    "当你生成的内容引用到了某段文本来源，请在内容中引用对应文本的数字序号来显示相关的信息源，"
-    "比如[1]，这样可以让你的回复看起来更加可靠。"
-    "你的答案需要包含至少一个相关的引用标记。"
-    "只有在你真正引用了文本的时候才会插入引用标记，当你没找到任何值得引用的内容时，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。\n"
-    "注意仅在引用标记中插入数字。你必须使用和提问相同的语言进行回答。\n\n"
-    "例如:\n"
-    "参考材料\n"
-    "-------\n"
-    "Source 1:\n"
-    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。此外，它还配备了全景玻璃车顶和双电机全轮驱动系统，提供更好的性能和操控。\n\n"
-    "Source 2:\n"
-    "Model 3 拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。Model 3 还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。 \n\n"
-    "Source 3:\n"
-    "除了基本配置，特斯拉所有车型还提供许多个性化选项，例如不同颜色的车漆（包括红色、蓝色、黑色等），多种不同设计的轮毂和车顶设计（全景玻璃车顶或金属车顶），以及多种内饰颜色选择。 \n\n"
-    "------\n"
-    "问题：model3的轮毂和内饰是什么配置？\n"
-    "答案：Model 3 配置了 19 英寸新星轮毂和深色高级内饰。它还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶 [2].\n\n"
-    "现在轮到你了：\n\n"
-    "参考材料\n"
-    "-------\n"
-    "{context_str}\n"
-    "-------\n"
-    "问题: {query_str}\n"
-    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
-)
-
-CITATION_TEXT_QA_TMPL_EN = (
-    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
-    "Please answer the question based on the following reference materials rather than other knowledge.\n"
-    "The references consist of several paragraphs of text,"
-    "When you generate content that references a text source, please quote the corresponding text number in the content to indicate the relevant information source, which will make your answer look more reliable."
-    "Your answer must contain at least one relevant reference mark. \n"
-    "Only insert reference marks when you actually quote the text. "
-    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
-    "Note that only numbers are inserted in reference marks. \n\n"
-    "For example:\n"
-    "References\n"
-    "-------\n"
-    "Source 1:\n"
-    "Model Y is an electric SUV launched by Tesla, featuring Pearl White (multi-coat) paint, 19-inch Gemini wheels, and a pure black premium interior (black seats). It also comes equipped with a panoramic glass roof and dual motor all-wheel drive system, offering better performance and handling. \n\n"
-    "Source 2:\n"
-    "Model 3 has starry grey paint, 19-inch nova wheels, and a dark premium interior (rear-wheel drive version) with basic assisted driving features. Model 3 also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving. \n\n"
-    "Source 3:\n"
-    "In addition to the basic configurations, all Tesla models offer a number of personalization options, including different paint colors (such as red, blue, black, etc.), various wheel designs, and roof designs (panoramic glass roof or metal roof), as well as multiple interior color choices. \n\n"
-    "------\n"
-    "Question: What are the wheels and interior of model3? \n"
-    "Answer: Model 3 is equipped with 19-inch nova wheels and a dark premium interior. It also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving [2]. \n\n"
-    "Now it's your turn: \n\n"
-    "Reference materials\n"
-    "-------\n"
-    "{context_str}\n"
-    "-------\n"
-    "Question: {query_str}\n"
-    "Please MUST use the same language as the question to answer. Please think carefully and give your answer:"
-)
-
-
-DEFAULT_LLM_CHAT_TMPL = """
-你是一个智能助手，乐于回答用户可能提出的各种问题。您的目标是提供准确、有用且易于理解的信息。在回应时，请确保遵循以下指导原则：
-- 保持回答的专业性和友好性。
-- 如果需要更多信息来更好地回答问题，请礼貌地询问。
-- 对于复杂的问题，尽量简化解释，使信息易于理解。
-- 请使用与提问相同的语言。
-
-{query_str}
-"""
-
-
-DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
-    "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"
-    "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
-    "请根据给定的材料回答给出的问题，回答中需要有文字描述和图片链接。"
-    "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。\n\n"
-    "如果材料中没有答案相关的信息，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。"
-    "例如：\n"
-    "参考材料\n"
-    "------\n"
-    "Source 1:\n"
-    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。此外，它还配备了全景玻璃车顶和双电机全轮驱动系统，提供更好的性能和操控。\n\n"
-    "Source 2:\n"
-    "Model 3 拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。Model 3 还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。 \n\n"
-    "Image 1:\n"
-    "http://www.tesla.cn/model3.jpg\n\n"
-    "------\n\n"
-    "问题：model3的轮毂和内饰是什么配置?\n"
-    "答案：Model 3 配置了 19 英寸新星轮毂和深色高级内饰。它还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。下图是 Model 3 的图片:"
-    "![](http://www.tesla.cn/model3.jpg)\n\n"
-    "现在轮到你了：\n\n"
-    "参考材料\n"
-    "------\n"
-    "{context_str}\n"
-    "------\n"
-    "问题: {query_str}\n"
-    "请仔细思考，并使用与提问相同的语言来提供你的答案：\n"
-)
-
-
-DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN = (
-    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
-    "The reference materials contain a set of text descriptions and a set of image links, which correspond to the addresses of the pictures given above.\n"
-    "Please answer the given questions based on the given materials. The answers need to have text descriptions and image links."
-    "If there are pictures above that help you generate answers, please find the image link and give it in markdown format, such as ![](image_url).\n\n"
-    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
-    "For example:\n"
-    "Reference materials\n"
-    "------\n"
-    "Source 1:\n"
-    "Model Y is an electric SUV launched by Tesla, featuring Pearl White (multi-coat) paint, 19-inch Gemini wheels, and a pure black premium interior (black seats). It also comes equipped with a panoramic glass roof and dual motor all-wheel drive system, offering better performance and handling. \n\n"
-    "Source 2:\n"
-    "Model 3 has starry grey paint, 19-inch nova wheels, and a dark premium interior (rear-wheel drive version) with basic assisted driving features. Model 3 also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving. \n\n"
-    "Image 1:\n"
-    "http://www.tesla.cn/model3.jpg\n\n"
-    "------\n"
-    "Question: What are the wheels and interior of model3?\n"
-    "Answer: Model 3 is equipped with 19-inch nova wheels and a dark premium interior. It also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving. Below is an image of Model 3: "
-    "![](http://www.tesla.cn/model3.jpg)\n\n"
-    "Now it's your turn:\n\n"
-    "Reference materials\n"
-    "------\n"
-    "{context_str}\n"
-    "------\n"
-    "Question: {query_str}\n"
-    "Must use the same language as the question. Please think carefully and give your answer:"
-)
-
-
-CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
-    "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"
-    "参考材料中包含一组文字描述和一组图片链接，图片链接分别对应到前面给出的图片的地址。\n"
-    "请根据给定的材料回答给出的问题，如果你当前生成的内容引用到了某一段文字描述，请直接在内容里引用他的数字序号，如[1]。\n"
-    "如果上面有图片对你生成答案有帮助，请找到图片链接并用markdown格式给出，如![](image_url)。"
-    "请至少列出一个文本和图片引用。"
-    "如果材料中没有答案相关的信息，请先说明没有找到值得参考的信息，再根据自己的知识进行回答。\n"
-    "例如：\n"
-    "参考材料\n"
-    "------\n"
-    "Source 1:\n"
-    "Model Y 是特斯拉推出的一款电动SUV，具有珍珠白（多涂层）车漆、19英寸双子星轮毂和纯黑色高级内饰（黑色座椅）。此外，它还配备了全景玻璃车顶和双电机全轮驱动系统，提供更好的性能和操控。\n\n"
-    "Source 2:\n"
-    "Model 3 拥有星空灰车漆，19英寸新星轮毂，深色高级内饰（后轮驱动版），基础版辅助驾驶功能。Model 3 还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶。 \n\n"
-    "Image 1:\n"
-    "http://www.tesla.cn/model3.jpg\n\n"
-    "------\n"
-    "问题：model3的轮毂和内饰是什么配置?\n"
-    "答案：Model 3 配置了 19 英寸新星轮毂和深色高级内饰。它还提供多个选配包，例如全自动驾驶能力包和性能提升包，用户可根据需求进行配置。此外，Model 3 具有高效的空气动力学设计和长续航电池选项，适合长途驾驶 [2]. 下图是 Model 3 的图片:"
-    "![](http://www.tesla.cn/model3.jpg)\n\n"
-    "现在轮到你了：\n\n"
-    "参考材料\n"
-    "------\n"
-    "{context_str}\n"
-    "------\n"
-    "问题: {query_str}\n"
-    "请必须使用和提问相同的语言，仔细思考，给出你的答案："
-)
-
-CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN = (
-    "You are a Knowledge Q&A Assistant, specialized in answering users' questions based on the provided content."
-    "The reference materials contain a set of text descriptions and a set of image links. The image links correspond to the addresses of the pictures given above.\n"
-    "Please answer the given questions based on the given materials. If the content you are currently generating refers to a certain text description, please directly quote its numerical serial number in the content, such as [1].\n"
-    "If there are pictures above that help you generate the answer, please find the image link and give it in markdown format, such as ![](image_url)."
-    "If you do not find any worthwhile content to reference, please first state that no relevant reference information was found, and then answer based on your own knowledge."
-    "For example:\n"
-    "Reference materials\n"
-    "------\n"
-    "Source 1:\n"
-    "Model Y is an electric SUV launched by Tesla, featuring Pearl White (multi-coat) paint, 19-inch Gemini wheels, and a pure black premium interior (black seats). It also comes equipped with a panoramic glass roof and dual motor all-wheel drive system, offering better performance and handling. \n\n"
-    "Source 2:\n"
-    "Model 3 has starry grey paint, 19-inch nova wheels, and a dark premium interior (rear-wheel drive version) with basic assisted driving features. Model 3 also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving. \n\n"
-    "Image 1:\n"
-    "http://www.tesla.cn/model3.jpg\n\n"
-    "------\n"
-    "Question: What are the wheels and interior of model3?\n"
-    "Answer: Model 3 is equipped with 19-inch nova wheels and a dark premium interior. It also offers several optional packages, such as the full self-driving capability package and performance upgrade package, allowing users to configure according to their needs. Additionally, Model 3 features an efficient aerodynamic design and long-range battery options suitable for long-distance driving [2]. Below is an image of Model 3: "
-    "![](http://www.tesla.cn/model3.jpg)\n\n"
-    "Now it's your turn:\n\n"
-    "Reference materials\n"
-    "------\n"
-    "{context_str}\n"
-    "------\n"
-    "Question: {query_str}\n"
-    "Please MUST use the same language as the question, think carefully, and give your answer:"
-)
 QueryTextType = QueryType
 
 
@@ -274,12 +66,9 @@ class PaiSynthesizer(BaseSynthesizer):
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
-        llm_chat_prompt: Optional[BasePromptTemplate] = None,
-        text_qa_template: Optional[BasePromptTemplate] = None,
+        system_role_template: Optional[str] = None,
+        custom_prompt_template: Optional[str] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
-        multimodal_qa_template: Optional[BasePromptTemplate] = None,
-        citation_text_qa_template: Optional[BasePromptTemplate] = None,
-        citation_multimodal_qa_template: Optional[BasePromptTemplate] = None,
         streaming: bool = False,
     ) -> None:
         super().__init__(
@@ -288,32 +77,55 @@ class PaiSynthesizer(BaseSynthesizer):
             prompt_helper=prompt_helper,
             streaming=streaming,
         )
-        self._text_qa_template = text_qa_template or PromptTemplate(
-            template=DEFAULT_TEXT_QA_TMPL
-        )
-        self._multimodal_qa_template = multimodal_qa_template or PromptTemplate(
-            template=DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL
-        )
-        self._citation_text_qa_template = citation_text_qa_template or PromptTemplate(
-            template=CITATION_TEXT_QA_TMPL
-        )
-        self._citation_multimodal_qa_template = (
-            citation_multimodal_qa_template
-            or PromptTemplate(template=CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL)
-        )
-        self._llm_only_template = llm_chat_prompt or PromptTemplate(
-            template=DEFAULT_LLM_CHAT_TMPL
-        )
         self._multimodal_llm = multimodal_llm
+        self._update_prompts(
+            system_role_str=system_role_template,
+            prompt_template_str=custom_prompt_template,
+        )
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
-        return {"text_qa_template": self._text_qa_template}
+        return {
+            "llm_only_template": self._llm_only_template,
+            "text_qa_template": self._text_qa_template,
+            "citation_template": self._citation_text_qa_template,
+            "multimodal_qa_template": self._multimodal_qa_template,
+            "citation_multimodal_qa_template": self._citation_multimodal_qa_template,
+        }
 
-    def _update_prompts(self, prompts: PromptDictType) -> None:
+    def _update_prompts(
+        self, system_role_str: str = None, prompt_template_str: str = None
+    ) -> None:
         """Update prompts."""
-        if "text_qa_template" in prompts:
-            self._text_qa_template = prompts["text_qa_template"]
+        self._system_role_template = system_role_str or DEFAULT_SYSTEM_ROLE_TEMPLATE
+        self._custom_prompt_template = (
+            prompt_template_str or DEFAULT_CUSTOM_PROMPT_TEMPLATE
+        )
+
+        self._llm_only_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                self._system_role_template,
+                self._custom_prompt_template,
+                DEFAULT_ANSWER_TEMPLATE,
+            )
+        )
+        self._text_qa_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                self._system_role_template,
+                self._custom_prompt_template,
+                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+            )
+        )
+        self._citation_text_qa_template = PromptTemplate(
+            template="{}\n{}\n{}\n{}".format(
+                self._system_role_template,
+                self._custom_prompt_template,
+                DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+            )
+        )
+        self._multimodal_qa_template = self._text_qa_template
+        self._citation_multimodal_qa_template = self._citation_text_qa_template
 
     @dispatcher.span
     def synthesize(
@@ -321,6 +133,7 @@ class PaiSynthesizer(BaseSynthesizer):
         query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+        system_role_str: str = None,
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
@@ -329,9 +142,6 @@ class PaiSynthesizer(BaseSynthesizer):
                 query=query,
             )
         )
-        prompt_template = None
-        if prompt_template_str:
-            prompt_template = PromptTemplate(template=prompt_template_str)
 
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
@@ -355,7 +165,9 @@ class PaiSynthesizer(BaseSynthesizer):
                 response_str = self.get_llm_only_response(
                     query_str=query_str,
                     streaming=query.stream,
-                    prompt_template=prompt_template,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -368,7 +180,9 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
-                    prompt_template=prompt_template,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
 
@@ -393,13 +207,10 @@ class PaiSynthesizer(BaseSynthesizer):
         query: PaiQueryBundle,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
+        system_role_str: str = None,
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TYPE:
-        prompt_template = None
-        if prompt_template_str:
-            prompt_template = PromptTemplate(template=prompt_template_str)
-
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -423,12 +234,13 @@ class PaiSynthesizer(BaseSynthesizer):
             query_str = query.query_str
             if query.chat_messages_str:
                 query_str = query.chat_messages_str + "\nassistant: "
-
             if query.no_retrieval:
                 response_str = await self.aget_llm_only_response(
                     query_str=query_str,
                     streaming=query.stream,
-                    prompt_template=prompt_template,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
             else:
@@ -441,7 +253,9 @@ class PaiSynthesizer(BaseSynthesizer):
                     image_url_list=[n.node.image_url for n in image_nodes],
                     streaming=query.stream,
                     citation=query.citation,
-                    prompt_template=prompt_template,
+                    system_role_str=system_role_str or self._system_role_template,
+                    prompt_template_str=prompt_template_str
+                    or self._custom_prompt_template,
                     **response_kwargs,
                 )
 
@@ -487,7 +301,9 @@ class PaiSynthesizer(BaseSynthesizer):
             fmt_prompt = self._citation_multimodal_qa_template.format(
                 context_str=context_str, query_str=query_str
             )
-
+        logger.info(
+            f"Synthsize using Multi-modal LLM with fmt_prompt {fmt_prompt}. citation: {citation}"
+        )
         if streaming:
             completion_response_gen = self._multimodal_llm.stream_complete(
                 prompt=fmt_prompt,
@@ -535,6 +351,9 @@ class PaiSynthesizer(BaseSynthesizer):
                 context_str=context_str, query_str=query_str
             )
 
+        logger.info(
+            f"Synthsize using Multi-modal LLM with fmt_prompt {fmt_prompt}. citation: {citation}"
+        )
         if streaming:
             completion_response_gen = await self._multimodal_llm.astream_complete(
                 prompt=fmt_prompt,
@@ -559,9 +378,10 @@ class PaiSynthesizer(BaseSynthesizer):
         query_str: str,
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
-        prompt_template: Optional[PromptTemplate] = None,
         streaming: bool = False,
         citation: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -569,9 +389,6 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._multimodal_llm is not None
             ), "Multi-modal LLM must be provided to understand image documents."
 
-            logger.info(
-                f"Synthsize using Multi-modal LLM with images {image_url_list}. citation: {citation}"
-            )
             return await self._aget_multi_modal_response(
                 query_str=query_str,
                 text_chunks=text_chunks,
@@ -583,9 +400,28 @@ class PaiSynthesizer(BaseSynthesizer):
 
         logger.info(f"Synthsize using LLM with no image inputs. citation: {citation}")
         if not citation:
-            prompt_template = prompt_template or self._text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._text_qa_template
+            )
         else:
-            prompt_template = prompt_template or self._citation_text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._citation_text_qa_template
+            )
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
 
@@ -594,6 +430,7 @@ class PaiSynthesizer(BaseSynthesizer):
         )
 
         response: RESPONSE_TEXT_TYPE
+        logger.info(f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template}")
         if not streaming:
             response = await self._llm.apredict(
                 text_qa_template,
@@ -620,9 +457,10 @@ class PaiSynthesizer(BaseSynthesizer):
         query_str: str,
         text_chunks: Sequence[str],
         image_url_list: Sequence[str] = None,
-        prompt_template: Optional[PromptTemplate] = None,
         streaming: bool = False,
         citation: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         if image_url_list and len(image_url_list) > 0:
@@ -638,9 +476,28 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         if not citation:
-            prompt_template = prompt_template or self._text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._text_qa_template
+            )
         else:
-            prompt_template = prompt_template or self._citation_text_qa_template
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                    )
+                )
+                or self._citation_text_qa_template
+            )
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
         context_str = "\n".join(
@@ -648,6 +505,7 @@ class PaiSynthesizer(BaseSynthesizer):
         )
 
         response: RESPONSE_TEXT_TYPE
+        logger.info(f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template}")
         if not streaming:
             response = self._llm.predict(
                 text_qa_template,
@@ -671,23 +529,31 @@ class PaiSynthesizer(BaseSynthesizer):
     async def aget_llm_only_response(
         self,
         query_str: str,
-        prompt_template: PromptTemplate,
         streaming: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
-
-        prompt_template = prompt_template or self._llm_only_template
-
+        _llm_only_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                system_role_str,
+                prompt_template_str,
+                DEFAULT_ANSWER_TEMPLATE,
+            )
+        )
+        logger.info(
+            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
+        )
         if not streaming:
             response = await self._llm.apredict(
-                prompt_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = await self._llm.astream(
-                prompt_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
@@ -702,23 +568,32 @@ class PaiSynthesizer(BaseSynthesizer):
     def get_llm_only_response(
         self,
         query_str: str,
-        prompt_template: PromptTemplate,
         streaming: bool = False,
+        system_role_str: str = None,
+        prompt_template_str: str = None,
         **kwargs: Any,
     ) -> RESPONSE_TEXT_TYPE:
         response: RESPONSE_TEXT_TYPE
 
-        prompt_template = prompt_template or self._llm_only_template
-
+        _llm_only_template = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                system_role_str,
+                prompt_template_str,
+                DEFAULT_ANSWER_TEMPLATE,
+            )
+        )
+        logger.info(
+            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
+        )
         if not streaming:
             response = self._llm.predict(
-                prompt_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )
         else:
             response = self._llm.stream(
-                prompt_template,
+                _llm_only_template,
                 query_str=query_str,
                 **kwargs,
             )

@@ -105,6 +105,7 @@ class AliyunSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        system_role_str: str = None,
         prompt_template_str: str = None,
     ):
         if self.intent_router:
@@ -121,13 +122,19 @@ class AliyunSearchTool(BaseQueryEngine):
                 return await self.synthesizer.asynthesize(
                     query=no_search_query,
                     nodes=[],
+                    system_role_str=system_role_str,
                     prompt_template_str=prompt_template_str,
                 )
 
         nodes = await self._asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError
