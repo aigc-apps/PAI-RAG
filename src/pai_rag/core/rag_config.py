@@ -37,6 +37,7 @@ from pai_rag.integrations.router.pai.pai_router import IntentConfig
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
+    AliyunSearchConfig,
 )
 
 
@@ -143,7 +144,7 @@ class RagConfig(BaseModel):
 
     # search web
     search: Annotated[
-        Union[BingSearchConfig, QuarkSearchConfig],
+        Union[BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]

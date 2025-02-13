@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from typing import List, Dict, Any
 from datetime import datetime
 import time
@@ -31,6 +32,7 @@ async def get_access_token(host: str, user: str, secret: str):
     salt = random_string(6)
     ts = str(int(round(time.time() * 1000)))
     sign = calc_signature(user, ts, salt, secret)
+    logger.info(f"Quark login with user {user}, ts {ts}, salt {salt}, secret {secret}.")
     async with httpx.AsyncClient() as client:
         response = await client.post(
             urljoin(host, "/api/auth/token"),
