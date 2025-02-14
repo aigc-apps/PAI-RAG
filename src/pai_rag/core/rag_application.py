@@ -272,6 +272,7 @@ class RagApplication:
 
         new_question = new_query_bundle.query_str
         logger.info(f"Querying with question '{new_question}'.")
+        messages[-1].content = ",".join([question, new_question])
         query_bundle = PaiQueryBundle(
             query_str=new_question,
             stream=chat_request.stream,

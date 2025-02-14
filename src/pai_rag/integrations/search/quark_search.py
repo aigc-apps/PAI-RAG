@@ -124,7 +124,7 @@ class QuarkSearchTool(BaseQueryEngine):
                 prompt_template_str=prompt_template_str,
             )
 
-        logger.info(f"Search with query {query.query_str,}.")
+        logger.info(f"Quark Search with query {query.query_str,}.")
         nodes = await self.asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
