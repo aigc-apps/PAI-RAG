@@ -60,3 +60,4 @@ class PaiQueryBundle(QueryBundle):
     no_retrieval: bool = False
     citation: bool = False
     chat_messages_str: str = None
+    need_web_search: bool = False
