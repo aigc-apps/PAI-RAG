@@ -276,6 +276,7 @@ class RagApplication:
             query_str=new_question,
             stream=chat_request.stream,
             citation=chat_request.citation,
+            need_web_search=new_query_bundle.need_web_search,
             chat_messages_str=messages_to_history_str(messages=messages[-8:]),
         )
 
@@ -355,6 +356,7 @@ class RagApplication:
 
         query_bundle = PaiQueryBundle(
             query_str=new_question,
+            need_web_search=new_query_bundle.need_web_search,
             stream=query.stream,
             citation=query.citation,
             chat_messages_str=new_query_bundle.chat_messages_str,
@@ -387,7 +389,6 @@ class RagApplication:
                 system_role_str=query.system_role_template,
                 prompt_template_str=query.custom_prompt_template,
             )
-
         node_results = response.source_nodes
         result_info = {
             "session_id": session_id,
