@@ -1,5 +1,4 @@
 from enum import Enum
-import os
 from threading import Lock
 from typing import List, Any, Literal, Optional
 from llama_index.core.llms import ChatMessage
@@ -41,11 +40,9 @@ class RedisChatStoreConfig(BaseChatStoreConfig):
 
 def create_chat_store(chat_store_config: BaseChatStoreConfig) -> BaseChatStore:
     if isinstance(chat_store_config, LocalChatStoreConfig):
-        chat_file = os.path.join(chat_store_config.persist_path, CHAT_STORE_FILE)
-        if not os.path.exists(chat_file):
-            return LruSimpleChatStore()
-        else:
-            return LruSimpleChatStore().from_persist_path(chat_file)
+        logger.info("Adding local LRU chat store.")
+        return LruSimpleChatStore()
+
     elif isinstance(chat_store_config, RedisChatStoreConfig):
         redis_chat_store = RedisChatStore(
             redis_url=f"redis://{chat_store_config.host}:6379",
