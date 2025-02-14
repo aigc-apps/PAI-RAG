@@ -283,7 +283,9 @@ class RagApplication:
         if chat_request.search_web:
             search_engine = resolve_searcher(session_config)
             response = await search_engine.aquery(
-                query_bundle, system_role_str=system_prompt, prompt_template_str=" "
+                query_bundle,
+                system_role_str=system_prompt,
+                prompt_template_str=" " if system_prompt else None,
             )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response(
@@ -297,7 +299,9 @@ class RagApplication:
 
         query_engine = resolve_query_engine(session_config)
         response = await query_engine.aquery(
-            query_bundle, system_role_str=system_prompt, prompt_template_str=" "
+            query_bundle,
+            system_role_str=system_prompt,
+            prompt_template_str=" " if system_prompt else None,
         )
         if chat_request.stream:
             return _make_chat_completion_chunk_response(
