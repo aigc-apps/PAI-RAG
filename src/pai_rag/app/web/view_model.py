@@ -96,8 +96,8 @@ class ViewModel(BaseModel):
     quark_secret: str = None
 
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
-    aliyun_accessid: str = None
-    aliyun_accesskey: str = None
+    aliyun_access_key_id: str = None
+    aliyun_access_key_secret: str = None
 
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
@@ -252,8 +252,8 @@ class ViewModel(BaseModel):
         elif isinstance(config.search, AliyunSearchConfig):
             view_model.search_type = "aliyun"
             view_model.aliyun_endpoint = config.search.endpoint
-            view_model.aliyun_accessid = config.search.accessid
-            view_model.aliyun_accesskey = config.search.accesskey
+            view_model.aliyun_access_key_id = config.search.access_key_id
+            view_model.aliyun_access_key_secret = config.search.access_key_secret
             view_model.search_count = config.search.search_count
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
@@ -435,8 +435,8 @@ class ViewModel(BaseModel):
         else:
             config["search"]["source"] = "aliyun"
             config["search"]["endpoint"] = self.aliyun_endpoint
-            config["search"]["accessid"] = self.aliyun_accessid
-            config["search"]["accesskey"] = self.aliyun_accesskey
+            config["search"]["access_key_id"] = self.aliyun_access_key_id
+            config["search"]["access_key_secret"] = self.aliyun_access_key_secret
             config["search"]["search_count"] = self.search_count
 
         config["intent"]["descriptions"] = json.loads(self.intent_description)
@@ -605,12 +605,12 @@ class ViewModel(BaseModel):
                 "value": self.aliyun_endpoint,
                 "visible": False,
             }
-            settings["aliyun_accessid"] = {
-                "value": self.aliyun_accessid,
+            settings["aliyun_access_key_id"] = {
+                "value": self.aliyun_access_key_id,
                 "visible": False,
             }
-            settings["aliyun_accesskey"] = {
-                "value": self.aliyun_accesskey,
+            settings["aliyun_access_key_secret"] = {
+                "value": self.aliyun_access_key_secret,
                 "visible": False,
             }
         elif self.search_type == "夸克":
@@ -627,12 +627,12 @@ class ViewModel(BaseModel):
                 "value": self.aliyun_endpoint,
                 "visible": False,
             }
-            settings["aliyun_accessid"] = {
-                "value": self.aliyun_accessid,
+            settings["aliyun_access_key_id"] = {
+                "value": self.aliyun_access_key_id,
                 "visible": False,
             }
-            settings["aliyun_accesskey"] = {
-                "value": self.aliyun_accesskey,
+            settings["aliyun_access_key_secret"] = {
+                "value": self.aliyun_access_key_secret,
                 "visible": False,
             }
         # aliyun
@@ -650,12 +650,12 @@ class ViewModel(BaseModel):
                 "value": self.aliyun_endpoint,
                 "visible": True,
             }
-            settings["aliyun_accessid"] = {
-                "value": self.aliyun_accessid,
+            settings["aliyun_access_key_id"] = {
+                "value": self.aliyun_access_key_id,
                 "visible": True,
             }
-            settings["aliyun_accesskey"] = {
-                "value": self.aliyun_accesskey,
+            settings["aliyun_access_key_secret"] = {
+                "value": self.aliyun_access_key_secret,
                 "visible": True,
             }
 

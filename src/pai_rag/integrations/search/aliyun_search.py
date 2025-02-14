@@ -22,20 +22,17 @@ DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 class AliyunSearchTool(BaseQueryEngine):
     def __init__(
         self,
-        accessid: str,
-        accesskey: str,
+        access_key_id: str,
+        access_key_secret: str,
         synthesizer: BaseSynthesizer = None,
         endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
         time_range: str = DEFAULT_TIMERANGE,
     ):
-        self.accessid = accessid
-        self.accesskey = accesskey
-
         config = open_api_models.Config(
-            access_key_id=accessid,
-            access_key_secret=accesskey,
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
         )
         self.synthesizer = synthesizer
 
@@ -76,7 +73,7 @@ class AliyunSearchTool(BaseQueryEngine):
 
         nodes = []
         for result in search_results:
-            items = result["pageItems"]
+            items = result.get("pageItems")
             for item in items:
                 text = item.get("mainText") or item.get("markdownText")
                 if not text:
@@ -86,16 +83,16 @@ class AliyunSearchTool(BaseQueryEngine):
                 node = TextNode(
                     text=text[:800],
                     metadata={
-                        "file_url": item["link"],
+                        "file_url": item.get("link"),
                         "file_name": item.get("htmlTitle") or item.get("title"),
                     },
                 )
                 if item.get("publishTime"):
-                    node.metadata["publish_time"] = item["publishTime"]
-                if item.get("source"):
-                    node.metadata["source"] = item["source"]
+                    node.metadata["publish_time"] = item.get("publishTime")
+                if item.get("hostname"):
+                    node.metadata["source"] = item.get("hostname")
                 if item.get("score"):
-                    score = item["score"]
+                    score = item.get("score")
                 nodes.append(NodeWithScore(node=node, score=score))
                 if len(nodes) >= self.search_count:
                     break
