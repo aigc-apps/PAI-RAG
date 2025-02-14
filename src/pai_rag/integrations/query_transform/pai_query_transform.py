@@ -196,7 +196,6 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 self._chat_store.add_message(hist_mes)
 
         chat_history = self._chat_store.get_messages(session_id)
-        chat_history.append(ChatMessage(role="user", content=query_str))
         chat_history_str = messages_to_history_str(chat_history)
 
         logger.debug(f"Chat history: {chat_history_str}")
@@ -205,13 +204,15 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
             question=query_str,
             chat_history=chat_history_str,
         )
-        logger.debug(f"Transformed query: {transformed_query_str}")
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
         if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            chat_history.append(ChatMessage(role="user", content=query_str))
+            chat_history_str = messages_to_history_str(chat_history)
             return PaiQueryBundle(
                 query_str=query_str,
                 need_web_search=False,
@@ -219,8 +220,15 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 chat_messages_str=chat_history_str,
             )
         else:
+            transformed_queries = ",".join(query_json["queries"])
+            chat_history.append(
+                ChatMessage(
+                    role="user", content=",".join([query_str, transformed_queries])
+                )
+            )
+            chat_history_str = messages_to_history_str(chat_history)
             return PaiQueryBundle(
-                query_str=",".join(query_json["queries"]),
+                query_str=transformed_queries,
                 need_web_search=True,
                 custom_embedding_strs=[query_str, transformed_query_str],
                 chat_messages_str=chat_history_str,
@@ -255,7 +263,6 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 self._chat_store.add_message(key=session_id, message=hist_mes)
 
         chat_history = self._chat_store.get_messages(key=session_id)
-        chat_history.append(ChatMessage(role="user", content=query_str))
         chat_history_str = messages_to_history_str(chat_history)
 
         logger.debug(f"Chat history: {chat_history_str}")
@@ -264,13 +271,15 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
             question=query_str,
             chat_history=chat_history_str,
         )
-        logger.debug(f"Transformed query: {transformed_query_str}")
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
         if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            chat_history.append(ChatMessage(role="user", content=query_str))
+            chat_history_str = messages_to_history_str(chat_history)
             return PaiQueryBundle(
                 query_str=query_str,
                 need_web_search=False,
@@ -278,8 +287,15 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 chat_messages_str=chat_history_str,
             )
         else:
+            transformed_queries = ",".join(query_json["queries"])
+            chat_history.append(
+                ChatMessage(
+                    role="user", content=",".join([query_str, transformed_queries])
+                )
+            )
+            chat_history_str = messages_to_history_str(chat_history)
             return PaiQueryBundle(
-                query_str=",".join(query_json["queries"]),
+                query_str=transformed_queries,
                 need_web_search=True,
                 custom_embedding_strs=[query_str, transformed_query_str],
                 chat_messages_str=chat_history_str,
@@ -341,7 +357,9 @@ class OpenAICompatibleQueryTransform:
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
-        logger.debug(f"Transformed query: {transformed_query_str}")
+        logger.debug(
+            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
+        )
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
@@ -381,7 +399,9 @@ class OpenAICompatibleQueryTransform:
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
-        logger.debug(f"Transformed query: {transformed_query_str}")
+        logger.debug(
+            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
+        )
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL

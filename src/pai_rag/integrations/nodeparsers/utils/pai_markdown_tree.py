@@ -89,7 +89,11 @@ class ASTTreeBuilder:
         new_node = TreeNode(level=node.level, category="title", content=content)
 
         # 调整堆栈以找到正确的父节点
-        while self.stack and self.stack[-1].level >= new_node.level:
+        while (
+            self.stack
+            and self.stack[-1].level >= new_node.level
+            and self.stack[-1].category != "root"
+        ):
             self.stack.pop()
 
         # 将新节点添加为当前父节点的子节点
@@ -126,7 +130,8 @@ class ASTTreeBuilder:
         for child in node.children:
             self.build_tree(child)
 
-        self.stack.pop()  # 列表节点出栈
+        if self.stack and self.stack[-1].category != "root":
+            self.stack.pop()  # 列表节点出栈
 
     def handle_list_item(self, node: ListItem):
         # 列表项可能包含段落、子列表等
@@ -149,7 +154,8 @@ class ASTTreeBuilder:
         for child in node.children:
             self.build_tree(child)
 
-        self.stack.pop()  # 列表项节点出栈
+        if self.stack and self.stack[-1].category != "root":
+            self.stack.pop()  # 列表节点出栈
 
     def handle_table(self, node: Table):
         table_content = self.reconstruct_table(node)

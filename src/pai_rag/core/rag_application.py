@@ -272,6 +272,7 @@ class RagApplication:
 
         new_question = new_query_bundle.query_str
         logger.info(f"Querying with question '{new_question}'.")
+        messages[-1].content = ",".join([question, new_question])
         query_bundle = PaiQueryBundle(
             query_str=new_question,
             stream=chat_request.stream,
@@ -283,7 +284,9 @@ class RagApplication:
         if chat_request.search_web:
             search_engine = resolve_searcher(session_config)
             response = await search_engine.aquery(
-                query_bundle, system_role_str=system_prompt, prompt_template_str=" "
+                query_bundle,
+                system_role_str=system_prompt,
+                prompt_template_str=" " if system_prompt else None,
             )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response(
@@ -297,7 +300,9 @@ class RagApplication:
 
         query_engine = resolve_query_engine(session_config)
         response = await query_engine.aquery(
-            query_bundle, system_role_str=system_prompt, prompt_template_str=" "
+            query_bundle,
+            system_role_str=system_prompt,
+            prompt_template_str=" " if system_prompt else None,
         )
         if chat_request.stream:
             return _make_chat_completion_chunk_response(
