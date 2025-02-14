@@ -118,7 +118,7 @@ class AliyunSearchTool(BaseQueryEngine):
                 prompt_template_str=prompt_template_str,
             )
 
-        logger.info(f"Search with query {query.query_str,}.")
+        logger.info(f"Aliyun Search with query {query.query_str,}.")
         nodes = await self._asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 

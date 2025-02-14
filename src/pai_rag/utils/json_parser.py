@@ -9,7 +9,7 @@ def parse_json_from_code_block_str(input_str):
         content = input_str[start : end + 1]
         try:
             data = json.loads(content)
-            logger.debug("解析后的 JSON 对象：", data)
+            logger.debug(f"解析后的 JSON 对象：{data}")
             return data
         except json.JSONDecodeError as e:
             logger.debug("JSON 解码错误:", e)
