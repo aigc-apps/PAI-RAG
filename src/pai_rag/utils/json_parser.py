@@ -1,22 +1,19 @@
 import json
-import re
+from loguru import logger
 
 
 def parse_json_from_code_block_str(input_str):
-    pattern = r"\{.*\}"
-    match = re.search(pattern, input_str, re.DOTALL)
-
-    if match:
-        json_str = match.group()
-        print(f"提取的 JSON 字符串:\n{json_str}\n")
-
+    start = input_str.find("{")
+    end = input_str.find("}", start + 1)
+    if start != -1 and end != -1:
+        content = input_str[start : end + 1]
         try:
-            # 解析 JSON 字符串
-            data = json.loads(json_str)
+            data = json.loads(content)
+            logger.debug("解析后的 JSON 对象：", data)
             return data
         except json.JSONDecodeError as e:
-            print(f"JSON 解析错误: {e}")
+            logger.debug("JSON 解码错误:", e)
             return json.loads('{ "queries": [] }')
     else:
-        print("未找到匹配的 JSON 对象。")
+        logger.debug("未找到有效的JSON对象。")
         return json.loads('{ "queries": [] }')
