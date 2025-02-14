@@ -402,14 +402,14 @@ def create_chat_tab() -> Dict[str, Any]:
                     aliyun_endpoint = gr.Text(
                         label="Endpoint", value="", elem_id="aliyun_endpoint"
                     )
-                    aliyun_accessid = gr.Text(
-                        label="AccessId", value="", elem_id="aliyun_accessid"
+                    aliyun_access_key_id = gr.Text(
+                        label="AccessKey ID", value="", elem_id="aliyun_access_key_id"
                     )
-                    aliyun_accesskey = gr.Text(
-                        label="AccessKey",
+                    aliyun_access_key_secret = gr.Text(
+                        label="AccessKey Secret",
                         value="",
                         type="password",
-                        elem_id="aliyun_accesskey",
+                        elem_id="aliyun_access_key_secret",
                     )
                 search_args = {
                     search_type,
@@ -420,8 +420,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     quark_user,
                     quark_secret,
                     aliyun_endpoint,
-                    aliyun_accessid,
-                    aliyun_accesskey,
+                    aliyun_access_key_id,
+                    aliyun_access_key_secret,
                 }
                 search_type.input(
                     fn=change_search_model_argument,
@@ -434,8 +434,8 @@ def create_chat_tab() -> Dict[str, Any]:
                         quark_user,
                         quark_secret,
                         aliyun_endpoint,
-                        aliyun_accessid,
-                        aliyun_accesskey,
+                        aliyun_access_key_id,
+                        aliyun_access_key_secret,
                     ],
                 )
 
@@ -590,8 +590,8 @@ def create_chat_tab() -> Dict[str, Any]:
             quark_secret.elem_id: quark_secret,
             quark_user.elem_id: quark_user,
             aliyun_endpoint.elem_id: aliyun_endpoint,
-            aliyun_accessid.elem_id: aliyun_accessid,
-            aliyun_accesskey.elem_id: aliyun_accesskey,
+            aliyun_access_key_id.elem_id: aliyun_access_key_id,
+            aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
             model_reranker_col.elem_id: model_reranker_col,
             llm_temperature.elem_id: llm_temperature,
         }

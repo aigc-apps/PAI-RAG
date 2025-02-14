@@ -284,8 +284,8 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
     elif isinstance(config.search, AliyunSearchConfig):
         searcher = resolve(
             cls=AliyunSearchTool,
-            accessid=config.search.accessid,
-            accesskey=config.search.accesskey,
+            access_key_id=config.search.access_key_id,
+            access_key_secret=config.search.access_key_secret,
             endpoint=config.search.endpoint,
             synthesizer=synthesizer,
             intent_router=intent_router,
