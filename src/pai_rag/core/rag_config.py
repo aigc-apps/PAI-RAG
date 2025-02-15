@@ -1,6 +1,7 @@
 from typing import Annotated, Dict, Union
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from pai_rag.core.models.config import (
+    AliyunTextModerationPlusConfig,
     NodeEnhancementConfig,
     OssStoreConfig,
     RetrieverConfig,
@@ -158,3 +159,5 @@ class RagConfig(BaseModel):
 
     # synthesizer
     synthesizer: SynthesizerConfig
+
+    guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()
