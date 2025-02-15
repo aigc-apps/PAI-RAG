@@ -472,20 +472,21 @@ class RagApplication:
 
         guardrail = resolve_llm_guardrail(session_config)
         # 多轮对话，用新查询检查
-        guardrail_result = await guardrail.acheck(new_question)
-        if guardrail_result.reject:
-            if query.stream:
-                return event_generator_async(
-                    response=guardrail_result.advice,
-                    chat_store=chat_store,
-                    session_id=session_id,
-                    sse_version=sse_version,
-                )
+        if guardrail is not None:
+            guardrail_result = await guardrail.acheck(new_question)
+            if guardrail_result.reject:
+                if query.stream:
+                    return event_generator_async(
+                        response=guardrail_result.advice,
+                        chat_store=chat_store,
+                        session_id=session_id,
+                        sse_version=sse_version,
+                    )
 
-            else:
-                return RagResponse(
-                    answer=guardrail_result.advice, session_id=session_id
-                )
+                else:
+                    return RagResponse(
+                        answer=guardrail_result.advice, session_id=session_id
+                    )
 
         query_bundle = PaiQueryBundle(
             query_str=new_question,
