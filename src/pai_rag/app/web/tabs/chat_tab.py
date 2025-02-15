@@ -131,6 +131,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 value="",
                 label="\N{bookmark} Index Name",
                 elem_id="chat_index",
+                allow_custom_value=True,
             )
             query_type = gr.Radio(
                 ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],

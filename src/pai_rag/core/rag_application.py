@@ -24,7 +24,7 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion import Choice
 
 import openai.types.chat.chat_completion_chunk as chat_completion_chunk
-
+from openai._exceptions import APIError
 from openai.types.completion_usage import CompletionUsage
 from pai_rag.app.api.models import (
     RagQuery,
@@ -170,27 +170,51 @@ async def _make_chat_completion_chunk_response(session_id, response):
     full_content = ""
     created_ts = int(time.time())
     model_name = Settings.llm.metadata.model_name
-    async for token in response.async_response_gen():
-        if token:
-            full_content += token
-            chunk = ChatCompletionChunk(
-                id=session_id,
-                created=created_ts,
-                model=model_name,
-                choices=[
-                    chat_completion_chunk.Choice(
-                        index=i,
-                        delta=chat_completion_chunk.ChoiceDelta(
-                            role=MessageRole.ASSISTANT.value,
-                            content=token,
-                        ),
-                        finish_reason=None,
-                    )
-                ],
-                object="chat.completion.chunk",
-            )
-            i += 1
-            yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    try:
+        async for token in response.async_response_gen():
+            if token:
+                full_content += token
+                chunk = ChatCompletionChunk(
+                    id=session_id,
+                    created=created_ts,
+                    model=model_name,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=i,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.ASSISTANT.value,
+                                content=token,
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    object="chat.completion.chunk",
+                )
+                i += 1
+                yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    except APIError as exception:
+        logger.info(f"Streaming failed: {exception}")
+        chunk = ChatCompletionChunk(
+            id=session_id,
+            created=created_ts,
+            model=model_name,
+            choices=[
+                chat_completion_chunk.Choice(
+                    index=i,
+                    delta=chat_completion_chunk.ChoiceDelta(
+                        role=MessageRole.ASSISTANT.value,
+                        content=exception.message,
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+            object="chat.completion.chunk",
+        )
+
+        yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    except Exception as exception:
+        logger.info(f"Streaming failed: {exception}")
+        raise exception
 
     logger.info(f"Finished streaming: {full_content}")
 

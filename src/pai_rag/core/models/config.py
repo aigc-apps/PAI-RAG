@@ -12,8 +12,8 @@ DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
 class AliyunTextModerationPlusConfig(BaseModel):
-    endpoint: str = "green-cip.cn-hangzhou.aliyuncs.com"
-    region: str = "cn-hangzhou"
+    endpoint: str | None = "green-cip.cn-hangzhou.aliyuncs.com"
+    region: str | None = "cn-hangzhou"
     access_key_id: str | None = None
     access_key_secret: str | None = None
     custom_advice: str | None = None

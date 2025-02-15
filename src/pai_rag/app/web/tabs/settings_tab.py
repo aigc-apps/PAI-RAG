@@ -20,6 +20,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value="NEW",
                     interactive=True,
                     elem_id="vector_index",
+                    allow_custom_value=True,
                 )
 
                 new_index_name = gr.Textbox(
