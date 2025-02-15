@@ -94,6 +94,13 @@ def change_use_oss(use_oss):
         return gr.update(visible=False)
 
 
+def change_enable_guardrail(enable_guardrail):
+    if enable_guardrail:
+        return gr.update(visible=True)
+    else:
+        return gr.update(visible=False)
+
+
 def choose_use_mllm(value):
     if value:
         return gr.update(visible=True)

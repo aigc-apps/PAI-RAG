@@ -53,6 +53,11 @@ class ChatCompletionRequest(BaseModel):
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
 
+    # debug purpose
+    force_search_web: Optional[bool] = False  # 始终执行搜索
+    force_no_search: Optional[bool] = False  # 始终执行llm，不搜索知识库和网络
+    force_search_knowledgebase: Optional[bool] = False  # 始终执行知识库搜索
+
 
 @dataclass
 class PaiQueryBundle(QueryBundle):

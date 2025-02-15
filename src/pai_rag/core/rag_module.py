@@ -18,6 +18,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
     PaiMultiModalEmbedding,
 )
+from pai_rag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorProcessor
@@ -54,6 +55,17 @@ def resolve(cls: Any, **kwargs):
     if cls_key not in cls_cache:
         cls_cache[cls_key] = cls(**kwargs)
     return cls_cache[cls_key]
+
+
+def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
+    if config.guardrail.is_enabled():
+        guardrail = resolve(
+            cls=PaiLlmGuardrail,
+            config=config.guardrail,
+        )
+        return guardrail
+
+    return None
 
 
 def resolve_chat_store(config: RagConfig) -> PaiChatStore:
@@ -254,7 +266,7 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
     synthesizer = resolve_synthesizer(config)
     searcher = None
 
-    if isinstance(config.search, BingSearchConfig):
+    if isinstance(config.search, BingSearchConfig) and config.search.search_api_key:
         searcher = resolve(
             cls=BingSearchTool,
             api_key=config.search.search_api_key,
@@ -262,7 +274,11 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
         )
-    elif isinstance(config.search, QuarkSearchConfig):
+    elif (
+        isinstance(config.search, QuarkSearchConfig)
+        and config.search.user
+        and config.search.secret
+    ):
         searcher = resolve(
             cls=QuarkSearchTool,
             user=config.search.user,
@@ -271,7 +287,11 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             synthesizer=synthesizer,
             search_count=config.search.search_count,
         )
-    elif isinstance(config.search, AliyunSearchConfig):
+    elif (
+        isinstance(config.search, AliyunSearchConfig)
+        and config.search.access_key_id
+        and config.search.access_key_secret
+    ):
         searcher = resolve(
             cls=AliyunSearchTool,
             access_key_id=config.search.access_key_id,

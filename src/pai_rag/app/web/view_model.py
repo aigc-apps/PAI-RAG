@@ -148,6 +148,13 @@ class ViewModel(BaseModel):
     # intent
     intent_description: str = None
 
+    # guardrail
+    guardrail_ak: str = None
+    guardrail_sk: str = None
+    guardrail_endpoint: str = None
+    guardrail_region: str = None
+    enable_guardrail: bool = False
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -301,6 +308,13 @@ class ViewModel(BaseModel):
             config.intent.descriptions, ensure_ascii=False, sort_keys=True, indent=4
         )
 
+        if config.guardrail.is_enabled():
+            view_model.enable_guardrail = True
+            view_model.guardrail_ak = config.guardrail.access_key_id
+            view_model.guardrail_sk = config.guardrail.access_key_secret
+            view_model.guardrail_endpoint = config.guardrail.endpoint
+            view_model.guardrail_region = config.guardrail.region
+
         return view_model
 
     def to_app_config(self):
@@ -438,6 +452,11 @@ class ViewModel(BaseModel):
             config["search"]["access_key_id"] = self.aliyun_access_key_id
             config["search"]["access_key_secret"] = self.aliyun_access_key_secret
             config["search"]["search_count"] = self.search_count
+
+        config["guardrail"]["region"] = self.guardrail_region
+        config["guardrail"]["endpoint"] = self.guardrail_endpoint
+        config["guardrail"]["access_key_id"] = self.guardrail_ak
+        config["guardrail"]["access_key_secret"] = self.guardrail_sk
 
         config["intent"]["descriptions"] = json.loads(self.intent_description)
 
@@ -695,6 +714,13 @@ class ViewModel(BaseModel):
         settings["default_web_search"] = {"value": self.default_web_search}
 
         settings["intent_description"] = {"value": self.intent_description}
+
+        settings["enable_guardrail"] = {"value": self.enable_guardrail}
+        settings["guardrail_region"] = {"value": self.guardrail_region}
+        settings["guardrail_endpoint"] = {"value": self.guardrail_endpoint}
+        settings["guardrail_ak"] = {"value": self.guardrail_ak}
+        settings["guardrail_sk"] = {"value": self.guardrail_sk}
+
         # print("view model settings:", settings)
 
         return settings

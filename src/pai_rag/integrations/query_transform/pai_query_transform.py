@@ -216,7 +216,7 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
             return PaiQueryBundle(
                 query_str=query_str,
                 need_web_search=False,
-                custom_embedding_strs=[query_str, transformed_query_str],
+                custom_embedding_strs=[query_str],
                 chat_messages_str=chat_history_str,
             )
         else:
@@ -283,7 +283,7 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
             return PaiQueryBundle(
                 query_str=query_str,
                 need_web_search=False,
-                custom_embedding_strs=[query_str, transformed_query_str],
+                custom_embedding_strs=[query_str],
                 chat_messages_str=chat_history_str,
             )
         else:
@@ -409,9 +409,9 @@ class OpenAICompatibleQueryTransform:
         query_json = parse_json_from_code_block_str(transformed_query_str)
         if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
             return PaiQueryBundle(
-                query_str=transformed_query_str,
+                query_str=chat_messages[-1].content,
                 need_web_search=False,
-                custom_embedding_strs=[transformed_query_str],
+                custom_embedding_strs=[chat_messages[-1].content],
             )
         else:
             return PaiQueryBundle(

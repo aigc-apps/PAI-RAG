@@ -8,6 +8,7 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_query,
     resolve_data_loader,
     resolve_intent_router,
+    resolve_llm_guardrail,
     resolve_query_engine,
     resolve_query_transform,
     resolve_searcher,
@@ -23,7 +24,7 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion import Choice
 
 import openai.types.chat.chat_completion_chunk as chat_completion_chunk
-
+from openai._exceptions import APIError
 from openai.types.completion_usage import CompletionUsage
 from pai_rag.app.api.models import (
     RagQuery,
@@ -48,6 +49,7 @@ import time
 import re
 
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
+DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 
 
 def uuid_generator() -> str:
@@ -80,13 +82,19 @@ async def event_generator_async(
     sse_version: SseVersion = SseVersion.V0,
 ):
     content = ""
-    async for token in response.async_response_gen():
-        if token:
-            chunk = {"delta": token, "is_finished": False}
-            content += token
-            yield _event_chunk_wrapper(
-                json.dumps(chunk, ensure_ascii=False), sse_version
-            )
+    if isinstance(response, str):
+        content = response
+        chunk = {"delta": content, "is_finished": False}
+        yield _event_chunk_wrapper(json.dumps(chunk, ensure_ascii=False), sse_version)
+
+    else:
+        async for token in response.async_response_gen():
+            if token:
+                chunk = {"delta": token, "is_finished": False}
+                content += token
+                yield _event_chunk_wrapper(
+                    json.dumps(chunk, ensure_ascii=False), sse_version
+                )
 
     if chat_store:
         content = re.sub(r"<think>.*?</think>\n*", "", content, flags=re.DOTALL)
@@ -107,6 +115,8 @@ async def event_generator_async(
 
 
 def _make_chat_completion_response(session_id, response):
+    logger.info(f"Finished response: {response.response}")
+
     return ChatCompletion(
         id=session_id,
         created=int(time.time()),
@@ -130,32 +140,109 @@ def _make_chat_completion_response(session_id, response):
     )
 
 
+async def _make_chat_completion_response_with_text(session_id, text):
+    logger.info(f"Finished response: {text}")
+    return ChatCompletion(
+        id=session_id,
+        created=int(time.time()),
+        model=Settings.llm.metadata.model_name,
+        choices=[
+            Choice(
+                index=0,
+                message=ChatCompletionMessage(
+                    role=MessageRole.ASSISTANT.value,
+                    content=text,
+                ),
+                finish_reason="stop",
+            )
+        ],
+        object="chat.completion",
+        usage=CompletionUsage(
+            completion_tokens=0,
+            prompt_tokens=0,
+            total_tokens=0,
+        ),
+    )
+
+
 async def _make_chat_completion_chunk_response(session_id, response):
-    content = ""
+    i = 0
+    full_content = ""
+    created_ts = int(time.time())
+    model_name = Settings.llm.metadata.model_name
+    try:
+        async for token in response.async_response_gen():
+            if token:
+                full_content += token
+                chunk = ChatCompletionChunk(
+                    id=session_id,
+                    created=created_ts,
+                    model=model_name,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=i,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.ASSISTANT.value,
+                                content=token,
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    object="chat.completion.chunk",
+                )
+                i += 1
+                yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    except APIError as exception:
+        logger.info(f"Streaming failed: {exception}")
+        chunk = ChatCompletionChunk(
+            id=session_id,
+            created=created_ts,
+            model=model_name,
+            choices=[
+                chat_completion_chunk.Choice(
+                    index=i,
+                    delta=chat_completion_chunk.ChoiceDelta(
+                        role=MessageRole.ASSISTANT.value,
+                        content=exception.message,
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+            object="chat.completion.chunk",
+        )
+
+        yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    except Exception as exception:
+        logger.info(f"Streaming failed: {exception}")
+        raise exception
+
+    logger.info(f"Finished streaming: {full_content}")
+
+
+async def _make_chat_completion_chunk_response_with_text(session_id, text):
     i = 0
     created_ts = int(time.time())
     model_name = Settings.llm.metadata.model_name
-    async for token in response.async_response_gen():
-        if token:
-            content += token
-            chunk = ChatCompletionChunk(
-                id=session_id,
-                created=created_ts,
-                model=model_name,
-                choices=[
-                    chat_completion_chunk.Choice(
-                        index=i,
-                        delta=chat_completion_chunk.ChoiceDelta(
-                            role=MessageRole.ASSISTANT.value,
-                            content=token,
-                        ),
-                        finish_reason=None,
-                    )
-                ],
-                object="chat.completion.chunk",
+    chunk = ChatCompletionChunk(
+        id=session_id,
+        created=created_ts,
+        model=model_name,
+        choices=[
+            chat_completion_chunk.Choice(
+                index=i,
+                delta=chat_completion_chunk.ChoiceDelta(
+                    role=MessageRole.ASSISTANT.value,
+                    content=text,
+                ),
+                finish_reason=None,
             )
-            i += 1
-            yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+        ],
+        object="chat.completion.chunk",
+    )
+    i += 1
+
+    logger.info(f"Finished streaming: {text}")
+    yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
 
 class RagApplication:
@@ -238,6 +325,10 @@ class RagApplication:
     ):
         if len(chat_request.messages) == 0:
             raise Exception("消息列表为空.")
+        session_id = uuid_generator()
+
+        guardrail = resolve_llm_guardrail(self.config)
+        passed_guardrail = False if guardrail is not None else True
 
         messages = chat_request.messages
         system_prompt = None
@@ -245,9 +336,24 @@ class RagApplication:
             system_prompt = messages[0].content
             messages = messages[1:]
 
+        if not passed_guardrail:
+            user_messages = [msg for msg in messages if msg.role == MessageRole.USER]
+            # 只有一条对话，直接检查
+            if len(user_messages) == 1:
+                guardrail_result = await guardrail.acheck(user_messages[0].content)
+                if guardrail_result.reject:
+                    if chat_request.stream:
+                        return _make_chat_completion_chunk_response_with_text(
+                            session_id, guardrail_result.advice
+                        )
+                    else:
+                        return _make_chat_completion_response_with_text(
+                            session_id, guardrail_result.advice
+                        )
+                passed_guardrail = True
+
         if self.config.system.default_web_search:
             chat_request.search_web = True
-        session_id = uuid_generator()
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(chat_request.index_name)
         session_config.embedding = index_entry.embedding_config
@@ -271,8 +377,23 @@ class RagApplication:
         )
 
         new_question = new_query_bundle.query_str
+        if not passed_guardrail:
+            # 多轮对话，用新查询检查
+            guardrail_result = await guardrail.acheck(new_question)
+            if guardrail_result.reject:
+                if chat_request.stream:
+                    return _make_chat_completion_chunk_response_with_text(
+                        session_id, guardrail_result.advice
+                    )
+                else:
+                    return _make_chat_completion_response_with_text(
+                        session_id, guardrail_result.advice
+                    )
+            passed_guardrail = True
+
         logger.info(f"Querying with question '{new_question}'.")
         messages[-1].content = ",".join([question, new_question])
+
         query_bundle = PaiQueryBundle(
             query_str=new_question,
             stream=chat_request.stream,
@@ -281,8 +402,22 @@ class RagApplication:
             chat_messages_str=messages_to_history_str(messages=messages[-8:]),
         )
 
+        if chat_request.force_no_search:
+            chat_request.search_web = True
+            query_bundle.need_web_search = False
+        elif chat_request.force_search_web:
+            chat_request.search_web = True
+            query_bundle.need_web_search = True
+        elif chat_request.force_search_knowledgebase:
+            chat_request.search_web = False
+
         if chat_request.search_web:
             search_engine = resolve_searcher(session_config)
+            if not search_engine:
+                raise ValueError(
+                    "AI search config is not valid. Please check your search api configuration."
+                )
+
             response = await search_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
@@ -359,6 +494,24 @@ class RagApplication:
             elif intent != Intents.RAG:
                 return ValueError(f"Invalid intent {intent}")
 
+        guardrail = resolve_llm_guardrail(session_config)
+        # 多轮对话，用新查询检查
+        if guardrail is not None:
+            guardrail_result = await guardrail.acheck(new_question)
+            if guardrail_result.reject:
+                if query.stream:
+                    return event_generator_async(
+                        response=guardrail_result.advice,
+                        chat_store=chat_store,
+                        session_id=session_id,
+                        sse_version=sse_version,
+                    )
+
+                else:
+                    return RagResponse(
+                        answer=guardrail_result.advice, session_id=session_id
+                    )
+
         query_bundle = PaiQueryBundle(
             query_str=new_question,
             need_web_search=new_query_bundle.need_web_search,
@@ -379,7 +532,9 @@ class RagApplication:
         elif chat_type == RagChatType.WEB:
             search_engine = resolve_searcher(session_config)
             if not search_engine:
-                raise ValueError("AI search not enabled. Please add search API key.")
+                raise ValueError(
+                    "AI search config is not valid. Please check your search api configuration."
+                )
             response = await search_engine.aquery(
                 query_bundle,
                 system_role_str=query.system_role_template,

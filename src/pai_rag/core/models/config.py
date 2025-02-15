@@ -11,6 +11,17 @@ DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
+class AliyunTextModerationPlusConfig(BaseModel):
+    endpoint: str | None = "green-cip.cn-hangzhou.aliyuncs.com"
+    region: str | None = "cn-hangzhou"
+    access_key_id: str | None = None
+    access_key_secret: str | None = None
+    custom_advice: str | None = None
+
+    def is_enabled(self) -> bool:
+        return self.access_key_id is not None and self.access_key_secret is not None
+
+
 class NodeEnhancementConfig(BaseModel):
     tree_depth: int = 3
     max_clusters: int = 52

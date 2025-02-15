@@ -50,7 +50,7 @@ def create_chat_store(chat_store_config: BaseChatStoreConfig) -> BaseChatStore:
             ttl=chat_store_config.ttl,
         )
         logger.info(
-            "Adding Redis chat store to 'redis://{chat_store_config.host}:6379'."
+            f"Adding Redis chat store to 'redis://{chat_store_config.host}:6379'."
         )
         return redis_chat_store
     else:
