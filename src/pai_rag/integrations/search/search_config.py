@@ -16,7 +16,6 @@ class SupportedSearchType(str, Enum):
 class BaseSearchConfig(BaseModel):
     source: SupportedSearchType
     search_count: int = DEFAULT_SEARCH_COUNT
-    with_intent: bool = True
 
     class Config:
         frozen = True
@@ -46,5 +45,5 @@ class QuarkSearchConfig(BaseSearchConfig):
 class AliyunSearchConfig(BaseSearchConfig):
     source: Literal[SupportedSearchType.aliyun] = SupportedSearchType.aliyun
     endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
-    accessid: str | None = None
-    accesskey: str | None = None
+    access_key_id: str | None = None
+    access_key_secret: str | None = None
