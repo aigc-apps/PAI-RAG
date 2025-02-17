@@ -1,7 +1,7 @@
 
 server {
-    listen       8000;
-    listen  [::]:8000;
+    listen       8680;
+    listen  [::]:8680;
     server_name  localhost;
     client_max_body_size 50m;
 

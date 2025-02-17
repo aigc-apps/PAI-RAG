@@ -92,7 +92,7 @@ EAS服务支持部署如下的模型列表和最低配置。
   "containers": [
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-nginx",
-      "port": 8000,
+      "port": 8680,
       "script": "/docker-entrypoint.sh nginx"
     },
     {
@@ -236,7 +236,7 @@ Answer: 服务配置信息默认存在本地，服务重启会丢失。如果挂
   "containers": [
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-nginx",
-      "port": 8000,
+      "port": 8680,
       "script": "/docker-entrypoint.sh nginx"
     },
     {
