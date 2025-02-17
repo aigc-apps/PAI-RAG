@@ -164,6 +164,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 choices=[],
                 label="\N{bookmark} Index Name",
                 elem_id="upload_index",
+                allow_custom_value=True,
             )
             chunk_size = gr.Textbox(
                 label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",

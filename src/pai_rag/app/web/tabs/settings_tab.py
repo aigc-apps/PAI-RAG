@@ -20,6 +20,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value="NEW",
                     interactive=True,
                     elem_id="vector_index",
+                    allow_custom_value=True,
                 )
 
                 new_index_name = gr.Textbox(
@@ -234,6 +235,41 @@ def create_setting_tab() -> Dict[str, Any]:
                     outputs=use_oss_col,
                 )
 
+            with gr.Column(scale=5, variant="panel"):
+                _ = gr.Markdown(
+                    value="\N{WHITE MEDIUM STAR} **(Optional) LLM Guardrail [doc](https://help.aliyun.com/document_detail/464388.html?spm=a2c4g.11186623.help-menu-28415.d_1_0.18923104V0TR1X)**"
+                )
+                enable_guardrail = gr.Checkbox(
+                    label="Enable LLM Guardrail",
+                    elem_id="enable_guardrail",
+                    container=False,
+                )
+                with gr.Row(visible=False, elem_id="guardrail_col") as guardrail_col:
+                    guardrail_endpoint = gr.Textbox(
+                        label="Endpoint",
+                        elem_id="guardrail_endpoint",
+                        placeholder="green-cip.cn-hangzhou.aliyuncs.com",
+                    )
+                    guardrail_region = gr.Textbox(
+                        label="Region",
+                        elem_id="guardrail_region",
+                        placeholder="cn-hangzhou",
+                    )
+                    guardrail_ak = gr.Textbox(
+                        label="Access Key Id",
+                        elem_id="guardrail_ak",
+                    )
+                    guardrail_sk = gr.Textbox(
+                        label="Access Key Secret",
+                        elem_id="guardrail_sk",
+                        type="password",
+                    )
+                enable_guardrail.input(
+                    fn=ev_listeners.change_enable_guardrail,
+                    inputs=enable_guardrail,
+                    outputs=guardrail_col,
+                )
+
             llm_components = [
                 llm_base_url,
                 llm_model_name,
@@ -247,6 +283,10 @@ def create_setting_tab() -> Dict[str, Any]:
                 oss_sk,
                 oss_endpoint,
                 oss_bucket,
+                guardrail_ak,
+                guardrail_sk,
+                guardrail_region,
+                guardrail_endpoint,
             ]
 
             components.extend(llm_components)

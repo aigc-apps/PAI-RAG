@@ -10,7 +10,6 @@ from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 
 from pai_rag.app.api.models import PaiQueryBundle
-from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter, Intents
 from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
@@ -23,21 +22,17 @@ DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 class AliyunSearchTool(BaseQueryEngine):
     def __init__(
         self,
-        accessid: str,
-        accesskey: str,
+        access_key_id: str,
+        access_key_secret: str,
         synthesizer: BaseSynthesizer = None,
         endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
         time_range: str = DEFAULT_TIMERANGE,
-        intent_router: PaiIntentRouter = None,
     ):
-        self.accessid = accessid
-        self.accesskey = accesskey
-
         config = open_api_models.Config(
-            access_key_id=accessid,
-            access_key_secret=accesskey,
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
         )
         self.synthesizer = synthesizer
 
@@ -48,8 +43,6 @@ class AliyunSearchTool(BaseQueryEngine):
         self.Client = Client(config)
         self.time_range = time_range
         self.html_reader = ParallelBeautifulSoupWebReader()
-
-        self.intent_router = intent_router
 
     async def _search_aliyun_single_page(self, query: str, page: int = 1):
         request = models.GenericSearchRequest(
@@ -80,7 +73,7 @@ class AliyunSearchTool(BaseQueryEngine):
 
         nodes = []
         for result in search_results:
-            items = result["pageItems"]
+            items = result.get("pageItems")
             for item in items:
                 text = item.get("mainText") or item.get("markdownText")
                 if not text:
@@ -89,14 +82,17 @@ class AliyunSearchTool(BaseQueryEngine):
                 score = 0.1
                 node = TextNode(
                     text=text[:800],
-                    metadata={"file_url": item["link"], "file_name": item["title"]},
+                    metadata={
+                        "file_url": item.get("link"),
+                        "file_name": item.get("htmlTitle") or item.get("title"),
+                    },
                 )
                 if item.get("publishTime"):
-                    node.metadata["publish_time"] = item["publishTime"]
-                if item.get("source"):
-                    node.metadata["source"] = item["source"]
+                    node.metadata["publish_time"] = item.get("publishTime")
+                if item.get("hostname"):
+                    node.metadata["source"] = item.get("hostname")
                 if item.get("score"):
-                    score = item["score"]
+                    score = item.get("score")
                 nodes.append(NodeWithScore(node=node, score=score))
                 if len(nodes) >= self.search_count:
                     break
@@ -105,29 +101,33 @@ class AliyunSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        system_role_str: str = None,
         prompt_template_str: str = None,
     ):
-        if self.intent_router:
-            logger.info("Intent router detected, start selecting intent.")
-            intent = await self.intent_router.aselect(query.chat_messages_str)
-            if intent == Intents.CHAT:
-                logger.info("Chat intent detected, return direct response.")
-                no_search_query = PaiQueryBundle(
-                    query_str=query.query_str,
-                    no_retrieval=True,
-                    stream=query.stream,
-                    chat_messages_str=query.chat_messages_str,
-                )
-                return await self.synthesizer.asynthesize(
-                    query=no_search_query,
-                    nodes=[],
-                    prompt_template_str=prompt_template_str,
-                )
+        if not query.need_web_search:
+            no_search_query = PaiQueryBundle(
+                query_str=query.query_str,
+                no_retrieval=True,
+                stream=query.stream,
+                chat_messages_str=query.chat_messages_str,
+            )
+            return await self.synthesizer.asynthesize(
+                query=no_search_query,
+                nodes=[],
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
+            )
 
+        logger.info(f"Aliyun Search with query {query.query_str,}.")
         nodes = await self._asearch(query=query.query_str)
         logger.info(f"Get {len(nodes)} docs from url.")
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        return await self.synthesizer.asynthesize(
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError

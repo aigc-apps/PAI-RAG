@@ -16,7 +16,8 @@ class RagQuery(BaseModel):
     with_intent: bool | None = False  # 是否使用意图
     index_name: str | None = None  # 索引名称
     search_web: bool | None = False  # 是否搜索网页
-    prompt_template: str | None = None  # system prompt模板
+    system_role_template: str | None = None  # system prompt模板
+    custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
 
 
@@ -52,6 +53,11 @@ class ChatCompletionRequest(BaseModel):
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
 
+    # debug purpose
+    force_search_web: Optional[bool] = False  # 始终执行搜索
+    force_no_search: Optional[bool] = False  # 始终执行llm，不搜索知识库和网络
+    force_search_knowledgebase: Optional[bool] = False  # 始终执行知识库搜索
+
 
 @dataclass
 class PaiQueryBundle(QueryBundle):
@@ -59,3 +65,4 @@ class PaiQueryBundle(QueryBundle):
     no_retrieval: bool = False
     citation: bool = False
     chat_messages_str: str = None
+    need_web_search: bool = False
