@@ -192,6 +192,25 @@ async def _make_chat_completion_chunk_response(session_id, response):
                 )
                 i += 1
                 yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+
+        last_chunk = ChatCompletionChunk(
+            id=session_id,
+            created=created_ts,
+            model=model_name,
+            choices=[
+                chat_completion_chunk.Choice(
+                    index=i,
+                    delta=chat_completion_chunk.ChoiceDelta(
+                        role=MessageRole.ASSISTANT.value,
+                        content="",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+            object="chat.completion.chunk",
+        )
+        yield f"data: {json.dumps(last_chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+
     except APIError as exception:
         logger.info(f"Streaming failed: {exception}")
         chunk = ChatCompletionChunk(
