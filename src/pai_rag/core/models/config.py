@@ -19,7 +19,12 @@ class AliyunTextModerationPlusConfig(BaseModel):
     custom_advice: str | None = None
 
     def is_enabled(self) -> bool:
-        return self.access_key_id is not None and self.access_key_secret is not None
+        return (
+            self.access_key_id is not None
+            and self.access_key_secret is not None
+            and len(self.access_key_id) > 0
+            and len(self.access_key_secret) > 0
+        )
 
 
 class NodeEnhancementConfig(BaseModel):

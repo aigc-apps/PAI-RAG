@@ -60,6 +60,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             max_tokens=llm_config.max_tokens,
             reuse_client=False,
+            timeout=120,
         )
     elif isinstance(llm_config, PaiEasLlmConfig):
         logger.info(
@@ -79,6 +80,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             is_chat_model=True,
             max_tokens=llm_config.max_tokens,
             reuse_client=False,
+            timeout=120,
         )
     elif isinstance(llm_config, OpenAICompatibleLlmConfig):
         api_base = _make_openai_compatible_base_url(llm_config.base_url)
@@ -100,6 +102,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             max_tokens=llm_config.max_tokens,
             reuse_client=False,
+            timeout=120,
         )
     else:
         raise ValueError(f"Unknown LLM source: '{llm_config}'")

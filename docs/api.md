@@ -9,7 +9,7 @@ It supports uploading local files through API and supports specifying different 
 - upload_data
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
+curl -X 'POST' http://localhost:8680/api/v1/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
@@ -17,7 +17,7 @@ curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multip
 - get_upload_state
 
 ```bash
-curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+curl 'http://localhost:8680/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
 
 # Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
 ```
@@ -30,23 +30,23 @@ curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194
   - /query: (default) RAG (retrieval + llm)
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
 ```bash
 # streaming output
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?", "stream":true}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?", "stream":true}'
 ```
 
 ```bash
 # with intent
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What's the time", "with_intent":true}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What's the time", "with_intent":true}'
 ```
 
 - Multi-round dialogue
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
 > Parameters: session_id
@@ -54,7 +54,7 @@ curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/
 > The unique identifier of the conversation history session. After the session_id is passed in, the conversation history will be recorded. Calling the large model will automatically carry the stored conversation history.
 >
 > ```bash
-> curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+> curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
 > ```
 
 > Parameters: chat_history
