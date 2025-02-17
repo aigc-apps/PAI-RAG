@@ -55,7 +55,7 @@ CPU版本镜像配置：
   "containers": [
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-nginx",
-      "port": 8000,
+      "port": 8680,
       "script": "/docker-entrypoint.sh nginx"
     },
     {
@@ -79,7 +79,7 @@ GPU版本镜像配置：
   "containers": [
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-nginx",
-      "port": 8000,
+      "port": 8680,
       "script": "/docker-entrypoint.sh nginx"
     },
     {

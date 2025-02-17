@@ -52,6 +52,6 @@ services:
     volumes:
       - ./nginx/default.conf.compose:/etc/nginx/conf.d/default.conf
     ports:
-      - "8000:8000"
+      - "8680:8680"
     entrypoint: ["/docker-entrypoint.sh", "nginx"]
     restart: always
