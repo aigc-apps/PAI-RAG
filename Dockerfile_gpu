@@ -25,9 +25,10 @@ ENV VIRTUAL_ENV=/app/.venv \
     ENABLE_FASTAPI=false \
     ENABLE_REQUESTS=false \
     ENABLE_AIOHTTPCLIENT=false \
-    ENABLE_HTTPX=false
+    ENABLE_HTTPX=false \
+    LD_LIBRARY_PATH=/usr/local/lib
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus
+RUN apt-get update && apt-get install -y wget libgl1 libglib2.0-0 libgomp1 curl libgdiplus
 
 RUN wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz && \
     tar -xzvf openssl-1.1.1w.tar.gz && \
