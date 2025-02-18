@@ -1,8 +1,5 @@
 # init trace
 import os
-if os.getenv("ARMS_LICENSE_KEY"):
-    from aliyun.opentelemetry.instrumentation.auto_instrumentation import sitecustomize
-
 import click
 import uvicorn
 from fastapi import FastAPI
