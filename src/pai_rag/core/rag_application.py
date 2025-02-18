@@ -140,7 +140,7 @@ def _make_chat_completion_response(session_id, response):
     )
 
 
-async def _make_chat_completion_response_with_text(session_id, text):
+def _make_chat_completion_response_with_text(session_id, text):
     logger.info(f"Finished response: {text}")
     return ChatCompletion(
         id=session_id,
@@ -253,7 +253,7 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
                     role=MessageRole.ASSISTANT.value,
                     content=text,
                 ),
-                finish_reason=None,
+                finish_reason="stop",
             )
         ],
         object="chat.completion.chunk",
@@ -342,24 +342,74 @@ class RagApplication:
         self,
         chat_request: ChatCompletionRequest,
     ):
-        if len(chat_request.messages) == 0:
-            raise Exception("消息列表为空.")
         session_id = uuid_generator()
 
-        guardrail = resolve_llm_guardrail(self.config)
-        passed_guardrail = False if guardrail is not None else True
+        if len(chat_request.messages) == 0:
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response_with_text(
+                    session_id, "看起来你问了一个空问题，请问有什么能帮忙的吗？"
+                )
+            else:
+                return _make_chat_completion_response_with_text(
+                    session_id, "看起来你问了一个空问题，请问有什么能帮忙的吗？"
+                )
 
-        messages = chat_request.messages
-        system_prompt = None
-        if messages[0].role == MessageRole.SYSTEM:
-            system_prompt = messages[0].content
-            messages = messages[1:]
+        try:
+            guardrail = resolve_llm_guardrail(self.config)
+            passed_guardrail = False if guardrail is not None else True
 
-        if not passed_guardrail:
-            user_messages = [msg for msg in messages if msg.role == MessageRole.USER]
-            # 只有一条对话，直接检查
-            if len(user_messages) == 1:
-                guardrail_result = await guardrail.acheck(user_messages[0].content)
+            messages = chat_request.messages
+            system_prompt = None
+            if messages[0].role == MessageRole.SYSTEM:
+                system_prompt = messages[0].content
+                messages = messages[1:]
+
+            if not passed_guardrail:
+                user_messages = [
+                    msg for msg in messages if msg.role == MessageRole.USER
+                ]
+                # 只有一条对话，直接检查
+                if len(user_messages) == 1:
+                    guardrail_result = await guardrail.acheck(user_messages[0].content)
+                    if guardrail_result.reject:
+                        if chat_request.stream:
+                            return _make_chat_completion_chunk_response_with_text(
+                                session_id, guardrail_result.advice
+                            )
+                        else:
+                            return _make_chat_completion_response_with_text(
+                                session_id, guardrail_result.advice
+                            )
+                    passed_guardrail = True
+
+            if self.config.system.default_web_search:
+                chat_request.search_web = True
+            session_config = self.config.model_copy()
+            index_entry = index_manager.get_index_by_name(chat_request.index_name)
+            session_config.embedding = index_entry.embedding_config
+            session_config.index.vector_store = index_entry.vector_store_config
+
+            question = messages[-1].content
+            chat_history = []
+            for msg in messages[:-1]:
+                if msg.role == MessageRole.USER:
+                    role = "user"
+                else:
+                    role = "bot"
+                chat_history.append({role: msg.content})
+
+            if not question:
+                return RagResponse(answer="请输入您的消息.", session_id=session_id)
+
+            openai_query_transform = resolve_openai_query_transform(session_config)
+            new_query_bundle = await openai_query_transform.arun(
+                chat_messages=messages,
+            )
+
+            new_question = new_query_bundle.query_str
+            if not passed_guardrail:
+                # 多轮对话，用新查询检查
+                guardrail_result = await guardrail.acheck(new_question)
                 if guardrail_result.reject:
                     if chat_request.stream:
                         return _make_chat_completion_chunk_response_with_text(
@@ -371,73 +421,50 @@ class RagApplication:
                         )
                 passed_guardrail = True
 
-        if self.config.system.default_web_search:
-            chat_request.search_web = True
-        session_config = self.config.model_copy()
-        index_entry = index_manager.get_index_by_name(chat_request.index_name)
-        session_config.embedding = index_entry.embedding_config
-        session_config.index.vector_store = index_entry.vector_store_config
+            logger.info(f"Querying with question '{new_question}'.")
+            messages[-1].content = ",".join([question, new_question])
 
-        question = messages[-1].content
-        chat_history = []
-        for msg in messages[:-1]:
-            if msg.role == MessageRole.USER:
-                role = "user"
-            else:
-                role = "bot"
-            chat_history.append({role: msg.content})
+            query_bundle = PaiQueryBundle(
+                query_str=new_question,
+                stream=chat_request.stream,
+                citation=chat_request.citation,
+                need_web_search=new_query_bundle.need_web_search,
+                chat_messages_str=messages_to_history_str(messages=messages[-8:]),
+            )
 
-        if not question:
-            return RagResponse(answer="请输入您的消息.", session_id=session_id)
+            if chat_request.force_no_search:
+                chat_request.search_web = True
+                query_bundle.need_web_search = False
+            elif chat_request.force_search_web:
+                chat_request.search_web = True
+                query_bundle.need_web_search = True
+            elif chat_request.force_search_knowledgebase:
+                chat_request.search_web = False
 
-        openai_query_transform = resolve_openai_query_transform(session_config)
-        new_query_bundle = await openai_query_transform.arun(
-            chat_messages=messages,
-        )
+            if chat_request.search_web:
+                search_engine = resolve_searcher(session_config)
+                if not search_engine:
+                    raise ValueError(
+                        "AI search config is not valid. Please check your search api configuration."
+                    )
 
-        new_question = new_query_bundle.query_str
-        if not passed_guardrail:
-            # 多轮对话，用新查询检查
-            guardrail_result = await guardrail.acheck(new_question)
-            if guardrail_result.reject:
+                response = await search_engine.aquery(
+                    query_bundle,
+                    system_role_str=system_prompt,
+                    prompt_template_str=" " if system_prompt else None,
+                )
                 if chat_request.stream:
-                    return _make_chat_completion_chunk_response_with_text(
-                        session_id, guardrail_result.advice
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response=response,
                     )
                 else:
-                    return _make_chat_completion_response_with_text(
-                        session_id, guardrail_result.advice
+                    return _make_chat_completion_response(
+                        session_id=session_id, response=response
                     )
-            passed_guardrail = True
 
-        logger.info(f"Querying with question '{new_question}'.")
-        messages[-1].content = ",".join([question, new_question])
-
-        query_bundle = PaiQueryBundle(
-            query_str=new_question,
-            stream=chat_request.stream,
-            citation=chat_request.citation,
-            need_web_search=new_query_bundle.need_web_search,
-            chat_messages_str=messages_to_history_str(messages=messages[-8:]),
-        )
-
-        if chat_request.force_no_search:
-            chat_request.search_web = True
-            query_bundle.need_web_search = False
-        elif chat_request.force_search_web:
-            chat_request.search_web = True
-            query_bundle.need_web_search = True
-        elif chat_request.force_search_knowledgebase:
-            chat_request.search_web = False
-
-        if chat_request.search_web:
-            search_engine = resolve_searcher(session_config)
-            if not search_engine:
-                raise ValueError(
-                    "AI search config is not valid. Please check your search api configuration."
-                )
-
-            response = await search_engine.aquery(
+            query_engine = resolve_query_engine(session_config)
+            response = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
                 prompt_template_str=" " if system_prompt else None,
@@ -451,22 +478,16 @@ class RagApplication:
                 return _make_chat_completion_response(
                     session_id=session_id, response=response
                 )
-
-        query_engine = resolve_query_engine(session_config)
-        response = await query_engine.aquery(
-            query_bundle,
-            system_role_str=system_prompt,
-            prompt_template_str=" " if system_prompt else None,
-        )
-        if chat_request.stream:
-            return _make_chat_completion_chunk_response(
-                session_id=session_id,
-                response=response,
-            )
-        else:
-            return _make_chat_completion_response(
-                session_id=session_id, response=response
-            )
+        except Exception as e:
+            logger.error(f"Error while processing request: {e}")
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response_with_text(
+                    session_id, "抱歉，系统错误，暂时无法处理这个请求。"
+                )
+            else:
+                return _make_chat_completion_response_with_text(
+                    session_id, "抱歉，系统错误，暂时无法处理这个请求。"
+                )
 
     async def aquery(
         self,
