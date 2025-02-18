@@ -1,4 +1,3 @@
-# init trace
 import os
 import click
 import uvicorn
