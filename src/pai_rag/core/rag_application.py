@@ -353,6 +353,20 @@ class RagApplication:
                     session_id, DEFAULT_EMPTY_RESPONSE
                 )
 
+        if (
+            len(chat_request.messages) == 0
+            or chat_request.messages[-1].content is None
+            or chat_request.messages[-1].content == ""
+        ):
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
+                )
+            else:
+                return _make_chat_completion_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
+                )
+
         try:
             guardrail = resolve_llm_guardrail(self.config)
             passed_guardrail = False if guardrail is not None else True
@@ -383,27 +397,18 @@ class RagApplication:
 
             if self.config.system.default_web_search:
                 chat_request.search_web = True
-            session_config = self.config.model_copy()
-            index_entry = index_manager.get_index_by_name(chat_request.index_name)
-            session_config.embedding = index_entry.embedding_config
-            session_config.index.vector_store = index_entry.vector_store_config
 
             question = messages[-1].content
-            chat_history = []
-            for msg in messages[:-1]:
-                if msg.role == MessageRole.USER:
-                    role = "user"
-                else:
-                    role = "bot"
-                chat_history.append({role: msg.content})
 
-            if not question:
-                return RagResponse(answer="请输入您的消息.", session_id=session_id)
-
-            openai_query_transform = resolve_openai_query_transform(session_config)
-            new_query_bundle = await openai_query_transform.arun(
-                chat_messages=messages,
-            )
+            openai_query_transform = resolve_openai_query_transform(self.config)
+            if openai_query_transform is not None:
+                new_query_bundle = await openai_query_transform.arun(
+                    chat_messages=messages,
+                )
+            else:
+                new_query_bundle = PaiQueryBundle(
+                    query_str=question, need_web_search=chat_request.search_web
+                )
 
             new_question = new_query_bundle.query_str
             if not passed_guardrail:
@@ -421,7 +426,8 @@ class RagApplication:
                 passed_guardrail = True
 
             logger.info(f"Querying with question '{new_question}'.")
-            messages[-1].content = ",".join([question, new_question])
+            if new_question != question:
+                messages[-1].content = ",".join([question, new_question])
 
             query_bundle = PaiQueryBundle(
                 query_str=new_question,
@@ -441,7 +447,7 @@ class RagApplication:
                 chat_request.search_web = False
 
             if chat_request.search_web:
-                search_engine = resolve_searcher(session_config)
+                search_engine = resolve_searcher(self.config)
                 if not search_engine:
                     raise ValueError(
                         "AI search config is not valid. Please check your search api configuration."
@@ -462,6 +468,10 @@ class RagApplication:
                         session_id=session_id, response=response
                     )
 
+            session_config = self.config.model_copy()
+            index_entry = index_manager.get_index_by_name(chat_request.index_name)
+            session_config.embedding = index_entry.embedding_config
+            session_config.index.vector_store = index_entry.vector_store_config
             query_engine = resolve_query_engine(session_config)
             response = await query_engine.aquery(
                 query_bundle,

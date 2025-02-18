@@ -193,7 +193,10 @@ def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
-    llm = resolve_llm(config)
+    if not config.query_rewrite.enabled:
+        return None
+
+    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
     openai_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
     return openai_query_transform
 

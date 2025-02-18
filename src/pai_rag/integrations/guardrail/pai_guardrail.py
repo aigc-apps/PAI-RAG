@@ -4,6 +4,7 @@ from alibabacloud_green20220302.client import Client
 from alibabacloud_green20220302 import models
 from alibabacloud_tea_openapi.models import Config
 import json
+import time
 from loguru import logger
 
 
@@ -39,6 +40,8 @@ class PaiLlmGuardrail:
         self.client = Client(aliyun_config)
 
     async def acheck(self, text):
+        start = time.time()
+
         serviceParameters = {"content": text}
 
         textModerationPlusRequest = models.TextModerationPlusRequest(
@@ -52,7 +55,6 @@ class PaiLlmGuardrail:
                 textModerationPlusRequest
             )
             if response.status_code == 200 and response.body.code == 200:
-                logger.info(f"Check text {text} api returned. response:{response}")
                 # 调用成功
                 risk_level = response.body.data.risk_level
                 reject = False
@@ -77,13 +79,13 @@ class PaiLlmGuardrail:
                     advice=advice,
                 )
 
-                logger.info(f"Check text {text} success. result:{result}")
+                logger.info(
+                    f"Check text {text} success. result:{result}. Elaspsed: {time.time() - start} seconds."
+                )
                 return result
             else:
-                logger.error(
-                    "Check text response failed. status:{} ,result:{}".format(
-                        response.status_code, response
-                    )
+                logger.info(
+                    f"Check text response failed. status:{response.status_code} ,result:{response}, Elaspsed: {time.time() - start} seconds."
                 )
                 return TextCheckResult(
                     reject=False,
@@ -92,10 +94,12 @@ class PaiLlmGuardrail:
                     advice="internal error",
                 )
         except Exception as err:
-            logger.error(f"Unhandled error: check text failed due to {err}")
+            logger.info(
+                f"Unhandled error: check text failed due to {err}. Elaspsed: {time.time() - start} seconds."
+            )
             return TextCheckResult(
                 reject=False,
-                reason="request failed",
-                risk_level="unknown",
-                advice="internal error",
+                reason="Check text failed.",
+                risk_level="low",
+                advice="",
             )
