@@ -21,15 +21,7 @@ FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
-ENV VIRTUAL_ENV=/app/.venv \
-    PATH="/app/.venv/bin:$PATH" \
-    ENABLE_FASTAPI=false \
-    ENABLE_REQUESTS=false \
-    ENABLE_AIOHTTPCLIENT=false \
-    ENABLE_HTTPX=false \
-    LD_LIBRARY_PATH=/usr/local/lib
-
-RUN apt-get update && apt-get install -y wget libgl1 libglib2.0-0 libgomp1 curl libgdiplus
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential
 
 RUN wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz && \
     tar -xzvf openssl-1.1.1w.tar.gz && \
@@ -37,6 +29,14 @@ RUN wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/ope
     ./config && \
     make && \
     make install
+
+ENV VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH" \
+    ENABLE_FASTAPI=false \
+    ENABLE_REQUESTS=false \
+    ENABLE_AIOHTTPCLIENT=false \
+    ENABLE_HTTPX=false \
+    LD_LIBRARY_PATH=/user/local/lib
 
 RUN rm -rf openssl-1.1.1w.tar.gz openssl-1.1.1w
 
