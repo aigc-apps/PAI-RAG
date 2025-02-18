@@ -84,7 +84,9 @@ def create_agent_tab() -> Dict[str, Any]:
 
         with gr.Column(scale=6):
             _ = gr.Markdown(value="**Agentic RAG Chatbot Test**")
-            agent_chatbot = gr.Chatbot(height=500, elem_id="agent_chatbot")
+            agent_chatbot = gr.Chatbot(
+                height=500, elem_id="agent_chatbot", type="messages"
+            )
             agent_question = gr.Textbox(
                 label="Enter your question.", elem_id="agent_question"
             )

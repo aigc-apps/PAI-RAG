@@ -10,7 +10,7 @@ import markdown
 import html
 from loguru import logger
 from pai_rag.app.api.models import RagQuery, RagResponse, RetrievalQuery
-from pai_rag.app.web.rag_client import RagApiError
+from pai_rag.app.web.rag_client import RagApiError, dotdict
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -50,7 +50,7 @@ DEFAULT_LOCAL_URL = "http://127.0.0.1:8680/"
 
 
 class RagLocalClient:
-    def _format_rag_response(self, response, stream: bool = False):
+    def _format_rag_response(self, response):
         text = response["delta"]
         docs = response.get("docs", []) or []
         is_finished = response.get("is_finished", True)
@@ -131,11 +131,10 @@ class RagLocalClient:
 
         response["delta"] = formatted_answer
 
-        return response
+        return dotdict(response)
 
     async def query(
         self,
-        text: str,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
         citation: bool = False,
@@ -144,8 +143,8 @@ class RagLocalClient:
         search_web: bool = False,
     ):
         query = RagQuery(
-            question=text,
-            chat_history=_create_chat_history_from_messages(chat_messages),
+            question=chat_messages[-1]["content"],
+            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
             stream=stream,
             citation=citation,
             with_intent=with_intent,
@@ -156,10 +155,21 @@ class RagLocalClient:
         try:
             response = await rag_service.aquery_v1(query)
             if isinstance(response, RagResponse):
-                yield self._format_rag_response(response, stream=stream)
+                result = {
+                    "delta": response.answer,
+                    "docs": response.docs,
+                }
+                yield self._format_rag_response(result)
             else:
                 async for r in response:
-                    yield self._format_rag_response(r, stream=stream)
+                    if r.startswith("data: "):
+                        chunk = json.loads(r[6:])
+                        result = {
+                            "delta": chunk["delta"],
+                            "docs": chunk.get("docs"),
+                            "is_finished": chunk.get("is_finished", False),
+                        }
+                        yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
@@ -170,30 +180,40 @@ class RagLocalClient:
         stream: bool = False,
     ):
         query = RagQuery(
-            question=text,
-            chat_history=_create_chat_history_from_messages(chat_messages),
+            question=chat_messages[-1]["content"],
+            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
             stream=stream,
         )
 
         try:
             response = await rag_service.aquery_data_analysis_v1(query)
             if isinstance(response, RagResponse):
-                yield self._format_rag_response(response, stream=stream)
+                result = {
+                    "delta": response.answer,
+                    "docs": response.docs,
+                }
+                yield self._format_rag_response(result)
             else:
                 async for r in response:
-                    yield self._format_rag_response(r, stream=stream)
+                    if r.startswith("data: "):
+                        chunk = json.loads(r[6:])
+                        result = {
+                            "delta": chunk["delta"],
+                            "docs": chunk.get("docs"),
+                            "is_finished": chunk.get("is_finished", False),
+                        }
+                        yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
     async def query_llm(
         self,
-        text: str,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
     ):
         query = RagQuery(
-            question=text,
-            chat_history=_create_chat_history_from_messages(chat_messages),
+            question=chat_messages[-1]["content"],
+            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
             stream=stream,
         )
 
@@ -204,18 +224,17 @@ class RagLocalClient:
                     "delta": response.answer,
                     "docs": response.docs,
                 }
-                yield self._format_rag_response(result, stream=stream)
+                yield self._format_rag_response(result)
             else:
                 async for r in response:
-                    if r.starts_with("data:"):
-                        chunk = json.loads(r[5:])
+                    if r.startswith("data: "):
+                        chunk = json.loads(r[6:])
                         result = {
                             "delta": chunk["delta"],
                             "docs": chunk.get("docs"),
                             "is_finished": chunk.get("is_finished", False),
                         }
-
-                    yield self._format_rag_response(result, stream=stream)
+                        yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
@@ -263,7 +282,7 @@ class RagLocalClient:
                     "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
                 )
                 result["delta"] = formatted_text
-            yield result
+            yield dotdict(result)
 
         except Exception as error:
             raise RagApiError(code=500, msg=str(error))
@@ -425,7 +444,7 @@ class RagLocalClient:
                 msg=f"list index failed. {e}",
             )
 
-    async def add_index(self, index_entry: RagIndexEntry):
+    def add_index(self, index_entry: RagIndexEntry):
         try:
             index_manager.add_index(index_entry=index_entry)
         except Exception as e:

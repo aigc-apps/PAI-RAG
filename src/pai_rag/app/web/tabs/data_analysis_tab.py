@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 import datetime
-from pai_rag.app.web.rag_client import rag_client, RagApiError
+from pai_rag.app.web.rag_local_client import rag_client, RagApiError
 from pai_rag.app.web.ui_constants import (
     NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,

@@ -2,14 +2,14 @@ import os
 from typing import Dict, Any
 import gradio as gr
 import time
-from pai_rag.app.web.rag_client import RagApiError, rag_client
+from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 
 IGNORE_FILE_LIST = [".DS_Store"]
 
 
-def upload_oss_knowledge(
+async def upload_oss_knowledge(
     oss_path,
     chunk_size,
     chunk_overlap,
@@ -26,7 +26,7 @@ def upload_oss_knowledge(
             ),
         ]
 
-    for state_info in upload_knowledge(
+    async for state_info in upload_knowledge(
         upload_files=[],
         oss_path=oss_path,
         chunk_size=chunk_size,
@@ -39,7 +39,7 @@ def upload_oss_knowledge(
         yield state_info
 
 
-def upload_files(
+async def upload_files(
     upload_files,
     chunk_size,
     chunk_overlap,
@@ -56,7 +56,7 @@ def upload_files(
             ),
         ]
 
-    for state_info in upload_knowledge(
+    async for state_info in upload_knowledge(
         upload_files=upload_files,
         oss_path=None,
         chunk_size=chunk_size,
@@ -68,7 +68,7 @@ def upload_files(
         yield state_info
 
 
-def upload_knowledge(
+async def upload_knowledge(
     upload_files,
     oss_path,
     chunk_size,
@@ -91,14 +91,14 @@ def upload_knowledge(
 
     my_upload_files = []
     if from_oss:
-        response = rag_client.add_knowledge(
+        response = await rag_client.add_knowledge(
             oss_path=oss_path,
             index_name=index_name,
             enable_multimodal=enable_multimodal,
         )
         my_upload_files.append(MyUploadFile(oss_path, response["task_id"]))
     else:
-        response = rag_client.add_knowledge(
+        response = await rag_client.add_knowledge(
             input_files=[file.name for file in upload_files],
             index_name=index_name,
             enable_multimodal=enable_multimodal,

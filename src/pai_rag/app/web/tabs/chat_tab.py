@@ -64,8 +64,7 @@ async def respond(input_elements: List[Any]):
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
-                question,
-                chat_messages=chatbot,
+                chat_messages=chatbot[:-1],
                 stream=is_streaming,
             )
         elif query_type == "Retrieval":
@@ -73,16 +72,14 @@ async def respond(input_elements: List[Any]):
 
         elif query_type == "Chat（Web Search）":
             response_gen = rag_client.query(
-                question,
-                chat_messages=chatbot,
+                chat_messages=chatbot[:-1],
                 stream=is_streaming,
                 citation=citation,
                 search_web=True,
             )
         else:
             response_gen = rag_client.query(
-                question,
-                chat_messages=chatbot,
+                chat_messages=chatbot[:-1],
                 stream=is_streaming,
                 citation=citation,
                 index_name=index_name,

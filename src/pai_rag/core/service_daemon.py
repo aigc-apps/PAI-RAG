@@ -9,7 +9,7 @@ CHECK_INTERVAL = 30
 
 
 async def periodic_check_config():
-    logger.debug("Running periodic_usage_pool_cleanup")
+    logger.debug("Running periodic_check_config")
     try:
         while True:
             index_manager.check_updates()

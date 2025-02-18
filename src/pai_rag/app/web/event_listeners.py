@@ -24,6 +24,7 @@ def add_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.add_index(index_entry)
     index_map = get_index_map()
+    print(index_map)
     logger.info(f"Add index {index_entry.index_name} successfully")
     return [
         gr.update(
