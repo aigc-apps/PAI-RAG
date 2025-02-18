@@ -103,6 +103,7 @@ dashvector = "^1.0.18"
 dashtext = "^0.0.7"
 alibabacloud-iqs20241111 = "1.1.3"
 alibabacloud-green20220302 = "^2.2.8"
+opentelemetry-api = "1.29.0"
 
 [tool.poetry.scripts]
 pai_rag = "pai_rag.main:run"
