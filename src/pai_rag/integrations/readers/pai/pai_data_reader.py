@@ -25,7 +25,7 @@ ACCEPTABLE_DOC_TYPES = set(
     [
         ".html",
         ".htm",
-        "txt",
+        ".txt",
         ".docx",
         ".pdf",
         ".pptx",
@@ -36,7 +36,7 @@ ACCEPTABLE_DOC_TYPES = set(
         ".xlsx",
         ".jpg",
         ".jpeg",
-        "png",
+        ".png",
     ]
 )
 
