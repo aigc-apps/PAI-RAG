@@ -70,7 +70,12 @@ class StructuredNodeParser(BaseModel):
         self, node, doc_node, ref_doc, nodes_list, chunk_images_list
     ) -> str:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
-        if node.category == "image" and self.enable_multimodal:
+        if (
+            node.category == "image"
+            and self.enable_multimodal
+            and node.content
+            and node.content != "None"
+        ):
             image_node = ImageNode(
                 embedding=doc_node.embedding,
                 image_url=node.content,
@@ -231,7 +236,12 @@ class StructuredNodeParser(BaseModel):
             else:
                 chunk_text = ""
                 for child in node_group:
-                    if child.category == "image" and self.enable_multimodal:
+                    if (
+                        child.category == "image"
+                        and self.enable_multimodal
+                        and node.content
+                        and node.content != "None"
+                    ):
                         image_node = ImageNode(
                             embedding=doc_node.embedding,
                             image_url=child.content,
