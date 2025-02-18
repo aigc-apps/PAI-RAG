@@ -14,6 +14,7 @@ from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
 
+import time
 
 DEFAULT_LANG = "zh-CN"
 DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
@@ -118,9 +119,12 @@ class AliyunSearchTool(BaseQueryEngine):
                 prompt_template_str=prompt_template_str,
             )
 
-        logger.info(f"Aliyun Search with query {query.query_str,}.")
+        start = time.time()
+        logger.info(f"Aliyun Search with query {query.query_str}.")
         nodes = await self._asearch(query=query.query_str)
-        logger.info(f"Get {len(nodes)} docs from url.")
+        logger.info(
+            f"[WebSearch]-Aliyun: Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
+        )
 
         return await self.synthesizer.asynthesize(
             query=query,

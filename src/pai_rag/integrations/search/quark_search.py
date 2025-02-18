@@ -110,6 +110,7 @@ class QuarkSearchTool(BaseQueryEngine):
         system_role_str: Optional[str] = None,
         prompt_template_str: Optional[str] = None,
     ):
+        start = time.time()
         if not query.need_web_search:
             no_search_query = PaiQueryBundle(
                 query_str=query.query_str,
@@ -124,9 +125,11 @@ class QuarkSearchTool(BaseQueryEngine):
                 prompt_template_str=prompt_template_str,
             )
 
-        logger.info(f"Quark Search with query {query.query_str,}.")
+        logger.info(f"Quark Search with query {query.query_str}.")
         nodes = await self.asearch(query=query.query_str)
-        logger.info(f"Get {len(nodes)} docs from url.")
+        logger.info(
+            f"[WebSearch]-Quark: Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
+        )
 
         return await self.synthesizer.asynthesize(
             query=query,
