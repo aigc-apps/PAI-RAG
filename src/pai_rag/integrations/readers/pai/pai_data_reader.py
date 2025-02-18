@@ -21,6 +21,25 @@ from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 
+ACCEPTABLE_DOC_TYPES = set(
+    [
+        ".html",
+        ".htm",
+        "txt",
+        ".docx",
+        ".pdf",
+        ".pptx",
+        ".md",
+        ".xls",
+        ".jsonl",
+        ".csv",
+        ".xlsx",
+        ".jpg",
+        ".jpeg",
+        "png",
+    ]
+)
+
 
 class BaseDataReaderConfig(BaseModel):
     concat_csv_rows: bool = False
@@ -79,7 +98,10 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
         if not os.path.exists(oss_file_path_dir):
             os.makedirs(oss_file_path_dir)
         for oss_obj in object_list:
-            if not oss_obj.key.endswith("/"):  # 不是目录
+            if (
+                not oss_obj.key.endswith("/")
+                and pathlib.Path(oss_obj.key).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            ):  # 不是目录
                 logger.info(f"Downloading oss object: {oss_obj.key}")
                 try:
                     set_public = oss_store.put_object_acl(oss_obj.key, "public-read")
@@ -125,14 +147,24 @@ def get_input_files(
 
     if isinstance(file_path_or_directory, list):
         # file list
-        input_files = [f for f in file_path_or_directory if os.path.isfile(f)]
+        input_files = [
+            f
+            for f in file_path_or_directory
+            if os.path.isfile(f)
+            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+        ]
     elif isinstance(file_path_or_directory, str) and os.path.isdir(
         file_path_or_directory
     ):
         # glob from directory
         directory = pathlib.Path(file_path_or_directory)
-        input_files = [f for f in directory.rglob(filter_pattern) if os.path.isfile(f)]
-    else:
+        input_files = [
+            f
+            for f in directory.rglob(filter_pattern)
+            if os.path.isfile(f)
+            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+        ]
+    elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
         # Single file
         input_files = [pathlib.Path(file_path_or_directory)]
 
