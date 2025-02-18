@@ -5,13 +5,13 @@ RUN pip3 install poetry
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    PYTHON_AGENT_PATH="https://arms-apm-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/aliyun-python-agent/dev/1.2.0-llama-index-support-0.10.43%2B/aliyun-python-agent.tar.gz"
 
 WORKDIR /app
 COPY . .
 
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
-export PYTHON_AGENT_PATH="https://arms-apm-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/aliyun-python-agent/dev/1.2.0-llama-index-support-0.10.43%2B/aliyun-python-agent.tar.gz"
 RUN poetry run aliyun-bootstrap -a install
 
 FROM python:3.11-slim AS prod
@@ -25,7 +25,7 @@ ENV VIRTUAL_ENV=/app/.venv \
     ENABLE_AIOHTTPCLIENT=false \
     ENABLE_HTTPX=false
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curli libgdiplus libssl
 
 # setup paddleocr dependencies
 RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
