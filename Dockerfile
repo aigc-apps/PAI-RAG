@@ -26,6 +26,19 @@ ENV VIRTUAL_ENV=/app/.venv \
 
 RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus
 
+
+RUN wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz && \
+    tar -xzvf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./config && \
+    make && \
+    make install
+
+
+RUN rm -rf openssl-1.1.1w.tar.gz openssl-1.1.1w
+
+RUN ldconfig
+
 # setup paddleocr dependencies
 RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
  && curl https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar -o /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer/ch_PP-OCRv4_det_infer.tar \
