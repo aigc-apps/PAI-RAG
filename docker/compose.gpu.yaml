@@ -18,6 +18,7 @@ services:
       ENABLE_REQUESTS: false
       ENABLE_AIOHTTPCLIENT: false
       ENABLE_HTTPX: false
+      LD_LIBRARY_PATH: /usr/local/lib
     deploy:
       resources:
         reservations:
