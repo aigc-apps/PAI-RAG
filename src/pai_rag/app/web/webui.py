@@ -4,7 +4,7 @@ from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
 from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.view_model import ViewModel
-from pai_rag.app.web.rag_client import DEFAULT_LOCAL_URL, rag_client
+from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.upload_tab import create_upload_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
@@ -19,20 +19,9 @@ from pai_rag.app.web.ui_constants import (
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 
-from loguru import logger
-
 
 def resume_ui():
     outputs = {}
-
-    if not rag_client.check_health():
-        gr.Warning(
-            "RAG service is not ready. Please check the service status and refresh later."
-        )
-        elems = elem_manager.get_elem_list()
-        outputs = {elem: gr.update() for elem in elems}
-        return outputs
-
     rag_config = rag_client.get_config()
     view_model = ViewModel.from_app_config(rag_config)
     index_map = get_index_map()
@@ -129,10 +118,7 @@ def make_homepage():
     return homepage
 
 
-def configure_webapp(app: FastAPI, rag_url=DEFAULT_LOCAL_URL) -> gr.Blocks:
-    rag_client.set_endpoint(rag_url)
-
+def configure_webapp(app: FastAPI) -> gr.Blocks:
     home = make_homepage()
-    logger.info(f"web_url: {rag_url}")
     gr.mount_gradio_app(app, home, path="/")
     return

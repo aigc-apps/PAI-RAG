@@ -1,9 +1,9 @@
 from typing import Dict, Any
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_local_client import rag_client
 import gradio as gr
 
 
-def respond(
+async def respond(
     intent_description,
     agent_api_definition,
     agent_function_definition,
@@ -22,7 +22,9 @@ def respond(
 
     rag_client.patch_config(update_dict)
 
-    response_gen = rag_client.query(agent_question, with_intent=True, stream=False)
+    response_gen = await rag_client.query(
+        agent_question, with_intent=True, stream=False
+    )
     content = ""
     agent_chatbot.append((agent_question, content))
     yield agent_chatbot

@@ -1,11 +1,10 @@
 from typing import Dict, Any, List
 import gradio as gr
-from pai_rag.app.web.rag_client import RagApiError, rag_client
+from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from loguru import logger
 
 
 def clear_history(chatbot):
-    rag_client.clear_history()
     chatbot = []
     return chatbot, 0
 
@@ -28,7 +27,7 @@ def change_search_model_argument(search_type):
     ]
 
 
-def respond(input_elements: List[Any]):
+async def respond(input_elements: List[Any]):
     update_dict = {}
 
     for element, value in input_elements.items():
@@ -66,30 +65,31 @@ def respond(input_elements: List[Any]):
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
                 question,
-                with_history=update_dict["include_history"],
+                chat_messages=chatbot,
                 stream=is_streaming,
             )
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(question, index_name=index_name)
 
         elif query_type == "Chat（Web Search）":
-            response_gen = rag_client.query_search(
+            response_gen = rag_client.query(
                 question,
-                with_history=update_dict["include_history"],
+                chat_messages=chatbot,
                 stream=is_streaming,
                 citation=citation,
+                search_web=True,
             )
         else:
             response_gen = rag_client.query(
                 question,
-                with_history=update_dict["include_history"],
+                chat_messages=chatbot,
                 stream=is_streaming,
                 citation=citation,
                 index_name=index_name,
             )
 
         is_thinking = False
-        for resp in response_gen:
+        async for resp in response_gen:
             if resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
                 chatbot[-1]["metadata"]["log"] = ""
@@ -155,7 +155,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
-                visible=False,
+                visible=True,
             )
             default_web_search = gr.Checkbox(
                 label="Default search web",

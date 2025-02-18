@@ -51,7 +51,8 @@ class PaiLlmGuardrail:
             response = await self.client.text_moderation_plus_async(
                 textModerationPlusRequest
             )
-            if response.status_code == 200:
+            if response.status_code == 200 and response.body.code == 200:
+                logger.info(f"Check text {text} api returned. response:{response}")
                 # 调用成功
                 risk_level = response.body.data.risk_level
                 reject = False
@@ -79,11 +80,22 @@ class PaiLlmGuardrail:
                 logger.info(f"Check text {text} success. result:{result}")
                 return result
             else:
-                logger.info(
-                    "Check text response not success. status:{} ,result:{}".format(
+                logger.error(
+                    "Check text response failed. status:{} ,result:{}".format(
                         response.status_code, response
                     )
                 )
+                return TextCheckResult(
+                    reject=False,
+                    reason="request failed",
+                    risk_level="unknown",
+                    advice="internal error",
+                )
         except Exception as err:
-            logger.info(f"Unhandled error: check text failed due to {err}")
-            raise err
+            logger.error(f"Unhandled error: check text failed due to {err}")
+            return TextCheckResult(
+                reject=False,
+                reason="request failed",
+                risk_level="unknown",
+                advice="internal error",
+            )

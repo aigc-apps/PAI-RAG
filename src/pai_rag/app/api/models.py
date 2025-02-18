@@ -30,6 +30,7 @@ class ContextDoc(BaseModel):
     text: str  # 文档文本
     score: float  # 文档得分
     metadata: Dict  # 文档元数据
+    image_url: str | None = None  # 图片链接
 
 
 class RetrievalResponse(BaseModel):

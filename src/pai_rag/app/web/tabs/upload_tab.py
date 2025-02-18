@@ -5,7 +5,6 @@ import time
 from pai_rag.app.web.rag_client import RagApiError, rag_client
 from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
-import asyncio
 
 IGNORE_FILE_LIST = [".DS_Store"]
 
@@ -114,9 +113,8 @@ def upload_knowledge(
     while True:
         for file in my_upload_files:
             try:
-                response = asyncio.run(
-                    rag_client.get_knowledge_state(str(file.task_id))
-                )
+                response = rag_client.get_knowledge_state(str(file.task_id))
+
             except RagApiError as api_error:
                 raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
