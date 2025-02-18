@@ -51,7 +51,7 @@ class PaiLlmGuardrail:
             response = await self.client.text_moderation_plus_async(
                 textModerationPlusRequest
             )
-            if response.status_code == 200:
+            if response.status_code == 200 and response.body.code == 200:
                 # 调用成功
                 risk_level = response.body.data.risk_level
                 reject = False
@@ -84,6 +84,17 @@ class PaiLlmGuardrail:
                         response.status_code, response
                     )
                 )
+                return TextCheckResult(
+                    reject=False,
+                    reason="Check text failed.",
+                    risk_level="low",
+                    advice="",
+                )
         except Exception as err:
             logger.info(f"Unhandled error: check text failed due to {err}")
-            raise err
+            return TextCheckResult(
+                reject=False,
+                reason="Check text failed.",
+                risk_level="low",
+                advice="",
+            )
