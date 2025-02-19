@@ -85,7 +85,7 @@ class BirdEvaluator(SQLEvaluator):
                             "enable_db_embedding", False
                         ),
                         max_col_num=analysis_config.get("max_col_num", 100),
-                        max_val_num=analysis_config.get("max_val_num", 10000),
+                        max_val_num=analysis_config.get("max_val_num", 2000),
                         enable_query_preprocessor=analysis_config.get(
                             "enable_query_preprocessor", False
                         ),

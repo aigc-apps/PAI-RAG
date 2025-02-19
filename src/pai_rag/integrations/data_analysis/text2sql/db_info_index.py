@@ -45,6 +45,7 @@ class SchemaIndex(DBInfoIndex):
             vector_store_config=description_vector_store_config,
             embed_model=embed_model,
             similarity_top_k=similarity_top_k,
+            enable_multimodal=False,
         )
 
     def insert_nodes(self, nodes: List[TextNode]):
@@ -66,6 +67,7 @@ class HistoryIndex(DBInfoIndex):
             embed_model=embed_model,
             vector_store_config=history_vector_store_config,
             similarity_top_k=similarity_top_k,
+            enable_multimodal=False,
         )
 
     def insert_nodes(self, nodes: List[TextNode]):
@@ -87,6 +89,7 @@ class ValueIndex(DBInfoIndex):
             vector_store_config=value_vector_store_config,
             embed_model=embed_model,
             similarity_top_k=similarity_top_k,
+            enable_multimodal=False,
         )
 
     def insert_nodes(self, nodes: List[TextNode]):

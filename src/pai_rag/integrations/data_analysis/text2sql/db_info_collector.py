@@ -106,7 +106,7 @@ class SchemaCollector(DBInfoCollector):
             # get table data samples
             data_sample = self._get_data_sample(table_name)
             # get table primary key
-            table_pk_col = self._get_table_primary_key(table_name)
+            table_pks = self._get_table_primary_key(table_name)
             # get foreign keys
             table_fks = self._get_table_foreign_keys(table_name)
             table_foreign_key_list.extend(table_fks)
@@ -125,7 +125,7 @@ class SchemaCollector(DBInfoCollector):
                         "column_name": col["name"],
                         "column_type": str(col["type"]),
                         "column_comment": col.get("comment"),
-                        "primary_key": col["name"] == table_pk_col,
+                        "primary_key": col["name"] in table_pks,
                         "foreign_key": False,
                         "foreign_key_referred_table": None,
                         "column_value_sample": column_value_sample,
@@ -225,16 +225,16 @@ class SchemaCollector(DBInfoCollector):
 
         return converted_table_sample
 
-    def _get_table_primary_key(self, table_name: str) -> str:
-        table_pk = self._sql_database._inspector.get_pk_constraint(
+    def _get_table_primary_key(self, table_name: str) -> List:
+        table_pk_constraint = self._sql_database._inspector.get_pk_constraint(
             table_name, self._sql_database._schema
         )  # get primary key
-        if len(table_pk["constrained_columns"]) > 0:
-            table_pk_col = table_pk["constrained_columns"][0]
-        else:
-            table_pk_col = None
+        # if table_pk_constraint["constrained_columns"]:
+        #     table_pks = table_pk_constraint["constrained_columns"]
+        # else:
+        #     table_pks = None
 
-        return table_pk_col
+        return table_pk_constraint["constrained_columns"]
 
     def _get_table_foreign_keys(self, table_name: str) -> List:
         table_fks = []
@@ -816,7 +816,7 @@ class BirdSchemaCollector(DBInfoCollector):
             # get table data samples
             data_sample = self._get_data_sample(table_name)
             # get table primary key
-            table_pk_col = self._get_table_primary_key(table_name)
+            table_pks = self._get_table_primary_key(table_name)
             # get foreign keys
             table_fks = self._get_table_foreign_keys(table_name)
             table_foreign_key_list.extend(table_fks)
@@ -833,8 +833,8 @@ class BirdSchemaCollector(DBInfoCollector):
                         except Exception as e:
                             logger.error(f"Failed to read {file}: {e}")
                             raise
-                else:
-                    table_desc_df = None
+            else:
+                table_desc_df = None
 
             # get column info
             column_info_list = []
@@ -879,7 +879,7 @@ class BirdSchemaCollector(DBInfoCollector):
                         "column_comment": self._merge_comment_and_desc(
                             col_comment, col.get("comment")
                         ),
-                        "primary_key": col["name"] == table_pk_col,
+                        "primary_key": col["name"] in table_pks,
                         "foreign_key": False,
                         "foreign_key_referred_table": None,
                         "column_value_sample": column_value_sample,
@@ -992,15 +992,11 @@ class BirdSchemaCollector(DBInfoCollector):
         return converted_table_sample
 
     def _get_table_primary_key(self, table_name: str) -> str:
-        table_pk = self._sql_database._inspector.get_pk_constraint(
+        table_pk_constraint = self._sql_database._inspector.get_pk_constraint(
             table_name, self._sql_database._schema
-        )  # get primary key
-        if len(table_pk["constrained_columns"]) > 0:
-            table_pk_col = table_pk["constrained_columns"][0]
-        else:
-            table_pk_col = None
+        )
 
-        return table_pk_col
+        return table_pk_constraint["constrained_columns"]
 
     def _get_table_foreign_keys(self, table_name: str) -> List:
         table_fks = []

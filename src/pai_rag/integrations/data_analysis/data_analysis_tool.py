@@ -72,7 +72,7 @@ def resolve_schema_retriever(
         cls_key="schema_retriever",
         db_name=analysis_config.database,
         embed_model=embed_model,
-        similarity_top_k=5,
+        similarity_top_k=8,
     )
 
 
@@ -84,7 +84,7 @@ def resolve_history_retriever(
         cls_key="history_retriever",
         db_name=analysis_config.database,
         embed_model=embed_model,
-        similarity_top_k=3,
+        similarity_top_k=5,
     )
 
 
@@ -96,7 +96,7 @@ def resolve_value_retriever(
         cls_key="value_retriever",
         db_name=analysis_config.database,
         embed_model=embed_model,
-        similarity_top_k=3,
+        similarity_top_k=5,
     )
 
 
