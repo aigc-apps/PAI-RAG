@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import shutil
@@ -16,8 +17,9 @@ from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap, index_manager
 from pai_rag.core.rag_service import rag_service
-from fastapi import BackgroundTasks
 from datetime import datetime
+import time
+from starlette.concurrency import run_in_threadpool
 
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
@@ -294,27 +296,26 @@ class RagLocalClient:
         enable_raptor: bool = False,
         enable_multimodal: bool = False,
         index_name: str = None,
-        background_tasks: BackgroundTasks = BackgroundTasks(),
     ):
         task_id = uuid.uuid4().hex
         logger.info(
-            f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
+            f"[Upload] Submitting upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
         )
 
         if oss_path:
-            background_tasks.add_task(
-                rag_service.add_knowledge,
-                task_id=task_id,
-                filter_pattern=None,
-                oss_path=oss_path,
-                from_oss=True,
-                index_name=index_name,
-                enable_raptor=enable_raptor,
-                enable_multimodal=enable_multimodal,
+            upload_job = asyncio.create_task(
+                run_in_threadpool(
+                    rag_service.add_knowledge,
+                    task_id=task_id,
+                    filter_pattern=None,
+                    oss_path=oss_path,
+                    from_oss=True,
+                    index_name=index_name,
+                    enable_raptor=enable_raptor,
+                    enable_multimodal=enable_multimodal,
+                )
             )
         else:
-            if not input_files:
-                return {"message": "No upload file sent"}
             tmpdir = f"./localdata/uploaddata/local/{get_ts()}"
             converted_input_file_list = []
             for file in input_files:
@@ -332,19 +333,46 @@ class RagLocalClient:
                         f.close()
                     converted_input_file_list.append(save_file)
 
-            background_tasks.add_task(
-                rag_service.add_knowledge,
-                task_id=task_id,
-                input_files=converted_input_file_list,
-                filter_pattern=None,
-                index_name=index_name,
-                oss_path=None,
-                enable_raptor=enable_raptor,
-                temp_file_dir=tmpdir,
-                enable_multimodal=enable_multimodal,
+            upload_job = asyncio.create_task(
+                run_in_threadpool(
+                    rag_service.add_knowledge,
+                    task_id=task_id,
+                    input_files=converted_input_file_list,
+                    filter_pattern=None,
+                    index_name=index_name,
+                    oss_path=None,
+                    enable_raptor=enable_raptor,
+                    temp_file_dir=tmpdir,
+                    enable_multimodal=enable_multimodal,
+                )
             )
 
-        return {"task_id": task_id}
+        logger.info(
+            f"[Upload] Submitted upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
+        )
+
+        result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
+        start = time.time()
+        while True:
+            status, detail = rag_service.get_task_status(task_id=task_id)
+            duration = time.time() - start
+            logger.info(
+                f"[Upload] task_id: {task_id}, status: {status}, duration: {duration}"
+            )
+            result = {
+                "status": [status],
+                "duration": [duration],
+                "detail": [detail],
+            }
+            yield result
+
+            if status in ["completed", "failed"]:
+                break
+
+            await asyncio.sleep(2)
+
+        await upload_job
+        logger.info(f"[Upload] Finished task_id: {task_id}")
 
     def add_datasheet(
         self,

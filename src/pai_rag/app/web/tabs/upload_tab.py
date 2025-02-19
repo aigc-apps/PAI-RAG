@@ -1,9 +1,6 @@
-import os
 from typing import Dict, Any
 import gradio as gr
-import time
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
-from pai_rag.utils.file_utils import MyUploadFile
 import pandas as pd
 
 IGNORE_FILE_LIST = [".DS_Store"]
@@ -18,7 +15,7 @@ async def upload_oss_knowledge(
     upload_index,
 ):
     if not oss_path:
-        return [
+        yield [
             gr.update(visible=False),
             gr.update(
                 visible=True,
@@ -48,7 +45,7 @@ async def upload_files(
     upload_index,
 ):
     if not upload_files:
-        return [
+        yield [
             gr.update(visible=False),
             gr.update(
                 visible=True,
@@ -89,58 +86,40 @@ async def upload_knowledge(
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
-    my_upload_files = []
     if from_oss:
-        response = await rag_client.add_knowledge(
+        response = rag_client.add_knowledge(
             oss_path=oss_path,
             index_name=index_name,
             enable_multimodal=enable_multimodal,
         )
-        my_upload_files.append(MyUploadFile(oss_path, response["task_id"]))
     else:
-        response = await rag_client.add_knowledge(
-            input_files=[file.name for file in upload_files],
+        input_files = [file.name for file in upload_files]
+        if len(input_files) == 0:
+            return
+        response = rag_client.add_knowledge(
+            input_files=input_files,
             index_name=index_name,
             enable_multimodal=enable_multimodal,
         )
-        for file in upload_files:
-            base_name = os.path.basename(file.name)
-            if base_name not in IGNORE_FILE_LIST:
-                my_upload_files.append(MyUploadFile(base_name, response["task_id"]))
 
-    result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     error_msg = ""
-    while True:
-        for file in my_upload_files:
-            try:
-                response = rag_client.get_knowledge_state(str(file.task_id))
-
-            except RagApiError as api_error:
-                raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-            file.update_state(response["status"])
-            file.update_process_duration()
-            result[file.file_name] = file.__info__()
-            if response["status"] in ["completed", "failed"]:
-                file.is_finished()
-            if response["detail"]:
-                error_msg = response["detail"]
+    async for r in response:
+        error_msg = r.get("detail")[0]
         yield [
-            gr.update(visible=True, value=pd.DataFrame(result)),
-            gr.update(visible=False),
+            gr.update(visible=True, value=pd.DataFrame(r)),
+            gr.update(
+                visible=True,
+                value="",
+            ),
         ]
 
-        if all(file.finished is True for file in my_upload_files):
-            break
-
-        time.sleep(2)
-
     upload_result = "Upload success."
+
     if error_msg:
         upload_result = f"Upload failed: {error_msg}"
 
     yield [
-        gr.update(visible=True, value=pd.DataFrame(result)),
+        gr.update(visible=True, value=pd.DataFrame(r)),
         gr.update(
             visible=True,
             value=upload_result,

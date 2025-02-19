@@ -125,9 +125,6 @@ class RagService:
                 detail = f"{ex}".replace("\t", " ").replace("\n", " ")
                 f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
-        finally:
-            if temp_file_dir:
-                os.rmdir(temp_file_dir)
 
     def get_task_status(self, task_id: str) -> str:
         status = "unknown"
