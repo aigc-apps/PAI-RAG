@@ -1,6 +1,7 @@
 from typing import List
 from pydantic import BaseModel
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
@@ -9,6 +10,27 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
 
 DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
+
+
+class QueryRewriteConfig(BaseModel):
+    enabled: bool = True
+    llm: OpenAICompatibleLlmConfig | None = None
+
+
+class AliyunTextModerationPlusConfig(BaseModel):
+    endpoint: str | None = "green-cip.cn-hangzhou.aliyuncs.com"
+    region: str | None = "cn-hangzhou"
+    access_key_id: str | None = None
+    access_key_secret: str | None = None
+    custom_advice: str | None = None
+
+    def is_enabled(self) -> bool:
+        return (
+            self.access_key_id is not None
+            and self.access_key_secret is not None
+            and len(self.access_key_id) > 0
+            and len(self.access_key_secret) > 0
+        )
 
 
 class NodeEnhancementConfig(BaseModel):

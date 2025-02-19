@@ -7,7 +7,7 @@
 - 上传（upload_data）
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
+curl -X 'POST' http://localhost:8680/api/v1/upload_data -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
 
 # Return: {"task_id": "2c1e557733764fdb9fefa063538914da"}
 ```
@@ -15,7 +15,7 @@ curl -X 'POST' http://localhost:8000/api/v1/upload_data -H 'Content-Type: multip
 - 查看上传状态（get_upload_state）
 
 ```bash
-curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+curl 'http://localhost:8680/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
 
 # Return: {"task_id":"2c1e557733764fdb9fefa063538914da","status":"completed"}
 ```
@@ -25,28 +25,28 @@ curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194
 - Rag Query请求
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
 ```bash
 # 流式输出
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?", "stream":true}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?", "stream":true}'
 ```
 
 ```bash
 # 意图识别
-curl -X 'POST' http://localhost:8000/service/query -H "Content-Type: application/json" -d '{"question":"现在几点了", "with_intent": true}'
+curl -X 'POST' http://localhost:8680/service/query -H "Content-Type: application/json" -d '{"question":"现在几点了", "with_intent": true}'
 ```
 
 - 多轮对话请求
 
 ```bash
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What did the author do growing up?"}'
 ```
 
 ```bash
 # 传入session_id：对话历史会话唯一标识，传入session_id后，将对话历史进行记录，调用大模型将自动携带存储的对话历史。
-curl -X 'POST' http://localhost:8000/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
+curl -X 'POST' http://localhost:8680/api/v1/query -H "Content-Type: application/json" -d '{"question":"What does he program with?", "session_id": "1702ffxxad3xxx6fxxx97daf7c"}'
 ```
 
 ```bash
