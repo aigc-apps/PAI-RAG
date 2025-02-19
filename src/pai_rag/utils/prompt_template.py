@@ -74,7 +74,7 @@ Note: Do not change the meaning of the new question, the answer should be as con
 
 Please think carefully and give your answer using the same language as the <New question>
 
-Example:
+Example 1:
 <Chat history>
 User: What did you do this morning?
 Assistant: Go play basketball
@@ -84,6 +84,17 @@ User: Is it fun?
 
 <Condensed question>
 Is playing basketball fun?
+
+Example 2:
+<Chat history>
+User: What did you do this morning?
+Assistant: Go play basketball
+
+<New question>
+User: 有趣么?
+
+<Condensed question>
+打篮球有趣么?
 
 Now it's your turn:
 <Chat history>

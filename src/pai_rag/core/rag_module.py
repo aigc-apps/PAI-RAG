@@ -29,6 +29,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     PaiCondenseQueryTransform,
     OpenAICompatibleQueryTransform,
+    NL2SQLCondenseQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
@@ -189,6 +190,15 @@ def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
     llm = resolve_llm(config)
     condense_query_transform = resolve(
         PaiCondenseQueryTransform, llm=llm, chat_store=chat_store
+    )
+    return condense_query_transform
+
+
+def resolve_nl2sql_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
+    chat_store = resolve(PaiChatStore, chat_store_config=config.chat_store)
+    llm = resolve_llm(config)
+    condense_query_transform = resolve(
+        NL2SQLCondenseQueryTransform, llm=llm, chat_store=chat_store
     )
     return condense_query_transform
 

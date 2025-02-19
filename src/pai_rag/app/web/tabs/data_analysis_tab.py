@@ -370,6 +370,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     file_types=[".csv"],
                                     elem_id="db_description_file_upload",
                                     scale=6,
+                                    visible=False,  # 初始状态为不可见
                                 )
                                 description_update_state = gr.Textbox(
                                     label="Description upload state",
@@ -509,7 +510,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     label="Chat history",
                     info="Query with chat history.",
                     elem_id="include_history",
-                    value=True,
+                    value=False,
                     scale=1,
                 )
                 question = gr.Textbox(

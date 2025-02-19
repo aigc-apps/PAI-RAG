@@ -13,6 +13,7 @@ from pai_rag.core.rag_module import (
     resolve_query_transform,
     resolve_searcher,
     resolve_openai_query_transform,
+    resolve_nl2sql_query_transform,
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.app.api.models import PaiQueryBundle
@@ -712,15 +713,19 @@ class RagApplication:
         chat_store.add_message(
             session_id, ChatMessage(role=MessageRole.USER, content=query.question)
         )
-        condense_query_transform = resolve_query_transform(session_config)
-        # Condense question
-        new_query_bundle = await condense_query_transform.arun(
-            query_bundle_or_str=query.question,
-            session_id=session_id,
-            chat_history=query.chat_history,
-        )
-        new_question = new_query_bundle.query_str
-        logger.info(f"Querying with question: '{new_question}'.")
+        # check if there is chat history
+        if len(chat_store.get_messages(session_id)) > 1:
+            condense_query_transform = resolve_nl2sql_query_transform(session_config)
+            # Condense question
+            new_query_bundle = await condense_query_transform.arun(
+                query_bundle_or_str=query.question,
+                session_id=session_id,
+                chat_history=query.chat_history,
+            )
+            new_question = new_query_bundle.query_str
+            logger.info(f"Querying with question: '{new_question}'.")
+        else:
+            new_query_bundle = query.question
 
         analysis_query = resolve_data_analysis_query(self.config)
         if not analysis_query:
