@@ -17,6 +17,7 @@ from llama_index.core.readers.file.base import default_file_metadata_func
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
+from functools import partial
 from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
@@ -148,6 +149,10 @@ def get_input_files(
     return input_files, file_metadata_map
 
 
+def get_file_metadata(x, file_metadata_map):
+    return file_metadata_map.get(x, {})
+
+
 class PaiDataReader(BaseReader):
     def __init__(
         self,
@@ -172,14 +177,21 @@ class PaiDataReader(BaseReader):
             filter_pattern=filter_pattern,
             oss_store=self.oss_store,
         )
+
+        file_metadata_func = partial(
+            get_file_metadata, file_metadata_map=file_metadata_map
+        )
         directory_reader = SimpleDirectoryReader(
             input_files=input_files,
             file_extractor=self.file_readers,
-            file_metadata=lambda x: file_metadata_map.get(x, {}),
+            file_metadata=file_metadata_func,
         )
 
         """Load data from the input directory."""
-        return directory_reader.load_data(show_progress=show_progress)
+        documents = directory_reader.load_data(
+            show_progress=show_progress, num_workers=8
+        )
+        return documents
 
     async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:
         """Load data from the input directory."""
