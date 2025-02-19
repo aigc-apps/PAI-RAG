@@ -9,6 +9,8 @@ from loguru import logger
 class CustomMiddleWare(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
+        self.last_log_time = 0
+        self.log_interval = 60  # seconds
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
@@ -17,9 +19,18 @@ class CustomMiddleWare(BaseHTTPMiddleware):
         host = request.client.host
         response.headers["X-Process-Time"] = str(process_time)
         response.headers["X-Client-IP"] = host
-        logger.info(
-            f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
-        )
+
+        if "get_upload_state" in str(request.url):
+            current_time = time.time()
+            if current_time - self.last_log_time >= self.log_interval:
+                logger.info(
+                    f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
+                )
+                self.last_log_time = current_time
+        else:
+            logger.info(
+                f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
+            )
         return response
 
 
