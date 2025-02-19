@@ -184,8 +184,10 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
 
 
 def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
+    if not config.query_rewrite.enabled:
+        return None
     chat_store = resolve(PaiChatStore, chat_store_config=config.chat_store)
-    llm = resolve_llm(config)
+    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
     condense_query_transform = resolve(
         PaiCondenseQueryTransform, llm=llm, chat_store=chat_store
     )
