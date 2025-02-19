@@ -4,6 +4,7 @@ from alibabacloud_green20220302.client import Client
 from alibabacloud_green20220302 import models
 from alibabacloud_tea_openapi.models import Config
 import json
+import time
 from loguru import logger
 
 
@@ -39,6 +40,8 @@ class PaiLlmGuardrail:
         self.client = Client(aliyun_config)
 
     async def acheck(self, text):
+        start = time.time()
+
         serviceParameters = {"content": text}
 
         textModerationPlusRequest = models.TextModerationPlusRequest(
@@ -76,13 +79,13 @@ class PaiLlmGuardrail:
                     advice=advice,
                 )
 
-                logger.info(f"Check text {text} success. result:{result}")
+                logger.info(
+                    f"Check text {text} success. result:{result}. Elaspsed: {time.time() - start} seconds."
+                )
                 return result
             else:
                 logger.info(
-                    "Check text response not success. status:{} ,result:{}".format(
-                        response.status_code, response
-                    )
+                    f"Check text response failed. status:{response.status_code} ,result:{response}, Elaspsed: {time.time() - start} seconds."
                 )
                 return TextCheckResult(
                     reject=False,
@@ -91,7 +94,9 @@ class PaiLlmGuardrail:
                     advice="",
                 )
         except Exception as err:
-            logger.info(f"Unhandled error: check text failed due to {err}")
+            logger.info(
+                f"Unhandled error: check text failed due to {err}. Elaspsed: {time.time() - start} seconds."
+            )
             return TextCheckResult(
                 reject=False,
                 reason="Check text failed.",
