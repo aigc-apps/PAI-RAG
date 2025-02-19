@@ -358,7 +358,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 )
                 with search_model_argument:
                     search_type = gr.Radio(
-                        ["bing", "夸克", "aliyun"],
+                        ["bing", "aliyun"],
                         label="Search Engine",
                         elem_id="search_type",
                     )
