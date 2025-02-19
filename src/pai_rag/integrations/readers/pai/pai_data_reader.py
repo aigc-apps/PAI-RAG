@@ -28,6 +28,7 @@ class BaseDataReaderConfig(BaseModel):
     enable_mandatory_ocr: bool = False
     format_sheet_data_to_json: bool = False
     sheet_column_filters: List[str] | None = None
+    number_workers: int = 4
 
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
@@ -160,7 +161,11 @@ class PaiDataReader(BaseReader):
         oss_store: Any = None,
     ):
         self.file_readers = get_file_readers(reader_config, oss_store)
+        self.number_workers = reader_config.number_workers
         self.oss_store = oss_store
+        logger.info(
+            f"[PaiDataReader] created with number_workers : {self.number_workers}"
+        )
 
     def load_data(
         self,
@@ -189,7 +194,7 @@ class PaiDataReader(BaseReader):
 
         """Load data from the input directory."""
         documents = directory_reader.load_data(
-            show_progress=show_progress, num_workers=8
+            show_progress=show_progress, num_workers=self.number_workers
         )
         return documents
 

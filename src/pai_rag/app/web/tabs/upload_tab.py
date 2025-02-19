@@ -12,6 +12,7 @@ IGNORE_FILE_LIST = [".DS_Store"]
 
 def upload_oss_knowledge(
     oss_path,
+    number_workers,
     chunk_size,
     chunk_overlap,
     enable_multimodal,
@@ -30,6 +31,7 @@ def upload_oss_knowledge(
     for state_info in upload_knowledge(
         upload_files=[],
         oss_path=oss_path,
+        number_workers=number_workers,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         enable_multimodal=enable_multimodal,
@@ -42,6 +44,7 @@ def upload_oss_knowledge(
 
 def upload_files(
     upload_files,
+    number_workers,
     chunk_size,
     chunk_overlap,
     enable_multimodal,
@@ -60,6 +63,7 @@ def upload_files(
     for state_info in upload_knowledge(
         upload_files=upload_files,
         oss_path=None,
+        number_workers=number_workers,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         enable_multimodal=enable_multimodal,
@@ -72,6 +76,7 @@ def upload_files(
 def upload_knowledge(
     upload_files,
     oss_path,
+    number_workers,
     chunk_size,
     chunk_overlap,
     enable_multimodal,
@@ -85,6 +90,7 @@ def upload_knowledge(
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
                 "enable_mandatory_ocr": enable_mandatory_ocr,
+                "number_workers": int(number_workers),
             }
         )
     except RagApiError as api_error:
@@ -166,6 +172,13 @@ def create_upload_tab() -> Dict[str, Any]:
                 elem_id="upload_index",
                 allow_custom_value=True,
             )
+            number_workers = gr.Slider(
+                minimum=0,
+                maximum=10,
+                step=1,
+                elem_id="number_workers",
+                label="\N{fire} Number of workers to parallelize data-loading over.",
+            )
             chunk_size = gr.Textbox(
                 label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",
                 elem_id="chunk_size",
@@ -222,6 +235,7 @@ def create_upload_tab() -> Dict[str, Any]:
                     fn=upload_oss_knowledge,
                     inputs=[
                         oss_path,
+                        number_workers,
                         chunk_size,
                         chunk_overlap,
                         enable_multimodal,
@@ -236,6 +250,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 fn=upload_files,
                 inputs=[
                     upload_file,
+                    number_workers,
                     chunk_size,
                     chunk_overlap,
                     enable_multimodal,
@@ -257,6 +272,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 inputs=[
                     upload_file_dir,
                     dummy_component,
+                    number_workers,
                     chunk_size,
                     chunk_overlap,
                     enable_multimodal,
@@ -274,6 +290,7 @@ def create_upload_tab() -> Dict[str, Any]:
             )
             return {
                 upload_index.elem_id: upload_index,
+                number_workers.elem_id: number_workers,
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
                 enable_multimodal.elem_id: enable_multimodal,
