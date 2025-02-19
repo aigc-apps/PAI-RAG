@@ -61,7 +61,7 @@ class RagDataLoader:
 
         ingestion_pipeline = IngestionPipeline(transformations=transformations)
 
-        nodes = ingestion_pipeline.run(documents=documents)
+        nodes = ingestion_pipeline.run(documents=documents, num_workers=None)
         logger.info(
             f"[DataLoader] parsed {len(documents)} documents into {len(nodes)} nodes."
         )
