@@ -239,8 +239,8 @@ class StructuredNodeParser(BaseModel):
                     if (
                         child.category == "image"
                         and self.enable_multimodal
-                        and node.content
-                        and node.content != "None"
+                        and child.content
+                        and child.content != "None"
                     ):
                         image_node = ImageNode(
                             embedding=doc_node.embedding,
