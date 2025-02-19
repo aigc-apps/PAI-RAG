@@ -55,13 +55,15 @@ class DBSelector:
         total_columns = count_total_columns(db_description_dict)
         schema_description_str = get_schema_desc4llm(db_description_dict)
 
-        sllm = self._llm.as_structured_llm(output_cls=SchemaSelection, 
-                                           llm_kwargs={
+        sllm = self._llm.as_structured_llm(
+            output_cls=SchemaSelection,
+            llm_kwargs={
                 "tool_choice": {
                     "type": "function",
                     "function": {"name": "SchemaSelection"},
                 }
-            },)
+            },
+        )
         selected_output_str = sllm.predict(
             prompt=self._db_schema_select_prompt,
             nl_query=nl_query.query_str,
@@ -94,13 +96,15 @@ class DBSelector:
         total_columns = count_total_columns(db_description_dict)
         schema_description_str = get_schema_desc4llm(db_description_dict)
 
-        sllm = self._llm.as_structured_llm(output_cls=SchemaSelection,
-                                           llm_kwargs={
+        sllm = self._llm.as_structured_llm(
+            output_cls=SchemaSelection,
+            llm_kwargs={
                 "tool_choice": {
                     "type": "function",
                     "function": {"name": "SchemaSelection"},
                 }
-            },)
+            },
+        )
         selected_output_str = await sllm.apredict(
             prompt=self._db_schema_select_prompt,
             nl_query=nl_query.query_str,

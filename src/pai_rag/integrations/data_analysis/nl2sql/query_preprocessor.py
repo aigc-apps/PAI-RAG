@@ -1,6 +1,5 @@
-import json
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core import Settings
