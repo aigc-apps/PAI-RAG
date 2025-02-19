@@ -1,4 +1,5 @@
 import logging
+import sys
 from loguru import logger
 
 
@@ -18,10 +19,16 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
         # 使用 Loguru 记录日志信息，保持调用栈的深度和异常信息
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
+        logger.opt(
+            depth=depth,
+            exception=record.exc_info,
+        ).log(level, record.getMessage())
 
 
 def format_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
+    logger.remove(0)
+    logger.add(
+        sys.stderr,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{process}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    )
