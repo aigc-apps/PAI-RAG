@@ -22,16 +22,20 @@ async def respond(
 
     rag_client.patch_config(update_dict)
 
-    response_gen = await rag_client.query(
-        agent_question, with_intent=True, stream=False
+    response_gen = rag_client.query(
+        chat_messages=agent_chatbot, with_intent=True, stream=True
     )
     content = ""
-    agent_chatbot.append((agent_question, content))
+    q_msg = {"content": agent_question, "role": "user"}
+    agent_chatbot.append(q_msg)
+    a_msg = {"content": "", "role": "assistant"}
+    agent_chatbot.append(a_msg)
+
     yield agent_chatbot
 
     for resp in response_gen:
         content += resp.delta
-        agent_chatbot[-1] = (agent_question, content)
+        agent_chatbot[-1]["content"] = content
         yield agent_chatbot
 
 

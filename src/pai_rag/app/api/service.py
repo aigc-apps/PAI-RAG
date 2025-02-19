@@ -7,6 +7,7 @@ from pai_rag.app.api import agent_demo
 from pai_rag.app.api.middleware import init_middleware
 from pai_rag.app.api.error_handler import config_app_errors
 from pai_rag.app.web.webui import configure_webapp
+from pai_rag.core.rag_environment import service_environment
 
 
 def init_router(app: FastAPI):
@@ -17,7 +18,12 @@ def init_router(app: FastAPI):
     app.include_router(router_openai, prefix="/v1", tags=["openai_compatible"])
     app.include_router(router_v1, prefix="/api/v1", tags=["api_v1"])
     app.include_router(agent_demo.demo_router, tags=["AgentDemo"], prefix="/demo/api")
-    configure_webapp(app)
+    if service_environment.IS_MULTIPLE_INSTANCE:
+        from pai_rag.app.api.v1.home import router_home
+
+        app.include_router(router_home, prefix="/", tags=["Homepage"])
+    else:
+        configure_webapp(app)
 
 
 def configure_app(app: FastAPI):
