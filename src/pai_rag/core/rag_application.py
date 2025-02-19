@@ -741,7 +741,10 @@ class RagApplication:
         }
 
         if not query.stream:
-            return RagResponse(answer=response.response, **result_info)
+            content = re.sub(
+                r"<think>.*?</think>\n*", "", response.response, flags=re.DOTALL
+            )
+            return RagResponse(answer=content, **result_info)
         else:
             return event_generator_async(
                 response=response, extra_info=result_info, sse_version=sse_version
