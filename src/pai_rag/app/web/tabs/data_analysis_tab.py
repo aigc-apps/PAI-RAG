@@ -125,17 +125,17 @@ def reset_textbox():
 # 处理history复选框变化
 def handle_history_checkbox_change(enable_db_history):
     if enable_db_history:
-        return gr.File.update(visible=True), gr.Textbox.update(visible=True)
+        return gr.update(visible=True), gr.update(visible=True)
     else:
-        return gr.File.update(visible=False), gr.Textbox.update(visible=False)
+        return gr.update(visible=False), gr.update(visible=False)
 
 
 # 处理embedding复选框变化
 def handle_embedding_checkbox_change(enable_db_embedding):
     if enable_db_embedding:
-        return gr.Slider.update(visible=True), gr.Slider.update(visible=True)
+        return gr.update(visible=True), gr.update(visible=True)
     else:
-        return gr.Slider.update(visible=False), gr.Slider.update(visible=False)
+        return gr.update(visible=False), gr.update(visible=False)
 
 
 def upload_history_fn(json_file):
