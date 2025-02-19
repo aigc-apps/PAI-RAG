@@ -1,6 +1,5 @@
-import json
 from typing import List, Optional
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core import Settings
@@ -28,26 +27,38 @@ class QueryPreprocessor:
         )
 
     def extract_keywords(self, nl_query: QueryBundle) -> List[str]:
-        sllm = self._llm.as_structured_llm(output_cls=KeywordList)
-        keyword_list = sllm.predict(
+        keyword_list_obj = self._llm.structured_predict(
+            output_cls=KeywordList,
             prompt=self._keyword_extraction_prompt,
+            llm_kwargs={
+                "tool_choice": {"type": "function", "function": {"name": "KeywordList"}}
+            },
             query_str=nl_query.query_str,
             fewshot_examples="",
         )
-        keywords = json.loads(keyword_list)["Keywords"]
+        # text_complection = LLMTextCompletionProgram.from_defaults(
+        #         output_cls=KeywordList,
+        #         prompt=self._keyword_extraction_prompt,
+        # )
+        # keyword_list_obj = text_complection(query_str=nl_query.query_str, fewshot_examples="")
+
+        keywords = keyword_list_obj.Keywords
         # later check if parser needed
         # keywords = parse(self, keywords)
         # logger.info(f"keyword_list: {keywords} extracted.")
         return keywords
 
     async def aextract_keywords(self, nl_query: QueryBundle) -> List[str]:
-        sllm = self._llm.as_structured_llm(output_cls=KeywordList)
-        keyword_list = await sllm.predict(
+        keyword_list_obj = await self._llm.astructured_predict(
+            output_cls=KeywordList,
             prompt=self._keyword_extraction_prompt,
+            llm_kwargs={
+                "tool_choice": {"type": "function", "function": {"name": "KeywordList"}}
+            },
             query_str=nl_query.query_str,
             fewshot_examples="",
         )
-        keywords = json.loads(keyword_list)["Keywords"]
+        keywords = keyword_list_obj.Keywords
         # later check if parser needed
         # keywords = parse(self, keywords)
         # logger.info(f"keyword_list: {keywords} extracted.")
@@ -61,4 +72,4 @@ class QueryPreprocessor:
 class KeywordList(BaseModel):
     """Data model for KeywordList."""
 
-    Keywords: List[str] = Field(description="从查询问题中提取的关键词、关键短语和命名实体列表")
+    Keywords: List[str]
