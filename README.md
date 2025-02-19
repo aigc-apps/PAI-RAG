@@ -60,7 +60,7 @@ You can run PAI-RAG locally using either a Docker environment or directly from t
    ```bash
    docker compose up -d
    ```
-3. Open your web browser and navigate to http://localhost:8000 to verify that the service is running. The service will need to download the model weights, which may take around 20 minutes.
+3. Open your web browser and navigate to http://localhost:8680 to verify that the service is running. The service will need to download the model weights, which may take around 20 minutes.
 
 ## Run in a Local Environment
 
@@ -68,7 +68,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
 
 ## Simple Query Using the Web UI
 
-1. Open http://localhost:8000 in your web browser. Adjust the index and LLM settings to your preferred models
+1. Open http://localhost:8680 in your web browser. Adjust the index and LLM settings to your preferred models
 
 <img src="docs/figures/quick_start/setting.png" width="600px"/>
 
@@ -82,7 +82,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
 
 ## Simple Query Using the RAG API
 
-1. Open http://localhost:8000 in your web browser. Adjust the index and LLM settings to your preferred models
+1. Open http://localhost:8680 in your web browser. Adjust the index and LLM settings to your preferred models
 
 2. Upload data via API:
    Go to the PAI-RAG base directory
@@ -94,7 +94,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
    **Request**
 
    ```shell
-   curl -X 'POST' http://localhost:8000/api/v1/upload_data \
+   curl -X 'POST' http://localhost:8680/api/v1/upload_data \
       -H 'Content-Type: multipart/form-data' \
       -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
    ```
@@ -112,7 +112,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
    **Request**
 
    ```shell
-   curl 'http://localhost:8000/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+   curl 'http://localhost:8680/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
    ```
 
    **Response**
@@ -130,7 +130,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
    **Request**
 
    ```shell
-   curl -X 'POST' http://localhost:8000/api/v1/query \
+   curl -X 'POST' http://localhost:8680/api/v1/query \
       -H "Content-Type: application/json" \
       -d '{"question":"What did the author do growing up?"}'
    ```

@@ -3,14 +3,15 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.query_engine import BaseQueryEngine
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
+from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 import httpx
+import time
 from loguru import logger
 
-from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
-
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
-DEFAULT_SEARCH_COUNT = 30
 DEFAULT_LANG = "zh-CN"
 
 
@@ -68,22 +69,51 @@ class BingSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
         lang: str = None,
+        system_role_str: Optional[str] = None,
+        prompt_template_str: Optional[str] = None,
         search_top_k: Optional[int] = None,
     ):
+        start = time.time()
+
         if lang:
             self.search_lang = lang
         if search_top_k:
             self.search_count = search_top_k
 
-        docs = await self._asearch(query=query.query_str)
-        logger.info(f"Get {len(docs)} docs from url.")
+        if not query.need_web_search:
+            no_search_query = PaiQueryBundle(
+                query_str=query.query_str,
+                no_retrieval=True,
+                stream=query.stream,
+                chat_messages_str=query.chat_messages_str,
+            )
+            return await self.synthesizer.asynthesize(
+                query=no_search_query,
+                nodes=[],
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
+            )
+
+        logger.info(f"Bing Search with query {query.query_str}.")
+        docs = await self._asearch(
+            query=query.query_str,
+        )
 
         nodes = []
         for doc in docs:
             doc_node = TextNode(text=doc.text[:800], metadata=doc.metadata)
             nodes.append(NodeWithScore(node=doc_node, score=1))
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        logger.info(
+            f"[WebSearch]-Bing Get {len(docs)} docs from url. Elapsed time: {time.time() - start}seconds."
+        )
+
+        return await self.synthesizer.asynthesize(
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError

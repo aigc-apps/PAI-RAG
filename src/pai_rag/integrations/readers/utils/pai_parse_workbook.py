@@ -2,6 +2,7 @@ from typing import List
 import numpy as np
 import openpyxl
 import pandas as pd
+import os
 from llama_index.core.schema import Document
 
 from loguru import logger
@@ -484,8 +485,23 @@ def split_sheet_v2(sheet, oss_client, splitter):
 
 def parse_workbook(workbook_file, oss_client, splitter):
     docs = []
+    directory_path = os.path.dirname(workbook_file)
+    file_name_without_extension = os.path.splitext(os.path.basename(workbook_file))[0]
+    file_extension = os.path.splitext(os.path.basename(workbook_file))[1]
+    logger.info(f"Parsing workbook {file_extension}.")
+    if file_extension.lower() == ".xls":
+        data_xls = pd.read_excel(workbook_file, engine="xlrd")
+        tmp_file_dir = os.path.join(directory_path, "pai_rag_temp_dir")
+        os.makedirs(tmp_file_dir, exist_ok=True)
+        new_file_path = os.path.join(
+            tmp_file_dir, f"{file_name_without_extension}.xlsx"
+        )
+        logger.info(f"Transfer {workbook_file} to {new_file_path}.")
+        data_xls.to_excel(new_file_path, index=False, engine="openpyxl")
+        workbook_file = new_file_path
     workbook = openpyxl.open(workbook_file, data_only=True)
     sheetnames = workbook.sheetnames
+
     for sheetname in sheetnames:
         logger.info(f"Parsing sheet {sheetname}.")
         sheet = workbook[sheetname]

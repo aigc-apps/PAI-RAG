@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import Optional
 from pai_rag.integrations.search.quark_utils import (
     get_access_token,
     postprocess_items,
@@ -9,8 +10,11 @@ from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
+from pai_rag.app.api.models import PaiQueryBundle
 import httpx
 from loguru import logger
+
+from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
 
 
 class QuarkAccessTokenProvider:
@@ -45,7 +49,7 @@ class QuarkSearchTool(BaseQueryEngine):
         secret: str,
         host: str,
         synthesizer: BaseSynthesizer = None,
-        search_count: int = 30,
+        search_count: int = DEFAULT_SEARCH_COUNT,
     ):
         self.host = host
         self.user = user
@@ -76,7 +80,7 @@ class QuarkSearchTool(BaseQueryEngine):
     async def asearch(self, query: str):
         search_tasks = []
         token = await self.token_provider.get_token()
-        for i in range(0, 1 + int(self.search_count / 10), 1):
+        for i in range(0, 1 + int((self.search_count - 1) / 10), 1):
             search_tasks.append(
                 self._search_quark_single_page(query=query, token=token, page=i + 1)
             )
@@ -103,11 +107,36 @@ class QuarkSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
+        system_role_str: Optional[str] = None,
+        prompt_template_str: Optional[str] = None,
     ):
-        nodes = await self.asearch(query=query.query_str)
-        logger.info(f"Get {len(nodes)} docs from url.")
+        start = time.time()
+        if not query.need_web_search:
+            no_search_query = PaiQueryBundle(
+                query_str=query.query_str,
+                no_retrieval=True,
+                stream=query.stream,
+                chat_messages_str=query.chat_messages_str,
+            )
+            return await self.synthesizer.asynthesize(
+                query=no_search_query,
+                nodes=[],
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
+            )
 
-        return await self.synthesizer.asynthesize(query=query, nodes=nodes)
+        logger.info(f"Quark Search with query {query.query_str}.")
+        nodes = await self.asearch(query=query.query_str)
+        logger.info(
+            f"[WebSearch]-Quark: Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
+        )
+
+        return await self.synthesizer.asynthesize(
+            query=query,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
+        )
 
     def _get_prompt_modules(self):
         raise NotImplementedError
