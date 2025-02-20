@@ -147,10 +147,8 @@ class RagLocalClient:
         search_web: bool = False,
         return_reference: bool = False,
     ):
-        print(chat_messages, chat_messages[-1]["content"])
         query = RagQuery(
-            question=chat_messages[-1]["content"],
-            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
+            messages=chat_messages,
             stream=stream,
             citation=citation,
             with_intent=with_intent,
@@ -186,8 +184,7 @@ class RagLocalClient:
         stream: bool = False,
     ):
         query = RagQuery(
-            question=chat_messages[-1]["content"],
-            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
+            messages=chat_messages,
             stream=stream,
         )
 
@@ -219,8 +216,7 @@ class RagLocalClient:
         stream: bool = False,
     ):
         query = RagQuery(
-            question=chat_messages[-1]["content"],
-            chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
+            messages=chat_messages,
             stream=stream,
         )
 

@@ -125,7 +125,8 @@ class PaiLlm(OpenAILike):
             completion_response = await self.acomplete(prompt, formatted=True, **kwargs)
             return completion_response_to_chat_response(completion_response)
 
-        return await self._llm.achat(messages, **kwargs)
+        filterd_messages = [message for message in messages if message.content]
+        return await self._llm.achat(filterd_messages, **kwargs)
 
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
@@ -139,4 +140,5 @@ class PaiLlm(OpenAILike):
                 completion_response
             )
 
-        return await self._llm.astream_chat(messages, **kwargs)
+        filterd_messages = [message for message in messages if message.content]
+        return await self._llm.astream_chat(filterd_messages, **kwargs)

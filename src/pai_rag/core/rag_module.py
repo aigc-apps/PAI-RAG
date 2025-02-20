@@ -27,7 +27,6 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
 from pai_rag.integrations.query_transform.pai_query_transform import (
-    PaiCondenseQueryTransform,
     OpenAICompatibleQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
@@ -181,15 +180,6 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         llm=llm,
         callback_manager=None,
     )
-
-
-def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
-    chat_store = resolve(PaiChatStore, chat_store_config=config.chat_store)
-    llm = resolve_llm(config)
-    condense_query_transform = resolve(
-        PaiCondenseQueryTransform, llm=llm, chat_store=chat_store
-    )
-    return condense_query_transform
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:

@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 
 class RagQuery(BaseModel):
-    question: str  # 输入的问题
+    # 新版上下文聊天，传入messages则无需传入question和chat_history和session_id, 推荐传入messages
+    messages: List[ChatMessage]
+
+    question: str | None = None  # 输入的问题，即将obsolete
     chat_history: List[
         Dict[str, str]
     ] | None = None  # chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。默认为空
