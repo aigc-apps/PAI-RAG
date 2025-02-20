@@ -53,6 +53,7 @@ class ChatCompletionRequest(BaseModel):
     index_name: Optional[str] = None  # 索引名称
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
+    return_reference: Optional[bool] = False
 
     # debug purpose
     force_search_web: Optional[bool] = False  # 始终执行搜索
