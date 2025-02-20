@@ -74,6 +74,7 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_mandatory_ocr: bool = False
+    number_workers: int = 4
 
     config_file: str = None
 
@@ -213,6 +214,7 @@ class ViewModel(BaseModel):
         view_model.chunk_size = config.node_parser.chunk_size
 
         view_model.enable_mandatory_ocr = config.data_reader.enable_mandatory_ocr
+        view_model.number_workers = config.data_reader.number_workers
 
         view_model.similarity_top_k = config.retriever.similarity_top_k
         view_model.image_similarity_top_k = config.retriever.image_similarity_top_k
@@ -279,8 +281,10 @@ class ViewModel(BaseModel):
             view_model.db_host = config.data_analysis.host
             view_model.db_port = config.data_analysis.port
             view_model.db_tables = ",".join(config.data_analysis.tables)
-            view_model.db_descriptions = json.dumps(
-                config.data_analysis.descriptions, ensure_ascii=False
+            view_model.db_descriptions = (
+                json.dumps(config.data_analysis.descriptions, ensure_ascii=False)
+                if config.data_analysis.descriptions
+                else None
             )
             view_model.enable_enhanced_description = (
                 config.data_analysis.enable_enhanced_description
@@ -349,6 +353,7 @@ class ViewModel(BaseModel):
         config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
         config["data_reader"]["enable_mandatory_ocr"] = self.enable_mandatory_ocr
+        config["data_reader"]["number_workers"] = int(self.number_workers)
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
@@ -575,6 +580,7 @@ class ViewModel(BaseModel):
         settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_mandatory_ocr"] = {"value": self.enable_mandatory_ocr}
+        settings["number_workers"] = {"value": self.number_workers}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}

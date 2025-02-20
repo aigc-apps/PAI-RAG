@@ -171,7 +171,6 @@ def respond(input_elements: List[Any]):
                         "metadata": {"status": "pending"},
                     }
                 )
-
             else:
                 if is_thinking:
                     chatbot[-1]["metadata"]["log"] += resp.delta
@@ -278,13 +277,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     tables = gr.Textbox(
                         label="Tables",
                         elem_id="db_tables",
-                        placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
+                        placeholder="List useful tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
                     )
                 descriptions = gr.Textbox(
                     label="Table Comment",
                     lines=2,
                     elem_id="db_descriptions",
-                    placeholder='A dict of table comments, e.g. {"table_A": "text_A_comment", "table_B": "text_comment"}',
+                    placeholder='A dict of table comments, e.g. {"table_A": "comment_A", "table_B": "comment_B"}',
                 )
 
                 with gr.Column(visible=True):

@@ -822,19 +822,23 @@ class BirdSchemaCollector(DBInfoCollector):
             table_foreign_key_list.extend(table_fks)
 
             # get table description df
+            table_desc_df = None
             if desc_csv_files:
                 for file in desc_csv_files:
                     if file.stem == table_name:
                         try:
                             table_desc_df = pd.read_csv(file, encoding_errors="ignore")
+                            break
                         except FileNotFoundError:
-                            logger.error(f"Failed not found {file}")
+                            logger.error(f"Description file not found: {file}")
                             raise
                         except Exception as e:
                             logger.error(f"Failed to read {file}: {e}")
                             raise
-            else:
-                table_desc_df = None
+                if table_desc_df is None:
+                    logger.info(
+                        f"No matching description file found for table: {table_name}"
+                    )
 
             # get column info
             column_info_list = []

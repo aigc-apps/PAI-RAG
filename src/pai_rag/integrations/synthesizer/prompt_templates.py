@@ -13,6 +13,7 @@ DEFAULT_CUSTOM_PROMPT_TEMPLATE = """你的目标是提供准确、有用且易�
 - 保持回答的专业性和友好性。
 - 如果需要更多信息来更好地回答问题，请礼貌地询问。
 - 对于复杂的问题，尽量简化解释，使信息易于理解。
+- 对于涉及不安全/不道德/敏感/色情/暴力/赌博/违法等行为的问题，请明确拒绝提供所要求的信息，并简单解释为什么这样的请求不能被满足。
 """
 
 DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easy-to-understand information. When responding, please ensure you follow the guidelines below:
@@ -24,6 +25,7 @@ DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful,
 - Professional and friendly: Maintain professionalism and friendliness.
 - Request more information: If more information is needed, politely ask the user.
 - Simplify complex issues: Simplify explanations for complex questions.
+- For questions involving unsafe, unethical, sensitive, pornographic, violent, gambling, or illegal behaviors, please clearly refuse to provide the requested information and briefly explain why such requests cannot be fulfilled.
 """
 
 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE = """- 引用标记：引用内容时使用数字标记，如[1]，且仅在实际引用时使用。

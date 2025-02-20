@@ -139,7 +139,8 @@ class PaiPDFReader(BaseReader):
                                         oss_url = self._transform_local_to_oss(
                                             pdf_name, image_path
                                         )
-                                        para_text += f"\n![]({oss_url})  \n"
+                                        if oss_url:
+                                            para_text += f"\n![]({oss_url})  \n"
                 for block in para_block["blocks"]:  # 2nd.拼image_caption
                     if block["type"] == BlockType.ImageCaption:
                         para_text += merge_para_with_text(block) + "  \n"
@@ -169,7 +170,8 @@ class PaiPDFReader(BaseReader):
                                         oss_url = self._transform_local_to_oss(
                                             pdf_name, image_path
                                         )
-                                        para_text += f"\n![]({oss_url})  \n"
+                                        if oss_url:
+                                            para_text += f"\n![]({oss_url})  \n"
                 for block in para_block["blocks"]:  # 3rd.拼table_footnote
                     if block["type"] == BlockType.TableFootnote:
                         para_text += merge_para_with_text(block) + "  \n"

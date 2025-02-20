@@ -41,8 +41,10 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
 from pai_rag.integrations.data_analysis.text2sql.utils.prompts import (
     DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
 )
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
+
 
 cls_cache = {}
 
@@ -58,10 +60,16 @@ def resolve(cls: Any, cls_key: str, **kwargs):
     return cls_cache[cls_key]
 
 
-if os.path.exists("./model_repository/bge-m3"):
-    embed_model_bge = HuggingFaceEmbedding(model_name="./model_repository/bge-m3")
-else:
-    embed_model_bge = None
+try:
+    embed_model_bge = HuggingFaceEmbedding(
+        model_name=os.path.join(DEFAULT_MODEL_DIR, "bge-m3")
+    )
+except FileNotFoundError as e:
+    logger.error(f"Embed_model file not found: {str(e)}")
+    raise ValueError(f"Embed_model file not found: {str(e)}")
+except Exception as e:
+    logger.error(f"Failed to load embed_model: {str(e)}")
+    raise ValueError(f"Failed to load embed_model: {str(e)}")
 
 
 def resolve_schema_retriever(
