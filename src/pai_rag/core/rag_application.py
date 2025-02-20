@@ -121,13 +121,14 @@ def _make_chat_completion_response(session_id, response, return_reference=False)
     if return_reference:
         for score_node in response.source_nodes:
             if isinstance(score_node.node, ImageNode):
-                if score_node.image_url is not None:
-                    citations.append(score_node.image_url)
+                url = score_node.node.image_url
+                if url is not None:
+                    citations.append(url)
                     citation_details.append(
                         {
                             "name": "Image",
                             "text": None,
-                            "url": score_node.image_url,
+                            "url": url,
                             "score": score_node.score,
                         }
                     )
@@ -208,13 +209,14 @@ async def _make_chat_completion_chunk_response(
     if return_reference:
         for score_node in response.source_nodes:
             if isinstance(score_node.node, ImageNode):
-                if score_node.image_url is not None:
-                    citations.append(score_node.image_url)
+                url = score_node.node.image_url
+                if url is not None:
+                    citations.append(url)
                     citation_details.append(
                         {
                             "name": "Image",
                             "text": None,
-                            "url": score_node.image_url,
+                            "url": url,
                             "score": score_node.score,
                         }
                     )
