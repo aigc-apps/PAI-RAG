@@ -198,9 +198,20 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         chat_history = self._chat_store.get_messages(session_id)
         chat_history_str = messages_to_history_str(chat_history)
 
-        logger.debug(f"Chat history: {chat_history_str}")
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
         transformed_query_str = self._llm.predict(
-            self._condense_question_prompt,
+            current_condense_question_prompt,
             question=query_str,
             chat_history=chat_history_str,
         )
@@ -265,9 +276,20 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         chat_history = self._chat_store.get_messages(key=session_id)
         chat_history_str = messages_to_history_str(chat_history)
 
-        logger.debug(f"Chat history: {chat_history_str}")
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
         transformed_query_str = await self._llm.apredict(
-            self._condense_question_prompt,
+            current_condense_question_prompt,
             question=query_str,
             chat_history=chat_history_str,
         )
