@@ -791,10 +791,10 @@ class RagApplication:
             return RagResponse(answer=DEFAULT_EMPTY_RESPONSE)
 
         agent = resolve_agent(self.config)
-        if new_query_bundle and new_query_bundle.chat_messages_str:
-            msg = new_query_bundle.chat_messages_str
+        if new_query_bundle and new_query_bundle.query_str:
+            msg = new_query_bundle.query_str
         else:
-            msg = messages_to_history_str(query.messages[-5:], max_length=600)
+            msg = messages_to_history_str(query.messages[-1].content, max_length=600)
 
         if query.stream:
             response = await agent.astream_chat(message=msg)
