@@ -9,6 +9,7 @@ from pai_rag.utils.oss_utils import check_and_set_oss_auth
 
 # store config file generated from ui.
 GENERATED_CONFIG_FILE_NAME = "localdata/settings.snapshot.toml"
+DEFAULT_CONFIG_FILE_NAME = "config/settings.toml"
 
 
 class RagConfigManager:

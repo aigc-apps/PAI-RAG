@@ -3,6 +3,7 @@ import os
 import threading
 import traceback
 from asgi_correlation_id import correlation_id
+from pai_rag.app.constants import DEFAULT_APPLICATION_CONFIG_FILE
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_application import RagApplication, RagChatType, SseVersion
@@ -45,7 +46,7 @@ class RagService:
     def initialize(self):
         self._state = FileServiceState(GENERATED_CONFIG_FILE_NAME)
 
-        rag_configuration = RagConfigManager.from_file(GENERATED_CONFIG_FILE_NAME)
+        rag_configuration = RagConfigManager.from_file(DEFAULT_APPLICATION_CONFIG_FILE)
         if not os.path.exists(GENERATED_CONFIG_FILE_NAME):
             new_state = rag_configuration.persist()
             self._state.update_state(new_state)
