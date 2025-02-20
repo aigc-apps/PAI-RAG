@@ -16,7 +16,7 @@ class SupportedEmbedType(str, Enum):
 
 
 class PaiBaseEmbeddingConfig(BaseModel):
-    source: SupportedEmbedType
+    source: Literal[SupportedEmbedType.huggingface] = SupportedEmbedType.huggingface
     model: str
     embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE
     enable_sparse: bool = False
