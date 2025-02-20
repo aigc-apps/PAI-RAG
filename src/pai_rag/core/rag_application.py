@@ -15,6 +15,9 @@ from pai_rag.core.rag_module import (
     resolve_openai_query_transform,
 )
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.query_transform.pai_query_transform import (
+    messages_to_history_str,
+)
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.app.api.models import PaiQueryBundle
 from openai.types.chat import (
@@ -34,13 +37,11 @@ from pai_rag.app.api.models import (
     ContextDoc,
     RetrievalResponse,
 )
-from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.schema import QueryBundle
 from llama_index.core.base.response.schema import AsyncStreamingResponse
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
-from llama_index.core.schema import (
-    ImageNode,
-)
+from llama_index.core.schema import ImageNode
+from llama_index.core.chat_engine.types import StreamingAgentChatResponse
 import json
 import os
 from loguru import logger
@@ -93,7 +94,9 @@ async def event_generator_async(
         content = response
         chunk = {"delta": content, "is_finished": False}
         yield _event_chunk_wrapper(json.dumps(chunk, ensure_ascii=False), sse_version)
-    elif isinstance(response, AsyncStreamingResponse):
+    elif isinstance(response, AsyncStreamingResponse) or isinstance(
+        response, StreamingAgentChatResponse
+    ):
         async for token in response.async_response_gen():
             if token:
                 chunk = {"delta": token, "is_finished": False}
@@ -680,12 +683,15 @@ class RagApplication:
 
         if query.with_intent:
             intent_router = resolve_intent_router(self.config)
+            print("===", new_query_bundle.chat_messages_str)
             intent = await intent_router.aselect(
                 str_or_query_bundle=new_query_bundle.chat_messages_str
             )
             logger.info(f"[IntentDetection] Routing query to {intent}.")
             if intent == Intents.TOOL:
-                return await self.aquery_agent(query, sse_version=sse_version)
+                return await self.aquery_agent(
+                    query, new_query_bundle, sse_version=sse_version
+                )
             elif intent == Intents.WEBSEARCH:
                 chat_type = RagChatType.WEB
             elif intent == Intents.NL2SQL:
@@ -766,7 +772,10 @@ class RagApplication:
             )
 
     async def aquery_agent(
-        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+        self,
+        query: RagQuery,
+        new_query_bundle: PaiQueryBundle = None,
+        sse_version: SseVersion = SseVersion.V0,
     ) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
 
@@ -782,15 +791,16 @@ class RagApplication:
             return RagResponse(answer=DEFAULT_EMPTY_RESPONSE)
 
         agent = resolve_agent(self.config)
+        if new_query_bundle and new_query_bundle.chat_messages_str:
+            msg = new_query_bundle.chat_messages_str
+        else:
+            msg = messages_to_history_str(query.messages[-5:], max_length=600)
+
         if query.stream:
-            response = await agent.astream_chat(
-                message=query.messages[-1].content, chat_history=query.messages[:-1]
-            )
+            response = await agent.astream_chat(message=msg)
             return event_generator_async(response, sse_version=sse_version)
         else:
-            response = await agent.achat(
-                message=query.messages[-1].content, chat_history=query.messages[:-1]
-            )
+            response = await agent.achat(message=msg)
             return RagResponse(answer=response.response)
 
     async def aload_agent_config(self, agent_cfg_path: str):

@@ -26,12 +26,16 @@ DEFAULT_FUSION_NUM_QUERIES = 4
 
 
 def messages_to_history_str(
-    messages: Sequence[ChatMessage], max_length: int = 0
+    messages: Sequence[ChatMessage], max_length: int = 1000
 ) -> str:
     """Convert messages to a history string."""
     string_messages = []
     for message in messages:
+        if not message.content:
+            continue
+
         role = message.role
+
         content = message.content[:max_length]
 
         string_message = f"{role.value}: {content}"
@@ -40,6 +44,8 @@ def messages_to_history_str(
         if additional_kwargs:
             string_message += f"\n{additional_kwargs}"
         string_messages.append(string_message)
+
+    print(messages, string_messages)
     return "\n".join(string_messages)
 
 
@@ -245,7 +251,7 @@ class OpenAICompatibleQueryTransform:
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
-        chat_history_str = messages_to_history_str(chat_messages[-7:])
+        chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         current_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
                 CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
@@ -276,10 +282,12 @@ class OpenAICompatibleQueryTransform:
                 query_str=chat_messages[-1].content,
                 need_web_search=False,
                 custom_embedding_strs=[chat_messages[-1].content],
+                chat_messages_str=chat_history_str,
             )
         else:
             return PaiQueryBundle(
                 query_str=",".join(query_json["queries"]),
                 need_web_search=True,
                 custom_embedding_strs=[transformed_query_str],
+                chat_messages_str=chat_history_str,
             )
