@@ -37,14 +37,14 @@ from pai_rag.integrations.data_analysis.nl2sql.db_loader import DBLoader
 from pai_rag.integrations.data_analysis.nl2sql.db_query import DBQuery
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
-from pai_rag.utils.constants import EAS_DEFAULT_MODEL_DIR
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 
-if os.path.exists(os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")):
+if os.path.exists(os.path.join(DEFAULT_MODEL_DIR, "bge-m3")):
     embed_model_bge_large = HuggingFaceEmbedding(
-        model_name=os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")
+        model_name=os.path.join(DEFAULT_MODEL_DIR, "bge-m3")
     )
 else:
     embed_model_bge_large = None

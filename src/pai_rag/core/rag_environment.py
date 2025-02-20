@@ -3,9 +3,7 @@ import os
 
 class RagServiceEnvironment:
     def __init__(self):
-        self.IS_MULTIPLE_INSTANCE = (
-            os.getenv("DEPLOY_MODE", "single").upper() == "MULTIPLE"
-        )
+        self.IS_API_INSTANCE = os.getenv("DEPLOY_MODE", "web").upper() == "api"
 
 
 service_environment = RagServiceEnvironment()

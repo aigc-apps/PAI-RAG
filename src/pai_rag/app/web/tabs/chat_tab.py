@@ -44,9 +44,6 @@ async def respond(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     chatbot = update_dict["chatbot"]
-    if not update_dict["include_history"]:
-        chatbot, _ = clear_history(chatbot)
-
     query_type = update_dict["query_type"]
     question = update_dict["question"]
     q_msg = {"content": question, "role": "user"}
@@ -54,6 +51,7 @@ async def respond(input_elements: List[Any]):
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
     citation = update_dict["citation"]
+    return_reference = update_dict["return_reference"]
 
     if chatbot is not None:
         chatbot.append(
@@ -76,6 +74,7 @@ async def respond(input_elements: List[Any]):
                 stream=is_streaming,
                 citation=citation,
                 search_web=True,
+                return_reference=return_reference,
             )
         else:
             response_gen = rag_client.query(
@@ -83,6 +82,7 @@ async def respond(input_elements: List[Any]):
                 stream=is_streaming,
                 citation=citation,
                 index_name=index_name,
+                return_reference=return_reference,
             )
 
         is_thinking = False
@@ -153,6 +153,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
                 visible=True,
+            )
+            return_reference = gr.Checkbox(
+                label="Show References",
+                info="Show references for RAG and web search.",
+                elem_id="return_reference",
+                visible=True,
+                value=False,
             )
             default_web_search = gr.Checkbox(
                 label="Default search web",
@@ -452,6 +459,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
                         prompt_argument: gr.update(open=False),
+                        return_reference: gr.update(visible=False),
                     }
                 elif query_type == "LLM":
                     return {
@@ -463,6 +471,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=True),
                         lc_col: gr.update(visible=True),
                         prompt_argument: gr.update(open=True),
+                        return_reference: gr.update(visible=False),
                     }
                 elif query_type == "Chat（Knowledge Base）":
                     return {
@@ -474,6 +483,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                         prompt_argument: gr.update(open=True),
+                        return_reference: gr.update(visible=True),
                     }
                 elif query_type == "Chat（Web Search）":
                     return {
@@ -485,6 +495,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
+                        return_reference: gr.update(visible=True),
                     }
 
             query_type.input(
@@ -499,19 +510,13 @@ def create_chat_tab() -> Dict[str, Any]:
                     llm_col,
                     model_argument,
                     lc_col,
+                    return_reference,
                 ],
             )
 
         with gr.Column(scale=8):
             chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
             with gr.Row():
-                include_history = gr.Checkbox(
-                    label="Chat history",
-                    info="Query with chat history.",
-                    elem_id="include_history",
-                    value=False,
-                    scale=1,
-                )
                 question = gr.Textbox(
                     label="Enter your question.", elem_id="question", scale=9
                 )
@@ -530,8 +535,8 @@ def create_chat_tab() -> Dict[str, Any]:
                 is_streaming,
                 citation,
                 need_image,
-                include_history,
                 chat_index,
+                return_reference,
             }
             .union(vec_args)
             .union(llm_args)

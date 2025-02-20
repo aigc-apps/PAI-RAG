@@ -44,7 +44,7 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def load_db_info_fn(input_elements: List[Any]):
+async def load_db_info_fn(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -63,14 +63,14 @@ def load_db_info_fn(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     try:
-        rag_client.load_db_info()
+        await rag_client.load_db_info()
         return f"[{datetime.datetime.now()}] DB info loaded successfully!"
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
         # return f"[{datetime.datetime.now()}] DB info loaded failed, HTTP {api_error.code} Error: {api_error.msg}"
 
 
-def respond(input_elements: List[Any]):
+async def respond(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -95,16 +95,6 @@ def respond(input_elements: List[Any]):
     question = update_dict["question"]
     chatbot = update_dict["chatbot"]
 
-    # if chatbot is not None:
-    #     chatbot.append((question, ""))
-
-    # try:
-    #     content = ""
-    #     response_gen = rag_client.query_data_analysis(question, stream=True)
-    #     for resp in response_gen:
-    #         content += resp.delta
-    #         chatbot[-1] = (question, content)
-    #         yield chatbot
     q_msg = {"content": question, "role": "user"}
     chatbot.append(q_msg)
 
@@ -115,9 +105,10 @@ def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        response_gen = rag_client.query_data_analysis(question, stream=True)
+        print(chatbot)
+        response_gen = rag_client.query_data_analysis(chatbot[:-1], stream=True)
         is_thinking = False
-        for resp in response_gen:
+        async for resp in response_gen:
             if resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
                 chatbot[-1]["metadata"]["log"] = ""

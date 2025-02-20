@@ -61,22 +61,26 @@ class RagLocalClient:
         if is_finished:
             content_list = []
             for i, doc in enumerate(docs):
-                filename = doc.metadata.get("file_name", None)
-                sheet_name = doc.metadata.get("sheet_name", None)
-                ref_table = doc.metadata.get("query_tables", None)
-                invalid_flag = doc.metadata.get("invalid_flag", 0)
-                file_url = doc.metadata.get("file_url", None)
-                if doc.image_url:
-                    media_url = doc.image_url
+                metadata = doc.get("metadata", {})
+                filename = metadata.get("file_name")
+                sheet_name = metadata.get("sheet_name")
+                ref_table = metadata.get("query_tables")
+                invalid_flag = metadata.get("invalid_flag", 0)
+                file_url = metadata.get("file_url")
+                if doc.get("image_url"):
+                    media_url = doc.get("image_url")
                 else:
-                    media_url = doc.metadata.get("image_info_list", None)
-                if media_url and doc.text == "":
+                    media_url = None
+                    media_urls = metadata.get("image_info_list")
+                    if media_urls:
+                        media_url = media_urls[0]
+                if media_url and doc.get("text") == "":
                     formatted_image_name = re.sub(
                         "^[0-9a-z]{32}_", "", "/".join(media_url.split("/")[-2:])
                     )
                     content = f"""
 <span>
-    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc.score}
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc.get("score")}
 </span>
 <br>
 """
@@ -84,16 +88,16 @@ class RagLocalClient:
                     formatted_file_name = re.sub("^[0-9a-z]{32}_", "", filename)
                     if sheet_name:
                         formatted_file_name += f">>{sheet_name}"
-                    html_content = html.escape(re.sub(r"<.*?>", "", doc.text)).replace(
-                        "\n", " "
-                    )
+                    html_content = html.escape(
+                        re.sub(r"<.*?>", "", doc.get("text"))
+                    ).replace("\n", " ")
                     if file_url:
                         formatted_file_name = (
                             f'<a href="{file_url}"> {formatted_file_name} </a>'
                         )
                     content = f"""
 <span class="text">
-    [{i+1}]: {formatted_file_name} Score:{doc.score}
+    [{i+1}]: {formatted_file_name} Score:{doc.get("score")}
     <span style='color: gray; font-size: 12px;'> ( {html_content} ) </span>
 </span>
 <br>
@@ -104,7 +108,7 @@ class RagLocalClient:
 
                     if invalid_flag == 0:
                         run_flag = " ✓ "
-                        ref_sql = doc.metadata.get("query_code_instruction", None)
+                        ref_sql = metadata.get("query_code_instruction", None)
                         formatted_sql_query = f"<b>{ref_sql}</b>"
                         content = (
                             f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
@@ -113,9 +117,7 @@ class RagLocalClient:
                         )
                     else:
                         run_flag = " ✗ "
-                        ref_sql = doc.metadata.get(
-                            "generated_query_code_instruction", None
-                        )
+                        ref_sql = metadata.get("generated_query_code_instruction", None)
                         formatted_sql_query = f"<b>{ref_sql}</b>"
                         content = (
                             f"""<span style="color:grey; font-size: 14px;">{formatted_table_name}</span> \n"""
@@ -143,7 +145,9 @@ class RagLocalClient:
         with_intent: bool = False,
         index_name: str = None,
         search_web: bool = False,
+        return_reference: bool = False,
     ):
+        print(chat_messages, chat_messages[-1]["content"])
         query = RagQuery(
             question=chat_messages[-1]["content"],
             chat_history=_create_chat_history_from_messages(chat_messages[:-1]),
@@ -152,6 +156,7 @@ class RagLocalClient:
             with_intent=with_intent,
             index_name=index_name,
             search_web=search_web,
+            return_reference=return_reference,
         )
 
         try:
@@ -177,7 +182,6 @@ class RagLocalClient:
 
     async def query_data_analysis(
         self,
-        text: str,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
     ):
@@ -204,6 +208,7 @@ class RagLocalClient:
                             "docs": chunk.get("docs"),
                             "is_finished": chunk.get("is_finished", False),
                         }
+                        print(result)
                         yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
@@ -396,10 +401,8 @@ class RagLocalClient:
         destination_path = os.path.join(persist_path, file_name)
         # 写入文件
         try:
-            # shutil.copy(file.filename, destination_path)
-            with open(destination_path, "wb") as f:
-                shutil.copyfileobj(input_file, f)
-            logger.info("data analysis file saved successfully")
+            shutil.copy(input_file, destination_path)
+            logger.info(f"data analysis file saved successfully to {destination_path}.")
 
             if destination_path.endswith(".csv"):
                 df = pd.read_csv(destination_path)
@@ -409,7 +412,7 @@ class RagLocalClient:
                 raise TypeError("Unsupported file type.")
 
         except Exception as e:
-            raise RagApiError(status_code=500, msg=str(e))
+            raise RagApiError(code=500, msg=str(e))
 
         return {
             "destination_path": destination_path,
