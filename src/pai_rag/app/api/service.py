@@ -18,11 +18,7 @@ def init_router(app: FastAPI):
     app.include_router(router_openai, prefix="/v1", tags=["openai_compatible"])
     app.include_router(router_v1, prefix="/api/v1", tags=["api_v1"])
     app.include_router(agent_demo.demo_router, tags=["AgentDemo"], prefix="/demo/api")
-    if service_environment.IS_API_INSTANCE:
-        from pai_rag.app.api.v1.home import router_home
-
-        app.include_router(router_home, prefix="/", tags=["Homepage"])
-    else:
+    if service_environment.SHOULD_START_WEB:
         configure_webapp(app)
 
 

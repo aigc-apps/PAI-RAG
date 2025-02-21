@@ -25,7 +25,6 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pai_rag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
-    DEFAULT_QUARK_SEARCH_ENDPOINT,
     DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
     QuarkSearchConfig,
@@ -91,10 +90,6 @@ class ViewModel(BaseModel):
     search_api_key: str = None
     search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
-
-    quark_host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
-    quark_user: str = None
-    quark_secret: str = None
 
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_access_key_id: str = None
@@ -253,10 +248,10 @@ class ViewModel(BaseModel):
             view_model.search_lang = config.search.search_lang
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, QuarkSearchConfig):
-            view_model.search_type = "夸克"
-            view_model.quark_host = config.search.host
-            view_model.quark_secret = config.search.secret
-            view_model.quark_user = config.search.user
+            view_model.search_type = "aliyun"
+            view_model.aliyun_endpoint = ""
+            view_model.aliyun_access_key_id = ""
+            view_model.aliyun_access_key_secret = ""
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, AliyunSearchConfig):
             view_model.search_type = "aliyun"
@@ -443,12 +438,6 @@ class ViewModel(BaseModel):
             )
             config["search"]["search_lang"] = self.search_lang
             config["search"]["search_count"] = self.search_count
-        elif self.search_type == "夸克":
-            config["search"]["source"] = "quark"
-            config["search"]["host"] = self.quark_host
-            config["search"]["user"] = self.quark_user
-            config["search"]["secret"] = self.quark_secret
-            config["search"]["search_count"] = self.search_count
         else:
             config["search"]["source"] = "aliyun"
             config["search"]["endpoint"] = self.aliyun_endpoint
@@ -621,31 +610,6 @@ class ViewModel(BaseModel):
             settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
             settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": False}
-            settings["quark_user"] = {"value": self.quark_user, "visible": False}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-            settings["aliyun_endpoint"] = {
-                "value": self.aliyun_endpoint,
-                "visible": False,
-            }
-            settings["aliyun_access_key_id"] = {
-                "value": self.aliyun_access_key_id,
-                "visible": False,
-            }
-            settings["aliyun_access_key_secret"] = {
-                "value": self.aliyun_access_key_secret,
-                "visible": False,
-            }
-        elif self.search_type == "夸克":
-            settings["search_api_key"] = {
-                "value": self.search_api_key,
-                "visible": False,
-            }
-            settings["search_lang"] = {"value": self.search_lang, "visible": False}
-            settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": True}
-            settings["quark_user"] = {"value": self.quark_user, "visible": True}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
                 "visible": False,
@@ -666,9 +630,6 @@ class ViewModel(BaseModel):
             }
             settings["search_lang"] = {"value": self.search_lang, "visible": False}
             settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": False}
-            settings["quark_user"] = {"value": self.quark_user, "visible": False}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
                 "visible": True,

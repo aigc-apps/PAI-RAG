@@ -18,9 +18,6 @@ def change_search_model_argument(search_type):
         gr.update(visible=True if search_type == "bing" else False),
         gr.update(visible=True),
         gr.update(visible=True if search_type == "bing" else False),
-        gr.update(visible=True if search_type == "夸克" else False),
-        gr.update(visible=True if search_type == "夸克" else False),
-        gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
@@ -388,22 +385,6 @@ def create_chat_tab() -> Dict[str, Any]:
                         value="zh-CN",
                         elem_id="search_lang",
                     )
-                    quark_host = gr.Text(
-                        label="Quark Host",
-                        value="",
-                        elem_id="quark_host",
-                    )
-                    quark_user = gr.Text(
-                        label="Quark User",
-                        value="",
-                        elem_id="quark_user",
-                    )
-                    quark_secret = gr.Text(
-                        label="Quark Secret",
-                        value="",
-                        type="password",
-                        elem_id="quark_secret",
-                    )
                     aliyun_endpoint = gr.Text(
                         label="Endpoint", value="", elem_id="aliyun_endpoint"
                     )
@@ -421,9 +402,6 @@ def create_chat_tab() -> Dict[str, Any]:
                     search_api_key,
                     search_count,
                     search_lang,
-                    quark_host,
-                    quark_user,
-                    quark_secret,
                     aliyun_endpoint,
                     aliyun_access_key_id,
                     aliyun_access_key_secret,
@@ -435,9 +413,6 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_api_key,
                         search_count,
                         search_lang,
-                        quark_host,
-                        quark_user,
-                        quark_secret,
                         aliyun_endpoint,
                         aliyun_access_key_id,
                         aliyun_access_key_secret,
@@ -589,9 +564,6 @@ def create_chat_tab() -> Dict[str, Any]:
             search_api_key.elem_id: search_api_key,
             search_count.elem_id: search_count,
             search_type.elem_id: search_type,
-            quark_host.elem_id: quark_host,
-            quark_secret.elem_id: quark_secret,
-            quark_user.elem_id: quark_user,
             aliyun_endpoint.elem_id: aliyun_endpoint,
             aliyun_access_key_id.elem_id: aliyun_access_key_id,
             aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
