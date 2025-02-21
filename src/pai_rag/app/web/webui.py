@@ -1,4 +1,3 @@
-from urllib.parse import urljoin
 from fastapi import FastAPI
 import gradio as gr
 from pai_rag.app.web import event_listeners
@@ -135,13 +134,11 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
     rag_client.set_endpoint(rag_url)
 
     chat_page = create_chat_ui()
-    chat_page.queue(concurrency_count=1, max_size=64)
-    chat_page._queue.set_url(urljoin(web_url, "chat/"))
+    chat_page.queue(api_open=True, max_size=64)
     gr.mount_gradio_app(app, chat_page, path="/chat")
 
     home = make_homepage()
-    home.queue(concurrency_count=1, max_size=64)
-    home._queue.set_url(urljoin(web_url, "/"))
+    chat_page.queue(api_open=True, max_size=64)
     logger.info(f"web_url: {web_url}")
     gr.mount_gradio_app(app, home, path="/")
     return

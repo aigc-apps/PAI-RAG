@@ -25,8 +25,7 @@ from llama_index.core.llms.utils import LLMType
 from llama_index.core.multi_modal_llms import MultiModalLLM
 from llama_index.core.query_engine.multi_modal import SimpleMultiModalQueryEngine
 from llama_index.core.schema import BaseNode, ImageNode
-from llama_index.core.service_context import ServiceContext
-from llama_index.core.settings import Settings, llm_from_settings_or_context
+from llama_index.core.settings import Settings
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.vector_stores.simple import (
     DEFAULT_VECTOR_STORE,
@@ -67,11 +66,22 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         # keep image_vector_store here for backward compatibility
         image_vector_store: Optional[BasePydanticVectorStore] = None,
         image_embed_model: EmbedType = "clip:ViT-B/32",
-        # deprecated
-        service_context: Optional[ServiceContext] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
+        storage_context = storage_context or StorageContext.from_defaults()
+
+        super().__init__(
+            nodes=nodes,
+            index_struct=index_struct,
+            embed_model=embed_model,
+            storage_context=storage_context,
+            show_progress=show_progress,
+            use_async=use_async,
+            store_nodes_override=store_nodes_override,
+            **kwargs,
+        )
+
         self._enable_multimodal = enable_multimodal
         if self._enable_multimodal:
             image_embed_model = resolve_embed_model(
@@ -99,20 +109,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 self.image_namespace
             ]
 
-        storage_context = storage_context or StorageContext.from_defaults()
-
-        super().__init__(
-            nodes=nodes,
-            index_struct=index_struct,
-            embed_model=embed_model,
-            service_context=service_context,
-            storage_context=storage_context,
-            show_progress=show_progress,
-            use_async=use_async,
-            store_nodes_override=store_nodes_override,
-            **kwargs,
-        )
-
     @property
     def image_vector_store(self) -> BasePydanticVectorStore:
         return self._image_vector_store
@@ -136,7 +132,7 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
     ) -> SimpleMultiModalQueryEngine:
         retriever = cast(PaiMultiModalVectorIndexRetriever, self.as_retriever(**kwargs))
 
-        llm = llm or llm_from_settings_or_context(Settings, self._service_context)
+        llm = llm or Settings.llm
         assert isinstance(llm, MultiModalLLM)
 
         return SimpleMultiModalQueryEngine(
@@ -151,7 +147,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         vector_store: BasePydanticVectorStore,
         embed_model: Optional[EmbedType] = None,
         # deprecated
-        service_context: Optional[ServiceContext] = None,
         # Image-related kwargs
         image_vector_store: Optional[BasePydanticVectorStore] = None,
         image_embed_model: EmbedType = "clip",
@@ -168,7 +163,6 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
 
         return cls(
             nodes=[],
-            service_context=service_context,
             storage_context=storage_context,
             image_embed_model=image_embed_model,
             embed_model=(

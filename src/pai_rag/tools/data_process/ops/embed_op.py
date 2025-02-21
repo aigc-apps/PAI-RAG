@@ -1,6 +1,5 @@
 import ray
 import numpy as np
-from loguru import logger
 from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
@@ -20,9 +19,6 @@ class Embedder(BaseOP):
     """Mapper to generate samples whose captions are generated based on
     another model and the figure."""
 
-    _accelerator = "cpu"
-    _batched_op = True
-
     def __init__(
         self,
         source: str = None,
@@ -30,8 +26,10 @@ class Embedder(BaseOP):
         enable_sparse: bool = False,
         enable_multimodal: bool = False,
         multimodal_source: str = None,
+        connection_name: str = None,
+        workspace_id: str = None,
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.embedder_cfg = parse_embed_config(
@@ -39,6 +37,8 @@ class Embedder(BaseOP):
                 "source": source,
                 "model": model,
                 "enable_sparse": enable_sparse,
+                "connection_name": connection_name,
+                "workspace_id": workspace_id,
             }
         )
         # Init model download list
@@ -56,18 +56,26 @@ class Embedder(BaseOP):
 
         # Init embedding models
         self.embed_model = create_embedding(self.embedder_cfg)
-        logger.info("Dense embedding model loaded.")
+        self.logger.info("Dense embedding model loaded.")
         if self.embedder_cfg.enable_sparse:
             self.sparse_embed_model = BGEM3SparseEmbeddingFunction(
                 model_name_or_path=self.model_dir
             )
-            logger.info("Sparse embedding model loaded.")
+            self.logger.info("Sparse embedding model loaded.")
         if self.enable_multimodal:
             self.multimodal_embed_model = create_embedding(
                 self.mm_embedder_cfg, pai_rag_model_dir=self.model_dir
             )
-            logger.info("Multi-modal embedding model loaded.")
-        logger.info("Embedder init finished.")
+            self.logger.info("Multi-modal embedding model loaded.")
+        self.logger.info(
+            f"""EmbedderActor [PaiEmbedding] init finished with following parameters:
+                        source: {source}
+                        model: {model}
+                        enable_sparse: {enable_sparse}
+                        enable_multimodal: {enable_multimodal}
+                        multimodal_source: {multimodal_source}
+            """
+        )
 
     def process_extra_metadata(self, nodes):
         excluded_embed_metadata_keys = nodes["excluded_embed_metadata_keys"]
@@ -105,7 +113,7 @@ class Embedder(BaseOP):
                 node["embedding"] = embedding
                 node["sparse_embedding"] = sparse_embedding
         else:
-            logger.info("No text nodes to process.")
+            self.logger.info("No text nodes to process.")
 
         if len(image_nodes) > 0:
             image_urls = [node["metadata"]["image_url"] for node in image_nodes]
@@ -116,6 +124,6 @@ class Embedder(BaseOP):
             for node, emb in zip(image_nodes, image_embeddings):
                 node["embedding"] = emb
         else:
-            logger.info("No image nodes to process.")
+            self.logger.info("No image nodes to process.")
 
         return text_nodes + image_nodes

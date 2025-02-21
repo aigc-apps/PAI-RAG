@@ -119,6 +119,7 @@ DASHSCOPE_MODEL_META = {
 class SupportedLlmType(str, Enum):
     dashscope = "dashscope"
     openai = "openai"
+    openai_compatible = "openai_compatible"
     paieas = "paieas"
 
 
@@ -127,6 +128,8 @@ class PaiBaseLlmConfig(BaseModel):
     temperature: float = DEFAULT_TEMPERATURE
     system_prompt: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
+    base_url: str | None = None
+    api_key: str | None = None
     model: str = None
 
     @classmethod
@@ -152,6 +155,15 @@ class OpenAILlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.openai] = SupportedLlmType.openai
     api_key: str | None = None
     model: str = "gpt-3.5-turbo"
+
+
+class OpenAICompatibleLlmConfig(PaiBaseLlmConfig):
+    source: Literal[
+        SupportedLlmType.openai_compatible
+    ] = SupportedLlmType.openai_compatible
+    base_url: str | None = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    api_key: str | None = None
+    model: str = ""
 
 
 class PaiEasLlmConfig(PaiBaseLlmConfig):

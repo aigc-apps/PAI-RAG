@@ -20,6 +20,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     OpenSearchVectorStoreConfig,
     PostgreSQLVectorStoreConfig,
     TablestoreVectorStoreConfig,
+    DashVectorVectorStoreConfig,
 )
 
 
@@ -78,6 +79,10 @@ index_related_component_keys = [
     "tablestore_access_key_id",
     "tablestore_access_key_secret",
     "tablestore_table_name",
+    "dashvector_endpoint",
+    "dashvector_api_key",
+    "dashvector_collection_name",
+    "dashvector_partition_name",
 ]
 
 
@@ -180,7 +185,7 @@ def index_to_components_settings(
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
-                {"value": ""},
+                {"value": "cn-hangzhou"},
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
@@ -298,6 +303,7 @@ def index_to_components_settings(
                 {"value": ""},
             ]
         )
+
     if isinstance(vector_store_config, TablestoreVectorStoreConfig):
         vector_component_settings.extend(
             [
@@ -318,6 +324,27 @@ def index_to_components_settings(
                 {"value": ""},
             ]
         )
+
+    if isinstance(vector_store_config, DashVectorVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.endpoint},
+                {"value": vector_store_config.api_key},
+                {"value": vector_store_config.collection_name},
+                {"value": vector_store_config.partition_name},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
     component_settings = [
         *index_component_settings,
         *embed_component_settings,
@@ -390,6 +417,10 @@ def components_to_index(
     tablestore_access_key_id,
     tablestore_access_key_secret,
     tablestore_table_name,
+    dashvector_endpoint,
+    dashvector_api_key,
+    dashvector_collection_name,
+    dashvector_partition_name,
     **kwargs,
 ) -> RagIndexEntry:
     if vector_index is None or vector_index.lower() == "new":
@@ -482,6 +513,14 @@ def components_to_index(
             "access_key_id": tablestore_access_key_id,
             "access_key_secret": tablestore_access_key_secret,
             "table_name": tablestore_table_name,
+        }
+    elif vectordb_type.lower() == "dashvector":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "endpoint": dashvector_endpoint,
+            "api_key": dashvector_api_key,
+            "collection_name": dashvector_collection_name,
+            "partition_name": dashvector_partition_name,
         }
     else:
         raise ValueError(f"Unknown vector db type: {vectordb_type}")

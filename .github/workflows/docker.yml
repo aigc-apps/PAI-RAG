@@ -42,6 +42,13 @@ jobs:
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
 
+      - name: Build and push base data process image
+        env:
+          IMAGE_TAG: ${{env.VERSION_TAG}}-rag-data-operator
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f src/pai_rag/tools/data_process/docker/Dockerfile_cpu .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
+
       - name: Build and push UI image
         env:
           IMAGE_TAG: ${{env.VERSION_TAG}}-ui

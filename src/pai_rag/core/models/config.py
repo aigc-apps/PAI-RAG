@@ -1,16 +1,36 @@
 from typing import List
 from pydantic import BaseModel
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from pai_rag.integrations.synthesizer.pai_synthesizer import (
-    DEFAULT_TEXT_QA_TMPL_EN,
-    DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN,
-    CITATION_TEXT_QA_TMPL_EN,
-    CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN,
+from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_SYSTEM_ROLE_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
 
 
 DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
+
+
+class QueryRewriteConfig(BaseModel):
+    enabled: bool = True
+    llm: OpenAICompatibleLlmConfig | None = None
+
+
+class AliyunTextModerationPlusConfig(BaseModel):
+    endpoint: str | None = "green-cip.cn-hangzhou.aliyuncs.com"
+    region: str | None = "cn-hangzhou"
+    access_key_id: str | None = None
+    access_key_secret: str | None = None
+    custom_advice: str | None = None
+
+    def is_enabled(self) -> bool:
+        return (
+            self.access_key_id is not None
+            and self.access_key_secret is not None
+            and len(self.access_key_id) > 0
+            and len(self.access_key_secret) > 0
+        )
 
 
 class NodeEnhancementConfig(BaseModel):
@@ -37,15 +57,7 @@ class RetrieverConfig(BaseModel):
     ]
 
 
-class SearchWebConfig(BaseModel):
-    search_api_key: str | None = None
-    search_count: int = 10
-    search_lang: str = "zh-CN"
-
-
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
-    text_qa_template: str = DEFAULT_TEXT_QA_TMPL_EN
-    citation_text_qa_template: str = CITATION_TEXT_QA_TMPL_EN
-    multimodal_qa_template: str = DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN
-    citation_multimodal_qa_template: str = CITATION_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL_EN
+    system_role_template: str = DEFAULT_SYSTEM_ROLE_TEMPLATE
+    custom_prompt_template: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE

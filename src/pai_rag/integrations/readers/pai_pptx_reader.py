@@ -6,8 +6,6 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from typing import Dict, List, Optional, Union, Any
 import os
-import aspose.slides as slides
-import aspose.pydrawing as drawing
 from PIL import Image
 import time
 from pai_rag.utils.markdown_utils import (
@@ -24,16 +22,11 @@ from loguru import logger
 class PaiPptxReader(BaseReader):
     def __init__(
         self,
-        enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        logger.info(
-            f"PaiPptxReader created with enable_table_summary : {self.enable_table_summary}"
-        )
 
-    def _extract_shape(self, slide_number, shape):
+    def _extract_shape(self, slide_number, shape, ppt_name):
         image_flag = False
         markdown = []
         if shape.name.startswith("Title"):
@@ -41,7 +34,20 @@ class PaiPptxReader(BaseReader):
             markdown.append(f"# {shape.text}\n\n")
         elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
             # 图片
+            logger.info(f"extracting image from pptx {ppt_name}")
             image_flag = True
+            if self._oss_cache:
+                image = shape.image
+                image_blob = image.blob
+                image_extension = image.ext
+                image_url = self._transform_local_to_oss(
+                    image_blob, image_extension, ppt_name
+                )
+                if image_url:
+                    time_tag = int(time.time())
+                    alt_text = f"pai_rag_image_{time_tag}_"
+                    image_content = f"![{alt_text}]({image_url})"
+                    markdown.append(f"{image_content}\n\n")
         elif shape.shape_type == MSO_SHAPE_TYPE.TEXT_BOX:
             # 文本框
             markdown.append(f"{shape.text}\n\n")
@@ -53,7 +59,7 @@ class PaiPptxReader(BaseReader):
         elif shape.shape_type == MSO_SHAPE_TYPE.GROUP:
             texts = []
             for p in sorted(shape.shapes, key=lambda x: (x.top // 10, x.left)):
-                md, shape_image_flag = self._extract_shape(slide_number, p)
+                md, shape_image_flag = self._extract_shape(slide_number, p, ppt_name)
                 if md:
                     texts.append(md)
                 if shape_image_flag:
@@ -109,6 +115,16 @@ class PaiPptxReader(BaseReader):
         )
         return convert_table_to_markdown(pai_table, len(table.columns))
 
+    def _transform_local_to_oss(
+        self, image_blob: bytes, image_extension: str, ppt_name: str
+    ):
+        # 暂时不处理Windows图元文件
+        if image_extension.lower() == ".emf" or image_extension.lower() == ".wmf":
+            logger.warning(f"Skip processing EMF or WMF image: {image_extension}")
+            return None
+        image = Image.open(BytesIO(image_blob))
+        return transform_local_to_oss(self._oss_cache, image, ppt_name)
+
     def convert_pptx_to_markdown(self, fnm):
         ppt_name = os.path.basename(fnm).split(".")[0]
         ppt_name = ppt_name.replace(" ", "_")
@@ -121,7 +137,7 @@ class PaiPptxReader(BaseReader):
             image_flag = False
             for shape in slide.shapes:
                 shape_markdown, shape_image_flag = self._extract_shape(
-                    slide_number, shape
+                    slide_number, shape, ppt_name
                 )
                 if shape_image_flag:
                     image_flag = shape_image_flag
@@ -129,23 +145,24 @@ class PaiPptxReader(BaseReader):
             markdown.append(f"# slide_number_{slide_number}\n\n")
             slide_image_flag.append(image_flag)
 
-        if self._oss_cache:
-            with slides.Presentation(fnm) as presentation:
-                for i, slide in enumerate(presentation.slides):
-                    if slide_image_flag[i]:
-                        buffered = BytesIO()
-                        slide.get_thumbnail(0.5, 0.5).save(
-                            buffered, drawing.imaging.ImageFormat.jpeg
-                        )
-                        buffered.seek(0)
-                        image = Image.open(buffered)
-                        image_url = transform_local_to_oss(
-                            self._oss_cache, image, ppt_name
-                        )
-                        time_tag = int(time.time())
-                        alt_text = f"pai_rag_image_{time_tag}_"
-                        image_content = f"![{alt_text}]({image_url})"
-                        markdown.append(f"{image_content}\n\n")
+        # if self._oss_cache:
+        #     with slides.Presentation(fnm) as presentation:
+        #         for i, slide in enumerate(presentation.slides):
+        #             if slide_image_flag[i]:
+        #                 buffered = BytesIO()
+        #                 slide.get_thumbnail(0.5, 0.5).save(
+        #                     buffered, drawing.imaging.ImageFormat.jpeg
+        #                 )
+        #                 buffered.seek(0)
+        #                 image = Image.open(buffered)
+        #                 image_url = transform_local_to_oss(
+        #                     self._oss_cache, image, ppt_name
+        #                 )
+        #                 if image_url:
+        #                     time_tag = int(time.time())
+        #                     alt_text = f"pai_rag_image_{time_tag}_"
+        #                     image_content = f"![{alt_text}]({image_url})"
+        #                     markdown.append(f"{image_content}\n\n")
 
         return "".join(markdown)
 

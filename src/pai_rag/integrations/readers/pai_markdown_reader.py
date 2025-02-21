@@ -29,14 +29,9 @@ HTML_IMAGE_PATTERN = re.compile(
 class PaiMarkdownReader(BaseReader):
     def __init__(
         self,
-        enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        logger.info(
-            f"PaiMarkdownReader created with enable_table_summary : {self.enable_table_summary}"
-        )
 
     def replace_image_paths(self, markdown_dir: str, markdown_name: str, content: str):
         markdown_image_matches = MARKDOWN_IMAGE_PATTERN.finditer(content)

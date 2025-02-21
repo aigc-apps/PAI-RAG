@@ -9,8 +9,6 @@ from pai_rag.app.web.ui_constants import (
     DEFAULT_EMBED_SIZE,
     DEFAULT_HF_EMBED_MODEL,
     EMBEDDING_DIM_DICT,
-    LLM_MODEL_KEY_DICT,
-    MLLM_MODEL_KEY_DICT,
     EMBEDDING_TYPE_DICT,
 )
 from pai_rag.core.rag_index_manager import RagIndexEntry
@@ -96,38 +94,18 @@ def change_use_oss(use_oss):
         return gr.update(visible=False)
 
 
-def choose_use_mllm(value):
-    if value:
+def change_enable_guardrail(enable_guardrail):
+    if enable_guardrail:
         return gr.update(visible=True)
     else:
         return gr.update(visible=False)
 
 
-def change_llm(value):
-    eas_visible = value.lower() == "paieas"
-    api_visible = value.lower() != "paieas"
-    model_options = LLM_MODEL_KEY_DICT.get(value, [])
-    cur_model = model_options[0] if model_options else ""
-    return [
-        gr.update(visible=eas_visible),
-        gr.update(visible=eas_visible),
-        gr.update(visible=eas_visible),
-        gr.update(choices=model_options, value=cur_model, visible=api_visible),
-        gr.update(visible=api_visible),
-    ]
-
-
-def change_mllm(value):
-    eas_visible = value.lower() == "paieas"
-    api_visible = value.lower() != "paieas"
-    model_options = MLLM_MODEL_KEY_DICT.get(value, [])
-    cur_model = model_options[0] if model_options else ""
-    return [
-        gr.update(visible=eas_visible),
-        gr.update(visible=api_visible),
-        gr.update(choices=model_options, value=cur_model),
-        gr.update(visible=api_visible),
-    ]
+def choose_use_mllm(value):
+    if value:
+        return gr.update(visible=True)
+    else:
+        return gr.update(visible=False)
 
 
 def get_default_index_entry(index_map):
@@ -162,6 +140,7 @@ def change_vectordb_conn(vectordb_type):
     opensearch_visible = False
     postgresql_visible = False
     tablestore_visible = False
+    dashvector_visible = False
     if vectordb_type.lower() == "analyticdb":
         adb_visible = True
     elif vectordb_type.lower() == "hologres":
@@ -178,7 +157,8 @@ def change_vectordb_conn(vectordb_type):
         postgresql_visible = True
     elif vectordb_type.lower() == "tablestore":
         tablestore_visible = True
-
+    elif vectordb_type.lower() == "dashvector":
+        dashvector_visible = True
     return [
         gr.update(visible=adb_visible),
         gr.update(visible=hologres_visible),
@@ -188,6 +168,7 @@ def change_vectordb_conn(vectordb_type):
         gr.update(visible=opensearch_visible),
         gr.update(visible=postgresql_visible),
         gr.update(visible=tablestore_visible),
+        gr.update(visible=dashvector_visible),
     ]
 
 
@@ -200,6 +181,7 @@ def save_config(input_elements: List[Any]):
             if element.elem_id == "oss_sk":
                 value_sk = value
             update_dict[element.elem_id] = value
+        print(update_dict)
         rag_client.patch_config(update_dict)
         return [
             gr.update(
@@ -209,7 +191,8 @@ def save_config(input_elements: List[Any]):
                 value=input_oss_ak_sk(value_sk), type="text" if value_sk else "password"
             ),
             gr.update(
-                value=f"[{datetime.datetime.now()}] Snapshot configuration saved successfully!"
+                value=f"[{datetime.datetime.now()}] Snapshot configuration saved successfully!",
+                visible=True,
             ),
         ]
     except RagApiError as api_error:

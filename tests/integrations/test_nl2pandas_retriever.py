@@ -13,8 +13,9 @@ from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
 )
 
 
-llm = DashScope(model_name="qwen-max", temperature=0.1)
-embed_model = DashScopeEmbedding(embed_batch_size=10)
+dashscope_key = os.environ.get("DASHSCOPE_API_KEY")
+llm = DashScope(model_name="qwen-max", temperature=0.1, api_key=dashscope_key)
+embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
 Settings.llm = llm
 Settings.embed_model = embed_model
 
@@ -61,7 +62,7 @@ def test_data_analysis_synthesizer():
                 end_char_idx=None,
                 text_template="{metadata_str}\n\n{content}",
                 metadata_template="{key}: {value}",
-                metadata_seperator="\n",
+                metadata_separator="\n",
             ),
             score=1.0,
         )

@@ -2,8 +2,7 @@ from io import BytesIO
 from typing import Any, Callable, List, Optional
 from llama_index.core.embeddings import MultiModalEmbedding
 from llama_index.core.base.embeddings.base import Embedding
-from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
-from llama_index.core.bridge.pydantic import Field, PrivateAttr
+from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.schema import ImageType, BaseNode, ImageNode
 from loguru import logger
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
@@ -15,7 +14,6 @@ from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 class PaiMultiModalEmbedding(MultiModalEmbedding):
     """PAI multimodal embedding model"""
 
-    _embed_batch_size: int = Field(default=DEFAULT_EMBED_BATCH_SIZE, gt=0)
     _embed_model: Any = PrivateAttr()
     _config: Any = PrivateAttr()
 
@@ -23,14 +21,15 @@ class PaiMultiModalEmbedding(MultiModalEmbedding):
         self,
         multimodal_embed_config: PaiBaseEmbeddingConfig,
     ):
-        self._config = multimodal_embed_config
-        self._embed_model = create_embedding(multimodal_embed_config)
+        embed_model = create_embedding(multimodal_embed_config)
 
         super().__init__(
-            model_name=self._embed_model.model_name,
-            embed_batch_size=self._embed_model.embed_batch_size,
-            callback_manager=self._embed_model.callback_manager,
+            model_name=embed_model.model_name,
+            embed_batch_size=embed_model.embed_batch_size,
+            callback_manager=embed_model.callback_manager,
         )
+        self._config = multimodal_embed_config
+        self._embed_model = embed_model
         logger.info(
             f"""
                 PaiMultiModalEmbedding Module created with config:

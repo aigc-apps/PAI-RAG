@@ -41,17 +41,18 @@ class MyModelBasedReranker(BaseNodePostprocessor):
                 "Cannot import FlagReranker package, please install it: ",
                 "pip install git+https://github.com/FlagOpen/FlagEmbedding.git",
             )
-        self._model = FlagReranker(
-            model,
-            use_fp16=use_fp16,
-        )
-        callback_manager = callback_manager or Settings.callback_manager
+
         super().__init__(
             top_n=top_n,
             model=model,
             similarity_threshold=similarity_threshold,
             use_fp16=use_fp16,
-            callback_manager=callback_manager,
+            callback_manager=callback_manager or Settings.callback_manager,
+        )
+
+        self._model = FlagReranker(
+            model,
+            use_fp16=use_fp16,
         )
 
     @classmethod

@@ -27,19 +27,14 @@ class PaiDocxReader(BaseReader):
     """Read docx files including texts, tables, images.
 
     Args:
-        enable_table_summary (bool):  whether to use table_summary to process tables
+        oss_cache : oss_cache
     """
 
     def __init__(
         self,
-        enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        logger.info(
-            f"PaiDocxReader created with enable_table_summary : {self.enable_table_summary}"
-        )
 
     def _transform_local_to_oss(
         self, image_blob: bytes, image_filename: str, doc_name: str
@@ -48,6 +43,7 @@ class PaiDocxReader(BaseReader):
         if image_filename.lower().endswith(".emf") or image_filename.lower().endswith(
             ".wmf"
         ):
+            logger.warning(f"Skip processing EMF or WMF image: {image_filename}")
             return None
         image = Image.open(BytesIO(image_blob))
         return transform_local_to_oss(self._oss_cache, image, doc_name)
@@ -151,10 +147,11 @@ class PaiDocxReader(BaseReader):
                         image_url = self._transform_local_to_oss(
                             image_blob, image_filename, doc_name
                         )
-                        time_tag = int(time.time())
-                        alt_text = f"pai_rag_image_{time_tag}_"
-                        image_content = f"![{alt_text}]({image_url})"
-                        paragraph_content.append(image_content)
+                        if image_url:
+                            time_tag = int(time.time())
+                            alt_text = f"pai_rag_image_{time_tag}_"
+                            image_content = f"![{alt_text}]({image_url})"
+                            paragraph_content.append(image_content)
 
             else:
                 paragraph_content.append(run.text)
@@ -207,10 +204,13 @@ class PaiDocxReader(BaseReader):
                                         image_url = self._transform_local_to_oss(
                                             image_blob, image_filename, doc_name
                                         )
-                                        time_tag = int(time.time())
-                                        alt_text = f"pai_rag_image_{time_tag}_"
-                                        image_content = f"![{alt_text}]({image_url})"
-                                        markdown.append(f"{image_content}\n\n")
+                                        if image_url:
+                                            time_tag = int(time.time())
+                                            alt_text = f"pai_rag_image_{time_tag}_"
+                                            image_content = (
+                                                f"![{alt_text}]({image_url})"
+                                            )
+                                            markdown.append(f"{image_content}\n\n")
                     markdown.append(self._convert_paragraph(paragraph))
 
             elif isinstance(element.tag, str) and element.tag.endswith("tbl"):  # 表格

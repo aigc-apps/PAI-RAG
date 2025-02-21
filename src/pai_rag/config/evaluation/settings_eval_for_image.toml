@@ -87,7 +87,7 @@ query_rewrite_n = 1 # set to 1 to disable query generation
 search_image = true
 
 [rag.search]
-search_api_key = ""
+source = "quark"
 
 [rag.synthesizer]
 type = "SimpleSummarize"

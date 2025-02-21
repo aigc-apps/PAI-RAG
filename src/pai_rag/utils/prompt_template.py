@@ -67,7 +67,13 @@ The response should be concise to keep json complete。
 
 CONDENSE_QUESTION_CHAT_ENGINE_PROMPT = PromptTemplate(
     """\
-Please play the role of an intelligent search rewriting and completion robot. According to the user's chat history and the corresponding new question, please first rewrite the subject inheritance of the new question, and then complete the context information. Note: Do not change the meaning of the new question, the answer should be as concise as possible, do not directly answer the question, and do not output more content.
+Please play the role of an intelligent search rewriting and completion robot.
+According to the user's chat history,
+please rewrite the new question into a condensed question by resolving references from context.
+Note: Do not change the meaning of the new question, the answer should be as concise as possible, do not directly answer the question, and do not output more content.
+
+Please think carefully and give your answer using the same language as the <New question>
+
 Example:
 <Chat history>
 User: What did you do this morning?
@@ -76,8 +82,8 @@ Assistant: Go play basketball
 <New question>
 User: Is it fun?
 
-Answer:
-Answer: Is playing basketball fun?
+<Condensed question>
+Is playing basketball fun?
 
 Now it's your turn:
 <Chat history>
@@ -86,35 +92,45 @@ Now it's your turn:
 <New question>
 {question}
 
-Please think carefully and give your answer using the same language as the <New question>:
+<Condensed question>
 """
 )
 
-CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH = PromptTemplate(
-    """\
-请你扮演一个智能搜索改写补全机器人，请根据User的聊天历史以及对应的新问题，对新问题先进行主语继承改写，然后进行上下文信息补全，注意：不要改变新问题的意思，答案要尽可能简洁，不要直接回答该问题，不要输出多于的内容。
-例子：
-<聊天历史>
-User：今天上午你干嘛了
-Assistant：去打篮球啦
+CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH = """# 角色
+你是一位专业的信息检索专家，负责分析聊天记录以确定是否需要生成搜索查询。你的目标是确保获取全面、最新且有价值的信息。
 
-<新问题>
-User：好玩吗？
+## 技能
+### 技能 1: 聊天记录分析
+- 分析提供的聊天记录，判断是否需要生成搜索查询。
+- 如果存在任何不确定性或可能获取到有用信息的情况，只需生成1-2个广泛且相关的搜索查询。
 
-答案：
-答案：打篮球好玩吗？
+### 技能 2: 生成搜索查询
+- 生成的搜索查询应简洁、明确且与主题相关。
+- 查询应尽可能广泛，以便获取更多相关信息。
+- 时间相关查询：（1）高频波动信息（如黄金价格、外汇汇率、股票价格等）：请提供具体且最新的时间信息，例如最新一天或实时数据，并使用适当的短时间间隔。（2）低频更新信息（如汽车评测、电影上映、歌曲发布等）：请使用较宽泛的时间范围，如最近一个月或更长时间，并提供相关的时间信息。
+- 非时间相关查询：避免随意添加时间信息，确保回答专注于查询的主要内容。
+- 生成的查询格式为 JSON 对象：```{ "queries": ["query1", "query2"] }```。
 
-现在轮到你了：
-<聊天历史>
+### 技能 3: 确定无需搜索
+- 如果完全确定不需要额外信息，返回空列表：```{ "queries": [] }```。
+
+## 限制
+- **仅**以 JSON 对象的形式响应，不允许任何形式的额外评论、解释或附加文本。
+- 除非绝对确定没有有用的结果可以通过搜索获得，否则建议生成搜索查询。
+- 在生成搜索查询时，确保每个查询都是独立的、简洁的，并且与主题相关。
+- 保持输出格式的一致性，严格遵循给定的 JSON 格式要求。
+- 简明扼要地专注于撰写高质量的搜索查询，避免不必要的详细说明、评论或假设。
+- 保持输出语言与输入语言的一致性。
+"""
+
+CONDENSE_QUESTION_ANSWER_PROMPT_ZH = """## 聊天记录:
 {chat_history}
 
-<新问题>
+用户:
 {question}
 
-请仔细思考后，使用和<新问题>相同的语言，给出你的答案：
+请仔细思考后，给出你的答案：
 """
-)
-
 
 QUERY_GEN_PROMPT = (
     "You are a helpful assistant that generates multiple search queries based on a single input query. "

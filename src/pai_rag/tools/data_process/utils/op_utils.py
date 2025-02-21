@@ -1,4 +1,6 @@
+import os
 from loguru import logger
+from pathlib import Path
 from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
 from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
@@ -58,3 +60,15 @@ def load_op_names(process_list):
         op_name, _ = list(process.items())[0]
         op_names.append(op_name)
     return op_names
+
+
+def replace_if_previous_op_subdirectory(folder_path, op_name):
+    folder = Path(folder_path)
+    previous_op_name = get_previous_operation(op_name)
+
+    # 检查一级子目录
+    for entry in folder.iterdir():
+        if entry.is_dir() and entry.name == previous_op_name:
+            return os.path.join(folder_path, previous_op_name)
+
+    return folder_path

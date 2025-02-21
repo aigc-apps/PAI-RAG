@@ -1,5 +1,5 @@
 import os
-import json
+import shutil
 from loguru import logger
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_module import (
@@ -21,7 +21,7 @@ from pai_rag.evaluation.dataset.crag.crag_jsonl_reader import CragJsonLReader
 from pai_rag.evaluation.dataset.crag.crag_data_loader import CragDataLoader
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
-from pai_rag.evaluation.generator.multimodal_qca_generator import MultimodalQcaGenerator
+from pai_rag.evaluation.dataset.state_manager import StateManager
 
 
 def get_rag_config_and_mode(config_file, exp_name):
@@ -73,12 +73,16 @@ def get_eval_components(
     else:
         llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
 
+    state_manager = StateManager(
+        os.path.join(config.index.vector_store.persist_path, "state.json")
+    )
     qca_generator = RagQcaGenerator(
         llm=llm,
         vector_index=vector_index,
         query_engine=query_engine,
         persist_path=config.index.vector_store.persist_path,
         enable_multi_modal=True if mode == "image" else False,
+        state_manager=state_manager,
     )
 
     if use_pai_eval:
@@ -90,6 +94,7 @@ def get_eval_components(
         evaluator = PaiEvaluator(
             llm_config=model_config,
             persist_path=config.index.vector_store.persist_path,
+            state_manager=state_manager,
         )
     else:
         eval_llm_config = parse_llm_config(eval_model_llm_config)
@@ -102,6 +107,7 @@ def get_eval_components(
             persist_path=config.index.vector_store.persist_path,
             enable_multi_modal=True if mode == "image" else False,
             use_granular_metrics=True,
+            state_manager=state_manager,
         )
     return qca_generator, evaluator
 
@@ -124,27 +130,28 @@ def get_multimodal_eval_components(
     if qca_dataset_path:
         persist_path = config.index.vector_store.persist_path
         os.makedirs(persist_path, exist_ok=True)
-        source_path = qca_dataset_path  # 源路径
-        destination_path = os.path.join(persist_path, "qca_dataset.json")  # 目标路径
-        with open(source_path, "r") as source_file:
-            data = json.load(source_file)
-            with open(destination_path, "w") as destination_file:
-                json.dump(data, destination_file, indent=4)
-        assert os.path.exists(destination_path), "Failed to copy qca_dataset.json"
+        destination_path = os.path.join(persist_path, "qca_dataset.jsonl")  # 目标路径
+        shutil.copy2(qca_dataset_path, destination_path)
+        assert os.path.exists(destination_path), "Failed to copy qca_dataset.jsonl"
 
-    multimodal_qca_generator = MultimodalQcaGenerator(
+    state_manager = StateManager(
+        os.path.join(config.index.vector_store.persist_path, "state.json")
+    )
+    multimodal_qca_generator = RagQcaGenerator(
         labelled_llm=llm,
         predicted_llm=tested_multimodal_llm,
         vector_index=vector_index,
         query_engine=query_engine,
         persist_path=config.index.vector_store.persist_path,
         enable_multi_modal=True,
+        state_manager=state_manager,
     )
 
     evaluator = BaseEvaluator(
         llm=eval_llm,
         persist_path=config.index.vector_store.persist_path,
         enable_multi_modal=True,
+        state_manager=state_manager,
     )
 
     return multimodal_qca_generator, evaluator

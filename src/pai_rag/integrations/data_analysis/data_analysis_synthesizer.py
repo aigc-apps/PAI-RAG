@@ -4,12 +4,10 @@ from loguru import logger
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
 from llama_index.core.prompts import BasePromptTemplate
-from llama_index.core.settings import Settings
 from llama_index.core.schema import NodeWithScore, QueryType, QueryBundle
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
-from llama_index.core.service_context import ServiceContext
-from llama_index.core.service_context_elements.llm_predictor import LLMPredictorType
+from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
@@ -44,30 +42,23 @@ async def empty_response_agenerator() -> AsyncGenerator[str, None]:
 class DataAnalysisSynthesizer(BaseSynthesizer):
     def __init__(
         self,
-        llm: Optional[LLMPredictorType] = None,
+        llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
         response_synthesis_prompt: Optional[BasePromptTemplate] = None,
         streaming: bool = False,
-        # deprecated
-        service_context: Optional[ServiceContext] = None,
     ) -> None:
-        logger.info("DataAnalysisSynthesizer initialized")
-        if service_context is not None:
-            prompt_helper = service_context.prompt_helper
-
-        self._llm = llm or Settings.llm
-        self._response_synthesis_prompt = (
-            response_synthesis_prompt or DEFAULT_RESPONSE_SYNTHESIS_PROMPT
-        )
-
         super().__init__(
             llm=llm,
             callback_manager=callback_manager,
             prompt_helper=prompt_helper,
-            service_context=service_context,
             streaming=streaming,
         )
+
+        self._response_synthesis_prompt = (
+            response_synthesis_prompt or DEFAULT_RESPONSE_SYNTHESIS_PROMPT
+        )
+        logger.info("DataAnalysisSynthesizer initialized")
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""

@@ -9,16 +9,21 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.storage.chat_store.base import BaseChatStore
-
+from llama_index.core.base.llms.types import ChatMessage
 from pai_rag.utils.prompt_template import (
-    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
+    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
+    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
 )
-
+from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.utils.messages_utils import parse_chat_messages
+from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.utils.json_parser import parse_json_from_code_block_str
+from datetime import datetime
 from loguru import logger
+import re
 
 DEFAULT_FUSION_NUM_QUERIES = 4
 
@@ -156,8 +161,17 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         self._llm = (
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
+        default_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
         self._condense_question_prompt = (
-            condense_question_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+            condense_question_prompt or default_condense_question_prompt
         )
         self._chat_store = chat_store
 
@@ -182,22 +196,54 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 self._chat_store.add_message(hist_mes)
 
         chat_history = self._chat_store.get_messages(session_id)
-        if not chat_history:
-            # Keep the question as is if there's no conversation context.
-            return query_bundle
-
         chat_history_str = messages_to_history_str(chat_history)
 
-        query_bundle_str = self._llm.predict(
-            self._condense_question_prompt,
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
+        transformed_query_str = self._llm.predict(
+            current_condense_question_prompt,
             question=query_str,
             chat_history=chat_history_str,
         )
-
-        return QueryBundle(
-            query_str=query_bundle_str,
-            custom_embedding_strs=[query_bundle_str],
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            chat_history.append(ChatMessage(role="user", content=query_str))
+            chat_history_str = messages_to_history_str(chat_history)
+            return PaiQueryBundle(
+                query_str=query_str,
+                need_web_search=False,
+                custom_embedding_strs=[query_str],
+                chat_messages_str=chat_history_str,
+            )
+        else:
+            transformed_queries = ",".join(query_json["queries"])
+            chat_history.append(
+                ChatMessage(
+                    role="user", content=",".join([query_str, transformed_queries])
+                )
+            )
+            chat_history_str = messages_to_history_str(chat_history)
+            return PaiQueryBundle(
+                query_str=transformed_queries,
+                need_web_search=True,
+                custom_embedding_strs=[query_str, transformed_query_str],
+                chat_messages_str=chat_history_str,
+            )
 
     def run(
         self,
@@ -228,22 +274,54 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
                 self._chat_store.add_message(key=session_id, message=hist_mes)
 
         chat_history = self._chat_store.get_messages(key=session_id)
-        if not chat_history:
-            # Keep the question as is if there's no conversation context.
-            return query_bundle
-
         chat_history_str = messages_to_history_str(chat_history)
-        logger.debug(f"Chat history: {chat_history_str}")
-        query_bundle_str = await self._llm.apredict(
-            self._condense_question_prompt,
+
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
+        transformed_query_str = await self._llm.apredict(
+            current_condense_question_prompt,
             question=query_str,
             chat_history=chat_history_str,
         )
-
-        return QueryBundle(
-            query_str=query_bundle_str,
-            custom_embedding_strs=[query_bundle_str],
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            chat_history.append(ChatMessage(role="user", content=query_str))
+            chat_history_str = messages_to_history_str(chat_history)
+            return PaiQueryBundle(
+                query_str=query_str,
+                need_web_search=False,
+                custom_embedding_strs=[query_str],
+                chat_messages_str=chat_history_str,
+            )
+        else:
+            transformed_queries = ",".join(query_json["queries"])
+            chat_history.append(
+                ChatMessage(
+                    role="user", content=",".join([query_str, transformed_queries])
+                )
+            )
+            chat_history_str = messages_to_history_str(chat_history)
+            return PaiQueryBundle(
+                query_str=transformed_queries,
+                need_web_search=True,
+                custom_embedding_strs=[query_str, transformed_query_str],
+                chat_messages_str=chat_history_str,
+            )
 
     async def arun(
         self,
@@ -263,3 +341,125 @@ class PaiCondenseQueryTransform(PaiBaseQueryTransform):
         return await self._arun(
             query_bundle, session_id=session_id, chat_history=chat_history
         )
+
+
+class OpenAICompatibleQueryTransform:
+    def __init__(
+        self,
+        llm: Optional[LLMType] = None,
+        condense_question_prompt: Optional[BasePromptTemplate] = None,
+        callback_manager: Optional[CallbackManager] = None,
+    ) -> None:
+        super().__init__()
+
+        self._llm = (
+            resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
+        )
+        default_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        self._condense_question_prompt = (
+            condense_question_prompt or default_condense_question_prompt
+        )
+
+    def run(
+        self,
+        chat_messages: List[ChatMessage],
+    ) -> QueryBundle:
+        chat_history_str = messages_to_history_str(chat_messages)
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
+        transformed_query_str = self._llm.predict(
+            current_condense_question_prompt,
+            question=chat_messages[-1].content,
+            chat_history=chat_history_str,
+        )
+        logger.debug(
+            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
+        )
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            return PaiQueryBundle(
+                query_str=chat_messages[-1].content,
+                need_web_search=False,
+                custom_embedding_strs=[
+                    chat_messages[-1].content,
+                    transformed_query_str,
+                ],
+                chat_messages_str=chat_history_str,
+            )
+        else:
+            return PaiQueryBundle(
+                query_str=",".join(query_json["queries"]),
+                need_web_search=True,
+                custom_embedding_strs=[
+                    chat_messages[-1].content,
+                    transformed_query_str,
+                ],
+                chat_messages_str=chat_history_str,
+            )
+
+    async def arun(
+        self,
+        chat_messages: List[ChatMessage],
+    ) -> QueryBundle:
+        """Run query transform.
+        Generate standalone question from conversation context and last message."""
+        chat_history_str = messages_to_history_str(chat_messages[-7:])
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
+        logger.debug(
+            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+        )
+        transformed_query_str = await self._llm.apredict(
+            current_condense_question_prompt,
+            question=chat_messages[-1].content,
+            chat_history=chat_history_str,
+        )
+        logger.debug(
+            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
+        )
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+            return PaiQueryBundle(
+                query_str=chat_messages[-1].content,
+                need_web_search=False,
+                custom_embedding_strs=[chat_messages[-1].content],
+            )
+        else:
+            return PaiQueryBundle(
+                query_str=",".join(query_json["queries"]),
+                need_web_search=True,
+                custom_embedding_strs=[transformed_query_str],
+            )

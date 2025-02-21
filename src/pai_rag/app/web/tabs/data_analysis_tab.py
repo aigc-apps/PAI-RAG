@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 import datetime
+from loguru import logger
 from pai_rag.app.web.rag_client import rag_client, RagApiError
 from pai_rag.app.web.ui_constants import (
     NL2SQL_GENERAL_PROMPTS,
@@ -57,7 +58,6 @@ def load_db_info_fn(input_elements: List[Any]):
         else:
             update_dict["enable_query_preprocessor"] = False
             update_dict["enable_db_preretriever"] = False
-        print("update_dict:", update_dict)
         rag_client.patch_config(update_dict)
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
@@ -95,19 +95,58 @@ def respond(input_elements: List[Any]):
     question = update_dict["question"]
     chatbot = update_dict["chatbot"]
 
+    # if chatbot is not None:
+    #     chatbot.append((question, ""))
+
+    # try:
+    #     content = ""
+    #     response_gen = rag_client.query_data_analysis(question, stream=True)
+    #     for resp in response_gen:
+    #         content += resp.delta
+    #         chatbot[-1] = (question, content)
+    #         yield chatbot
+    q_msg = {"content": question, "role": "user"}
+    chatbot.append(q_msg)
+
     if chatbot is not None:
-        chatbot.append((question, ""))
+        chatbot.append(
+            {"content": "", "role": "assistant", "metadata": {"status": "pending"}}
+        )
+        yield chatbot
 
     try:
         response_gen = rag_client.query_data_analysis(question, stream=True)
+        is_thinking = False
         for resp in response_gen:
-            chatbot[-1] = (question, resp.result)
+            if resp.delta == "<think>":
+                chatbot[-1]["metadata"]["title"] = "thinking..."
+                chatbot[-1]["metadata"]["log"] = ""
+                is_thinking = True
+
+            elif resp.delta == "</think>":
+                chatbot[-1]["metadata"]["title"] = "thought"
+                chatbot[-1]["metadata"]["status"] = "done"
+                is_thinking = False
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+
+            else:
+                if is_thinking:
+                    chatbot[-1]["metadata"]["log"] += resp.delta
+                else:
+                    chatbot[-1]["content"] += resp.delta
             yield chatbot
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
     except Exception as e:
         raise gr.Error(f"Error: {e}")
     finally:
+        logger.info(f"Chatbot finished: {chatbot}")
         yield chatbot
 
 
@@ -124,17 +163,17 @@ def reset_textbox():
 # 处理history复选框变化
 def handle_history_checkbox_change(enable_db_history):
     if enable_db_history:
-        return gr.File.update(visible=True), gr.Textbox.update(visible=True)
+        return gr.update(visible=True), gr.update(visible=True)
     else:
-        return gr.File.update(visible=False), gr.Textbox.update(visible=False)
+        return gr.update(visible=False), gr.update(visible=False)
 
 
 # 处理embedding复选框变化
 def handle_embedding_checkbox_change(enable_db_embedding):
     if enable_db_embedding:
-        return gr.Slider.update(visible=True), gr.Slider.update(visible=True)
+        return gr.update(visible=True), gr.update(visible=True)
     else:
-        return gr.Slider.update(visible=False), gr.Slider.update(visible=False)
+        return gr.update(visible=False), gr.update(visible=False)
 
 
 def upload_history_fn(json_file):
@@ -403,7 +442,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=6):
-            chatbot = gr.Chatbot(height=600, elem_id="chatbot")
+            chatbot = gr.Chatbot(height=600, elem_id="chatbot", type="messages")
             question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")

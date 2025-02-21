@@ -18,7 +18,7 @@ def test_bm25():
 
     bm25 = LocalBm25IndexStore(persist_path)
 
-    nodes = [TextNode(id_=i, text=text) for i, text in enumerate(texts)]
+    nodes = [TextNode(id_=f"node_{i}", text=text) for i, text in enumerate(texts)]
     bm25.add_docs(nodes)
 
     nodes_with_score = bm25.query("模型开发")

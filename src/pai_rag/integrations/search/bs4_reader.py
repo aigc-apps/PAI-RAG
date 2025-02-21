@@ -174,8 +174,8 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
     _website_extractor: Dict[str, Callable] = PrivateAttr()
 
     def __init__(self, website_extractor: Optional[Dict[str, Callable]] = None) -> None:
-        self._website_extractor = website_extractor or DEFAULT_WEBSITE_EXTRACTOR
         super().__init__()
+        self._website_extractor = website_extractor or DEFAULT_WEBSITE_EXTRACTOR
 
     @classmethod
     def class_name(cls) -> str:
@@ -225,7 +225,7 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
                 extra_info.update(metadata)
 
             else:
-                data = soup.getText()
+                data = soup.getText(strip=True)
 
             if data:
                 documents.append(Document(text=data, id_=url, extra_info=extra_info))

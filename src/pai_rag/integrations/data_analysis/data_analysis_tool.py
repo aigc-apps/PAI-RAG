@@ -37,12 +37,15 @@ from pai_rag.integrations.data_analysis.nl2sql.db_loader import DBLoader
 from pai_rag.integrations.data_analysis.nl2sql.db_query import DBQuery
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
+from pai_rag.utils.constants import EAS_DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 
-if os.path.exists("./model_repository/bge-m3"):
-    embed_model_bge_large = HuggingFaceEmbedding(model_name="./model_repository/bge-m3")
+if os.path.exists(os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")):
+    embed_model_bge_large = HuggingFaceEmbedding(
+        model_name=os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")
+    )
 else:
     embed_model_bge_large = None
 
@@ -203,6 +206,8 @@ class DataAnalysisQuery(BaseQueryEngine):
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
         """Initialize params."""
+        super().__init__(callback_manager=callback_manager or Settings.callback_manager)
+
         self._llm = llm or Settings.llm
         self._sql_database = sql_database
         self._retriever = create_retriever(
@@ -216,7 +221,6 @@ class DataAnalysisQuery(BaseQueryEngine):
             response_synthesis_prompt=PromptTemplate(analysis_config.synthesizer_prompt)
             or DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
         )
-        super().__init__(callback_manager=callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""

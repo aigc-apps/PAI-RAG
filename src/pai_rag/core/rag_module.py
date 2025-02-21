@@ -1,7 +1,8 @@
 from typing import Any
 
 from llama_index.core import Settings
-from llama_index.core.prompts import PromptTemplate
+from llama_index.core.query_engine import BaseQueryEngine
+
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_data_loader import RagDataLoader
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
@@ -17,6 +18,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
     PaiMultiModalEmbedding,
 )
+from pai_rag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorProcessor
@@ -26,15 +28,24 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 )
 from pai_rag.integrations.query_transform.pai_query_transform import (
     PaiCondenseQueryTransform,
+    OpenAICompatibleQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-from pai_rag.integrations.router.pai.pai_router import PaiIntentRouter
+from pai_rag.integrations.router.pai.pai_router import (
+    PaiIntentRouter,
+)
 from pai_rag.integrations.search.bing_search import BingSearchTool
+from pai_rag.integrations.search.quark_search import QuarkSearchTool
+from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
-
+from pai_rag.integrations.search.search_config import (
+    BingSearchConfig,
+    QuarkSearchConfig,
+    AliyunSearchConfig,
+)
 
 cls_cache = {}
 
@@ -44,6 +55,17 @@ def resolve(cls: Any, **kwargs):
     if cls_key not in cls_cache:
         cls_cache[cls_key] = cls(**kwargs)
     return cls_cache[cls_key]
+
+
+def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
+    if config.guardrail.is_enabled():
+        guardrail = resolve(
+            cls=PaiLlmGuardrail,
+            config=config.guardrail,
+        )
+        return guardrail
+
+    return None
 
 
 def resolve_chat_store(config: RagConfig) -> PaiChatStore:
@@ -170,26 +192,28 @@ def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
     return condense_query_transform
 
 
+def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
+    if not config.query_rewrite.enabled:
+        return None
+
+    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
+    openai_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    return openai_query_transform
+
+
 def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     multimodal_llm = None
     if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
         multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
         multimodal_llm=multimodal_llm,
-        text_qa_template=PromptTemplate(template=config.synthesizer.text_qa_template),
-        multimodal_qa_template=PromptTemplate(
-            template=config.synthesizer.multimodal_qa_template
-        ),
-        citation_text_qa_template=PromptTemplate(
-            template=config.synthesizer.citation_text_qa_template
-        ),
-        citation_multimodal_qa_template=PromptTemplate(
-            template=config.synthesizer.citation_multimodal_qa_template
-        ),
+        system_role_template=config.synthesizer.system_role_template,
+        custom_prompt_template=config.synthesizer.custom_prompt_template,
     )
     return synthesizer
 
@@ -241,17 +265,43 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
     return query_engine
 
 
-def resolve_searcher(config: RagConfig) -> BingSearchTool:
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
     synthesizer = resolve_synthesizer(config)
+    searcher = None
 
-    searcher = resolve(
-        cls=BingSearchTool,
-        api_key=config.search.search_api_key,
-        synthesizer=synthesizer,
-        embed_model=embed_model,
-        search_count=config.search.search_count,
-        search_lang=config.search.search_lang,
-    )
+    if isinstance(config.search, BingSearchConfig) and config.search.search_api_key:
+        searcher = resolve(
+            cls=BingSearchTool,
+            api_key=config.search.search_api_key,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+            search_lang=config.search.search_lang,
+        )
+    elif (
+        isinstance(config.search, QuarkSearchConfig)
+        and config.search.user
+        and config.search.secret
+    ):
+        searcher = resolve(
+            cls=QuarkSearchTool,
+            user=config.search.user,
+            secret=config.search.secret,
+            host=config.search.host,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+        )
+    elif (
+        isinstance(config.search, AliyunSearchConfig)
+        and config.search.access_key_id
+        and config.search.access_key_secret
+    ):
+        searcher = resolve(
+            cls=AliyunSearchTool,
+            access_key_id=config.search.access_key_id,
+            access_key_secret=config.search.access_key_secret,
+            endpoint=config.search.endpoint,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+        )
 
     return searcher

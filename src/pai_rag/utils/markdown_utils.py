@@ -58,6 +58,7 @@ def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -
         if image.mode != "RGB":
             image = image.convert("RGB")
         if image.width <= 50 or image.height <= 50:
+            logger.warning(f"Skipping small image {image}")
             return None
 
         current_pixels = image.width * image.height

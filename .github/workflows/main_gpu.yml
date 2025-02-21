@@ -8,6 +8,10 @@ on:
       - feature
       - "releases/**"
 
+concurrency:
+  group: pr-build-gpu-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -41,6 +45,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry install
+          pip install ray[default]
         env:
           POETRY_VIRTUALENVS_CREATE: false
 

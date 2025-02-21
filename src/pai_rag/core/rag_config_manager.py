@@ -47,6 +47,8 @@ class RagConfigManager:
             config["rag"]["index"]["vector_store"]["type"] = config["rag"]["index"][
                 "vector_store"
             ]["type"].lower()
+            if "api_key" in config["rag"]["llm"]:
+                config["rag"]["llm"]["api_key"] = str(config["rag"]["llm"]["api_key"])
 
             return cls(config)
             # `envvar_prefix` = export envvars with `export PAIRAG_FOO=bar`.

@@ -14,6 +14,7 @@ class SupportedVectorStoreType(str, Enum):
     milvus = "milvus"
     hologres = "hologres"
     tablestore = "tablestore"
+    dashvector = "dashvector"
 
 
 class VectorIndexRetrievalType(str, Enum):
@@ -27,6 +28,7 @@ VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH = [
     SupportedVectorStoreType.postgresql,
     SupportedVectorStoreType.milvus,
     SupportedVectorStoreType.tablestore,
+    SupportedVectorStoreType.dashvector,
 ]
 
 
@@ -50,7 +52,7 @@ class AnalyticDBVectorStoreConfig(BaseVectorStoreConfig):
     ] = SupportedVectorStoreType.analyticdb
     ak: str
     sk: str
-    region_id: str
+    region_id: str = "cn-hangzhou"
     instance_id: str
     account: str
     account_password: str
@@ -110,6 +112,16 @@ class TablestoreVectorStoreConfig(BaseVectorStoreConfig):
     access_key_id: str
     access_key_secret: str
     table_name: str
+
+
+class DashVectorVectorStoreConfig(BaseVectorStoreConfig):
+    type: Literal[
+        SupportedVectorStoreType.dashvector
+    ] = SupportedVectorStoreType.dashvector
+    endpoint: str
+    api_key: str
+    collection_name: str
+    partition_name: str
 
 
 class PostgreSQLVectorStoreConfig(BaseVectorStoreConfig):

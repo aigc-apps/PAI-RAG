@@ -12,12 +12,11 @@ IGNORE_FILE_LIST = [".DS_Store"]
 
 def upload_oss_knowledge(
     oss_path,
+    number_workers,
     chunk_size,
     chunk_overlap,
-    enable_raptor,
     enable_multimodal,
     enable_mandatory_ocr,
-    enable_table_summary,
     upload_index,
 ):
     if not oss_path:
@@ -32,12 +31,11 @@ def upload_oss_knowledge(
     for state_info in upload_knowledge(
         upload_files=[],
         oss_path=oss_path,
+        number_workers=number_workers,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
         enable_mandatory_ocr=enable_mandatory_ocr,
-        enable_table_summary=enable_table_summary,
         index_name=upload_index,
         from_oss=True,
     ):
@@ -46,12 +44,11 @@ def upload_oss_knowledge(
 
 def upload_files(
     upload_files,
+    number_workers,
     chunk_size,
     chunk_overlap,
-    enable_raptor,
     enable_multimodal,
     enable_mandatory_ocr,
-    enable_table_summary,
     upload_index,
 ):
     if not upload_files:
@@ -66,12 +63,11 @@ def upload_files(
     for state_info in upload_knowledge(
         upload_files=upload_files,
         oss_path=None,
+        number_workers=number_workers,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        enable_raptor=enable_raptor,
         enable_multimodal=enable_multimodal,
         enable_mandatory_ocr=enable_mandatory_ocr,
-        enable_table_summary=enable_table_summary,
         index_name=upload_index,
     ):
         yield state_info
@@ -80,12 +76,11 @@ def upload_files(
 def upload_knowledge(
     upload_files,
     oss_path,
+    number_workers,
     chunk_size,
     chunk_overlap,
-    enable_raptor,
     enable_multimodal,
     enable_mandatory_ocr,
-    enable_table_summary,
     index_name,
     from_oss: bool = False,
 ):
@@ -95,7 +90,7 @@ def upload_knowledge(
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
                 "enable_mandatory_ocr": enable_mandatory_ocr,
-                "enable_table_summary": enable_table_summary,
+                "number_workers": int(number_workers),
             }
         )
     except RagApiError as api_error:
@@ -105,7 +100,6 @@ def upload_knowledge(
     if from_oss:
         response = rag_client.add_knowledge(
             oss_path=oss_path,
-            enable_raptor=enable_raptor,
             index_name=index_name,
             enable_multimodal=enable_multimodal,
         )
@@ -113,7 +107,6 @@ def upload_knowledge(
     else:
         response = rag_client.add_knowledge(
             input_files=[file.name for file in upload_files],
-            enable_raptor=enable_raptor,
             index_name=index_name,
             enable_multimodal=enable_multimodal,
         )
@@ -124,7 +117,7 @@ def upload_knowledge(
 
     result = {"Info": ["StartTime", "EndTime", "Duration(s)", "Status"]}
     error_msg = ""
-    while not all(file.finished is True for file in my_upload_files):
+    while True:
         for file in my_upload_files:
             try:
                 response = asyncio.run(
@@ -144,12 +137,16 @@ def upload_knowledge(
             gr.update(visible=True, value=pd.DataFrame(result)),
             gr.update(visible=False),
         ]
-        if not all(file.finished is True for file in my_upload_files):
-            time.sleep(2)
+
+        if all(file.finished is True for file in my_upload_files):
+            break
+
+        time.sleep(2)
 
     upload_result = "Upload success."
     if error_msg:
         upload_result = f"Upload failed: {error_msg}"
+
     yield [
         gr.update(visible=True, value=pd.DataFrame(result)),
         gr.update(
@@ -173,6 +170,14 @@ def create_upload_tab() -> Dict[str, Any]:
                 choices=[],
                 label="\N{bookmark} Index Name",
                 elem_id="upload_index",
+                allow_custom_value=True,
+            )
+            number_workers = gr.Slider(
+                minimum=0,
+                maximum=10,
+                step=1,
+                elem_id="number_workers",
+                label="\N{fire} Number of workers to parallelize data-loading over.",
             )
             chunk_size = gr.Textbox(
                 label="\N{rocket} Chunk Size (The size of the chunks into which a document is divided)",
@@ -182,11 +187,6 @@ def create_upload_tab() -> Dict[str, Any]:
             chunk_overlap = gr.Textbox(
                 label="\N{fire} Chunk Overlap (The portion of adjacent document chunks that overlap with each other)",
                 elem_id="chunk_overlap",
-            )
-            enable_raptor = gr.Checkbox(
-                label="Yes",
-                info="Process with Raptor Node Enhancement",
-                elem_id="enable_raptor",
             )
             enable_multimodal = gr.Checkbox(
                 label="Yes",
@@ -199,11 +199,6 @@ def create_upload_tab() -> Dict[str, Any]:
                 info="Process PDF with OCR",
                 elem_id="enable_mandatory_ocr",
                 visible=True,
-            )
-            enable_table_summary = gr.Checkbox(
-                label="Yes",
-                info="Process with Table Summary ",
-                elem_id="enable_table_summary",
             )
         with gr.Column(scale=8):
             with gr.Tab("Files"):
@@ -240,12 +235,11 @@ def create_upload_tab() -> Dict[str, Any]:
                     fn=upload_oss_knowledge,
                     inputs=[
                         oss_path,
+                        number_workers,
                         chunk_size,
                         chunk_overlap,
-                        enable_raptor,
                         enable_multimodal,
                         enable_mandatory_ocr,
-                        enable_table_summary,
                         upload_index,
                     ],
                     outputs=[upload_oss_state_df, upload_oss_state],
@@ -256,12 +250,11 @@ def create_upload_tab() -> Dict[str, Any]:
                 fn=upload_files,
                 inputs=[
                     upload_file,
+                    number_workers,
                     chunk_size,
                     chunk_overlap,
-                    enable_raptor,
                     enable_multimodal,
                     enable_mandatory_ocr,
-                    enable_table_summary,
                     upload_index,
                 ],
                 outputs=[upload_file_state_df, upload_file_state],
@@ -279,12 +272,11 @@ def create_upload_tab() -> Dict[str, Any]:
                 inputs=[
                     upload_file_dir,
                     dummy_component,
+                    number_workers,
                     chunk_size,
                     chunk_overlap,
-                    enable_raptor,
                     enable_multimodal,
                     enable_mandatory_ocr,
-                    enable_table_summary,
                     upload_index,
                 ],
                 outputs=[upload_dir_state_df, upload_dir_state],
@@ -298,10 +290,9 @@ def create_upload_tab() -> Dict[str, Any]:
             )
             return {
                 upload_index.elem_id: upload_index,
+                number_workers.elem_id: number_workers,
                 chunk_size.elem_id: chunk_size,
                 chunk_overlap.elem_id: chunk_overlap,
-                enable_raptor.elem_id: enable_raptor,
                 enable_multimodal.elem_id: enable_multimodal,
                 enable_mandatory_ocr.elem_id: enable_mandatory_ocr,
-                enable_table_summary.elem_id: enable_table_summary,
             }

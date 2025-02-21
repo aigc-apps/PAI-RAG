@@ -21,7 +21,7 @@ async def test_enhance_nodes():
     DEFAULT_EMBED_BATCH_SIZE = 10
 
     # set embedding
-    llm = DashScope(model_name="qwen-turbo", temperature=0.1)
+    llm = DashScope(model_name="qwen-turbo", temperature=0.1, api_key=DASHSCOPE_API_KEY)
     embed_model = DashScopeEmbedding(
         api_key=DASHSCOPE_API_KEY, embed_batch_size=DEFAULT_EMBED_BATCH_SIZE
     )

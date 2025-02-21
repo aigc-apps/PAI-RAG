@@ -25,7 +25,8 @@ class FileDataset(ABC):
             run_tasks = []
             for i, batch_data in enumerate(self.data):
                 run_tasks.append(ops[i % num_actors].process.remote(batch_data))
-            self.data = ray.get(run_tasks)
+            results = ray.get(run_tasks)
+            self.data = [item for sub_results in results for item in sub_results]
         except:  # noqa: E722
             logger.error(f"An error occurred during Op [{op_name}].")
             import traceback

@@ -1,7 +1,6 @@
 from typing import Any, Callable, List, Optional
 from llama_index.core.base.embeddings.base import BaseEmbedding, Embedding
-from llama_index.core.constants import DEFAULT_EMBED_BATCH_SIZE
-from llama_index.core.bridge.pydantic import Field, PrivateAttr
+from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.schema import BaseNode, MetadataMode, ImageNode
 
 from loguru import logger
@@ -15,7 +14,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 class PaiEmbedding(BaseEmbedding):
     """PAI embedding model"""
 
-    _embed_batch_size: int = Field(default=DEFAULT_EMBED_BATCH_SIZE, gt=0)
     _embed_model: Any = PrivateAttr()
     _config: Any = PrivateAttr()
 
@@ -23,14 +21,15 @@ class PaiEmbedding(BaseEmbedding):
         self,
         embed_config: PaiBaseEmbeddingConfig,
     ):
-        self._config = embed_config
-        self._embed_model = create_embedding(embed_config)
-
+        embed_model = create_embedding(embed_config)
         super().__init__(
-            model_name=self._embed_model.model_name,
-            embed_batch_size=self._embed_model.embed_batch_size,
-            callback_manager=self._embed_model.callback_manager,
+            model_name=embed_model.model_name,
+            embed_batch_size=embed_model.embed_batch_size,
+            callback_manager=embed_model.callback_manager,
         )
+        self._config = embed_config
+        self._embed_model = embed_model
+
         logger.info(
             f"""
                 PaiEmbedding created with config:

@@ -1,7 +1,6 @@
 """Markdown node parser."""
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from typing import Any, Iterator, List, Optional, Sequence
-import json
 
 from llama_index.core.node_parser.interface import NodeParser
 from llama_index.core.node_parser import SentenceSplitter
@@ -65,19 +64,24 @@ class StructuredNodeParser(BaseModel):
         return self.base_parser.split_text(raw_section)
 
     def _format_section_header(self, section_headers) -> str:
-        return " >> ".join([h.content for h in section_headers])
+        return "\n".join([h.content for h in section_headers])
 
     def _format_tree_nodes(
         self, node, doc_node, ref_doc, nodes_list, chunk_images_list
     ) -> str:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
-        if node.category == "image" and self.enable_multimodal:
+        if (
+            node.category == "image"
+            and self.enable_multimodal
+            and node.content
+            and node.content != "None"
+        ):
             image_node = ImageNode(
                 embedding=doc_node.embedding,
                 image_url=node.content,
                 excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                 excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_seperator=doc_node.metadata_seperator,
+                metadata_separator=doc_node.metadata_separator,
                 metadata_template=doc_node.metadata_template,
                 text_template=doc_node.text_template,
                 metadata={
@@ -88,11 +92,11 @@ class StructuredNodeParser(BaseModel):
             )
             nodes_list.append(image_node)
             image_info = ImageInfo(image_url=node.content)
-            chunk_images_list.append(json.dumps(image_info.__dict__))
+            chunk_images_list.append(image_info.__dict__)
             return ""
         if not node.children:
             return node.content
-        return node.content + "\n\n".join(
+        return node.content + "\n".join(
             [
                 self._format_tree_nodes(
                     child, doc_node, ref_doc, nodes_list, chunk_images_list
@@ -111,7 +115,7 @@ class StructuredNodeParser(BaseModel):
                 embedding=doc_node.embedding,
                 excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                 excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_seperator=doc_node.metadata_seperator,
+                metadata_separator=doc_node.metadata_separator,
                 metadata_template=doc_node.metadata_template,
                 text_template=doc_node.text_template,
                 metadata={
@@ -126,7 +130,7 @@ class StructuredNodeParser(BaseModel):
                 embedding=doc_node.embedding,
                 excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                 excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_seperator=doc_node.metadata_seperator,
+                metadata_separator=doc_node.metadata_separator,
                 metadata_template=doc_node.metadata_template,
                 text_template=doc_node.text_template,
                 meta_data=doc_node.extra_info,
@@ -202,7 +206,7 @@ class StructuredNodeParser(BaseModel):
             for chunk_text in self._cut(tree_node.content):
                 if title_stack:
                     new_chunk_text = (
-                        f"{self._format_section_header(title_stack)}:{chunk_text}"
+                        f"{self._format_section_header(title_stack)} : {chunk_text}"
                     )
                 else:
                     new_chunk_text = chunk_text
@@ -232,13 +236,18 @@ class StructuredNodeParser(BaseModel):
             else:
                 chunk_text = ""
                 for child in node_group:
-                    if child.category == "image":
+                    if (
+                        child.category == "image"
+                        and self.enable_multimodal
+                        and child.content
+                        and child.content != "None"
+                    ):
                         image_node = ImageNode(
                             embedding=doc_node.embedding,
                             image_url=child.content,
                             excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                             excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                            metadata_seperator=doc_node.metadata_seperator,
+                            metadata_separator=doc_node.metadata_separator,
                             metadata_template=doc_node.metadata_template,
                             text_template=doc_node.text_template,
                             metadata={
@@ -249,14 +258,14 @@ class StructuredNodeParser(BaseModel):
                         )
                         nodes_list.append(image_node)
                         image_info = ImageInfo(image_url=child.content)
-                        chunk_images_list.append(json.dumps(image_info.__dict__))
+                        chunk_images_list.append(image_info.__dict__)
                     else:
-                        chunk_text += self._format_tree_nodes(
+                        chunk_text += "\n" + self._format_tree_nodes(
                             child, doc_node, ref_doc, nodes_list, chunk_images_list
                         )
                 if title_stack:
                     new_chunk_text = (
-                        f"{self._format_section_header(title_stack)}:{chunk_text}"
+                        f"{self._format_section_header(title_stack)} : {chunk_text}"
                     )
                 else:
                     new_chunk_text = chunk_text

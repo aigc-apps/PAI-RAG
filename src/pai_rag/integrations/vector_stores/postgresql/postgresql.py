@@ -2,6 +2,7 @@ from loguru import logger
 import re
 from typing import Any, List, NamedTuple, Optional, Type, Union
 from urllib.parse import quote_plus
+from sqlalchemy.sql.selectable import Select
 
 import asyncpg  # noqa
 import pgvector  # noqa
@@ -144,10 +145,8 @@ class PGVectorStore(BasePydanticVectorStore):
         ```
     """
 
-    from sqlalchemy.sql.selectable import Select
-
-    stores_text = True
-    flat_metadata = False
+    stores_text: bool = True
+    flat_metadata: bool = False
 
     connection_string: str
     async_connection_string: Union[str, sqlalchemy.engine.URL]
@@ -194,6 +193,20 @@ class PGVectorStore(BasePydanticVectorStore):
                 "a text search configuration specification."
             )
 
+        super().__init__(
+            connection_string=connection_string,
+            async_connection_string=async_connection_string,
+            table_name=table_name,
+            schema_name=schema_name,
+            hybrid_search=hybrid_search,
+            text_search_config=text_search_config,
+            embed_dim=embed_dim,
+            cache_ok=cache_ok,
+            perform_setup=perform_setup,
+            debug=debug,
+            use_jsonb=use_jsonb,
+        )
+
         from sqlalchemy.orm import declarative_base
 
         # sqlalchemy model
@@ -206,20 +219,6 @@ class PGVectorStore(BasePydanticVectorStore):
             text_search_config,
             cache_ok,
             embed_dim=embed_dim,
-            use_jsonb=use_jsonb,
-        )
-
-        super().__init__(
-            connection_string=connection_string,
-            async_connection_string=async_connection_string,
-            table_name=table_name,
-            schema_name=schema_name,
-            hybrid_search=hybrid_search,
-            text_search_config=text_search_config,
-            embed_dim=embed_dim,
-            cache_ok=cache_ok,
-            perform_setup=perform_setup,
-            debug=debug,
             use_jsonb=use_jsonb,
         )
 

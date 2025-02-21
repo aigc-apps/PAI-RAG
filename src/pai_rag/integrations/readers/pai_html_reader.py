@@ -33,19 +33,14 @@ class PaiHtmlReader(BaseReader):
     """Read html files including texts, tables, images.
 
     Args:
-        enable_table_summary (bool):  whether to use table_summary to process tables
+        oss_cache :  oss_cache
     """
 
     def __init__(
         self,
-        enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_table_summary = enable_table_summary
         self._oss_cache = oss_cache
-        logger.info(
-            f"PaiHtmlReader created with enable_table_summary : {self.enable_table_summary}"
-        )
 
     def _extract_tables(self, html):
         soup = BeautifulSoup(html, "html.parser")

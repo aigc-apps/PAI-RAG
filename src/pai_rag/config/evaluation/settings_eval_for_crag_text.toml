@@ -43,8 +43,8 @@ vector_store.type = "FAISS"
 # endpoint = ""
 # token = ""
 [rag.llm]
-source = "OpenAI"
-model = "gpt-4o-2024-08-06"
+source = "DashScope"
+model = "qwen-max"
 
 [rag.multimodal_embedding]
 source = "cnclip"
@@ -85,7 +85,7 @@ retrieval_mode = "hybrid" # [hybrid, embedding, keyword, router]
 query_rewrite_n = 1 # set to 1 to disable query generation
 
 [rag.search]
-search_api_key = ""
+source = "quark"
 
 [rag.synthesizer]
 type = "SimpleSummarize"

@@ -221,8 +221,6 @@ class MyElasticsearchStore(BasePydanticVectorStore):
     ) -> None:
         nest_asyncio.apply()
 
-        self._local_storage = threading.local()
-
         if retrieval_strategy is None:
             retrieval_strategy = AsyncDenseVectorStrategy(
                 distance=DistanceMetric[distance_strategy]
@@ -243,6 +241,9 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             distance_strategy=distance_strategy,
             retrieval_strategy=retrieval_strategy,
         )
+
+        self._local_storage = threading.local()
+
         asyncio.get_event_loop().run_until_complete(
             self._get_store()._create_index_if_not_exists()
         )

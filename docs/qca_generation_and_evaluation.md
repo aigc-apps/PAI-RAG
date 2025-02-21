@@ -17,21 +17,23 @@ RAG评估工具是一种用于测试和评估基于检索的文本生成系统�
 1. 示例配置如下
 
 ```yaml
-- name: "exp1"
+- name: "text_exp1"
   eval_data_path: "example_data/eval_docs_text"
+  rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_text.toml"
   eval_model_llm:
     source: "dashscope"
     model: "qwen-max"
     max_tokens: 1024
-  rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_text.toml"
+  use_pai_eval: true
 ```
 
 2. 参数说明：
 
 - name: 评估实验名称。
 - eval_data_path: 评估数据集路径，支持本地文件路径，或者oss路径。
-- eval_model_llm: 用于评估大模型的配置，支持dashscope、openai、paieas等。
 - rag_setting_file: rag配置文件路径。
+- eval_model_llm: 用于评估大模型的配置，支持dashscope、openai、paieas等。
+- use_pai_eval: 是否使用pai_llm_evals评估，默认为true，如果为false，则使用本地评估。
 
 3. 评估维度：
 

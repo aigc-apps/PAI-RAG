@@ -101,7 +101,6 @@ class Correctness(LlmMetric):
     Passing is defined as a score greater than or equal to the given threshold.
 
     Args:
-        service_context (Optional[ServiceContext]): Service context.
         eval_template (Optional[Union[BasePromptTemplate, str]]):
             Template for the evaluation prompt.
         score_threshold (float): Numerical threshold for passing the evaluation,

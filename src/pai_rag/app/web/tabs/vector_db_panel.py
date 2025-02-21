@@ -18,6 +18,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                     "opensearch",
                     "postgresql",
                     "tablestore",
+                    "dashvector",
                 ],
                 label="Which VectorStore do you want to use?",
                 elem_id="vectordb_type",
@@ -47,6 +48,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                         "cn-shenzhen",
                         "cn-chengdu",
                     ],
+                    value="cn-hangzhou",
                     label="RegionId",
                     elem_id="adb_region_id",
                 )
@@ -264,6 +266,35 @@ def create_vector_db_panel() -> Dict[str, Any]:
                         interactive=True,
                     )
 
+            with gr.Column(visible=(vectordb_type == "dashvector")) as dashvector_col:
+                with gr.Row():
+                    dashvector_endpoint = gr.Textbox(
+                        label="Endpoint",
+                        elem_id="dashvector_endpoint",
+                        interactive=True,
+                    )
+                    dashvector_api_key = gr.Textbox(
+                        label="ApiKey",
+                        elem_id="dashvector_api_key",
+                        interactive=True,
+                        type="password",
+                    )
+                with gr.Row():
+                    dashvector_collection_name = gr.Textbox(
+                        label="Collection Name",
+                        elem_id="dashvector_collection_name",
+                        interactive=True,
+                        placeholder="pai_rag",
+                        info="leave it empty to use the default collection name: 'pai_rag'",
+                    )
+                    dashvector_partition_name = gr.Textbox(
+                        label="Partition Name",
+                        elem_id="dashvector_partition_name",
+                        interactive=True,
+                        placeholder="default",
+                        info="leave it empty to specify the default partition: 'default'",
+                    )
+
             vectordb_type.change(
                 fn=ev_listeners.change_vectordb_conn,
                 inputs=vectordb_type,
@@ -276,6 +307,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                     opensearch_col,
                     postgresql_col,
                     tablestore_col,
+                    dashvector_col,
                 ],
             )
             db_related_elements = [
@@ -330,6 +362,11 @@ def create_vector_db_panel() -> Dict[str, Any]:
                 tablestore_access_key_id,
                 tablestore_access_key_secret,
                 tablestore_table_name,
+                # dashvector
+                dashvector_endpoint,
+                dashvector_api_key,
+                dashvector_collection_name,
+                dashvector_partition_name,
             ]
             components.extend(db_related_elements)
     return db_related_elements, components_to_dict(components)

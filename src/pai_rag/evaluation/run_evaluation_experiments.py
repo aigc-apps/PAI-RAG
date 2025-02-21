@@ -1,6 +1,5 @@
 import yaml
 import click
-from loguru import logger
 import time
 import json
 import hashlib
@@ -11,6 +10,7 @@ from pai_rag.evaluation.pipeline.run_evaluation_pipeline import (
 from pai_rag.evaluation.pipeline.run_multimodal_evaluation_pipeline import (
     run_multimodal_evaluation_pipeline,
 )
+from loguru import logger
 
 
 def validate_json_file(ctx, param, value):
@@ -39,8 +39,7 @@ def run_experiment(exp_params):
         f"Running experiment with name={exp_name}, dataset={dataset}, exp_params={exp_params}"
     )
     try:
-        # 运行实验并获取结果
-        result = run_rag_evaluation_pipeline(
+        run_rag_evaluation_pipeline(
             config_file=exp_params["rag_setting_file"],
             data_path=exp_params["eval_data_path"],
             exp_name=exp_name,
@@ -52,15 +51,14 @@ def run_experiment(exp_params):
     except Exception as e:
         logger.error(f"Error running experiment {exp_name}: {e}")
 
-    return {"name": exp_params["name"], "parameters": exp_params, "result": result}
+    return {"name": exp_params["name"], "parameters": exp_params}
 
 
 def run_multimodal_experiment(exp_params):
     exp_name = exp_params["name"]
     logger.info(f"Running experiment with name={exp_name}, exp_params={exp_params}")
     try:
-        # 运行实验并获取结果
-        result = run_multimodal_evaluation_pipeline(
+        run_multimodal_evaluation_pipeline(
             config_file=exp_params["rag_setting_file"],
             exp_name=exp_name,
             qca_dataset_path=exp_params.get("qca_dataset_path", None),
@@ -72,7 +70,7 @@ def run_multimodal_experiment(exp_params):
     except Exception as e:
         logger.error(f"Error running experiment {exp_name}: {e}")
 
-    return {"name": exp_params["name"], "parameters": exp_params, "result": result}
+    return {"name": exp_params["name"], "parameters": exp_params}
 
 
 @click.command()

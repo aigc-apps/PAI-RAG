@@ -36,7 +36,7 @@ class RaptorProcessor(TransformComponent):
             embed_model=embed_model,
         )
 
-    def __call__(self, nodes: List[BaseNode]) -> List[BaseNode]:
+    def __call__(self, nodes: List[BaseNode], **kwargs: Any) -> List[BaseNode]:
         """Given a set of nodes, this function inserts higher level of abstractions within the index.
 
         For later retrieval
@@ -65,7 +65,8 @@ class RaptorProcessor(TransformComponent):
             logger.info(f"Generating embeddings for level {level}.")
 
             embeddings = embed_model.get_text_embedding_batch(
-                [node.get_content(metadata_mode="embed") for node in cur_nodes]
+                [node.get_content(metadata_mode="embed") for node in cur_nodes],
+                **kwargs,
             )
             assert len(embeddings) == len(cur_nodes)
             id_to_embedding = {
@@ -122,7 +123,8 @@ class RaptorProcessor(TransformComponent):
 
             if level == self.tree_depth - 1:
                 embeddings = embed_model.get_text_embedding_batch(
-                    [node.get_content(metadata_mode="embed") for node in cur_nodes]
+                    [node.get_content(metadata_mode="embed") for node in cur_nodes],
+                    **kwargs,
                 )
                 assert len(embeddings) == len(cur_nodes)
                 id_to_embedding = {

@@ -1,5 +1,6 @@
+from abc import ABC, abstractmethod
 import os
-from typing import List
+from typing import List, Optional, Dict
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 
 from loguru import logger
@@ -7,8 +8,18 @@ from loguru import logger
 MODEL_NAME = "bge-m3"
 
 
-class BGEM3SparseEmbeddingFunction:
-    def __init__(self, model_name_or_path: str = None) -> None:
+class BaseSparseEmbeddingFunction(ABC):
+    @abstractmethod
+    def encode_queries(self, queries: List[str]) -> List[Dict[int, float]]:
+        pass
+
+    @abstractmethod
+    def encode_documents(self, documents: List[str]) -> List[Dict[int, float]]:
+        pass
+
+
+class BGEM3SparseEmbeddingFunction(BaseSparseEmbeddingFunction):
+    def __init__(self, model_name_or_path: Optional[str] = None) -> None:
         try:
             from FlagEmbedding import BGEM3FlagModel
 
@@ -47,3 +58,7 @@ class BGEM3SparseEmbeddingFunction:
         for k in raw_output:
             result[int(k)] = raw_output[k]
         return result
+
+
+def get_default_sparse_embedding_function() -> BGEM3SparseEmbeddingFunction:
+    return BGEM3SparseEmbeddingFunction()

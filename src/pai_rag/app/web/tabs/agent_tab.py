@@ -28,7 +28,8 @@ def respond(
     yield agent_chatbot
 
     for resp in response_gen:
-        agent_chatbot[-1] = (agent_question, resp.result)
+        content += resp.delta
+        agent_chatbot[-1] = (agent_question, content)
         yield agent_chatbot
 
 

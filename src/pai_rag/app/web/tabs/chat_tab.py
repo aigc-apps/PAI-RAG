@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 import gradio as gr
 from pai_rag.app.web.rag_client import RagApiError, rag_client
+from loguru import logger
 
 
 def clear_history(chatbot):
@@ -11,6 +12,20 @@ def clear_history(chatbot):
 
 def reset_textbox():
     return gr.update(value="")
+
+
+def change_search_model_argument(search_type):
+    return [
+        gr.update(visible=True if search_type == "bing" else False),
+        gr.update(visible=True),
+        gr.update(visible=True if search_type == "bing" else False),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "夸克" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
+        gr.update(visible=True if search_type == "aliyun" else False),
+    ]
 
 
 def respond(input_elements: List[Any]):
@@ -29,46 +44,74 @@ def respond(input_elements: List[Any]):
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
-    query_type = update_dict["query_type"]
-    msg = update_dict["question"]
     chatbot = update_dict["chatbot"]
+    if not update_dict["include_history"]:
+        chatbot, _ = clear_history(chatbot)
+
+    query_type = update_dict["query_type"]
+    question = update_dict["question"]
+    q_msg = {"content": question, "role": "user"}
+    chatbot.append(q_msg)
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
     citation = update_dict["citation"]
 
-    if not update_dict["include_history"]:
-        chatbot, _ = clear_history(chatbot)
     if chatbot is not None:
-        chatbot.append((msg, ""))
+        chatbot.append(
+            {"content": "", "role": "assistant", "metadata": {"status": "pending"}}
+        )
         yield chatbot
 
     try:
         if query_type == "LLM":
             response_gen = rag_client.query_llm(
-                msg,
+                question,
                 with_history=update_dict["include_history"],
                 stream=is_streaming,
             )
         elif query_type == "Retrieval":
-            response_gen = rag_client.query_vector(msg, index_name=index_name)
+            response_gen = rag_client.query_vector(question, index_name=index_name)
 
-        elif query_type == "RAG (Search Web)":
+        elif query_type == "Chat（Web Search）":
             response_gen = rag_client.query_search(
-                msg,
+                question,
                 with_history=update_dict["include_history"],
                 stream=is_streaming,
                 citation=citation,
             )
         else:
             response_gen = rag_client.query(
-                msg,
+                question,
                 with_history=update_dict["include_history"],
                 stream=is_streaming,
                 citation=citation,
                 index_name=index_name,
             )
+
+        is_thinking = False
         for resp in response_gen:
-            chatbot[-1] = (msg, resp.result)
+            if resp.delta == "<think>":
+                chatbot[-1]["metadata"]["title"] = "thinking..."
+                chatbot[-1]["metadata"]["log"] = ""
+                is_thinking = True
+
+            elif resp.delta == "</think>":
+                chatbot[-1]["metadata"]["title"] = "thought"
+                chatbot[-1]["metadata"]["status"] = "done"
+                is_thinking = False
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+
+            else:
+                if is_thinking:
+                    chatbot[-1]["metadata"]["log"] += resp.delta
+                else:
+                    chatbot[-1]["content"] += resp.delta
             yield chatbot
 
     except RagApiError as api_error:
@@ -76,6 +119,7 @@ def respond(input_elements: List[Any]):
     except Exception as e:
         raise gr.Error(f"Error: {e}")
     finally:
+        logger.info(f"Chatbot finished: {chatbot}")
         yield chatbot
 
 
@@ -87,12 +131,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 value="",
                 label="\N{bookmark} Index Name",
                 elem_id="chat_index",
+                allow_custom_value=True,
             )
             query_type = gr.Radio(
-                ["Retrieval", "LLM", "RAG (Search Web)", "RAG (Retrieval + LLM)"],
+                ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],
                 label="\N{fire} Which query do you want to use?",
                 elem_id="query_type",
-                value="RAG (Retrieval + LLM)",
+                value="Chat（Knowledge Base）",
             )
             is_streaming = gr.Checkbox(
                 label="Streaming Output",
@@ -104,12 +149,19 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Citation",
                 info="Need Citation",
                 elem_id="citation",
-                value=True,
+                value=False,
             )
             need_image = gr.Checkbox(
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
+                visible=True,
+            )
+            default_web_search = gr.Checkbox(
+                label="Default search web",
+                info="Default search web for openai endpoint",
+                elem_id="default_web_search",
+                value=False,
             )
 
             with gr.Column(visible=True) as vs_col:
@@ -255,10 +307,45 @@ def create_chat_tab() -> Dict[str, Any]:
                     reranker_similarity_top_k,
                 }
 
+            with gr.Column(visible=True) as lc_col:
+                prompt_argument = gr.Accordion("Prompt Templates", open=False)
+                with prompt_argument:
+                    system_role_template = gr.Textbox(
+                        label="System Role",
+                        value="",
+                        elem_id="system_role_template",
+                        lines=4,
+                        interactive=True,
+                    )
+                    custom_prompt_template = gr.Textbox(
+                        label="Prompt Template",
+                        value="",
+                        elem_id="custom_prompt_template",
+                        lines=10,
+                        interactive=True,
+                    )
+                    # with gr.Tab(
+                    #     "MultiModal Prompt", interactive=True
+                    # ) as multimodal_prompt_col:
+                    #     multimodal_qa_template = gr.Textbox(
+                    #         label="Multi-modal Prompt Template",
+                    #         value="",
+                    #         elem_id="multimodal_qa_template",
+                    #         lines=12,
+                    #         interactive=True,
+                    #     )
+                    #     citation_multimodal_qa_template = gr.Textbox(
+                    #         label="Citation Multi-modal Prompt Template",
+                    #         value="",
+                    #         elem_id="citation_multimodal_qa_template",
+                    #         lines=12,
+                    #         interactive=True,
+                    #     )
+
             with gr.Column(visible=True) as llm_col:
                 model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
                 with model_argument:
-                    llm_temp = gr.Slider(
+                    llm_temperature = gr.Slider(
                         minimum=0,
                         maximum=1,
                         step=0.001,
@@ -266,13 +353,18 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="llm_temperature",
                         label="Temperature (choose between 0 and 1)",
                     )
-                llm_args = {llm_temp}
+                llm_args = {llm_temperature}
 
             with gr.Column(visible=False) as search_col:
                 search_model_argument = gr.Accordion(
                     "Parameters of Web Search", open=False
                 )
                 with search_model_argument:
+                    search_type = gr.Radio(
+                        ["bing", "aliyun"],
+                        label="Search Engine",
+                        elem_id="search_type",
+                    )
                     search_api_key = gr.Text(
                         label="Bing API Key",
                         value="",
@@ -282,7 +374,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     search_count = gr.Slider(
                         label="Search Count",
                         minimum=5,
-                        maximum=30,
+                        maximum=50,
                         step=1,
                         elem_id="search_count",
                     )
@@ -292,39 +384,61 @@ def create_chat_tab() -> Dict[str, Any]:
                         value="zh-CN",
                         elem_id="search_lang",
                     )
-                search_args = {search_api_key, search_count, search_lang}
-
-            with gr.Column(visible=True) as lc_col:
-                with gr.Tab("Prompt"):
-                    text_qa_template = gr.Textbox(
-                        label="Prompt Template",
+                    quark_host = gr.Text(
+                        label="Quark Host",
                         value="",
-                        elem_id="text_qa_template",
-                        lines=10,
-                        interactive=True,
+                        elem_id="quark_host",
                     )
-                    citation_text_qa_template = gr.Textbox(
-                        label="Citation Prompt Template",
+                    quark_user = gr.Text(
+                        label="Quark User",
                         value="",
-                        elem_id="citation_text_qa_template",
-                        lines=10,
-                        interactive=True,
+                        elem_id="quark_user",
                     )
-                with gr.Tab("MultiModal Prompt"):
-                    multimodal_qa_template = gr.Textbox(
-                        label="Multi-modal Prompt Template",
+                    quark_secret = gr.Text(
+                        label="Quark Secret",
                         value="",
-                        elem_id="multimodal_qa_template",
-                        lines=12,
-                        interactive=True,
+                        type="password",
+                        elem_id="quark_secret",
                     )
-                    citation_multimodal_qa_template = gr.Textbox(
-                        label="Citation Multi-modal Prompt Template",
+                    aliyun_endpoint = gr.Text(
+                        label="Endpoint", value="", elem_id="aliyun_endpoint"
+                    )
+                    aliyun_access_key_id = gr.Text(
+                        label="AccessKey ID", value="", elem_id="aliyun_access_key_id"
+                    )
+                    aliyun_access_key_secret = gr.Text(
+                        label="AccessKey Secret",
                         value="",
-                        elem_id="citation_multimodal_qa_template",
-                        lines=12,
-                        interactive=True,
+                        type="password",
+                        elem_id="aliyun_access_key_secret",
                     )
+                search_args = {
+                    search_type,
+                    search_api_key,
+                    search_count,
+                    search_lang,
+                    quark_host,
+                    quark_user,
+                    quark_secret,
+                    aliyun_endpoint,
+                    aliyun_access_key_id,
+                    aliyun_access_key_secret,
+                }
+                search_type.input(
+                    fn=change_search_model_argument,
+                    inputs=[search_type],
+                    outputs=[
+                        search_api_key,
+                        search_count,
+                        search_lang,
+                        quark_host,
+                        quark_user,
+                        quark_secret,
+                        aliyun_endpoint,
+                        aliyun_access_key_id,
+                        aliyun_access_key_secret,
+                    ],
+                )
 
             cur_tokens = gr.Textbox(
                 label="\N{fire} Current total count of tokens", visible=False
@@ -340,6 +454,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=False),
+                        prompt_argument: gr.update(open=False),
                     }
                 elif query_type == "LLM":
                     return {
@@ -349,9 +464,10 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_col: gr.update(visible=False),
                         llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=True),
-                        lc_col: gr.update(visible=False),
+                        lc_col: gr.update(visible=True),
+                        prompt_argument: gr.update(open=True),
                     }
-                elif query_type == "RAG (Retrieval + LLM)":
+                elif query_type == "Chat（Knowledge Base）":
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=False),
@@ -360,22 +476,25 @@ def create_chat_tab() -> Dict[str, Any]:
                         llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
+                        prompt_argument: gr.update(open=True),
                     }
-                elif query_type == "RAG (Search Web)":
+                elif query_type == "Chat（Web Search）":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=True),
                         search_col: gr.update(visible=True),
+                        prompt_argument: gr.update(open=True),
                         llm_col: gr.update(visible=False),
                         model_argument: gr.update(open=False),
-                        lc_col: gr.update(visible=False),
+                        lc_col: gr.update(visible=True),
                     }
 
             query_type.input(
                 fn=change_query_radio,
                 inputs=query_type,
                 outputs=[
+                    prompt_argument,
                     vs_col,
                     vec_model_argument,
                     search_model_argument,
@@ -387,13 +506,13 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
         with gr.Column(scale=8):
-            chatbot = gr.Chatbot(height=500, elem_id="chatbot")
+            chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
             with gr.Row():
                 include_history = gr.Checkbox(
                     label="Chat history",
                     info="Query with chat history.",
                     elem_id="include_history",
-                    value=True,
+                    value=False,
                     scale=1,
                 )
                 question = gr.Textbox(
@@ -405,10 +524,9 @@ def create_chat_tab() -> Dict[str, Any]:
 
         chat_args = (
             {
-                text_qa_template,
-                multimodal_qa_template,
-                citation_text_qa_template,
-                citation_multimodal_qa_template,
+                default_web_search,
+                system_role_template,
+                custom_prompt_template,
                 question,
                 query_type,
                 chatbot,
@@ -450,6 +568,7 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
+            default_web_search.elem_id: default_web_search,
             chat_index.elem_id: chat_index,
             similarity_top_k.elem_id: similarity_top_k,
             image_similarity_top_k.elem_id: image_similarity_top_k,
@@ -462,12 +581,18 @@ def create_chat_tab() -> Dict[str, Any]:
             similarity_threshold.elem_id: similarity_threshold,
             reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
             reranker_similarity_top_k.elem_id: reranker_similarity_top_k,
-            multimodal_qa_template.elem_id: multimodal_qa_template,
-            citation_multimodal_qa_template.elem_id: citation_multimodal_qa_template,
-            citation_text_qa_template.elem_id: citation_text_qa_template,
-            text_qa_template.elem_id: text_qa_template,
+            system_role_template.elem_id: system_role_template,
+            custom_prompt_template.elem_id: custom_prompt_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,
             search_count.elem_id: search_count,
+            search_type.elem_id: search_type,
+            quark_host.elem_id: quark_host,
+            quark_secret.elem_id: quark_secret,
+            quark_user.elem_id: quark_user,
+            aliyun_endpoint.elem_id: aliyun_endpoint,
+            aliyun_access_key_id.elem_id: aliyun_access_key_id,
+            aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
             model_reranker_col.elem_id: model_reranker_col,
+            llm_temperature.elem_id: llm_temperature,
         }

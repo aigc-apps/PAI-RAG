@@ -12,6 +12,9 @@ from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
 from pai_rag.integrations.vector_stores.tablestore.tablestore import (
     TablestoreVectorStore,
 )
+from pai_rag.integrations.vector_stores.dashvector.dashvector import (
+    DashVectorVectorStore,
+)
 from pai_rag.integrations.vector_stores.hologres.hologres import HologresVectorStore
 from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
     MyElasticsearchStore,
@@ -32,6 +35,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     OpenSearchVectorStoreConfig,
     HologresVectorStoreConfig,
     TablestoreVectorStoreConfig,
+    DashVectorVectorStoreConfig,
 )
 
 
@@ -64,6 +68,8 @@ def create_vector_store(
         create_vector_store_func = create_opensearch
     elif isinstance(vectordb_config, TablestoreVectorStoreConfig):
         create_vector_store_func = create_tablestore
+    elif isinstance(vectordb_config, DashVectorVectorStoreConfig):
+        create_vector_store_func = create_dashvector
     else:
         raise ValueError(f"Unknown vector store config {vectordb_config}.")
 
@@ -194,6 +200,39 @@ def create_milvus(
     )
 
     return milvus_store
+
+
+def create_dashvector(
+    dashvector_config: DashVectorVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    collection_name = dashvector_config.collection_name
+    if collection_name == "":
+        collection_name = "pai_rag"
+
+    if is_image_store:
+        collection_name = f"{collection_name}__image"
+
+    partition_name = dashvector_config.partition_name
+    if partition_name == "":
+        partition_name = None
+
+    enable_sparse = not is_image_store
+
+    dashvector_store = DashVectorVectorStore(
+        endpoint=dashvector_config.endpoint,
+        api_key=dashvector_config.api_key,
+        collection_name=collection_name,
+        partition_name=partition_name,
+        dim=embed_dims,
+        enable_sparse=enable_sparse,
+        sparse_embedding_function=(
+            BGEM3SparseEmbeddingFunction() if enable_sparse else None
+        ),
+    )
+
+    return dashvector_store
 
 
 def create_opensearch(

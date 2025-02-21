@@ -4,40 +4,25 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-from magic_pdf.data.data_reader_writer import FileBasedDataWriter
+from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
 from pai_rag.utils.markdown_utils import (
     transform_local_to_oss,
-    is_horizontal_table,
 )
-from bs4 import BeautifulSoup
-from llama_index.core import Settings
-from magic_pdf.pipe.UNIPipe import UNIPipe
-from magic_pdf.pipe.OCRPipe import OCRPipe
-import magic_pdf.model as model_config
-from rapidocr_onnxruntime import RapidOCR
-from rapid_table import RapidTable
 from operator import itemgetter
-import time
 import tempfile
-import re
 from PIL import Image
 import os
-import json
+import traceback
 from loguru import logger
+from magic_pdf.data.dataset import PymuDocDataset
+from magic_pdf.model.doc_analyze_by_custom_model import doc_analyze
+from magic_pdf.config.enums import SupportedPdfParseMethod
+from magic_pdf.dict2md.ocr_mkcontent import merge_para_with_text
+from magic_pdf.config.ocr_content_type import BlockType, ContentType
+from magic_pdf.libs.commons import join_path
+from urllib.parse import urlparse
 
 
-model_config.__use_inside_model__ = True
-
-
-IMAGE_MAX_PIXELS = 512 * 512
-TABLE_SUMMARY_MAX_ROW_NUM = 5
-TABLE_SUMMARY_MAX_COL_NUM = 10
-TABLE_SUMMARY_MAX_CELL_TOKEN = 20
-TABLE_SUMMARY_MAX_TOKEN = 200
-PAGE_TABLE_SUMMARY_MAX_TOKEN = 400
-IMAGE_URL_PATTERN = r"(https?://[^\s]+?[\s\w.-]*\.(jpg|jpeg|png|gif|bmp))"
-IMAGE_LOCAL_PATTERN = r"!\[(?P<alt_text>.*?)\]\((?P<url>/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
-IMAGE_COMBINED_PATTERN = r"!\[.*?\]\((https?://[^\s()]+|/[^()\s]+(?:\s[^()\s]*)?/\S*?\.(jpg|jpeg|png|gif|bmp))\)"
 DEFAULT_HEADING_DIFF_THRESHOLD = 2
 
 
@@ -45,21 +30,17 @@ class PaiPDFReader(BaseReader):
     """Read PDF files including texts, tables, images.
 
     Args:
-        enable_table_summary (bool):  whether to use table_summary to process tables
+        enable_mandatory_ocr (bool):  whether to use ocr to files
+        oss_cache: oss_cache
     """
 
     def __init__(
         self,
         enable_mandatory_ocr: bool = False,
-        enable_table_summary: bool = False,
         oss_cache: Any = None,
     ) -> None:
-        self.enable_table_summary = enable_table_summary
         self.enable_mandatory_ocr = enable_mandatory_ocr
         self._oss_cache = oss_cache
-        logger.info(
-            f"PaiPdfReader created with enable_table_summary : {self.enable_table_summary}"
-        )
         logger.info(
             f"PaiPdfReader created with enable_mandatory_ocr : {self.enable_mandatory_ocr}"
         )
@@ -68,169 +49,172 @@ class PaiPDFReader(BaseReader):
         image = Image.open(local_url)
         return transform_local_to_oss(self._oss_cache, image, pdf_name)
 
-    def replace_image_paths(self, pdf_name: str, content: str):
-        local_image_pattern = IMAGE_LOCAL_PATTERN
-        matches = re.findall(local_image_pattern, content)
-        for alt_text, local_url, image_type in matches:
-            if self._oss_cache:
-                time_tag = int(time.time())
-                oss_url = self._transform_local_to_oss(pdf_name, local_url)
-                updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
-                content = content.replace(
-                    f"![{alt_text}]({local_url})", f"![{updated_alt_text}]({oss_url})"
-                )
-            else:
-                content = content.replace(f"![{alt_text}]({local_url})", "")
+    def is_url(self, url: str) -> bool:
+        """判断是否为 URL"""
+        try:
+            result = urlparse(url)
+            return all([result.scheme, result.netloc])
+        except ValueError:
+            return False
 
-        return content
-
-    @staticmethod
-    def perform_ocr(img_path: str) -> str:
-        table_engine = RapidTable()
-        ocr_engine = RapidOCR()
-        ocr_result, _ = ocr_engine(img_path)
-        table_html_str, table_cell_bboxes, elapse = table_engine(img_path, ocr_result)
-        return table_html_str
-
-    @staticmethod
-    def html_table_to_list_of_lists(html):
-        soup = BeautifulSoup(html, "lxml")
-        table = soup.find("table")
-        if not table:
-            return []
-        table_data = []
-        for row in table.find_all("tr"):
-            cols = row.find_all(["td", "th"])
-            table_data.append([col.get_text(strip=True) for col in cols])
-        return table_data
-
-    @staticmethod
-    def add_table_ocr_content(
-        markdown_content: str, image_path: str, ocr_content: str
-    ) -> str:
-        pattern = rf"!\[(.*?)\]\({re.escape(image_path)}\)"
-        regex = re.compile(pattern)
-        replacement = "table"
-        offset = 0  # 用于记录已插入文本导致的偏移量
-        for match in regex.finditer(markdown_content):
-            # 记录匹配的起始和结束偏移量
-            start, end = match.span()
-            # 提取alt_text的起始和结束位置，以便替换
-            alt_start, alt_end = match.span(1)  # span(1)针对第一个捕获组
-            new_alt_start = alt_start + offset
-            new_alt_end = alt_end + offset
-
-            markdown_content = (
-                markdown_content[:new_alt_start]
-                + replacement
-                + markdown_content[new_alt_end:]
-            )
-            new_start = start + offset
-            ocr_content = f"\n\n{ocr_content}\n\n"
-            markdown_content = (
-                markdown_content[:new_start]
-                + ocr_content
-                + markdown_content[new_start:]
-            )
-            # 更新偏移量，因为刚刚插入了新文本
-            offset += len(ocr_content) + len(replacement)
-        return markdown_content
-
-    @staticmethod
-    def limit_cell_size(cell: str, max_chars: int) -> str:
-        return (cell[:max_chars] + "...") if len(cell) > max_chars else cell
-
-    @staticmethod
-    def limit_table_content(table: List[List]) -> List[List]:
-        return [
-            [
-                PaiPDFReader.limit_cell_size(str(cell), TABLE_SUMMARY_MAX_CELL_TOKEN)
-                for cell in row
-            ]
-            for row in table
-        ]
-
-    @staticmethod
-    def tables_summarize(table: List[List]) -> str:
-        table = PaiPDFReader.limit_table_content(table)
-        if not is_horizontal_table(table):
-            table = list(zip(*table))
-        table = table[:TABLE_SUMMARY_MAX_ROW_NUM]
-        table = [row[:TABLE_SUMMARY_MAX_COL_NUM] for row in table]
-
-        prompt_text = f"请为以下表格生成一个摘要: {table}"
-        response = Settings.llm.complete(
-            prompt_text,
-            max_tokens=200,
-            n=1,
-        )
-        summarized_text = response
-        return summarized_text.text
-
-    def process_table(self, markdown_content, json_data):
-        ocr_count = 0
-
-        for item in json_data:
-            if item["type"] == "table" and "img_path" in item:
-                img_path = item["img_path"]
-                if os.path.exists(img_path):
-                    ocr_count += 1
-                    ocr_content = PaiPDFReader.perform_ocr(img_path)
-                    if self.enable_table_summary:
-                        table_list_data = PaiPDFReader.html_table_to_list_of_lists(
-                            ocr_content
-                        )
-                        summarized_table_text = PaiPDFReader.tables_summarize(
-                            table_list_data
-                        )[:TABLE_SUMMARY_MAX_TOKEN]
-                        ocr_content += f"\n\n{summarized_table_text}\n\n"
-                        markdown_content = PaiPDFReader.add_table_ocr_content(
-                            markdown_content, item["img_path"], ocr_content
-                        )
-                    else:
-                        markdown_content = PaiPDFReader.add_table_ocr_content(
-                            markdown_content, item["img_path"], ocr_content
-                        )
-                else:
-                    logger.warning(f"警告：图片文件不存在 {img_path}")
-        return markdown_content
-
-    def post_process_multi_level_headings(self, json_data, md_content):
-        logger.info(
-            "*****************************start process headings*****************************"
-        )
-        pages_list = json_data["pdf_info"]
-        if not pages_list:
-            return md_content
+    def create_markdown(
+        self,
+        pdf_name: str,
+        pdf_info_dict: list,
+        img_buket_path: str = "",
+    ):
+        output_content = []
         text_height_min = float("inf")
         text_height_max = 0
         title_list = []
-        for page in pages_list:
-            page_infos = page["preproc_blocks"]
-            for item in page_infos:
-                if not item.get("lines", None) or len(item["lines"]) <= 0:
-                    continue
-                x0, y0, x1, y1 = item["lines"][0]["bbox"]
-                content_height = y1 - y0
-                if item["type"] == "title":
-                    title_height = int(content_height)
-                    title_text = ""
-                    for line in item["lines"]:
-                        for span in line["spans"]:
-                            if span["type"] == "inline_equation":
-                                span["content"] = " $" + span["content"] + "$ "
-                            title_text += span["content"]
-                    title_text = title_text.replace("\\", "\\\\")
-                    title_list.append((title_text, title_height))
-                elif item["type"] == "text":
-                    if content_height < text_height_min:
-                        text_height_min = content_height
-                    if content_height > text_height_max:
-                        text_height_max = content_height
+        # 存储每个title的index
+        md_title_index = []
+        # 记录index
+        index_count = 0
+        for page_info in pdf_info_dict:
+            paras_of_layout = page_info.get("para_blocks")
+            if not paras_of_layout:
+                continue
+            (
+                page_markdown,
+                text_height_min,
+                text_height_max,
+                index_count,
+            ) = self.create_page_markdown(
+                pdf_name,
+                paras_of_layout,
+                img_buket_path,
+                title_list,
+                md_title_index,
+                text_height_min,
+                text_height_max,
+                index_count,
+            )
+            output_content.extend(page_markdown)
+        new_title_list = self.post_process_multi_level_headings(
+            title_list, text_height_min, text_height_max
+        )
+        for idx, content_idx in enumerate(md_title_index):
+            output_content[content_idx] = new_title_list[idx]
+        markdown_result = "\n\n".join(output_content)
+        return markdown_result
 
-        sorted_list = sorted(title_list, key=itemgetter(1), reverse=True)
+    def create_page_markdown(
+        self,
+        pdf_name,
+        paras_of_layout,
+        img_buket_path,
+        title_list,
+        md_title_index,
+        text_height_min,
+        text_height_max,
+        index_count,
+    ):
+        page_markdown = []
+        for para_block in paras_of_layout:
+            text_height_min, text_height_max = self.collect_title_info(
+                para_block, title_list, text_height_min, text_height_max
+            )
+            para_text = ""
+            para_type = para_block["type"]
+            if para_type in [BlockType.Text, BlockType.List, BlockType.Index]:
+                para_text = merge_para_with_text(para_block)
+            elif para_type == BlockType.Title:
+                para_text = f"# {merge_para_with_text(para_block)}"
+                md_title_index.append(index_count)
+            elif para_type == BlockType.InterlineEquation:
+                para_text = merge_para_with_text(para_block)
+            elif para_type == BlockType.Image:
+                for block in para_block["blocks"]:  # 1st.拼image_body
+                    if block["type"] == BlockType.ImageBody:
+                        for line in block["lines"]:
+                            for span in line["spans"]:
+                                if span["type"] == ContentType.Image:
+                                    if span.get("image_path", "") and not self.is_url(
+                                        span.get("image_path", "")
+                                    ):
+                                        image_path = join_path(
+                                            img_buket_path, span["image_path"]
+                                        )
+                                        oss_url = self._transform_local_to_oss(
+                                            pdf_name, image_path
+                                        )
+                                        if oss_url:
+                                            para_text += f"\n![]({oss_url})  \n"
+                for block in para_block["blocks"]:  # 2nd.拼image_caption
+                    if block["type"] == BlockType.ImageCaption:
+                        para_text += merge_para_with_text(block) + "  \n"
+                for block in para_block["blocks"]:  # 3rd.拼image_footnote
+                    if block["type"] == BlockType.ImageFootnote:
+                        para_text += merge_para_with_text(block) + "  \n"
+            elif para_type == BlockType.Table:
+                for block in para_block["blocks"]:  # 1st.拼table_caption
+                    if block["type"] == BlockType.TableCaption:
+                        para_text += merge_para_with_text(block) + "  \n"
+                for block in para_block["blocks"]:  # 2nd.拼table_body
+                    if block["type"] == BlockType.TableBody:
+                        for line in block["lines"]:
+                            for span in line["spans"]:
+                                if span["type"] == ContentType.Table:
+                                    # if processed by table model
+                                    if span.get("latex", ""):
+                                        para_text += f"\n\n$\n {span['latex']}\n$\n\n"
+                                    elif span.get("html", ""):
+                                        para_text += f"\n\n{span['html']}\n\n"
+                                    if span.get("image_path", "") and not self.is_url(
+                                        span.get("image_path", "")
+                                    ):
+                                        image_path = join_path(
+                                            img_buket_path, span["image_path"]
+                                        )
+                                        oss_url = self._transform_local_to_oss(
+                                            pdf_name, image_path
+                                        )
+                                        if oss_url:
+                                            para_text += f"\n![]({oss_url})  \n"
+                for block in para_block["blocks"]:  # 3rd.拼table_footnote
+                    if block["type"] == BlockType.TableFootnote:
+                        para_text += merge_para_with_text(block) + "  \n"
+
+            if para_text.strip() == "":
+                continue
+            else:
+                page_markdown.append(para_text.strip() + "  ")
+            index_count += 1
+
+        return page_markdown, text_height_min, text_height_max, index_count
+
+    def collect_title_info(
+        self, para_block, title_list, text_height_min, text_height_max
+    ):
+        if not para_block.get("lines", None) or len(para_block["lines"]) <= 0:
+            return text_height_min, text_height_max
+        x0, y0, x1, y1 = para_block["lines"][0]["bbox"]
+        content_height = y1 - y0
+        if para_block["type"] == BlockType.Title:
+            title_height = int(content_height)
+            title_text = merge_para_with_text(para_block)
+            title_list.append((title_text, title_height))
+        elif para_block["type"] == BlockType.Text:
+            if content_height < text_height_min:
+                text_height_min = content_height
+            if content_height > text_height_max:
+                text_height_max = content_height
+        return text_height_min, text_height_max
+
+    def post_process_multi_level_headings(
+        self, title_list, text_height_min, text_height_max
+    ):
+        logger.info(
+            "*****************************start process headings*****************************"
+        )
+        indexed_title_list = [
+            (idx, title_text, title_height)
+            for idx, (title_text, title_height) in enumerate(title_list)
+        ]
+        sorted_list = sorted(indexed_title_list, key=itemgetter(2), reverse=True)
         diff_list = [
-            (sorted_list[i][1] - sorted_list[i + 1][1], i)
+            (sorted_list[i][2] - sorted_list[i + 1][2], i)
             for i in range(len(sorted_list) - 1)
         ]
         sorted_diff = sorted(diff_list, key=itemgetter(0), reverse=True)
@@ -241,33 +225,39 @@ class PaiPDFReader(BaseReader):
             if diff >= DEFAULT_HEADING_DIFF_THRESHOLD and len(slice_index) <= 5:
                 slice_index.append(index)
         slice_index.sort(reverse=True)
+        rank_mapping = {}  # idx到rank的映射
         rank = 1
         cur_index = 0
         if len(slice_index) > 0:
             cur_index = slice_index.pop()
-        for index, (title_text, title_height) in enumerate(sorted_list):
+        for index, (idx, title_text, title_height) in enumerate(sorted_list):
             if index > cur_index:
                 rank += 1
                 if len(slice_index) > 0:
                     cur_index = slice_index.pop()
                 else:
                     cur_index = len(sorted_list) - 1
-            title_level = "#" * rank + " "
+            rank_mapping[idx] = rank
+        new_title_list = []
+        for original_idx, (title_text, title_height) in enumerate(title_list):
+            assigned_rank = rank_mapping.get(original_idx, 6)
+            title_level = "#" * assigned_rank + " "
+
+            # 高度范围在纯文本之间不作为标题
             if text_height_min <= text_height_max and int(
                 text_height_min
             ) <= title_height <= int(text_height_max):
                 title_level = ""
-            old_title = "# " + title_text
-            new_title = title_level + title_text
-            md_content = re.sub(re.escape(old_title), new_title, md_content)
 
-        return md_content
+            new_title = title_level + title_text
+            new_title_list.append(new_title)
+            logger.info(f"transform {title_text} to {new_title}")
+
+        return new_title_list
 
     def parse_pdf(
         self,
         pdf_path: str,
-        parse_method: str = "auto",
-        model_json_path: str = None,
     ):
         """
         执行从 pdf 转换到 json、md 的过程，输出 md 和 json 文件到 pdf 文件所在的目录
@@ -281,50 +271,35 @@ class PaiPDFReader(BaseReader):
             pdf_name = pdf_name.replace(" ", "_")
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = os.path.join(temp_dir, pdf_name)
-                pdf_bytes = open(pdf_path, "rb").read()  # 读取 pdf 文件的二进制数据
 
-                if model_json_path:
-                    model_json = json.loads(
-                        open(model_json_path, "r", encoding="utf-8").read()
-                    )
-                else:
-                    model_json = []
-
-                # 执行解析步骤
                 image_writer = FileBasedDataWriter(temp_file_path)
+                # parent_dir is "", if the pdf_path is relative path, it will be joined with parent_dir.
+                file_reader = FileBasedDataReader("")
+                pdf_bytes = file_reader.read(pdf_path)
+                ds = PymuDocDataset(pdf_bytes)
 
                 # 选择解析方式
-                if parse_method == "auto":
-                    jso_useful_key = {"_pdf_type": "", "model_list": model_json}
-                    pipe = UNIPipe(pdf_bytes, jso_useful_key, image_writer)
-                elif parse_method == "ocr":
-                    pipe = OCRPipe(pdf_bytes, model_json, image_writer)
+                if (
+                    self.enable_mandatory_ocr
+                    or ds.classify() == SupportedPdfParseMethod.OCR
+                ):
+                    infer_result = ds.apply(doc_analyze, ocr=True)
+                    pipe_result = infer_result.pipe_ocr_mode(image_writer)
                 else:
-                    logger.error("unknown parse method, only auto, ocr, txt allowed")
-                    exit(1)
+                    infer_result = ds.apply(doc_analyze, ocr=False)
+                    pipe_result = infer_result.pipe_txt_mode(image_writer)
 
-                # 执行分类
-                pipe.pipe_classify()
+                content_list = pipe_result._pipe_res["pdf_info"]
 
-                # 如果没有传入模型数据，则使用内置模型解析
-                if len(model_json) == 0:
-                    pipe.pipe_analyze()  # 解析
-
-                # 执行解析
-                pipe.pipe_parse()
-                content_list = pipe.pipe_mk_uni_format(temp_file_path, drop_mode="none")
-                md_content = pipe.pipe_mk_markdown(temp_file_path, drop_mode="none")
-                md_content = self.post_process_multi_level_headings(
-                    pipe.pdf_mid_data, md_content
+                md_content = self.create_markdown(
+                    pdf_name, content_list, temp_file_path
                 )
-                md_content = self.process_table(md_content, content_list)
-                new_md_content = self.replace_image_paths(pdf_name, md_content)
 
-            return new_md_content
+            return md_content
 
-        except Exception as e:
-            logger.error(e)
-            return None
+        except Exception:
+            logger.error(traceback.format_exc())
+            raise
 
     def load_data(
         self,
@@ -355,11 +330,7 @@ class PaiPDFReader(BaseReader):
         Returns:
             List[Document]: list of documents.
         """
-        if self.enable_mandatory_ocr:
-            parse_method = "ocr"
-        else:
-            parse_method = "auto"
-        md_content = self.parse_pdf(file_path, parse_method)
+        md_content = self.parse_pdf(file_path)
         logger.info(f"[PaiPDFReader] successfully processed pdf file {file_path}.")
         docs = []
         if metadata:

@@ -12,7 +12,6 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.objects.base import ObjectRetriever
 from llama_index.core.objects.table_node_mapping import SQLTableSchema
 from llama_index.core.schema import QueryBundle
-from llama_index.core.service_context import ServiceContext
 from llama_index.core import Settings
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core import BasePromptTemplate
@@ -48,7 +47,6 @@ class DBDescriptor(PromptMixin):
         context_str_prefix: Optional[str] = None,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
-        service_context: Optional[ServiceContext] = None,
         db_summary_prompt: Optional[BasePromptTemplate] = None,
         db_description_file_path: Optional[str] = None,
     ) -> None:

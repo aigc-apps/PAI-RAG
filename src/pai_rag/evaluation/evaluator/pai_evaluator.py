@@ -1,131 +1,100 @@
-import os
-import json
-
-from pai_rag.evaluation.dataset.rag_eval_dataset import (
-    EvaluationSample,
-    PaiRagEvalDataset,
-)
-from llama_index.core.llama_dataset import (
-    CreatedBy,
-    CreatedByType,
-)
-from loguru import logger
 from pai.llm_eval.evals.default_templates import DefaultPromptTemplateCN
 from pai.llm_eval.pipeline.pipeline_utils import run_rag_offline_eval_pipeline
 from pai_rag.evaluation.evaluator.base_evaluator import BaseEvaluator
+from pai_rag.evaluation.dataset.rag_qca_dataset_refactor import QcapDataset
+from pai_rag.evaluation.dataset.state_manager import (
+    DatasetState,
+    StateManager,
+)
+from pai_rag.evaluation.dataset.rag_eval_dataset_refactor import (
+    QcapEvalDataset,
+)
+from loguru import logger
 
 
 class PaiEvaluator(BaseEvaluator):
-    def __init__(self, llm_config, persist_path: str = None):
-        self._llm_config = llm_config
-        self.persist_path = persist_path
+    def __init__(
+        self,
+        llm_config,
+        persist_path: str = None,
+        state_manager: StateManager = None,
+    ):
+        super().__init__(persist_path=persist_path, state_manager=state_manager)
 
+        self._llm_config = llm_config
         self.retrieval_evaluators = [
             DefaultPromptTemplateCN.RETRIEVER_RELEVANCE_PROMPT_TEMPLATE
         ]
-
         self.response_evaluators = [
             DefaultPromptTemplateCN.FAITHFULNESS_PROMPT_TEMPLATE,
             DefaultPromptTemplateCN.RAG_CORRECTNESS_PROMPT_TEMPLATE,
         ]
 
-        self.created_by = CreatedBy(
-            type=CreatedByType.AI, model_name=self._llm_config["model_name"]
-        )
-        self.qca_dataset_path = os.path.join(self.persist_path, "qca_dataset.json")
-        self.evaluation_dataset_path = os.path.join(
-            self.persist_path, "evaluation_dataset.json"
-        )
-        self._show_progress = True
-        self._workers = 2
-
-    def format_retrieval_result(self, examples, results):
-        ret_examples = []
-        for idx, qca_sample in enumerate(examples):
-            res = json.loads(results[idx])
-            retrieval_eval_example = EvaluationSample(**vars(qca_sample))
-            setattr(
-                retrieval_eval_example,
-                "hitrate",
-                res["eval_results"]["0"]["rag"]["retriever_relevance"]["hit_rate"],
-            )
-            setattr(
-                retrieval_eval_example,
-                "mrr",
-                res["eval_results"]["0"]["rag"]["retriever_relevance"]["mrr"],
-            )
-            ret_examples.append(retrieval_eval_example)
-        return ret_examples
-
-    def format_response_result(self, examples, results):
-        ret_examples = []
-        for idx, qca_sample in enumerate(examples):
-            res = json.loads(results[idx])
-            retrieval_eval_example = EvaluationSample(**vars(qca_sample))
-            setattr(retrieval_eval_example, "evaluated_by", self.created_by)
-            setattr(
-                retrieval_eval_example,
-                "faithfulness_score",
-                res["eval_results"]["0"]["rag"]["faithfulness"]["score"][0],
-            )
-            setattr(
-                retrieval_eval_example,
-                "correctness_score",
-                res["eval_results"]["0"]["rag"]["rag_correctness"]["score"][0],
-            )
-            ret_examples.append(retrieval_eval_example)
-        return ret_examples
-
-    async def aevaluation(self, stage):
-        """Run evaluation with qca dataset."""
-        _status = {"retrieval": False, "response": False}
-        evaluation_dataset = self.load_evaluation_dataset()
-        qca_dataset = self.load_qca_dataset()
-        if evaluation_dataset:
-            logger.info(
-                f"A evaluation dataset already exists with status: [[{evaluation_dataset.status}]]"
-            )
-            _status = evaluation_dataset.status
-            if _status[stage]:
-                return evaluation_dataset.results[stage]
-            else:
-                qca_dataset = evaluation_dataset
-        if qca_dataset:
-            logger.info(
-                f"Starting to generate evaluation dataset for stage: [[{stage}]]..."
-            )
-            if stage == "retrieval":
-                retrieval_result = run_rag_offline_eval_pipeline(
-                    self.retrieval_evaluators,
-                    self.qca_dataset_path,
-                    eval_name="test_rag_offline_eval_retrieval",
-                    batch_size=1,
-                    need_data_management=False,
-                    **self._llm_config,
-                )
-                eval_examples = self.format_retrieval_result(
-                    qca_dataset.examples, retrieval_result
-                )
-            elif stage == "response":
-                response_result = run_rag_offline_eval_pipeline(
-                    self.response_evaluators,
-                    self.qca_dataset_path,
-                    eval_name="test_rag_offline_eval_response",
-                    batch_size=1,
-                    need_data_management=False,
-                    **self._llm_config,
-                )
-                eval_examples = self.format_response_result(
-                    qca_dataset.examples, response_result
-                )
-            else:
-                raise ValueError(f"Invalid stage: {stage}")
-            _status[stage] = True
-            eval_dataset = PaiRagEvalDataset(examples=eval_examples, status=_status)
-            eval_dataset.save_json(self.evaluation_dataset_path)
-            return eval_dataset.results[stage]
+    async def aevaluation_for_retrieval(self):
+        if self.state_manager.is_completed(DatasetState.RETRIEVAL):
+            logger.info("Evaluation dataset for retrieval stage already exists.")
         else:
-            raise ValueError(
-                "No QCA dataset found. Please provide a QCA dataset or "
-                "generate one first."
+            logger.info(
+                "Starting to generate evaluation dataset for retrieval stage..."
             )
+            qcap_dataset = QcapDataset.from_json(self.qcap_dataset_path)
+            ########################################################
+            # TODO: update to new sdk
+            retrieval_eval_samples = run_rag_offline_eval_pipeline(
+                self.retrieval_evaluators,
+                qcap_dataset,
+                eval_name="test_rag_offline_eval_retrieval",
+                batch_size=1,
+                need_data_management=False,
+                **self._llm_config,
+            )
+            ########################################################
+            retrieval_eval_dataset = QcapEvalDataset(samples=retrieval_eval_samples)
+            retrieval_eval_dataset.save_json(self.retrieval_evaluation_dataset_path)
+            self.state_manager.mark_completed(DatasetState.RETRIEVAL)
+            logger.info("Evaluation dataset for retrieval stage generated.")
+
+    async def aevaluation_for_response(self):
+        if self.state_manager.is_completed(DatasetState.RESPONSE):
+            logger.info("Evaluation dataset for response stage already exists.")
+        else:
+            logger.info("Starting to generate evaluation dataset for response stage...")
+            qcap_dataset = QcapDataset.from_json(self.qcap_dataset_path)
+            ########################################################
+            # TODO: update to new sdk
+            response_eval_samples = run_rag_offline_eval_pipeline(
+                self.response_evaluators,
+                qcap_dataset,
+                eval_name="test_rag_offline_eval_response",
+                batch_size=1,
+                need_data_management=False,
+                **self._llm_config,
+            )
+            ########################################################
+            response_eval_dataset = QcapEvalDataset(samples=response_eval_samples)
+            response_eval_dataset.save_json(self.response_evaluation_dataset_path)
+            self.state_manager.mark_completed(DatasetState.RESPONSE)
+            logger.info("Evaluation dataset for response stage generated.")
+
+    async def aevaluation_for_all(self):
+        """Run evaluation with qca dataset."""
+        if self.state_manager.is_completed(DatasetState.E2E):
+            logger.info("Evaluation dataset for end2end stage already exists.")
+        else:
+            logger.info("Starting to generate evaluation dataset for end2end stage...")
+            qcap_dataset = QcapDataset.from_json(self.qcap_dataset_path)
+            ########################################################
+            # TODO: update to new sdk
+            e2e_eval_samples = run_rag_offline_eval_pipeline(
+                self.response_evaluators,
+                qcap_dataset,
+                eval_name="test_rag_offline_eval_all",
+                batch_size=1,
+                need_data_management=False,
+                **self._llm_config,
+            )
+            ########################################################
+            e2e_eval_dataset = QcapEvalDataset(samples=e2e_eval_samples)
+            e2e_eval_dataset.save_json(self.evaluation_dataset_path)
+            self.state_manager.mark_completed(DatasetState.E2E)
+            logger.info("Evaluation dataset for end2end stage generated.")

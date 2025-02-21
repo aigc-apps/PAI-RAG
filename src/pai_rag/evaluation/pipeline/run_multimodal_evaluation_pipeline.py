@@ -4,6 +4,7 @@ from pai_rag.evaluation.utils.create_components import (
     get_rag_config_and_mode,
     get_multimodal_eval_components,
 )
+from pai_rag.evaluation.dataset.state_manager import DatasetState
 
 
 def run_multimodal_evaluation_pipeline(
@@ -29,11 +30,12 @@ def run_multimodal_evaluation_pipeline(
         qca_dataset_path,
     )
     if qca_dataset_path:
+        multimodal_qca_generator.state_manager.mark_completed(DatasetState.QCA)
         _ = asyncio.run(
-            multimodal_qca_generator.agenerate_qca_dataset(stage="predicted")
+            multimodal_qca_generator.agenerate_predicted_multimodal_dataset_only_via_vlm()
         )
-        response_result = asyncio.run(evaluator.aevaluation(stage="response"))
-        return {"response": response_result}
+        asyncio.run(evaluator.aevaluation_for_response())
+        return
 
     assert (oss_path is not None) or (
         data_path is not None
@@ -51,7 +53,6 @@ def run_multimodal_evaluation_pipeline(
             enable_raptor=False,
         )
 
-    _ = asyncio.run(multimodal_qca_generator.agenerate_qca_dataset(stage="labelled"))
-    _ = asyncio.run(multimodal_qca_generator.agenerate_qca_dataset(stage="predicted"))
-    response_result = asyncio.run(evaluator.aevaluation(stage="response"))
-    return {"response": response_result}
+    _ = asyncio.run(multimodal_qca_generator.agenerate_all_dataset())
+    asyncio.run(evaluator.aevaluation_for_retrieval())
+    asyncio.run(evaluator.aevaluation_for_response())

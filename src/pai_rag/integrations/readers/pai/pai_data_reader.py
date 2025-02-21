@@ -17,17 +17,37 @@ from llama_index.core.readers.file.base import default_file_metadata_func
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
+from functools import partial
 from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
+
+ACCEPTABLE_DOC_TYPES = set(
+    [
+        ".html",
+        ".htm",
+        ".txt",
+        ".docx",
+        ".pdf",
+        ".pptx",
+        ".md",
+        ".xls",
+        ".jsonl",
+        ".csv",
+        ".xlsx",
+        ".jpg",
+        ".jpeg",
+        ".png",
+    ]
+)
 
 
 class BaseDataReaderConfig(BaseModel):
     concat_csv_rows: bool = False
     enable_mandatory_ocr: bool = False
-    enable_table_summary: bool = False
     format_sheet_data_to_json: bool = False
     sheet_column_filters: List[str] | None = None
+    number_workers: int = 4
 
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
@@ -36,28 +56,22 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
 
     file_readers = {
         ".html": PaiHtmlReader(
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing html images
         ),
         ".htm": PaiHtmlReader(
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing html images
         ),
         ".docx": PaiDocxReader(
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing docx images
         ),
         ".pdf": PaiPDFReader(
             enable_mandatory_ocr=reader_config.enable_mandatory_ocr,
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pdf images
         ),
         ".pptx": PaiPptxReader(
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing pptx images
         ),
         ".md": PaiMarkdownReader(
-            enable_table_summary=reader_config.enable_table_summary,
             oss_cache=oss_store,  # Storing markdown images
         ),
         ".csv": PaiPandasCSVReader(
@@ -86,7 +100,10 @@ def get_oss_files(oss_path: str, filter_pattern: str = None, oss_store: Any = No
         if not os.path.exists(oss_file_path_dir):
             os.makedirs(oss_file_path_dir)
         for oss_obj in object_list:
-            if not oss_obj.key.endswith("/"):  # 不是目录
+            if (
+                not oss_obj.key.endswith("/")
+                and pathlib.Path(oss_obj.key).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            ):  # 不是目录
                 logger.info(f"Downloading oss object: {oss_obj.key}")
                 try:
                     set_public = oss_store.put_object_acl(oss_obj.key, "public-read")
@@ -132,14 +149,24 @@ def get_input_files(
 
     if isinstance(file_path_or_directory, list):
         # file list
-        input_files = [f for f in file_path_or_directory if os.path.isfile(f)]
+        input_files = [
+            f
+            for f in file_path_or_directory
+            if os.path.isfile(f)
+            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+        ]
     elif isinstance(file_path_or_directory, str) and os.path.isdir(
         file_path_or_directory
     ):
         # glob from directory
         directory = pathlib.Path(file_path_or_directory)
-        input_files = [f for f in directory.rglob(filter_pattern) if os.path.isfile(f)]
-    else:
+        input_files = [
+            f
+            for f in directory.rglob(filter_pattern)
+            if os.path.isfile(f)
+            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+        ]
+    elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
         # Single file
         input_files = [pathlib.Path(file_path_or_directory)]
 
@@ -155,6 +182,10 @@ def get_input_files(
     return input_files, file_metadata_map
 
 
+def get_file_metadata(x, file_metadata_map):
+    return file_metadata_map.get(x, {})
+
+
 class PaiDataReader(BaseReader):
     def __init__(
         self,
@@ -162,7 +193,11 @@ class PaiDataReader(BaseReader):
         oss_store: Any = None,
     ):
         self.file_readers = get_file_readers(reader_config, oss_store)
+        self.number_workers = reader_config.number_workers
         self.oss_store = oss_store
+        logger.info(
+            f"[PaiDataReader] created with number_workers : {self.number_workers}"
+        )
 
     def load_data(
         self,
@@ -179,14 +214,21 @@ class PaiDataReader(BaseReader):
             filter_pattern=filter_pattern,
             oss_store=self.oss_store,
         )
+
+        file_metadata_func = partial(
+            get_file_metadata, file_metadata_map=file_metadata_map
+        )
         directory_reader = SimpleDirectoryReader(
             input_files=input_files,
             file_extractor=self.file_readers,
-            file_metadata=lambda x: file_metadata_map.get(x, {}),
+            file_metadata=file_metadata_func,
         )
 
         """Load data from the input directory."""
-        return directory_reader.load_data(show_progress=show_progress)
+        documents = directory_reader.load_data(
+            show_progress=show_progress, num_workers=self.number_workers
+        )
+        return documents
 
     async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:
         """Load data from the input directory."""

@@ -1,5 +1,4 @@
 import ray
-from loguru import logger
 from pai_rag.core.rag_module import resolve
 from pai_rag.tools.data_process.ops.base_op import BaseOP, OPERATORS
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
@@ -16,9 +15,6 @@ class Splitter(BaseOP):
     """Mapper to generate samples whose captions are generated based on
     another model and the figure."""
 
-    _accelerator = "cpu"
-    _batched_op = True
-
     def __init__(
         self,
         type: str = "Token",
@@ -26,7 +22,7 @@ class Splitter(BaseOP):
         chunk_overlap: int = 20,
         enable_multimodal: bool = False,
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.node_parser_config = NodeParserConfig(
@@ -38,7 +34,14 @@ class Splitter(BaseOP):
         self.node_parser = resolve(
             cls=PaiNodeParser, parser_config=self.node_parser_config
         )
-        logger.info("SplitterActor [PaiNodeParser] init finished.")
+        self.logger.info(
+            f"""SplitterActor [PaiNodeParser] init finished with following parameters:
+                        type: {type}
+                        chunk_size: {chunk_size}
+                        chunk_overlap: {chunk_overlap}
+                        enable_multimodal: {enable_multimodal}
+            """
+        )
 
     def process(self, documents):
         format_documents = convert_list_to_documents(documents)

@@ -143,6 +143,7 @@ class PaiNodeParser(TransformComponent):
         self._doc_cnt_map = {}
 
         for doc_node in nodes:
+            logger.info(f"Start Parsing document: {doc_node.metadata['file_name']}")
             doc_node.metadata["file_path"] = format_temp_file_path(
                 doc_node.metadata["file_path"]
             )
@@ -158,8 +159,6 @@ class PaiNodeParser(TransformComponent):
                         text=doc_node.text,
                         metadata=doc_node.metadata,
                         image_url=doc_node.image_url,
-                        image_path=doc_node.image_path,
-                        image_mimetype=doc_node.image_mimetype,
                     )
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
@@ -189,6 +188,7 @@ class PaiNodeParser(TransformComponent):
                             self._get_auto_increment_node_id(doc_key), doc_node
                         )
                         splitted_nodes.append(tmp_node)
+            logger.info(f"Finished Parsing document: {doc_node.metadata['file_name']}")
 
         for node in splitted_nodes:
             node.excluded_embed_metadata_keys = list(

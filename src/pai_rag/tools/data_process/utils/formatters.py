@@ -16,7 +16,6 @@ def convert_node_to_dict(node):
         },
         "embedding": getattr(node, "embedding", None),
         "sparse_embedding": None,
-        "mimetype": getattr(node, "mimetype", None),
         "start_char_idx": getattr(node, "start_char_idx", None),
         "end_char_idx": getattr(node, "end_char_idx", None),
         "text_template": getattr(node, "text_template", None)
@@ -36,23 +35,24 @@ def convert_node_to_dict(node):
         "image_url": getattr(node, "image_url", None)
         if type(node) is ImageNode
         else None,
-        "image_mimetype": getattr(node, "image_mimetype", None)
-        if type(node) is ImageNode
-        else None,
     }
 
 
-def convert_document_to_dict(doc):
-    return {
-        "id": doc.id_,
-        "embedding": doc.embedding,
-        "metadata": doc.metadata,
-        "excluded_embed_metadata_keys": doc.excluded_embed_metadata_keys,
-        "excluded_llm_metadata_keys": doc.excluded_llm_metadata_keys,
-        "relationships": doc.relationships,
-        "text": doc.text,
-        "mimetype": doc.mimetype,
-    }
+def convert_document_to_dict(documents):
+    docs_dict = []
+    for document in documents:
+        docs_dict.append(
+            {
+                "id": document.id_,
+                "embedding": document.embedding,
+                "metadata": document.metadata,
+                "excluded_embed_metadata_keys": document.excluded_embed_metadata_keys,
+                "excluded_llm_metadata_keys": document.excluded_llm_metadata_keys,
+                "relationships": document.relationships,
+                "text": document.text,
+            }
+        )
+    return docs_dict
 
 
 def convert_list_to_documents(doc_list):
@@ -66,7 +66,6 @@ def convert_list_to_documents(doc_list):
             excluded_llm_metadata_keys=list(doc["excluded_llm_metadata_keys"]),
             relationships=doc["relationships"],
             text=doc["text"],
-            mimetype=doc["mimetype"],
         )
         documents.append(document)
     return documents

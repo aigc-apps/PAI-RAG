@@ -5,7 +5,8 @@ RUN pip3 install poetry
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    PYTHON_AGENT_PATH="https://arms-apm-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/aliyun-python-agent/dev/1.2.0-llama-index-support-0.10.43%2B/aliyun-python-agent.tar.gz"
 
 WORKDIR /app
 COPY . .
@@ -20,14 +21,26 @@ FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential
+
+RUN wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz && \
+    tar -xzvf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./config && \
+    make && \
+    make install
+
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
     ENABLE_FASTAPI=false \
     ENABLE_REQUESTS=false \
     ENABLE_AIOHTTPCLIENT=false \
-    ENABLE_HTTPX=false
+    ENABLE_HTTPX=false \
+    LD_LIBRARY_PATH=/user/local/lib
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 curl
+RUN rm -rf openssl-1.1.1w.tar.gz openssl-1.1.1w
+
+RUN ldconfig
 
 # setup paddleocr dependencies
 RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \

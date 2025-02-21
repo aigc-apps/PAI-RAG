@@ -1,19 +1,19 @@
+import os
+from llama_index.core import Settings
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
     DashScopeEmbeddingConfig,
     OpenAIEmbeddingConfig,
     HuggingFaceEmbeddingConfig,
     CnClipEmbeddingConfig,
+    LangStudioEmbeddingConfig,
 )
-
-from llama_index.core import Settings
-from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.embeddings.dashscope import DashScopeEmbedding
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from pai_rag.integrations.embeddings.clip.cnclip_embedding import CnClipEmbedding
-import os
 from loguru import logger
-from pai_rag.utils.download_models import ModelScopeDownloader
 
 
 def create_embedding(
@@ -22,6 +22,7 @@ def create_embedding(
     if isinstance(embed_config, OpenAIEmbeddingConfig):
         embed_model = OpenAIEmbedding(
             api_key=embed_config.api_key,
+            api_base=embed_config.api_base,
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
         )
@@ -91,7 +92,16 @@ def create_embedding(
         logger.info(
             f"Initialized CnClip embedding model {embed_config.model} with {embed_config.embed_batch_size} batch size."
         )
+    elif isinstance(embed_config, LangStudioEmbeddingConfig):
+        from pai_rag.integrations.embeddings.pai.langstudio_utils import (
+            convert_langstudio_embed_config,
+        )
 
+        converted_embed_config = convert_langstudio_embed_config(embed_config)
+        logger.info(
+            f"Initialized LangStudio embedding model with {converted_embed_config}."
+        )
+        return create_embedding(converted_embed_config, pai_rag_model_dir)
     else:
         raise ValueError(f"Unknown Embedding source: {embed_config}")
 

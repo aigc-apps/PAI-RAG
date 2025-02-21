@@ -80,8 +80,8 @@ class PaiPostProcessor(BaseNodePostprocessor):
         self,
         postprocessor_config: BasePostProcessorConfig,
     ):
-        self._postprocessors = create_postprocessors(postprocessor_config)
         super().__init__()
+        self._postprocessors = create_postprocessors(postprocessor_config)
 
     @classmethod
     def class_name(cls) -> str:

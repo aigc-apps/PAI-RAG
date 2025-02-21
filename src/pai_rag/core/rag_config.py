@@ -1,10 +1,11 @@
 from typing import Annotated, Dict, Union
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from pai_rag.core.models.config import (
+    AliyunTextModerationPlusConfig,
     NodeEnhancementConfig,
     OssStoreConfig,
+    QueryRewriteConfig,
     RetrieverConfig,
-    SearchWebConfig,
     SynthesizerConfig,
 )
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
@@ -26,6 +27,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
     OpenAILlmConfig,
     PaiBaseLlmConfig,
     PaiEasLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
@@ -34,6 +36,11 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import BaseDataReaderConfig
 from pai_rag.integrations.router.pai.pai_router import IntentConfig
+from pai_rag.integrations.search.search_config import (
+    BingSearchConfig,
+    QuarkSearchConfig,
+    AliyunSearchConfig,
+)
 
 
 def validate_case_insensitive(value: Dict) -> Dict:
@@ -47,11 +54,25 @@ def validate_case_insensitive(value: Dict) -> Dict:
             # fix old config
             if value[key] == "simple-weighted-reranker":
                 value[key] = "no-reranker"
+
+    if value.get("source") == "paieas":
+        value["source"] = "openai_compatible"
+        value["base_url"] = value["endpoint"]
+        value["api_key"] = str(value["token"])
+    elif value.get("source") == "dashscope" and "embed_batch_size" not in value:
+        value["source"] = "openai_compatible"
     return value
+
+
+class SystemConfig(BaseModel):
+    default_web_search: bool = False
 
 
 class RagConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    # system
+    system: SystemConfig = SystemConfig()
 
     # reader, parser
     data_reader: BaseDataReaderConfig
@@ -79,7 +100,12 @@ class RagConfig(BaseModel):
         BeforeValidator(validate_case_insensitive),
     ]
     multimodal_llm: Annotated[
-        Union[DashScopeMultiModalLlmConfig, PaiEasLlmConfig, OpenAILlmConfig],
+        Union[
+            DashScopeMultiModalLlmConfig,
+            PaiEasLlmConfig,
+            OpenAILlmConfig,
+            OpenAICompatibleLlmConfig,
+        ],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ] | None = None
@@ -126,7 +152,15 @@ class RagConfig(BaseModel):
     retriever: RetrieverConfig
 
     # search web
-    search: SearchWebConfig
+    search: Annotated[
+        Union[BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig],
+        Field(discriminator="source"),
+        BeforeValidator(validate_case_insensitive),
+    ]
 
     # synthesizer
     synthesizer: SynthesizerConfig
+
+    query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
+
+    guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()

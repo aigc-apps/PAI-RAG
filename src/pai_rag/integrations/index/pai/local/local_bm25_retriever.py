@@ -17,14 +17,15 @@ class LocalBM25Retriever(BaseRetriever):
         object_map: Optional[dict] = None,
         verbose: bool = False,
     ) -> None:
-        self._similarity_top_k = similarity_top_k
-        self.bm25_index = bm25_index
         super().__init__(
             callback_manager=callback_manager,
             object_map=object_map,
             objects=objects,
             verbose=verbose,
         )
+
+        self._similarity_top_k = similarity_top_k
+        self.bm25_index = bm25_index
 
     @classmethod
     def from_defaults(

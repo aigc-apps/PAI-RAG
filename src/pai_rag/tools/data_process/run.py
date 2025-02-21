@@ -4,6 +4,9 @@ from loguru import logger
 from typing import List
 from pai_rag.tools.data_process.ops.base_op import OPERATORS
 from pai_rag.tools.data_process.ray_executor import RayExecutor
+from pai_rag.tools.data_process.utils.compute_resource_utils import (
+    enforce_min_requirements,
+)
 
 
 def str2bool(v):
@@ -44,6 +47,7 @@ def update_op_process(args):
 
 
 def process_parser(args):
+    op_name = "rag_parser"
     args_dict = args.__dict__
     parser_required_args = {
         key: args_dict[key]
@@ -56,19 +60,20 @@ def process_parser(args):
             "accelerator",
             "enable_mandatory_ocr",
             "concat_csv_rows",
-            "enable_table_summary",
             "format_sheet_data_to_json",
             "sheet_column_filters",
             "oss_bucket",
             "oss_endpoint",
         ]
     }
-    args.process.append("rag_parser")
-    args.process[0] = {"rag_parser": parser_required_args}
+    parser_required_args = enforce_min_requirements(op_name, parser_required_args)
+    args.process.append(op_name)
+    args.process[0] = {op_name: parser_required_args}
     return args
 
 
 def process_splitter(args):
+    op_name = "rag_splitter"
     args_dict = args.__dict__
     splitter_required_args = {
         key: args_dict[key]
@@ -84,12 +89,14 @@ def process_splitter(args):
             "enable_multimodal",
         ]
     }
-    args.process.append("rag_splitter")
-    args.process[0] = {"rag_splitter": splitter_required_args}
+    splitter_required_args = enforce_min_requirements(op_name, splitter_required_args)
+    args.process.append(op_name)
+    args.process[0] = {op_name: splitter_required_args}
     return args
 
 
 def process_embedder(args):
+    op_name = "rag_embedder"
     args_dict = args.__dict__
     embedder_required_args = {
         key: args_dict[key]
@@ -105,10 +112,13 @@ def process_embedder(args):
             "enable_sparse",
             "enable_multimodal",
             "multimodal_source",
+            "connection_name",
+            "workspace_id",
         ]
     }
-    args.process.append("rag_embedder")
-    args.process[0] = {"rag_embedder": embedder_required_args}
+    embedder_required_args = enforce_min_requirements(op_name, embedder_required_args)
+    args.process.append(op_name)
+    args.process[0] = {op_name: embedder_required_args}
     return args
 
 
@@ -142,20 +152,20 @@ def init_configs():
     parser.add_argument(
         "--working_dir",
         type=str,
-        default="/PAI-RAG",
+        default="/app",
         help="Path to working dir for ray cluster.",
     )
     parser.add_argument(
         "--cpu_required",
         type=int,
-        default=1,
+        default=2,
         help="Cpu required for each rag operator.",
     )
     parser.add_argument(
         "--mem_required",
-        type=str,
-        default="1GB",
-        help="Memory required for each rag operator.",
+        type=int,
+        default=2,
+        help="Memory(GB) required for each rag operator.",
     )
     parser.add_argument(
         "--process", default=[], help="list of operator processes to run"
@@ -192,14 +202,6 @@ def init_configs():
         const=True,
         default=False,
         help="Whether to concat csv rows for rag_parser operator.",
-    )
-    parser.add_argument(
-        "--enable_table_summary",
-        type=str2bool,
-        nargs="?",
-        const=True,
-        default=False,
-        help="Whether to enable table summary for rag_parser operator.",
     )
     parser.add_argument(
         "--format_sheet_data_to_json",
@@ -282,6 +284,18 @@ def init_configs():
         type=str,
         default="cnclip",
         help="Multi-modal embedding model source for rag_embedder operator.",
+    )
+    parser.add_argument(
+        "--connection_name",
+        type=str,
+        default=None,
+        help="Langstudio connection for rag_embedder operator.",
+    )
+    parser.add_argument(
+        "--workspace_id",
+        type=str,
+        default=None,
+        help="PAI workspace id for rag_embedder operator.",
     )
 
     args = parser.parse_args()

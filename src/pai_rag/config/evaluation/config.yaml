@@ -7,7 +7,7 @@ experiment:
       source: "dashscope"
       model: "qwen-max"
       max_tokens: 1024
-    use_pai_eval: true
+    use_pai_eval: false
   # [custom text dataset][crag]
   - name: "text_exp2"
     dataset: "crag"
@@ -31,7 +31,7 @@ experiment:
       max_tokens: 1024
   # [custom multi-modal dataset]
   - name: "multi_modal_exp2"
-    qca_dataset_path: "example_data/eval_docs_image_example/multimodal_eval_dataset_zh_example.json"
+    qca_dataset_path: "example_data/eval_docs_image_example/multimodal_eval_dataset_zh_example.jsonl"
     rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
     eval_model_llm:
       source: "dashscope"

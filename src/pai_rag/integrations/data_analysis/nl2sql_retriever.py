@@ -33,12 +33,7 @@ from llama_index.core.prompts.mixin import (
     PromptMixinType,
 )
 from llama_index.core.schema import NodeWithScore, QueryBundle, QueryType, TextNode
-from llama_index.core.service_context import ServiceContext
-from llama_index.core.settings import (
-    Settings,
-    embed_model_from_settings_or_context,
-    llm_from_settings_or_context,
-)
+from llama_index.core.settings import Settings
 from sqlalchemy import Table
 
 from pai_rag.integrations.data_analysis.data_analysis_config import (
@@ -94,10 +89,11 @@ class MySQLRetriever(BaseRetriever):
         callback_manager: Optional[CallbackManager] = None,
         **kwargs: Any,
     ) -> None:
+        super().__init__(callback_manager or Settings.callback_manager)
+
         """Initialize params."""
         self._sql_database = sql_database
         self._return_raw = return_raw
-        super().__init__(callback_manager)
 
     def _format_node_results(
         self, results: List[List[Any]], col_keys: List[str]
@@ -337,7 +333,6 @@ class MyNLSQLRetriever(PromptMixin):
         table_retriever (ObjectRetriever[SQLTableSchema]): Object retriever for
             SQLTableSchema objects. Defaults to None.
         context_str_prefix (str): Prefix for context string. Defaults to None.
-        service_context (ServiceContext): Service context. Defaults to None.
         return_raw (bool): Whether to return plain-text dump of SQL results, or parsed into Nodes.
         handle_sql_errors (bool): Whether to handle SQL errors. Defaults to True.
         sql_only (bool) : Whether to get only sql and not the sql query result.
@@ -358,7 +353,6 @@ class MyNLSQLRetriever(PromptMixin):
         sql_parser_mode: SQLParserMode = SQLParserMode.DEFAULT,
         llm: Optional[LLM] = None,
         embed_model: Optional[BaseEmbedding] = None,
-        service_context: Optional[ServiceContext] = None,
         return_raw: bool = True,
         handle_sql_errors: bool = True,
         sql_only: bool = False,
@@ -366,6 +360,8 @@ class MyNLSQLRetriever(PromptMixin):
         verbose: bool = False,
         **kwargs: Any,
     ) -> None:
+        super().__init__()
+
         """Initialize params."""
         self._sql_retriever = MySQLRetriever(sql_database, return_raw=return_raw)
         self._sql_database = sql_database
@@ -375,20 +371,18 @@ class MyNLSQLRetriever(PromptMixin):
         self._tables = tables
         self._dialect = dialect
         self._context_str_prefix = context_str_prefix
-        self._llm = llm or llm_from_settings_or_context(Settings, service_context)
+        self._llm = llm or Settings.llm
         self._text_to_sql_prompt = text_to_sql_prompt or DEFAULT_TEXT_TO_SQL_TMPL
         self._sql_parser_mode = sql_parser_mode
 
-        embed_model = embed_model or embed_model_from_settings_or_context(
-            Settings, service_context
-        )
+        embed_model = embed_model or Settings.embed_model
         self._sql_parser = self._load_sql_parser(sql_parser_mode, embed_model)
         self._handle_sql_errors = handle_sql_errors
         self._sql_only = sql_only
         self._verbose = verbose
         # super().__init__(
         #     callback_manager=callback_manager
-        #     or callback_manager_from_settings_or_context(Settings, service_context)
+        #     or Settings.callback_manager
         # )
 
     @classmethod

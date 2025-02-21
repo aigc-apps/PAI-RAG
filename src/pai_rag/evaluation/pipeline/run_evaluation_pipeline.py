@@ -1,5 +1,4 @@
 import asyncio
-from loguru import logger
 from pai_rag.evaluation.utils.create_components import (
     get_rag_components,
     get_rag_config_and_mode,
@@ -45,13 +44,8 @@ def run_rag_evaluation_pipeline(
     )
 
     _ = asyncio.run(
-        qca_generator.agenerate_qca_dataset(
-            stage="labelled", dataset=dataset, dataset_path=data_path
-        )
+        qca_generator.agenerate_all_dataset(dataset=dataset, dataset_path=data_path)
     )
-    _ = asyncio.run(qca_generator.agenerate_qca_dataset(stage="predicted"))
-    retrieval_result = asyncio.run(evaluator.aevaluation(stage="retrieval"))
-    response_result = asyncio.run(evaluator.aevaluation(stage="response"))
-    logger.info(f"retrieval_result : {retrieval_result}")
-    logger.info(f"response_result : {response_result}")
-    return {"retrieval": retrieval_result, "response": response_result}
+    asyncio.run(evaluator.aevaluation_for_retrieval())
+    asyncio.run(evaluator.aevaluation_for_response())
+    asyncio.run(evaluator.aevaluation_for_all())

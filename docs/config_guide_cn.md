@@ -87,7 +87,7 @@ source = [PaiEas, OpenAI, DashScope]
 
 ## rag.index
 
-vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablestore]
+vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablestore, DashVector]
 
 目前, pai_rag 支持多种方式创建和存储索引。
 
@@ -165,6 +165,20 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablest
     access_key_id = ""
     access_key_secret = ""
     table_name = "pai_rag"
+
+如果 vector_store.type = "DashVector", 需要提供如下信息：
+
+    [rag.index]
+    persist_path = "localdata/storage"
+
+    [rag.index.vector_store]
+    type = "dashvector"
+    endpoint = ""
+    api_key = ""
+    collection_name = "" # optional
+    partition_name = "" # optional
+
+其中，endpoint 和 api_key 需要手动开通并创建 DashVector Cluster 后获取，参考 [文档](https://help.aliyun.com/document_detail/2631966.html)。对于 collection_name和 partition_name，如果留空则使用默认配置（collection: "pai_rag", partition: "default"）。如果指定的collection和partition不存在，则会自动创建，可在DashVector控制台中进行管理。
 
 该设置也可在网页中配置。
 
