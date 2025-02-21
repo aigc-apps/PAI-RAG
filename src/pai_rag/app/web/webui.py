@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Request,Response
 import gradio as gr
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
@@ -19,7 +19,6 @@ from pai_rag.app.web.ui_constants import (
     WELCOME_MESSAGE,
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
-from pai_rag.app.web.middleware import FileBrowserProxy
 
 from loguru import logger
 
@@ -136,15 +135,45 @@ def make_homepage():
 
 
 def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blocks:
+
+    @app.middleware("http")
+    async def postprocess_middleware(request, call_next):
+        print(call_next)
+        if "/filebrowser" in request.url.path:
+            def clean_headers(headers:dict,keys):
+                for k in keys:
+                    headers.pop(k, None)
+                    headers.pop(str.lower(k),None)
+                return headers
+            import aiohttp
+            session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(
+                        total= 30*60,
+                        connect= 30*60,
+                    )
+                )
+            url = request.url.replace(hostname="localhost", port="8012")
+            async def sender_data(req:Request):
+                async for chunk in req.stream():
+                    yield chunk
+            async with session.request(request.method, str(url),headers=clean_headers(dict(request.headers),["Transfer-Encoding"]),params=str(request.path_params), data=sender_data(request), allow_redirects=False) as resp:
+                content = await resp.content.read()
+                r = Response(content=content,headers=clean_headers(dict(resp.headers),["Content-Encoding","Content-Length"]), status_code=resp.status)
+                print(r)
+                return r
+        else:
+            response = await call_next(request)
+            print(response)
+            return response
     rag_client.set_endpoint(rag_url)
 
     chat_page = create_chat_ui()
     chat_page.queue(api_open=True, max_size=64)
-    gr.mount_gradio_app(app, chat_page, path="/chat")
+    app = gr.mount_gradio_app(app, chat_page, path="/chat")
 
     home = make_homepage()
     chat_page.queue(api_open=True, max_size=64)
     logger.info(f"web_url: {web_url}")
-    gr.mount_gradio_app(app, home, path="/")
-    app.add_middleware(FileBrowserProxy)
+    app = gr.mount_gradio_app(app, home, path="/")
+    # app.add_middleware(FileBrowserProxy)
     return
