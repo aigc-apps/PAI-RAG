@@ -205,7 +205,6 @@ class RagLocalClient:
                             "docs": chunk.get("docs"),
                             "is_finished": chunk.get("is_finished", False),
                         }
-                        print(result)
                         yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))

@@ -683,7 +683,6 @@ class RagApplication:
 
         if query.with_intent:
             intent_router = resolve_intent_router(self.config)
-            print("===", new_query_bundle.chat_messages_str)
             intent = await intent_router.aselect(
                 str_or_query_bundle=new_query_bundle.chat_messages_str
             )

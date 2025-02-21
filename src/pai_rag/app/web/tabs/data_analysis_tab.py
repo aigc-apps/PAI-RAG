@@ -105,7 +105,6 @@ async def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        print(chatbot)
         response_gen = rag_client.query_data_analysis(chatbot[:-1], stream=True)
         is_thinking = False
         async for resp in response_gen:

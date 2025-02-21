@@ -125,7 +125,6 @@ class PaiLlm(OpenAILike):
             completion_response = await self.acomplete(prompt, formatted=True, **kwargs)
             return completion_response_to_chat_response(completion_response)
 
-        print(messages)
         filterd_messages = [
             message
             for message in messages
@@ -145,7 +144,6 @@ class PaiLlm(OpenAILike):
                 completion_response
             )
 
-        print(messages)
         filterd_messages = [
             message
             for message in messages

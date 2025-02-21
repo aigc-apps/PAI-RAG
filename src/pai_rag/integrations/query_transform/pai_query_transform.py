@@ -45,7 +45,6 @@ def messages_to_history_str(
             string_message += f"\n{additional_kwargs}"
         string_messages.append(string_message)
 
-    print(messages, string_messages)
     return "\n".join(string_messages)
 
 
