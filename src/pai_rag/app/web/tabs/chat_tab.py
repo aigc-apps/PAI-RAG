@@ -367,7 +367,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="search_type",
                     )
                     serpapi_key_tips = gr.Markdown(
-                        value="\N{WHITE MEDIUM STAR} **How to get SerpAPI Key [doc](https://serpapi.com/)**"
+                        value="How to get [SerpAPI Key](https://serpapi.com)"
                     )
                     search_api_key = gr.Text(
                         label="Bing API Key",
