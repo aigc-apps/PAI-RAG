@@ -7,6 +7,7 @@ from llama_index.core import BasePromptTemplate
 from llama_index.core.llms.llm import LLM
 from llama_index.core.schema import QueryType
 from llama_index.core import Settings
+from llama_index.core.program import LLMTextCompletionProgram
 
 from pai_rag.integrations.data_analysis.text2sql.utils.prompts import (
     DEFAULT_DB_SCHEMA_SELECT_PROMPT,
@@ -49,18 +50,29 @@ class SchemaSelector(DBInfoSelector):
         column_nums = count_total_columns(db_info)
         schema_description_str = get_schema_desc(db_info)
 
-        selected_output_obj = self._llm.structured_predict(
+        # for llms that support FunctionCallingProgram
+        # selected_output_obj = self._llm.structured_predict(
+        #     output_cls=SchemaSelection,
+        #     prompt=self._db_schema_select_prompt,
+        #     llm_kwargs={
+        #         "tool_choice": {
+        #             "type": "function",
+        #             "function": {"name": "SchemaSelection"},
+        #         }
+        #     },
+        #     nl_query=query.query_str,
+        #     hint=hint,
+        #     db_schema=schema_description_str,
+        # )
+
+        # for llms that do not support FunctionCallingProgram
+        textCompletion = LLMTextCompletionProgram.from_defaults(
             output_cls=SchemaSelection,
+            llm=self._llm,
             prompt=self._db_schema_select_prompt,
-            llm_kwargs={
-                "tool_choice": {
-                    "type": "function",
-                    "function": {"name": "SchemaSelection"},
-                }
-            },
-            nl_query=query.query_str,
-            hint=hint,
-            db_schema=schema_description_str,
+        )
+        selected_output_obj = textCompletion(
+            nl_query=query.query_str, hint=hint, db_schema=schema_description_str
         )
         logger.info(f"selected_output_obj: \n{selected_output_obj}\n")
         # 解析筛选
@@ -78,18 +90,29 @@ class SchemaSelector(DBInfoSelector):
         column_nums = count_total_columns(db_info)
         schema_description_str = get_schema_desc(db_info)
 
-        selected_output_obj = await self._llm.astructured_predict(
+        # for llms that support FunctionCallingProgram
+        # selected_output_obj = await self._llm.astructured_predict(
+        #     output_cls=SchemaSelection,
+        #     prompt=self._db_schema_select_prompt,
+        #     llm_kwargs={
+        #         "tool_choice": {
+        #             "type": "function",
+        #             "function": {"name": "SchemaSelection"},
+        #         }
+        #     },
+        #     nl_query=query.query_str,
+        #     hint=hint,
+        #     db_schema=schema_description_str,
+        # )
+
+        # for llms that do not support FunctionCallingProgram
+        textCompletion = LLMTextCompletionProgram.from_defaults(
             output_cls=SchemaSelection,
+            llm=self._llm,
             prompt=self._db_schema_select_prompt,
-            llm_kwargs={
-                "tool_choice": {
-                    "type": "function",
-                    "function": {"name": "SchemaSelection"},
-                }
-            },
-            nl_query=query.query_str,
-            hint=hint,
-            db_schema=schema_description_str,
+        )
+        selected_output_obj = await textCompletion.acall(
+            nl_query=query.query_str, hint=hint, db_schema=schema_description_str
         )
         logger.info(f"selected_output_str: \n{selected_output_obj}\n")
         # 解析筛选
