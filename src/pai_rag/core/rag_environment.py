@@ -11,7 +11,6 @@ lock_file_path = "localdata/__shared_gradio_instance.lock"
 
 class WebInstanceLock:
     def __init__(self):
-        open(lock_file_path, "w").write("abc")
         self.lock = FileLock(lock_file_path, timeout=2)
         self.has_lock = False
 
