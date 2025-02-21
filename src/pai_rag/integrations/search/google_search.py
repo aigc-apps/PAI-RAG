@@ -11,7 +11,6 @@ from loguru import logger
 from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
 import serpapi
 
-DEFAULT_SEARCH_COUNT = 10
 DEFAULT_LANG = "zh-CN"
 
 
@@ -40,7 +39,7 @@ class GoogleSearchTool(BaseQueryEngine):
             "q": query,
             "hl": self.search_lang,
             "num": self.search_count,
-            "api_key": self.api_key
+            "api_key": self.api_key,
         }
 
         search = serpapi.search(params)

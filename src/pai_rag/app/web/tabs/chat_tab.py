@@ -18,7 +18,7 @@ def change_search_model_argument(search_type):
     return [
         gr.update(visible=True if search_type == "bing" else False),
         gr.update(visible=True),
-        gr.update(visible=True if search_type in ["bing","google"] else False),
+        gr.update(visible=True if search_type in ["bing", "google"] else False),
         gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "夸克" else False),

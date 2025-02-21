@@ -678,7 +678,10 @@ class ViewModel(BaseModel):
                 "visible": False,
             }
         elif self.search_type == "google":
-            settings["search_api_key"] = {"value": self.search_api_key, "visible": False}
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
             settings["search_count"] = {"value": self.search_count, "visible": True}
             settings["quark_host"] = {"value": self.quark_host, "visible": False}

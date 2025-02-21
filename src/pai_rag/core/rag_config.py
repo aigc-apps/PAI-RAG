@@ -154,7 +154,9 @@ class RagConfig(BaseModel):
 
     # search web
     search: Annotated[
-        Union[BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig, GoogleSearchConfig],
+        Union[
+            BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig, GoogleSearchConfig
+        ],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]

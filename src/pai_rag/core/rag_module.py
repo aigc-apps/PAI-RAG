@@ -305,10 +305,7 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             synthesizer=synthesizer,
             search_count=config.search.search_count,
         )
-    elif (
-        isinstance(config.search, GoogleSearchConfig)
-        and config.search.serpapi_key
-    ):
+    elif isinstance(config.search, GoogleSearchConfig) and config.search.serpapi_key:
         searcher = resolve(
             cls=GoogleSearchTool,
             api_key=config.search.serpapi_key,
@@ -316,6 +313,5 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
         )
-        
 
     return searcher
