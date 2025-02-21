@@ -70,14 +70,14 @@
    启动:
 
    ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8001), config(默认src/pai_rag/config/settings.yaml), skip-download-models(不加为False)
-   # 默认启动时下载模型 [bge-m3, easyocr] , 可设置 skip-download-models 避免启动时下载模型.
-   # 可使用命令行 "load_model" 下载模型 including [bge-m3, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--skip-download-models]
+   # 启动，支持自定义hport(默认8680), worker_num(默认1)
+   # 默认启动时下载模型 [bge-m3, pdf-extract]
+   # 可使用命令行 "load_model" 下载模型 including [bge-m3, pdf-extract, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
+   ./scripts/start.sh [-w WORKER_NUM] [-p PORT]
    ```
 
    ```bash
-   pai_rag serve
+      ./scripts/start.sh
    ```
 
 5. 启动RAG WebUI
