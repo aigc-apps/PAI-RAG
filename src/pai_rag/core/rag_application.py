@@ -115,13 +115,44 @@ async def event_generator_async(
     yield _event_chunk_wrapper(last_chunk_data, sse_version)
 
 
-def _make_chat_completion_response(session_id, response):
+def _make_chat_completion_response(session_id, response, return_reference=False):
     logger.info(f"Finished response: {response.response}")
+    citations = []
+    citation_details = []
+    if return_reference:
+        for score_node in response.source_nodes:
+            if isinstance(score_node.node, ImageNode):
+                url = score_node.node.image_url
+                if url is not None:
+                    citations.append(url)
+                    citation_details.append(
+                        {
+                            "name": "Image",
+                            "text": None,
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
+            else:
+                url = score_node.node.metadata.get(
+                    "file_url"
+                ) or score_node.node.metadata.get("file_path")
+                citations.append(url)
+                citation_details.append(
+                    {
+                        "name": score_node.node.metadata.get("file_name"),
+                        "text": score_node.node.text,
+                        "url": url,
+                        "score": score_node.score,
+                    }
+                )
 
     return ChatCompletion(
         id=session_id,
         created=int(time.time()),
         model=Settings.llm.metadata.model_name,
+        citations=citations,
+        citation_details=citation_details,
         choices=[
             Choice(
                 index=0,
@@ -157,6 +188,8 @@ def _make_chat_completion_response_with_text(session_id, text):
                 finish_reason="stop",
             )
         ],
+        citations=[],
+        citation_details=[],
         object="chat.completion",
         usage=CompletionUsage(
             completion_tokens=0,
@@ -166,10 +199,42 @@ def _make_chat_completion_response_with_text(session_id, text):
     )
 
 
-async def _make_chat_completion_chunk_response(session_id, response):
+async def _make_chat_completion_chunk_response(
+    session_id, response, return_reference=False
+):
     i = 0
     full_content = ""
     created_ts = int(time.time())
+    citations = []
+    citation_details = []
+    if return_reference:
+        for score_node in response.source_nodes:
+            if isinstance(score_node.node, ImageNode):
+                url = score_node.node.image_url
+                if url is not None:
+                    citations.append(url)
+                    citation_details.append(
+                        {
+                            "name": "Image",
+                            "text": None,
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
+            else:
+                url = score_node.node.metadata.get(
+                    "file_url"
+                ) or score_node.node.metadata.get("file_path")
+                citations.append(url)
+                citation_details.append(
+                    {
+                        "name": score_node.node.metadata.get("file_name"),
+                        "url": url,
+                        "text": score_node.node.text,
+                        "score": score_node.score,
+                    }
+                )
+
     model_name = Settings.llm.metadata.model_name
     try:
         async for token in response.async_response_gen():
@@ -179,6 +244,8 @@ async def _make_chat_completion_chunk_response(session_id, response):
                     id=session_id,
                     created=created_ts,
                     model=model_name,
+                    citations=citations,
+                    citation_details=citation_details,
                     choices=[
                         chat_completion_chunk.Choice(
                             index=i,
@@ -198,6 +265,8 @@ async def _make_chat_completion_chunk_response(session_id, response):
             id=session_id,
             created=created_ts,
             model=model_name,
+            citations=citations,
+            citation_details=citation_details,
             choices=[
                 chat_completion_chunk.Choice(
                     index=i,
@@ -218,6 +287,8 @@ async def _make_chat_completion_chunk_response(session_id, response):
             id=session_id,
             created=created_ts,
             model=model_name,
+            citations=citations,
+            citation_details=citation_details,
             choices=[
                 chat_completion_chunk.Choice(
                     index=i,
@@ -247,6 +318,8 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
         id=session_id,
         created=created_ts,
         model=model_name,
+        citations=[],
+        citation_details=[],
         choices=[
             chat_completion_chunk.Choice(
                 index=i,
@@ -454,10 +527,13 @@ class RagApplication:
                     return _make_chat_completion_chunk_response(
                         session_id=session_id,
                         response=response,
+                        return_reference=chat_request.return_reference,
                     )
                 else:
                     return _make_chat_completion_response(
-                        session_id=session_id, response=response
+                        session_id=session_id,
+                        response=response,
+                        return_reference=chat_request.return_reference,
                     )
 
             session_config = self.config.model_copy()
@@ -474,10 +550,13 @@ class RagApplication:
                 return _make_chat_completion_chunk_response(
                     session_id=session_id,
                     response=response,
+                    return_reference=chat_request.return_reference,
                 )
             else:
                 return _make_chat_completion_response(
-                    session_id=session_id, response=response
+                    session_id=session_id,
+                    response=response,
+                    return_reference=chat_request.return_reference,
                 )
         except Exception as e:
             logger.error(f"Error while processing request: {e}")

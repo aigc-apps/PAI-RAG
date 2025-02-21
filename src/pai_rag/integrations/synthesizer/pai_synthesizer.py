@@ -438,7 +438,7 @@ class PaiSynthesizer(BaseSynthesizer):
         text_qa_template = prompt_template.partial_format(query_str=query_str)
 
         context_str = "\n".join(
-            [f"材料{i}:\n{text}\n" for i, text in enumerate(text_chunks)]
+            [f"材料 {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
         )
 
         response: RESPONSE_TEXT_TYPE
@@ -525,7 +525,7 @@ class PaiSynthesizer(BaseSynthesizer):
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
         context_str = "\n".join(
-            [f"材料{i}:\n{text}\n" for i, text in enumerate(text_chunks)]
+            [f"材料 {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)]
         )
 
         response: RESPONSE_TEXT_TYPE
