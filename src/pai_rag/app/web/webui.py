@@ -159,11 +159,9 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
             async with session.request(request.method, str(url),headers=clean_headers(dict(request.headers),["Transfer-Encoding"]),params=str(request.path_params), data=sender_data(request), allow_redirects=False) as resp:
                 content = await resp.content.read()
                 r = Response(content=content,headers=clean_headers(dict(resp.headers),["Content-Encoding","Content-Length"]), status_code=resp.status)
-                print(r)
                 return r
         else:
             response = await call_next(request)
-            print(response)
             return response
     rag_client.set_endpoint(rag_url)
 
@@ -175,5 +173,4 @@ def configure_webapp(app: FastAPI, web_url, rag_url=DEFAULT_LOCAL_URL) -> gr.Blo
     chat_page.queue(api_open=True, max_size=64)
     logger.info(f"web_url: {web_url}")
     app = gr.mount_gradio_app(app, home, path="/")
-    # app.add_middleware(FileBrowserProxy)
     return
