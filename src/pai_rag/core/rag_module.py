@@ -37,6 +37,7 @@ from pai_rag.integrations.router.pai.pai_router import (
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
 from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
+from pai_rag.integrations.search.google_search import GoogleSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
@@ -45,6 +46,7 @@ from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
+    GoogleSearchConfig,
 )
 
 cls_cache = {}
@@ -303,5 +305,17 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             synthesizer=synthesizer,
             search_count=config.search.search_count,
         )
+    elif (
+        isinstance(config.search, GoogleSearchConfig)
+        and config.search.serpapi_key
+    ):
+        searcher = resolve(
+            cls=GoogleSearchTool,
+            api_key=config.search.serpapi_key,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+            search_lang=config.search.search_lang,
+        )
+        
 
     return searcher

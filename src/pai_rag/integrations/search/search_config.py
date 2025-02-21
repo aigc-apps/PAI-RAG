@@ -4,6 +4,7 @@ from typing import Literal
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
 DEFAULT_QUARK_SEARCH_ENDPOINT = "https://zx-dsc.sm.cn/"
+DEFAULT_GOOGLE_SEARCH_ENDPOINT = "https://serpapi.com/search"
 DEFAULT_SEARCH_COUNT = 10
 
 
@@ -11,6 +12,7 @@ class SupportedSearchType(str, Enum):
     bing = "bing"
     quark = "quark"
     aliyun = "aliyun"
+    google = "google"
 
 
 class BaseSearchConfig(BaseModel):
@@ -47,3 +49,9 @@ class AliyunSearchConfig(BaseSearchConfig):
     endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     access_key_id: str | None = None
     access_key_secret: str | None = None
+
+
+class GoogleSearchConfig(BaseSearchConfig):
+    source: Literal[SupportedSearchType.google] = SupportedSearchType.google
+    serpapi_key: str | None = None
+    search_lang: str = "zh-CN"
