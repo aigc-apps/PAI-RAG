@@ -243,7 +243,9 @@ class RagService:
 
     async def aquery_data_analysis_v1(self, query: RagQuery):
         try:
-            return await self.rag.aquery_data_analysis(query, sse_version=SseVersion.V1)
+            return await self.rag.aquery(
+                query, chat_type=RagChatType.NL2SQL, sse_version=SseVersion.V1
+            )
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Data Analysis failed: {ex}")

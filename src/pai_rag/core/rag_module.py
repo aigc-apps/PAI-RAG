@@ -36,6 +36,7 @@ from pai_rag.integrations.router.pai.pai_router import (
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
 from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
+from pai_rag.integrations.search.google_search import GoogleSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
@@ -44,6 +45,7 @@ from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
+    GoogleSearchConfig,
 )
 
 cls_cache = {}
@@ -158,8 +160,9 @@ def resolve_data_analysis_connector(config: RagConfig):
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
-    sql_database = DataAnalysisConnector(config.data_analysis).connect_db()
-    # sql_database = resolve_data_analysis_connector(config).connect_db()
+    sql_database = DataAnalysisConnector(
+        config.data_analysis
+    ).connect()  # 每次load都会重连数据库
 
     return resolve(
         cls=DataAnalysisLoader,
@@ -171,7 +174,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
-    sql_database = resolve_data_analysis_connector(config).connect_db()
+    sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
         cls=DataAnalysisQuery,
@@ -180,6 +183,12 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         llm=llm,
         callback_manager=None,
     )
+
+
+def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
+    llm = resolve_llm(config)
+    condense_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    return condense_query_transform
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
@@ -292,6 +301,14 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
             endpoint=config.search.endpoint,
             synthesizer=synthesizer,
             search_count=config.search.search_count,
+        )
+    elif isinstance(config.search, GoogleSearchConfig) and config.search.serpapi_key:
+        searcher = resolve(
+            cls=GoogleSearchTool,
+            api_key=config.search.serpapi_key,
+            synthesizer=synthesizer,
+            search_count=config.search.search_count,
+            search_lang=config.search.search_lang,
         )
 
     return searcher

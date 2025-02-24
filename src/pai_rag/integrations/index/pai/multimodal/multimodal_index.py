@@ -327,7 +327,7 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         seen_node_ids = set(self.index_struct.nodes_dict.values())
         for node in nodes:
             if not self.vector_store.stores_text and node.node_id in seen_node_ids:
-                logger.info(
+                logger.debug(
                     f"Skipping insert {node.node_id} since it already exists in index."
                 )
                 continue
@@ -346,9 +346,11 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 text_nodes, **insert_kwargs
             )
             origin_text_ids = [node.node_id for node in text_nodes]
-            logger.info(
-                f"Added {len(text_nodes)} TextNodes to index. NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}."
-            )
+            logger.info(f"Added {len(text_nodes)} TextNodes to index.")
+            logger.debug(f"NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}.")
+            # logger.debug(
+            #     f"Added {len(text_nodes)} TextNodes to index. NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}."
+            # )
 
         else:
             logger.info("No text nodes to insert.")

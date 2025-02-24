@@ -12,7 +12,9 @@ class RagQuery(BaseModel):
     question: str | None = None  # 输入的问题，即将obsolete
     chat_history: List[
         Dict[str, str]
-    ] | None = None  # chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。默认为空
+    ] | None = (
+        []
+    )  # chat_history：用户与模型的对话历史，list中的每个元素是形式为{"user":"用户输入","bot":"模型输出"}的一轮对话，多轮对话按时间顺序排列。默认为空
     session_id: str | None = None  # 会话id，用于区分不同会话
     stream: bool | None = False  # 是否流式输出
     citation: bool | None = False  # 是否使用引用标签

@@ -28,7 +28,7 @@ def parse_chat_messages_v2(
     if len(chat_history) > 0:
         messages.extend(parse_chat_messages(chat_history))
     else:
-        messages.extend(chat_store.get_chat_messages(session_id))
+        messages.extend(chat_store.get_messages(session_id))
 
     messages.append(ChatMessage(role=MessageRole.USER, content=question))
     return messages

@@ -29,6 +29,7 @@ from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
+    GoogleSearchConfig,
 )
 
 
@@ -94,6 +95,8 @@ class ViewModel(BaseModel):
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_access_key_id: str = None
     aliyun_access_key_secret: str = None
+
+    serpapi_key: str = None
 
     # data_analysis
     analysis_type: str = "nl2pandas"  # nl2sql / nl2pandas
@@ -259,6 +262,13 @@ class ViewModel(BaseModel):
             view_model.aliyun_access_key_id = config.search.access_key_id
             view_model.aliyun_access_key_secret = config.search.access_key_secret
             view_model.search_count = config.search.search_count
+        elif isinstance(config.search, GoogleSearchConfig):
+            view_model.search_type = "google"
+            view_model.serpapi_key = config.search.serpapi_key or os.environ.get(
+                "SERPAPI_KEY"
+            )
+            view_model.search_lang = config.search.search_lang
+            view_model.search_count = config.search.search_count
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
             view_model.analysis_type = "nl2pandas"
@@ -276,8 +286,10 @@ class ViewModel(BaseModel):
             view_model.db_host = config.data_analysis.host
             view_model.db_port = config.data_analysis.port
             view_model.db_tables = ",".join(config.data_analysis.tables)
-            view_model.db_descriptions = json.dumps(
-                config.data_analysis.descriptions, ensure_ascii=False
+            view_model.db_descriptions = (
+                json.dumps(config.data_analysis.descriptions, ensure_ascii=False)
+                if config.data_analysis.descriptions
+                else None
             )
             view_model.enable_enhanced_description = (
                 config.data_analysis.enable_enhanced_description
@@ -435,6 +447,13 @@ class ViewModel(BaseModel):
             config["search"]["source"] = "bing"
             config["search"]["search_api_key"] = self.search_api_key or os.environ.get(
                 "BING_SEARCH_KEY"
+            )
+            config["search"]["search_lang"] = self.search_lang
+            config["search"]["search_count"] = self.search_count
+        elif self.search_type == "google":
+            config["search"]["source"] = "google"
+            config["search"]["serpapi_key"] = self.serpapi_key or os.environ.get(
+                "SERPAPI_KEY"
             )
             config["search"]["search_lang"] = self.search_lang
             config["search"]["search_count"] = self.search_count
@@ -610,6 +629,27 @@ class ViewModel(BaseModel):
             settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
             settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["serpapi_key"] = {"value": self.serpapi_key, "visible": False}
+            settings["aliyun_endpoint"] = {
+                "value": self.aliyun_endpoint,
+                "visible": False,
+            }
+            settings["aliyun_access_key_id"] = {
+                "value": self.aliyun_access_key_id,
+                "visible": False,
+            }
+            settings["aliyun_access_key_secret"] = {
+                "value": self.aliyun_access_key_secret,
+                "visible": False,
+            }
+        elif self.search_type == "google":
+            settings["search_api_key"] = {
+                "value": self.search_api_key,
+                "visible": False,
+            }
+            settings["search_lang"] = {"value": self.search_lang, "visible": True}
+            settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["serpapi_key"] = {"value": self.serpapi_key, "visible": True}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
                 "visible": False,
@@ -630,6 +670,7 @@ class ViewModel(BaseModel):
             }
             settings["search_lang"] = {"value": self.search_lang, "visible": False}
             settings["search_count"] = {"value": self.search_count, "visible": True}
+            settings["serpapi_key"] = {"value": self.serpapi_key, "visible": False}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
                 "visible": True,
