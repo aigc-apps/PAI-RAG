@@ -33,7 +33,6 @@ from openai._exceptions import APIError
 from openai.types.completion_usage import CompletionUsage
 from pai_rag.app.api.models import (
     RagQuery,
-    RetrievalQuery,
     RagResponse,
     ContextDoc,
     RetrievalResponse,
@@ -401,11 +400,54 @@ class RagApplication:
             enable_raptor=enable_raptor,
         )
 
-    async def aretrieve(self, query: RetrievalQuery) -> RetrievalResponse:
-        if not query.question:
+    async def aretrieve(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ) -> RetrievalResponse:
+        session_id = query.session_id or uuid_generator()
+        logger.debug(f"Get session ID: {session_id}.")
+
+        chat_store = resolve_chat_store(self.config)
+        if query.messages is None or len(query.messages) == 0:
+            query.messages = parse_chat_messages_v2(
+                question=query.question,
+                session_id=session_id,
+                chat_history=query.chat_history,
+                chat_store=chat_store,
+            )
+
+        if (
+            not query.messages
+            or len(query.messages) == 0
+            or not query.messages[-1].content
+        ):
+            if query.stream:
+                return event_generator_async(
+                    DEFAULT_EMPTY_RESPONSE, sse_version=sse_version
+                )
             return RetrievalResponse(docs=[])
 
-        query_bundle = QueryBundle(query.question)
+        openai_query_transform = resolve_openai_query_transform(self.config)
+        question = query.messages[-1].content
+        if openai_query_transform is not None:
+            new_query_bundle = await openai_query_transform.arun(
+                chat_messages=query.messages,
+            )
+        else:
+            new_query_bundle = PaiQueryBundle(
+                query_str=question,
+                chat_messages_str=messages_to_history_str(
+                    query.messages, max_length=500
+                ),
+            )
+
+        # Condense question
+        new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+        if new_question != question:
+            new_question = ",".join([question, new_question])
+        logger.info(f"Querying with question '{new_question}'.")
+
+        query_bundle = QueryBundle(new_question)
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(query.index_name)
         session_config.embedding = index_entry.embedding_config
@@ -507,7 +549,13 @@ class RagApplication:
                     ),
                 )
 
+            # Condense question
             new_question = new_query_bundle.query_str
+            logger.info(f"Transformed question '{new_question}'.")
+            if new_question != question:
+                new_question = ",".join([question, new_question])
+            logger.info(f"Querying with question '{new_question}'.")
+
             if not passed_guardrail:
                 # 多轮对话，用新查询检查
                 guardrail_result = await guardrail.acheck(new_question)
@@ -662,6 +710,9 @@ class RagApplication:
 
         # Condense question
         new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+        if new_question != question:
+            new_question = ",".join([question, new_question])
         logger.info(f"Querying with question '{new_question}'.")
 
         guardrail = resolve_llm_guardrail(self.config)

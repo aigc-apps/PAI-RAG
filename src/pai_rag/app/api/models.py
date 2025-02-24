@@ -24,11 +24,6 @@ class RagQuery(BaseModel):
     return_reference: bool | None = False  # 是否返回参考文档
 
 
-class RetrievalQuery(BaseModel):
-    question: str  # 检索问题
-    index_name: str | None = None  # 检索目标索引名称
-
-
 class ContextDoc(BaseModel):
     text: str  # 文档文本
     score: float  # 文档得分

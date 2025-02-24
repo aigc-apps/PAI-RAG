@@ -10,7 +10,7 @@ import re
 import markdown
 import html
 from loguru import logger
-from pai_rag.app.api.models import RagQuery, RagResponse, RetrievalQuery
+from pai_rag.app.api.models import RagQuery, RagResponse
 from pai_rag.app.web.rag_client import RagApiError, dotdict
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
@@ -240,10 +240,13 @@ class RagLocalClient:
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
-    async def query_vector(self, text: str, index_name: str = None):
+    async def query_vector(
+        self, chat_messages: List[Dict[str, str]], text: str, index_name: str = None
+    ):
         try:
             response = await rag_service.aquery_retrieval(
-                RetrievalQuery(
+                RagQuery(
+                    messages=chat_messages,
                     question=text,
                     index_name=index_name,
                 )

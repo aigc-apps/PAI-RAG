@@ -12,7 +12,6 @@ from pai_rag.utils.oss_utils import get_oss_auth
 from pai_rag.app.api.models import (
     RagQuery,
     RagResponse,
-    RetrievalQuery,
 )
 from openinference.instrumentation import using_attributes
 from typing import Dict, List
@@ -207,7 +206,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
 
-    async def aquery_retrieval(self, query: RetrievalQuery):
+    async def aquery_retrieval(self, query: RagQuery):
         try:
             return await self.rag.aretrieve(query)
         except Exception as ex:
