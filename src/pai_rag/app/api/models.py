@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 class RagQuery(BaseModel):
     # 新版上下文聊天，传入messages则无需传入question和chat_history和session_id, 推荐传入messages
-    messages: List[ChatMessage]
+    messages: List[ChatMessage] = []
 
     question: str | None = None  # 输入的问题，即将obsolete
     chat_history: List[
