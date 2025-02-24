@@ -63,7 +63,9 @@ async def respond(input_elements: List[Any]):
                 stream=is_streaming,
             )
         elif query_type == "Retrieval":
-            response_gen = rag_client.query_vector(question, index_name=index_name)
+            response_gen = rag_client.query_vector(
+                chatbot[:-1], question, index_name=index_name
+            )
 
         elif query_type == "Chat（Web Search）":
             response_gen = rag_client.query(
