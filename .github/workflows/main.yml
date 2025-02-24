@@ -58,6 +58,7 @@ jobs:
           PAIRAG_RAG__embedding__source: "DashScope"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
+          BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}}}
 
       - name: Get Cover
         uses: orgoro/coverage@v3.1
