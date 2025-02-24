@@ -77,7 +77,7 @@ try:
     embed_model_bge = HuggingFaceEmbedding(model_name=model_path)
 except Exception as e:
     logger.error(f"Failed to load embed_model: {str(e)}")
-    raise ValueError(f"Failed to load embed_model: {str(e)}")
+    embed_model_bge = None
 
 
 def resolve_schema_retriever(
