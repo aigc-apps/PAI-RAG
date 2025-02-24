@@ -41,7 +41,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
 from pai_rag.integrations.data_analysis.text2sql.utils.prompts import (
     DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
 )
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
+from pai_rag.utils.constants import EAS_DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -60,13 +60,21 @@ def resolve(cls: Any, cls_key: str, **kwargs):
     return cls_cache[cls_key]
 
 
+def get_model_path(model_name, eas_default_dir, local_default_dir):
+    eas_path = os.path.join(eas_default_dir, model_name)
+    local_path = os.path.join(local_default_dir, model_name)
+
+    if os.path.exists(eas_path):
+        return eas_path
+    elif os.path.exists(local_path):
+        return local_path
+    else:
+        raise FileNotFoundError(f"Model file not found in {eas_path} or {local_path}")
+
+
 try:
-    embed_model_bge = HuggingFaceEmbedding(
-        model_name=os.path.join(DEFAULT_MODEL_DIR, "bge-m3")
-    )
-except FileNotFoundError as e:
-    logger.error(f"Embed_model file not found: {str(e)}")
-    raise ValueError(f"Embed_model file not found: {str(e)}")
+    model_path = get_model_path("bge-m3", EAS_DEFAULT_MODEL_DIR, "./model_repository")
+    embed_model_bge = HuggingFaceEmbedding(model_name=model_path)
 except Exception as e:
     logger.error(f"Failed to load embed_model: {str(e)}")
     raise ValueError(f"Failed to load embed_model: {str(e)}")
