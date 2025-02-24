@@ -383,6 +383,10 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             self.adelete(ref_doc_id, **delete_kwargs)
         )
 
+    def delete_nodes(self, node_ids: List[str], **delete_kwargs: Any):
+        for node_id in node_ids:
+            self.delete(node_id, **delete_kwargs)
+
     async def adelete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:
         """
         Async delete node from Elasticsearch index.
