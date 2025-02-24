@@ -80,3 +80,9 @@ class MyFaissVectorStore(FaissVectorStore):
         return VectorStoreQueryResult(
             similarities=filtered_dists, ids=filtered_node_idxs
         )
+
+    def remove_ids(self, ids: List[str]) -> List[str]:
+        """
+        Remove ids from the index.
+        """
+        self._faiss_index.remove_ids(np.array(ids))

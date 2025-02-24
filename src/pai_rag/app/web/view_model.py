@@ -291,8 +291,10 @@ class ViewModel(BaseModel):
             view_model.db_host = config.data_analysis.host
             view_model.db_port = config.data_analysis.port
             view_model.db_tables = ",".join(config.data_analysis.tables)
-            view_model.db_descriptions = json.dumps(
-                config.data_analysis.descriptions, ensure_ascii=False
+            view_model.db_descriptions = (
+                json.dumps(config.data_analysis.descriptions, ensure_ascii=False)
+                if config.data_analysis.descriptions
+                else None
             )
             view_model.enable_enhanced_description = (
                 config.data_analysis.enable_enhanced_description

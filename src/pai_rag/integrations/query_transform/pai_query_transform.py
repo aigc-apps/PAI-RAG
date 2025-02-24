@@ -14,6 +14,7 @@ from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
 )
 from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
@@ -463,3 +464,133 @@ class OpenAICompatibleQueryTransform:
                 need_web_search=True,
                 custom_embedding_strs=[transformed_query_str],
             )
+
+
+class NL2SQLCondenseQueryTransform(PaiCondenseQueryTransform):
+    def __init__(
+        self,
+        chat_store: BaseChatStore = None,
+        llm: Optional[LLMType] = None,
+        condense_question_prompt: Optional[BasePromptTemplate] = None,
+        callback_manager: Optional[CallbackManager] = None,
+    ) -> None:
+        # super().__init__()
+
+        self._llm = (
+            resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
+        )
+        default_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+        self._condense_question_prompt = (
+            condense_question_prompt or default_condense_question_prompt
+        )
+        self._chat_store = chat_store
+
+    def _run(self, query_bundle: QueryBundle, session_id, chat_history) -> QueryBundle:
+        """Run query transform.
+        Generate standalone question from conversation context and last message."""
+        query_str = query_bundle.query_str
+        if chat_history is not None:
+            history_messages = parse_chat_messages(chat_history)
+            for hist_mes in history_messages:
+                self._chat_store.add_message(hist_mes)
+
+        chat_history = self._chat_store.get_messages(session_id)
+        chat_history_str = messages_to_history_str(chat_history)
+
+        logger.debug(f"Chat history: {chat_history_str}")
+        transformed_query_str = self._llm.predict(
+            self._condense_question_prompt,
+            question=query_str,
+            chat_history=chat_history_str,
+        )
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        chat_history.append(
+            ChatMessage(
+                role="user", content=",".join([query_str, transformed_query_str])
+            )
+        )
+        chat_history_str = messages_to_history_str(chat_history)
+        return PaiQueryBundle(
+            query_str=transformed_query_str,
+            need_web_search=False,
+            custom_embedding_strs=[query_str, transformed_query_str],
+            chat_messages_str=chat_history_str,
+        )
+
+    def run(
+        self,
+        query_bundle_or_str: QueryType,
+        session_id: str | None = None,
+        chat_history: List[Dict[str, str]] | None = None,
+    ) -> QueryBundle:
+        """Run query transform."""
+        if isinstance(query_bundle_or_str, str):
+            query_bundle = QueryBundle(
+                query_str=query_bundle_or_str,
+                custom_embedding_strs=[query_bundle_or_str],
+            )
+        else:
+            query_bundle = query_bundle_or_str
+
+        return self._run(query_bundle, session_id=session_id, chat_history=chat_history)
+
+    async def _arun(
+        self, query_bundle: QueryBundle, session_id, chat_history
+    ) -> QueryBundle:
+        """Run query transform.
+        Generate standalone question from conversation context and last message."""
+        query_str = query_bundle.query_str
+        if chat_history is not None:
+            history_messages = parse_chat_messages(chat_history)
+            for hist_mes in history_messages:
+                self._chat_store.add_message(key=session_id, message=hist_mes)
+
+        chat_history = self._chat_store.get_messages(key=session_id)
+        chat_history_str = messages_to_history_str(chat_history)
+
+        logger.debug(f"Chat history: {chat_history_str}")
+        transformed_query_str = await self._llm.apredict(
+            self._condense_question_prompt,
+            question=query_str,
+            chat_history=chat_history_str,
+        )
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        chat_history.append(
+            ChatMessage(
+                role="user", content=",".join([query_str, transformed_query_str])
+            )
+        )
+        chat_history_str = messages_to_history_str(chat_history)
+        return PaiQueryBundle(
+            query_str=transformed_query_str,
+            need_web_search=False,
+            custom_embedding_strs=[query_str, transformed_query_str],
+            chat_messages_str=chat_history_str,
+        )
+
+    async def arun(
+        self,
+        query_bundle_or_str: QueryType,
+        session_id: str | None = None,
+        chat_history: List[Dict[str, str]] | None = None,
+    ) -> QueryBundle:
+        """Run query transform."""
+        if isinstance(query_bundle_or_str, str):
+            query_bundle = QueryBundle(
+                query_str=query_bundle_or_str,
+                custom_embedding_strs=[query_bundle_or_str],
+            )
+        else:
+            query_bundle = query_bundle_or_str
+
+        return await self._arun(
+            query_bundle, session_id=session_id, chat_history=chat_history
+        )
