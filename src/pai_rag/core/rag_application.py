@@ -506,7 +506,13 @@ class RagApplication:
                     ),
                 )
 
+            # Condense question
             new_question = new_query_bundle.query_str
+            logger.info(f"Transformed question '{new_question}'.")
+            if new_question != question:
+                new_question = ",".join([question, new_question])
+            logger.info(f"Querying with question '{new_question}'.")
+
             if not passed_guardrail:
                 # 多轮对话，用新查询检查
                 guardrail_result = await guardrail.acheck(new_question)
@@ -661,6 +667,9 @@ class RagApplication:
 
         # Condense question
         new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+        if new_question != question:
+            new_question = ",".join([question, new_question])
         logger.info(f"Querying with question '{new_question}'.")
 
         guardrail = resolve_llm_guardrail(self.config)
