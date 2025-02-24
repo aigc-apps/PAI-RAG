@@ -40,6 +40,7 @@ from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
+    GoogleSearchConfig,
 )
 
 
@@ -153,7 +154,9 @@ class RagConfig(BaseModel):
 
     # search web
     search: Annotated[
-        Union[BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig],
+        Union[
+            BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig, GoogleSearchConfig
+        ],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]
