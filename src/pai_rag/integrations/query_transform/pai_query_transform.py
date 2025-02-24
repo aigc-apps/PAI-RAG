@@ -474,7 +474,7 @@ class NL2SQLCondenseQueryTransform(PaiCondenseQueryTransform):
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
-        super().__init__()
+        # super().__init__()
 
         self._llm = (
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
