@@ -24,6 +24,10 @@
 
 PAI-RAG 是一个易于使用的模块化 RAG（检索增强生成）开源框架，结合 LLM（大型语言模型）提供真实问答能力，支持 RAG 系统各模块灵活配置和定制开发，为基于阿里云人工智能平台（PAI）的任何规模的企业提供生产级的 RAG 系统。
 
+# 🎬 PAI-RAG联网搜索的效果展示（本地客户端使用开源的Cherry Studio）
+
+https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
+
 # 🌟 主要模块和功能
 
 - 模块化设计，灵活可配置
