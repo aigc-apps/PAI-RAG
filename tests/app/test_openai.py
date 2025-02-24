@@ -8,7 +8,10 @@ from httpx import ASGITransport, AsyncClient
 import asyncio
 
 
-if "DASHSCOPE_API_KEY" not in os.environ:
+if (
+    "DASHSCOPE_API_KEY" not in os.environ
+    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
+):
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',

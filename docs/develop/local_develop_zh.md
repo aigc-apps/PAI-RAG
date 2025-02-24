@@ -83,7 +83,7 @@
 5. 启动RAG WebUI
 
    ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8002), config(默认localhost:8680)
+   # 启动，支持自定义host(默认0.0.0.0), port(默认8680), config(默认localhost:8680)
    pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
    ```
 
