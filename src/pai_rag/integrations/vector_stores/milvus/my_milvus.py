@@ -6,6 +6,7 @@ An index that is built within Milvus.
 
 from loguru import logger
 from typing import Any, Dict, List, Optional, Union
+from copy import deepcopy
 
 import pymilvus  # noqa
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
@@ -20,6 +21,8 @@ from llama_index.vector_stores.milvus.utils import (
 )
 from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
+    FilterOperator,
+    MetadataFilter,
     MetadataFilters,
     VectorStoreQuery,
     VectorStoreQueryMode,
@@ -362,6 +365,37 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
             ids = [entry["id"] for entry in entries]
             self._milvusclient.delete(collection_name=self.collection_name, pks=ids)
             logger.debug(f"Successfully deleted embedding with doc_id: {doc_ids}")
+
+    def delete_nodes(
+        self,
+        node_ids: Optional[List[str]] = None,
+        filters: Optional[MetadataFilters] = None,
+        **delete_kwargs: Any,
+    ) -> None:
+        """Deletes nodes.
+
+        Args:
+            node_ids (Optional[List[str]], optional): IDs of nodes to delete. Defaults to None.
+            filters (Optional[MetadataFilters], optional): Metadata filters. Defaults to None.
+        """
+        filters_cpy = deepcopy(filters) or MetadataFilters(filters=[])
+
+        if node_ids:
+            filters_cpy.filters.append(
+                MetadataFilter(key="id", value=node_ids, operator=FilterOperator.IN)
+            )
+
+        if filters_cpy is not None:
+            filter = _to_milvus_filter(filters_cpy)
+        else:
+            filter = None
+
+        self.client.delete(
+            collection_name=self.collection_name,
+            filter=filter,
+            **delete_kwargs,
+        )
+        logger.debug(f"Successfully deleted node_ids: {node_ids}")
 
     def query(self, query: VectorStoreQuery, **kwargs: Any) -> VectorStoreQueryResult:
         """Query index for top k most similar nodes.
