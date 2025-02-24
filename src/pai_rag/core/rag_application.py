@@ -846,7 +846,12 @@ class RagApplication:
             RagResponse
         """
         if not query.messages or not query.messages[-1].content:
-            return RagResponse(answer=DEFAULT_EMPTY_RESPONSE)
+            if query.question:
+                query.messages = [
+                    ChatMessage(role=MessageRole.USER, content=query.question)
+                ]
+            else:
+                return RagResponse(answer=DEFAULT_EMPTY_RESPONSE)
 
         agent = resolve_agent(self.config)
         if new_query_bundle and new_query_bundle.query_str:

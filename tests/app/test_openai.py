@@ -2,9 +2,7 @@ import json
 import mimetypes
 import os
 import pytest
-from pai_rag.app.app import app
 from httpx import ASGITransport, AsyncClient
-
 import asyncio
 
 
@@ -16,6 +14,9 @@ if (
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
+
+
+from pai_rag.app.app import app
 
 
 async def upload_file(input_files, index_name="default_index"):
