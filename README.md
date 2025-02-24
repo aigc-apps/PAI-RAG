@@ -29,6 +29,10 @@
 
 PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmented Generation). It combines LLM (Large Language Model) to provide truthful question-answering capabilities, supports flexible configuration and custom development of each module of the RAG system. It offers a production-level RAG workflow for businesses of any scale based on Alibaba Cloud's Platform of Artificial Intelligence (PAI).
 
+# 🎬 PAI-RAG with Web Search Demo (local client using Cherry Studio)
+
+https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
+
 # 🌟 Key Features
 
 - Modular design, flexible and configurable

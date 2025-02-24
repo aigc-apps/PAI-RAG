@@ -8576,6 +8576,24 @@ files = [
 ]
 
 [[package]]
+name = "serpapi"
+version = "0.1.5"
+description = "The official Python client for SerpApi.com."
+optional = false
+python-versions = ">=3.6.0"
+files = [
+    {file = "serpapi-0.1.5-py2.py3-none-any.whl", hash = "sha256:6467b6adec1231059f754ccaa952b229efeaa8b9cae6e71f879703ec9e5bb3d1"},
+    {file = "serpapi-0.1.5.tar.gz", hash = "sha256:b9707ed54750fdd2f62dc3a17c6a3fb7fa421dc37902fd65b2263c0ac765a1a5"},
+]
+
+[package.dependencies]
+requests = "*"
+
+[package.extras]
+color = ["pygments"]
+test = ["pytest"]
+
+[[package]]
 name = "setuptools"
 version = "75.8.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -10731,4 +10749,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "4e34c3f24dbeb03f12060a1f99059f45c50a92d41e76fc67666f5cc2d308f7a1"
+content-hash = "b51c3c6b28b7b1941f17751e790b71105f86b54815950518e54349d5afab8ffc"

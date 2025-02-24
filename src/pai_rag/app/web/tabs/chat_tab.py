@@ -18,19 +18,20 @@ def change_search_model_argument(search_type):
     return [
         gr.update(visible=True if search_type == "bing" else False),
         gr.update(visible=True),
-        gr.update(visible=True if search_type == "bing" else False),
+        gr.update(visible=True if search_type in ["bing", "google"] else False),
         gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "夸克" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
         gr.update(visible=True if search_type == "aliyun" else False),
+        gr.update(visible=True if search_type == "google" else False),
+        gr.update(visible=True if search_type == "google" else False),
     ]
 
 
 def respond(input_elements: List[Any]):
     update_dict = {}
-
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
@@ -361,15 +362,24 @@ def create_chat_tab() -> Dict[str, Any]:
                 )
                 with search_model_argument:
                     search_type = gr.Radio(
-                        ["bing", "aliyun"],
+                        ["bing", "aliyun", "google"],
                         label="Search Engine",
                         elem_id="search_type",
+                    )
+                    serpapi_key_tips = gr.Markdown(
+                        value="How to get [SerpAPI Key](https://serpapi.com)"
                     )
                     search_api_key = gr.Text(
                         label="Bing API Key",
                         value="",
                         type="password",
                         elem_id="search_api_key",
+                    )
+                    serpapi_key = gr.Text(
+                        label="SerpAPI Key",
+                        value="",
+                        type="password",
+                        elem_id="serpapi_key",
                     )
                     search_count = gr.Slider(
                         label="Search Count",
@@ -423,6 +433,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     aliyun_endpoint,
                     aliyun_access_key_id,
                     aliyun_access_key_secret,
+                    serpapi_key,
                 }
                 search_type.input(
                     fn=change_search_model_argument,
@@ -437,6 +448,8 @@ def create_chat_tab() -> Dict[str, Any]:
                         aliyun_endpoint,
                         aliyun_access_key_id,
                         aliyun_access_key_secret,
+                        serpapi_key,
+                        serpapi_key_tips,
                     ],
                 )
 
@@ -585,6 +598,7 @@ def create_chat_tab() -> Dict[str, Any]:
             custom_prompt_template.elem_id: custom_prompt_template,
             search_lang.elem_id: search_lang,
             search_api_key.elem_id: search_api_key,
+            serpapi_key.elem_id: serpapi_key,
             search_count.elem_id: search_count,
             search_type.elem_id: search_type,
             quark_host.elem_id: quark_host,
