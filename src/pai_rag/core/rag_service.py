@@ -127,7 +127,7 @@ class RagService:
                 f.write(f"{task_id}\tfailed\t{detail}\n")
             raise UserInputError(f"Upload knowledge failed: {ex}")
 
-    def get_task_status(self, task_id: str) -> str:
+    def get_task_status(self, task_id: str):
         status = "unknown"
         detail = None
         if not os.path.exists(TASK_STATUS_FILE):

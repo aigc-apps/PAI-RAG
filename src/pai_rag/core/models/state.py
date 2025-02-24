@@ -10,6 +10,10 @@ class FileServiceState:
     def check_state(self):
         if not os.path.exists(self.state_key):
             return 0
+
+        # dummpy read to update file state from oss mount path
+        _ = open(self.state_key, "r").readline()
+
         mtime = os.path.getmtime(self.state_key)
         if mtime != self.state_value:
             return mtime

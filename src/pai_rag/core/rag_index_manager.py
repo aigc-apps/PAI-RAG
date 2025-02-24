@@ -89,7 +89,10 @@ class RagIndexManager:
             return self._index_map.indexes[self._index_map.current_index_name]
 
         if index_name not in self._index_map.indexes:
-            self.reload_indexes()  # try to reload index if index not exists.
+            new_state = self._state.check_state()
+            self.reload_indexes(
+                new_state=new_state
+            )  # try to reload index if index not exists.
             if index_name not in self._index_map.indexes:
                 raise ValueError(f"Index name '{index_name}' not exists.")
         return self._index_map.indexes[index_name]

@@ -1,3 +1,4 @@
+import traceback
 from pai_rag.app.api.models import ChatCompletionRequest
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import index_manager
@@ -264,8 +265,8 @@ async def _make_chat_completion_chunk_response(
                     id=session_id,
                     created=created_ts,
                     model=model_name,
-                    citations=citations,
-                    citation_details=citation_details,
+                    citations=[],
+                    citation_details=[],
                     choices=[
                         chat_completion_chunk.Choice(
                             index=i,
@@ -589,9 +590,9 @@ class RagApplication:
                     response=response,
                     return_reference=chat_request.return_reference,
                 )
-        except Exception as error:
+        except Exception:
             logger.error(
-                f"Chat failed for query {chat_request.messages[-1].content} due to {error}"
+                f"Chat failed for query {chat_request.messages[-1].content} due to {traceback.format_exc()}"
             )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response_with_text(
