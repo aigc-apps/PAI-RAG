@@ -757,9 +757,9 @@ class RagApplication:
         )
         if chat_type == RagChatType.RAG:
             if new_question != question:
-                new_question = " ".join([question, new_question])
+                query_bundle.query_str = " ".join([question, new_question])
 
-            logger.info(f"Querying with question '{new_question}'.")
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
             session_config = self.config.model_copy()
             index_entry = index_manager.get_index_by_name(query.index_name)
