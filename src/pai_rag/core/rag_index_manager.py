@@ -148,14 +148,18 @@ class RagIndexManager:
     def check_updates(self):
         new_state = self._state.check_state()
         if new_state != 0:
-            logger.info(f"Detected changes for config file {new_state}.")
+            logger.info(
+                f"Detected changes for index file {self._state.state_key} {new_state}."
+            )
             self.reload_indexes(new_state)
-            logger.info("Index reloaded successfully.")
+            logger.info("Indexes reloaded successfully.")
 
     def reload_indexes(self, new_state):
         with self._lock:
             if self._state.state_value != new_state:
-                logger.info("Need reload index from background.")
+                logger.info(
+                    f"Need reload index from background. {self._state.state_key}"
+                )
                 if os.path.exists(DEFAULT_INDEX_FILE):
                     with open(DEFAULT_INDEX_FILE, "r") as f:
                         index_json_str = f.read()

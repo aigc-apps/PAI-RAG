@@ -65,13 +65,17 @@ class RagService:
     def check_updates(self):
         new_state = self._state.check_state()
         if new_state != 0:
-            logger.info(f"Detected changes for config file {new_state}.")
+            logger.info(
+                f"Detected changes for config file {self._state.state_key} {new_state}."
+            )
             self.reload_from_file(GENERATED_CONFIG_FILE_NAME, new_state=new_state)
 
     def reload_from_file(self, config_file: str, new_state: int):
         with self.reload_lock:
             if self._state.state_value != new_state:
-                logger.info("Need reload index from background.")
+                logger.info(
+                    f"Need reload configuration from background. {self._state.state_key}"
+                )
                 self.rag_configuration = RagConfigManager.from_file(config_file)
                 self.rag.refresh(self.rag_configuration.get_value())
                 self._state.update_state(new_state)
@@ -130,7 +134,7 @@ class RagService:
         status = "unknown"
         detail = None
         if not os.path.exists(TASK_STATUS_FILE):
-            return status
+            return status, detail
 
         lines = open(TASK_STATUS_FILE).readlines()
         for line in lines[::-1]:

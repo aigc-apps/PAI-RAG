@@ -67,6 +67,7 @@ def validate_case_insensitive(value: Dict) -> Dict:
 
 class SystemConfig(BaseModel):
     default_web_search: bool = False
+    query_type: str | None = "rag"
 
 
 class RagConfig(BaseModel):

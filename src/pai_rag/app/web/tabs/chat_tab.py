@@ -585,4 +585,5 @@ def create_chat_tab() -> Dict[str, Any]:
             aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
             model_reranker_col.elem_id: model_reranker_col,
             llm_temperature.elem_id: llm_temperature,
+            query_type.elem_id: query_type,
         }

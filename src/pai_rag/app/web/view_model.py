@@ -33,6 +33,20 @@ from pai_rag.integrations.search.search_config import (
 )
 
 
+QUERY_TYPE_MAP = {
+    "LLM": "llm",
+    "Retrieval": "retrieval",
+    "Chat（Web Search）": "websearch",
+    "Chat（Knowledge Base）": "rag",
+}
+INVERTED_QUERY_TYPE_MAP = {
+    "llm": "LLM",
+    "retrieval": "Retrieval",
+    "websearch": "Chat（Web Search）",
+    "rag": "Chat（Knowledge Base）",
+}
+
+
 def recursive_dict():
     return defaultdict(recursive_dict)
 
@@ -129,7 +143,7 @@ class ViewModel(BaseModel):
     reranker_similarity_threshold: float = 0
     reranker_similarity_top_k: int = 3
 
-    query_engine_type: str = None
+    query_type: str = "Chat（Knowledge Base）"
 
     synthesizer_type: str = None
 
@@ -187,6 +201,9 @@ class ViewModel(BaseModel):
         view_model.llm_temperature = config.llm.temperature
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
+        view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
+            config.system.query_type, "Chat（Knowledge Base）"
+        )
 
         if isinstance(config.multimodal_llm, PaiEasLlmConfig):
             view_model.mllm_base_url = config.multimodal_llm.endpoint
@@ -330,6 +347,8 @@ class ViewModel(BaseModel):
         config = recursive_dict()
 
         config["system"]["default_web_search"] = self.default_web_search
+
+        config["system"]["query_type"] = QUERY_TYPE_MAP.get(self.query_type, "rag")
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -602,6 +621,9 @@ class ViewModel(BaseModel):
         settings["keyword_weight"] = {
             "value": self.keyword_weight,
             "visible": self.retrieval_mode == "Hybrid",
+        }
+        settings["query_type"] = {
+            "value": self.query_type,
         }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
         settings["reranker_similarity_threshold"] = {
