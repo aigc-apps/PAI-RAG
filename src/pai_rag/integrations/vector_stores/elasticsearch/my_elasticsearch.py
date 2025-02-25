@@ -269,6 +269,7 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             "document_id": {"type": "keyword"},
             "doc_id": {"type": "keyword"},
             "ref_doc_id": {"type": "keyword"},
+            "node_id": {"type": "keyword"},
         }
         if not retrieval_strategy:
             retrieval_strategy = self.retrieval_strategy
@@ -383,9 +384,20 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             self.adelete(ref_doc_id, **delete_kwargs)
         )
 
+    def delete_by_node_id(self, node_id: str, **delete_kwargs: Any) -> None:
+        return asyncio.get_event_loop().run_until_complete(
+            self.adelete_by_node_id(node_id, **delete_kwargs)
+        )
+
+    async def adelete_by_node_id(self, node_id: str, **delete_kwargs: Any) -> None:
+        es_store = self._get_store()
+        await es_store.delete(
+            query={"term": {"metadata.node_id": node_id}}, **delete_kwargs
+        )
+
     def delete_nodes(self, node_ids: List[str], **delete_kwargs: Any):
         for node_id in node_ids:
-            self.delete(node_id, **delete_kwargs)
+            self.delete_by_node_id(node_id, **delete_kwargs)
 
     async def adelete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:
         """

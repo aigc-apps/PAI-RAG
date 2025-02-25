@@ -1,26 +1,12 @@
 import os
 import pytest
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from dotenv import load_dotenv
+
+from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core.schema import TextNode
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.index.pai.vector_store_config import MilvusVectorStoreConfig
-from dotenv import load_dotenv
 
-# 加载 .env 文件
-load_dotenv()
-
-# 设置日志记录
-import logging
-
-logging.basicConfig(level=logging.INFO)
-
-# 初始化嵌入模型
-if os.path.exists("./model_repository/bge-m3"):
-    embed_model_bge = HuggingFaceEmbedding(
-        model_name="./model_repository/bge-m3", embed_batch_size=20
-    )
-else:
-    embed_model_bge = None
 
 # 构造 mock_nodes
 mock_nodes = [
@@ -45,12 +31,16 @@ mock_nodes = [
 for i, node in enumerate(mock_nodes):
     node.node_id = node.metadata["node_id"]
 
+# 加载 .env 文件
+load_dotenv()
+
 # 从环境变量中读取配置
+dashscope_key = os.environ.get("DASHSCOPE_API_KEY")
 milvus_host = os.getenv("MILVUS_HOST", "http://localhost:19530")
 milvus_port = int(os.getenv("MILVUS_PORT", 19530))
 milvus_user = os.getenv("MILVUS_USER", "")
 milvus_password = os.getenv("MILVUS_PASSWORD", "")
-milvus_collection_name = os.getenv("MILVUS_COLLECTION_NAME", "pairagcollection")
+milvus_collection_name = os.getenv("MILVUS_COLLECTION_NAME", "pairag_tests")
 milvus_database = os.getenv("MILVUS_DATABASE", "default")
 
 # 配置 vector_store
@@ -64,32 +54,65 @@ vector_store_config = MilvusVectorStoreConfig(
     database=milvus_database,
 )
 
+embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
 # 初始化 PaiVectorStoreIndex
-vector_store_index = PaiVectorStoreIndex(
-    vector_store_config, embed_model=embed_model_bge
-)
+vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
+
+# vector_store_index.insert_nodes(mock_nodes)
+# vector_store_index.delete_nodes(["3"])
+# vector_store_index.delete_nodes(["node_3"])   # 无效
+# vector_store_index.delete_nodes([])   # 无效
 
 
-# # 测试插入节点
-# @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
-# def test_insert_nodes():
-#     vector_store_index.insert_nodes(mock_nodes)
-#     vector_count = len(vector_store_index._vector_store.client.query(collection_name="pairagcollection", limit=5))
-#     assert vector_count == len(mock_nodes)
+# 测试插入节点
+@pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+def test_insert_nodes():
+    vector_store_index.insert_nodes(mock_nodes)
+    vector_store_index._vector_store.client.flush(collection_name="pairag_tests")
+    vector_count = len(
+        vector_store_index._vector_store.client.query(
+            collection_name="pairag_tests", limit=5
+        )
+    )
+    assert vector_count == len(mock_nodes)
 
 
 # 测试删除节点
 @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
 def test_delete_nodes():
-    # 插入三个节点
-    vector_store_index.insert_nodes(mock_nodes)
+    # # 插入三个节点
+    # vector_store_index.insert_nodes(mock_nodes)
     # 删除一个节点
-    node_to_delete = "node_3"
-    vector_store_index.delete_nodes([node_to_delete])
+    node_ids_to_delete = ["node_3"]
+    vector_store_index.delete_nodes(node_ids_to_delete)
+    vector_store_index.delete_nodes(["3"])  # 无效
+    vector_store_index.delete_nodes([])  # 无效
+    # time.sleep(1)
+    vector_store_index._vector_store.client.flush(collection_name="pairag_tests")
     vector_count = len(
         vector_store_index._vector_store.client.query(
-            collection_name="pairagcollection", limit=5
+            collection_name="pairag_tests", limit=5
         )
     )
+
     expected_count = len(mock_nodes) - 1
     assert vector_count == expected_count
+
+
+# @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+# @pytest.mark.asyncio
+# async def test_adelete_nodes():
+#     # 插入三个节点
+#     vector_store_index.insert_nodes(mock_nodes)
+#     # 删除一个节点
+#     nodes_to_delete = ["node_3"]
+#     await vector_store_index.adelete_nodes(nodes_to_delete)
+#     vector_store_index._vector_store.client.flush(collection_name="pairag_tests")
+#     vector_count = len(
+#         vector_store_index._vector_store.client.query(
+#             collection_name="pairag_tests", limit=5
+#         )
+#     )
+
+#     expected_count = len(mock_nodes) - 1
+#     assert vector_count == expected_count
