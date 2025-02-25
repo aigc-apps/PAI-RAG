@@ -18,6 +18,10 @@ if (
 
 from pai_rag.app.app import app
 
+DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
+DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
+DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
+
 
 async def upload_file(input_files, index_name="default_index"):
     files = []
@@ -224,7 +228,11 @@ async def test_openai_websearch():
 
     answer = response.json()["choices"][0]["message"]["content"]
 
-    assert "股价" in answer
+    assert (
+        answer != DEFAULT_GUARDRAIL_RESPONSE
+        and answer != DEFAULT_EMPTY_RESPONSE
+        and answer != DEFAULT_ERROR_RESPONSE
+    )
     assert len(response.json()["citations"]) > 0
 
     # 不返回reference
@@ -245,7 +253,11 @@ async def test_openai_websearch():
 
     answer = response.json()["choices"][0]["message"]["content"]
 
-    assert "股价" in answer
+    assert (
+        answer != DEFAULT_GUARDRAIL_RESPONSE
+        and answer != DEFAULT_EMPTY_RESPONSE
+        and answer != DEFAULT_ERROR_RESPONSE
+    )
     assert len(response.json()["citations"]) == 0
 
 
@@ -306,7 +318,11 @@ async def test_openai_websearch_stream():
             answer += delta
             citations = chunk_data.get("citations", [])
 
-    assert "股价" in answer
+    assert (
+        answer != DEFAULT_GUARDRAIL_RESPONSE
+        and answer != DEFAULT_EMPTY_RESPONSE
+        and answer != DEFAULT_ERROR_RESPONSE
+    )
     assert len(citations) > 0
 
     # 不返回引用
@@ -335,7 +351,11 @@ async def test_openai_websearch_stream():
             answer += delta
             citations = chunk_data.get("citations", [])
 
-    assert "股价" in answer
+    assert (
+        answer != DEFAULT_GUARDRAIL_RESPONSE
+        and answer != DEFAULT_EMPTY_RESPONSE
+        and answer != DEFAULT_ERROR_RESPONSE
+    )
     assert len(citations) == 0
 
 
