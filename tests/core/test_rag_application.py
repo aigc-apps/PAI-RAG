@@ -1,21 +1,19 @@
-import asyncio
-import os
-from pathlib import Path
 import pytest
+import os
+import asyncio
+from pathlib import Path
 import shutil
-
-from pai_rag.core.rag_application import DEFAULT_EMPTY_RESPONSE
-
-BASE_DIR = Path(__file__).parent.parent.parent
-TEST_INDEX_PATH = "localdata/teststorage"
-
-EXPECTED_EMPTY_RESPONSE = DEFAULT_EMPTY_RESPONSE
 
 
 pytestmark = pytest.mark.skipif(
     os.getenv("SKIP_GPU_TESTS", "false") == "true",
     reason="Need to execute in a CUDA environment.",
 )
+
+
+BASE_DIR = Path(__file__).parent.parent.parent
+TEST_INDEX_PATH = "localdata/teststorage"
+EXPECTED_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
 
 
 @pytest.fixture(scope="module", autouse=True)
