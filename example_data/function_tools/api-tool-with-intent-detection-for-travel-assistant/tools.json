@@ -21,7 +21,7 @@
   "api_tools": [
     {
       "name": "search_flight_ticket_api",
-      "url": "http://127.0.0.1:8001/demo/api/flights",
+      "url": "http://127.0.0.1:8680/demo/api/flights",
       "headers": {
         "Authorization": "Bearer YOUR_ACCESS_TOKEN"
       },
@@ -45,7 +45,7 @@
     },
     {
       "name": "search_train_ticket_api",
-      "url": "http://127.0.0.1:8001/demo/api/trains",
+      "url": "http://127.0.0.1:8680/demo/api/trains",
       "headers": {
         "Authorization": "Bearer YOUR_ACCESS_TOKEN"
       },
@@ -69,7 +69,7 @@
     },
     {
       "name": "search_hotels_api",
-      "url": "http://127.0.0.1:8001/demo/api/hotels",
+      "url": "http://127.0.0.1:8680/demo/api/hotels",
       "headers": {
         "Authorization": "Bearer YOUR_ACCESS_TOKEN"
       },

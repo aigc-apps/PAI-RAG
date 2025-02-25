@@ -1,4 +1,4 @@
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_local_client import rag_client
 
 
 def get_index_map():

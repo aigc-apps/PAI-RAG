@@ -27,7 +27,6 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )
 from pai_rag.integrations.query_transform.pai_query_transform import (
-    PaiCondenseQueryTransform,
     OpenAICompatibleQueryTransform,
 )
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
@@ -161,8 +160,9 @@ def resolve_data_analysis_connector(config: RagConfig):
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
     llm = resolve_llm(config)
-    sql_database = DataAnalysisConnector(config.data_analysis).connect_db()
-    # sql_database = resolve_data_analysis_connector(config).connect_db()
+    sql_database = DataAnalysisConnector(
+        config.data_analysis
+    ).connect()  # 每次load都会重连数据库
 
     return resolve(
         cls=DataAnalysisLoader,
@@ -174,7 +174,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
-    sql_database = resolve_data_analysis_connector(config).connect_db()
+    sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
         cls=DataAnalysisQuery,
@@ -185,12 +185,9 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     )
 
 
-def resolve_query_transform(config: RagConfig) -> PaiCondenseQueryTransform:
-    chat_store = resolve(PaiChatStore, chat_store_config=config.chat_store)
+def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
     llm = resolve_llm(config)
-    condense_query_transform = resolve(
-        PaiCondenseQueryTransform, llm=llm, chat_store=chat_store
-    )
+    condense_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
     return condense_query_transform
 
 

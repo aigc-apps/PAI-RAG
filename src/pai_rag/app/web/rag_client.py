@@ -16,7 +16,7 @@ from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 from urllib.parse import urljoin
 
 DEFAULT_CLIENT_TIME_OUT = 120
-DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
+DEFAULT_LOCAL_URL = "http://127.0.0.1:8680/"
 
 
 class RagApiError(Exception):
@@ -83,6 +83,10 @@ class RagWebClient:
     @property
     def load_db_history_url(self):
         return urljoin(self.endpoint, "api/v1/upload_db_history")
+
+    @property
+    def load_db_description_url(self):
+        return urljoin(self.endpoint, "api/v1/upload_db_description")
 
     @property
     def load_agent_cfg_url(self):
@@ -449,14 +453,17 @@ class RagWebClient:
     def add_db_history(
         self,
         input_file: str,
+        db_name: str,
     ):
         file_obj = open(input_file, "rb")
         mimetype = mimetypes.guess_type(input_file)[0]
         files = {"file": (input_file, file_obj, mimetype)}
+        para = {"db_name": db_name}
         try:
             r = requests.post(
                 self.load_db_history_url,
                 files=files,
+                data=para,
                 timeout=DEFAULT_CLIENT_TIME_OUT,
             )
             response = dotdict(json.loads(r.text))
@@ -466,6 +473,41 @@ class RagWebClient:
             logger.exception(f"add_db_history failed: {e}")
         finally:
             file_obj.close()
+
+        response = dotdict(json.loads(r.text))
+        return response
+
+    def add_db_description(
+        self,
+        input_files: str,
+        db_name: str,
+    ):
+        files = []
+        file_obj_list = []
+        if input_files:
+            for file_name in input_files:
+                file_obj = open(file_name, "rb")
+                mimetype = mimetypes.guess_type(file_name)[0]
+                files.append(
+                    ("files", (os.path.basename(file_name), file_obj, mimetype))
+                )
+                file_obj_list.append(file_obj)
+
+        para = {"db_name": db_name}
+        try:
+            r = requests.post(
+                self.load_db_description_url,
+                files=files,
+                data=para,
+                timeout=DEFAULT_CLIENT_TIME_OUT,
+            )
+
+            response = dotdict(json.loads(r.text))
+            if r.status_code != HTTPStatus.OK:
+                raise RagApiError(code=r.status_code, msg=response.message)
+        finally:
+            for file_obj in file_obj_list:
+                file_obj.close()
 
         response = dotdict(json.loads(r.text))
         return response

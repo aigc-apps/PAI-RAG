@@ -1,7 +1,7 @@
 import gradio as gr
 from typing import Any, List
 from pai_rag.app.web.index_utils import components_to_index, index_to_components
-from pai_rag.app.web.rag_client import RagApiError, rag_client
+from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 import datetime
@@ -181,7 +181,6 @@ def save_config(input_elements: List[Any]):
             if element.elem_id == "oss_sk":
                 value_sk = value
             update_dict[element.elem_id] = value
-        print(update_dict)
         rag_client.patch_config(update_dict)
         return [
             gr.update(

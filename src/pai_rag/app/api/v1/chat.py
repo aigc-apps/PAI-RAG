@@ -10,15 +10,17 @@ import pandas as pd
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
 from pai_rag.core.rag_service import rag_service
-from pai_rag.app.api.models import (
-    RagQuery,
-    RetrievalQuery,
-)
+from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
+)
+from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
+    DEFAULT_DESCRIPTION_FOLDER_PATH,
+    DEFAULT_DB_HISTORY_PATH,
+    DEFAULT_DB_HISTORY_NAME,
 )
 
 router_v1 = APIRouter()
@@ -61,7 +63,7 @@ async def aquery_search_v1(query: RagQuery):
 
 
 @router_v1.post("/query/retrieval")
-async def aquery_retrieval(query: RetrievalQuery):
+async def aquery_retrieval(query: RagQuery):
     return await rag_service.aquery_retrieval(query)
 
 
@@ -252,27 +254,28 @@ async def upload_datasheet(
 @router_v1.post("/upload_db_history")
 async def upload_history_json(
     file: UploadFile,
+    db_name: str = Form(None),
 ):
     task_id = uuid.uuid4().hex
     if not file:
         return None
 
-    persist_path = "./localdata/data_analysis/nl2sql/history"
+    persist_path = DEFAULT_DB_HISTORY_PATH
 
     os.makedirs(name=persist_path, exist_ok=True)
 
-    # 清空目录中的文件
-    for filename in os.listdir(persist_path):
-        file_path = os.path.join(persist_path, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            logger.info(f"Failed to delete {file_path}. Reason: {e}")
+    # # 清空目录中的文件
+    # for filename in os.listdir(persist_path):
+    #     file_path = os.path.join(persist_path, filename)
+    #     try:
+    #         if os.path.isfile(file_path) or os.path.islink(file_path):
+    #             os.unlink(file_path)
+    #     except Exception as e:
+    #         logger.info(f"Failed to delete {file_path}. Reason: {e}")
 
     # 指定持久化存储位置
     file_name = os.path.basename(file.filename)  # 获取文件名
-    destination_path = os.path.join(persist_path, file_name)
+    destination_path = os.path.join(persist_path, f"{db_name}_{file_name}")
     # 写入文件
     try:
         # shutil.copy(file.filename, destination_path)
@@ -285,7 +288,9 @@ async def upload_history_json(
 
     # 重命名
     try:
-        unified_destination_path = os.path.join(persist_path, "db_query_history.json")
+        unified_destination_path = os.path.join(
+            persist_path, f"{db_name}_{DEFAULT_DB_HISTORY_NAME}"
+        )
         os.rename(destination_path, unified_destination_path)
         logger.info("History file renamed successfully")
     except Exception as e:
@@ -294,6 +299,43 @@ async def upload_history_json(
     return {
         "task_id": task_id,
         "destination_path": unified_destination_path,
+    }
+
+
+@router_v1.post("/upload_db_description")
+async def upload_description(
+    files: List[UploadFile] = Body(None),
+    db_name: str = Form(None),
+):
+    task_id = uuid.uuid4().hex
+    if not files:
+        return {"message": "No upload files"}
+
+    persist_path = DEFAULT_DESCRIPTION_FOLDER_PATH
+    file_destination_folder = os.path.join(
+        persist_path, db_name, "database_description"
+    )
+    os.makedirs(name=file_destination_folder, exist_ok=True)
+
+    # 指定持久化存储位置
+    for file in files:
+        file_name = os.path.basename(file.filename)  # 获取文件名
+        file_destination_path = os.path.join(
+            persist_path, db_name, "database_description", file_name
+        )
+        # 写入文件
+        try:
+            # shutil.copy(file.filename, destination_path)
+            with open(file_destination_path, "wb") as f:
+                shutil.copyfileobj(file.file, f)
+            logger.info("History file saved successfully")
+
+        except Exception as e:
+            return StreamingResponse(status_code=500, content={"message": str(e)})
+
+    return {
+        "task_id": task_id,
+        "destination_path": persist_path,
     }
 
 

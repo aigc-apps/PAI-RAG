@@ -2,12 +2,12 @@ from typing import Dict, Any, List
 import gradio as gr
 import pandas as pd
 import datetime
-from loguru import logger
-from pai_rag.app.web.rag_client import rag_client, RagApiError
+from pai_rag.app.web.rag_local_client import rag_client, RagApiError
 from pai_rag.app.web.ui_constants import (
     NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,
 )
+from loguru import logger
 
 
 def upload_file_fn(input_file):
@@ -44,7 +44,50 @@ def upload_file_fn(input_file):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
-def load_db_info_fn(input_elements: List[Any]):
+def upload_history_fn(json_file, database):
+    if json_file is None:
+        return None
+    try:
+        # 调用接口
+        res = rag_client.add_db_history(json_file.name, database)
+        # 更新config
+        update_dict = {
+            "db_history_file_path": res["destination_path"],
+        }
+        rag_client.patch_config(update_dict)
+
+        if json_file.name.endswith(".json"):
+            return "Upload successfully!"
+        else:
+            return "Please upload a json file."
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def upload_description_fn(input_files: List, database):
+    if not input_files:
+        return None
+    try:
+        # 调用接口
+        res = rag_client.add_db_description(
+            [file.name for file in input_files], database
+        )
+        # yield gr.update(visible=True, value="Upload successfully!")
+
+        # 更新config
+        update_dict = {
+            "database_file_path": res["destination_path"],
+        }
+        rag_client.patch_config(update_dict)
+
+        return "Upload successfully!"
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+async def load_db_info_fn(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -63,14 +106,14 @@ def load_db_info_fn(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     try:
-        rag_client.load_db_info()
+        await rag_client.load_db_info()
         return f"[{datetime.datetime.now()}] DB info loaded successfully!"
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
         # return f"[{datetime.datetime.now()}] DB info loaded failed, HTTP {api_error.code} Error: {api_error.msg}"
 
 
-def respond(input_elements: List[Any]):
+async def respond(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
@@ -94,17 +137,9 @@ def respond(input_elements: List[Any]):
 
     question = update_dict["question"]
     chatbot = update_dict["chatbot"]
+    # if not update_dict["include_history"]:
+    #     chatbot = clear_history(chatbot)
 
-    # if chatbot is not None:
-    #     chatbot.append((question, ""))
-
-    # try:
-    #     content = ""
-    #     response_gen = rag_client.query_data_analysis(question, stream=True)
-    #     for resp in response_gen:
-    #         content += resp.delta
-    #         chatbot[-1] = (question, content)
-    #         yield chatbot
     q_msg = {"content": question, "role": "user"}
     chatbot.append(q_msg)
 
@@ -115,9 +150,10 @@ def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        response_gen = rag_client.query_data_analysis(question, stream=True)
+        print(chatbot)
+        response_gen = rag_client.query_data_analysis(chatbot[:-1], stream=True)
         is_thinking = False
-        for resp in response_gen:
+        async for resp in response_gen:
             if resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
                 chatbot[-1]["metadata"]["log"] = ""
@@ -134,13 +170,13 @@ def respond(input_elements: List[Any]):
                         "metadata": {"status": "pending"},
                     }
                 )
-
             else:
                 if is_thinking:
                     chatbot[-1]["metadata"]["log"] += resp.delta
                 else:
                     chatbot[-1]["content"] += resp.delta
             yield chatbot
+
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
     except Exception as e:
@@ -160,6 +196,14 @@ def reset_textbox():
     return gr.update(value="")
 
 
+# 处理description复选框变化
+def handle_description_checkbox_change(db_description_upload):
+    if db_description_upload:
+        return gr.update(visible=True), gr.update(visible=True)
+    else:
+        return gr.update(visible=False), gr.update(visible=False)
+
+
 # 处理history复选框变化
 def handle_history_checkbox_change(enable_db_history):
     if enable_db_history:
@@ -174,27 +218,6 @@ def handle_embedding_checkbox_change(enable_db_embedding):
         return gr.update(visible=True), gr.update(visible=True)
     else:
         return gr.update(visible=False), gr.update(visible=False)
-
-
-def upload_history_fn(json_file):
-    if json_file is None:
-        return None
-    try:
-        # 调用接口
-        res = rag_client.add_db_history(json_file.name)
-        # 更新config
-        update_dict = {
-            "db_history_file_path": res["destination_path"],
-        }
-        rag_client.patch_config(update_dict)
-
-        if json_file.name.endswith(".json"):
-            return "Upload successfully!"
-        else:
-            return "Please upload a json file."
-
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
 
 def create_data_analysis_tab() -> Dict[str, Any]:
@@ -253,13 +276,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     tables = gr.Textbox(
                         label="Tables",
                         elem_id="db_tables",
-                        placeholder="List db tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
+                        placeholder="List useful tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
                     )
                 descriptions = gr.Textbox(
-                    label="Descriptions",
-                    lines=3,
+                    label="Table Comment",
+                    lines=2,
                     elem_id="db_descriptions",
-                    placeholder='A dict of table descriptions, e.g. {"table_A": "text_description_A", "table_B": "text_description_B"}',
+                    placeholder='A dict of table comments, e.g. {"table_A": "comment_A", "table_B": "comment_B"}',
                 )
 
                 with gr.Column(visible=True):
@@ -291,13 +314,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     visible=False,  # 初始状态为不可见
                                 )
                                 max_value_num = gr.Slider(
-                                    minimum=5000,
+                                    minimum=1000,
                                     maximum=20000,
                                     step=1000,
                                     label="Max Value Number",
-                                    info="Maximum number of unique values to be embedded. Larger number may take longer time.",
+                                    info="Maximum number of unique values per column to be embedded. Larger number may take longer time.",
                                     elem_id="max_value_num",
-                                    value=10000,
+                                    value=1000,
                                     visible=False,  # 初始状态为不可见
                                 )
 
@@ -319,6 +342,12 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     elem_id="enable_db_history",
                                 )
 
+                                db_description_upload = gr.Checkbox(
+                                    label="Yes",
+                                    info="Enable db description upload",
+                                    elem_id="enable_db_description_upload",
+                                )
+
                                 history_file_upload = gr.File(
                                     label="Upload q-sql json file",
                                     file_count="single",
@@ -333,6 +362,37 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     visible=False,  # 初始状态为不可见
                                 )
 
+                                db_description_file_upload = gr.File(
+                                    label="Upload db description files",
+                                    file_count="multiple",
+                                    file_types=[".csv"],
+                                    elem_id="db_description_file_upload",
+                                    scale=6,
+                                    visible=False,  # 初始状态为不可见
+                                )
+                                description_update_state = gr.Textbox(
+                                    label="Description upload state",
+                                    visible=False,  # 初始状态为不可见
+                                    container=False,
+                                )
+
+                                # 当复选框状态变化时，调用 handle_checkbox_change 函数
+                                db_description_upload.change(
+                                    fn=handle_description_checkbox_change,
+                                    inputs=[db_description_upload],
+                                    outputs=[
+                                        db_description_file_upload,
+                                        description_update_state,
+                                    ],
+                                )
+
+                                db_description_file_upload.upload(
+                                    fn=upload_description_fn,
+                                    inputs=[db_description_file_upload, database],
+                                    outputs=description_update_state,
+                                    api_name="upload_description_fn",
+                                )
+
                                 # 当复选框状态变化时，调用 handle_checkbox_change 函数
                                 enable_db_history.change(
                                     fn=handle_history_checkbox_change,
@@ -342,7 +402,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                                 history_file_upload.upload(
                                     fn=upload_history_fn,
-                                    inputs=history_file_upload,
+                                    inputs=[history_file_upload, database],
                                     outputs=history_update_state,
                                     api_name="upload_history_fn",
                                 )
@@ -443,7 +503,18 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
         with gr.Column(scale=6):
             chatbot = gr.Chatbot(height=600, elem_id="chatbot", type="messages")
-            question = gr.Textbox(label="Enter your question.", elem_id="question")
+            with gr.Row():
+                include_history = gr.Checkbox(
+                    label="Chat history",
+                    info="Query with chat history.",
+                    elem_id="include_history",
+                    value=False,
+                    scale=1,
+                )
+                question = gr.Textbox(
+                    label="Enter your question.", elem_id="question", scale=9
+                )
+            # question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
                 clearBtn = gr.Button("Clear History", variant="secondary")
@@ -462,6 +533,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,
+            include_history,
             chatbot,
         }
 

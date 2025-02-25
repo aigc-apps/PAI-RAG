@@ -89,9 +89,9 @@ class PaiLlmGuardrail:
                 )
                 return TextCheckResult(
                     reject=False,
-                    reason="Check text failed.",
-                    risk_level="low",
-                    advice="",
+                    reason="request failed",
+                    risk_level="unknown",
+                    advice="internal error",
                 )
         except Exception as err:
             logger.info(

@@ -1,118 +1,135 @@
 import os
-from typing import Optional, List, Tuple
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from typing import Optional, List, Tuple, Any
+from loguru import logger
 
-from llama_index.core.prompts import PromptTemplate
-from llama_index.core.base.base_query_engine import BaseQueryEngine
-from llama_index.core.callbacks.base import CallbackManager
-from llama_index.core.callbacks.schema import CBEventType, EventPayload
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.llms.llm import LLM
-from llama_index.core.prompts.mixin import PromptMixinType
 from llama_index.core.schema import QueryBundle, NodeWithScore
 from llama_index.core.settings import Settings
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
+from llama_index.core.callbacks.base import CallbackManager
+from llama_index.core.callbacks.schema import CBEventType, EventPayload
+from llama_index.core.prompts import PromptTemplate
+from llama_index.core.base.base_query_engine import BaseQueryEngine
+from llama_index.core.prompts.mixin import PromptMixinType
 import llama_index.core.instrumentation as instrument
 
-from pai_rag.integrations.data_analysis.data_analysis_config import (
-    BaseAnalysisConfig,
-    PandasAnalysisConfig,
-    SqlAnalysisConfig,
-)
 from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
 from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
     DataAnalysisSynthesizer,
 )
-from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
-    DESCRIPTION_STORAGE_PATH,
-    HISTORY_STORAGE_PATH,
-    VALUE_STORAGE_PATH,
+from pai_rag.integrations.data_analysis.text2sql.db_connector import (
+    MysqlConnector,
+    SqliteConnector,
 )
-from pai_rag.integrations.data_analysis.nl2sql.nl2sql_prompts import (
+from pai_rag.integrations.data_analysis.text2sql.db_info_retriever import (
+    SchemaRetriever,
+    HistoryRetriever,
+    ValueRetriever,
+)
+from pai_rag.integrations.data_analysis.text2sql.db_loader import DBLoader
+from pai_rag.integrations.data_analysis.text2sql.db_query import DBQuery
+from pai_rag.integrations.data_analysis.data_analysis_config import (
+    BaseAnalysisConfig,
+    PandasAnalysisConfig,
+    SqlAnalysisConfig,
+    MysqlAnalysisConfig,
+    SqliteAnalysisConfig,
+)
+from pai_rag.integrations.data_analysis.text2sql.utils.prompts import (
     DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
 )
-from pai_rag.integrations.data_analysis.nl2sql.db_connector import DBConnector
-from pai_rag.integrations.data_analysis.nl2sql.db_loader import DBLoader
-from pai_rag.integrations.data_analysis.nl2sql.db_query import DBQuery
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
-from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
 from pai_rag.utils.constants import EAS_DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 
-if os.path.exists(os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")):
-    embed_model_bge_large = HuggingFaceEmbedding(
-        model_name=os.path.join(EAS_DEFAULT_MODEL_DIR, "bge-m3")
-    )
-else:
-    embed_model_bge_large = None
+cls_cache = {}
 
 
-def create_db_connctor(analysis_config: BaseAnalysisConfig):
-    if isinstance(analysis_config, SqlAnalysisConfig):
-        return DBConnector.from_config(sql_config=analysis_config)
+def resolve(cls: Any, cls_key: str, **kwargs):
+    cls_key = kwargs.__repr__() + cls_key
+    if cls_key not in cls_cache:
+        cls_cache[cls_key] = cls(**kwargs)
+        instance = cls(**kwargs)
+        logger.debug(f"Created new instance with id: {id(instance)}")
     else:
-        raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
+        logger.debug(f"Returning cached instance with id: {id(cls_cache[cls_key])}")
+    return cls_cache[cls_key]
 
 
-def create_db_indexes(analysis_config: SqlAnalysisConfig, embed_model: BaseEmbedding):
-    db_name = analysis_config.database
-    description_persist_path = os.path.join(DESCRIPTION_STORAGE_PATH, db_name)
-    history_persist_path = os.path.join(HISTORY_STORAGE_PATH, db_name)
-    value_persist_path = os.path.join(VALUE_STORAGE_PATH, db_name)
+def get_model_path(model_name, eas_default_dir, local_default_dir):
+    eas_path = os.path.join(eas_default_dir, model_name)
+    local_path = os.path.join(local_default_dir, model_name)
 
-    description_vector_store_config = FaissVectorStoreConfig(
-        persist_path=description_persist_path,
-    )
-    history_vector_store_config = FaissVectorStoreConfig(
-        persist_path=history_persist_path,
-    )
-    value_vector_store_config = FaissVectorStoreConfig(
-        persist_path=value_persist_path,
-    )
-    description_index = PaiVectorStoreIndex(
-        vector_store_config=description_vector_store_config, embed_model=embed_model
-    )
-    history_index = PaiVectorStoreIndex(
-        vector_store_config=history_vector_store_config, embed_model=embed_model
-    )
-    value_index = PaiVectorStoreIndex(
-        vector_store_config=value_vector_store_config, embed_model=embed_model
-    )
-    return [description_index, history_index, value_index]
+    if os.path.exists(eas_path):
+        return eas_path
+    elif os.path.exists(local_path):
+        return local_path
+    else:
+        raise FileNotFoundError(f"Model file not found in {eas_path} or {local_path}")
 
 
-def create_db_loader(
-    analysis_config: BaseAnalysisConfig,
-    sql_database: SQLDatabase,
-    # embed_model: BaseEmbedding,
-    # indexes: List[PaiVectorStoreIndex],
-    llm: LLM,
+try:
+    model_path = get_model_path("bge-m3", EAS_DEFAULT_MODEL_DIR, "./model_repository")
+    embed_model_bge = HuggingFaceEmbedding(model_name=model_path)
+except Exception as e:
+    logger.error(f"Failed to load embed_model: {str(e)}")
+    embed_model_bge = None
+
+
+def resolve_schema_retriever(
+    analysis_config: SqlAnalysisConfig, embed_model: BaseEmbedding
 ):
-    if isinstance(analysis_config, SqlAnalysisConfig):
-        print("analysis_config:", analysis_config)
-        embed_model = embed_model_bge_large
-        indexes = create_db_indexes(analysis_config, embed_model)
-        # print("indexes:", indexes)
-        return DBLoader.from_config(
-            sql_config=analysis_config,
-            sql_database=sql_database,
-            embed_model=embed_model,
-            index=indexes,
-            llm=llm,
-        )
+    return resolve(
+        cls=SchemaRetriever,
+        cls_key="schema_retriever",
+        db_name=analysis_config.database,
+        embed_model=embed_model,
+        similarity_top_k=8,
+    )
+
+
+def resolve_history_retriever(
+    analysis_config: SqlAnalysisConfig, embed_model: BaseEmbedding
+):
+    return resolve(
+        cls=HistoryRetriever,
+        cls_key="history_retriever",
+        db_name=analysis_config.database,
+        embed_model=embed_model,
+        similarity_top_k=5,
+    )
+
+
+def resolve_value_retriever(
+    analysis_config: SqlAnalysisConfig, embed_model: BaseEmbedding
+):
+    return resolve(
+        cls=ValueRetriever,
+        cls_key="value_retriever",
+        db_name=analysis_config.database,
+        embed_model=embed_model,
+        similarity_top_k=5,
+    )
+
+
+def create_db_connctor(analysis_config: SqlAnalysisConfig):
+    if isinstance(analysis_config, MysqlAnalysisConfig):
+        return MysqlConnector(db_config=analysis_config)
+    elif isinstance(analysis_config, SqliteAnalysisConfig):
+        return SqliteConnector(db_config=analysis_config)
     else:
         raise ValueError(f"Unknown sql analysis config: {analysis_config}.")
 
 
-def create_retriever(
+def create_query_retriever(
     analysis_config: BaseAnalysisConfig,
     sql_database: SQLDatabase,
-    # indexes: List[PaiVectorStoreIndex],
     llm: LLM,
-    # embed_model: BaseEmbedding,
+    embed_model: BaseEmbedding = embed_model_bge,
 ):
     if isinstance(analysis_config, PandasAnalysisConfig):
         return PandasQueryRetriever.from_config(
@@ -120,13 +137,13 @@ def create_retriever(
             llm=llm,
         )
     elif isinstance(analysis_config, SqlAnalysisConfig):
-        embed_model = embed_model_bge_large
-        indexes = create_db_indexes(analysis_config, embed_model)
-        return DBQuery.from_config(
-            sql_config=analysis_config,
+        return DBQuery(
+            db_config=analysis_config,
             sql_database=sql_database,
             embed_model=embed_model,
-            index=indexes,
+            schema_retriever=resolve_schema_retriever(analysis_config, embed_model),
+            history_retriever=resolve_history_retriever(analysis_config, embed_model),
+            value_retriever=resolve_value_retriever(analysis_config, embed_model),
             llm=llm,
         )
     else:
@@ -150,7 +167,7 @@ class DataAnalysisConnector:
         else:
             raise ValueError(f"Unknown analysis config: {analysis_config}.")
 
-    def connect_db(self):
+    def connect(self):
         if isinstance(self._analysis_config, PandasAnalysisConfig):
             return
         elif isinstance(self._analysis_config, SqlAnalysisConfig):
@@ -161,27 +178,26 @@ class DataAnalysisConnector:
 
 class DataAnalysisLoader:
     """
-    Used for db connection, description and embedding
+    Used for db info collection and index creation.
     """
 
     def __init__(
         self,
-        analysis_config: BaseAnalysisConfig,
+        analysis_config: SqlAnalysisConfig,
         sql_database: SQLDatabase,
-        # embed_model: BaseEmbedding,
-        # indexes: List[PaiVectorStoreIndex],
+        embed_model: BaseEmbedding = embed_model_bge,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
-        self._llm = llm or Settings.llm
-        # self._embed_model = embed_model
         self._sql_database = sql_database
-        self._db_loader = create_db_loader(
-            analysis_config=analysis_config,
-            sql_database=self._sql_database,
-            # embed_model=embed_model,
-            # indexes=indexes,
-            llm=self._llm,
+        self._db_loader = DBLoader(
+            db_config=analysis_config,
+            sql_database=sql_database,
+            embed_model=embed_model,
+            schema_retriever=resolve_schema_retriever(analysis_config, embed_model),
+            history_retriever=resolve_history_retriever(analysis_config, embed_model),
+            value_retriever=resolve_value_retriever(analysis_config, embed_model),
+            llm=llm,
         )
 
     def load_db_info(self):
@@ -200,41 +216,40 @@ class DataAnalysisQuery(BaseQueryEngine):
         self,
         analysis_config: BaseAnalysisConfig,
         sql_database: SQLDatabase,
-        # indexes: List[PaiVectorStoreIndex],
+        embed_model: BaseEmbedding = embed_model_bge,
         llm: Optional[LLM] = None,
-        # embed_model: Optional[BaseEmbedding] = embed_model_bge_large,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
         """Initialize params."""
-        super().__init__(callback_manager=callback_manager or Settings.callback_manager)
-
         self._llm = llm or Settings.llm
+        self._embed_model = embed_model
         self._sql_database = sql_database
-        self._retriever = create_retriever(
+        self._query_retriever = create_query_retriever(
             analysis_config=analysis_config,
             sql_database=self._sql_database,
-            # indexes=indexes,
             llm=self._llm,
+            embed_model=self._embed_model,
         )
         self._synthesizer = DataAnalysisSynthesizer(
             llm=self._llm,
             response_synthesis_prompt=PromptTemplate(analysis_config.synthesizer_prompt)
             or DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
         )
+        super().__init__(callback_manager=callback_manager or Settings.callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
         return {}
 
     def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = self._retriever.retrieve(query_bundle)
+        nodes = self._query_retriever.retrieve(query_bundle)
         if isinstance(nodes, Tuple):
             return nodes[0], nodes[1]
         else:
             return nodes, ""
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = await self._retriever.aretrieve(query_bundle)
+        nodes = await self._query_retriever.aretrieve(query_bundle)
         if isinstance(nodes, Tuple):
             return nodes[0], nodes[1]
         else:
@@ -309,14 +324,9 @@ class DataAnalysisQuery(BaseQueryEngine):
         return response
 
     async def astream_query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-        # streaming = self._synthesizer._streaming
-        # self._synthesizer._streaming = True
-
         nodes, description = await self.aretrieve(query_bundle)
-
         stream_response = await self._synthesizer.asynthesize(
             query=query_bundle, description=description, nodes=nodes, streaming=True
         )
-        # self._synthesizer._streaming = streaming
 
         return stream_response
