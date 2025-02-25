@@ -16,7 +16,7 @@ from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap
 from urllib.parse import urljoin
 
 DEFAULT_CLIENT_TIME_OUT = 120
-DEFAULT_LOCAL_URL = "http://127.0.0.1:8001/"
+DEFAULT_LOCAL_URL = "http://127.0.0.1:8680/"
 
 
 class RagApiError(Exception):

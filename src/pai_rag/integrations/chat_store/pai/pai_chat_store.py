@@ -128,8 +128,8 @@ class PaiChatStore(BaseChatStore):
         recent_messages = deque(default_messages[-6:], maxlen=6)
         ret_messages = []
         for msg in reversed(recent_messages):
-            msg.content = msg.content[:600]
-            ret_messages.append(msg)
+            if msg.content is not None:
+                ret_messages.append(msg)
 
         ret_messages.reverse()
         return ret_messages

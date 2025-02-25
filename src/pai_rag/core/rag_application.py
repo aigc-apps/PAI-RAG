@@ -1,3 +1,4 @@
+import traceback
 from pai_rag.app.api.models import ChatCompletionRequest
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import index_manager
@@ -8,12 +9,15 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_query,
     resolve_data_loader,
     resolve_intent_router,
+    resolve_llm,
     resolve_llm_guardrail,
     resolve_query_engine,
-    resolve_query_transform,
     resolve_searcher,
     resolve_openai_query_transform,
-    resolve_nl2sql_query_transform,
+)
+from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+from pai_rag.integrations.query_transform.pai_query_transform import (
+    messages_to_history_str,
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.app.api.models import PaiQueryBundle
@@ -29,17 +33,15 @@ from openai._exceptions import APIError
 from openai.types.completion_usage import CompletionUsage
 from pai_rag.app.api.models import (
     RagQuery,
-    RetrievalQuery,
     RagResponse,
     ContextDoc,
     RetrievalResponse,
 )
-from llama_index.core.base.llms.generic_utils import messages_to_history_str
 from llama_index.core.schema import QueryBundle
+from llama_index.core.base.response.schema import AsyncStreamingResponse
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
-from llama_index.core.schema import (
-    ImageNode,
-)
+from llama_index.core.schema import ImageNode
+from llama_index.core.chat_engine.types import StreamingAgentChatResponse
 import json
 import os
 from loguru import logger
@@ -49,8 +51,12 @@ from llama_index.core import Settings
 import time
 import re
 
+from pai_rag.utils.messages_utils import parse_chat_messages_v2
+
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
+DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
+DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
 
 
 def uuid_generator() -> str:
@@ -61,6 +67,7 @@ class RagChatType(str, Enum):
     LLM = "llm"
     RAG = "rag"
     WEB = "web"
+    NL2SQL = "nl2sql"
 
 
 class SseVersion(int, Enum):
@@ -77,6 +84,7 @@ def _event_chunk_wrapper(chunk_content, sse_version: SseVersion = SseVersion.V0)
 
 async def event_generator_async(
     response,
+    messages=[],
     extra_info=None,
     chat_store=None,
     session_id=None,
@@ -87,8 +95,9 @@ async def event_generator_async(
         content = response
         chunk = {"delta": content, "is_finished": False}
         yield _event_chunk_wrapper(json.dumps(chunk, ensure_ascii=False), sse_version)
-
-    else:
+    elif isinstance(response, AsyncStreamingResponse) or isinstance(
+        response, StreamingAgentChatResponse
+    ):
         async for token in response.async_response_gen():
             if token:
                 chunk = {"delta": token, "is_finished": False}
@@ -96,12 +105,24 @@ async def event_generator_async(
                 yield _event_chunk_wrapper(
                     json.dumps(chunk, ensure_ascii=False), sse_version
                 )
+    else:
+        async for chat_response in response:
+            if chat_response.delta:
+                chunk = {"delta": chat_response.delta, "is_finished": False}
+                content = chat_response.message.content
+                yield _event_chunk_wrapper(
+                    json.dumps(chunk, ensure_ascii=False), sse_version
+                )
 
     if chat_store:
         content = re.sub(r"<think>.*?</think>\n*", "", content, flags=re.DOTALL)
-        chat_store.add_message(
-            session_id, ChatMessage(role=MessageRole.ASSISTANT, content=content)
+        messages.append(
+            ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=content,
+            )
         )
+        chat_store.set_messages(session_id, messages)
 
     if extra_info:
         # 返回
@@ -244,8 +265,8 @@ async def _make_chat_completion_chunk_response(
                     id=session_id,
                     created=created_ts,
                     model=model_name,
-                    citations=citations,
-                    citation_details=citation_details,
+                    citations=[],
+                    citation_details=[],
                     choices=[
                         chat_completion_chunk.Choice(
                             index=i,
@@ -311,7 +332,6 @@ async def _make_chat_completion_chunk_response(
 
 
 async def _make_chat_completion_chunk_response_with_text(session_id, text):
-    i = 0
     created_ts = int(time.time())
     model_name = Settings.llm.metadata.model_name
     chunk = ChatCompletionChunk(
@@ -322,7 +342,7 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
         citation_details=[],
         choices=[
             chat_completion_chunk.Choice(
-                index=i,
+                index=0,
                 delta=chat_completion_chunk.ChoiceDelta(
                     role=MessageRole.ASSISTANT.value,
                     content=text,
@@ -332,7 +352,6 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
         ],
         object="chat.completion.chunk",
     )
-    i += 1
 
     logger.info(f"Finished streaming: {text}")
     yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
@@ -382,11 +401,54 @@ class RagApplication:
             enable_raptor=enable_raptor,
         )
 
-    async def aretrieve(self, query: RetrievalQuery) -> RetrievalResponse:
-        if not query.question:
+    async def aretrieve(
+        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+    ) -> RetrievalResponse:
+        session_id = query.session_id or uuid_generator()
+        logger.debug(f"Get session ID: {session_id}.")
+
+        chat_store = resolve_chat_store(self.config)
+        if query.messages is None or len(query.messages) == 0:
+            query.messages = parse_chat_messages_v2(
+                question=query.question,
+                session_id=session_id,
+                chat_history=query.chat_history,
+                chat_store=chat_store,
+            )
+
+        if (
+            not query.messages
+            or len(query.messages) == 0
+            or not query.messages[-1].content
+        ):
+            if query.stream:
+                return event_generator_async(
+                    DEFAULT_EMPTY_RESPONSE, sse_version=sse_version
+                )
             return RetrievalResponse(docs=[])
 
-        query_bundle = QueryBundle(query.question)
+        openai_query_transform = resolve_openai_query_transform(self.config)
+        question = query.messages[-1].content
+        if openai_query_transform is not None:
+            new_query_bundle = await openai_query_transform.arun(
+                chat_messages=query.messages,
+            )
+        else:
+            new_query_bundle = PaiQueryBundle(
+                query_str=question,
+                chat_messages_str=messages_to_history_str(
+                    query.messages, max_length=500
+                ),
+            )
+
+        # Condense question
+        new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+        if new_question != question:
+            new_question = ",".join([question, new_question])
+        logger.info(f"Querying with question '{new_question}'.")
+
+        query_bundle = QueryBundle(new_question)
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(query.index_name)
         session_config.embedding = index_entry.embedding_config
@@ -417,6 +479,15 @@ class RagApplication:
         chat_request: ChatCompletionRequest,
     ):
         session_id = uuid_generator()
+        if len(chat_request.messages) == 0:
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
+                )
+            else:
+                return _make_chat_completion_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
+                )
 
         if (
             len(chat_request.messages) == 0
@@ -425,11 +496,11 @@ class RagApplication:
         ):
             if chat_request.stream:
                 return _make_chat_completion_chunk_response_with_text(
-                    session_id, "看起来你问了一个空问题，请问有什么能帮忙的吗？"
+                    session_id, DEFAULT_EMPTY_RESPONSE
                 )
             else:
                 return _make_chat_completion_response_with_text(
-                    session_id, "看起来你问了一个空问题，请问有什么能帮忙的吗？"
+                    session_id, DEFAULT_EMPTY_RESPONSE
                 )
 
         try:
@@ -472,10 +543,20 @@ class RagApplication:
                 )
             else:
                 new_query_bundle = PaiQueryBundle(
-                    query_str=question, need_web_search=chat_request.search_web
+                    query_str=question,
+                    need_web_search=chat_request.search_web,
+                    chat_messages_str=messages_to_history_str(
+                        messages[-7:], max_length=500
+                    ),
                 )
 
+            # Condense question
             new_question = new_query_bundle.query_str
+            logger.info(f"Transformed question '{new_question}'.")
+            if new_question != question:
+                new_question = ",".join([question, new_question])
+            logger.info(f"Querying with question '{new_question}'.")
+
             if not passed_guardrail:
                 # 多轮对话，用新查询检查
                 guardrail_result = await guardrail.acheck(new_question)
@@ -499,7 +580,7 @@ class RagApplication:
                 stream=chat_request.stream,
                 citation=chat_request.citation,
                 need_web_search=new_query_bundle.need_web_search,
-                chat_messages_str=messages_to_history_str(messages=messages[-8:]),
+                chat_messages_str=new_query_bundle.chat_messages_str,
             )
 
             if chat_request.force_no_search:
@@ -558,15 +639,17 @@ class RagApplication:
                     response=response,
                     return_reference=chat_request.return_reference,
                 )
-        except Exception as e:
-            logger.error(f"Error while processing request: {e}")
+        except Exception:
+            logger.error(
+                f"Chat failed for query {chat_request.messages[-1].content} due to {traceback.format_exc()}"
+            )
             if chat_request.stream:
                 return _make_chat_completion_chunk_response_with_text(
-                    session_id, "抱歉，系统错误，暂时无法处理这个请求。"
+                    session_id, DEFAULT_ERROR_RESPONSE
                 )
             else:
                 return _make_chat_completion_response_with_text(
-                    session_id, "抱歉，系统错误，暂时无法处理这个请求。"
+                    session_id, DEFAULT_ERROR_RESPONSE
                 )
 
     async def aquery(
@@ -577,44 +660,63 @@ class RagApplication:
     ):
         session_id = query.session_id or uuid_generator()
         logger.debug(f"Get session ID: {session_id}.")
-        session_config = self.config.model_copy()
-        index_entry = index_manager.get_index_by_name(query.index_name)
-        session_config.embedding = index_entry.embedding_config
-        session_config.index.vector_store = index_entry.vector_store_config
 
-        if not query.question:
-            return RagResponse(
-                answer="Empty query. Please input your question.", session_id=session_id
+        chat_store = resolve_chat_store(self.config)
+        if query.messages is None or len(query.messages) == 0:
+            query.messages = parse_chat_messages_v2(
+                question=query.question,
+                session_id=session_id,
+                chat_history=query.chat_history,
+                chat_store=chat_store,
             )
 
-        chat_store = resolve_chat_store(session_config)
-        condense_query_transform = resolve_query_transform(session_config)
+        if (
+            not query.messages
+            or len(query.messages) == 0
+            or not query.messages[-1].content
+        ):
+            if query.stream:
+                return event_generator_async(
+                    DEFAULT_EMPTY_RESPONSE, sse_version=sse_version
+                )
+            return RagResponse(answer=DEFAULT_EMPTY_RESPONSE, session_id=session_id)
+
+        # Chat to LLM, return directly
+        if chat_type == RagChatType.LLM:
+            llm: PaiLlm = resolve_llm(self.config)
+            if not query.stream:
+                response = await llm.achat(messages=query.messages)
+                return RagResponse(
+                    answer=response.message.content, session_id=session_id
+                )
+            else:
+                response = await llm.astream_chat(messages=query.messages)
+                return event_generator_async(response, sse_version=sse_version)
+
+        openai_query_transform = resolve_openai_query_transform(self.config)
+        question = query.messages[-1].content
+        if openai_query_transform is not None:
+            new_query_bundle = await openai_query_transform.arun(
+                chat_messages=query.messages,
+            )
+        else:
+            need_web_search = chat_type == RagChatType.WEB
+            new_query_bundle = PaiQueryBundle(
+                query_str=question,
+                need_web_search=need_web_search,
+                chat_messages_str=messages_to_history_str(
+                    query.messages, max_length=500
+                ),
+            )
 
         # Condense question
-        new_query_bundle = await condense_query_transform.arun(
-            query_bundle_or_str=query.question,
-            session_id=session_id,
-            chat_history=query.chat_history,
-        )
         new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+        if new_question != question:
+            new_question = ",".join([question, new_question])
         logger.info(f"Querying with question '{new_question}'.")
 
-        if query.with_intent:
-            intent_router = resolve_intent_router(session_config)
-            intent = await intent_router.aselect(
-                str_or_query_bundle=new_query_bundle.chat_messages_str
-            )
-            logger.info(f"[IntentDetection] Routing query to {intent}.")
-            if intent == Intents.TOOL:
-                return await self.aquery_agent(query, sse_version=sse_version)
-            elif intent == Intents.WEBSEARCH:
-                chat_type = RagChatType.WEB
-            elif intent == Intents.NL2SQL:
-                return await self.aquery_data_analysis(query)
-            elif intent != Intents.RAG:
-                return ValueError(f"Invalid intent {intent}")
-
-        guardrail = resolve_llm_guardrail(session_config)
+        guardrail = resolve_llm_guardrail(self.config)
         # 多轮对话，用新查询检查
         if guardrail is not None:
             guardrail_result = await guardrail.acheck(new_question)
@@ -632,6 +734,23 @@ class RagApplication:
                         answer=guardrail_result.advice, session_id=session_id
                     )
 
+        if query.with_intent:
+            intent_router = resolve_intent_router(self.config)
+            intent = await intent_router.aselect(
+                str_or_query_bundle=new_query_bundle.chat_messages_str
+            )
+            logger.info(f"[IntentDetection] Routing query to {intent}.")
+            if intent == Intents.TOOL:
+                return await self.aquery_agent(
+                    query, new_query_bundle, sse_version=sse_version
+                )
+            elif intent == Intents.WEBSEARCH:
+                chat_type = RagChatType.WEB
+            elif intent == Intents.NL2SQL:
+                chat_type = RagChatType.NL2SQL
+            elif intent != Intents.RAG:
+                return ValueError(f"Invalid intent {intent}")
+
         query_bundle = PaiQueryBundle(
             query_str=new_question,
             need_web_search=new_query_bundle.need_web_search,
@@ -639,10 +758,12 @@ class RagApplication:
             citation=query.citation,
             chat_messages_str=new_query_bundle.chat_messages_str,
         )
-        chat_store.add_message(
-            session_id, ChatMessage(role=MessageRole.USER, content=query.question)
-        )
         if chat_type == RagChatType.RAG:
+            session_config = self.config.model_copy()
+            index_entry = index_manager.get_index_by_name(query.index_name)
+            session_config.embedding = index_entry.embedding_config
+            session_config.index.vector_store = index_entry.vector_store_config
+
             query_engine = resolve_query_engine(session_config)
             response = await query_engine.aquery(
                 query_bundle,
@@ -650,7 +771,7 @@ class RagApplication:
                 prompt_template_str=query.custom_prompt_template,
             )
         elif chat_type == RagChatType.WEB:
-            search_engine = resolve_searcher(session_config)
+            search_engine = resolve_searcher(self.config)
             if not search_engine:
                 raise ValueError(
                     "AI search config is not valid. Please check your search api configuration."
@@ -660,60 +781,59 @@ class RagApplication:
                 system_role_str=query.system_role_template,
                 prompt_template_str=query.custom_prompt_template,
             )
-        elif chat_type == RagChatType.LLM:
-            query_engine = resolve_query_engine(session_config)
-            query_bundle.no_retrieval = True
-            response = await query_engine.asynthesize(
-                query_bundle,
-                nodes=[],
-                system_role_str=query.system_role_template,
-                prompt_template_str=query.custom_prompt_template,
-            )
-        node_results = response.source_nodes
+        elif chat_type == RagChatType.NL2SQL:
+            nl2sql_query_engine = resolve_data_analysis_query(self.config)
+            if query.stream:
+                response = await nl2sql_query_engine.astream_query(query_bundle)
+            else:
+                response = await nl2sql_query_engine.aquery(query_bundle)
+
         result_info = {
             "session_id": session_id,
             "new_query": new_question,
         }
 
         if query.return_reference:
-            reference_docs = [
+            result_info["docs"] = [
                 ContextDoc(
-                    text=score_node.node.get_content(),
+                    text=score_node.node.text,
                     metadata=score_node.node.metadata,
                     score=score_node.score,
                     image_url=score_node.node.image_url,
                 )
                 if isinstance(score_node.node, ImageNode)
                 else ContextDoc(
-                    text=score_node.node.get_content(),
+                    text=score_node.node.text,
                     metadata=score_node.node.metadata,
                     score=score_node.score,
                 )
-                for score_node in node_results
+                for score_node in response.source_nodes
             ]
-
-            result_info["docs"] = reference_docs
 
         if not query.stream:
             content = re.sub(
                 r"<think>.*?</think>\n*", "", response.response, flags=re.DOTALL
             )
-            chat_store.add_message(
-                session_id,
+            query.messages.append(
                 ChatMessage(role=MessageRole.ASSISTANT, content=content),
             )
+            chat_store.set_messages(session_id, query.messages)
             return RagResponse(answer=response.response, **result_info)
         else:
             return event_generator_async(
                 response=response,
                 extra_info=result_info,
+                messages=query.messages,
                 chat_store=chat_store,
                 session_id=session_id,
                 sse_version=sse_version,
             )
 
     async def aquery_agent(
-        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
+        self,
+        query: RagQuery,
+        new_query_bundle: PaiQueryBundle = None,
+        sse_version: SseVersion = SseVersion.V0,
     ) -> RagResponse:
         """Query answer from RAG App via web search asynchronously.
 
@@ -725,15 +845,25 @@ class RagApplication:
         Returns:
             RagResponse
         """
-        if not query.question:
-            return RagResponse(answer="Empty query. Please input your question.")
+        if not query.messages or not query.messages[-1].content:
+            if query.question:
+                query.messages = [
+                    ChatMessage(role=MessageRole.USER, content=query.question)
+                ]
+            else:
+                return RagResponse(answer=DEFAULT_EMPTY_RESPONSE)
 
         agent = resolve_agent(self.config)
+        if new_query_bundle and new_query_bundle.query_str:
+            msg = new_query_bundle.query_str
+        else:
+            msg = messages_to_history_str(query.messages, max_length=600)
+
         if query.stream:
-            response = await agent.astream_chat(query.question)
+            response = await agent.astream_chat(message=msg)
             return event_generator_async(response, sse_version=sse_version)
         else:
-            response = await agent.achat(query.question)
+            response = await agent.achat(message=msg)
             return RagResponse(answer=response.response)
 
     async def aload_agent_config(self, agent_cfg_path: str):
@@ -765,102 +895,3 @@ class RagApplication:
         await db_info_loader.aload_db_info()
 
         return "Load database info successfully."
-
-    async def aquery_data_analysis(
-        self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
-    ):
-        """Query answer from RAG App asynchronously.
-
-        Generate answer from Data Analysis interface.
-
-        Args:
-            query: RagQuery
-
-        Returns:
-            RagResponse
-        """
-        session_id = query.session_id or uuid_generator()
-        logger.debug(f"Get session ID: {session_id}.")
-        session_config = self.config.model_copy()
-        if not query.question:
-            return RagResponse(
-                answer="Empty query. Please input your question.", session_id=session_id
-            )
-
-        # enable chat_history
-        chat_store = resolve_chat_store(session_config)
-        chat_store.add_message(
-            session_id, ChatMessage(role=MessageRole.USER, content=query.question)
-        )
-        # check if there is chat history
-        if len(chat_store.get_messages(session_id)) > 1:
-            condense_query_transform = resolve_nl2sql_query_transform(session_config)
-            # Condense question
-            new_query_bundle = await condense_query_transform.arun(
-                query_bundle_or_str=query.question,
-                session_id=session_id,
-                chat_history=query.chat_history,
-            )
-            new_question = new_query_bundle.query_str
-            logger.info(f"Querying with question: '{new_question}'.")
-        else:
-            new_query_bundle = query.question
-
-        analysis_query = resolve_data_analysis_query(self.config)
-        if not analysis_query:
-            raise ValueError("Data Analysis not enabled. Please specify analysis type.")
-
-        if not query.stream:
-            # response = await analysis_query.aquery(query.question)
-            response = await analysis_query.aquery(new_query_bundle)
-        else:
-            # response = await analysis_query.astream_query(query.question)
-            response = await analysis_query.astream_query(new_query_bundle)
-
-        node_results = response.source_nodes
-        new_query = query.question
-
-        reference_docs = [
-            ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-                image_url=score_node.node.image_url,
-            )
-            if isinstance(score_node.node, ImageNode)
-            else ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-            )
-            for score_node in node_results
-        ]
-
-        result_info = {
-            "session_id": session_id,
-            "docs": reference_docs,
-            "new_query": new_query,
-        }
-        if not query.stream:
-            content = re.sub(
-                r"<think>.*?</think>\n*", "", response.response, flags=re.DOTALL
-            )
-            chat_store.add_message(
-                session_id,
-                ChatMessage(role=MessageRole.ASSISTANT, content=content),
-            )
-            return RagResponse(answer=content, **result_info)
-
-        # if not query.stream:
-        #     return RagResponse(answer=response.response, **result_info)
-        else:
-            # return event_generator_async(
-            #     response=response, extra_info=result_info, sse_version=sse_version
-            # )
-            return event_generator_async(
-                response=response,
-                extra_info=result_info,
-                chat_store=chat_store,
-                session_id=session_id,
-                sse_version=sse_version,
-            )

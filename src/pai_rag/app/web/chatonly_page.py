@@ -1,9 +1,8 @@
 import gradio as gr
-from pai_rag.app.web.rag_client import RagApiError, rag_client
+from pai_rag.app.web.rag_local_client import RagApiError, rag_local_client
 
 
 def clear_history(chatbot):
-    rag_client.clear_history()
     chatbot = []
     return chatbot
 
@@ -24,10 +23,12 @@ def respond(retrieve_only, question, chatbot):
 
     try:
         if retrieve_only:
-            response_gen = rag_client.query_vector(question, index_name="default_index")
+            response_gen = rag_local_client.query_vector(
+                chatbot[:-1], question, index_name="default_index"
+            )
 
         else:
-            response_gen = rag_client.query(
+            response_gen = rag_local_client.query(
                 question,
                 with_history=False,
                 stream=True,

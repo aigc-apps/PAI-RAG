@@ -1,9 +1,9 @@
 from typing import Dict, Any
-from pai_rag.app.web.rag_client import rag_client
+from pai_rag.app.web.rag_local_client import rag_client
 import gradio as gr
 
 
-def respond(
+async def respond(
     intent_description,
     agent_api_definition,
     agent_function_definition,
@@ -22,14 +22,21 @@ def respond(
 
     rag_client.patch_config(update_dict)
 
-    response_gen = rag_client.query(agent_question, with_intent=True, stream=False)
+    q_msg = {"content": agent_question, "role": "user"}
+    agent_chatbot.append(q_msg)
     content = ""
-    agent_chatbot.append((agent_question, content))
+    a_msg = {"content": "", "role": "assistant"}
+    agent_chatbot.append(a_msg)
+
+    response_gen = rag_client.query(
+        chat_messages=agent_chatbot[:-1], with_intent=True, stream=True
+    )
+
     yield agent_chatbot
 
-    for resp in response_gen:
+    async for resp in response_gen:
         content += resp.delta
-        agent_chatbot[-1] = (agent_question, content)
+        agent_chatbot[-1]["content"] = content
         yield agent_chatbot
 
 
@@ -82,7 +89,9 @@ def create_agent_tab() -> Dict[str, Any]:
 
         with gr.Column(scale=6):
             _ = gr.Markdown(value="**Agentic RAG Chatbot Test**")
-            agent_chatbot = gr.Chatbot(height=500, elem_id="agent_chatbot")
+            agent_chatbot = gr.Chatbot(
+                height=500, elem_id="agent_chatbot", type="messages"
+            )
             agent_question = gr.Textbox(
                 label="Enter your question.", elem_id="agent_question"
             )

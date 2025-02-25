@@ -10,10 +10,7 @@ import pandas as pd
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
 from pai_rag.core.rag_service import rag_service
-from pai_rag.app.api.models import (
-    RagQuery,
-    RetrievalQuery,
-)
+from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
@@ -66,7 +63,7 @@ async def aquery_search_v1(query: RagQuery):
 
 
 @router_v1.post("/query/retrieval")
-async def aquery_retrieval(query: RetrievalQuery):
+async def aquery_retrieval(query: RagQuery):
     return await rag_service.aquery_retrieval(query)
 
 

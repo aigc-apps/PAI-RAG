@@ -31,7 +31,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     visible=False,
                 )
 
-                # _ = gr.Markdown(value="**Index - Embedding Model**")
+                _ = gr.Markdown(value="**Index - Embedding Model**")
                 embed_source = gr.Radio(
                     EMBEDDING_API_KEY_DICT.keys(),
                     label="Embedding Type",
