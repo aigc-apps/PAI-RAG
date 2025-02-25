@@ -1,7 +1,6 @@
 import os
 import pytest
 from dotenv import load_dotenv
-
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core.schema import TextNode
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
@@ -54,9 +53,8 @@ vector_store_config = MilvusVectorStoreConfig(
     database=milvus_database,
 )
 
-embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
-# 初始化 PaiVectorStoreIndex
-vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
+# embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
+# vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
 
 # vector_store_index.insert_nodes(mock_nodes)
 # vector_store_index.delete_nodes(["3"])
@@ -64,9 +62,20 @@ vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_
 # vector_store_index.delete_nodes([])   # 无效
 
 
+@pytest.fixture()
+def setup_vector_store_index():
+    embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
+    # 初始化 PaiVectorStoreIndex
+    vector_store_index = PaiVectorStoreIndex(
+        vector_store_config, embed_model=embed_model
+    )
+    return vector_store_index
+
+
 # 测试插入节点
 @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
-def test_insert_nodes():
+def test_insert_nodes(setup_vector_store_index):
+    vector_store_index = setup_vector_store_index
     vector_store_index.insert_nodes(mock_nodes)
     vector_store_index._vector_store.client.flush(collection_name="pairag_tests")
     vector_count = len(
@@ -79,7 +88,8 @@ def test_insert_nodes():
 
 # 测试删除节点
 @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
-def test_delete_nodes():
+def test_delete_nodes(setup_vector_store_index):
+    vector_store_index = setup_vector_store_index
     # # 插入三个节点
     # vector_store_index.insert_nodes(mock_nodes)
     # 删除一个节点

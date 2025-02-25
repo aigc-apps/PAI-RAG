@@ -72,17 +72,28 @@ vector_store_config = ElasticSearchVectorStoreConfig(
     es_index="pairag_test",
 )
 
-embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
-# 初始化 PaiVectorStoreIndex
-vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
+# embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
+# # 初始化 PaiVectorStoreIndex
+# vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
 
 # vector_store_index.insert_nodes(mock_nodes)
 # node_ids_to_delete = ["node_3"]
 # vector_store_index.delete_nodes(node_ids_to_delete)
 
 
+@pytest.fixture()
+def setup_vector_store_index():
+    embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
+    # 初始化 PaiVectorStoreIndex
+    vector_store_index = PaiVectorStoreIndex(
+        vector_store_config, embed_model=embed_model
+    )
+    return vector_store_index
+
+
 @pytest.mark.skipif(os.getenv("es_host") is None, reason="no host")
-def test_insert_nodes():
+def test_insert_nodes(setup_vector_store_index):
+    vector_store_index = setup_vector_store_index
     # 插入三个节点
     vector_store_index.insert_nodes(mock_nodes)
     vector_count = asyncio.run(
@@ -94,7 +105,8 @@ def test_insert_nodes():
 
 # 测试删除节点
 @pytest.mark.skipif(os.getenv("es_host") is None, reason="no host")
-def test_delete_nodes():
+def test_delete_nodes(setup_vector_store_index):
+    vector_store_index = setup_vector_store_index
     # # 插入三个节点
     # vector_store_index.insert_nodes(mock_nodes)
     # 删除一个节点
