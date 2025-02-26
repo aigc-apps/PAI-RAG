@@ -445,7 +445,7 @@ class RagApplication:
         new_question = new_query_bundle.query_str
         logger.info(f"Transformed question '{new_question}'.")
         if new_question != question:
-            new_question = ",".join([question, new_question])
+            new_question = " ".join([question, new_question])
         logger.info(f"Querying with question '{new_question}'.")
 
         query_bundle = QueryBundle(new_question)
@@ -553,9 +553,6 @@ class RagApplication:
             # Condense question
             new_question = new_query_bundle.query_str
             logger.info(f"Transformed question '{new_question}'.")
-            if new_question != question:
-                new_question = ",".join([question, new_question])
-            logger.info(f"Querying with question '{new_question}'.")
 
             if not passed_guardrail:
                 # 多轮对话，用新查询检查
@@ -570,10 +567,6 @@ class RagApplication:
                             session_id, guardrail_result.advice
                         )
                 passed_guardrail = True
-
-            logger.info(f"Querying with question '{new_question}'.")
-            if new_question != question:
-                messages[-1].content = ",".join([question, new_question])
 
             query_bundle = PaiQueryBundle(
                 query_str=new_question,
@@ -593,6 +586,8 @@ class RagApplication:
                 chat_request.search_web = False
 
             if chat_request.search_web:
+                logger.info(f"Querying with question '{query_bundle.query_str}'.")
+
                 search_engine = resolve_searcher(self.config)
                 if not search_engine:
                     raise ValueError(
@@ -616,6 +611,11 @@ class RagApplication:
                         response=response,
                         return_reference=chat_request.return_reference,
                     )
+
+            if new_question != question:
+                query_bundle.query_str = " ".join([question, new_question])
+
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
             session_config = self.config.model_copy()
             index_entry = index_manager.get_index_by_name(chat_request.index_name)
@@ -712,9 +712,6 @@ class RagApplication:
         # Condense question
         new_question = new_query_bundle.query_str
         logger.info(f"Transformed question '{new_question}'.")
-        if new_question != question:
-            new_question = ",".join([question, new_question])
-        logger.info(f"Querying with question '{new_question}'.")
 
         guardrail = resolve_llm_guardrail(self.config)
         # 多轮对话，用新查询检查
@@ -759,6 +756,11 @@ class RagApplication:
             chat_messages_str=new_query_bundle.chat_messages_str,
         )
         if chat_type == RagChatType.RAG:
+            if new_question != question:
+                query_bundle.query_str = " ".join([question, new_question])
+
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
+
             session_config = self.config.model_copy()
             index_entry = index_manager.get_index_by_name(query.index_name)
             session_config.embedding = index_entry.embedding_config
@@ -771,6 +773,8 @@ class RagApplication:
                 prompt_template_str=query.custom_prompt_template,
             )
         elif chat_type == RagChatType.WEB:
+            logger.info(f"Querying with question '{new_question}'.")
+
             search_engine = resolve_searcher(self.config)
             if not search_engine:
                 raise ValueError(
