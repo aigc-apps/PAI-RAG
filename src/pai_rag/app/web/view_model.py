@@ -25,13 +25,26 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pai_rag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
-    DEFAULT_QUARK_SEARCH_ENDPOINT,
     DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
+
+
+QUERY_TYPE_MAP = {
+    "LLM": "llm",
+    "Retrieval": "retrieval",
+    "Chat（Web Search）": "websearch",
+    "Chat（Knowledge Base）": "rag",
+}
+INVERTED_QUERY_TYPE_MAP = {
+    "llm": "LLM",
+    "retrieval": "Retrieval",
+    "websearch": "Chat（Web Search）",
+    "rag": "Chat（Knowledge Base）",
+}
 
 
 def recursive_dict():
@@ -93,10 +106,6 @@ class ViewModel(BaseModel):
     search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
 
-    quark_host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
-    quark_user: str = None
-    quark_secret: str = None
-
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_access_key_id: str = None
     aliyun_access_key_secret: str = None
@@ -134,7 +143,7 @@ class ViewModel(BaseModel):
     reranker_similarity_threshold: float = 0
     reranker_similarity_top_k: int = 3
 
-    query_engine_type: str = None
+    query_type: str = "Chat（Knowledge Base）"
 
     synthesizer_type: str = None
 
@@ -192,6 +201,9 @@ class ViewModel(BaseModel):
         view_model.llm_temperature = config.llm.temperature
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
+        view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
+            config.system.query_type, "Chat（Knowledge Base）"
+        )
 
         if isinstance(config.multimodal_llm, PaiEasLlmConfig):
             view_model.mllm_base_url = config.multimodal_llm.endpoint
@@ -256,10 +268,10 @@ class ViewModel(BaseModel):
             view_model.search_lang = config.search.search_lang
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, QuarkSearchConfig):
-            view_model.search_type = "夸克"
-            view_model.quark_host = config.search.host
-            view_model.quark_secret = config.search.secret
-            view_model.quark_user = config.search.user
+            view_model.search_type = "aliyun"
+            view_model.aliyun_endpoint = ""
+            view_model.aliyun_access_key_id = ""
+            view_model.aliyun_access_key_secret = ""
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, AliyunSearchConfig):
             view_model.search_type = "aliyun"
@@ -335,6 +347,8 @@ class ViewModel(BaseModel):
         config = recursive_dict()
 
         config["system"]["default_web_search"] = self.default_web_search
+
+        config["system"]["query_type"] = QUERY_TYPE_MAP.get(self.query_type, "rag")
 
         config["llm"]["source"] = SupportedLlmType.openai_compatible
         config["llm"]["base_url"] = self.llm_base_url
@@ -454,12 +468,6 @@ class ViewModel(BaseModel):
                 "BING_SEARCH_KEY"
             )
             config["search"]["search_lang"] = self.search_lang
-            config["search"]["search_count"] = self.search_count
-        elif self.search_type == "夸克":
-            config["search"]["source"] = "quark"
-            config["search"]["host"] = self.quark_host
-            config["search"]["user"] = self.quark_user
-            config["search"]["secret"] = self.quark_secret
             config["search"]["search_count"] = self.search_count
         elif self.search_type == "google":
             config["search"]["source"] = "google"
@@ -614,6 +622,9 @@ class ViewModel(BaseModel):
             "value": self.keyword_weight,
             "visible": self.retrieval_mode == "Hybrid",
         }
+        settings["query_type"] = {
+            "value": self.query_type,
+        }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
         settings["reranker_similarity_threshold"] = {
             "value": self.reranker_similarity_threshold
@@ -640,32 +651,6 @@ class ViewModel(BaseModel):
             settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
             settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": False}
-            settings["quark_user"] = {"value": self.quark_user, "visible": False}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
-            settings["serpapi_key"] = {"value": self.serpapi_key, "visible": False}
-            settings["aliyun_endpoint"] = {
-                "value": self.aliyun_endpoint,
-                "visible": False,
-            }
-            settings["aliyun_access_key_id"] = {
-                "value": self.aliyun_access_key_id,
-                "visible": False,
-            }
-            settings["aliyun_access_key_secret"] = {
-                "value": self.aliyun_access_key_secret,
-                "visible": False,
-            }
-        elif self.search_type == "夸克":
-            settings["search_api_key"] = {
-                "value": self.search_api_key,
-                "visible": False,
-            }
-            settings["search_lang"] = {"value": self.search_lang, "visible": False}
-            settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": True}
-            settings["quark_user"] = {"value": self.quark_user, "visible": True}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": True}
             settings["serpapi_key"] = {"value": self.serpapi_key, "visible": False}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
@@ -686,9 +671,6 @@ class ViewModel(BaseModel):
             }
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
             settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": False}
-            settings["quark_user"] = {"value": self.quark_user, "visible": False}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
             settings["serpapi_key"] = {"value": self.serpapi_key, "visible": True}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,
@@ -710,9 +692,6 @@ class ViewModel(BaseModel):
             }
             settings["search_lang"] = {"value": self.search_lang, "visible": False}
             settings["search_count"] = {"value": self.search_count, "visible": True}
-            settings["quark_host"] = {"value": self.quark_host, "visible": False}
-            settings["quark_user"] = {"value": self.quark_user, "visible": False}
-            settings["quark_secret"] = {"value": self.quark_secret, "visible": False}
             settings["serpapi_key"] = {"value": self.serpapi_key, "visible": False}
             settings["aliyun_endpoint"] = {
                 "value": self.aliyun_endpoint,

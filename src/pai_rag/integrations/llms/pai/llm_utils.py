@@ -18,7 +18,7 @@ from loguru import logger
 
 
 def _make_openai_compatible_base_url(base_url: str):
-    if base_url.endswith("/v1"):
+    if base_url.endswith("/v1") or "pai-eas.aliyun" not in base_url:
         return base_url
 
     return urljoin(base_url.rstrip("/") + "/", "v1")

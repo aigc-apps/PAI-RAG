@@ -67,3 +67,4 @@ jobs:
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
           SKIP_GPU_TESTS: true
+          BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}

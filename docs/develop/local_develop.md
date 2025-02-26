@@ -70,26 +70,19 @@ For local development, please refer to the following steps:
    Please replace xxx with your own DASHSCOPE API key. You can find your keys here: https://dashscope.console.aliyun.com/apiKey
 
    ```bash
-   # Support custom host (default 0.0.0.0), port (default 8001), config (default src/pai_rag/config/settings.yaml), skip-download-models (default False)
-   # Download [bge-m3, easyocr] by default, you can skip it by setting --skip-download-models.
-   # you can use tool "load_model" to download other models including [bge-m3, easyocr, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
-   pai_rag serve [--host HOST] [--port PORT] [--config CONFIG_FILE] [--skip-download-models]
+   # Support port (default 8680), worker_num (default 1)
+   # Download [bge-m3, pdf-extract] by default, you can skip it by setting --skip-download-models.
+   # you can use tool "load_model" to download other models including [bge-m3, pdf-extract, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
+   pai_rag serve [-w worker_num] [-p PORT]
    ```
 
    ```bash
-   pai_rag serve
+      ./scripts/start.sh
    ```
 
-5. Run RAG WebUI
+   You can open http://localhost:8680/ to configure the RAG service and upload local data.
 
-   ```bash
-   # Supports custom host (default 0.0.0.0), port (default 8002), config (default localhost:8001)
-   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
-   ```
-
-   You can also open http://localhost:8002/ to configure the RAG service and upload local data.
-
-6. [Optional] Local load_data tool
+5. [Optional] Local load_data tool
 
    Apart from upload files from web ui, you can load data into knowledge base using `load_data` script
 
