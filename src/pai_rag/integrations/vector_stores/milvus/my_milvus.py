@@ -6,6 +6,7 @@ An index that is built within Milvus.
 
 from loguru import logger
 from typing import Any, Dict, List, Optional, Union
+from copy import deepcopy
 
 import pymilvus  # noqa
 from llama_index.core.bridge.pydantic import Field, PrivateAttr
@@ -20,6 +21,8 @@ from llama_index.vector_stores.milvus.utils import (
 )
 from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
+    FilterOperator,
+    MetadataFilter,
     MetadataFilters,
     VectorStoreQuery,
     VectorStoreQueryMode,
@@ -31,7 +34,13 @@ from llama_index.core.vector_stores.utils import (
     metadata_dict_to_node,
     node_to_metadata_dict,
 )
-from pymilvus import Collection, MilvusClient, DataType, AnnSearchRequest
+from pymilvus import (
+    Collection,
+    MilvusClient,
+    AsyncMilvusClient,
+    DataType,
+    AnnSearchRequest,
+)
 from pai_rag.utils.score_utils import normalize_cosine_similarity_score
 
 DEFAULT_BATCH_SIZE = 100
@@ -180,6 +189,7 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
     hybrid_ranker_params: dict = {}
 
     _milvusclient: MilvusClient = PrivateAttr()
+    _async_milvusclient: AsyncMilvusClient = PrivateAttr()
     _collection: Any = PrivateAttr()
 
     def __init__(
@@ -239,6 +249,11 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
             token=token,
             **kwargs,  # pass additional arguments such as server_pem_path
         )
+        self._async_milvusclient = AsyncMilvusClient(
+            uri=uri,
+            token=token,
+            **kwargs,  # pass additional arguments such as server_pem_path
+        )
         # Delete previous collection if overwriting
         if overwrite and collection_name in self.client.list_collections():
             self._milvusclient.drop_collection(collection_name)
@@ -287,6 +302,11 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
     def client(self) -> Any:
         """Get client."""
         return self._milvusclient
+
+    @property
+    def aclient(self) -> AsyncMilvusClient:
+        """Get async client."""
+        return self._async_milvusclient
 
     def add(self, nodes: List[BaseNode], **add_kwargs: Any) -> List[str]:
         """Add the embeddings and their nodes into Milvus.
@@ -362,6 +382,69 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
             ids = [entry["id"] for entry in entries]
             self._milvusclient.delete(collection_name=self.collection_name, pks=ids)
             logger.debug(f"Successfully deleted embedding with doc_id: {doc_ids}")
+
+    def delete_nodes(
+        self,
+        node_ids: Optional[List[str]] = None,
+        filters: Optional[MetadataFilters] = None,
+        **delete_kwargs: Any,
+    ) -> None:
+        """Deletes nodes.
+
+        Args:
+            node_ids (Optional[List[str]], optional): IDs of nodes to delete. Defaults to None.
+            filters (Optional[MetadataFilters], optional): Metadata filters. Defaults to None.
+        """
+        filters_cpy = deepcopy(filters) or MetadataFilters(filters=[])
+
+        if node_ids:
+            filters_cpy.filters.append(
+                MetadataFilter(key="id", value=node_ids, operator=FilterOperator.IN)
+            )
+        else:
+            logger.warning("No node_ids or filters provided, skipping delete.")
+            return
+
+        if filters_cpy is not None:
+            filter = _to_milvus_filter(filters_cpy)
+        else:
+            filter = None
+
+        self.client.delete(
+            collection_name=self.collection_name,
+            filter=filter,
+            **delete_kwargs,
+        )
+        logger.debug(f"Successfully deleted node_ids: {node_ids}")
+
+    async def adelete_nodes(
+        self,
+        node_ids: Optional[List[str]] = None,
+        filters: Optional[MetadataFilters] = None,
+        **delete_kwargs: Any,
+    ) -> None:
+        """Asynchronous version of the delete_nodes method."""
+        filters_cpy = deepcopy(filters) or MetadataFilters(filters=[])
+
+        if node_ids:
+            filters_cpy.filters.append(
+                MetadataFilter(key="id", value=node_ids, operator=FilterOperator.IN)
+            )
+        else:
+            logger.warning("No node_ids or filters provided, skipping delete.")
+            return
+
+        if filters_cpy is not None:
+            filter = _to_milvus_filter(filters_cpy)
+        else:
+            filter = None
+
+        await self.aclient.delete(
+            collection_name=self.collection_name,
+            filter=filter,
+            **delete_kwargs,
+        )
+        logger.debug(f"Successfully deleted node_ids: {node_ids}")
 
     def query(self, query: VectorStoreQuery, **kwargs: Any) -> VectorStoreQueryResult:
         """Query index for top k most similar nodes.
