@@ -2,6 +2,16 @@
 
 RAG评估工具是一种用于测试和评估基于检索的文本生成系统的方法或框架，评估的内容包括检索的准确性、生成内容的质量和相关性等，评估指标包括精确度、召回率、一致性和合理性等。它可以帮助开发人员更好地了解和优化 RAG 应用，使其更适用于实际应用。相对于人工评估，RAG 评估工具更加客观、准确和高效，并且可以通过自动化的方式进行大规模的评估，从而让应用更快地进行迭代和优化。
 
+## 安装
+
+```bash
+  pip install poetry
+  poetry install
+  pip install https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/pai-rag/pai_llm_evals-0.0.1-py3-none-any.whl --trusted-host yum.tbsite.net  -i http://yum.tbsite.net/pypi/simple/
+
+  poetry install
+```
+
 ## 评估方式
 
 在yaml文件里配置评估实验，并运行以下命令进行评估
