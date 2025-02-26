@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import Coroutine, List, Any, Sequence
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.base.base_retriever import BaseRetriever
@@ -26,6 +27,10 @@ from pai_rag.integrations.index.pai.utils.vector_store_utils import (
 from pai_rag.integrations.index.pai.vector_store_config import (
     VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH,
     VectorIndexRetrievalType,
+)
+from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
+    MyElasticsearchStore,
 )
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
@@ -234,26 +239,63 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     ) -> IndexDict:
         return self._vector_index.build_index_from_nodes(nodes, **insert_kwargs)
 
-    def delete_ref_doc(
-        self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
-    ) -> None:
-        return self._vector_index.delete_ref_doc(
-            ref_doc_id, delete_from_docstore, **delete_kwargs
-        )
-
     def delete_nodes(
         self,
         node_ids: List[str],
         delete_from_docstore: bool = False,
         **delete_kwargs: Any,
     ) -> None:
-        return self._vector_index.delete_nodes(
-            node_ids, delete_from_docstore, **delete_kwargs
-        )
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
+            return self._vector_index.delete_nodes(
+                node_ids, delete_from_docstore, **delete_kwargs
+            )
+        else:
+            logger.warning("Currently delete_nodes supports for Milvus vector store")
+            raise NotImplementedError
 
-    def adelete_ref_doc(
+    async def adelete_nodes(
+        self,
+        node_ids: List[str],
+        delete_from_docstore: bool = False,
+        **delete_kwargs: Any,
+    ) -> Coroutine[Any, Any, None]:
+        if isinstance(self._vector_store, MyMilvusVectorStore):
+            await self._vector_store.adelete_nodes(
+                node_ids, delete_from_docstore, **delete_kwargs
+            )
+            # delete from docstore only if needed
+            if (
+                not self._vector_store.stores_text or self._store_nodes_override
+            ) and delete_from_docstore:
+                for node_id in node_ids:
+                    self._docstore.delete_document(node_id, raise_error=False)
+                return
+        else:
+            logger.warning("Currently delete_nodes supports for Milvus vector store")
+            raise NotImplementedError
+
+    def delete_ref_doc(
+        self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
+    ) -> None:
+        if isinstance(self._vector_store, MyMilvusVectorStore):
+            return self._vector_index.delete_ref_doc(
+                ref_doc_id, delete_from_docstore, **delete_kwargs
+            )
+        else:
+            logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            raise NotImplementedError
+
+    async def adelete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> Coroutine[Any, Any, None]:
-        return self._vector_index.adelete_ref_doc(
-            ref_doc_id, delete_from_docstore, **delete_kwargs
-        )
+        if isinstance(self._vector_store, MyMilvusVectorStore):
+            return await asyncio.to_thread(
+                self._vector_index.delete_ref_doc(
+                    ref_doc_id, delete_from_docstore, **delete_kwargs
+                )
+            )
+        else:
+            logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            raise NotImplementedError
