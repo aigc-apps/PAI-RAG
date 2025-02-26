@@ -29,6 +29,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
+from pai_rag.utils.prompt_template import CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
     PaiIntentRouter,
@@ -174,6 +175,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     llm = resolve_llm(config)
+    llm.max_tokens = 1024
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
@@ -186,8 +188,15 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
 
 
 def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
-    llm = resolve_llm(config)
-    condense_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    if not config.query_rewrite.enabled:
+        return None
+
+    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
+    condense_query_transform = resolve(
+        OpenAICompatibleQueryTransform,
+        llm=llm,
+        condense_question_prompt=CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
+    )
     return condense_query_transform
 
 

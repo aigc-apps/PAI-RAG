@@ -24,6 +24,11 @@ from starlette.concurrency import run_in_threadpool
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     COMMON_FILE_PATH_FODER_NAME,
 )
+from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
+    DEFAULT_DESCRIPTION_FOLDER_PATH,
+    DEFAULT_DB_HISTORY_PATH,
+    DEFAULT_DB_HISTORY_NAME,
+)
 
 
 def get_ts():
@@ -182,10 +187,12 @@ class RagLocalClient:
         self,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
+        return_reference: bool = True,
     ):
         query = RagQuery(
             messages=chat_messages,
             stream=stream,
+            return_reference=return_reference,
         )
 
         try:
@@ -381,8 +388,10 @@ class RagLocalClient:
         self,
         input_file: str,
     ):
-        persist_path = "./localdata/data_analysis"
+        if not input_file:
+            return None
 
+        persist_path = "./localdata/data_analysis"
         os.makedirs(name=persist_path, exist_ok=True)
 
         # 清空目录中的文件
@@ -415,6 +424,82 @@ class RagLocalClient:
         return {
             "destination_path": destination_path,
             "data_preview": df.head(10).to_json(orient="records", lines=False),
+        }
+
+    def add_db_history(
+        self,
+        input_file: str,
+        db_name: str,
+    ):
+        if not input_file:
+            return None
+
+        persist_path = DEFAULT_DB_HISTORY_PATH
+        os.makedirs(name=persist_path, exist_ok=True)
+
+        # 指定持久化存储位置
+        file_name = os.path.basename(input_file)  # 获取文件名
+        destination_path = os.path.join(persist_path, f"{db_name}_{file_name}")
+        # 写入文件
+        try:
+            # shutil.copy(file.filename, destination_path)
+            # with open(destination_path, "wb") as f:
+            #     shutil.copyfileobj(input_file, f)
+            shutil.copy(input_file, destination_path)
+            logger.info("History file saved successfully")
+
+        except Exception as e:
+            raise RagApiError(code=500, msg=str(e))
+
+        # 重命名
+        try:
+            unified_destination_path = os.path.join(
+                persist_path, f"{db_name}_{DEFAULT_DB_HISTORY_NAME}"
+            )
+            os.rename(destination_path, unified_destination_path)
+            logger.info("History file renamed successfully")
+        except Exception as e:
+            raise RagApiError(code=500, msg=str(e))
+
+        return {
+            "destination_path": unified_destination_path,
+        }
+
+    def add_db_description(
+        self,
+        files: List[str],
+        db_name: str,
+    ):
+        if not files:
+            return {"message": "No upload files"}
+
+        persist_path = DEFAULT_DESCRIPTION_FOLDER_PATH
+        file_destination_folder = os.path.join(
+            persist_path, db_name, "database_description"
+        )
+        os.makedirs(name=file_destination_folder, exist_ok=True)
+
+        # 指定持久化存储位置
+        for file in files:
+            file_name = os.path.basename(file)  # 获取文件名
+            file_destination_path = os.path.join(
+                persist_path, db_name, "database_description", file_name
+            )
+            # 写入文件
+            try:
+                # shutil.copy(file.filename, destination_path)
+                # with open(file_destination_path, "wb") as f:
+                #     shutil.copyfileobj(file, f)
+                shutil.copy(file, file_destination_path)
+                logger.info(
+                    f"Description file saved successfully: {file_destination_path}"
+                )
+
+            except Exception as e:
+                raise RagApiError(code=500, msg=str(e))
+
+        return {
+            "destination_path": persist_path,
         }
 
     async def load_db_info(

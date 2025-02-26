@@ -150,7 +150,7 @@ async def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        print(chatbot)
+        # print(chatbot)
         response_gen = rag_client.query_data_analysis(chatbot[:-1], stream=True)
         is_thinking = False
         async for resp in response_gen:
@@ -187,7 +187,7 @@ async def respond(input_elements: List[Any]):
 
 
 def clear_history(chatbot):
-    rag_client.clear_history()
+    # rag_client.clear_history()
     chatbot = []
     return chatbot
 
@@ -503,18 +503,18 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
         with gr.Column(scale=6):
             chatbot = gr.Chatbot(height=600, elem_id="chatbot", type="messages")
-            with gr.Row():
-                include_history = gr.Checkbox(
-                    label="Chat history",
-                    info="Query with chat history.",
-                    elem_id="include_history",
-                    value=False,
-                    scale=1,
-                )
-                question = gr.Textbox(
-                    label="Enter your question.", elem_id="question", scale=9
-                )
-            # question = gr.Textbox(label="Enter your question.", elem_id="question")
+            # with gr.Row():
+            #     include_history = gr.Checkbox(
+            #         label="Chat history",
+            #         info="Query with chat history.",
+            #         elem_id="include_history",
+            #         value=False,
+            #         scale=1,
+            #     )
+            #     question = gr.Textbox(
+            #         label="Enter your question.", elem_id="question", scale=9
+            #     )
+            question = gr.Textbox(label="Enter your question.", elem_id="question")
             with gr.Row():
                 submitBtn = gr.Button("Submit", variant="primary")
                 clearBtn = gr.Button("Clear History", variant="secondary")
@@ -533,7 +533,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             db_nl2sql_prompt,
             synthesizer_prompt,
             question,
-            include_history,
+            # include_history,
             chatbot,
         }
 
