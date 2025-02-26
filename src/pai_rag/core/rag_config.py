@@ -165,6 +165,6 @@ class RagConfig(BaseModel):
     # synthesizer
     synthesizer: SynthesizerConfig
 
-    query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
+    query_transform: QueryRewriteConfig = QueryRewriteConfig()
 
     guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()

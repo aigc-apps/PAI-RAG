@@ -169,6 +169,55 @@ def create_chat_tab() -> Dict[str, Any]:
             )
 
             with gr.Column(visible=True) as vs_col:
+                vec_model_argument = gr.Accordion("Add query transform", open=False)
+                with vec_model_argument:
+                    enable_query_transform = gr.Checkbox(
+                        label="enable query transform",
+                        elem_id="enable_query_transform",
+                        container=True,
+                    )
+                    with gr.Row(
+                        visible=False, elem_id="enable_query_transform_col"
+                    ) as enable_query_transform_col:
+                        query_transform_template = gr.Textbox(
+                            label="Query Transform Template",
+                            value="",
+                            elem_id="query_transform_template",
+                            lines=10,
+                            interactive=True,
+                        )
+                        qt_llm_base_url = gr.Textbox(
+                            label="Query Transform LLM Base URL",
+                            elem_id="qt_llm_base_url",
+                            interactive=True,
+                            placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
+                        )
+                        qt_llm_api_key = gr.Textbox(
+                            label="Query Transform LLM API Key",
+                            elem_id="qt_llm_api_key",
+                            type="password",
+                            interactive=True,
+                        )
+                        qt_llm_model_name = gr.Textbox(
+                            label="Query Transform LLM Model Name",
+                            elem_id="qt_llm_model_name",
+                            interactive=True,
+                            placeholder="Model Name, e.g. qwen-max",
+                        )
+
+                    def change_query_transform_parameter(enable_query_transform):
+                        if enable_query_transform:
+                            return gr.update(visible=True)
+                        else:
+                            return gr.update(visible=False)
+
+                    enable_query_transform.change(
+                        fn=change_query_transform_parameter,
+                        inputs=enable_query_transform,
+                        outputs=enable_query_transform_col,
+                    )
+
+            with gr.Column(visible=True) as vs_col:
                 vec_model_argument = gr.Accordion(
                     "Parameters of Vector Retrieval", open=False
                 )
@@ -517,6 +566,11 @@ def create_chat_tab() -> Dict[str, Any]:
         chat_args = (
             {
                 default_web_search,
+                enable_query_transform,
+                qt_llm_base_url,
+                qt_llm_api_key,
+                qt_llm_model_name,
+                query_transform_template,
                 system_role_template,
                 custom_prompt_template,
                 question,
@@ -573,6 +627,11 @@ def create_chat_tab() -> Dict[str, Any]:
             similarity_threshold.elem_id: similarity_threshold,
             reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
             reranker_similarity_top_k.elem_id: reranker_similarity_top_k,
+            enable_query_transform.elem_id: enable_query_transform,
+            query_transform_template.elem_id: query_transform_template,
+            qt_llm_base_url.elem_id: qt_llm_base_url,
+            qt_llm_api_key.elem_id: qt_llm_api_key,
+            qt_llm_model_name.elem_id: qt_llm_model_name,
             system_role_template.elem_id: system_role_template,
             custom_prompt_template.elem_id: custom_prompt_template,
             search_lang.elem_id: search_lang,

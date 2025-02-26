@@ -172,6 +172,7 @@ class OpenAICompatibleQueryTransform:
     def __init__(
         self,
         llm: Optional[LLMType] = None,
+        query_transform_prompt: Optional[BasePromptTemplate] = None,
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
@@ -180,9 +181,12 @@ class OpenAICompatibleQueryTransform:
         self._llm = (
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
+        self._query_transform_prompt = (
+            query_transform_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
+        )
         default_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),

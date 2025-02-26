@@ -192,11 +192,24 @@ def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
-    if not config.query_rewrite.enabled:
+    if not config.query_transform.enable_query_transform:
         return None
 
-    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
-    openai_query_transform = resolve(OpenAICompatibleQueryTransform, llm=llm)
+    if (
+        config.query_transform.llm.base_url
+        and config.query_transform.llm.api_key
+        and config.query_transform.llm.model
+        and resolve(cls=PaiLlm, llm_config=config.query_transform.llm)
+    ):
+        llm = resolve(cls=PaiLlm, llm_config=config.query_transform.llm)
+    else:
+        llm = resolve(cls=PaiLlm, llm_config=config.llm)
+
+    openai_query_transform = resolve(
+        OpenAICompatibleQueryTransform,
+        llm=llm,
+        query_transform_prompt=config.query_transform.query_transform_template,
+    )
     return openai_query_transform
 
 

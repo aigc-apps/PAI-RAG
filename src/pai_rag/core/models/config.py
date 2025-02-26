@@ -6,6 +6,7 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
+from pai_rag.utils.prompt_template import CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
 
 
 DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
@@ -13,7 +14,8 @@ DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
 class QueryRewriteConfig(BaseModel):
-    enabled: bool = True
+    enable_query_transform: bool = True
+    query_transform_template: str = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
     llm: OpenAICompatibleLlmConfig | None = None
 
 
