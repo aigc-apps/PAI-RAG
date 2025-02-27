@@ -18,7 +18,6 @@ do
    esac
 done
 
-unset port
 workers="${workers:-1}"
 port="${port:-8680}"
 
