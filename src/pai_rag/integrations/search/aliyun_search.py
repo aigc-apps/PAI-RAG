@@ -16,7 +16,7 @@ from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDP
 import time
 
 DEFAULT_LANG = "zh-CN"
-DEFAULT_TIMERANGE = "NoLimit"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
+DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 
 
 class AliyunSearchTool(BaseQueryEngine):
