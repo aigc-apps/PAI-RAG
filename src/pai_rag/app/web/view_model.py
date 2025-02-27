@@ -146,6 +146,7 @@ class ViewModel(BaseModel):
     query_type: str = "Chat（Knowledge Base）"
 
     enable_query_transform: bool = True
+    qt_llm_source: str = None
     qt_llm_base_url: str = None
     qt_llm_api_key: str = None
     qt_llm_model_name: str = None
@@ -258,15 +259,14 @@ class ViewModel(BaseModel):
                 config.postprocessor.similarity_threshold
             )
 
-        view_model.enable_query_transform = (
-            config.query_transform.enable_query_transform
-        )
+        view_model.enable_query_transform = config.query_rewrite.enabled
         view_model.query_transform_template = (
-            config.query_transform.query_transform_template
+            config.query_rewrite.rewrite_prompt_template
         )
-        view_model.qt_llm_base_url = config.query_transform.llm.base_url
-        view_model.qt_llm_api_key = config.query_transform.llm.api_key
-        view_model.qt_llm_model_name = config.query_transform.llm.model
+        view_model.qt_llm_source = config.query_rewrite.llm.source
+        view_model.qt_llm_base_url = config.query_rewrite.llm.base_url
+        view_model.qt_llm_api_key = config.query_rewrite.llm.api_key
+        view_model.qt_llm_model_name = config.query_rewrite.llm.model
 
         view_model.system_role_template = config.synthesizer.system_role_template
         view_model.custom_prompt_template = config.synthesizer.custom_prompt_template
@@ -473,16 +473,14 @@ class ViewModel(BaseModel):
         config["synthesizer"]["custom_prompt_template"] = self.custom_prompt_template
         config["synthesizer"]["system_role_template"] = self.system_role_template
 
-        config["query_transform"][
-            "query_transform_template"
+        config["query_rewrite"][
+            "rewrite_prompt_template"
         ] = self.query_transform_template
-        config["query_transform"][
-            "enable_query_transform"
-        ] = self.enable_query_transform
-        config["query_transform"]["llm"]["source"] = SupportedLlmType.openai_compatible
-        config["query_transform"]["llm"]["base_url"] = self.qt_llm_base_url
-        config["query_transform"]["llm"]["api_key"] = self.qt_llm_api_key
-        config["query_transform"]["llm"]["model"] = self.qt_llm_model_name
+        config["query_rewrite"]["enabled"] = self.enable_query_transform
+        config["query_rewrite"]["llm"]["source"] = SupportedLlmType.openai_compatible
+        config["query_rewrite"]["llm"]["base_url"] = self.qt_llm_base_url
+        config["query_rewrite"]["llm"]["api_key"] = self.qt_llm_api_key
+        config["query_rewrite"]["llm"]["model"] = self.qt_llm_model_name
         # config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         # config["synthesizer"][
         #     "citation_multimodal_qa_template"
