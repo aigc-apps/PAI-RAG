@@ -26,7 +26,6 @@ os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 
 app = FastAPI(lifespan=lifespan)
 
-
 ModelScopeDownloader().load_rag_models()
 
 configure_app(app)
