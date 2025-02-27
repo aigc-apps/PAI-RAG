@@ -172,6 +172,7 @@ class OpenAICompatibleQueryTransform:
     def __init__(
         self,
         llm: Optional[LLMType] = None,
+        query_transform_prompt: Optional[BasePromptTemplate] = None,
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
@@ -180,9 +181,12 @@ class OpenAICompatibleQueryTransform:
         self._llm = (
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
+        self._query_transform_prompt = (
+            query_transform_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
+        )
         default_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
@@ -200,7 +204,7 @@ class OpenAICompatibleQueryTransform:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         current_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
@@ -223,7 +227,7 @@ class OpenAICompatibleQueryTransform:
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
-        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+        if ("query" not in query_json) or (len(query_json["query"]) == 0):
             return PaiQueryBundle(
                 query_str=chat_messages[-1].content,
                 need_web_search=False,
@@ -235,7 +239,7 @@ class OpenAICompatibleQueryTransform:
             )
         else:
             return PaiQueryBundle(
-                query_str=",".join(query_json["queries"]),
+                query_str=query_json["query"],
                 need_web_search=True,
                 custom_embedding_strs=[
                     chat_messages[-1].content,
@@ -253,7 +257,7 @@ class OpenAICompatibleQueryTransform:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         current_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
@@ -276,7 +280,8 @@ class OpenAICompatibleQueryTransform:
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
-        if ("queries" not in query_json) or (len(query_json["queries"]) == 0):
+
+        if ("query" not in query_json) or (len(query_json["query"]) == 0):
             return PaiQueryBundle(
                 query_str=chat_messages[-1].content,
                 need_web_search=False,
@@ -284,8 +289,10 @@ class OpenAICompatibleQueryTransform:
                 chat_messages_str=chat_history_str,
             )
         else:
+            if chat_messages[-1].content != query_json["query"]:
+                chat_history_str += f' {query_json["query"]}'
             return PaiQueryBundle(
-                query_str=",".join(query_json["queries"]),
+                query_str=query_json["query"],
                 need_web_search=True,
                 custom_embedding_strs=[transformed_query_str],
                 chat_messages_str=chat_history_str,
