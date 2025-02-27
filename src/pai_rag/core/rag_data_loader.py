@@ -1,10 +1,12 @@
 from typing import Any
 from llama_index.core.schema import TransformComponent
 from llama_index.core.indices import VectorStoreIndex
-from llama_index.core.ingestion import IngestionPipeline
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from loguru import logger
+from pai_rag.knowledgebase.save_parse_files import save_parse_files
+from pai_rag.knowledgebase.save_chunk_nodes import save_chunk_nodes
+from pai_rag.knowledgebase.track_jobs import track_jobs
 
 
 class RagDataLoader:
@@ -32,13 +34,31 @@ class RagDataLoader:
         oss_path: str = None,
         filter_pattern: str = None,
         enable_raptor: bool = False,
+        index_name: str = None,
+        task_id: str = None,
     ):
         """Load data from a file or directory."""
+        # parse input files into documents
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="parse",
+            status="processing",
+        )
         documents = self._data_reader.load_data(
             file_path_or_directory=file_path_or_directory,
             filter_pattern=filter_pattern,
             oss_path=oss_path,
             from_oss=from_oss,
+        )
+        save_parse_files(index_name, documents)
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="parse",
+            status="completed",
         )
         if from_oss:
             logger.info(f"Loaded {len(documents)} documents from {oss_path}")
@@ -47,25 +67,53 @@ class RagDataLoader:
                 f"Loaded {len(documents)} documents from {file_path_or_directory}"
             )
 
-        transformations = [
-            self._node_parser,
-            self._embed_model,
-        ]
-
-        if self._multimodal_embed_model is not None:
-            transformations.append(self._multimodal_embed_model)
-
-        if enable_raptor:
-            assert self._raptor_processor is not None, "Raptor processor is not set."
-            transformations.append(self._raptor_processor)
-
-        ingestion_pipeline = IngestionPipeline(transformations=transformations)
-
-        nodes = ingestion_pipeline.run(documents=documents, num_workers=None)
-        logger.info(
-            f"[DataLoader] parsed {len(documents)} documents into {len(nodes)} nodes."
+        # split documents into nodes
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="split",
+            status="processing",
+        )
+        splitted_nodes = self._node_parser(documents)
+        save_chunk_nodes(index_name, splitted_nodes, "split")
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="split",
+            status="completed",
         )
 
-        self._vector_index.insert_nodes(nodes)
-        logger.info(f"[DataLoader] Inserted {len(nodes)} nodes.")
+        # embed nodes
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="embed",
+            status="processing",
+        )
+        embedded_nodes = self._embed_model(splitted_nodes)
+        if self._multimodal_embed_model is not None:
+            embedded_nodes = self._multimodal_embed_model(embedded_nodes)
+        save_chunk_nodes(index_name, embedded_nodes, "embed")
+        track_jobs(
+            task_id,
+            index_name,
+            file_path_or_directory,
+            stage="embed",
+            status="completed",
+        )
+
+        # if enable_raptor:
+        #     assert self._raptor_processor is not None, "Raptor processor is not set."
+        #     raptor_node = self._raptor_processor(embedded_nodes)
+        #     save_chunk_nodes(index_name, embedded_nodes, "raptor")
+
+        logger.info(
+            f"[DataLoader] parsed {len(documents)} documents into {len(embedded_nodes)} nodes."
+        )
+
+        self._vector_index.insert_nodes(embedded_nodes)
+        logger.info(f"[DataLoader] Inserted {len(embedded_nodes)} nodes.")
         logger.info("[DataLoader] Ingestion Completed!")

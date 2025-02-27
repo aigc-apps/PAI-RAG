@@ -377,6 +377,7 @@ class RagApplication:
         oss_path=None,
         enable_raptor=False,
         enable_multimodal=False,
+        task_id=None,
     ):
         logger.info(
             f"""Loading data:
@@ -399,6 +400,8 @@ class RagApplication:
             from_oss=from_oss,
             oss_path=oss_path,
             enable_raptor=enable_raptor,
+            index_name=index_name,
+            task_id=task_id,
         )
 
     async def aretrieve(

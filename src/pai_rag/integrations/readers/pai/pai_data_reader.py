@@ -18,28 +18,10 @@ from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
 from functools import partial
+from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 from loguru import logger
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
-
-ACCEPTABLE_DOC_TYPES = set(
-    [
-        ".html",
-        ".htm",
-        ".txt",
-        ".docx",
-        ".pdf",
-        ".pptx",
-        ".md",
-        ".xls",
-        ".jsonl",
-        ".csv",
-        ".xlsx",
-        ".jpg",
-        ".jpeg",
-        ".png",
-    ]
-)
 
 
 class BaseDataReaderConfig(BaseModel):

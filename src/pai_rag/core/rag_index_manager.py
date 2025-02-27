@@ -9,6 +9,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 )
 from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
 from loguru import logger
+from pai_rag.knowledgebase.utils import create_new_index_dir, del_index_dir
 
 DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
 DEFAULT_INDEX_NAME = "default_index"
@@ -69,6 +70,7 @@ class RagIndexManager:
                 vector_store_config=rag_config.index.vector_store,
                 embedding_config=rag_config.embedding,
             )
+            create_new_index_dir(DEFAULT_INDEX_NAME)
 
     @classmethod
     def from_file(cls, index_file: str):
@@ -118,6 +120,7 @@ class RagIndexManager:
             self._index_map.indexes[index_entry.index_name] = index_entry
             new_state = self.save_index_map()
             self._state.update_state(new_state)
+            create_new_index_dir(index_entry.index_name)
             logger.info(f"Index '{index_entry.index_name}' created successfully.")
 
     def update_index(self, index_entry: RagIndexEntry):
@@ -138,6 +141,7 @@ class RagIndexManager:
                 index_name in self._index_map.indexes
             ), f"Index name '{index_name}' not exists."
             del self._index_map.indexes[index_name]
+            del_index_dir(index_name)
             new_state = self.save_index_map()
             self._state.update_state(new_state)
             logger.info(f"Index '{index_name}' removed.")

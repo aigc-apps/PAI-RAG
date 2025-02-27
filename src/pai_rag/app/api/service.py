@@ -8,6 +8,8 @@ from pai_rag.app.api.middleware import init_middleware
 from pai_rag.app.api.error_handler import config_app_errors
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.core.rag_environment import service_environment
+import subprocess
+from pai_rag.knowledgebase.constants import DEFAULT_KNOWLEDGE_PATH
 
 
 def init_router(app: FastAPI):
@@ -23,6 +25,10 @@ def init_router(app: FastAPI):
 
 
 def configure_app(app: FastAPI):
+    subprocess.Popen(
+        f"rm -rf /tmp/filebrowser.db && /bin/filebrowser -b /filebrowser --address 0.0.0.0 -p {8012} -r {DEFAULT_KNOWLEDGE_PATH} --noauth -d /tmp/filebrowser.db",
+        shell=True,
+    )
     rag_service.initialize()
     init_middleware(app)
     init_router(app)

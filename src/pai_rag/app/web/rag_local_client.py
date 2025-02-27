@@ -377,6 +377,63 @@ class RagLocalClient:
         await upload_job
         logger.info(f"[Upload] Finished task_id: {task_id}")
 
+    def handle_task_result(self, task, task_id):
+        try:
+            # 尝试获取任务的结果，以捕捉异常
+            while True:
+                status, _ = rag_service.get_task_status(task_id=task_id)
+                if status in ["completed", "failed"]:
+                    break
+        except Exception as e:
+            logger.error(f"Upload job {task_id} failed: {e}")
+
+    async def async_add_knowledge_file(
+        self,
+        oss_path: str = None,
+        input_files: str = None,
+        enable_raptor: bool = False,
+        enable_multimodal: bool = False,
+        index_name: str = None,
+    ):
+        task_id = uuid.uuid4().hex
+        logger.info(
+            f"[Upload] Submitting upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
+        )
+
+        if oss_path:
+            upload_job = asyncio.create_task(
+                run_in_threadpool(
+                    rag_service.add_knowledge,
+                    task_id=task_id,
+                    filter_pattern=None,
+                    oss_path=oss_path,
+                    from_oss=True,
+                    index_name=index_name,
+                    enable_raptor=enable_raptor,
+                    enable_multimodal=enable_multimodal,
+                )
+            )
+        else:
+            upload_job = asyncio.create_task(
+                run_in_threadpool(
+                    rag_service.add_knowledge,
+                    task_id=task_id,
+                    input_files=input_files,
+                    filter_pattern=None,
+                    index_name=index_name,
+                    oss_path=None,
+                    enable_raptor=enable_raptor,
+                    enable_multimodal=enable_multimodal,
+                )
+            )
+        # 为任务添加回调，以处理可能的异常
+        upload_job.add_done_callback(lambda t: self.handle_task_result(t, task_id))
+        logger.info(
+            f"[Upload] Submitted upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}, input_files: {input_files}"
+        )
+
+        return
+
     def add_datasheet(
         self,
         input_file: str,

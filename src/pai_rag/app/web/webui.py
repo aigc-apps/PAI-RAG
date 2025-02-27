@@ -18,6 +18,7 @@ from pai_rag.app.web.ui_constants import (
     WELCOME_MESSAGE,
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
+from pai_rag.knowledgebase.request_utils import postprocess_middleware
 
 
 def resume_ui():
@@ -82,6 +83,10 @@ def make_homepage():
         with gr.Tab("\N{bar chart} DBChat"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
+        with gr.Tab("\N{rocket} KnowledgeBase"):
+            with gr.Blocks():
+                html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
+                gr.HTML(html)
 
         index_selector_elements = [
             setting_elements["vector_index"],
@@ -119,6 +124,8 @@ def make_homepage():
 
 
 def configure_webapp(app: FastAPI) -> gr.Blocks:
+    # 添加中间件
+    app.middleware("http")(postprocess_middleware)
     home = make_homepage()
     gr.mount_gradio_app(app, home, path="/")
     return
