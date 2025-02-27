@@ -168,9 +168,11 @@ def create_chat_tab() -> Dict[str, Any]:
                 value=False,
             )
 
-            with gr.Column(visible=True) as vs_col:
-                vec_model_argument = gr.Accordion("Add query transform", open=False)
-                with vec_model_argument:
+            with gr.Column(visible=True) as qt_col:
+                query_transform_argument = gr.Accordion(
+                    "Add query transform", open=False
+                )
+                with query_transform_argument:
                     enable_query_transform = gr.Checkbox(
                         label="enable query transform",
                         elem_id="enable_query_transform",
@@ -492,6 +494,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=True),
+                        qt_col: gr.update(visible=True),
+                        query_transform_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=False),
                         search_col: gr.update(visible=False),
                         llm_col: gr.update(visible=False),
@@ -504,6 +508,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
+                        qt_col: gr.update(visible=True),
+                        query_transform_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=False),
                         search_col: gr.update(visible=False),
                         llm_col: gr.update(visible=True),
@@ -516,6 +522,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=False),
+                        qt_col: gr.update(visible=True),
+                        query_transform_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=False),
                         search_col: gr.update(visible=False),
                         llm_col: gr.update(visible=True),
@@ -528,6 +536,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
+                        qt_col: gr.update(visible=True),
+                        query_transform_argument: gr.update(open=False),
                         search_model_argument: gr.update(open=True),
                         search_col: gr.update(visible=True),
                         prompt_argument: gr.update(open=True),
@@ -544,6 +554,8 @@ def create_chat_tab() -> Dict[str, Any]:
                     prompt_argument,
                     vs_col,
                     vec_model_argument,
+                    qt_col,
+                    query_transform_argument,
                     search_model_argument,
                     search_col,
                     llm_col,

@@ -204,7 +204,7 @@ class OpenAICompatibleQueryTransform:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         current_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
@@ -257,7 +257,7 @@ class OpenAICompatibleQueryTransform:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         current_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
