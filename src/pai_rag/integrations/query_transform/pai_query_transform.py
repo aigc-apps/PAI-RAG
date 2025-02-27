@@ -172,6 +172,7 @@ class OpenAICompatibleQueryTransform:
     def __init__(
         self,
         llm: Optional[LLMType] = None,
+        query_transform_prompt: Optional[BasePromptTemplate] = None,
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
@@ -180,9 +181,12 @@ class OpenAICompatibleQueryTransform:
         self._llm = (
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
+        self._query_transform_prompt = (
+            query_transform_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
+        )
         default_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
-                CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+                self._query_transform_prompt,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
                 ),
@@ -202,16 +206,15 @@ class OpenAICompatibleQueryTransform:
         chat_messages: List[ChatMessage] = [],
     ) -> QueryBundle:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        # current_condense_question_prompt = PromptTemplate(
-        #     template="{}\n{}\n{}".format(
-        #         CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
-        #         CURRENT_TIME_PROMPT.format(
-        #             current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-        #         ),
-        #         CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-        #     )
-        # )
-        current_condense_question_prompt = self._condense_question_prompt
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                self._query_transform_prompt,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
@@ -267,16 +270,15 @@ class OpenAICompatibleQueryTransform:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        # current_condense_question_prompt = PromptTemplate(
-        #     template="{}\n{}\n{}".format(
-        #         CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
-        #         CURRENT_TIME_PROMPT.format(
-        #             current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-        #         ),
-        #         CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-        #     )
-        # )
-        current_condense_question_prompt = self._condense_question_prompt
+        current_condense_question_prompt = PromptTemplate(
+            template="{}\n{}\n{}".format(
+                self._query_transform_prompt,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                ),
+                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+            )
+        )
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
