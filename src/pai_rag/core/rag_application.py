@@ -14,7 +14,6 @@ from pai_rag.core.rag_module import (
     resolve_query_engine,
     resolve_searcher,
     resolve_openai_query_transform,
-    resolve_nl2sql_query_transform,
 )
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.query_transform.pai_query_transform import (
@@ -694,120 +693,99 @@ class RagApplication:
                 response = await llm.astream_chat(messages=query.messages)
                 return event_generator_async(response, sse_version=sse_version)
 
-        if chat_type != RagChatType.NL2SQL:
-            openai_query_transform = resolve_openai_query_transform(self.config)
-            question = query.messages[-1].content
-            if openai_query_transform is not None:
-                new_query_bundle = await openai_query_transform.arun(
-                    chat_messages=query.messages,
-                )
-            else:
-                need_web_search = chat_type == RagChatType.WEB
-                new_query_bundle = PaiQueryBundle(
-                    query_str=question,
-                    need_web_search=need_web_search,
-                    chat_messages_str=messages_to_history_str(
-                        query.messages, max_length=500
-                    ),
-                )
-            # Condense question
-            new_question = new_query_bundle.query_str
-            logger.info(f"Transformed question '{new_question}'.")
-            # else:
-            #     new_question = query.messages[-1].content
-
-            guardrail = resolve_llm_guardrail(self.config)
-            # 多轮对话，用新查询检查
-            if guardrail is not None:
-                guardrail_result = await guardrail.acheck(new_question)
-                if guardrail_result.reject:
-                    if query.stream:
-                        return event_generator_async(
-                            response=guardrail_result.advice,
-                            chat_store=chat_store,
-                            session_id=session_id,
-                            sse_version=sse_version,
-                        )
-
-                    else:
-                        return RagResponse(
-                            answer=guardrail_result.advice, session_id=session_id
-                        )
-
-            if query.with_intent:
-                intent_router = resolve_intent_router(self.config)
-                intent = await intent_router.aselect(
-                    str_or_query_bundle=new_query_bundle.chat_messages_str
-                )
-                logger.info(f"[IntentDetection] Routing query to {intent}.")
-                if intent == Intents.TOOL:
-                    return await self.aquery_agent(
-                        query, new_query_bundle, sse_version=sse_version
-                    )
-                elif intent == Intents.WEBSEARCH:
-                    chat_type = RagChatType.WEB
-                elif intent == Intents.NL2SQL:
-                    chat_type = RagChatType.NL2SQL
-                elif intent != Intents.RAG:
-                    return ValueError(f"Invalid intent {intent}")
-
-            query_bundle = PaiQueryBundle(
-                query_str=new_question,
-                need_web_search=new_query_bundle.need_web_search,
-                stream=query.stream,
-                citation=query.citation,
-                chat_messages_str=new_query_bundle.chat_messages_str,
+        openai_query_transform = resolve_openai_query_transform(self.config)
+        question = query.messages[-1].content
+        if openai_query_transform is not None:
+            new_query_bundle = await openai_query_transform.arun(
+                chat_messages=query.messages, chat_type=chat_type
             )
-            if chat_type == RagChatType.RAG:
-                if new_question != question:
-                    query_bundle.query_str = " ".join([question, new_question])
-
-                logger.info(f"Querying with question '{query_bundle.query_str}'.")
-
-                session_config = self.config.model_copy()
-                index_entry = index_manager.get_index_by_name(query.index_name)
-                session_config.embedding = index_entry.embedding_config
-                session_config.index.vector_store = index_entry.vector_store_config
-
-                query_engine = resolve_query_engine(session_config)
-                response = await query_engine.aquery(
-                    query_bundle,
-                    system_role_str=query.system_role_template,
-                    prompt_template_str=query.custom_prompt_template,
-                )
-            elif chat_type == RagChatType.WEB:
-                logger.info(f"Querying with question '{new_question}'.")
-
-                search_engine = resolve_searcher(self.config)
-                if not search_engine:
-                    raise ValueError(
-                        "AI search config is not valid. Please check your search api configuration."
-                    )
-                response = await search_engine.aquery(
-                    query_bundle,
-                    system_role_str=query.system_role_template,
-                    prompt_template_str=query.custom_prompt_template,
-                )
-        if chat_type == RagChatType.NL2SQL:
-            if len(query.messages) > 1:
-                query_transform_with_chat_history = resolve_nl2sql_query_transform(
-                    self.config
-                )
-                question = query.messages[-1].content
-                if query_transform_with_chat_history is not None:
-                    new_query_bundle = await query_transform_with_chat_history.arun(
-                        chat_messages=query.messages,
-                    )
-                new_question = new_query_bundle.query_str
-                logger.info(f"Transformed question: '{new_question}'.")
-            else:
-                new_question = query.messages[-1].content
-            query_bundle = PaiQueryBundle(
-                query_str=new_question,
-                need_web_search=False,
-                stream=query.stream,
+        else:
+            need_web_search = chat_type == RagChatType.WEB
+            new_query_bundle = PaiQueryBundle(
+                query_str=question,
+                need_web_search=need_web_search,
+                chat_messages_str=messages_to_history_str(
+                    query.messages, max_length=500
+                ),
             )
 
+        # Condense question
+        new_question = new_query_bundle.query_str
+        logger.info(f"Transformed question '{new_question}'.")
+
+        guardrail = resolve_llm_guardrail(self.config)
+        # 多轮对话，用新查询检查
+        if guardrail is not None:
+            guardrail_result = await guardrail.acheck(new_question)
+            if guardrail_result.reject:
+                if query.stream:
+                    return event_generator_async(
+                        response=guardrail_result.advice,
+                        chat_store=chat_store,
+                        session_id=session_id,
+                        sse_version=sse_version,
+                    )
+
+                else:
+                    return RagResponse(
+                        answer=guardrail_result.advice, session_id=session_id
+                    )
+
+        if query.with_intent:
+            intent_router = resolve_intent_router(self.config)
+            intent = await intent_router.aselect(
+                str_or_query_bundle=new_query_bundle.chat_messages_str
+            )
+            logger.info(f"[IntentDetection] Routing query to {intent}.")
+            if intent == Intents.TOOL:
+                return await self.aquery_agent(
+                    query, new_query_bundle, sse_version=sse_version
+                )
+            elif intent == Intents.WEBSEARCH:
+                chat_type = RagChatType.WEB
+            elif intent == Intents.NL2SQL:
+                chat_type = RagChatType.NL2SQL
+            elif intent != Intents.RAG:
+                return ValueError(f"Invalid intent {intent}")
+
+        query_bundle = PaiQueryBundle(
+            query_str=new_question,
+            need_web_search=new_query_bundle.need_web_search,
+            stream=query.stream,
+            citation=query.citation,
+            chat_messages_str=new_query_bundle.chat_messages_str,
+        )
+        if chat_type == RagChatType.RAG:
+            if new_question != question:
+                query_bundle.query_str = " ".join([question, new_question])
+
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
+
+            session_config = self.config.model_copy()
+            index_entry = index_manager.get_index_by_name(query.index_name)
+            session_config.embedding = index_entry.embedding_config
+            session_config.index.vector_store = index_entry.vector_store_config
+
+            query_engine = resolve_query_engine(session_config)
+            response = await query_engine.aquery(
+                query_bundle,
+                system_role_str=query.system_role_template,
+                prompt_template_str=query.custom_prompt_template,
+            )
+        elif chat_type == RagChatType.WEB:
+            logger.info(f"Querying with question '{new_question}'.")
+
+            search_engine = resolve_searcher(self.config)
+            if not search_engine:
+                raise ValueError(
+                    "AI search config is not valid. Please check your search api configuration."
+                )
+            response = await search_engine.aquery(
+                query_bundle,
+                system_role_str=query.system_role_template,
+                prompt_template_str=query.custom_prompt_template,
+            )
+        elif chat_type == RagChatType.NL2SQL:
             nl2sql_query_engine = resolve_data_analysis_query(self.config)
             if query.stream:
                 response = await nl2sql_query_engine.astream_query(query_bundle)

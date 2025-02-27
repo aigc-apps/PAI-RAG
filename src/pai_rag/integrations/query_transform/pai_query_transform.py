@@ -12,6 +12,7 @@ from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
 )
 from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
@@ -184,37 +185,34 @@ class OpenAICompatibleQueryTransform:
         self._query_transform_prompt = (
             query_transform_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
         )
-        default_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-            )
-        )
-        self._condense_question_prompt = (
-            condense_question_prompt or default_condense_question_prompt
-        )
-        if condense_question_prompt:
-            self._disable_parser = True
-        else:
-            self._disable_parser = False
+        # default_condense_question_prompt = PromptTemplate(
+        #     template="{}\n{}\n{}".format(
+        #         self._query_transform_prompt,
+        #         CURRENT_TIME_PROMPT.format(
+        #             current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+        #         ),
+        #         CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+        #     )
+        # )
+        # self._condense_question_prompt = condense_question_prompt
 
     def run(
-        self,
-        chat_messages: List[ChatMessage] = [],
+        self, chat_messages: List[ChatMessage] = [], chat_type: str = "rag"
     ) -> QueryBundle:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        current_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+        if chat_type != "nl2sql":
+            current_condense_question_prompt = PromptTemplate(
+                template="{}\n{}\n{}".format(
+                    self._query_transform_prompt,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    ),
+                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                )
             )
-        )
+        else:
+            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
@@ -230,7 +228,7 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
-        if self._disable_parser:
+        if chat_type == "nl2sql":
             return PaiQueryBundle(
                 query_str=transformed_query_str,
                 need_web_search=False,
@@ -264,21 +262,24 @@ class OpenAICompatibleQueryTransform:
                 )
 
     async def arun(
-        self,
-        chat_messages: List[ChatMessage] = [],
+        self, chat_messages: List[ChatMessage] = [], chat_type: str = "rag"
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        current_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+        if chat_type != "nl2sql":
+            current_condense_question_prompt = PromptTemplate(
+                template="{}\n{}\n{}".format(
+                    self._query_transform_prompt,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    ),
+                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                )
             )
-        )
+        else:
+            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
@@ -295,7 +296,7 @@ class OpenAICompatibleQueryTransform:
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
 
-        if self._disable_parser:
+        if chat_type == "nl2sql":
             return PaiQueryBundle(
                 query_str=transformed_query_str,
                 need_web_search=False,
