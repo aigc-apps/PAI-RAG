@@ -9,6 +9,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
     OpenAILlmConfig,
     DashScopeLlmConfig,
     PaiEasLlmConfig,
+    DEFAULT_MLLM_MAX_TOKENS,
 )
 from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
@@ -111,6 +112,7 @@ def create_llm(llm_config: PaiBaseLlmConfig):
 
 
 def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
+    max_tokens = min(llm_config.max_tokens, DEFAULT_MLLM_MAX_TOKENS)
     if isinstance(llm_config, OpenAILlmConfig):
         logger.info(
             f"""
@@ -125,7 +127,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             temperature=llm_config.temperature,
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.api_key,
-            max_new_tokens=llm_config.max_tokens,
+            max_new_tokens=max_tokens,
         )
     elif isinstance(llm_config, DashScopeLlmConfig):
         logger.info(
@@ -143,7 +145,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             is_chat_model=True,
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
-            max_new_tokens=llm_config.max_tokens,
+            max_new_tokens=max_tokens,
         )
     elif isinstance(llm_config, PaiEasLlmConfig):
         logger.info(
@@ -151,7 +153,6 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             [Parameters][LLM:PAI-EAS]
                 model = {llm_config.model},
                 endpoint = {llm_config.endpoint},
-                token = {llm_config.token}
             """
         )
         llm = OpenAIAlikeMultiModal(
@@ -161,7 +162,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.token,
             is_chat_model=True,
-            max_new_tokens=llm_config.max_tokens,
+            max_new_tokens=max_tokens,
         )
     elif isinstance(llm_config, OpenAICompatibleLlmConfig):
         api_base = _make_openai_compatible_base_url(llm_config.base_url)
@@ -170,8 +171,6 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             [Parameters][LLM:OpenAICompatible]
                 model = {llm_config.model},
                 base_url = {api_base},
-                endpoint = {llm_config.base_url},
-                token = {llm_config.api_key}
             """
         )
         llm = OpenAIAlikeMultiModal(
@@ -181,7 +180,7 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             is_chat_model=True,
-            max_new_tokens=llm_config.max_tokens,
+            max_new_tokens=max_tokens,
         )
     else:
         raise ValueError(f"Unknown Multi-modal LLM source: '{llm_config}'")
