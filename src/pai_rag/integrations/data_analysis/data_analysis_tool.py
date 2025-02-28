@@ -323,6 +323,17 @@ class DataAnalysisQuery(BaseQueryEngine):
 
         return response
 
+    async def aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+        nodes, description = await self.aretrieve(query_bundle)
+        response = await self._synthesizer.asynthesize(
+            query=query_bundle,
+            description=description,
+            nodes=nodes,
+            streaming=query_bundle.stream,
+        )
+
+        return response
+
     async def astream_query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         nodes, description = await self.aretrieve(query_bundle)
         stream_response = await self._synthesizer.asynthesize(

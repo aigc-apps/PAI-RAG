@@ -172,7 +172,7 @@ def _make_chat_completion_response(
                     ("File Name", file_name),
                     ("Tables", tables),
                     ("SQL", sql),
-                    ("Is Valid", is_valid)
+                    ("Is Valid", is_valid),
                 ]
                 for name, value in fields_to_append:
                     if value is not None:
@@ -290,7 +290,7 @@ async def _make_chat_completion_chunk_response(
                     ("File Name", file_name),
                     ("Tables", tables),
                     ("SQL", sql),
-                    ("Is Valid", is_valid)
+                    ("Is Valid", is_valid),
                 ]
                 for name, value in fields_to_append:
                     if value is not None:
@@ -615,26 +615,29 @@ class RagApplication:
 
             if self.config.system.default_web_search:
                 chat_request.search_web = True
-            
-            # if (chat_request.chat_llm) and (not chat_request.search_web):
-            #     logger.info(f"Querying with question: {messages[-1].content}.")
-            #     llm: PaiLlm = resolve_llm(self.config)
-            #     if not chat_request.stream:
-            #         response = await llm.achat(messages=messages)
-            #         import pdb
-            #         pdb.set_trace()
-            #         return _make_chat_completion_response(
-            #             session_id=session_id,
-            #             response=response,
-            #         )
-            #     else:
-            #         response = await llm.astream_chat(messages=messages)
 
-            #         # return response
-            #         return _make_chat_completion_chunk_response(
-            #             session_id=session_id,
-            #             response=response,
-            #         )                    
+            if (chat_request.chat_llm) and (not chat_request.search_web):
+                logger.info(f"Querying with question: {messages[-1].content}.")
+                llm: PaiLlm = resolve_llm(self.config)
+                if chat_request.stream:
+                    response = await llm.astream_chat(messages=messages)
+
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response_wrapper=ChatResponseWrapper(response=response),
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                        start_time=start,
+                    )
+                else:
+                    response = await llm.achat(messages=messages)
+
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response_wrapper=ChatResponseWrapper(response=response),
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                    )
 
             question = messages[-1].content
 
@@ -648,7 +651,7 @@ class RagApplication:
                 chat_type = "default"
             if openai_query_transform is not None:
                 new_query_bundle = await openai_query_transform.arun(
-                    chat_messages=messages,chat_type=chat_type
+                    chat_messages=messages, chat_type=chat_type
                 )
                 base_token_usage.completion_tokens += new_query_bundle.completion_tokens
                 base_token_usage.prompt_tokens += new_query_bundle.prompt_tokens
@@ -700,7 +703,37 @@ class RagApplication:
                 query_bundle.need_web_search = True
             elif chat_request.force_search_knowledgebase:
                 chat_request.search_web = False
-            
+
+            if chat_request.chat_agent:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                agent_tool = resolve_agent(self.config)
+                if not agent_tool:
+                    raise ValueError(
+                        "Agent config is not valid. Please check your Agent api configuration."
+                    )
+                if chat_request.stream:
+                    response_wrapper = await agent_tool.astream_chat(
+                        message=query_bundle.query_str,
+                    )
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                        start_time=start,
+                    )
+                else:
+                    response_wrapper = await agent_tool.achat(
+                        message=query_bundle.query_str,
+                    )
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                    )
+
             if chat_request.chat_db:
                 logger.info(f"Querying with question: {query_bundle.query_str}.")
 
@@ -709,18 +742,21 @@ class RagApplication:
                     raise ValueError(
                         "DBChat config is not valid. Please check your DBChat api configuration."
                     )
-                response = await data_analysis_query_engine.aquery(query_bundle)
+                response_wrapper = await data_analysis_query_engine.aquery(query_bundle)
 
                 if chat_request.stream:
                     return _make_chat_completion_chunk_response(
                         session_id=session_id,
-                        response=response,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
                         return_reference=True,
+                        start_time=start,
                     )
                 else:
                     return _make_chat_completion_response(
                         session_id=session_id,
-                        response=response,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
                         return_reference=True,
                     )
 
@@ -760,7 +796,7 @@ class RagApplication:
                         base_token_usage=base_token_usage,
                         return_reference=chat_request.return_reference,
                     )
-                
+
             if new_question != question:
                 query_bundle.query_str = " ".join([question, new_question])
 
