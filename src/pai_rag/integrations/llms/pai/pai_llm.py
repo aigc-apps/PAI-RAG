@@ -33,7 +33,10 @@ class PaiLlm(OpenAILike):
     )
 
     def __init__(self, llm_config: PaiBaseLlmConfig):
-        super().__init__()
+        super().__init__(
+            temperature=llm_config.temperature,
+            max_tokens=llm_config.max_tokens,
+        )
         self.llm_config = llm_config
         self._llm = create_llm(self.llm_config)
         self.model = llm_config.model
@@ -119,6 +122,9 @@ class PaiLlm(OpenAILike):
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
+        kwargs["temperature"] = kwargs.get("temperature", self.temperature)
+        kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
+
         """Chat with the model."""
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
@@ -135,6 +141,10 @@ class PaiLlm(OpenAILike):
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
+        kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
+        kwargs["temperature"] = kwargs.get("temperature", self.temperature)
+        kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
+
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             completion_response = await self.astream_complete(

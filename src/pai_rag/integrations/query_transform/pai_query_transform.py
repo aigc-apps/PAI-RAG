@@ -12,6 +12,7 @@ from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
 )
 from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
@@ -198,27 +199,34 @@ class OpenAICompatibleQueryTransform:
         )
 
     def run(
-        self,
-        chat_messages: List[ChatMessage] = [],
+        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
     ) -> QueryBundle:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        current_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+        if chat_type != "nl2sql":
+            current_condense_question_prompt = PromptTemplate(
+                template="{}\n{}\n{}".format(
+                    self._query_transform_prompt,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    ),
+                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                )
             )
-        )
+        else:
+            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
-        transformed_query_str = self._llm.predict(
+        messages = self._llm._get_messages(
             current_condense_question_prompt,
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
+        chat_response = self._llm.chat(
+            messages=messages,
+        )
+        transformed_query_str = chat_response.message.content
         logger.debug(
             f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
         )
@@ -226,10 +234,9 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
-        query_json = parse_json_from_code_block_str(transformed_query_str)
-        if ("query" not in query_json) or (len(query_json["query"]) == 0):
+        if chat_type == "nl2sql":
             return PaiQueryBundle(
-                query_str=chat_messages[-1].content,
+                query_str=transformed_query_str,
                 need_web_search=False,
                 custom_embedding_strs=[
                     chat_messages[-1].content,
@@ -238,40 +245,74 @@ class OpenAICompatibleQueryTransform:
                 chat_messages_str=chat_history_str,
             )
         else:
-            return PaiQueryBundle(
-                query_str=query_json["query"],
-                need_web_search=True,
-                custom_embedding_strs=[
-                    chat_messages[-1].content,
-                    transformed_query_str,
-                ],
-                chat_messages_str=chat_history_str,
-            )
+            query_json = parse_json_from_code_block_str(transformed_query_str)
+            if ("query" not in query_json) or (len(query_json["query"]) == 0):
+                return PaiQueryBundle(
+                    query_str=chat_messages[-1].content,
+                    need_web_search=False,
+                    custom_embedding_strs=[
+                        chat_messages[-1].content,
+                        transformed_query_str,
+                    ],
+                    chat_messages_str=chat_history_str,
+                    completion_tokens=chat_response.additional_kwargs.get(
+                        "completion_tokens", 0
+                    ),
+                    prompt_tokens=chat_response.additional_kwargs.get(
+                        "prompt_tokens", 0
+                    ),
+                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+                )
+            else:
+                return PaiQueryBundle(
+                    query_str=query_json["query"],
+                    need_web_search=True,
+                    custom_embedding_strs=[
+                        chat_messages[-1].content,
+                        transformed_query_str,
+                    ],
+                    chat_messages_str=chat_history_str,
+                    completion_tokens=chat_response.additional_kwargs.get(
+                        "completion_tokens", 0
+                    ),
+                    prompt_tokens=chat_response.additional_kwargs.get(
+                        "prompt_tokens", 0
+                    ),
+                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+                )
 
     async def arun(
-        self,
-        chat_messages: List[ChatMessage] = [],
+        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
-        current_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+        if chat_type != "nl2sql":
+            current_condense_question_prompt = PromptTemplate(
+                template="{}\n{}\n{}".format(
+                    self._query_transform_prompt,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    ),
+                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                )
             )
-        )
+        else:
+            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
-        transformed_query_str = await self._llm.apredict(
+        messages = self._llm._get_messages(
             current_condense_question_prompt,
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
+        chat_response = await self._llm.achat(
+            messages=messages,
+        )
+        transformed_query_str = chat_response.message.content
+
         logger.debug(
             f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
         )
@@ -279,21 +320,46 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
-        query_json = parse_json_from_code_block_str(transformed_query_str)
-
-        if ("query" not in query_json) or (len(query_json["query"]) == 0):
+        if chat_type == "nl2sql":
             return PaiQueryBundle(
-                query_str=chat_messages[-1].content,
+                query_str=transformed_query_str,
                 need_web_search=False,
-                custom_embedding_strs=[chat_messages[-1].content],
+                custom_embedding_strs=[
+                    chat_messages[-1].content,
+                    transformed_query_str,
+                ],
                 chat_messages_str=chat_history_str,
             )
         else:
-            if chat_messages[-1].content != query_json["query"]:
-                chat_history_str += f' {query_json["query"]}'
-            return PaiQueryBundle(
-                query_str=query_json["query"],
-                need_web_search=True,
-                custom_embedding_strs=[transformed_query_str],
-                chat_messages_str=chat_history_str,
-            )
+            query_json = parse_json_from_code_block_str(transformed_query_str)
+
+            if ("query" not in query_json) or (len(query_json["query"]) == 0):
+                return PaiQueryBundle(
+                    query_str=chat_messages[-1].content,
+                    need_web_search=False,
+                    custom_embedding_strs=[chat_messages[-1].content],
+                    chat_messages_str=chat_history_str,
+                    completion_tokens=chat_response.additional_kwargs.get(
+                        "completion_tokens", 0
+                    ),
+                    prompt_tokens=chat_response.additional_kwargs.get(
+                        "prompt_tokens", 0
+                    ),
+                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+                )
+            else:
+                if chat_messages[-1].content != query_json["query"]:
+                    chat_history_str += f' {query_json["query"]}'
+                return PaiQueryBundle(
+                    query_str=query_json["query"],
+                    need_web_search=True,
+                    custom_embedding_strs=[transformed_query_str],
+                    chat_messages_str=chat_history_str,
+                    completion_tokens=chat_response.additional_kwargs.get(
+                        "completion_tokens", 0
+                    ),
+                    prompt_tokens=chat_response.additional_kwargs.get(
+                        "prompt_tokens", 0
+                    ),
+                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+                )

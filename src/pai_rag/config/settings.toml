@@ -73,10 +73,10 @@ reranker_model = "bge-reranker-base" # [bge-reranker-base, bge-reranker-large]
 similarity_threshold = 0.5
 top_n = 2
 
-[rag.query_transform]
-enable_query_transform = true
+[rag.query_rewrite]
+enabled = true
 
-[rag.query_transform.llm]
+[rag.query_rewrite.llm]
 
 [rag.retriever]
 similarity_top_k = 5

@@ -5,6 +5,7 @@ from llama_index.core.base.embeddings.base import Embedding
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.schema import ImageType, BaseNode, ImageNode
 from loguru import logger
+import requests
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
@@ -123,8 +124,16 @@ class PaiMultiModalEmbedding(MultiModalEmbedding):
         image_node_ids, images = [], []
         for i, node in enumerate(nodes):
             if isinstance(node, ImageNode):
-                image_node_ids.append(i)
-                images.append(node.resolve_image())
+                try:
+                    resolved_image = node.resolve_image()
+                    images.append(resolved_image)
+                    image_node_ids.append(i)
+                except requests.exceptions.MissingSchema as e:
+                    logger.warning(f"跳过无效图片URL: {node.image_url}，错误: {str(e)}")
+                    continue
+                except Exception as e:
+                    logger.error(f"图片处理失败: {str(e)}", exc_info=True)
+                    continue
 
         embeddings = self.get_image_embedding_batch(img_file_paths=images, **kwargs)
         for i, embedding in zip(image_node_ids, embeddings):
@@ -136,8 +145,16 @@ class PaiMultiModalEmbedding(MultiModalEmbedding):
         image_node_ids, images = [], []
         for i, node in enumerate(nodes):
             if isinstance(node, ImageNode):
-                image_node_ids.append(i)
-                images.append(node.resolve_image())
+                try:
+                    resolved_image = node.resolve_image()
+                    images.append(resolved_image)
+                    image_node_ids.append(i)
+                except requests.exceptions.MissingSchema as e:
+                    logger.warning(f"跳过无效图片URL: {node.image_url}，错误: {str(e)}")
+                    continue
+                except Exception as e:
+                    logger.error(f"图片处理失败: {str(e)}", exc_info=True)
+                    continue
 
         embeddings = await self.aget_image_embedding_batch(
             img_file_paths=images, **kwargs
