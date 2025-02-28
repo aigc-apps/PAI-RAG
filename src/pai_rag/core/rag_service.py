@@ -16,7 +16,7 @@ from pai_rag.app.api.models import (
 from openinference.instrumentation import using_attributes
 from typing import Dict, List
 from loguru import logger
-from pai_rag.knowledgebase.track_jobs import track_jobs
+from pai_rag.core.rag_job_manager import upload_job_manager
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 
@@ -110,7 +110,7 @@ class RagService:
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
 
-        track_jobs(task_id, index_name, input_files, status="start")
+        upload_job_manager.track_job(task_id, index_name, input_files, status="start")
         with open(TASK_STATUS_FILE, "a") as f:
             f.write(f"{task_id}\tprocessing\n")
         try:
@@ -131,7 +131,7 @@ class RagService:
             with open(TASK_STATUS_FILE, "a") as f:
                 detail = f"{ex}".replace("\t", " ").replace("\n", " ")
                 f.write(f"{task_id}\tfailed\t{detail}\n")
-                track_jobs(
+                upload_job_manager.track_job(
                     task_id,
                     index_name,
                     input_files,

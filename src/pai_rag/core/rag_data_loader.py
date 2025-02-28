@@ -3,10 +3,9 @@ from llama_index.core.schema import TransformComponent
 from llama_index.core.indices import VectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
+from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
+from pai_rag.core.rag_job_manager import upload_job_manager
 from loguru import logger
-from pai_rag.knowledgebase.save_parse_files import save_parse_files
-from pai_rag.knowledgebase.save_chunk_nodes import save_chunk_nodes
-from pai_rag.knowledgebase.track_jobs import track_jobs
 
 
 class RagDataLoader:
@@ -37,9 +36,10 @@ class RagDataLoader:
         index_name: str = None,
         task_id: str = None,
     ):
+        _knowledgebase_manager = RagKnowledgeBaseManager(index_name=index_name)
         """Load data from a file or directory."""
         # parse input files into documents
-        track_jobs(
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,
@@ -52,8 +52,8 @@ class RagDataLoader:
             oss_path=oss_path,
             from_oss=from_oss,
         )
-        save_parse_files(index_name, documents)
-        track_jobs(
+        _knowledgebase_manager.save_parse_files(documents)
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,
@@ -68,7 +68,7 @@ class RagDataLoader:
             )
 
         # split documents into nodes
-        track_jobs(
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,
@@ -76,8 +76,8 @@ class RagDataLoader:
             status="processing",
         )
         splitted_nodes = self._node_parser(documents)
-        save_chunk_nodes(index_name, splitted_nodes, "split")
-        track_jobs(
+        _knowledgebase_manager.save_chunk_nodes(splitted_nodes, "split")
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,
@@ -86,7 +86,7 @@ class RagDataLoader:
         )
 
         # embed nodes
-        track_jobs(
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,
@@ -96,8 +96,8 @@ class RagDataLoader:
         embedded_nodes = self._embed_model(splitted_nodes)
         if self._multimodal_embed_model is not None:
             embedded_nodes = self._multimodal_embed_model(embedded_nodes)
-        save_chunk_nodes(index_name, embedded_nodes, "embed")
-        track_jobs(
+        _knowledgebase_manager.save_chunk_nodes(embedded_nodes, "embed")
+        upload_job_manager.track_job(
             task_id,
             index_name,
             file_path_or_directory,

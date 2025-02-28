@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import subprocess
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api import query
 from pai_rag.app.api.v1.chat import router_v1
@@ -8,8 +9,7 @@ from pai_rag.app.api.middleware import init_middleware
 from pai_rag.app.api.error_handler import config_app_errors
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.core.rag_environment import service_environment
-import subprocess
-from pai_rag.knowledgebase.constants import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.core.rag_knowledgebase_manager import DEFAULT_KNOWLEDGE_PATH
 
 
 def init_router(app: FastAPI):

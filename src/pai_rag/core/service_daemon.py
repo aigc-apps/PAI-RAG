@@ -1,11 +1,10 @@
 import asyncio
+import traceback
 from pai_rag.core.rag_service import rag_service
 from pai_rag.core.rag_index_manager import index_manager
-from loguru import logger
-import traceback
-from typing import Dict, List
-from threading import Lock
 from pai_rag.app.web.rag_local_client import rag_client
+from pai_rag.core.rag_index_manager import batch_files, batch_lock
+from loguru import logger
 
 # Check every 30 seconds.
 CHECK_INTERVAL = 30
@@ -25,11 +24,6 @@ async def periodic_check_config():
         logger.info("Exited periodic check config updates.")
 
 
-# 共享的批处理文件列表和锁
-batch_files: Dict[str, List[str]] = {}
-batch_lock = Lock()
-
-
 # 定义后台任务
 async def process_batch_files():
     while True:
@@ -39,8 +33,6 @@ async def process_batch_files():
                 continue  # 如果没有文件，则跳过
             current_batch = batch_files.copy()
             batch_files.clear()
-        # 在这里处理 current_batch 中的文件
-        # 例如，保存到磁盘、批量分析等
         logger.info(f"Processing current_batch: {current_batch}")
         try:
             tasks = [

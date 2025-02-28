@@ -1,6 +1,7 @@
 import os
+from threading import Lock
 import threading
-from typing import Annotated, Union, Dict
+from typing import Annotated, Union, Dict, List
 from pydantic import BaseModel, Field
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_config import RagConfig
@@ -8,13 +9,20 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
+from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
+from pai_rag.utils.index_utils import del_index_dir
 from loguru import logger
-from pai_rag.knowledgebase.utils import create_new_index_dir, del_index_dir
+
 
 DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
 DEFAULT_INDEX_NAME = "default_index"
 DEFAULT_MAX_INDEX_ENTRY_COUNT = os.environ.get("DEFAULT_MAX_INDEX_ENTRY_COUNT", 20)
 
+# 共享的批处理文件列表和锁
+batch_files: Dict[str, List[str]] = {}
+batch_lock = Lock()
 
 """
 IndexEntry Model
@@ -34,6 +42,7 @@ class RagIndexEntry(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
+    knowledgebase_manager: RagKnowledgeBaseManager = RagKnowledgeBaseManager()
 
 
 """
@@ -69,8 +78,8 @@ class RagIndexManager:
                 index_name=DEFAULT_INDEX_NAME,
                 vector_store_config=rag_config.index.vector_store,
                 embedding_config=rag_config.embedding,
+                knowledgebase_manager=RagKnowledgeBaseManager(),
             )
-            create_new_index_dir(DEFAULT_INDEX_NAME)
 
     @classmethod
     def from_file(cls, index_file: str):
@@ -120,7 +129,6 @@ class RagIndexManager:
             self._index_map.indexes[index_entry.index_name] = index_entry
             new_state = self.save_index_map()
             self._state.update_state(new_state)
-            create_new_index_dir(index_entry.index_name)
             logger.info(f"Index '{index_entry.index_name}' created successfully.")
 
     def update_index(self, index_entry: RagIndexEntry):
@@ -171,6 +179,41 @@ class RagIndexManager:
                             index_json_str
                         )
                         self._state.update_state(new_state)
+
+    def add_file_to_index(self, index_name: str, file_path: str):
+        with batch_lock:
+            if index_name in batch_files:
+                batch_files[index_name].append(file_path)
+            else:
+                batch_files[index_name] = [file_path]
+        logger.info(
+            f"File {file_path} added to batch_processor for index {index_name}."
+        )
+
+    def delete_file_from_index(self, index_name: str, file_path: str):
+        current_index = self.get_index_by_name(index_name)
+        current_vector_store_index = PaiVectorStoreIndex(
+            current_index.vector_store_config,
+            embed_model=create_embedding(current_index.embedding_config),
+        )
+        ref_doc_id = (
+            current_index.knowledgebase_manager.get_docid_from_index_via_file_name(
+                file_path
+            )
+        )
+        logger.info(f"get_docid_from_index_via_file_name: ref_doc_id {ref_doc_id}")
+        try:
+            res = current_vector_store_index.delete_ref_doc(ref_doc_id)
+            current_index.knowledgebase_manager.del_local_files_from_index(file_path)
+            logger.info(
+                f"File {file_path} removed from batch_processor for index {index_name}. res: {res}."
+            )
+            return True
+        except NotImplementedError as e:
+            logger.error(f"Deletion not implemented: {e}")
+        except Exception as e:
+            logger.error(f"delete_file_from_index: delete_ref_doc error {e}")
+        return False
 
 
 index_manager = RagIndexManager.from_file(index_file=DEFAULT_INDEX_FILE)

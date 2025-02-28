@@ -560,5 +560,20 @@ class RagLocalClient:
                 msg=f"delete index {index_name} failed. {e}",
             )
 
+    def add_file_to_index(self, index_name: str, file_path: str):
+        try:
+            index_manager.add_file_to_index(index_name=index_name, file_path=file_path)
+        except Exception as e:
+            logger.exception(f"Add file {file_path} to_index {index_name} failed: {e}")
+            raise RagApiError(
+                code=500,
+                msg=f"Add file {file_path} to_index {index_name} failed. {e}",
+            )
+
+    def delete_file_from_index(self, index_name: str, file_path: str):
+        return index_manager.delete_file_from_index(
+            index_name=index_name, file_path=file_path
+        )
+
 
 rag_client = RagLocalClient()
