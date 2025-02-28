@@ -13,7 +13,6 @@ from pai_rag.app.api.models import PaiQueryBundle
 from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
-
 import time
 
 DEFAULT_LANG = "zh-CN"

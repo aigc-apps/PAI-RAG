@@ -214,11 +214,15 @@ class OpenAICompatibleQueryTransform:
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
-        transformed_query_str = self._llm.predict(
+        messages = self._llm._get_messages(
             current_condense_question_prompt,
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
+        chat_response = self._llm.chat(
+            messages=messages,
+        )
+        transformed_query_str = chat_response.message.content
         logger.debug(
             f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
         )
@@ -236,6 +240,11 @@ class OpenAICompatibleQueryTransform:
                     transformed_query_str,
                 ],
                 chat_messages_str=chat_history_str,
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
             )
         else:
             return PaiQueryBundle(
@@ -246,6 +255,11 @@ class OpenAICompatibleQueryTransform:
                     transformed_query_str,
                 ],
                 chat_messages_str=chat_history_str,
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
             )
 
     async def arun(
@@ -267,11 +281,16 @@ class OpenAICompatibleQueryTransform:
         logger.debug(
             f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
-        transformed_query_str = await self._llm.apredict(
+        messages = self._llm._get_messages(
             current_condense_question_prompt,
             question=chat_messages[-1].content,
             chat_history=chat_history_str,
         )
+        chat_response = await self._llm.achat(
+            messages=messages,
+        )
+        transformed_query_str = chat_response.message.content
+
         logger.debug(
             f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
         )
@@ -287,6 +306,11 @@ class OpenAICompatibleQueryTransform:
                 need_web_search=False,
                 custom_embedding_strs=[chat_messages[-1].content],
                 chat_messages_str=chat_history_str,
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
             )
         else:
             if chat_messages[-1].content != query_json["query"]:
@@ -296,4 +320,9 @@ class OpenAICompatibleQueryTransform:
                 need_web_search=True,
                 custom_embedding_strs=[transformed_query_str],
                 chat_messages_str=chat_history_str,
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
             )

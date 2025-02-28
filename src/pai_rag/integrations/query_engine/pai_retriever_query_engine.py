@@ -1,4 +1,4 @@
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
@@ -12,6 +12,10 @@ from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.instrumentation.events.query import (
     QueryEndEvent,
     QueryStartEvent,
+)
+from llama_index.core.base.llms.types import (
+    ChatResponse,
+    ChatResponseAsyncGen,
 )
 from pai_rag.app.api.models import PaiQueryBundle
 
@@ -163,7 +167,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         system_role_str: str = None,
         prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
-        dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
+        # dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
         with self.callback_manager.as_trace("query"):
             if isinstance(str_or_query_bundle, str):
                 str_or_query_bundle = QueryBundle(str_or_query_bundle)
@@ -172,9 +176,9 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
                 system_role_str=system_role_str,
                 prompt_template_str=prompt_template_str,
             )
-        dispatcher.event(
-            QueryEndEvent(query=str_or_query_bundle, response=query_result)
-        )
+        # dispatcher.event(
+        #    QueryEndEvent(query=str_or_query_bundle, response=query_result)
+        # )
         return query_result
 
     def synthesize(
@@ -200,7 +204,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         system_role_str: str = None,
         prompt_template_str: str = None,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
-    ) -> RESPONSE_TYPE:
+    ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         return await self._response_synthesizer.asynthesize(
             query=query_bundle,
             nodes=nodes,

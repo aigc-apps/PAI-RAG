@@ -1,5 +1,5 @@
 import traceback
-from pai_rag.app.api.models import ChatCompletionRequest
+from pai_rag.app.api.models import ChatCompletionRequest, ChatResponseWrapper
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_index_manager import index_manager
 from pai_rag.core.rag_module import (
@@ -136,12 +136,17 @@ async def event_generator_async(
     yield _event_chunk_wrapper(last_chunk_data, sse_version)
 
 
-def _make_chat_completion_response(session_id, response, return_reference=False):
-    logger.info(f"Finished response: {response.response}")
+def _make_chat_completion_response(
+    session_id,
+    response_wrapper: ChatResponseWrapper,
+    base_token_usage: CompletionUsage,
+    return_reference: bool = False,
+):
+    logger.info(f"Finished response: {response_wrapper.response.message.content}")
     citations = []
     citation_details = []
     if return_reference:
-        for score_node in response.source_nodes:
+        for score_node in response_wrapper.source_nodes:
             if isinstance(score_node.node, ImageNode):
                 url = score_node.node.image_url
                 if url is not None:
@@ -168,6 +173,16 @@ def _make_chat_completion_response(session_id, response, return_reference=False)
                     }
                 )
 
+    base_token_usage.completion_tokens += (
+        response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
+    )
+    base_token_usage.prompt_tokens += response_wrapper.response.additional_kwargs.get(
+        "prompt_tokens", 0
+    )
+    base_token_usage.total_tokens += response_wrapper.response.additional_kwargs.get(
+        "total_tokens", 0
+    )
+
     return ChatCompletion(
         id=session_id,
         created=int(time.time()),
@@ -179,17 +194,13 @@ def _make_chat_completion_response(session_id, response, return_reference=False)
                 index=0,
                 message=ChatCompletionMessage(
                     role=MessageRole.ASSISTANT.value,
-                    content=response.response,
+                    content=response_wrapper.response.message.content,
                 ),
                 finish_reason="stop",
             )
         ],
         object="chat.completion",
-        usage=CompletionUsage(
-            completion_tokens=0,
-            prompt_tokens=0,
-            total_tokens=0,
-        ),
+        usage=base_token_usage,
     )
 
 
@@ -221,7 +232,11 @@ def _make_chat_completion_response_with_text(session_id, text):
 
 
 async def _make_chat_completion_chunk_response(
-    session_id, response, return_reference=False
+    session_id,
+    response_wrapper: ChatResponseWrapper,
+    base_token_usage: CompletionUsage,
+    return_reference: bool = False,
+    start_time=0,
 ):
     i = 0
     full_content = ""
@@ -229,7 +244,7 @@ async def _make_chat_completion_chunk_response(
     citations = []
     citation_details = []
     if return_reference:
-        for score_node in response.source_nodes:
+        for score_node in response_wrapper.source_nodes:
             if isinstance(score_node.node, ImageNode):
                 url = score_node.node.image_url
                 if url is not None:
@@ -258,9 +273,25 @@ async def _make_chat_completion_chunk_response(
 
     model_name = Settings.llm.metadata.model_name
     try:
-        async for token in response.async_response_gen():
-            if token:
-                full_content += token
+        is_first = True
+        chunk_usage = None
+        async for chat_response in response_wrapper.response:
+            chunk_usage = CompletionUsage(
+                completion_tokens=base_token_usage.completion_tokens
+                + chat_response.additional_kwargs.get("completion_tokens", 0),
+                prompt_tokens=base_token_usage.prompt_tokens
+                + chat_response.additional_kwargs.get("prompt_tokens", 0),
+                total_tokens=base_token_usage.total_tokens
+                + chat_response.additional_kwargs.get("total_tokens", 0),
+            )
+            if chat_response.delta:
+                if is_first:
+                    logger.info(
+                        f"{session_id} Start get first token {time.time() - start_time}"
+                    )
+                    is_first = False
+
+                full_content += chat_response.delta
                 chunk = ChatCompletionChunk(
                     id=session_id,
                     created=created_ts,
@@ -272,15 +303,18 @@ async def _make_chat_completion_chunk_response(
                             index=i,
                             delta=chat_completion_chunk.ChoiceDelta(
                                 role=MessageRole.ASSISTANT.value,
-                                content=token,
+                                content=chat_response.delta,
                             ),
                             finish_reason=None,
                         )
                     ],
+                    usage=chunk_usage,
                     object="chat.completion.chunk",
                 )
                 i += 1
                 yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+
+        logger.info(f"{session_id} Finished get all token {time.time() - start_time}")
 
         last_chunk = ChatCompletionChunk(
             id=session_id,
@@ -298,6 +332,7 @@ async def _make_chat_completion_chunk_response(
                     finish_reason="stop",
                 )
             ],
+            usage=chunk_usage,
             object="chat.completion.chunk",
         )
         yield f"data: {json.dumps(last_chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
@@ -479,6 +514,13 @@ class RagApplication:
         chat_request: ChatCompletionRequest,
     ):
         session_id = uuid_generator()
+        base_token_usage = CompletionUsage(
+            completion_tokens=0,
+            prompt_tokens=0,
+            total_tokens=0,
+        )
+
+        start = time.time()
         if len(chat_request.messages) == 0:
             if chat_request.stream:
                 return _make_chat_completion_chunk_response_with_text(
@@ -536,11 +578,17 @@ class RagApplication:
 
             question = messages[-1].content
 
+            logger.info(
+                f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
+            )
             openai_query_transform = resolve_openai_query_transform(self.config)
             if openai_query_transform is not None:
                 new_query_bundle = await openai_query_transform.arun(
                     chat_messages=messages,
                 )
+                base_token_usage.completion_tokens += new_query_bundle.completion_tokens
+                base_token_usage.prompt_tokens += new_query_bundle.prompt_tokens
+                base_token_usage.total_tokens += new_query_bundle.total_tokens
             else:
                 new_query_bundle = PaiQueryBundle(
                     query_str=question,
@@ -549,6 +597,10 @@ class RagApplication:
                         messages[-7:], max_length=500
                     ),
                 )
+
+            logger.info(
+                f"{session_id} Finished query transformation: Usage: {base_token_usage} Elapsed {time.time() - start}"
+            )
 
             # Condense question
             new_question = new_query_bundle.query_str
@@ -588,27 +640,37 @@ class RagApplication:
             if chat_request.search_web:
                 logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
+                logger.info(
+                    f"{session_id} Starting search web: Elapsed {time.time() - start}"
+                )
+
                 search_engine = resolve_searcher(self.config)
                 if not search_engine:
                     raise ValueError(
                         "AI search config is not valid. Please check your search api configuration."
                     )
 
-                response = await search_engine.aquery(
+                response_wrapper = await search_engine.aquery(
                     query_bundle,
                     system_role_str=system_prompt,
                     prompt_template_str=" " if system_prompt else None,
                 )
+                logger.info(
+                    f"{session_id} Finished search web: Elapsed {time.time() - start}"
+                )
                 if chat_request.stream:
                     return _make_chat_completion_chunk_response(
                         session_id=session_id,
-                        response=response,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
                         return_reference=chat_request.return_reference,
+                        start_time=start,
                     )
                 else:
                     return _make_chat_completion_response(
                         session_id=session_id,
-                        response=response,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
                         return_reference=chat_request.return_reference,
                     )
 
@@ -622,7 +684,7 @@ class RagApplication:
             session_config.embedding = index_entry.embedding_config
             session_config.index.vector_store = index_entry.vector_store_config
             query_engine = resolve_query_engine(session_config)
-            response = await query_engine.aquery(
+            response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
                 prompt_template_str=" " if system_prompt else None,
@@ -630,13 +692,16 @@ class RagApplication:
             if chat_request.stream:
                 return _make_chat_completion_chunk_response(
                     session_id=session_id,
-                    response=response,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
                     return_reference=chat_request.return_reference,
+                    start_time=start,
                 )
             else:
                 return _make_chat_completion_response(
                     session_id=session_id,
-                    response=response,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
                     return_reference=chat_request.return_reference,
                 )
         except Exception:
@@ -767,7 +832,7 @@ class RagApplication:
             session_config.index.vector_store = index_entry.vector_store_config
 
             query_engine = resolve_query_engine(session_config)
-            response = await query_engine.aquery(
+            response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=query.system_role_template,
                 prompt_template_str=query.custom_prompt_template,
@@ -780,7 +845,7 @@ class RagApplication:
                 raise ValueError(
                     "AI search config is not valid. Please check your search api configuration."
                 )
-            response = await search_engine.aquery(
+            response_wrapper = await search_engine.aquery(
                 query_bundle,
                 system_role_str=query.system_role_template,
                 prompt_template_str=query.custom_prompt_template,
@@ -788,9 +853,9 @@ class RagApplication:
         elif chat_type == RagChatType.NL2SQL:
             nl2sql_query_engine = resolve_data_analysis_query(self.config)
             if query.stream:
-                response = await nl2sql_query_engine.astream_query(query_bundle)
+                response_wrapper = await nl2sql_query_engine.astream_query(query_bundle)
             else:
-                response = await nl2sql_query_engine.aquery(query_bundle)
+                response_wrapper = await nl2sql_query_engine.aquery(query_bundle)
 
         result_info = {
             "session_id": session_id,
@@ -811,21 +876,26 @@ class RagApplication:
                     metadata=score_node.node.metadata,
                     score=score_node.score,
                 )
-                for score_node in response.source_nodes
+                for score_node in response_wrapper.source_nodes
             ]
 
         if not query.stream:
             content = re.sub(
-                r"<think>.*?</think>\n*", "", response.response, flags=re.DOTALL
+                r"<think>.*?</think>\n*",
+                "",
+                response_wrapper.response.message.content,
+                flags=re.DOTALL,
             )
             query.messages.append(
                 ChatMessage(role=MessageRole.ASSISTANT, content=content),
             )
             chat_store.set_messages(session_id, query.messages)
-            return RagResponse(answer=response.response, **result_info)
+            return RagResponse(
+                answer=response_wrapper.response.message.content, **result_info
+            )
         else:
             return event_generator_async(
-                response=response,
+                response=response_wrapper.response,
                 extra_info=result_info,
                 messages=query.messages,
                 chat_store=chat_store,

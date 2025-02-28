@@ -1,8 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from llama_index.core.schema import QueryBundle
 from llama_index.core.base.llms.types import ChatMessage
 from dataclasses import dataclass
+from llama_index.core.schema import NodeWithScore
 
 
 class RagQuery(BaseModel):
@@ -68,3 +69,11 @@ class PaiQueryBundle(QueryBundle):
     citation: bool = False
     chat_messages_str: str = None
     need_web_search: bool = False
+    completion_tokens: int = 0
+    prompt_tokens: int = 0
+    total_tokens: int = 0
+
+
+class ChatResponseWrapper(BaseModel):
+    response: Any
+    source_nodes: List[NodeWithScore] = []

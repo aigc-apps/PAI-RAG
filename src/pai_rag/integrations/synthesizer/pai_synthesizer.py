@@ -1,4 +1,4 @@
-from typing import Any, Generator, List, Optional, Sequence, cast
+from typing import Any, Generator, List, Optional, Sequence, Union, cast
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
@@ -28,8 +28,9 @@ from llama_index.core.llms.llm import (
     stream_completion_response_to_tokens,
     astream_completion_response_to_tokens,
 )
+from llama_index.core.base.llms.types import ChatResponse, ChatResponseAsyncGen
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_EMPTY_RESPONSE_GEN,
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
@@ -212,7 +213,7 @@ class PaiSynthesizer(BaseSynthesizer):
         system_role_str: str = None,
         prompt_template_str: str = None,
         **response_kwargs: Any,
-    ) -> RESPONSE_TYPE:
+    ) -> ChatResponseWrapper:
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -237,7 +238,7 @@ class PaiSynthesizer(BaseSynthesizer):
             if query.chat_messages_str:
                 query_str = query.chat_messages_str + "\nassistant: "
             if query.no_retrieval:
-                response_str = await self.aget_llm_only_response(
+                response = await self.aget_llm_only_response(
                     query_str=query_str,
                     streaming=query.stream,
                     system_role_str=system_role_str or self._system_role_template,
@@ -246,7 +247,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     **response_kwargs,
                 )
             else:
-                response_str = await self.aget_response(
+                response = await self.aget_response(
                     query_str=query_str,
                     text_chunks=[
                         n.node.get_content(metadata_mode=MetadataMode.LLM)
@@ -264,17 +265,9 @@ class PaiSynthesizer(BaseSynthesizer):
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
 
-            response = self._prepare_response_output(response_str, source_nodes)
-
             event.on_end(payload={EventPayload.RESPONSE: response})
 
-        dispatcher.event(
-            SynthesizeEndEvent(
-                query=query,
-                response=response,
-            )
-        )
-        return response
+        return ChatResponseWrapper(response=response, source_nodes=source_nodes)
 
     def _get_multi_modal_response(
         self,
@@ -385,7 +378,7 @@ class PaiSynthesizer(BaseSynthesizer):
         system_role_str: str = None,
         prompt_template_str: str = None,
         **response_kwargs: Any,
-    ) -> RESPONSE_TEXT_TYPE:
+    ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         if image_url_list and len(image_url_list) > 0:
             assert (
                 self._multimodal_llm is not None
@@ -445,24 +438,22 @@ class PaiSynthesizer(BaseSynthesizer):
         logger.info(
             f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Query: {query_str}"
         )
-        if not streaming:
-            response = await self._llm.apredict(
-                text_qa_template,
-                context_str=context_str,
-                **response_kwargs,
-            )
-        else:
-            # customized modify [will be removed]
-            response = await self._llm.astream(
-                text_qa_template,
-                context_str=context_str,
-                **response_kwargs,
-            )
+        messages = self._llm._get_messages(
+            text_qa_template,
+            context_str=context_str,
+            **response_kwargs,
+        )
 
-        if isinstance(response, str):
-            response = response or DEFAULT_EMPTY_RESPONSE_GEN
+        if not streaming:
+            response = await self._llm.achat(
+                messages=messages,
+                **response_kwargs,
+            )
         else:
-            response = cast(Generator, response)
+            response = await self._llm.astream_chat(
+                messages=messages,
+                **response_kwargs,
+            )
 
         return response
 
@@ -557,7 +548,7 @@ class PaiSynthesizer(BaseSynthesizer):
         system_role_str: str = None,
         prompt_template_str: str = None,
         **kwargs: Any,
-    ) -> RESPONSE_TEXT_TYPE:
+    ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         response: RESPONSE_TEXT_TYPE
         _llm_only_template = PromptTemplate(
             template="{}\n{}\n{}\n{}".format(
@@ -572,23 +563,22 @@ class PaiSynthesizer(BaseSynthesizer):
         logger.info(
             f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
         )
-        if not streaming:
-            response = await self._llm.apredict(
-                _llm_only_template,
-                query_str=query_str,
-                **kwargs,
-            )
-        else:
-            response = await self._llm.astream(
-                _llm_only_template,
-                query_str=query_str,
-                **kwargs,
-            )
+        messages = self._llm._get_messages(
+            _llm_only_template,
+            query_str=query_str,
+            **kwargs,
+        )
 
-        if isinstance(response, str):
-            response = response or DEFAULT_EMPTY_RESPONSE_GEN
+        if not streaming:
+            response = await self._llm.achat(
+                messages=messages,
+                **kwargs,
+            )
         else:
-            response = cast(Generator, response)
+            response = await self._llm.astream_chat(
+                messages=messages,
+                **kwargs,
+            )
 
         return response
 
