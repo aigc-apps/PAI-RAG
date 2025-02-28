@@ -87,14 +87,14 @@ Is playing basketball fun?
 
 Example 2:
 <Chat history>
-User: What did you do this morning?
-Assistant: Go play basketball
+User: 有多少只猫?
+Assistant: 有1只猫
 
 <New question>
-User: 有趣么?
+User: 狗呢
 
 <Condensed question>
-打篮球有趣么?
+有多少条狗?
 
 Now it's your turn:
 <Chat history>
@@ -106,6 +106,7 @@ Now it's your turn:
 <Condensed question>
 """
 )
+
 
 CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH = """# 角色
 你是一位专业的信息检索专家，负责分析聊天记录以确定是否需要生成搜索查询。你的目标是确保获取全面、最新且有价值的信息。
