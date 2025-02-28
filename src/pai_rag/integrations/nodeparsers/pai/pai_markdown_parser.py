@@ -1,5 +1,6 @@
 """Markdown node parser."""
 from llama_index.core.bridge.pydantic import Field, BaseModel
+from urllib.parse import urlparse
 from typing import Any, Iterator, List, Optional, Sequence
 
 from llama_index.core.node_parser.interface import NodeParser
@@ -59,6 +60,14 @@ class StructuredNodeParser(BaseModel):
         """Get class name."""
         return "StructuredNodeParser"
 
+    def normalize_url(self, url: str) -> str:
+        """自动补全缺失协议头的URL"""
+        parsed = urlparse(url)
+        if not parsed.scheme:
+            # 默认使用HTTPS协议
+            return f"https:{url}" if url.startswith("//") else f"https://{url}"
+        return url
+
     def _cut(self, raw_section: str) -> Iterator[str]:
         # 可能存在单个node 字符数大于chunk_size，此时需要将node进行拆分。拆分元素里不会含有image。
         return self.base_parser.split_text(raw_section)
@@ -78,7 +87,7 @@ class StructuredNodeParser(BaseModel):
         ):
             image_node = ImageNode(
                 embedding=doc_node.embedding,
-                image_url=node.content,
+                image_url=self.normalize_url(node.content),
                 excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                 excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                 metadata_separator=doc_node.metadata_separator,
@@ -91,7 +100,7 @@ class StructuredNodeParser(BaseModel):
                 relationships=relationships,
             )
             nodes_list.append(image_node)
-            image_info = ImageInfo(image_url=node.content)
+            image_info = ImageInfo(image_url=self.normalize_url(node.content))
             chunk_images_list.append(image_info.__dict__)
             return ""
         if not node.children:
@@ -244,20 +253,22 @@ class StructuredNodeParser(BaseModel):
                     ):
                         image_node = ImageNode(
                             embedding=doc_node.embedding,
-                            image_url=child.content,
+                            image_url=self.normalize_url(child.content),
                             excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                             excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                             metadata_separator=doc_node.metadata_separator,
                             metadata_template=doc_node.metadata_template,
                             text_template=doc_node.text_template,
                             metadata={
-                                "image_url": child.content,
+                                "image_url": self.normalize_url(child.content),
                                 **doc_node.extra_info,
                             },
                             relationships=relationships,
                         )
                         nodes_list.append(image_node)
-                        image_info = ImageInfo(image_url=child.content)
+                        image_info = ImageInfo(
+                            image_url=self.normalize_url(child.content)
+                        )
                         chunk_images_list.append(image_info.__dict__)
                     else:
                         chunk_text += "\n" + self._format_tree_nodes(
