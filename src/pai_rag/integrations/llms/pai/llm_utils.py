@@ -18,11 +18,20 @@ from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
 from loguru import logger
 
 
-def _make_openai_compatible_base_url(base_url: str):
-    if base_url.endswith("/v1") or "pai-eas.aliyun" not in base_url:
-        return base_url
+def _should_url_add_v1(base_url: str):
+    if base_url.endswith("/v1") or base_url.endswith("/v1/"):
+        return False
 
-    return urljoin(base_url.rstrip("/") + "/", "v1")
+    elif "pai-eas" in base_url or "localhost" in base_url or "127.0.0.1" in base_url:
+        return True
+
+    return False
+
+
+def _make_openai_compatible_base_url(base_url: str):
+    if _should_url_add_v1(base_url):
+        return urljoin(base_url.rstrip("/") + "/", "v1")
+    return base_url
 
 
 def create_llm(llm_config: PaiBaseLlmConfig):

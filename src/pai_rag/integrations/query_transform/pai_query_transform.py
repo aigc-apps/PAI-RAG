@@ -14,7 +14,7 @@ from pai_rag.utils.prompt_template import (
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
 )
-from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_TIME_PROMPT
+from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_QUERY_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import PaiQueryBundle
@@ -188,8 +188,8 @@ class OpenAICompatibleQueryTransform:
         default_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
                 self._query_transform_prompt,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                CURRENT_QUERY_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
                 ),
                 CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
             )
@@ -206,8 +206,8 @@ class OpenAICompatibleQueryTransform:
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
                     self._query_transform_prompt,
-                    CURRENT_TIME_PROMPT.format(
-                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    CURRENT_QUERY_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日")
                     ),
                     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
                 )
@@ -291,8 +291,8 @@ class OpenAICompatibleQueryTransform:
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
                     self._query_transform_prompt,
-                    CURRENT_TIME_PROMPT.format(
-                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                    CURRENT_QUERY_TIME_PROMPT.format(
+                        current_datetime=datetime.now().strftime("%Y年%m月%d日")
                     ),
                     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
                 )
@@ -348,8 +348,6 @@ class OpenAICompatibleQueryTransform:
                     total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
                 )
             else:
-                if chat_messages[-1].content != query_json["query"]:
-                    chat_history_str += f' {query_json["query"]}'
                 return PaiQueryBundle(
                     query_str=query_json["query"],
                     need_web_search=True,
