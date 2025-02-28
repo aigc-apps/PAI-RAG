@@ -205,10 +205,10 @@ def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
         return None
 
     if (
-        config.query_rewrite.llm.base_url
+        config.query_rewrite.llm
+        and config.query_rewrite.llm.base_url
         and config.query_rewrite.llm.api_key
         and config.query_rewrite.llm.model
-        and resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
     ):
         llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
     else:
