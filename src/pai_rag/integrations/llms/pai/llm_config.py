@@ -5,6 +5,7 @@ from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
 DEFAULT_MAX_TOKENS = 4000
+DEFAULT_MLLM_MAX_TOKENS = 2048
 
 
 class DashScopeGenerationModels:
