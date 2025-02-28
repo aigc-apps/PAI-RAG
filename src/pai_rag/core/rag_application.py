@@ -697,7 +697,7 @@ class RagApplication:
         question = query.messages[-1].content
         if openai_query_transform is not None:
             new_query_bundle = await openai_query_transform.arun(
-                chat_messages=query.messages
+                chat_messages=query.messages, chat_type=chat_type
             )
         else:
             need_web_search = chat_type == RagChatType.WEB
