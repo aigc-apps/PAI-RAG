@@ -280,7 +280,7 @@ class DataAnalysisQuery(BaseQueryEngine):
             query=query_bundle,
             description=description,
             nodes=nodes,
-            streaming=streaming,
+            streaming=query_bundle.stream,
         )
 
     @dispatcher.span
@@ -317,7 +317,7 @@ class DataAnalysisQuery(BaseQueryEngine):
                 query=query_bundle,
                 description=description,
                 nodes=nodes,
-                streaming=streaming,
+                streaming=query_bundle.stream,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 

@@ -199,7 +199,9 @@ class OpenAICompatibleQueryTransform:
         )
 
     def run(
-        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
+        self,
+        chat_messages: List[ChatMessage] = [],
+        chat_type: str = "default"
     ) -> QueryBundle:
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         if chat_type != "nl2sql":
@@ -245,6 +247,17 @@ class OpenAICompatibleQueryTransform:
                 chat_messages_str=chat_history_str,
             )
         else:
+                if chat_type == "nl2sql":
+                return PaiQueryBundle(
+                    query_str=transformed_query_str,
+                    need_web_search=False,
+                    custom_embedding_strs=[
+                        chat_messages[-1].content,
+                        transformed_query_str,
+                    ],
+                    chat_messages_str=chat_history_str,
+                )
+        else:
             query_json = parse_json_from_code_block_str(transformed_query_str)
             if ("query" not in query_json) or (len(query_json["query"]) == 0):
                 return PaiQueryBundle(
@@ -263,16 +276,16 @@ class OpenAICompatibleQueryTransform:
                     ),
                     total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
                 )
-            else:
-                return PaiQueryBundle(
-                    query_str=query_json["query"],
-                    need_web_search=True,
-                    custom_embedding_strs=[
-                        chat_messages[-1].content,
-                        transformed_query_str,
-                    ],
-                    chat_messages_str=chat_history_str,
-                    completion_tokens=chat_response.additional_kwargs.get(
+                else:
+                    return PaiQueryBundle(
+                        query_str=query_json["query"],
+                        need_web_search=True,
+                        custom_embedding_strs=[
+                            chat_messages[-1].content,
+                            transformed_query_str,
+                        ],
+                        chat_messages_str=chat_history_str,
+                        completion_tokens=chat_response.additional_kwargs.get(
                         "completion_tokens", 0
                     ),
                     prompt_tokens=chat_response.additional_kwargs.get(
@@ -282,21 +295,23 @@ class OpenAICompatibleQueryTransform:
                 )
 
     async def arun(
-        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
+        self,
+        chat_messages: List[ChatMessage] = [],
+        chat_type: str = "default"
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
         chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
         if chat_type != "nl2sql":
             current_condense_question_prompt = PromptTemplate(
-                template="{}\n{}\n{}".format(
-                    self._query_transform_prompt,
-                    CURRENT_TIME_PROMPT.format(
-                        current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                    ),
-                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                    template="{}\n{}\n{}".format(
+                        self._query_transform_prompt,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+                        ),
+                        CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
+                    )
                 )
-            )
         else:
             current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
 
@@ -332,13 +347,25 @@ class OpenAICompatibleQueryTransform:
             )
         else:
             query_json = parse_json_from_code_block_str(transformed_query_str)
+        if chat_type == "nl2sql":
+            return PaiQueryBundle(
+                query_str=transformed_query_str,
+                need_web_search=False,
+                custom_embedding_strs=[
+                    chat_messages[-1].content,
+                    transformed_query_str,
+                ],
+                chat_messages_str=chat_history_str,
+            )
+        else:
+            query_json = parse_json_from_code_block_str(transformed_query_str)
 
-            if ("query" not in query_json) or (len(query_json["query"]) == 0):
-                return PaiQueryBundle(
-                    query_str=chat_messages[-1].content,
-                    need_web_search=False,
-                    custom_embedding_strs=[chat_messages[-1].content],
-                    chat_messages_str=chat_history_str,
+                if ("query" not in query_json) or (len(query_json["query"]) == 0):
+                    return PaiQueryBundle(
+                        query_str=chat_messages[-1].content,
+                        need_web_search=False,
+                        custom_embedding_strs=[chat_messages[-1].content],
+                        chat_messages_str=chat_history_str,
                     completion_tokens=chat_response.additional_kwargs.get(
                         "completion_tokens", 0
                     ),
@@ -346,15 +373,15 @@ class OpenAICompatibleQueryTransform:
                         "prompt_tokens", 0
                     ),
                     total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
-            else:
-                if chat_messages[-1].content != query_json["query"]:
-                    chat_history_str += f' {query_json["query"]}'
-                return PaiQueryBundle(
-                    query_str=query_json["query"],
-                    need_web_search=True,
-                    custom_embedding_strs=[transformed_query_str],
-                    chat_messages_str=chat_history_str,
+                    )
+                else:
+                    if chat_messages[-1].content != query_json["query"]:
+                        chat_history_str += f' {query_json["query"]}'
+                    return PaiQueryBundle(
+                        query_str=query_json["query"],
+                        need_web_search=True,
+                        custom_embedding_strs=[transformed_query_str],
+                        chat_messages_str=chat_history_str,
                     completion_tokens=chat_response.additional_kwargs.get(
                         "completion_tokens", 0
                     ),
@@ -362,4 +389,4 @@ class OpenAICompatibleQueryTransform:
                         "prompt_tokens", 0
                     ),
                     total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
+                    )

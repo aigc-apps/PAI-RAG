@@ -164,14 +164,34 @@ def _make_chat_completion_response(
                     "file_url"
                 ) or score_node.node.metadata.get("file_path")
                 citations.append(url)
-                citation_details.append(
-                    {
-                        "name": score_node.node.metadata.get("file_name"),
-                        "text": score_node.node.text,
-                        "url": url,
-                        "score": score_node.score,
-                    }
-                )
+                file_name = score_node.node.metadata.get("file_name")
+                tables = score_node.node.metadata.get("query_tables")
+                sql = score_node.node.metadata.get("query_code_instruction")
+                is_valid = score_node.node.metadata.get("invalid_flag")
+                fields_to_append = [
+                    ("File Name", file_name),
+                    ("Tables", tables),
+                    ("SQL", sql),
+                    ("Is Valid", is_valid)
+                ]
+                for name, value in fields_to_append:
+                    if value is not None:
+                        citation_details.append(
+                            {
+                                "name": value,
+                                "text": score_node.node.text,
+                                "url": url,
+                                "score": score_node.score,
+                            }
+                        )
+                # citation_details.append(
+                #     {
+                #         "name": score_node.node.metadata.get("file_name"),
+                #         "text": score_node.node.text,
+                #         "url": url,
+                #         "score": score_node.score,
+                #     }
+                # )
 
     base_token_usage.completion_tokens += (
         response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
@@ -262,14 +282,34 @@ async def _make_chat_completion_chunk_response(
                     "file_url"
                 ) or score_node.node.metadata.get("file_path")
                 citations.append(url)
-                citation_details.append(
-                    {
-                        "name": score_node.node.metadata.get("file_name"),
-                        "url": url,
-                        "text": score_node.node.text,
-                        "score": score_node.score,
-                    }
-                )
+                file_name = score_node.node.metadata.get("file_name")
+                tables = score_node.node.metadata.get("query_tables")
+                sql = score_node.node.metadata.get("query_code_instruction")
+                is_valid = score_node.node.metadata.get("invalid_flag")
+                fields_to_append = [
+                    ("File Name", file_name),
+                    ("Tables", tables),
+                    ("SQL", sql),
+                    ("Is Valid", is_valid)
+                ]
+                for name, value in fields_to_append:
+                    if value is not None:
+                        citation_details.append(
+                            {
+                                "name": value,
+                                "text": score_node.node.text,
+                                "url": url,
+                                "score": score_node.score,
+                            }
+                        )
+                # citation_details.append(
+                #     {
+                #         "name": score_node.node.metadata.get("file_name"),
+                #         "url": url,
+                #         "text": score_node.node.text,
+                #         "score": score_node.score,
+                #     }
+                # )
 
     model_name = Settings.llm.metadata.model_name
     try:
@@ -575,6 +615,26 @@ class RagApplication:
 
             if self.config.system.default_web_search:
                 chat_request.search_web = True
+            
+            # if (chat_request.chat_llm) and (not chat_request.search_web):
+            #     logger.info(f"Querying with question: {messages[-1].content}.")
+            #     llm: PaiLlm = resolve_llm(self.config)
+            #     if not chat_request.stream:
+            #         response = await llm.achat(messages=messages)
+            #         import pdb
+            #         pdb.set_trace()
+            #         return _make_chat_completion_response(
+            #             session_id=session_id,
+            #             response=response,
+            #         )
+            #     else:
+            #         response = await llm.astream_chat(messages=messages)
+
+            #         # return response
+            #         return _make_chat_completion_chunk_response(
+            #             session_id=session_id,
+            #             response=response,
+            #         )                    
 
             question = messages[-1].content
 
@@ -582,9 +642,13 @@ class RagApplication:
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
             openai_query_transform = resolve_openai_query_transform(self.config)
+            if chat_request.chat_db:
+                chat_type = "nl2sql"
+            else:
+                chat_type = "default"
             if openai_query_transform is not None:
                 new_query_bundle = await openai_query_transform.arun(
-                    chat_messages=messages,
+                    chat_messages=messages,chat_type=chat_type
                 )
                 base_token_usage.completion_tokens += new_query_bundle.completion_tokens
                 base_token_usage.prompt_tokens += new_query_bundle.prompt_tokens
@@ -636,6 +700,29 @@ class RagApplication:
                 query_bundle.need_web_search = True
             elif chat_request.force_search_knowledgebase:
                 chat_request.search_web = False
+            
+            if chat_request.chat_db:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                data_analysis_query_engine = resolve_data_analysis_query(self.config)
+                if not data_analysis_query_engine:
+                    raise ValueError(
+                        "DBChat config is not valid. Please check your DBChat api configuration."
+                    )
+                response = await data_analysis_query_engine.aquery(query_bundle)
+
+                if chat_request.stream:
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response=response,
+                        return_reference=True,
+                    )
+                else:
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response=response,
+                        return_reference=True,
+                    )
 
             if chat_request.search_web:
                 logger.info(f"Querying with question '{query_bundle.query_str}'.")
@@ -673,7 +760,7 @@ class RagApplication:
                         base_token_usage=base_token_usage,
                         return_reference=chat_request.return_reference,
                     )
-
+                
             if new_question != question:
                 query_bundle.query_str = " ".join([question, new_question])
 
