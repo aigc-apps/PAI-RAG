@@ -1,4 +1,4 @@
-from typing import Any, List, Generator, Optional, Sequence, cast, AsyncGenerator
+from typing import Any, List, Generator, Optional, Sequence, cast, AsyncGenerator, Union
 from loguru import logger
 
 from llama_index.core.callbacks.base import CallbackManager
@@ -8,6 +8,8 @@ from llama_index.core.schema import NodeWithScore, QueryType, QueryBundle
 from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.llms import LLM
+from llama_index.core.base.llms.types import ChatResponse, ChatResponseAsyncGen
+from pai_rag.app.api.models import ChatResponseWrapper
 from llama_index.core.types import RESPONSE_TEXT_TYPE
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
@@ -76,7 +78,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         retrieved_nodes: List[NodeWithScore],
         streaming: bool = False,
         **response_kwargs: Any,
-    ) -> RESPONSE_TEXT_TYPE:
+    ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         query_df_output = [n.node.get_content() for n in retrieved_nodes]
         logger.info(f"db_description_str: {db_description_str}")
         partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
@@ -92,34 +94,53 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         )
         logger.info(f"truncated_df_output: {str(truncated_df_output)}")
 
-        response: RESPONSE_TEXT_TYPE
+        # response: RESPONSE_TEXT_TYPE
+        messages = self._llm._get_messages(
+            self._response_synthesis_prompt,
+            query_str=query_str,
+            db_schema=db_description_str,
+            query_code_instruction=[
+                n.node.metadata["query_code_instruction"] for n in retrieved_nodes
+            ],  # sql or pandas query
+            query_output=truncated_df_output,  # query output
+            **response_kwargs,
+        )
+
         if not streaming:
-            response = await self._llm.apredict(
-                self._response_synthesis_prompt,
-                query_str=query_str,
-                db_schema=db_description_str,
-                query_code_instruction=[
-                    n.node.metadata["query_code_instruction"] for n in retrieved_nodes
-                ],  # sql or pandas query
-                query_output=truncated_df_output,  # query output
+            # response = await self._llm.apredict(
+            #     self._response_synthesis_prompt,
+            #     query_str=query_str,
+            #     db_schema=db_description_str,
+            #     query_code_instruction=[
+            #         n.node.metadata["query_code_instruction"] for n in retrieved_nodes
+            #     ],  # sql or pandas query
+            #     query_output=truncated_df_output,  # query output
+            #     **response_kwargs,
+            # )
+            response = await self._llm.achat(
+                messages=messages,
                 **response_kwargs,
             )
         else:
-            response = await self._llm.astream(
-                self._response_synthesis_prompt,
-                query_str=query_str,
-                db_schema=db_description_str,
-                query_code_instruction=[
-                    n.node.metadata["query_code_instruction"] for n in retrieved_nodes
-                ],
-                query_output=truncated_df_output,
+            # response = await self._llm.astream(
+            #     self._response_synthesis_prompt,
+            #     query_str=query_str,
+            #     db_schema=db_description_str,
+            #     query_code_instruction=[
+            #         n.node.metadata["query_code_instruction"] for n in retrieved_nodes
+            #     ],
+            #     query_output=truncated_df_output,
+            #     **response_kwargs,
+            # )
+            response = await self._llm.astream_chat(
+                messages=messages,
                 **response_kwargs,
             )
 
-        if isinstance(response, str):
-            response = response or DEFAULT_EMPTY_RESPONSE_GEN
-        else:
-            response = cast(Generator, response)
+        # if isinstance(response, str):
+        #     response = response or DEFAULT_EMPTY_RESPONSE_GEN
+        # else:
+        #     response = cast(Generator, response)
 
         return response
 
@@ -255,7 +276,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         streaming: bool = False,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         **response_kwargs: Any,
-    ) -> RESPONSE_TYPE:
+    ) -> ChatResponseWrapper:
         dispatcher.event(
             SynthesizeStartEvent(
                 query=query,
@@ -290,7 +311,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            response_str = await self.aget_response(
+            response = await self.aget_response(
                 query_str=query.query_str,
                 db_description_str=description,
                 retrieved_nodes=nodes,
@@ -301,14 +322,18 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
 
-            response = self._prepare_response_output(response_str, source_nodes)
+            # response = self._prepare_response_output(response_str, source_nodes)
 
             event.on_end(payload={EventPayload.RESPONSE: response})
 
-        dispatcher.event(
-            SynthesizeEndEvent(
-                query=query,
-                response=response,
-            )
+        # dispatcher.event(
+        #     SynthesizeEndEvent(
+        #         query=query,
+        #         response=response,
+        #     )
+        # )
+        # return response
+        return ChatResponseWrapper(
+            response=response,
+            source_nodes=source_nodes,
         )
-        return response
