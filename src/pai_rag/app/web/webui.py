@@ -19,7 +19,7 @@ from pai_rag.app.web.ui_constants import (
     WELCOME_MESSAGE,
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
-from pai_rag.utils.request_utils import postprocess_middleware
+from pai_rag.app.web.filebrower.request_utils import postprocess_middleware
 
 
 def resume_ui():

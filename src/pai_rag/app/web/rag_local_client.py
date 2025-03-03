@@ -660,5 +660,10 @@ class RagLocalClient:
             index_name=index_name, file_path=file_path
         )
 
+    def delete_dir_from_index(self, index_name: str, dir_path: str):
+        return index_manager.delete_dir_from_index(
+            index_name=index_name, file_path=dir_path
+        )
+
 
 rag_client = RagLocalClient()

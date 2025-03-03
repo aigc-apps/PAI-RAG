@@ -23,7 +23,7 @@ def delete_dir(folder_path):
         logger.error(f"Error deleting folder {folder_path}: {e}")
 
 
-def del_index_dir(index_name):
+def delete_index_dir(index_name):
     if index_name == "default_index":
         destination_folder = os.path.join("localdata", "storage")
     else:
@@ -32,7 +32,7 @@ def del_index_dir(index_name):
 
 
 def write_markdown_to_parse_dir(md_content, file_name, parse_dir):
-    destination_md_file = f"{parse_dir}/{file_name}.md"
+    destination_md_file = os.path.join(parse_dir, f"{file_name}.md")
     try:
         with open(destination_md_file, "w", encoding="utf-8") as md_file:
             md_file.write(md_content)

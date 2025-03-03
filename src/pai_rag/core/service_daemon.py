@@ -12,7 +12,7 @@ FILE_CHECK_INTERVAL = 10
 
 
 async def periodic_check_config():
-    logger.debug("Running periodic_check_config")
+    logger.debug("Running periodic_check_config in background.")
     try:
         while True:
             index_manager.check_updates()
@@ -25,7 +25,8 @@ async def periodic_check_config():
 
 
 # 定义后台任务
-async def process_batch_files():
+async def process_batch_files_in_background():
+    logger.debug("Running process_batch_files in background.")
     while True:
         await asyncio.sleep(FILE_CHECK_INTERVAL)  # 等待15秒
         with batch_lock:
@@ -48,5 +49,5 @@ async def process_batch_files():
 
 async def startup_event():
     # 启动后台任务
-    logger.debug("Running process_batch_files")
-    asyncio.create_task(process_batch_files())
+    asyncio.create_task(periodic_check_config())
+    asyncio.create_task(process_batch_files_in_background())

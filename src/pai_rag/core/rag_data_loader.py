@@ -37,73 +37,111 @@ class RagDataLoader:
         task_id: str = None,
     ):
         _knowledgebase_manager = RagKnowledgeBaseManager(index_name=index_name)
-        """Load data from a file or directory."""
-        # parse input files into documents
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="parse",
-            status="processing",
-        )
-        documents = self._data_reader.load_data(
-            file_path_or_directory=file_path_or_directory,
-            filter_pattern=filter_pattern,
-            oss_path=oss_path,
-            from_oss=from_oss,
-        )
-        _knowledgebase_manager.save_parse_files(documents)
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="parse",
-            status="completed",
-        )
-        if from_oss:
-            logger.info(f"Loaded {len(documents)} documents from {oss_path}")
-        else:
-            logger.info(
-                f"Loaded {len(documents)} documents from {file_path_or_directory}"
+        try:
+            """Load data from a file or directory."""
+            # parse input files into documents
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="parse",
+                status="processing",
+                start=True,
             )
+            documents = self._data_reader.load_data(
+                file_path_or_directory=file_path_or_directory,
+                filter_pattern=filter_pattern,
+                oss_path=oss_path,
+                from_oss=from_oss,
+            )
+            _knowledgebase_manager.save_parse_files(documents)
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="parse",
+                status="completed",
+            )
+            if from_oss:
+                logger.info(f"Loaded {len(documents)} documents from {oss_path}")
+            else:
+                logger.info(
+                    f"Loaded {len(documents)} documents from {file_path_or_directory}"
+                )
+        except Exception as e:
+            logger.error(f"[DataLoader] Parse Stage Error: {e}")
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="parse",
+                status="failed",
+                detail=f"[DataLoader] Error: {e}",
+            )
+            raise e
 
         # split documents into nodes
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="split",
-            status="processing",
-        )
-        splitted_nodes = self._node_parser(documents)
-        _knowledgebase_manager.save_chunk_nodes(splitted_nodes, "split")
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="split",
-            status="completed",
-        )
+        try:
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="split",
+                status="processing",
+            )
+            splitted_nodes = self._node_parser(documents)
+            _knowledgebase_manager.save_chunk_nodes(splitted_nodes, "split")
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="split",
+                status="completed",
+            )
+        except Exception as e:
+            logger.error(f"[DataLoader] Split Stage Error: {e}")
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="split",
+                status="failed",
+                detail=f"[DataLoader] Error: {e}",
+            )
+            raise e
 
         # embed nodes
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="embed",
-            status="processing",
-        )
-        embedded_nodes = self._embed_model(splitted_nodes)
-        if self._multimodal_embed_model is not None:
-            embedded_nodes = self._multimodal_embed_model(embedded_nodes)
-        _knowledgebase_manager.save_chunk_nodes(embedded_nodes, "embed")
-        upload_job_manager.track_job(
-            task_id,
-            index_name,
-            file_path_or_directory,
-            stage="embed",
-            status="completed",
-        )
+        try:
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="embed",
+                status="processing",
+            )
+            embedded_nodes = self._embed_model(splitted_nodes)
+            if self._multimodal_embed_model is not None:
+                embedded_nodes = self._multimodal_embed_model(embedded_nodes)
+            _knowledgebase_manager.save_chunk_nodes(embedded_nodes, "embed")
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="embed",
+                status="completed",
+            )
+        except Exception as e:
+            logger.error(f"[DataLoader] Embedding Stage Error: {e}")
+            upload_job_manager.track_job(
+                task_id,
+                index_name,
+                file_path_or_directory,
+                stage="embed",
+                status="failed",
+                detail=f"[DataLoader] Error: {e}",
+                end=True,
+            )
+            raise e
 
         # if enable_raptor:
         #     assert self._raptor_processor is not None, "Raptor processor is not set."

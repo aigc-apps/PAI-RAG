@@ -12,13 +12,14 @@ from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreCo
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
-from pai_rag.utils.index_utils import del_index_dir
+from pai_rag.utils.index_utils import delete_index_dir
 from loguru import logger
 
 
 DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
 DEFAULT_INDEX_NAME = "default_index"
 DEFAULT_MAX_INDEX_ENTRY_COUNT = os.environ.get("DEFAULT_MAX_INDEX_ENTRY_COUNT", 20)
+IGNORE_FILE_LIST = [".DS_Store"]
 
 # 共享的批处理文件列表和锁
 batch_files: Dict[str, List[str]] = {}
@@ -149,7 +150,7 @@ class RagIndexManager:
                 index_name in self._index_map.indexes
             ), f"Index name '{index_name}' not exists."
             del self._index_map.indexes[index_name]
-            del_index_dir(index_name)
+            delete_index_dir(index_name)
             new_state = self.save_index_map()
             self._state.update_state(new_state)
             logger.info(f"Index '{index_name}' removed.")
@@ -181,6 +182,10 @@ class RagIndexManager:
                         self._state.update_state(new_state)
 
     def add_file_to_index(self, index_name: str, file_path: str):
+        for ignore_file in IGNORE_FILE_LIST:
+            if file_path.endswith(ignore_file):
+                logger.info(f"File {file_path} is not supported and ignored.")
+                return
         with batch_lock:
             if index_name in batch_files:
                 batch_files[index_name].append(file_path)
@@ -191,6 +196,10 @@ class RagIndexManager:
         )
 
     def delete_file_from_index(self, index_name: str, file_path: str):
+        for ignore_file in IGNORE_FILE_LIST:
+            if file_path.endswith(ignore_file):
+                logger.info(f"File {file_path} is not supported and ignored.")
+                return True
         current_index = self.get_index_by_name(index_name)
         current_vector_store_index = PaiVectorStoreIndex(
             current_index.vector_store_config,
@@ -201,10 +210,12 @@ class RagIndexManager:
                 file_path
             )
         )
-        logger.info(f"get_docid_from_index_via_file_name: ref_doc_id {ref_doc_id}")
+        logger.info(
+            f"get_docid_from_index_via_file_name: ref_doc_id {ref_doc_id} file path: {file_path}"
+        )
         try:
             res = current_vector_store_index.delete_ref_doc(ref_doc_id)
-            current_index.knowledgebase_manager.del_local_files_from_index(file_path)
+            current_index.knowledgebase_manager.delete_local_files_from_index(file_path)
             logger.info(
                 f"File {file_path} removed from batch_processor for index {index_name}. res: {res}."
             )
@@ -214,6 +225,10 @@ class RagIndexManager:
         except Exception as e:
             logger.error(f"delete_file_from_index: delete_ref_doc error {e}")
         return False
+
+    def delete_dir_from_index(self, index_name: str, file_path: str):
+        current_index = self.get_index_by_name(index_name)
+        current_index.knowledgebase_manager.delete_local_dir_from_index(file_path)
 
 
 index_manager = RagIndexManager.from_file(index_file=DEFAULT_INDEX_FILE)

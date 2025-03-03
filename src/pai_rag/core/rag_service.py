@@ -109,10 +109,6 @@ class RagService:
             logger.warning(f"No event loop found, will create new: {ex}")
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
-
-        upload_job_manager.track_job(task_id, index_name, input_files, status="start")
-        with open(TASK_STATUS_FILE, "a") as f:
-            f.write(f"{task_id}\tprocessing\n")
         try:
             self.rag.load_knowledge(
                 input_files=input_files,
@@ -124,38 +120,13 @@ class RagService:
                 enable_multimodal=enable_multimodal,
                 task_id=task_id,
             )
-            with open(TASK_STATUS_FILE, "a") as f:
-                f.write(f"{task_id}\tcompleted\n")
         except Exception as ex:
             logger.error(f"Upload failed: {ex} {traceback.format_exc()}")
-            with open(TASK_STATUS_FILE, "a") as f:
-                detail = f"{ex}".replace("\t", " ").replace("\n", " ")
-                f.write(f"{task_id}\tfailed\t{detail}\n")
-                upload_job_manager.track_job(
-                    task_id,
-                    index_name,
-                    input_files,
-                    stage="parse",
-                    status="failed",
-                    detail=detail,
-                )
             raise UserInputError(f"Upload knowledge failed: {ex}")
 
     def get_task_status(self, task_id: str):
-        status = "unknown"
         detail = None
-        if not os.path.exists(TASK_STATUS_FILE):
-            return status, detail
-
-        lines = open(TASK_STATUS_FILE).readlines()
-        for line in lines[::-1]:
-            if line.startswith(task_id):
-                parts = line.strip().split("\t")
-                status = parts[1]
-                if len(parts) == 3:
-                    detail = parts[2]
-                break
-
+        status = upload_job_manager.get_task_status(task_id)
         return status, detail
 
     async def aquery_v1(self, query: RagQuery):
