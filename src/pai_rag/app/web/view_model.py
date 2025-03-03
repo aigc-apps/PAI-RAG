@@ -146,10 +146,9 @@ class ViewModel(BaseModel):
     query_type: str = "Chat（Knowledge Base）"
 
     enable_query_transform: bool = True
-    qt_llm_source: str = None
     qt_llm_base_url: str = None
     qt_llm_api_key: str = None
-    qt_llm_model_name: str = None
+    qt_llm_model_name: str = "default"
     query_transform_template: str = None
 
     synthesizer_type: str = None
@@ -263,10 +262,10 @@ class ViewModel(BaseModel):
         view_model.query_transform_template = (
             config.query_rewrite.rewrite_prompt_template
         )
-        view_model.qt_llm_source = config.query_rewrite.llm.source
-        view_model.qt_llm_base_url = config.query_rewrite.llm.base_url
-        view_model.qt_llm_api_key = config.query_rewrite.llm.api_key
-        view_model.qt_llm_model_name = config.query_rewrite.llm.model
+        if config.query_rewrite.llm is not None:
+            view_model.qt_llm_base_url = config.query_rewrite.llm.base_url
+            view_model.qt_llm_api_key = config.query_rewrite.llm.api_key
+            view_model.qt_llm_model_name = config.query_rewrite.llm.model
 
         view_model.system_role_template = config.synthesizer.system_role_template
         view_model.custom_prompt_template = config.synthesizer.custom_prompt_template

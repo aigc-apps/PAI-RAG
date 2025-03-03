@@ -16,7 +16,7 @@ DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 class QueryRewriteConfig(BaseModel):
     enabled: bool = True
     rewrite_prompt_template: str = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
-    llm: OpenAICompatibleLlmConfig | None = None
+    llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
 
 
 class AliyunTextModerationPlusConfig(BaseModel):
