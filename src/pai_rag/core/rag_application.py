@@ -169,12 +169,20 @@ def _make_chat_completion_response(
                     citation_details.append(
                         {
                             "name": "SQL Information",
-                            "text": json.dumps({
-                                "SQL" : score_node.node.metadata.get("query_code_instruction"),
-                                "SQL_Exec_Result" : score_node.node.text,
-                                "Tables" : score_node.node.metadata.get("query_tables"),
-                                "Valid" : score_node.node.metadata.get("invalid_flag")
-                            }),
+                            "text": json.dumps(
+                                {
+                                    "SQL": score_node.node.metadata.get(
+                                        "query_code_instruction"
+                                    ),
+                                    "SQL_Exec_Result": score_node.node.text,
+                                    "Tables": score_node.node.metadata.get(
+                                        "query_tables"
+                                    ),
+                                    "Valid": score_node.node.metadata.get(
+                                        "invalid_flag"
+                                    ),
+                                }
+                            ),
                             "url": url,
                             "score": score_node.score,
                         }
@@ -188,7 +196,6 @@ def _make_chat_completion_response(
                             "score": score_node.score,
                         }
                     )
-
 
     base_token_usage.completion_tokens += (
         response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
@@ -284,12 +291,20 @@ async def _make_chat_completion_chunk_response(
                     citation_details.append(
                         {
                             "name": "SQL Information",
-                            "text": json.dumps({
-                                "SQL" : score_node.node.metadata.get("query_code_instruction"),
-                                "SQL_Exec_Result" : score_node.node.text,
-                                "Tables" : score_node.node.metadata.get("query_tables"),
-                                "Valid" : score_node.node.metadata.get("invalid_flag")
-                            }),
+                            "text": json.dumps(
+                                {
+                                    "SQL": score_node.node.metadata.get(
+                                        "query_code_instruction"
+                                    ),
+                                    "SQL_Exec_Result": score_node.node.text,
+                                    "Tables": score_node.node.metadata.get(
+                                        "query_tables"
+                                    ),
+                                    "Valid": score_node.node.metadata.get(
+                                        "invalid_flag"
+                                    ),
+                                }
+                            ),
                             "url": url,
                             "score": score_node.score,
                         }
