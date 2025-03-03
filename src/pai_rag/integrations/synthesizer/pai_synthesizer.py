@@ -99,30 +99,30 @@ class PaiSynthesizer(BaseSynthesizer):
         self._llm_only_template = PromptTemplate(
             template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
                 self._custom_prompt_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                ),
                 DEFAULT_ANSWER_TEMPLATE,
             )
         )
         self._text_qa_template = PromptTemplate(
             template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
                 self._custom_prompt_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                ),
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
         )
         self._citation_text_qa_template = PromptTemplate(
             template="{}\n{}\n{}\n{}\n{}".format(
                 self._system_role_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
                 self._custom_prompt_template,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                ),
                 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
@@ -399,12 +399,10 @@ class PaiSynthesizer(BaseSynthesizer):
                 PromptTemplate(
                     template="{}\n{}\n{}\n{}".format(
                         system_role_str,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=datetime.now().strftime(
-                                "%Y年%m月%d日 %H:%M:%S"
-                            )
-                        ),
                         prompt_template_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                        ),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
@@ -485,12 +483,10 @@ class PaiSynthesizer(BaseSynthesizer):
                 PromptTemplate(
                     template="{}\n{}\n{}\n{}".format(
                         system_role_str,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=datetime.now().strftime(
-                                "%Y年%m月%d日 %H:%M:%S"
-                            )
-                        ),
                         prompt_template_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                        ),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
@@ -501,12 +497,10 @@ class PaiSynthesizer(BaseSynthesizer):
                 PromptTemplate(
                     template="{}\n{}\n{}\n{}\n{}".format(
                         system_role_str,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=datetime.now().strftime(
-                                "%Y年%m月%d日 %H:%M:%S"
-                            )
-                        ),
                         prompt_template_str,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                        ),
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
@@ -553,10 +547,10 @@ class PaiSynthesizer(BaseSynthesizer):
         _llm_only_template = PromptTemplate(
             template="{}\n{}\n{}\n{}".format(
                 system_role_str,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
                 prompt_template_str,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                ),
                 DEFAULT_ANSWER_TEMPLATE,
             )
         )
@@ -595,10 +589,10 @@ class PaiSynthesizer(BaseSynthesizer):
         _llm_only_template = PromptTemplate(
             template="{}\n{}\n{}\n{}".format(
                 system_role_str,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
-                ),
                 prompt_template_str,
+                CURRENT_TIME_PROMPT.format(
+                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                ),
                 DEFAULT_ANSWER_TEMPLATE,
             )
         )
