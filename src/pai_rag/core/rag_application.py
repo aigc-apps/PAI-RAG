@@ -164,34 +164,31 @@ def _make_chat_completion_response(
                     "file_url"
                 ) or score_node.node.metadata.get("file_path")
                 citations.append(url)
-                file_name = score_node.node.metadata.get("file_name")
-                tables = score_node.node.metadata.get("query_tables")
-                sql = score_node.node.metadata.get("query_code_instruction")
-                is_valid = score_node.node.metadata.get("invalid_flag")
-                fields_to_append = [
-                    ("File Name", file_name),
-                    ("Tables", tables),
-                    ("SQL", sql),
-                    ("Is Valid", is_valid),
-                ]
-                for name, value in fields_to_append:
-                    if value is not None:
-                        citation_details.append(
-                            {
-                                "name": value,
-                                "text": score_node.node.text,
-                                "url": url,
-                                "score": score_node.score,
-                            }
-                        )
-                # citation_details.append(
-                #     {
-                #         "name": score_node.node.metadata.get("file_name"),
-                #         "text": score_node.node.text,
-                #         "url": url,
-                #         "score": score_node.score,
-                #     }
-                # )
+
+                if score_node.node.metadata.get("invalid_flag") is not None:
+                    citation_details.append(
+                        {
+                            "name": "SQL Information",
+                            "text": json.dumps({
+                                "SQL" : score_node.node.metadata.get("query_code_instruction"),
+                                "SQL_Exec_Result" : score_node.node.text,
+                                "Tables" : score_node.node.metadata.get("query_tables"),
+                                "Valid" : score_node.node.metadata.get("invalid_flag")
+                            }),
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
+                else:
+                    citation_details.append(
+                        {
+                            "name": score_node.node.metadata.get("file_name"),
+                            "text": score_node.node.text,
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
+
 
     base_token_usage.completion_tokens += (
         response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
@@ -282,34 +279,30 @@ async def _make_chat_completion_chunk_response(
                     "file_url"
                 ) or score_node.node.metadata.get("file_path")
                 citations.append(url)
-                file_name = score_node.node.metadata.get("file_name")
-                tables = score_node.node.metadata.get("query_tables")
-                sql = score_node.node.metadata.get("query_code_instruction")
-                is_valid = score_node.node.metadata.get("invalid_flag")
-                fields_to_append = [
-                    ("File Name", file_name),
-                    ("Tables", tables),
-                    ("SQL", sql),
-                    ("Is Valid", is_valid),
-                ]
-                for name, value in fields_to_append:
-                    if value is not None:
-                        citation_details.append(
-                            {
-                                "name": value,
-                                "text": score_node.node.text,
-                                "url": url,
-                                "score": score_node.score,
-                            }
-                        )
-                # citation_details.append(
-                #     {
-                #         "name": score_node.node.metadata.get("file_name"),
-                #         "url": url,
-                #         "text": score_node.node.text,
-                #         "score": score_node.score,
-                #     }
-                # )
+
+                if score_node.node.metadata.get("invalid_flag") is not None:
+                    citation_details.append(
+                        {
+                            "name": "SQL Information",
+                            "text": json.dumps({
+                                "SQL" : score_node.node.metadata.get("query_code_instruction"),
+                                "SQL_Exec_Result" : score_node.node.text,
+                                "Tables" : score_node.node.metadata.get("query_tables"),
+                                "Valid" : score_node.node.metadata.get("invalid_flag")
+                            }),
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
+                else:
+                    citation_details.append(
+                        {
+                            "name": score_node.node.metadata.get("file_name"),
+                            "text": score_node.node.text,
+                            "url": url,
+                            "score": score_node.score,
+                        }
+                    )
 
     model_name = Settings.llm.metadata.model_name
     try:
