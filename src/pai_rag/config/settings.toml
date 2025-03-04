@@ -32,7 +32,7 @@ embed_batch_size = 10
 enable_sparse = false
 
 [rag.index]
-persist_path = "localdata/storage"
+persist_path = "localdata/knowledgebase/default/.index/.faiss"
 enable_multimodal = true
 vector_store.type = "FAISS"
 

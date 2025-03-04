@@ -9,8 +9,9 @@ from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
-from pai_rag.core.rag_index_manager import RagIndexEntry, DEFAULT_INDEX_NAME
+from pai_rag.core.rag_index_manager import RagIndexEntry
 from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
+from pai_rag.utils.constants import DEFAULT_INDEX_NAME
 
 # from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager

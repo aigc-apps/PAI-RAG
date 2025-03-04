@@ -9,7 +9,7 @@ from pai_rag.app.api.middleware import init_middleware
 from pai_rag.app.api.error_handler import config_app_errors
 from pai_rag.app.web.webui import configure_webapp
 from pai_rag.core.rag_environment import service_environment
-from pai_rag.core.rag_knowledgebase_manager import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
 from pai_rag.app.web.filebrower.constants import DEFAULT_FILE_BROWER_PORT
 
 

@@ -1,5 +1,5 @@
 from fastapi import Request, Response, HTTPException
-from pai_rag.core.rag_knowledgebase_manager import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
 from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.filebrower.constants import (
     FILEBROWER_PREFIX,
@@ -28,6 +28,10 @@ def process_delete_mothod(url_path: str):
     if len(path_parts) == 4 and url_path.endswith("/"):
         index_name = path_parts[3]
         rag_client.delete_index(index_name)
+        if index_name == "default":
+            raise IndexError(
+                "Index delete operation is not supported for the 'default' index."
+            )
         logger.info(f"Index Deleted. Index name: {index_name}")
     elif len(path_parts) >= 6 and path_parts[4] == "docs":
         index_name = path_parts[3]
@@ -83,6 +87,25 @@ def process_post_method(url_path: str):
         logger.info(f"skip directory {url_path}")
 
 
+async def postprocess_middleware_to_filebrower(session, request, url):
+    async with session.request(
+        request.method,
+        str(url),
+        headers=clean_headers(dict(request.headers), ["Transfer-Encoding"]),
+        params=str(request.path_params),
+        data=sender_data(request),
+        allow_redirects=False,
+    ) as resp:
+        content = await resp.content.read()
+        return Response(
+            content=content,
+            headers=clean_headers(
+                dict(resp.headers), ["Content-Encoding", "Content-Length"]
+            ),
+            status_code=resp.status,
+        )
+
+
 async def postprocess_middleware(request, call_next):
     logger.debug(f"request_path: {request.url.path} , method: {request.method}")
     if "/filebrowser" in request.url.path and not request.url.path.endswith(
@@ -103,22 +126,7 @@ async def postprocess_middleware(request, call_next):
             ):
                 process_post_method(str(request.url.path))
 
-            async with session.request(
-                request.method,
-                str(url),
-                headers=clean_headers(dict(request.headers), ["Transfer-Encoding"]),
-                params=str(request.path_params),
-                data=sender_data(request),
-                allow_redirects=False,
-            ) as resp:
-                content = await resp.content.read()
-                return Response(
-                    content=content,
-                    headers=clean_headers(
-                        dict(resp.headers), ["Content-Encoding", "Content-Length"]
-                    ),
-                    status_code=resp.status,
-                )
+            return await postprocess_middleware_to_filebrower(session, request, url)
     else:
         response = await call_next(request)
         return response

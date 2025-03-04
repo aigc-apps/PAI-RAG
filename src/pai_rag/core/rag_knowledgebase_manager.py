@@ -10,11 +10,8 @@ from pai_rag.utils.index_utils import (
     write_markdown_to_parse_dir,
     copy_original_files_to_parse_dir,
 )
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH, DEFAULT_INDEX_NAME
 from loguru import logger
-
-DEFAULT_KNOWLEDGE_PATH = "localdata/knowledgebase"
-DEFAULT_TASK_FILE = "localdata/task_jobs.json"
-DEFAULT_INDEX_NAME = "default_index"
 
 EXCLUDE_NODE_KEYS = set(
     [

@@ -3,7 +3,7 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
-from pai_rag.core.rag_knowledgebase_manager import (
+from pai_rag.utils.constants import (
     DEFAULT_KNOWLEDGE_PATH,
     DEFAULT_TASK_FILE,
 )

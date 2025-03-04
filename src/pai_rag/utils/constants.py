@@ -23,3 +23,12 @@ OSS_URL = (
 DEFAULT_DATAFILE_DIR = "./data"
 
 DEFAULT_DASHSCOPE_EMBEDDING_MODEL = "text-embedding-v2"
+
+
+DEFAULT_KNOWLEDGE_PATH = "localdata/knowledgebase"
+DEFAULT_TASK_FILE = "localdata/task_jobs.json"
+
+DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
+DEFAULT_INDEX_NAME = "default"
+DEFAULT_MAX_INDEX_ENTRY_COUNT = os.environ.get("DEFAULT_MAX_INDEX_ENTRY_COUNT", 20)
+IGNORE_FILE_LIST = [".DS_Store"]
