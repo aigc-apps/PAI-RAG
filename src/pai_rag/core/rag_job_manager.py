@@ -14,7 +14,7 @@ import threading
 class TaskInfo(BaseModel):
     task_id: str
     index_name: str
-    input_files: List[str]
+    input_files: List[str] | str
     last_modified_time: str
     status: str
 
