@@ -21,6 +21,7 @@ from pai_rag.integrations.query_transform.pai_query_transform import (
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.utils.citation_utils import get_citations_from_node
 from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletion,
@@ -143,59 +144,10 @@ def _make_chat_completion_response(
     return_reference: bool = False,
 ):
     logger.info(f"Finished response: {response_wrapper.response.message.content}")
-    citations = []
-    citation_details = []
-    if return_reference:
-        for score_node in response_wrapper.source_nodes:
-            if isinstance(score_node.node, ImageNode):
-                url = score_node.node.image_url
-                if url is not None:
-                    citations.append(url)
-                    citation_details.append(
-                        {
-                            "name": "Image",
-                            "text": None,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-            else:
-                url = score_node.node.metadata.get(
-                    "file_url"
-                ) or score_node.node.metadata.get("file_path")
-                citations.append(url)
 
-                if score_node.node.metadata.get("invalid_flag") is not None:
-                    citation_details.append(
-                        {
-                            "name": "SQL Information",
-                            "text": json.dumps(
-                                {
-                                    "SQL": score_node.node.metadata.get(
-                                        "query_code_instruction"
-                                    ),
-                                    "SQL_Exec_Result": score_node.node.text,
-                                    "Tables": score_node.node.metadata.get(
-                                        "query_tables"
-                                    ),
-                                    "Valid": score_node.node.metadata.get(
-                                        "invalid_flag"
-                                    ),
-                                }
-                            ),
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-                else:
-                    citation_details.append(
-                        {
-                            "name": score_node.node.metadata.get("file_name"),
-                            "text": score_node.node.text,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
+    citations, citation_details = get_citations_from_node(
+        return_reference, response_wrapper
+    )
 
     base_token_usage.completion_tokens += (
         response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
@@ -265,59 +217,10 @@ async def _make_chat_completion_chunk_response(
     i = 0
     full_content = ""
     created_ts = int(time.time())
-    citations = []
-    citation_details = []
-    if return_reference:
-        for score_node in response_wrapper.source_nodes:
-            if isinstance(score_node.node, ImageNode):
-                url = score_node.node.image_url
-                if url is not None:
-                    citations.append(url)
-                    citation_details.append(
-                        {
-                            "name": "Image",
-                            "text": None,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-            else:
-                url = score_node.node.metadata.get(
-                    "file_url"
-                ) or score_node.node.metadata.get("file_path")
-                citations.append(url)
 
-                if score_node.node.metadata.get("invalid_flag") is not None:
-                    citation_details.append(
-                        {
-                            "name": "SQL Information",
-                            "text": json.dumps(
-                                {
-                                    "SQL": score_node.node.metadata.get(
-                                        "query_code_instruction"
-                                    ),
-                                    "SQL_Exec_Result": score_node.node.text,
-                                    "Tables": score_node.node.metadata.get(
-                                        "query_tables"
-                                    ),
-                                    "Valid": score_node.node.metadata.get(
-                                        "invalid_flag"
-                                    ),
-                                }
-                            ),
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-                else:
-                    citation_details.append(
-                        {
-                            "name": score_node.node.metadata.get("file_name"),
-                            "text": score_node.node.text,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
+    citations, citation_details = get_citations_from_node(
+        return_reference, response_wrapper
+    )
 
     model_name = Settings.llm.metadata.model_name
     try:
