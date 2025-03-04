@@ -64,7 +64,7 @@ vector_store_config = MilvusVectorStoreConfig(
 # res = vector_store_index._vector_store.client.list_collections()
 
 
-@pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+@pytest.mark.skipif(os.getenv("PAI_RAG_MODEL_DIR") is None, reason="no model dir")
 @pytest.fixture()
 def setup_vector_store_index():
     embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
@@ -77,6 +77,7 @@ def setup_vector_store_index():
 
 # 测试插入节点
 @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+@pytest.mark.skipif(os.getenv("PAI_RAG_MODEL_DIR") is None, reason="no model dir")
 def test_insert_nodes(setup_vector_store_index):
     vector_store_index = setup_vector_store_index
     vector_store_index.insert_nodes(mock_nodes)
@@ -91,6 +92,7 @@ def test_insert_nodes(setup_vector_store_index):
 
 # 测试删除节点
 @pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+@pytest.mark.skipif(os.getenv("PAI_RAG_MODEL_DIR") is None, reason="no model dir")
 def test_delete_nodes(setup_vector_store_index):
     vector_store_index = setup_vector_store_index
     # # 插入三个节点
@@ -112,6 +114,8 @@ def test_delete_nodes(setup_vector_store_index):
     assert vector_count == expected_count
 
 
+@pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
+@pytest.mark.skipif(os.getenv("PAI_RAG_MODEL_DIR") is None, reason="no model dir")
 def test_clear(setup_vector_store_index):
     vector_store_index = setup_vector_store_index
 
