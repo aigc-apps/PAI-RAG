@@ -152,7 +152,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 label="Display Image",
                 info="Inference with multi-modal LLM.",
                 elem_id="need_image",
-                visible=True,
+                visible=False,
             )
             return_reference = gr.Checkbox(
                 label="Show References",
