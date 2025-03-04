@@ -118,8 +118,6 @@ class RagDataLoader:
                 status="processing",
             )
             embedded_nodes = self._embed_model(splitted_nodes)
-            if self._multimodal_embed_model is not None:
-                embedded_nodes = self._multimodal_embed_model(embedded_nodes)
             _knowledgebase_manager.save_chunk_nodes(embedded_nodes, "embed")
             upload_job_manager.track_job(
                 task_id,

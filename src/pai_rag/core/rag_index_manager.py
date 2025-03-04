@@ -95,6 +95,8 @@ class RagIndexManager:
             delete_dir(old_persist_path)
 
     def compatible_with_old_index(self, rag_config):
+        if DEFAULT_INDEX_NAME in self._index_map.indexes:
+            return
         _index_map_indexes_cp = self._index_map.indexes.copy()
         self._index_map.indexes = {}
         if len(_index_map_indexes_cp) > 0:
