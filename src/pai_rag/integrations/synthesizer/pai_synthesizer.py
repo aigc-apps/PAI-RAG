@@ -219,25 +219,13 @@ class PaiSynthesizer(BaseSynthesizer):
         nodes: List[NodeWithScore],
     ):
         context_str = ""
-        has_image = True
         for i, node in enumerate(nodes):
-            image_url = node.metadata.get("image_url")
-
-            if image_url:
-                has_image = True
-                context_str += f"""
-材料 {i+1}:
-{node.node.get_content()}
-图片链接: {image_url}\n\n
-
-                """
-            else:
-                context_str += f"""
+            context_str += f"""
 材料 {i+1}:
 {node.node.get_content()}
 
                 """
-        return context_str, has_image
+        return context_str
 
     async def aget_response(
         self,
@@ -249,73 +237,39 @@ class PaiSynthesizer(BaseSynthesizer):
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
-        context_str, has_image = self._contruct_context_str(nodes)
-        print(context_str)
-        logger.info(
-            f"Synthesize using LLM with image flag {has_image} and citation flag: {citation}"
-        )
-        if has_image:
-            if not citation:
-                prompt_template = (
-                    PromptTemplate(
-                        template="{}\n{}\n{}\n{}\n{}".format(
-                            system_role_str,
-                            prompt_template_str,
-                            DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
-                            CURRENT_TIME_PROMPT.format(
-                                current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                            ),
-                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                        )
+        context_str = self._contruct_context_str(nodes)
+        logger.info(f"Synthesize using LLM with  citation flag: {citation}")
+        if not citation:
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                        ),
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
-                    or self._multimodal_qa_template
                 )
-            else:
-                prompt_template = (
-                    PromptTemplate(
-                        template="{}\n{}\n{}\n{}\n{}\n{}".format(
-                            system_role_str,
-                            prompt_template_str,
-                            DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
-                            DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                            CURRENT_TIME_PROMPT.format(
-                                current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                            ),
-                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                        )
-                    )
-                    or self._citation_multimodal_qa_template
-                )
+                or self._multimodal_qa_template
+            )
         else:
-            if not citation:
-                prompt_template = (
-                    PromptTemplate(
-                        template="{}\n{}\n{}\n{}".format(
-                            system_role_str,
-                            prompt_template_str,
-                            CURRENT_TIME_PROMPT.format(
-                                current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                            ),
-                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                        )
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}\n{}\n{}".format(
+                        system_role_str,
+                        prompt_template_str,
+                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
+                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
+                        CURRENT_TIME_PROMPT.format(
+                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                        ),
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
-                    or self._text_qa_template
                 )
-            else:
-                prompt_template = (
-                    PromptTemplate(
-                        template="{}\n{}\n{}\n{}\n{}".format(
-                            system_role_str,
-                            prompt_template_str,
-                            DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                            CURRENT_TIME_PROMPT.format(
-                                current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                            ),
-                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                        )
-                    )
-                    or self._citation_text_qa_template
-                )
+                or self._citation_multimodal_qa_template
+            )
 
         text_qa_template = prompt_template.partial_format(query_str=query_str)
 

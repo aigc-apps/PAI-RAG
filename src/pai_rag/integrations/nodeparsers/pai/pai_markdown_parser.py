@@ -16,6 +16,7 @@ from pai_rag.integrations.nodeparsers.utils.pai_markdown_tree import (
     build_markdown_tree,
     TreeNode,
 )
+import re
 
 
 class ImageInfo(BaseModel):
@@ -74,8 +75,19 @@ class StructuredNodeParser(BaseModel):
     def _format_section_header(self, section_headers) -> str:
         return "\n".join([h.content for h in section_headers])
 
+    # 找到前文中最后一个段落（最长300个字）
+    def _get_context(self, pre_content):
+        content = re.sub(r"<图片>.*?</图片\n*", "", pre_content, flags=re.DOTALL)
+        result = content[-300:]
+        return result
+
     def _format_tree_nodes(
-        self, node, doc_node, ref_doc, nodes_list, chunk_images_list
+        self,
+        node,
+        doc_node,
+        ref_doc,
+        nodes_list,
+        pre_content=None,
     ) -> str:
         if (
             node.category == "image"
@@ -84,7 +96,7 @@ class StructuredNodeParser(BaseModel):
             and node.content != "None"
         ):
             image_url = self.normalize_url(node.content)
-            image_text = self.image_caption_tool.extract_url(image_url)
+            image_text = self.image_caption_tool.extract_url(image_url, pre_content)
             """
             relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
             new_node = TextNode(
@@ -102,46 +114,38 @@ class StructuredNodeParser(BaseModel):
             return f"\n<图片>\n图片链接: {image_url}\n图片描述: {image_text}\n</图片>\n"
         if not node.children:
             return node.content
-        return node.content + "\n".join(
-            [
-                self._format_tree_nodes(
-                    child, doc_node, ref_doc, nodes_list, chunk_images_list
-                )
-                for child in node.children
-            ]
-        )
+
+        for child in node.children:
+            child_content = self._format_tree_nodes(
+                child,
+                doc_node,
+                ref_doc,
+                nodes_list,
+                pre_content=self._get_context(pre_content=node.content),
+            )
+            node.content += f"{child_content}\n"
+
+        return node.content
 
     def _create_text_node(
-        self, chunk_content, doc_node, ref_doc, nodes_list, chunk_images_list
+        self,
+        chunk_content,
+        doc_node,
+        ref_doc,
+        nodes_list,
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
-        if len(chunk_images_list) > 0:
-            text_node = TextNode(
-                text=chunk_content,
-                embedding=doc_node.embedding,
-                excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
-                excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_separator=doc_node.metadata_separator,
-                metadata_template=doc_node.metadata_template,
-                text_template=doc_node.text_template,
-                metadata={
-                    "image_info_list": chunk_images_list.copy(),
-                    **doc_node.extra_info,
-                },
-                relationships=relationships,
-            )
-        else:
-            text_node = TextNode(
-                text=chunk_content,
-                embedding=doc_node.embedding,
-                excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
-                excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_separator=doc_node.metadata_separator,
-                metadata_template=doc_node.metadata_template,
-                text_template=doc_node.text_template,
-                meta_data=doc_node.extra_info,
-                relationships=relationships,
-            )
+        text_node = TextNode(
+            text=chunk_content,
+            embedding=doc_node.embedding,
+            excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
+            excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
+            metadata_separator=doc_node.metadata_separator,
+            metadata_template=doc_node.metadata_template,
+            text_template=doc_node.text_template,
+            meta_data=doc_node.extra_info,
+            relationships=relationships,
+        )
 
         return text_node
 
@@ -150,24 +154,20 @@ class StructuredNodeParser(BaseModel):
     ) -> list[BaseNode]:
         ref_doc = ref_doc or doc_node
         nodes_list = []
-        chunk_images_list = []
         title_stack = []
         # 判断是否可以将整个树节点作为一个chunk
         if root.content_token_count <= self.chunk_size:
             new_chunk_text = self._format_tree_nodes(
-                root, doc_node, ref_doc, nodes_list, chunk_images_list
+                root, doc_node, ref_doc, nodes_list
             )
             # 避免插入内容为空的节点
             if len(new_chunk_text) > 0:
                 node = self._create_text_node(
-                    new_chunk_text, doc_node, ref_doc, nodes_list, chunk_images_list
+                    new_chunk_text, doc_node, ref_doc, nodes_list
                 )
                 nodes_list.append(node)
-                chunk_images_list.clear()
         else:
-            self.traverse_tree(
-                root, doc_node, ref_doc, nodes_list, chunk_images_list, title_stack
-            )
+            self.traverse_tree(root, doc_node, ref_doc, nodes_list, title_stack)
 
         return nodes_list.copy()
 
@@ -198,9 +198,7 @@ class StructuredNodeParser(BaseModel):
                 tree_tokens = tree_node.content_token_count
         return tree_nodes_group
 
-    def traverse_tree(
-        self, tree_node, doc_node, ref_doc, nodes_list, chunk_images_list, title_stack
-    ):
+    def traverse_tree(self, tree_node, doc_node, ref_doc, nodes_list, title_stack):
         if tree_node.category == "title":
             while title_stack and title_stack[-1].level >= tree_node.level:
                 title_stack.pop()
@@ -216,10 +214,9 @@ class StructuredNodeParser(BaseModel):
                 else:
                     new_chunk_text = chunk_text
                 node = self._create_text_node(
-                    new_chunk_text, doc_node, ref_doc, nodes_list, chunk_images_list
+                    new_chunk_text, doc_node, ref_doc, nodes_list
                 )
                 nodes_list.append(node)
-                chunk_images_list.clear()
 
         nodes_groups = self._split_level_nodes(tree_node.children)
         for node_group in nodes_groups:
@@ -235,7 +232,6 @@ class StructuredNodeParser(BaseModel):
                     doc_node,
                     ref_doc,
                     nodes_list,
-                    chunk_images_list,
                     title_stack,
                 )
             else:
@@ -248,7 +244,9 @@ class StructuredNodeParser(BaseModel):
                         and child.content != "None"
                     ):
                         image_url = self.normalize_url(child.content)
-                        image_text = self.image_caption_tool.extract_url(image_url)
+                        image_text = self.image_caption_tool.extract_url(
+                            image_url, self._get_context(chunk_text)
+                        )
                         """
                         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
                         new_node = TextNode(
@@ -268,7 +266,11 @@ class StructuredNodeParser(BaseModel):
                         )
                     else:
                         chunk_text += "\n" + self._format_tree_nodes(
-                            child, doc_node, ref_doc, nodes_list, chunk_images_list
+                            child,
+                            doc_node,
+                            ref_doc,
+                            nodes_list,
+                            self._get_context(chunk_text),
                         )
                 if title_stack:
                     new_chunk_text = (
@@ -277,10 +279,9 @@ class StructuredNodeParser(BaseModel):
                 else:
                     new_chunk_text = chunk_text
                 node = self._create_text_node(
-                    new_chunk_text, doc_node, ref_doc, nodes_list, chunk_images_list
+                    new_chunk_text, doc_node, ref_doc, nodes_list
                 )
                 nodes_list.append(node)
-                chunk_images_list.clear()
 
 
 class MarkdownNodeParser(NodeParser):

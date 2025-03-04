@@ -51,7 +51,6 @@ IMAGE_URL_REGEX = re.compile(
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 DEFAULT_EXCLUDED_METADATA_KEYS = [
-    "file_name",
     "file_type",
     "file_size",
     "creation_date",
