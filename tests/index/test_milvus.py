@@ -64,6 +64,7 @@ vector_store_config = MilvusVectorStoreConfig(
 # res = vector_store_index._vector_store.client.list_collections()
 
 
+@pytest.mark.skipif(os.getenv("MILVUS_HOST") is None, reason="no host")
 @pytest.fixture()
 def setup_vector_store_index():
     embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
