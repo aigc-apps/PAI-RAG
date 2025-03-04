@@ -115,7 +115,7 @@ class StructuredNodeParser(BaseModel):
         if not node.children:
             return node.content
 
-        for child in node.children:
+        for i, child in enumerate(node.children):
             child_content = self._format_tree_nodes(
                 child,
                 doc_node,
@@ -123,7 +123,10 @@ class StructuredNodeParser(BaseModel):
                 nodes_list,
                 pre_content=self._get_context(pre_content=node.content),
             )
-            node.content += f"{child_content}\n"
+            if i == 0:
+                node.content += child_content
+            else:
+                node.content += f"\n{child_content}"
 
         return node.content
 
