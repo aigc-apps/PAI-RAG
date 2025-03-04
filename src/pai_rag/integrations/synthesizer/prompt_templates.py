@@ -60,7 +60,9 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """**Reference Content:**
 **Question to Answer:**
 {query_str}
 """
-CURRENT_TIME_PROMPT = "现在是北京时间：{current_datetime}"
+CURRENT_QUERY_TIME_PROMPT = "今天的日期是{current_datetime}"
+CURRENT_TIME_PROMPT = "你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。"
+
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"

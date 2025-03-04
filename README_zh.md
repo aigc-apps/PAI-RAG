@@ -165,9 +165,9 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
 您也可以在PAI-RAG中使用支持API function calling功能的Agent，请参考文档：
 [Agentic RAG](./docs/agentic_rag.md)
 
-## 数据分析 NL2sql
+## 数据分析 Nl2sql
 
-您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc.md)
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc_250303.md)
 
 ## 支持文件类型
 
