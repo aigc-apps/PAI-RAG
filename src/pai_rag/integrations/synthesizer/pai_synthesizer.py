@@ -219,7 +219,7 @@ class PaiSynthesizer(BaseSynthesizer):
         nodes: List[NodeWithScore],
     ):
         context_str = ""
-        has_image = False
+        has_image = True
         for i, node in enumerate(nodes):
             image_url = node.metadata.get("image_url")
 

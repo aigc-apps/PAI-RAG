@@ -99,7 +99,7 @@ class StructuredNodeParser(BaseModel):
             )
             nodes_list.append(new_node)
             """
-            return f"{image_text}\n图片链接: {image_url}\n"
+            return f"\n<图片>\n图片链接: {image_url}\n图片描述: {image_text}\n</图片>\n"
         if not node.children:
             return node.content
         return node.content + "\n".join(
@@ -263,7 +263,9 @@ class StructuredNodeParser(BaseModel):
                         )
                         nodes_list.append(new_node)
                         """
-                        chunk_text += f"\n{image_text}\n图片链接: {image_url}\n"
+                        chunk_text += (
+                            f"\n<图片>\n图片链接: {image_url}\n图片描述: {image_text}\n</图片>\n"
+                        )
                     else:
                         chunk_text += "\n" + self._format_tree_nodes(
                             child, doc_node, ref_doc, nodes_list, chunk_images_list
