@@ -29,6 +29,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
+from pai_rag.integrations.nodeparsers.pai.pai_image_caption import ImageCaption
 from pai_rag.utils.prompt_template import CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
@@ -96,7 +97,11 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
         oss_store=oss_store,
     )
 
-    node_parser = resolve(cls=PaiNodeParser, parser_config=config.node_parser)
+    image_caption = resolve_image_caption(config)
+
+    node_parser = resolve(
+        cls=PaiNodeParser, parser_config=config.node_parser, image_caption=image_caption
+    )
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
     multimodal_embed_model = None
@@ -220,6 +225,17 @@ def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
         query_transform_prompt=config.query_rewrite.rewrite_prompt_template,
     )
     return openai_query_transform
+
+
+def resolve_image_caption(config: RagConfig) -> ImageCaption:
+    multimodal_llm = None
+    if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
+        multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    image_caption = resolve(
+        cls=ImageCaption,
+        multimodal_llm=multimodal_llm,
+    )
+    return image_caption
 
 
 def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:

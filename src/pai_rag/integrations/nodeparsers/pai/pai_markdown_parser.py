@@ -2,13 +2,13 @@
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from urllib.parse import urlparse
 from typing import Any, Iterator, List, Optional, Sequence
-
+from pai_rag.integrations.nodeparsers.pai.pai_image_ocr import get_image_ocr
 from llama_index.core.node_parser.interface import NodeParser
+from pai_rag.integrations.nodeparsers.pai.pai_image_caption import ImageCaption
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
-    ImageNode,
     TextNode,
     NodeRelationship,
     MetadataMode,
@@ -54,6 +54,9 @@ class StructuredNodeParser(BaseModel):
         default=SentenceSplitter(chunk_size=500, chunk_overlap=10),
         description="base parser",
     )
+    image_caption: Optional[ImageCaption] = Field(
+        default=None, description="Image Caption."
+    )
 
     @classmethod
     def class_name(cls) -> str:
@@ -85,21 +88,25 @@ class StructuredNodeParser(BaseModel):
             and node.content
             and node.content != "None"
         ):
-            image_node = ImageNode(
+            image_url = self.normalize_url(node.content)
+            image_caption = self.image_caption.get_image_caption(image_url)
+            image_ocr = get_image_ocr(image_url)
+            image_node_text = "{}\n{}".format(image_caption, image_ocr)
+            image_text_node = TextNode(
+                text=image_node_text,
                 embedding=doc_node.embedding,
-                image_url=self.normalize_url(node.content),
                 excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                 excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                 metadata_separator=doc_node.metadata_separator,
                 metadata_template=doc_node.metadata_template,
                 text_template=doc_node.text_template,
                 metadata={
-                    "image_url": node.content,
+                    "image_info_list": [{"image_url": image_url}],
                     **doc_node.extra_info,
                 },
                 relationships=relationships,
             )
-            nodes_list.append(image_node)
+            nodes_list.append(image_text_node)
             image_info = ImageInfo(image_url=self.normalize_url(node.content))
             chunk_images_list.append(image_info.__dict__)
             return ""
@@ -251,21 +258,25 @@ class StructuredNodeParser(BaseModel):
                         and child.content
                         and child.content != "None"
                     ):
-                        image_node = ImageNode(
+                        image_url = self.normalize_url(child.content)
+                        image_caption = self.image_caption.get_image_caption(image_url)
+                        image_ocr = get_image_ocr(image_url)
+                        image_node_text = "{}\n{}".format(image_caption, image_ocr)
+                        image_text_node = TextNode(
+                            text=image_node_text,
                             embedding=doc_node.embedding,
-                            image_url=self.normalize_url(child.content),
                             excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
                             excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                             metadata_separator=doc_node.metadata_separator,
                             metadata_template=doc_node.metadata_template,
                             text_template=doc_node.text_template,
                             metadata={
-                                "image_url": self.normalize_url(child.content),
+                                "image_info_list": [{"image_url": image_url}],
                                 **doc_node.extra_info,
                             },
                             relationships=relationships,
                         )
-                        nodes_list.append(image_node)
+                        nodes_list.append(image_text_node)
                         image_info = ImageInfo(
                             image_url=self.normalize_url(child.content)
                         )
@@ -297,6 +308,7 @@ class MarkdownNodeParser(NodeParser):
         default=SentenceSplitter(chunk_size=500, chunk_overlap=10),
         description="base parser",
     )
+    image_caption: ImageCaption = Field(default=None, description="Image Caption.")
 
     def _parse_nodes(
         self,
@@ -315,6 +327,7 @@ class MarkdownNodeParser(NodeParser):
                 chunk_overlap_size=self.chunk_overlap_size,
                 enable_multimodal=self.enable_multimodal,
                 base_parser=self.base_parser,
+                image_caption=self.image_caption,
             )
             nodes = parser.get_nodes_from_tree(ast_root, node)
             all_nodes.extend(nodes)

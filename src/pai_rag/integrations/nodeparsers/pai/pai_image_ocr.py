@@ -1,5 +1,8 @@
 import os
 import cv2
+import numpy as np
+import requests
+from urllib.parse import urlparse
 from loguru import logger
 from paddleocr import PPStructure
 from paddleocr.ppstructure.recovery.recovery_to_doc import sorted_layout_boxes
@@ -127,9 +130,30 @@ def convert_info_to_text(res, image_name):
     text_list = []
 
     for i, region in enumerate(res):
-        merge_func = check_merge_method(region)
-        if merge_func:
-            text_list.append(merge_func(region))
+        if not region["res"] and region["type"].lower() != "figure":
+            continue
+
+        if (
+            region["type"].lower() == "table"
+            and isinstance(region["res"], dict)
+            and "html" in region["res"]
+        ):
+            text_list.append(region["res"]["html"])
+        elif (
+            region["type"].lower() == "equation"
+            and isinstance(region["res"], dict)
+            and "latex" in region["res"]
+        ):
+            text_list.append(region["res"]["latex"])
+        elif isinstance(region["res"], list):
+            merge_func = check_merge_method(region)
+            if merge_func:
+                text_list.append(merge_func(region))
+        else:
+            res_string = ""
+            for line in region["res"]:
+                res_string += line["text"] + " "
+            text_list.append(res_string)
 
     text_string = "\n\n".join(text_list)
 
@@ -137,13 +161,26 @@ def convert_info_to_text(res, image_name):
     return text_string
 
 
-def plain_image_ocr(image_path):
+def get_image_ocr(image_url):
+    parsed_url = urlparse(image_url)
+    image_path = parsed_url.path
     image_name = os.path.basename(image_path).split(".")[0]
-    img = cv2.imread(image_path)
+
+    try:
+        response = requests.get(image_url, timeout=10)
+        response.raise_for_status()
+
+        # 将响应内容转为OpenCV格式
+        img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            raise ValueError("Failed to decode image from URL")
+
+    except requests.exceptions.RequestException as e:
+        raise ConnectionError(f"Failed to download image from OSS: {str(e)}")
+
     result = PPStructure(recovery=True)(img)
     _, w, _ = img.shape
     res = sorted_layout_boxes(result, w)
     return convert_info_to_text(res, image_name)
-
-
-print(plain_image_ocr("tests/testdata/data/image_data/用户故事.jpg"))

@@ -191,3 +191,6 @@ DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "问题: {query_str}\n请返回文字和展示图片，不需要标明图片顺序"
     "答案: "
 )
+
+
+DEFAULT_IMAGE_CAPTION_PROMPT_ZH = "请生成一段中文描述，描述给定的图片。\n" "图片:{image_url}\n" "描述:"

@@ -2,7 +2,9 @@ import hashlib
 import os
 import re
 from typing import List, Any, Dict
-from llama_index.core.schema import BaseNode, TextNode, ImageDocument, ImageNode
+from llama_index.core.schema import BaseNode, TextNode, ImageDocument
+from pai_rag.integrations.nodeparsers.pai.pai_image_caption import ImageCaption
+from pai_rag.integrations.nodeparsers.pai.pai_image_ocr import get_image_ocr
 from llama_index.core.schema import TransformComponent
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -118,11 +120,14 @@ class PaiNodeParser(TransformComponent):
     _parser: Any = PrivateAttr()
     _doc_cnt_map: Any = PrivateAttr()
 
-    def __init__(self, parser_config: NodeParserConfig = None):
+    def __init__(
+        self, parser_config: NodeParserConfig = None, image_caption: ImageCaption = None
+    ):
         super().__init__()
         self._parser_config = parser_config or NodeParserConfig()
         self._parser = get_data_parser(self._parser_config)
         self._doc_cnt_map = {}
+        self._image_caption = image_caption or ImageCaption()
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
@@ -153,12 +158,19 @@ class PaiNodeParser(TransformComponent):
                 node_id = node_id_hash(
                     self._get_auto_increment_node_id(doc_key), doc_node
                 )
+                image_caption = self._image_caption.get_image_caption(
+                    doc_node.image_url
+                )
+                image_ocr = get_image_ocr(doc_node.image_url)
+                image_node_text = "{}\n{}".format(image_caption, image_ocr)
                 splitted_nodes.append(
-                    ImageNode(
+                    TextNode(
                         id_=node_id,
-                        text=doc_node.text,
-                        metadata=doc_node.metadata,
-                        image_url=doc_node.image_url,
+                        text=image_node_text,
+                        metadata={
+                            "image_info_list": [{"image_url": doc_node.image_url}],
+                            **doc_node.metadata,
+                        },
                     )
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
@@ -178,6 +190,7 @@ class PaiNodeParser(TransformComponent):
                         max_chunk_size=self._parser_config.chunk_size,
                         chunk_overlap_size=self._parser_config.chunk_overlap,
                         base_parser=self._parser,
+                        image_caption=self._image_caption,
                     )
                     tmp_nodes = md_node_parser.get_nodes_from_documents([doc_node])
                 else:
