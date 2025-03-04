@@ -31,7 +31,7 @@ def rag_app():
     rag_app = RagApplication(config)
 
     data_dir = os.path.join(BASE_DIR, "tests/testdata/paul_graham")
-    rag_app.load_knowledge(data_dir)
+    rag_app.load_knowledge(data_dir, index_name="default", task_id="test1234")
 
     return rag_app
 
