@@ -15,9 +15,6 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
 # cnclip import should come before others. otherwise will segment fault.
-from pai_rag.integrations.embeddings.pai.pai_multimodal_embedding import (
-    PaiMultiModalEmbedding,
-)
 from pai_rag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
@@ -42,12 +39,14 @@ from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.utils.oss_client import OssClient
+from pai_rag.utils.image_caption_utils import ImageCaptionTool
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
+
 
 cls_cache = {}
 
@@ -90,28 +89,31 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             endpoint=config.oss_store.endpoint,
         )
 
+    multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+
+    caption_tool = None
+    if multimodal_llm is not None:
+        caption_tool = resolve(
+            cls=ImageCaptionTool,
+            multimodal_llm=multimodal_llm,
+        )
+
     data_reader = resolve(
         cls=PaiDataReader,
         reader_config=config.data_reader,
         oss_store=oss_store,
     )
 
-    node_parser = resolve(cls=PaiNodeParser, parser_config=config.node_parser)
+    node_parser = resolve(
+        cls=PaiNodeParser, parser_config=config.node_parser, caption_tool=caption_tool
+    )
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    multimodal_embed_model = None
-    if config.index.enable_multimodal:
-        multimodal_embed_model = resolve(
-            cls=PaiMultiModalEmbedding,
-            multimodal_embed_config=config.multimodal_embedding,
-        )
 
     vector_index = resolve(
         cls=PaiVectorStoreIndex,
         vector_store_config=config.index.vector_store,
-        enable_multimodal=config.index.enable_multimodal,
         embed_model=embed_model,
-        multimodal_embed_model=multimodal_embed_model,
         enable_local_keyword_index=True,
     )
 
@@ -128,7 +130,6 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
         node_parser=node_parser,
         raptor_processor=raptor_processor,
         embed_model=embed_model,
-        multimodal_embed_model=multimodal_embed_model,
         vector_index=vector_index,
     )
 
@@ -241,19 +242,10 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
 
 def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
     embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
-    multimodal_embed_model = None
-    if config.index.enable_multimodal:
-        multimodal_embed_model = resolve(
-            cls=PaiMultiModalEmbedding,
-            multimodal_embed_config=config.multimodal_embedding,
-        )
-
     vector_index = resolve(
         cls=PaiVectorStoreIndex,
         vector_store_config=config.index.vector_store,
-        enable_multimodal=config.index.enable_multimodal,
         embed_model=embed_model,
-        multimodal_embed_model=multimodal_embed_model,
         enable_local_keyword_index=True,
     )
     return vector_index

@@ -21,6 +21,7 @@ from functools import partial
 from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 from loguru import logger
 
+
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 
 
@@ -177,6 +178,7 @@ class PaiDataReader(BaseReader):
         self.file_readers = get_file_readers(reader_config, oss_store)
         self.number_workers = reader_config.number_workers
         self.oss_store = oss_store
+
         logger.info(
             f"[PaiDataReader] created with number_workers : {self.number_workers}"
         )

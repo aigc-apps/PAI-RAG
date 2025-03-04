@@ -30,6 +30,10 @@ DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful,
 - For questions involving unsafe, unethical, sensitive, pornographic, violent, gambling, or illegal behaviors, please clearly refuse to provide the requested information and briefly explain why such requests cannot be fulfilled.
 """
 
+DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE = """- 参考内容中可能包含图片,如果该图片描述对你生成答案有帮助,请用Markdown格式展示该图片链接，如![](https://example.com/image.jpg)) 。
+如果答案中需要使用材料中提到的操作步骤类型的图文内容，必须在相应的步骤给出图片链接。
+"""
+
 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE = """- 引用标记：引用内容时使用数字标记，如[1]，且仅在实际引用时使用。
 - 无引用时说明：未引用时说明参考信息不足，并基于自身知识回答。
 """

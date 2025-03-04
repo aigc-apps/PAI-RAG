@@ -15,7 +15,6 @@ class RagDataLoader:
         node_parser: PaiNodeParser,
         raptor_processor: TransformComponent = None,
         embed_model: Any = None,
-        multimodal_embed_model: Any = None,
         vector_index: VectorStoreIndex = None,
     ):
         self._data_reader = data_reader
@@ -23,7 +22,6 @@ class RagDataLoader:
         self._raptor_processor = raptor_processor
 
         self._embed_model = embed_model
-        self._multimodal_embed_model = multimodal_embed_model
         self._vector_index = vector_index
 
     def load_data(
