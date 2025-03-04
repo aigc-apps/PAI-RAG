@@ -24,7 +24,7 @@ def respond(retrieve_only, question, chatbot):
     try:
         if retrieve_only:
             response_gen = rag_local_client.query_vector(
-                chatbot[:-1], question, index_name="default_index"
+                chatbot[:-1], question, index_name="default"
             )
 
         else:
@@ -33,7 +33,7 @@ def respond(retrieve_only, question, chatbot):
                 with_history=False,
                 stream=True,
                 citation=False,
-                index_name="default_index",
+                index_name="default",
             )
         for resp in response_gen:
             chatbot[-1] = (question, resp.result)
