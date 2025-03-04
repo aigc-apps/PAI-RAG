@@ -24,13 +24,13 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于给图片生成详细的描述和标签。"),
+                    TextBlock(text="你是一个图片处理专家，善于给图片生成详细的中文描述。"),
                 ],
             ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text="为下面的图片生成详细的描述和标签信息."),
+                    TextBlock(text="请使用中文为下面的图片生成详细的描述."),
                     ImageBlock(url=image_url),
                 ],
             ),
