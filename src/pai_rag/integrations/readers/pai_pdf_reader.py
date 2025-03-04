@@ -13,6 +13,8 @@ import tempfile
 from PIL import Image
 import os
 import traceback
+import re
+from collections import defaultdict
 from loguru import logger
 from magic_pdf.data.dataset import PymuDocDataset
 from magic_pdf.model.doc_analyze_by_custom_model import doc_analyze
@@ -202,12 +204,28 @@ class PaiPDFReader(BaseReader):
                 text_height_max = content_height
         return text_height_min, text_height_max
 
+    def average_same_level_title_height(self, title_list):
+        groups = defaultdict(list)
+        for idx, (title_text, title_height) in enumerate(title_list):
+            match = re.match(r"(\d+(\.\d+)*)", title_text)
+            if match:
+                prefix = match.group(1)
+                level = prefix.count(".")
+                groups[level].append((idx, title_text, title_height))
+
+        for titles in groups.values():
+            avg_height = int(sum(height for _, _, height in titles) / len(titles))
+            for idx, title_text, _ in titles:
+                title_list[idx] = (title_text, avg_height)
+        return title_list
+
     def post_process_multi_level_headings(
         self, title_list, text_height_min, text_height_max
     ):
         logger.info(
             "*****************************start process headings*****************************"
         )
+        title_list = self.average_same_level_title_height(title_list)
         indexed_title_list = [
             (idx, title_text, title_height)
             for idx, (title_text, title_height) in enumerate(title_list)

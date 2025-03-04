@@ -280,7 +280,7 @@ class DataAnalysisQuery(BaseQueryEngine):
             query=query_bundle,
             description=description,
             nodes=nodes,
-            streaming=streaming,
+            streaming=query_bundle.stream,
         )
 
     @dispatcher.span
@@ -317,9 +317,20 @@ class DataAnalysisQuery(BaseQueryEngine):
                 query=query_bundle,
                 description=description,
                 nodes=nodes,
-                streaming=streaming,
+                streaming=query_bundle.stream,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
+
+        return response
+
+    async def aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+        nodes, description = await self.aretrieve(query_bundle)
+        response = await self._synthesizer.asynthesize(
+            query=query_bundle,
+            description=description,
+            nodes=nodes,
+            streaming=query_bundle.stream,
+        )
 
         return response
 
