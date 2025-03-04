@@ -558,3 +558,18 @@ class MyElasticsearchStore(BasePydanticVectorStore):
             ids=top_k_ids,
             similarities=top_k_scores,
         )
+
+    async def aclear(
+        self,
+    ):
+        # Delete indices. Deleting an index with its documents, shards, and metadata.
+        return await self.client.indices.delete(index=self.index_name)
+        # return await self.client.delete_by_query(
+        #     index=self.index_name,
+        #     body={"query": {"match_all": {}}},
+        #     refresh=True,)
+
+    def clear(
+        self,
+    ):
+        return asyncio.get_event_loop().run_until_complete(self.aclear())

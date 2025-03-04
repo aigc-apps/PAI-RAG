@@ -252,7 +252,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 node_ids, delete_from_docstore, **delete_kwargs
             )
         else:
-            logger.warning("Currently delete_nodes supports for Milvus vector store")
+            logger.warning(
+                "Currently delete_nodes supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError
 
     async def adelete_nodes(
@@ -279,18 +281,24 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     def delete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> None:
-        if isinstance(self._vector_store, MyMilvusVectorStore):
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
             return self._vector_index.delete_ref_doc(
                 ref_doc_id, delete_from_docstore, **delete_kwargs
             )
         else:
-            logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            logger.warning(
+                "Currently delete_ref_doc supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError
 
     async def adelete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> Coroutine[Any, Any, None]:
-        if isinstance(self._vector_store, MyMilvusVectorStore):
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
             return await asyncio.to_thread(
                 self._vector_index.delete_ref_doc(
                     ref_doc_id, delete_from_docstore, **delete_kwargs
@@ -298,4 +306,32 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             )
         else:
             logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            raise NotImplementedError
+
+    def clear(
+        self,
+    ):
+        """清空索引中的内容并删除索引"""
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
+            self._vector_store.clear()
+        else:
+            logger.warning(
+                "Currently clear supports for Milvus & ElasticSearch vector stores"
+            )
+            raise NotImplementedError
+
+    async def aclear(
+        self,
+    ):
+        """清空索引中的内容并删除索引"""
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
+            await self._vector_store.aclear()
+        else:
+            logger.warning(
+                "Currently clear supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError

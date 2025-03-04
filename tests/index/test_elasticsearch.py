@@ -3,54 +3,54 @@ import pytest
 from dotenv import load_dotenv
 import asyncio
 from llama_index.embeddings.dashscope import DashScopeEmbedding
-from llama_index.core.schema import TextNode
+from llama_index.core import Document
+from llama_index.core.node_parser import SentenceSplitter
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.index.pai.vector_store_config import (
     ElasticSearchVectorStoreConfig,
 )
 
 
-# # 假设你有一个文本字符串 text_str
-# text_str1 = "dog"
-# text_str2 = "cat"
-# text_str3 = "horse"
+text_str1 = "dog"
+text_str2 = "cat"
+text_str3 = "horse"
 
-# # 创建一个带有 doc_id 的 Document 对象
-# doc1 = Document(text=text_str1, id_="doc_id_1")
-# doc2 = Document(text=text_str2, id_="doc_id_2")
-# doc3 = Document(text=text_str3, id_="doc_id_3")
+# 创建一个带有 doc_id 的 Document 对象
+doc1 = Document(text=text_str1, id_="doc_id_1")
+doc2 = Document(text=text_str2, id_="doc_id_2")
+doc3 = Document(text=text_str3, id_="doc_id_3")
 
 
-# # 初始化 SentenceSplitter
-# parser = SentenceSplitter()
-# # 使用 parser 从文档中获取节点
-# mock_nodes = parser.get_nodes_from_documents([doc1, doc2, doc3])
+# 初始化 SentenceSplitter
+parser = SentenceSplitter()
+# 使用 parser 从文档中获取节点
+mock_nodes = parser.get_nodes_from_documents([doc1, doc2, doc3])
 
-# 构造 mock_nodes
-mock_nodes = [
-    TextNode(
-        text="Cat",
-        ref_doc_id="ref_doc_1",
-        doc_id="doc_1",
-        metadata={"node_id": "node_1", "ref_doc_id": "ref_1", "doc_id": "doc_1"},
-    ),
-    TextNode(
-        text="Dog",
-        ref_doc_id="ref_doc_1",
-        doc_id="doc_2",
-        metadata={"node_id": "node_2", "ref_doc_id": "ref_2", "doc_id": "doc_2"},
-    ),
-    TextNode(
-        text="Horse",
-        ref_doc_id="ref_doc_2",
-        doc_id="doc_3",
-        metadata={"node_id": "node_3", "ref_doc_id": "ref_3", "doc_id": "doc_3"},
-    ),
-]
+# # 构造 mock_nodes
+# mock_nodes = [
+#     TextNode(
+#         text="Cat",
+#         ref_doc_id="ref_doc_1",
+#         doc_id="doc_1",
+#         metadata={"node_id": "node_1", "ref_doc_id": "ref_1", "doc_id": "doc_1"},
+#     ),
+#     TextNode(
+#         text="Dog",
+#         ref_doc_id="ref_doc_1",
+#         doc_id="doc_2",
+#         metadata={"node_id": "node_2", "ref_doc_id": "ref_2", "doc_id": "doc_2"},
+#     ),
+#     TextNode(
+#         text="Horse",
+#         ref_doc_id="ref_doc_2",
+#         doc_id="doc_3",
+#         metadata={"node_id": "node_3", "ref_doc_id": "ref_3", "doc_id": "doc_3"},
+#     ),
+# ]
 
 # 设置 node_id
 for i, node in enumerate(mock_nodes):
-    node.node_id = node.metadata["node_id"]
+    node.node_id = f"node_{i+1}"
 
 # 加载 .env 文件
 load_dotenv()
@@ -73,12 +73,25 @@ vector_store_config = ElasticSearchVectorStoreConfig(
 )
 
 # embed_model = DashScopeEmbedding(embed_batch_size=10, api_key=dashscope_key)
-# # 初始化 PaiVectorStoreIndex
+# 初始化 PaiVectorStoreIndex
 # vector_store_index = PaiVectorStoreIndex(vector_store_config, embed_model=embed_model)
 
 # vector_store_index.insert_nodes(mock_nodes)
+# res0 = asyncio.run(
+#     vector_store_index._vector_store.client.indices.exists(
+#         index=vector_store_index._vector_store.index_name
+#     )
+# )
 # node_ids_to_delete = ["node_3"]
 # vector_store_index.delete_nodes(node_ids_to_delete)
+# vector_store_index.clear()
+# res1 = asyncio.run(
+#     vector_store_index._vector_store.client.indices.exists(
+#         index=vector_store_index._vector_store.index_name
+#     )
+# )
+
+# print("temp_res")
 
 
 @pytest.fixture()
@@ -103,17 +116,52 @@ def test_insert_nodes(setup_vector_store_index):
     assert vector_count == expected_count
 
 
-# 测试删除节点
+# # 测试删除节点
+# @pytest.mark.skipif(os.getenv("es_host") is None, reason="no host")
+# def test_delete_nodes(setup_vector_store_index):
+#     vector_store_index = setup_vector_store_index
+#     # # 插入三个节点
+#     # vector_store_index.insert_nodes(mock_nodes)
+#     # 删除一个节点
+#     node_ids_to_delete = ["node_3"]
+#     vector_store_index.delete_nodes(node_ids_to_delete)
+#     vector_count = asyncio.run(
+#         vector_store_index._vector_store.client.count(index="pairag_test")
+#     )["count"]
+#     expected_count = len(mock_nodes) - 1
+#     assert vector_count == expected_count
+
+
+# 测试删除ref_doc_id
 @pytest.mark.skipif(os.getenv("es_host") is None, reason="no host")
-def test_delete_nodes(setup_vector_store_index):
+def test_delete_ref_doc(setup_vector_store_index):
     vector_store_index = setup_vector_store_index
-    # # 插入三个节点
-    # vector_store_index.insert_nodes(mock_nodes)
-    # 删除一个节点
-    node_ids_to_delete = ["node_3"]
-    vector_store_index.delete_nodes(node_ids_to_delete)
+    # 删除一个ref_doc_id
+    ref_doc_id_to_delete = "doc_id_1"
+    vector_store_index.delete_ref_doc(ref_doc_id_to_delete)
     vector_count = asyncio.run(
         vector_store_index._vector_store.client.count(index="pairag_test")
     )["count"]
     expected_count = len(mock_nodes) - 1
     assert vector_count == expected_count
+
+
+# 测试删除索引中的所有doc
+@pytest.mark.skipif(os.getenv("es_host") is None, reason="no host")
+def test_clear(setup_vector_store_index):
+    vector_store_index = setup_vector_store_index
+    check_existence_before_clear = asyncio.run(
+        vector_store_index._vector_store.client.indices.exists(
+            index=vector_store_index._vector_store.index_name
+        )
+    )
+    assert check_existence_before_clear.body is True
+    # 清空索引
+    vector_store_index.clear()
+    check_existence_after_clear = asyncio.run(
+        vector_store_index._vector_store.client.indices.exists(
+            index=vector_store_index._vector_store.index_name
+        )
+    )
+    assert check_existence_after_clear.body is False
+    # vector_store_index.close()

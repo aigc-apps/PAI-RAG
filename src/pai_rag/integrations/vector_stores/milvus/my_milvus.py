@@ -727,3 +727,11 @@ class MyMilvusVectorStore(BasePydanticVectorStore):
             "index_type": index_type,
         }
         self._collection.create_index(self.embedding_field, dense_index)
+
+    def clear(self) -> None:
+        """Clears db."""
+        self.client.drop_collection(self.collection_name)
+
+    async def aclear(self) -> None:
+        """Asynchronous version of the clear method."""
+        await self.aclient.drop_collection(self.collection_name)
