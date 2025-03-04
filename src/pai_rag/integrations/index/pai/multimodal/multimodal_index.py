@@ -11,7 +11,6 @@ from llama_index.core.data_structs.data_structs import (
     IndexDict,
     MultiModelIndexDict,
 )
-from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
 from llama_index.core.embeddings.utils import EmbedType, resolve_embed_model
 from llama_index.core.indices.utils import (
     async_embed_image_nodes,
@@ -24,12 +23,11 @@ from llama_index.core.indices.vector_store.base import VectorStoreIndex
 from llama_index.core.llms.utils import LLMType
 from llama_index.core.multi_modal_llms import MultiModalLLM
 from llama_index.core.query_engine.multi_modal import SimpleMultiModalQueryEngine
-from llama_index.core.schema import BaseNode, ImageNode
+from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.settings import Settings
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.core.vector_stores.simple import (
     DEFAULT_VECTOR_STORE,
-    SimpleVectorStore,
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pai_rag.integrations.index.pai.multimodal.multimodal_retriever import (
@@ -57,15 +55,9 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         index_struct: Optional[MultiModelIndexDict] = None,
         embed_model: Optional[BaseEmbedding] = None,
         storage_context: Optional[StorageContext] = None,
-        enable_multimodal: bool = False,
         use_async: bool = False,
         store_nodes_override: bool = False,
         show_progress: bool = False,
-        # Image-related kwargs
-        # image_vector_store going to be deprecated. image_store can be passed from storage_context
-        # keep image_vector_store here for backward compatibility
-        image_vector_store: Optional[BasePydanticVectorStore] = None,
-        image_embed_model: EmbedType = "clip:ViT-B/32",
         **kwargs: Any,
     ) -> None:
         """Initialize params."""
@@ -82,45 +74,9 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             **kwargs,
         )
 
-        self._enable_multimodal = enable_multimodal
-        if self._enable_multimodal:
-            image_embed_model = resolve_embed_model(
-                image_embed_model, callback_manager=kwargs.get("callback_manager", None)
-            )
-            assert isinstance(image_embed_model, MultiModalEmbedding)
-            self._image_embed_model = image_embed_model
-            if image_vector_store is not None:
-                if self.image_namespace not in storage_context.vector_stores:
-                    storage_context.add_vector_store(
-                        image_vector_store, self.image_namespace
-                    )
-                else:
-                    # overwrite image_store from storage_context
-                    storage_context.vector_stores[
-                        self.image_namespace
-                    ] = image_vector_store
-
-            if self.image_namespace not in storage_context.vector_stores:
-                storage_context.add_vector_store(
-                    SimpleVectorStore(), self.image_namespace
-                )
-
-            self._image_vector_store = storage_context.vector_stores[
-                self.image_namespace
-            ]
-
-    @property
-    def image_vector_store(self) -> BasePydanticVectorStore:
-        return self._image_vector_store
-
-    @property
-    def image_embed_model(self) -> MultiModalEmbedding:
-        return self._image_embed_model
-
     def as_retriever(self, **kwargs: Any) -> PaiMultiModalVectorIndexRetriever:
         return PaiMultiModalVectorIndexRetriever(
             self,
-            enable_multimodal=self._enable_multimodal,
             node_ids=list(self.index_struct.nodes_dict.values()),
             **kwargs,
         )
@@ -190,7 +146,7 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         if is_image:
             id_to_embed_map = embed_image_nodes(
                 nodes,
-                embed_model=self._image_embed_model,
+                embed_model=None,
                 show_progress=show_progress,
             )
         else:
@@ -227,7 +183,7 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         if is_image:
             id_to_embed_map = await async_embed_image_nodes(
                 nodes,
-                embed_model=self._image_embed_model,
+                embed_model=None,
                 show_progress=show_progress,
             )
         else:
@@ -260,15 +216,11 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         if not nodes:
             return
 
-        image_nodes: List[ImageNode] = []
         text_nodes: List[BaseNode] = []
         new_text_ids: List[str] = []
-        new_img_ids: List[str] = []
 
         for node in nodes:
-            if isinstance(node, ImageNode):
-                image_nodes.append(node)
-            if node.text:
+            if isinstance(node, TextNode) and node.text:
                 text_nodes.append(node)
         if len(text_nodes) > 0:
             # embed all nodes as text - include image nodes that have text attached
@@ -279,26 +231,10 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
                 DEFAULT_VECTOR_STORE
             ].async_add(text_nodes, **insert_kwargs)
 
-        if len(image_nodes) > 0:
-            # embed image nodes as images directly
-            image_nodes = await self._aget_node_with_embedding(
-                image_nodes,
-                show_progress,
-                is_image=True,
-            )
-            new_img_ids = await self.storage_context.vector_stores[
-                self.image_namespace
-            ].async_add(image_nodes, **insert_kwargs)
-
-            # TODO: Fix for FAISS
-            new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
-
         # if the vector store doesn't store text, we need to add the nodes to the
         # index struct and document store
-        all_nodes = text_nodes + image_nodes
-        all_new_ids = new_text_ids + new_img_ids
         if not self._vector_store.stores_text or self._store_nodes_override:
-            for node, new_id in zip(all_nodes, all_new_ids):
+            for node, new_id in zip(text_nodes, new_text_ids):
                 # NOTE: remove embedding from node to avoid duplication
                 node_without_embedding = node.copy()
                 node_without_embedding.embedding = None
@@ -319,21 +255,11 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
         if not nodes:
             return
 
-        image_nodes: List[ImageNode] = []
         text_nodes: List[BaseNode] = []
         new_text_ids: List[str] = []
-        new_img_ids: List[str] = []
 
-        seen_node_ids = set(self.index_struct.nodes_dict.values())
         for node in nodes:
-            if not self.vector_store.stores_text and node.node_id in seen_node_ids:
-                logger.debug(
-                    f"Skipping insert {node.node_id} since it already exists in index."
-                )
-                continue
-            if isinstance(node, ImageNode):
-                image_nodes.append(node)
-            if node.text:
+            if isinstance(node, TextNode) and node.text:
                 text_nodes.append(node)
 
         if len(text_nodes) > 0:
@@ -348,42 +274,11 @@ class PaiMultiModalVectorStoreIndex(VectorStoreIndex):
             origin_text_ids = [node.node_id for node in text_nodes]
             logger.info(f"Added {len(text_nodes)} TextNodes to index.")
             logger.debug(f"NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}.")
-            # logger.debug(
-            #     f"Added {len(text_nodes)} TextNodes to index. NodeIds: {origin_text_ids}, new NodeIds: {new_text_ids}."
-            # )
-
-        else:
-            logger.info("No text nodes to insert.")
-
-        if len(image_nodes) > 0:
-            # embed image nodes as images directly
-            # check if we should use text embedding for images instead of default
-            image_nodes = self._get_node_with_embedding(
-                image_nodes,
-                show_progress,
-                is_image=True,
-            )
-            new_img_ids = self.storage_context.vector_stores[self.image_namespace].add(
-                image_nodes, **insert_kwargs
-            )
-
-            # FAISS
-            if not self.storage_context.vector_store.stores_text:
-                new_img_ids = [f"{self.image_namespace}_{i}" for i in new_img_ids]
-            origin_img_ids = [node.node_id for node in image_nodes]
-            logger.info(
-                f"Added {len(image_nodes)} ImageNodes to index. NodeIds: {origin_img_ids}, new NodeIds: {new_img_ids}."
-            )
-
-        else:
-            logger.info("No image nodes to insert.")
 
         # if the vector store doesn't store text, we need to add the nodes to the
         # index struct and document store
-        all_nodes = text_nodes + image_nodes
-        all_new_ids = new_text_ids + new_img_ids
         if not self._vector_store.stores_text or self._store_nodes_override:
-            for node, new_id in zip(all_nodes, all_new_ids):
+            for node, new_id in zip(text_nodes, new_text_ids):
                 # NOTE: remove embedding from node to avoid duplication
                 node_without_embedding = node.copy()
                 node_without_embedding.embedding = None

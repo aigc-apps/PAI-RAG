@@ -169,7 +169,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 label="Yes",
                 info="Process with MultiModal",
                 elem_id="enable_multimodal",
-                visible=True,
+                visible=False,
             )
             enable_mandatory_ocr = gr.Checkbox(
                 label="Yes",

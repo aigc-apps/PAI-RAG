@@ -2,7 +2,7 @@ import hashlib
 import os
 import re
 from typing import List, Any, Dict
-from llama_index.core.schema import BaseNode, TextNode, ImageDocument, ImageNode
+from llama_index.core.schema import BaseNode, TextNode, ImageDocument
 from llama_index.core.schema import TransformComponent
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -24,6 +24,8 @@ from pai_rag.utils.constants import (
     DEFAULT_BUFFER_SIZE,
 )
 from loguru import logger
+
+from pai_rag.utils.image_caption_utils import ImageCaptionTool
 
 
 class NodeParserConfig(BaseModel):
@@ -49,7 +51,6 @@ IMAGE_URL_REGEX = re.compile(
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
 DEFAULT_EXCLUDED_METADATA_KEYS = [
-    "file_name",
     "file_type",
     "file_size",
     "creation_date",
@@ -115,14 +116,28 @@ def get_data_parser(parser_config: NodeParserConfig):
 
 class PaiNodeParser(TransformComponent):
     _parser_config: NodeParserConfig = PrivateAttr()
+    _image_caption_tool: ImageCaptionTool = PrivateAttr()
     _parser: Any = PrivateAttr()
     _doc_cnt_map: Any = PrivateAttr()
 
-    def __init__(self, parser_config: NodeParserConfig = None):
+    def __init__(
+        self,
+        parser_config: NodeParserConfig = None,
+        caption_tool: ImageCaptionTool = None,
+    ):
         super().__init__()
         self._parser_config = parser_config or NodeParserConfig()
+        self._image_caption_tool = caption_tool
         self._parser = get_data_parser(self._parser_config)
         self._doc_cnt_map = {}
+
+        self._caption_tool = caption_tool
+
+    def _extract_image_info(self, image_path):
+        assert (
+            self._caption_tool is not None
+        ), "Multimodal LLM must be provided for image processing."
+        return self._caption_tool.extract_path(image_path)
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
@@ -153,13 +168,11 @@ class PaiNodeParser(TransformComponent):
                 node_id = node_id_hash(
                     self._get_auto_increment_node_id(doc_key), doc_node
                 )
+                image_text = self._extract_image_info(doc_node.metadata["file_path"])
+                metadata = doc_node.metadata
+                metadata["image_url"] = doc_node.image_url
                 splitted_nodes.append(
-                    ImageNode(
-                        id_=node_id,
-                        text=doc_node.text,
-                        metadata=doc_node.metadata,
-                        image_url=doc_node.image_url,
-                    )
+                    TextNode(id_=node_id, text=image_text, metadata=metadata)
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 node_id = node_id_hash(
@@ -174,7 +187,7 @@ class PaiNodeParser(TransformComponent):
                 if doc_type in DOC_TYPES_CONVERT_TO_MD:
                     md_node_parser = MarkdownNodeParser(
                         id_func=node_id_hash,
-                        enable_multimodal=self._parser_config.enable_multimodal,
+                        image_caption_tool=self._image_caption_tool,
                         max_chunk_size=self._parser_config.chunk_size,
                         chunk_overlap_size=self._parser_config.chunk_overlap,
                         base_parser=self._parser,
