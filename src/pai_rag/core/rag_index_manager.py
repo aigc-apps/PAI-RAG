@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 from threading import Lock
 import threading
 from typing import Annotated, Union, Dict, List
@@ -9,7 +10,11 @@ from pai_rag.core.rag_config import RagConfig
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
-from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.integrations.index.pai.vector_store_config import (
+    BaseVectorStoreConfig,
+    DEFAULT_LOCAL_STORAGE_PATH_OLD,
+    DEFAULT_LOCAL_STORAGE_PATH,
+)
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
@@ -17,9 +22,11 @@ from pai_rag.utils.index_utils import delete_index_dir, delete_default_index_dir
 from pai_rag.utils.constants import (
     DEFAULT_INDEX_FILE,
     DEFAULT_INDEX_NAME,
+    DEFAULT_INDEX_NAME_OLD,
     DEFAULT_MAX_INDEX_ENTRY_COUNT,
     IGNORE_FILE_LIST,
 )
+from pai_rag.utils.index_utils import delete_dir
 from loguru import logger
 
 
@@ -74,8 +81,61 @@ class RagIndexManager:
         self._index_map = index_map
         self._lock = threading.Lock()
         self._state = FileServiceState(DEFAULT_INDEX_FILE)
+        self.compatible_index = False
+
+    def move_old_index_persist_path(self, old_persist_path, new_persist_path):
+        if os.path.exists(old_persist_path):
+            if not os.path.exists(new_persist_path):
+                os.makedirs(new_persist_path, exist_ok=True)
+            for item in os.listdir(old_persist_path):
+                source_path = os.path.join(old_persist_path, item)
+                if os.path.isdir(source_path):
+                    shutil.move(source_path, new_persist_path)
+                    print(f"已移动目录: {source_path} 到 {new_persist_path}")
+            delete_dir(old_persist_path)
+
+    def compatible_with_old_index(self, rag_config):
+        _index_map_indexes_cp = self._index_map.indexes.copy()
+        self._index_map.indexes = {}
+        if len(_index_map_indexes_cp) > 0:
+            for index_name in _index_map_indexes_cp:
+                old_index_entry = _index_map_indexes_cp[index_name]
+                new_index_name = (
+                    DEFAULT_INDEX_NAME
+                    if index_name == DEFAULT_INDEX_NAME_OLD
+                    else index_name
+                )
+                new_index_entry = RagIndexEntry(
+                    index_name=new_index_name,
+                    vector_store_config=old_index_entry.vector_store_config,
+                    embedding_config=old_index_entry.embedding_config,
+                    knowledgebase_manager=RagKnowledgeBaseManager(
+                        index_name=new_index_name
+                    ),
+                )
+                new_persist_path = os.path.join(
+                    new_index_entry.knowledgebase_manager.index_path, ".faiss"
+                )
+                if old_index_entry.vector_store_config.type == "faiss":
+                    self.move_old_index_persist_path(
+                        old_index_entry.vector_store_config.persist_path,
+                        new_persist_path,
+                    )
+                new_index_entry.vector_store_config.persist_path = new_persist_path
+                self._index_map.indexes[new_index_name] = new_index_entry
+        else:
+            rag_config.index.vector_store.persist_path = DEFAULT_LOCAL_STORAGE_PATH
+            self.move_old_index_persist_path(
+                DEFAULT_LOCAL_STORAGE_PATH_OLD,
+                rag_config.index.vector_store.persist_path,
+            )
+        if self._index_map.current_index_name == DEFAULT_INDEX_NAME_OLD:
+            self._index_map.current_index_name = DEFAULT_INDEX_NAME
+        self.compatible_index = True
 
     def add_default_index(self, rag_config: RagConfig):
+        if not self.compatible_index:
+            self.compatible_with_old_index(rag_config)
         if DEFAULT_INDEX_NAME not in self._index_map.indexes:
             self._index_map.indexes[DEFAULT_INDEX_NAME] = RagIndexEntry(
                 index_name=DEFAULT_INDEX_NAME,
