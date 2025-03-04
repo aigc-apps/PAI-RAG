@@ -1,12 +1,10 @@
 """Base vector store index query."""
 
-import asyncio
 from typing import Any, Dict, List, Optional
 
 from llama_index.core.base.base_multi_modal_retriever import (
     MultiModalRetriever,
 )
-from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 from llama_index.core.data_structs.data_structs import IndexDict
@@ -86,11 +84,6 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
 
         self._image_vector_store = None
 
-        if self._enable_multimodal:
-            self._image_vector_store = self._index.image_vector_store
-
-            assert isinstance(self._index.image_embed_model, BaseEmbedding)
-            self._image_embed_model = index._image_embed_model
         self._embed_model = index._embed_model
 
         self._docstore = self._index.docstore
@@ -480,23 +473,15 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
 
     async def _aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         # Run the two retrievals in async, and return their results as a concatenated list
-        results: List[NodeWithScore] = []
-        tasks = [
-            self._atext_retrieve(query_bundle),
-            self._atext_to_image_retrieve(query_bundle),
-        ]
-        task_results = await asyncio.gather(*tasks)
+        text_nodes = await self._atext_retrieve(query_bundle=query_bundle)
 
-        text_nodes, image_nodes = task_results[0], task_results[1]
         logger.debug(f"Retrieved text nodes: {text_nodes}")
-        logger.debug(f"Retrieved image nodes: {image_nodes}")
 
         if not text_nodes:
             text_nodes = []
-        if not image_nodes:
-            image_nodes = []
 
         # 优先从文本中召回图片
+        """
         integrated_image_nodes = []
         seen_image_urls = []
         if self._search_image:
@@ -518,15 +503,8 @@ class PaiMultiModalVectorIndexRetriever(MultiModalRetriever):
                             )
                         )
                         seen_image_urls.append(image_url)
-
-        for node in image_nodes:
-            if len(integrated_image_nodes) >= self._image_similarity_top_k:
-                break
-            if node.node.image_url not in seen_image_urls:
-                integrated_image_nodes.append(node)
-
-        results = text_nodes + integrated_image_nodes
-        return results
+        """
+        return text_nodes
 
     async def aretrieve(self, str_or_query_bundle: QueryType) -> List[NodeWithScore]:
         self._check_callback_manager()

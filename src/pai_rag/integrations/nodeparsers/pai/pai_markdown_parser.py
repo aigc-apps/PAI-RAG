@@ -8,7 +8,6 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
-    ImageNode,
     TextNode,
     NodeRelationship,
     MetadataMode,
@@ -47,8 +46,8 @@ class StructuredNodeParser(BaseModel):
 
     chunk_size: int = Field(default=500, description="chunk size.")
     chunk_overlap_size: int = Field(default=10, description="Chunk overlap size.")
-    enable_multimodal: bool = Field(
-        default=False, description="whether use multimodal."
+    image_caption_tool: Any = Field(
+        default=None, description="use multimodal llm for image captioning."
     )
     base_parser: NodeParser = Field(
         default=SentenceSplitter(chunk_size=500, chunk_overlap=10),
@@ -78,31 +77,29 @@ class StructuredNodeParser(BaseModel):
     def _format_tree_nodes(
         self, node, doc_node, ref_doc, nodes_list, chunk_images_list
     ) -> str:
-        relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         if (
             node.category == "image"
-            and self.enable_multimodal
+            and self.image_caption_tool
             and node.content
             and node.content != "None"
         ):
-            image_node = ImageNode(
-                embedding=doc_node.embedding,
-                image_url=self.normalize_url(node.content),
-                excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
-                excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                metadata_separator=doc_node.metadata_separator,
-                metadata_template=doc_node.metadata_template,
-                text_template=doc_node.text_template,
+            image_url = self.normalize_url(node.content)
+            image_text = self.image_caption_tool.extract_url(image_url)
+            """
+            relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+            new_node = TextNode(
+                text=image_text,
                 metadata={
-                    "image_url": node.content,
+                    "image_url": image_url,
                     **doc_node.extra_info,
                 },
+                excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
+                excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                 relationships=relationships,
             )
-            nodes_list.append(image_node)
-            image_info = ImageInfo(image_url=self.normalize_url(node.content))
-            chunk_images_list.append(image_info.__dict__)
-            return ""
+            nodes_list.append(new_node)
+            """
+            return f"{image_text}\n图片链接: {image_url}\n"
         if not node.children:
             return node.content
         return node.content + "\n".join(
@@ -204,7 +201,6 @@ class StructuredNodeParser(BaseModel):
     def traverse_tree(
         self, tree_node, doc_node, ref_doc, nodes_list, chunk_images_list, title_stack
     ):
-        relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         if tree_node.category == "title":
             while title_stack and title_stack[-1].level >= tree_node.level:
                 title_stack.pop()
@@ -247,29 +243,27 @@ class StructuredNodeParser(BaseModel):
                 for child in node_group:
                     if (
                         child.category == "image"
-                        and self.enable_multimodal
+                        and self.image_caption_tool
                         and child.content
                         and child.content != "None"
                     ):
-                        image_node = ImageNode(
-                            embedding=doc_node.embedding,
-                            image_url=self.normalize_url(child.content),
-                            excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
-                            excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
-                            metadata_separator=doc_node.metadata_separator,
-                            metadata_template=doc_node.metadata_template,
-                            text_template=doc_node.text_template,
+                        image_url = self.normalize_url(child.content)
+                        image_text = self.image_caption_tool.extract_url(image_url)
+                        """
+                        relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+                        new_node = TextNode(
+                            text=image_text,
                             metadata={
-                                "image_url": self.normalize_url(child.content),
+                                "image_url": image_url,
                                 **doc_node.extra_info,
                             },
+                            excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
+                            excluded_llm_metadata_keys=doc_node.excluded_llm_metadata_keys,
                             relationships=relationships,
                         )
-                        nodes_list.append(image_node)
-                        image_info = ImageInfo(
-                            image_url=self.normalize_url(child.content)
-                        )
-                        chunk_images_list.append(image_info.__dict__)
+                        nodes_list.append(new_node)
+                        """
+                        chunk_text += f"\n{image_text}\n图片链接: {image_url}\n"
                     else:
                         chunk_text += "\n" + self._format_tree_nodes(
                             child, doc_node, ref_doc, nodes_list, chunk_images_list
@@ -290,8 +284,8 @@ class StructuredNodeParser(BaseModel):
 class MarkdownNodeParser(NodeParser):
     chunk_size: int = Field(default=500, description="chunk size.")
     chunk_overlap_size: int = Field(default=10, description="Chunk overlap size.")
-    enable_multimodal: bool = Field(
-        default=False, description="whether use multimodal."
+    image_caption_tool: Any = Field(
+        default=None, description="Image caption with multimodal model."
     )
     base_parser: NodeParser = Field(
         default=SentenceSplitter(chunk_size=500, chunk_overlap=10),
@@ -304,18 +298,19 @@ class MarkdownNodeParser(NodeParser):
         show_progress: bool = False,
         **kwargs: Any,
     ) -> List[BaseNode]:
+        parser = StructuredNodeParser(
+            chunk_size=self.chunk_size,
+            chunk_overlap_size=self.chunk_overlap_size,
+            image_caption_tool=self.image_caption_tool,
+            base_parser=self.base_parser,
+        )
+
         all_nodes: List[BaseNode] = []
         nodes_with_progress = get_tqdm_iterable(nodes, show_progress, "Parsing nodes")
 
         for node in nodes_with_progress:
             text = node.get_content(metadata_mode=MetadataMode.NONE)
             ast_root = build_markdown_tree(text)
-            parser = StructuredNodeParser(
-                chunk_size=self.chunk_size,
-                chunk_overlap_size=self.chunk_overlap_size,
-                enable_multimodal=self.enable_multimodal,
-                base_parser=self.base_parser,
-            )
             nodes = parser.get_nodes_from_tree(ast_root, node)
             all_nodes.extend(nodes)
         return all_nodes
