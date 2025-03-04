@@ -55,6 +55,9 @@ class ChatCompletionRequest(BaseModel):
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
     return_reference: Optional[bool] = False
+    chat_llm: Optional[bool] = False  # llm聊天
+    chat_agent: Optional[bool] = False  # 使用agent
+    chat_db: Optional[bool] = False  # 查询数据库
 
     # debug purpose
     force_search_web: Optional[bool] = False  # 始终执行搜索
