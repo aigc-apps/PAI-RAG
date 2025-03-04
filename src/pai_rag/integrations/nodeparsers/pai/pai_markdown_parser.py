@@ -115,7 +115,7 @@ class StructuredNodeParser(BaseModel):
         self, chunk_content, doc_node, ref_doc, nodes_list, chunk_images_list
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
-        if len(chunk_images_list) > 0 and self.enable_multimodal:
+        if len(chunk_images_list) > 0:
             text_node = TextNode(
                 text=chunk_content,
                 embedding=doc_node.embedding,
@@ -175,7 +175,7 @@ class StructuredNodeParser(BaseModel):
         tree_nodes_group = []
         tree_tokens = 0
         for tree_node in tree_nodes:
-            if tree_node.category == "image" and self.enable_multimodal:
+            if tree_node.category == "image" and self.image_caption_tool is not None:
                 if tree_nodes_group:
                     tree_nodes_group[-1].append(tree_node)
                 else:
