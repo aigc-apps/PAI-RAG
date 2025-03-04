@@ -21,6 +21,7 @@ from pai_rag.integrations.query_transform.pai_query_transform import (
 )
 from pai_rag.integrations.router.pai.pai_router import Intents
 from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.utils.citation_utils import get_citations_from_node
 from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletion,
@@ -143,35 +144,10 @@ def _make_chat_completion_response(
     return_reference: bool = False,
 ):
     logger.info(f"Finished response: {response_wrapper.response.message.content}")
-    citations = []
-    citation_details = []
-    if return_reference:
-        for score_node in response_wrapper.source_nodes:
-            if isinstance(score_node.node, ImageNode):
-                url = score_node.node.image_url
-                if url is not None:
-                    citations.append(url)
-                    citation_details.append(
-                        {
-                            "name": "Image",
-                            "text": None,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-            else:
-                url = score_node.node.metadata.get(
-                    "file_url"
-                ) or score_node.node.metadata.get("file_path")
-                citations.append(url)
-                citation_details.append(
-                    {
-                        "name": score_node.node.metadata.get("file_name"),
-                        "text": score_node.node.text,
-                        "url": url,
-                        "score": score_node.score,
-                    }
-                )
+
+    citations, citation_details = get_citations_from_node(
+        return_reference, response_wrapper
+    )
 
     base_token_usage.completion_tokens += (
         response_wrapper.response.additional_kwargs.get("completion_tokens", 0)
@@ -241,35 +217,10 @@ async def _make_chat_completion_chunk_response(
     i = 0
     full_content = ""
     created_ts = int(time.time())
-    citations = []
-    citation_details = []
-    if return_reference:
-        for score_node in response_wrapper.source_nodes:
-            if isinstance(score_node.node, ImageNode):
-                url = score_node.node.image_url
-                if url is not None:
-                    citations.append(url)
-                    citation_details.append(
-                        {
-                            "name": "Image",
-                            "text": None,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
-            else:
-                url = score_node.node.metadata.get(
-                    "file_url"
-                ) or score_node.node.metadata.get("file_path")
-                citations.append(url)
-                citation_details.append(
-                    {
-                        "name": score_node.node.metadata.get("file_name"),
-                        "url": url,
-                        "text": score_node.node.text,
-                        "score": score_node.score,
-                    }
-                )
+
+    citations, citation_details = get_citations_from_node(
+        return_reference, response_wrapper
+    )
 
     model_name = Settings.llm.metadata.model_name
     try:
@@ -579,15 +530,42 @@ class RagApplication:
             if self.config.system.default_web_search:
                 chat_request.search_web = True
 
+            if (chat_request.chat_llm) and (not chat_request.search_web):
+                logger.info(f"Querying with question: {messages[-1].content}.")
+                llm: PaiLlm = resolve_llm(self.config)
+                if chat_request.stream:
+                    response = await llm.astream_chat(messages=messages)
+
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response_wrapper=ChatResponseWrapper(response=response),
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                        start_time=start,
+                    )
+                else:
+                    response = await llm.achat(messages=messages)
+
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response_wrapper=ChatResponseWrapper(response=response),
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                    )
+
             question = messages[-1].content
 
             logger.info(
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
             openai_query_transform = resolve_openai_query_transform(self.config)
+            if chat_request.chat_db:
+                chat_type = "nl2sql"
+            else:
+                chat_type = "default"
             if openai_query_transform is not None:
                 new_query_bundle = await openai_query_transform.arun(
-                    chat_messages=messages,
+                    chat_messages=messages, chat_type=chat_type
                 )
                 base_token_usage.completion_tokens += new_query_bundle.completion_tokens
                 base_token_usage.prompt_tokens += new_query_bundle.prompt_tokens
@@ -639,6 +617,62 @@ class RagApplication:
                 query_bundle.need_web_search = True
             elif chat_request.force_search_knowledgebase:
                 chat_request.search_web = False
+
+            if chat_request.chat_agent:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                agent_tool = resolve_agent(self.config)
+                if not agent_tool:
+                    raise ValueError(
+                        "Agent config is not valid. Please check your Agent api configuration."
+                    )
+                if chat_request.stream:
+                    response_wrapper = await agent_tool.astream_chat(
+                        message=query_bundle.query_str,
+                    )
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                        start_time=start,
+                    )
+                else:
+                    response_wrapper = await agent_tool.achat(
+                        message=query_bundle.query_str,
+                    )
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=chat_request.return_reference,
+                    )
+
+            if chat_request.chat_db:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                data_analysis_query_engine = resolve_data_analysis_query(self.config)
+                if not data_analysis_query_engine:
+                    raise ValueError(
+                        "DBChat config is not valid. Please check your DBChat api configuration."
+                    )
+                response_wrapper = await data_analysis_query_engine.aquery(query_bundle)
+
+                if chat_request.stream:
+                    return _make_chat_completion_chunk_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=True,
+                        start_time=start,
+                    )
+                else:
+                    return _make_chat_completion_response(
+                        session_id=session_id,
+                        response_wrapper=response_wrapper,
+                        base_token_usage=base_token_usage,
+                        return_reference=True,
+                    )
 
             if chat_request.search_web:
                 logger.info(f"Querying with question '{query_bundle.query_str}'.")
