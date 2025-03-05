@@ -220,6 +220,9 @@ class PaiDocxReader(BaseReader):
                 markdown.append(self._convert_table_to_markdown(table, None))
                 markdown.append("\n\n")
 
+        with open(f"tests/testdata/data/test_back_data/{doc_name}.md", "w") as f:
+            f.write("".join(markdown))
+
         return "".join(markdown)
 
     def load_data(
