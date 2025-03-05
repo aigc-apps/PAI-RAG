@@ -54,7 +54,7 @@ class PaiDocxReader(BaseReader):
             return ""
 
         # 处理标题
-        if paragraph.style.name.startswith("Heading"):
+        if paragraph.style and paragraph.style.name.startswith("Heading"):
             heading_level = int(
                 re.search(r"Heading (\d)", paragraph.style.name).group(1)
             )
@@ -141,7 +141,7 @@ class PaiDocxReader(BaseReader):
                     if not image_id:
                         continue
                     image_part = paragraph.part.rels.get(image_id, None)
-                    if image_id and self._oss_cache:
+                    if image_id and hasattr(image_part, "blob") and self._oss_cache:
                         image_blob = image_part.blob
                         image_filename = os.path.basename(image_part.partname)
                         image_url = self._transform_local_to_oss(
@@ -170,9 +170,10 @@ class PaiDocxReader(BaseReader):
             if isinstance(element.tag, str) and element.tag.endswith("p"):  # 段落
                 paragraph = paragraphs.pop(0)
 
-                if paragraph.style.name.startswith(
-                    "List"
-                ) or paragraph.style.name.startswith("List"):
+                if paragraph.style and (
+                    paragraph.style.name.startswith("List")
+                    or paragraph.style.name.startswith("List")
+                ):
                     current_list_level = self._get_list_level(paragraph)
                     markdown.append(self._convert_list(paragraph, current_list_level))
                 else:
@@ -197,20 +198,21 @@ class PaiDocxReader(BaseReader):
                                         image_part = document.part.related_parts.get(
                                             embed_id
                                         )
-                                        image_blob = image_part.blob
-                                        image_filename = os.path.basename(
-                                            image_part.partname
-                                        )
-                                        image_url = self._transform_local_to_oss(
-                                            image_blob, image_filename, doc_name
-                                        )
-                                        if image_url:
-                                            time_tag = int(time.time())
-                                            alt_text = f"pai_rag_image_{time_tag}_"
-                                            image_content = (
-                                                f"![{alt_text}]({image_url})"
+                                        if hasattr(image_part, "blob"):
+                                            image_blob = image_part.blob
+                                            image_filename = os.path.basename(
+                                                image_part.partname
                                             )
-                                            markdown.append(f"{image_content}\n\n")
+                                            image_url = self._transform_local_to_oss(
+                                                image_blob, image_filename, doc_name
+                                            )
+                                            if image_url:
+                                                time_tag = int(time.time())
+                                                alt_text = f"pai_rag_image_{time_tag}_"
+                                                image_content = (
+                                                    f"![{alt_text}]({image_url})"
+                                                )
+                                                markdown.append(f"{image_content}\n\n")
                     markdown.append(self._convert_paragraph(paragraph))
 
             elif isinstance(element.tag, str) and element.tag.endswith("tbl"):  # 表格
