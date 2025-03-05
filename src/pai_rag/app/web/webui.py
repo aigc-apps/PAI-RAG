@@ -35,7 +35,6 @@ def resume_ui():
             index_name=DEFAULT_INDEX_NAME,
             vector_store_config=rag_config.index.vector_store,
             embedding_config=rag_config.embedding,
-            knowledgebase_manager={"index_name": DEFAULT_INDEX_NAME},
         )
     component_settings.update(
         index_to_components_settings(

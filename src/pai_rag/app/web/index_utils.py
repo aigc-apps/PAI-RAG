@@ -533,7 +533,6 @@ def components_to_index(
             "index_name": index_name,
             "vector_store_config": vector_store,
             "embedding_config": embedding,
-            "knowledgebase_manager": {"index_name": index_name},
         }
     )
 

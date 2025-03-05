@@ -120,7 +120,6 @@ def get_default_index_entry(index_map):
                 DEFAULT_KNOWLEDGE_PATH, index_name, ".index", ".faiss"
             )
         ),
-        knowledgebase_manager={"index_name": index_name},
     )
 
 

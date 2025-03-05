@@ -1,7 +1,6 @@
 import os
 import json
 from typing import Dict, Any
-from pydantic import BaseModel
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import DOC_TYPES_CONVERT_TO_MD
 from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 from pai_rag.utils.index_utils import (
@@ -10,7 +9,6 @@ from pai_rag.utils.index_utils import (
     write_markdown_to_parse_dir,
     copy_original_files_to_parse_dir,
 )
-from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH, DEFAULT_INDEX_NAME
 from loguru import logger
 
 EXCLUDE_NODE_KEYS = set(
@@ -34,62 +32,38 @@ def filter_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in data.items() if k not in EXCLUDE_NODE_KEYS}
 
 
-class RagKnowledgeBaseManager(BaseModel):
-    index_name: str = DEFAULT_INDEX_NAME
-
-    @property
-    def base_path(self):
-        return os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name)
-
-    @property
-    def docs_path(self):
-        return os.path.join(self.base_path, "docs")
-
-    @property
-    def index_path(self):
-        return os.path.join(self.base_path, ".index")
-
-    @property
-    def faiss_index_path(self):
-        return os.path.join(self.index_path, ".faiss")
-
-    @property
-    def logs_path(self):
-        return os.path.join(self.base_path, ".logs")
-
-    @property
-    def doc_ids_map_file(self):
-        return os.path.join(self.index_path, "file_to_docid_map.json")
-
-    @property
-    def parse_path(self):
-        return os.path.join(self.index_path, "parse")
-
-    @property
-    def split_path(self):
-        return os.path.join(self.index_path, "split")
-
-    @property
-    def embed_path(self):
-        return os.path.join(self.index_path, "embed")
-
-    def create_new_knowledgebase_dir(self):
+class RagKnowledgeBaseManager:
+    @staticmethod
+    def create_new_knowledgebase_dir(knowledgebase_paths: Dict[str, str]):
         try:
-            os.makedirs(self.base_path, exist_ok=True)
-            os.makedirs(self.docs_path, exist_ok=True)
-            os.makedirs(self.index_path, exist_ok=True)
-            os.makedirs(self.logs_path, exist_ok=True)
-            logger.info(f"知识库目录 '{self.base_path}' 及其子目录已成功创建或已存在。")
+            os.makedirs(knowledgebase_paths["base_path"], exist_ok=True)
+            os.makedirs(knowledgebase_paths["docs_path"], exist_ok=True)
+            os.makedirs(knowledgebase_paths["index_path"], exist_ok=True)
+            os.makedirs(knowledgebase_paths["logs_path"], exist_ok=True)
+            logger.info(f"知识库目录 {knowledgebase_paths['base_path']} 及其子目录已成功创建或已存在。")
         except Exception as e:
-            logger.error(f"创建目录时发生错误: {e}")
+            logger.error(f"创建目录knowledgebase_paths:{knowledgebase_paths}时发生错误: {e} ")
 
-    def delete_local_files_from_index(self, file_path):
+    @staticmethod
+    def get_docid_from_index_via_file_name(doc_ids_map_file, file_name):
+        with open(doc_ids_map_file, "r") as f:
+            doc_ids_map_dict = json.load(f)
+        return doc_ids_map_dict.get(file_name, None)
+
+    @staticmethod
+    def delete_local_files_from_index(knowledgebase_paths, file_path):
         file_name = str(file_path).split("/")[-1]
         relative_path = "/".join(file_path.split("/")[4:-1])
         file_type = os.path.splitext(file_name)[1]
-        parse_file = os.path.join(self.parse_path, relative_path, file_name)
-        split_path = os.path.join(self.split_path, relative_path, file_name)
-        embed_path = os.path.join(self.embed_path, relative_path, file_name)
+        parse_file = os.path.join(
+            knowledgebase_paths["parse_path"], relative_path, file_name
+        )
+        split_path = os.path.join(
+            knowledgebase_paths["split_path"], relative_path, file_name
+        )
+        embed_path = os.path.join(
+            knowledgebase_paths["embed_path"], relative_path, file_name
+        )
 
         file_type = f".{parse_file.split('.')[-1]}"
         if file_type in DOC_TYPES_CONVERT_TO_MD:
@@ -99,8 +73,8 @@ class RagKnowledgeBaseManager(BaseModel):
         delete_dir(split_path)
         delete_dir(embed_path)
 
-        if os.path.exists(self.doc_ids_map_file):
-            with open(self.doc_ids_map_file, "r") as json_file:
+        if os.path.exists(knowledgebase_paths["doc_ids_map_file"]):
+            with open(knowledgebase_paths["doc_ids_map_file"], "r") as json_file:
                 try:
                     doc_ids_map_dict = json.load(json_file)
                 except json.JSONDecodeError:
@@ -110,25 +84,27 @@ class RagKnowledgeBaseManager(BaseModel):
             f"Deleted file_path: {file_path} from doc_ids_map_dict {doc_ids_map_dict}"
         )
         try:
-            with open(self.doc_ids_map_file, "w") as f:
+            with open(knowledgebase_paths["doc_ids_map_file"], "w") as f:
                 json.dump(doc_ids_map_dict, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            logger.error(f"写入文件{self.doc_ids_map_file}时出错: {e}")
+            logger.error(f"写入文件{knowledgebase_paths['doc_ids_map_file']}时出错: {e}")
 
-    def delete_local_dir_from_index(self, file_path):
+    @staticmethod
+    def delete_local_dir_from_index(knowledgebase_paths, file_path):
         relative_path = "/".join(file_path.split("/")[4:])
-        parse_dir = os.path.join(self.parse_path, relative_path)
-        split_path = os.path.join(self.split_path, relative_path)
-        embed_path = os.path.join(self.embed_path, relative_path)
+        parse_dir = os.path.join(knowledgebase_paths["parse_path"], relative_path)
+        split_path = os.path.join(knowledgebase_paths["split_path"], relative_path)
+        embed_path = os.path.join(knowledgebase_paths["embed_path"], relative_path)
 
         delete_dir(parse_dir)
         delete_dir(split_path)
         delete_dir(embed_path)
 
-    def save_parse_files(self, documents):
+    @staticmethod
+    def save_parse_files(knowledgebase_paths, documents):
         doc_ids_map_dict = {}
-        if os.path.exists(self.doc_ids_map_file):
-            with open(self.doc_ids_map_file, "r") as json_file:
+        if os.path.exists(knowledgebase_paths["doc_ids_map_file"]):
+            with open(knowledgebase_paths["doc_ids_map_file"], "r") as json_file:
                 try:
                     doc_ids_map_dict = json.load(json_file)
                 except json.JSONDecodeError:
@@ -140,7 +116,9 @@ class RagKnowledgeBaseManager(BaseModel):
             doc_ids_map_dict[file_path] = doc.id_
             file_type = os.path.splitext(file_name)[1]
             relative_path = "/".join(file_path.split("/")[4:-1])
-            relative_parse_path = os.path.join(self.parse_path, relative_path)
+            relative_parse_path = os.path.join(
+                knowledgebase_paths["parse_path"], relative_path
+            )
             os.makedirs(relative_parse_path, exist_ok=True)
             if file_type in DOC_TYPES_CONVERT_TO_MD:
                 write_markdown_to_parse_dir(
@@ -153,13 +131,14 @@ class RagKnowledgeBaseManager(BaseModel):
             logger.debug("doc_ids_map_dict", doc_ids_map_dict)
 
             try:
-                with open(self.doc_ids_map_file, "w") as f:
+                with open(knowledgebase_paths["doc_ids_map_file"], "w") as f:
                     json.dump(doc_ids_map_dict, f, indent=4, ensure_ascii=False)
             except Exception as e:
-                logger.error(f"写入文件{self.doc_ids_map_file}时出错: {e}")
+                logger.error(f"写入文件{knowledgebase_paths['doc_ids_map_file']}时出错: {e}")
 
-    def save_chunk_nodes(self, nodes, operation):
-        chunk_path = os.path.join(self.index_path, operation)
+    @staticmethod
+    def save_chunk_nodes(knowledgebase_paths, nodes, operation):
+        chunk_path = os.path.join(knowledgebase_paths["index_path"], operation)
         os.makedirs(chunk_path, exist_ok=True)
         file_name_dict = {}
         for node in nodes:
@@ -172,11 +151,8 @@ class RagKnowledgeBaseManager(BaseModel):
             relative_path = "/".join(file_path.split("/")[4:-1])
             file_chunk_dir = os.path.join(chunk_path, relative_path, file_name)
             os.makedirs(file_chunk_dir, exist_ok=True)
-            node_file_path = f"{file_chunk_dir}/{file_name_dict[file_name]}.json"
+            node_file_path = os.path.join(
+                file_chunk_dir, f"{file_name_dict[file_name]}.json"
+            )
             with open(node_file_path, mode="w", encoding="utf-8") as file:
                 json.dump(filter_dict(node.dict()), file, ensure_ascii=False, indent=4)
-
-    def get_docid_from_index_via_file_name(self, file_name):
-        with open(self.doc_ids_map_file, "r") as f:
-            doc_ids_map_dict = json.load(f)
-        return doc_ids_map_dict.get(file_name, None)
