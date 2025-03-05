@@ -3,8 +3,6 @@ import gradio as gr
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 import pandas as pd
 
-IGNORE_FILE_LIST = [".DS_Store"]
-
 
 async def upload_oss_knowledge(
     oss_path,

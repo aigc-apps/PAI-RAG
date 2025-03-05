@@ -23,7 +23,7 @@ DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
 
 
-async def upload_file(input_files, index_name="default_index"):
+async def upload_file(input_files, index_name="default"):
     files = []
     file_obj_list = []
     if input_files:
