@@ -1,4 +1,5 @@
 import gradio as gr
+import os
 from typing import Any, List
 from pai_rag.app.web.index_utils import components_to_index, index_to_components
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
@@ -16,6 +17,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     HuggingFaceEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
 from loguru import logger
 
 
@@ -114,8 +116,11 @@ def get_default_index_entry(index_map):
         index_name=index_name,
         embedding_config=HuggingFaceEmbeddingConfig(),
         vector_store_config=FaissVectorStoreConfig(
-            persist_path=f"localdata/{index_name}"
+            persist_path=os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, index_name, ".index", ".faiss"
+            )
         ),
+        knowledgebase_manager={"index_name": index_name},
     )
 
 

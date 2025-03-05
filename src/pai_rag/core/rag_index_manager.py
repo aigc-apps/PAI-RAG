@@ -3,7 +3,7 @@ import json
 import shutil
 from threading import Lock
 import threading
-from typing import Annotated, Union, Dict, List
+from typing import Annotated, Union, Dict, List, Optional
 from pydantic import BaseModel, Field
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_config import RagConfig
@@ -52,7 +52,7 @@ class RagIndexEntry(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
-    knowledgebase_manager: RagKnowledgeBaseManager = RagKnowledgeBaseManager()
+    knowledgebase_manager: Optional[RagKnowledgeBaseManager] = None
 
 
 """
@@ -111,19 +111,17 @@ class RagIndexManager:
                     index_name=new_index_name,
                     vector_store_config=old_index_entry.vector_store_config,
                     embedding_config=old_index_entry.embedding_config,
-                    knowledgebase_manager=RagKnowledgeBaseManager(
-                        index_name=new_index_name
-                    ),
+                    knowledgebase_manager={"index_name": new_index_name},
                 )
-                new_persist_path = os.path.join(
-                    new_index_entry.knowledgebase_manager.index_path, ".faiss"
-                )
+                new_index_entry.knowledgebase_manager.create_new_knowledgebase_dir()
                 if old_index_entry.vector_store_config.type == "faiss":
                     self.move_old_index_persist_path(
                         old_index_entry.vector_store_config.persist_path,
-                        new_persist_path,
+                        new_index_entry.knowledgebase_manager.faiss_index_path,
                     )
-                new_index_entry.vector_store_config.persist_path = new_persist_path
+                new_index_entry.vector_store_config.persist_path = (
+                    new_index_entry.knowledgebase_manager.faiss_index_path
+                )
                 self._index_map.indexes[new_index_name] = new_index_entry
         else:
             rag_config.index.vector_store.persist_path = DEFAULT_LOCAL_STORAGE_PATH
@@ -139,12 +137,16 @@ class RagIndexManager:
         if not self.compatible_index:
             self.compatible_with_old_index(rag_config)
         if DEFAULT_INDEX_NAME not in self._index_map.indexes:
-            self._index_map.indexes[DEFAULT_INDEX_NAME] = RagIndexEntry(
+            index_entry = RagIndexEntry(
                 index_name=DEFAULT_INDEX_NAME,
                 vector_store_config=rag_config.index.vector_store,
                 embedding_config=rag_config.embedding,
-                knowledgebase_manager=RagKnowledgeBaseManager(),
+                knowledgebase_manager={
+                    "index_name": DEFAULT_INDEX_NAME,
+                },
             )
+            index_entry.knowledgebase_manager.create_new_knowledgebase_dir()
+            self._index_map.indexes[DEFAULT_INDEX_NAME] = index_entry
         new_state = self.save_index_map()
         self._state.update_state(new_state)
         logger.info(f"Index '{DEFAULT_INDEX_NAME}' created successfully.")
@@ -192,6 +194,7 @@ class RagIndexManager:
                 index_entry.index_name not in self._index_map.indexes
             ), f"Index name '{index_entry.index_name}' already exists."
             self._index_map.indexes[index_entry.index_name] = index_entry
+            index_entry.knowledgebase_manager.create_new_knowledgebase_dir()
             new_state = self.save_index_map()
             self._state.update_state(new_state)
             logger.info(f"Index '{index_entry.index_name}' created successfully.")
@@ -222,7 +225,9 @@ class RagIndexManager:
                     index_name=DEFAULT_INDEX_NAME,
                     vector_store_config=default_index_entry.vector_store_config,
                     embedding_config=default_index_entry.embedding_config,
-                    knowledgebase_manager=RagKnowledgeBaseManager(),
+                    knowledgebase_manager={
+                        "index_name": DEFAULT_INDEX_NAME,
+                    },
                 )
                 new_state = self.save_index_map()
                 self._state.update_state(new_state)

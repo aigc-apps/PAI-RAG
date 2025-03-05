@@ -1,7 +1,7 @@
 import os
 import json
-from typing import Dict, Any, Self
-from pydantic import BaseModel, model_validator
+from typing import Dict, Any
+from pydantic import BaseModel
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import DOC_TYPES_CONVERT_TO_MD
 from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 from pai_rag.utils.index_utils import (
@@ -36,27 +36,42 @@ def filter_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 class RagKnowledgeBaseManager(BaseModel):
     index_name: str = DEFAULT_INDEX_NAME
-    base_path: str = ""
-    docs_path: str = ""
-    index_path: str = ""
-    logs_path: str = ""
-    doc_ids_map_file: str = ""
-    parse_path: str = ""
-    split_path: str = ""
-    embed_path: str = ""
 
-    @model_validator(mode="after")
-    def initialize_paths(self) -> Self:
-        self.base_path = os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name)
-        self.docs_path = os.path.join(self.base_path, "docs")
-        self.index_path = os.path.join(self.base_path, ".index")
-        self.logs_path = os.path.join(self.base_path, ".logs")
-        self.doc_ids_map_file = os.path.join(self.index_path, "file_to_docid_map.json")
-        self.parse_path = os.path.join(self.index_path, "parse")
-        self.split_path = os.path.join(self.index_path, "split")
-        self.embed_path = os.path.join(self.index_path, "embed")
-        self.create_new_knowledgebase_dir()
-        return self
+    @property
+    def base_path(self):
+        return os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name)
+
+    @property
+    def docs_path(self):
+        return os.path.join(self.base_path, "docs")
+
+    @property
+    def index_path(self):
+        return os.path.join(self.base_path, ".index")
+
+    @property
+    def faiss_index_path(self):
+        return os.path.join(self.index_path, ".faiss")
+
+    @property
+    def logs_path(self):
+        return os.path.join(self.base_path, ".logs")
+
+    @property
+    def doc_ids_map_file(self):
+        return os.path.join(self.index_path, "file_to_docid_map.json")
+
+    @property
+    def parse_path(self):
+        return os.path.join(self.index_path, "parse")
+
+    @property
+    def split_path(self):
+        return os.path.join(self.index_path, "split")
+
+    @property
+    def embed_path(self):
+        return os.path.join(self.index_path, "embed")
 
     def create_new_knowledgebase_dir(self):
         try:
