@@ -26,4 +26,5 @@ def test_pai_docx_reader():
     directory_reader.file_readers[".docx"] = PaiDocxReader()
 
     documents = directory_reader.load_data(file_path_or_directory=input_dir)
-    assert len(documents) == 1
+    assert "步骤一：部署RAG服务" in str(documents[0].text)
+
