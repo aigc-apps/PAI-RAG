@@ -172,7 +172,10 @@ def create_vector_db_panel() -> Dict[str, Any]:
 
             with gr.Column(visible=(vectordb_type == "faiss")) as faiss_col:
                 faiss_path = gr.Textbox(
-                    label="Path", elem_id="faiss_path", interactive=True
+                    label="Path",
+                    elem_id="faiss_path",
+                    interactive=True,
+                    visible=False,
                 )
 
             with gr.Column(visible=(vectordb_type == "opensearch")) as opensearch_col:

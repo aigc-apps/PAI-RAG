@@ -50,11 +50,9 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 
 class PaiVectorStoreIndex(VectorStoreIndex):
     _vector_store: BasePydanticVectorStore = PrivateAttr()
-    _image_store: BasePydanticVectorStore = PrivateAttr()
     _embed_model: BaseEmbedding = PrivateAttr()
     _storage_context: StorageContext = PrivateAttr()
     _vector_index: VectorStoreIndex = PrivateAttr()
-    _multimodal_embed_model: BaseEmbedding = PrivateAttr()
 
     _persist_path: str
     # Enable local keyword index for
@@ -63,17 +61,12 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self,
         vector_store_config: BaseVectorStoreConfig,
         embed_model: BaseEmbedding,
-        enable_multimodal: bool = False,
-        multimodal_embed_model: BaseEmbedding = None,
         enable_local_keyword_index: bool = False,
         vector_index_retrieval_type: VectorIndexRetrievalType = VectorIndexRetrievalType.embedding,
         similarity_top_k=DEFAULT_SIMILARITY_TOP_K,
-        image_similarity_top_k=DEFAULT_SIMILARITY_TOP_K,
         retriever_weights: List[float] = None,
     ):
         self.vector_store_config = vector_store_config
-        self._enable_multimodal = enable_multimodal
-        self._image_store = None
 
         embed_dims = len(embed_model.get_text_embedding("0"))
         self._embed_model = embed_model
@@ -86,18 +79,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             embed_dims=embed_dims,
             persist_path=self._persist_path,
         )
-        multi_modal_embed_dims = -1  # multimodal not enabled
-        # assert multimodal_embed_model is not None, "Multi-modal embedding model must be provided."
-        if self._enable_multimodal:
-            multi_modal_embed_dims = len(multimodal_embed_model.get_text_embedding("0"))
-            self._multimodal_embed_model = multimodal_embed_model
-
-            self._image_store = create_vector_store(
-                vectordb_config=vector_store_config,
-                embed_dims=multi_modal_embed_dims,
-                is_image_store=True,
-                persist_path=self._persist_path,
-            )
 
         self._storage_context = self._create_storage_context()
 
@@ -107,7 +88,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         )
 
         self._similarity_top_k = similarity_top_k
-        self._image_similarity_top_k = image_similarity_top_k
 
         self._enable_local_keyword_index = (
             enable_local_keyword_index
@@ -129,9 +109,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 Vector store type: {self.vector_store_config.type}
                 Vector store path: {self._persist_path}
                 Embedding model: {self._embed_model.model_name}
-                Enable multimodal: {self._enable_multimodal}
                 Text embedding dims: {embed_dims}
-                Image embedding dims: {multi_modal_embed_dims}
                 Enable local keyword index: {self._enable_local_keyword_index}
             """
         )
@@ -143,12 +121,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             vector_index = load_index_from_storage(
                 storage_context=self.storage_context,
                 embed_model=self._embed_model,
-                image_embed_model=self._multimodal_embed_model,
-                enable_multimodal=self._enable_multimodal,
                 enable_local_keyword_index=self._enable_local_keyword_index,
                 vector_index_retrieval_type=self._vector_index_retrieval_type,
                 similarity_top_k=self._similarity_top_k,
-                image_similarity_top_k=self._image_similarity_top_k,
                 retriever_weights=self._retriever_weights,
             )
             logger.info(
@@ -160,8 +135,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             nodes=[],
             storage_context=self.storage_context,
             embed_model=self._embed_model,
-            enable_multimodal=self._enable_multimodal,
-            image_embed_model=self._multimodal_embed_model,
         )
 
     def _create_storage_context(self):
@@ -193,7 +166,6 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             docstore=doc_store,
             index_store=index_store,
             vector_store=self._vector_store,
-            image_store=self._image_store,
             persist_dir=persist_dir,
         )
 
@@ -252,7 +224,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 node_ids, delete_from_docstore, **delete_kwargs
             )
         else:
-            logger.warning("Currently delete_nodes supports for Milvus vector store")
+            logger.warning(
+                "Currently delete_nodes supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError
 
     async def adelete_nodes(
@@ -279,18 +253,24 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     def delete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> None:
-        if isinstance(self._vector_store, MyMilvusVectorStore):
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
             return self._vector_index.delete_ref_doc(
                 ref_doc_id, delete_from_docstore, **delete_kwargs
             )
         else:
-            logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            logger.warning(
+                "Currently delete_ref_doc supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError
 
     async def adelete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> Coroutine[Any, Any, None]:
-        if isinstance(self._vector_store, MyMilvusVectorStore):
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
             return await asyncio.to_thread(
                 self._vector_index.delete_ref_doc(
                     ref_doc_id, delete_from_docstore, **delete_kwargs
@@ -298,4 +278,32 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             )
         else:
             logger.warning("Currently delete_ref_doc supports for Milvus vector store")
+            raise NotImplementedError
+
+    def clear(
+        self,
+    ):
+        """清空索引中的内容并删除索引"""
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
+            self._vector_store.clear()
+        else:
+            logger.warning(
+                "Currently clear supports for Milvus & ElasticSearch vector stores"
+            )
+            raise NotImplementedError
+
+    async def aclear(
+        self,
+    ):
+        """清空索引中的内容并删除索引"""
+        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+            self._vector_store, MyElasticsearchStore
+        ):
+            await self._vector_store.aclear()
+        else:
+            logger.warning(
+                "Currently clear supports for Milvus & ElasticSearch vector stores"
+            )
             raise NotImplementedError

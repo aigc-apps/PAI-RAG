@@ -363,6 +363,7 @@ class RagApplication:
         oss_path=None,
         enable_raptor=False,
         enable_multimodal=False,
+        task_id=None,
     ):
         logger.info(
             f"""Loading data:
@@ -385,6 +386,8 @@ class RagApplication:
             from_oss=from_oss,
             oss_path=oss_path,
             enable_raptor=enable_raptor,
+            index_name=index_name,
+            task_id=task_id,
         )
 
     async def aretrieve(
@@ -577,7 +580,7 @@ class RagApplication:
                 )
 
             logger.info(
-                f"{session_id} Finished query transformation: Usage: {base_token_usage} Elapsed {time.time() - start}"
+                f"{session_id} Finished query transformation: Usage: {base_token_usage}, Need_web_search {new_query_bundle.need_web_search}, Elapsed {time.time() - start}"
             )
 
             # Condense question

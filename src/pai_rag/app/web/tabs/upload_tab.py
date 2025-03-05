@@ -3,8 +3,6 @@ import gradio as gr
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 import pandas as pd
 
-IGNORE_FILE_LIST = [".DS_Store"]
-
 
 async def upload_oss_knowledge(
     oss_path,
@@ -169,7 +167,7 @@ def create_upload_tab() -> Dict[str, Any]:
                 label="Yes",
                 info="Process with MultiModal",
                 elem_id="enable_multimodal",
-                visible=True,
+                visible=False,
             )
             enable_mandatory_ocr = gr.Checkbox(
                 label="Yes",

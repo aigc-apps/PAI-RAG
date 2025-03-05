@@ -1,19 +1,38 @@
 import os
+import json
+import shutil
+from threading import Lock
 import threading
-from typing import Annotated, Union, Dict
+from typing import Annotated, Union, Dict, List
 from pydantic import BaseModel, Field
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
-from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.integrations.index.pai.vector_store_config import (
+    BaseVectorStoreConfig,
+    DEFAULT_LOCAL_STORAGE_PATH_OLD,
+    DEFAULT_LOCAL_STORAGE_PATH,
+)
+from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
+from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
+from pai_rag.utils.index_utils import delete_index_dir, delete_default_index_dir
+from pai_rag.utils.constants import (
+    DEFAULT_INDEX_FILE,
+    DEFAULT_INDEX_NAME,
+    DEFAULT_INDEX_NAME_OLD,
+    DEFAULT_MAX_INDEX_ENTRY_COUNT,
+    IGNORE_FILE_LIST,
+)
+from pai_rag.utils.index_utils import delete_dir
 from loguru import logger
 
-DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
-DEFAULT_INDEX_NAME = "default_index"
-DEFAULT_MAX_INDEX_ENTRY_COUNT = os.environ.get("DEFAULT_MAX_INDEX_ENTRY_COUNT", 20)
 
+# 共享的批处理文件列表和锁
+batch_files: Dict[str, List[str]] = {}
+batch_lock = Lock()
 
 """
 IndexEntry Model
@@ -33,6 +52,7 @@ class RagIndexEntry(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
+    knowledgebase_manager: RagKnowledgeBaseManager = RagKnowledgeBaseManager()
 
 
 """
@@ -61,14 +81,73 @@ class RagIndexManager:
         self._index_map = index_map
         self._lock = threading.Lock()
         self._state = FileServiceState(DEFAULT_INDEX_FILE)
+        self.compatible_index = False
+
+    def move_old_index_persist_path(self, old_persist_path, new_persist_path):
+        if os.path.exists(old_persist_path):
+            if not os.path.exists(new_persist_path):
+                os.makedirs(new_persist_path, exist_ok=True)
+            for item in os.listdir(old_persist_path):
+                source_path = os.path.join(old_persist_path, item)
+                if os.path.isdir(source_path):
+                    shutil.move(source_path, new_persist_path)
+                    print(f"已移动目录: {source_path} 到 {new_persist_path}")
+            delete_dir(old_persist_path)
+
+    def compatible_with_old_index(self, rag_config):
+        if DEFAULT_INDEX_NAME in self._index_map.indexes:
+            return
+        _index_map_indexes_cp = self._index_map.indexes.copy()
+        self._index_map.indexes = {}
+        if len(_index_map_indexes_cp) > 0:
+            for index_name in _index_map_indexes_cp:
+                old_index_entry = _index_map_indexes_cp[index_name]
+                new_index_name = (
+                    DEFAULT_INDEX_NAME
+                    if index_name == DEFAULT_INDEX_NAME_OLD
+                    else index_name
+                )
+                new_index_entry = RagIndexEntry(
+                    index_name=new_index_name,
+                    vector_store_config=old_index_entry.vector_store_config,
+                    embedding_config=old_index_entry.embedding_config,
+                    knowledgebase_manager=RagKnowledgeBaseManager(
+                        index_name=new_index_name
+                    ),
+                )
+                new_persist_path = os.path.join(
+                    new_index_entry.knowledgebase_manager.index_path, ".faiss"
+                )
+                if old_index_entry.vector_store_config.type == "faiss":
+                    self.move_old_index_persist_path(
+                        old_index_entry.vector_store_config.persist_path,
+                        new_persist_path,
+                    )
+                new_index_entry.vector_store_config.persist_path = new_persist_path
+                self._index_map.indexes[new_index_name] = new_index_entry
+        else:
+            rag_config.index.vector_store.persist_path = DEFAULT_LOCAL_STORAGE_PATH
+            self.move_old_index_persist_path(
+                DEFAULT_LOCAL_STORAGE_PATH_OLD,
+                rag_config.index.vector_store.persist_path,
+            )
+        if self._index_map.current_index_name == DEFAULT_INDEX_NAME_OLD:
+            self._index_map.current_index_name = DEFAULT_INDEX_NAME
+        self.compatible_index = True
 
     def add_default_index(self, rag_config: RagConfig):
+        if not self.compatible_index:
+            self.compatible_with_old_index(rag_config)
         if DEFAULT_INDEX_NAME not in self._index_map.indexes:
             self._index_map.indexes[DEFAULT_INDEX_NAME] = RagIndexEntry(
                 index_name=DEFAULT_INDEX_NAME,
                 vector_store_config=rag_config.index.vector_store,
                 embedding_config=rag_config.embedding,
+                knowledgebase_manager=RagKnowledgeBaseManager(),
             )
+        new_state = self.save_index_map()
+        self._state.update_state(new_state)
+        logger.info(f"Index '{DEFAULT_INDEX_NAME}' created successfully.")
 
     @classmethod
     def from_file(cls, index_file: str):
@@ -78,7 +157,6 @@ class RagIndexManager:
                 index_map = RagIndexMap.model_validate_json(index_json_str)
         else:
             index_map = RagIndexMap()
-
         return cls(index_file=index_file, index_map=index_map)
 
     def get_index_map(self) -> RagIndexMap:
@@ -98,8 +176,6 @@ class RagIndexManager:
         return self._index_map.indexes[index_name]
 
     def save_index_map(self):
-        import json
-
         index_object = self._index_map.model_dump()
         index_json = json.dumps(index_object, sort_keys=True, ensure_ascii=False)
         with open(self._index_file, "w") as fp:
@@ -137,10 +213,28 @@ class RagIndexManager:
             assert (
                 index_name in self._index_map.indexes
             ), f"Index name '{index_name}' not exists."
-            del self._index_map.indexes[index_name]
-            new_state = self.save_index_map()
-            self._state.update_state(new_state)
-            logger.info(f"Index '{index_name}' removed.")
+            if index_name == "default":
+                default_index_entry = self._index_map.indexes[index_name]
+                del self._index_map.indexes[index_name]
+                delete_default_index_dir()
+                logger.info(f"Index '{index_name}' removed.")
+                self._index_map.indexes[default_index_entry.index_name] = RagIndexEntry(
+                    index_name=DEFAULT_INDEX_NAME,
+                    vector_store_config=default_index_entry.vector_store_config,
+                    embedding_config=default_index_entry.embedding_config,
+                    knowledgebase_manager=RagKnowledgeBaseManager(),
+                )
+                new_state = self.save_index_map()
+                self._state.update_state(new_state)
+                logger.info(
+                    f"Index '{default_index_entry.index_name}' created successfully."
+                )
+            else:
+                del self._index_map.indexes[index_name]
+                delete_index_dir(index_name)
+                new_state = self.save_index_map()
+                self._state.update_state(new_state)
+                logger.info(f"Index '{index_name}' removed.")
 
     def list_indexes(self):
         return self._index_map
@@ -167,6 +261,55 @@ class RagIndexManager:
                             index_json_str
                         )
                         self._state.update_state(new_state)
+
+    def add_file_to_index(self, index_name: str, file_path: str):
+        for ignore_file in IGNORE_FILE_LIST:
+            if file_path.endswith(ignore_file):
+                logger.info(f"File {file_path} is not supported and ignored.")
+                return
+        with batch_lock:
+            if index_name in batch_files:
+                batch_files[index_name].append(file_path)
+            else:
+                batch_files[index_name] = [file_path]
+        logger.info(
+            f"File {file_path} added to batch_processor for index {index_name}."
+        )
+
+    def delete_file_from_index(self, index_name: str, file_path: str):
+        for ignore_file in IGNORE_FILE_LIST:
+            if file_path.endswith(ignore_file):
+                logger.info(f"File {file_path} is not supported and ignored.")
+                return True
+        current_index = self.get_index_by_name(index_name)
+        current_vector_store_index = PaiVectorStoreIndex(
+            current_index.vector_store_config,
+            embed_model=create_embedding(current_index.embedding_config),
+        )
+        ref_doc_id = (
+            current_index.knowledgebase_manager.get_docid_from_index_via_file_name(
+                file_path
+            )
+        )
+        logger.info(
+            f"get_docid_from_index_via_file_name: ref_doc_id {ref_doc_id} file path: {file_path}"
+        )
+        try:
+            res = current_vector_store_index.delete_ref_doc(ref_doc_id)
+            current_index.knowledgebase_manager.delete_local_files_from_index(file_path)
+            logger.info(
+                f"File {file_path} removed from batch_processor for index {index_name}. res: {res}."
+            )
+            return True
+        except NotImplementedError as e:
+            logger.error(f"Deletion not implemented: {e}")
+        except Exception as e:
+            logger.error(f"delete_file_from_index: delete_ref_doc error {e}")
+        return False
+
+    def delete_dir_from_index(self, index_name: str, file_path: str):
+        current_index = self.get_index_by_name(index_name)
+        current_index.knowledgebase_manager.delete_local_dir_from_index(file_path)
 
 
 index_manager = RagIndexManager.from_file(index_file=DEFAULT_INDEX_FILE)

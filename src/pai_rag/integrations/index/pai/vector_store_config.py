@@ -2,7 +2,8 @@ from typing import Annotated, List, Literal, Union
 from pydantic import BaseModel, Field
 from enum import Enum
 
-DEFAULT_LOCAL_STORAGE_PATH = "./localdata/storage"
+DEFAULT_LOCAL_STORAGE_PATH_OLD = "./localdata/storage"
+DEFAULT_LOCAL_STORAGE_PATH = "./localdata/knowledgebase/default/.index/.faiss"
 
 
 class SupportedVectorStoreType(str, Enum):

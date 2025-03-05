@@ -33,7 +33,7 @@
 
 ## API 使用
 
-注意，目前查询和上传API均可以指定index_name来切换知识库，当index_name参数省略时，默认为**default_index**知识库。
+注意，目前查询和上传API均可以指定index_name来切换知识库，当index_name参数省略时，默认为**default**知识库。
 
 目前，删除index操作仅仅支持通过API删除。
 
@@ -42,13 +42,13 @@
 ** Retrieval **
 
 ```sh
-curl -X POST http://localhost:8680/service/query/retrieval -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
+curl -X POST http://localhost:8680/service/query/retrieval -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default"}'
 ```
 
 ** Query **
 
 ```sh
-curl -X POST http://localhost:8680/service/query -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default_index"}'
+curl -X POST http://localhost:8680/service/query -H "Content-Type: application/json" -d '{"question": "什么是组件化", "index_name": "default"}'
 ```
 
 ### 上传接口(Upload)
