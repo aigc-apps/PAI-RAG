@@ -87,11 +87,11 @@ class PaiDocxReader(BaseReader):
             return ""
 
         # 处理无序列表
-        if paragraph.style.name.startswith("List"):
+        if paragraph.style.name.startswith("List Bullet"):
             return f"{'-' * level} {text}\n"
 
         # 处理有序列表
-        if paragraph.style.name.startswith("List"):
+        if paragraph.style.name.startswith("List Number"):
             return f"{level}. {text}\n"
 
         return ""
@@ -170,10 +170,7 @@ class PaiDocxReader(BaseReader):
             if isinstance(element.tag, str) and element.tag.endswith("p"):  # 段落
                 paragraph = paragraphs.pop(0)
 
-                if paragraph.style and (
-                    paragraph.style.name.startswith("List")
-                    or paragraph.style.name.startswith("List")
-                ):
+                if paragraph.style and paragraph.style.name.startswith("List"):
                     current_list_level = self._get_list_level(paragraph)
                     markdown.append(self._convert_list(paragraph, current_list_level))
                 else:
