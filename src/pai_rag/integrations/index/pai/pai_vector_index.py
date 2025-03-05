@@ -34,7 +34,11 @@ from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
 )
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
+
+from llama_index.core.constants import (
+    DEFAULT_SIMILARITY_TOP_K,
+    DEFAULT_IMAGE_SIMILARITY_TOP_K,
+)
 
 from loguru import logger
 
@@ -64,6 +68,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         enable_local_keyword_index: bool = False,
         vector_index_retrieval_type: VectorIndexRetrievalType = VectorIndexRetrievalType.embedding,
         similarity_top_k=DEFAULT_SIMILARITY_TOP_K,
+        image_similarity_top_k=DEFAULT_IMAGE_SIMILARITY_TOP_K,
         retriever_weights: List[float] = None,
     ):
         self.vector_store_config = vector_store_config
@@ -88,6 +93,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         )
 
         self._similarity_top_k = similarity_top_k
+        self._image_similarity_top_k = image_similarity_top_k
 
         self._enable_local_keyword_index = (
             enable_local_keyword_index
