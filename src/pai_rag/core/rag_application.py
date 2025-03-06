@@ -417,6 +417,7 @@ class RagApplication:
             return RetrievalResponse(docs=[])
 
         question = query.messages[-1].content
+        logger.info(f"Querying with question: {question}.")
 
         query_bundle = QueryBundle(question)
         session_config = self.config.model_copy()
