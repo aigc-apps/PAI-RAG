@@ -23,8 +23,6 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     TablestoreVectorStoreConfig,
     DashVectorVectorStoreConfig,
 )
-from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
-
 
 index_related_component_keys = [
     "vector_index",
@@ -530,13 +528,11 @@ def components_to_index(
     else:
         raise ValueError(f"Unknown vector db type: {vectordb_type}")
 
-    knowledgebase_manager = RagKnowledgeBaseManager(index_name=index_name)
     index_entry = RagIndexEntry.model_validate(
         {
             "index_name": index_name,
             "vector_store_config": vector_store,
             "embedding_config": embedding,
-            "knowledgebase_manager": knowledgebase_manager,
         }
     )
 
