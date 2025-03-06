@@ -23,20 +23,21 @@ class ImageCaptionTool:
         pre_content: 上下文描述。
         """
         if not pre_content:
-            prompt = "请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"
+            prompt = """1.请提取图片里的文字信息。
+                        2.请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"""
         else:
             prompt = f"""
 # 图片上下文描述
 {pre_content}
 
 # 任务
-请参考图片的上下文材料，
-使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"""
+1. 请提取图片里的文字信息。
+2. 请参考图片的上下文材料，使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"""
         messages = [
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于给图片生成简要且完整的中文描述。"),
+                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
                 ],
             ),
             ChatMessage(
@@ -61,13 +62,13 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于给图片生成详细的描述和标签。"),
+                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
                 ],
             ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text="为下面的图片生成详细的描述和标签信息:"),
+                    TextBlock(text="请提取下面图片里的文字信息，并为下面的图片生成详细的描述和标签信息:"),
                     ImageBlock(path=local_image_path),
                 ],
             ),
@@ -84,13 +85,13 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于给图片生成详细的描述和标签。"),
+                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
                 ],
             ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text="为下面的图片生成详细的描述和标签信息:"),
+                    TextBlock(text="请提取下面图片里的文字信息，并为下面的图片生成详细的描述和标签信息:"),
                     ImageBlock(path=local_image_path),
                 ],
             ),
