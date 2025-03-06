@@ -205,7 +205,7 @@ class ViewModel(BaseModel):
 
         view_model.llm_temperature = config.llm.temperature
 
-        view_model.use_mllm = config.synthesizer.use_multimodal_llm
+        view_model.use_mllm = config.multimodal_llm.enable
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "Chat（Knowledge Base）"
         )
@@ -370,6 +370,7 @@ class ViewModel(BaseModel):
         config["llm"]["temperature"] = self.llm_temperature
         config["llm"]["model"] = self.llm_model_name
 
+        config["multimodal_llm"]["enable"] = self.use_mllm
         config["multimodal_llm"]["source"] = SupportedLlmType.openai_compatible
         config["multimodal_llm"]["base_url"] = self.mllm_base_url
         config["multimodal_llm"]["api_key"] = self.mllm_api_key

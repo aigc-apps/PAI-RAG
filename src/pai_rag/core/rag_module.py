@@ -92,7 +92,7 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
     multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
 
     caption_tool = None
-    if multimodal_llm is not None:
+    if multimodal_llm is not None and config.multimodal_llm.enable:
         caption_tool = resolve(
             cls=ImageCaptionTool,
             multimodal_llm=multimodal_llm,

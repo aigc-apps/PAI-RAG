@@ -313,6 +313,7 @@ def create_setting_tab() -> Dict[str, Any]:
         {
             use_oss_col.elem_id: use_oss_col,
             use_mllm_col.elem_id: use_mllm_col,
+            use_mllm.elem_id: use_mllm,
         }
     )
     return elems
