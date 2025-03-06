@@ -416,28 +416,9 @@ class RagApplication:
                 )
             return RetrievalResponse(docs=[])
 
-        openai_query_transform = resolve_openai_query_transform(self.config)
         question = query.messages[-1].content
-        if openai_query_transform is not None:
-            new_query_bundle = await openai_query_transform.arun(
-                chat_messages=query.messages,
-            )
-        else:
-            new_query_bundle = PaiQueryBundle(
-                query_str=question,
-                chat_messages_str=messages_to_history_str(
-                    query.messages, max_length=500
-                ),
-            )
 
-        # Condense question
-        new_question = new_query_bundle.query_str
-        logger.info(f"Transformed question '{new_question}'.")
-        if new_question != question:
-            new_question = " ".join([question, new_question])
-        logger.info(f"Querying with question '{new_question}'.")
-
-        query_bundle = QueryBundle(new_question)
+        query_bundle = QueryBundle(question)
         session_config = self.config.model_copy()
         index_entry = index_manager.get_index_by_name(query.index_name)
         session_config.embedding = index_entry.embedding_config
