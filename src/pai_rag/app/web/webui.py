@@ -10,7 +10,6 @@ from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.core.rag_index_manager import RagIndexEntry
-from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
 from pai_rag.utils.constants import DEFAULT_INDEX_NAME
 
 # from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
@@ -36,7 +35,6 @@ def resume_ui():
             index_name=DEFAULT_INDEX_NAME,
             vector_store_config=rag_config.index.vector_store,
             embedding_config=rag_config.embedding,
-            knowledgebase_manager=RagKnowledgeBaseManager(),
         )
     component_settings.update(
         index_to_components_settings(

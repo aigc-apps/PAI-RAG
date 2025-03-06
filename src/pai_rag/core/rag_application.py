@@ -386,7 +386,7 @@ class RagApplication:
             from_oss=from_oss,
             oss_path=oss_path,
             enable_raptor=enable_raptor,
-            index_name=index_name,
+            index_entry=index_entry,
             task_id=task_id,
         )
 

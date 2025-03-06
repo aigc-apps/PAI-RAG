@@ -3,8 +3,8 @@ import json
 import shutil
 from threading import Lock
 import threading
-from typing import Annotated, Union, Dict, List
-from pydantic import BaseModel, Field
+from typing import Annotated, Union, Dict, List, Self
+from pydantic import BaseModel, Field, model_validator
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
@@ -25,6 +25,7 @@ from pai_rag.utils.constants import (
     DEFAULT_INDEX_NAME_OLD,
     DEFAULT_MAX_INDEX_ENTRY_COUNT,
     IGNORE_FILE_LIST,
+    DEFAULT_KNOWLEDGE_PATH,
 )
 from pai_rag.utils.index_utils import delete_dir
 from loguru import logger
@@ -52,7 +53,37 @@ class RagIndexEntry(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
-    knowledgebase_manager: RagKnowledgeBaseManager = RagKnowledgeBaseManager()
+    knowledgebase_paths: Dict[str, str] = {}
+
+    @model_validator(mode="after")
+    def set_knowledgebase_paths(self) -> Self:
+        self.knowledgebase_paths = {
+            "base_path": os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name),
+            "docs_path": os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name, "docs"),
+            "index_path": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, self.index_name, ".index"
+            ),
+            "logs_path": os.path.join(DEFAULT_KNOWLEDGE_PATH, self.index_name, ".logs"),
+            "parse_path": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, self.index_name, ".index", "parse"
+            ),
+            "split_path": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, self.index_name, ".index", "split"
+            ),
+            "embed_path": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, self.index_name, ".index", "embed"
+            ),
+            "faiss_index_path": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH, self.index_name, ".index", ".faiss"
+            ),
+            "doc_ids_map_file": os.path.join(
+                DEFAULT_KNOWLEDGE_PATH,
+                self.index_name,
+                ".index",
+                "file_to_docid_map.json",
+            ),
+        }
+        return self
 
 
 """
@@ -111,19 +142,18 @@ class RagIndexManager:
                     index_name=new_index_name,
                     vector_store_config=old_index_entry.vector_store_config,
                     embedding_config=old_index_entry.embedding_config,
-                    knowledgebase_manager=RagKnowledgeBaseManager(
-                        index_name=new_index_name
-                    ),
                 )
-                new_persist_path = os.path.join(
-                    new_index_entry.knowledgebase_manager.index_path, ".faiss"
+                RagKnowledgeBaseManager.create_new_knowledgebase_dir(
+                    new_index_entry.knowledgebase_paths
                 )
                 if old_index_entry.vector_store_config.type == "faiss":
                     self.move_old_index_persist_path(
                         old_index_entry.vector_store_config.persist_path,
-                        new_persist_path,
+                        new_index_entry.knowledgebase_paths["faiss_index_path"],
                     )
-                new_index_entry.vector_store_config.persist_path = new_persist_path
+                new_index_entry.vector_store_config.persist_path = (
+                    new_index_entry.knowledgebase_paths["faiss_index_path"]
+                )
                 self._index_map.indexes[new_index_name] = new_index_entry
         else:
             rag_config.index.vector_store.persist_path = DEFAULT_LOCAL_STORAGE_PATH
@@ -139,12 +169,15 @@ class RagIndexManager:
         if not self.compatible_index:
             self.compatible_with_old_index(rag_config)
         if DEFAULT_INDEX_NAME not in self._index_map.indexes:
-            self._index_map.indexes[DEFAULT_INDEX_NAME] = RagIndexEntry(
+            index_entry = RagIndexEntry(
                 index_name=DEFAULT_INDEX_NAME,
                 vector_store_config=rag_config.index.vector_store,
                 embedding_config=rag_config.embedding,
-                knowledgebase_manager=RagKnowledgeBaseManager(),
             )
+            RagKnowledgeBaseManager.create_new_knowledgebase_dir(
+                index_entry.knowledgebase_paths
+            )
+            self._index_map.indexes[DEFAULT_INDEX_NAME] = index_entry
         new_state = self.save_index_map()
         self._state.update_state(new_state)
         logger.info(f"Index '{DEFAULT_INDEX_NAME}' created successfully.")
@@ -192,6 +225,9 @@ class RagIndexManager:
                 index_entry.index_name not in self._index_map.indexes
             ), f"Index name '{index_entry.index_name}' already exists."
             self._index_map.indexes[index_entry.index_name] = index_entry
+            RagKnowledgeBaseManager.create_new_knowledgebase_dir(
+                index_entry.knowledgebase_paths
+            )
             new_state = self.save_index_map()
             self._state.update_state(new_state)
             logger.info(f"Index '{index_entry.index_name}' created successfully.")
@@ -222,7 +258,6 @@ class RagIndexManager:
                     index_name=DEFAULT_INDEX_NAME,
                     vector_store_config=default_index_entry.vector_store_config,
                     embedding_config=default_index_entry.embedding_config,
-                    knowledgebase_manager=RagKnowledgeBaseManager(),
                 )
                 new_state = self.save_index_map()
                 self._state.update_state(new_state)
@@ -286,17 +321,18 @@ class RagIndexManager:
             current_index.vector_store_config,
             embed_model=create_embedding(current_index.embedding_config),
         )
-        ref_doc_id = (
-            current_index.knowledgebase_manager.get_docid_from_index_via_file_name(
-                file_path
-            )
+
+        ref_doc_id = RagKnowledgeBaseManager.get_docid_from_index_via_file_name(
+            current_index.knowledgebase_paths["doc_ids_map_file"], file_path
         )
         logger.info(
             f"get_docid_from_index_via_file_name: ref_doc_id {ref_doc_id} file path: {file_path}"
         )
         try:
             res = current_vector_store_index.delete_ref_doc(ref_doc_id)
-            current_index.knowledgebase_manager.delete_local_files_from_index(file_path)
+            RagKnowledgeBaseManager.delete_local_files_from_index(
+                current_index.knowledgebase_paths, file_path
+            )
             logger.info(
                 f"File {file_path} removed from batch_processor for index {index_name}. res: {res}."
             )
@@ -309,7 +345,9 @@ class RagIndexManager:
 
     def delete_dir_from_index(self, index_name: str, file_path: str):
         current_index = self.get_index_by_name(index_name)
-        current_index.knowledgebase_manager.delete_local_dir_from_index(file_path)
+        RagKnowledgeBaseManager.delete_local_dir_from_index(
+            current_index.knowledgebase_paths, file_path
+        )
 
 
 index_manager = RagIndexManager.from_file(index_file=DEFAULT_INDEX_FILE)
