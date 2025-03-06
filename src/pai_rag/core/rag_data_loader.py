@@ -4,6 +4,7 @@ from llama_index.core.indices import VectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.core.rag_knowledgebase_manager import RagKnowledgeBaseManager
+from pai_rag.core.rag_index_manager import RagIndexEntry
 from pai_rag.core.rag_job_manager import upload_job_manager
 from loguru import logger
 
@@ -31,10 +32,10 @@ class RagDataLoader:
         oss_path: str = None,
         filter_pattern: str = None,
         enable_raptor: bool = False,
-        index_name: str = None,
+        index_entry: RagIndexEntry = None,
         task_id: str = None,
     ):
-        _knowledgebase_manager = RagKnowledgeBaseManager(index_name=index_name)
+        index_name = index_entry.index_name if index_entry else None
         try:
             """Load data from a file or directory."""
             # parse input files into documents
@@ -52,7 +53,9 @@ class RagDataLoader:
                 oss_path=oss_path,
                 from_oss=from_oss,
             )
-            _knowledgebase_manager.save_parse_files(documents)
+            RagKnowledgeBaseManager.save_parse_files(
+                index_entry.knowledgebase_paths, documents
+            )
             upload_job_manager.track_job(
                 task_id,
                 index_name,
@@ -88,7 +91,9 @@ class RagDataLoader:
                 status="processing",
             )
             splitted_nodes = self._node_parser(documents)
-            _knowledgebase_manager.save_chunk_nodes(splitted_nodes, "split")
+            RagKnowledgeBaseManager.save_chunk_nodes(
+                index_entry.knowledgebase_paths, splitted_nodes, "split"
+            )
             upload_job_manager.track_job(
                 task_id,
                 index_name,
@@ -118,7 +123,9 @@ class RagDataLoader:
                 status="processing",
             )
             embedded_nodes = self._embed_model(splitted_nodes)
-            _knowledgebase_manager.save_chunk_nodes(embedded_nodes, "embed")
+            RagKnowledgeBaseManager.save_chunk_nodes(
+                index_entry.knowledgebase_paths, embedded_nodes, "embed"
+            )
             upload_job_manager.track_job(
                 task_id,
                 index_name,
