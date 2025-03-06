@@ -52,6 +52,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.1  # temperature
     stream: Optional[bool] = False  # 流式输出
     index_name: Optional[str] = None  # 索引名称
+    chat_knowledgebase: Optional[bool] = True
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
     return_reference: Optional[bool] = False
