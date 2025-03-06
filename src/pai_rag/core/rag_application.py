@@ -343,6 +343,44 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
     yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
 
+def _switch_control(
+    chat_request: ChatCompletionRequest,
+):
+    """
+    priority:
+    chat_knowledgebase > search_web > chat_agent > chat_db > chat_llm
+    """
+    # 如果多个开关为true，按照优先级顺序控制
+    if chat_request.chat_knowledgebase:
+        chat_request.chat_llm = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    elif chat_request.search_web:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.chat_llm = False
+    elif chat_request.chat_agent:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_llm = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    elif chat_request.chat_db:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_llm = False
+        chat_request.chat_agent = False
+        chat_request.search_web = False
+    elif chat_request.chat_llm:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    else:
+        # 如果开关均为false，默认使用chat_knowledgebase
+        chat_request.chat_knowledgebase = True
+
+
 class RagApplication:
     def __init__(self, config: RagConfig):
         self.name = "RagApplication"
@@ -499,6 +537,8 @@ class RagApplication:
                     session_id, DEFAULT_EMPTY_RESPONSE
                 )
 
+        _switch_control(chat_request)
+
         try:
             guardrail = resolve_llm_guardrail(self.config)
             passed_guardrail = False if guardrail is not None else True
@@ -530,7 +570,7 @@ class RagApplication:
             if self.config.system.default_web_search:
                 chat_request.search_web = True
 
-            if (chat_request.chat_llm) and (not chat_request.search_web):
+            if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
                 llm: PaiLlm = resolve_llm(self.config)
                 if chat_request.stream:
@@ -711,37 +751,36 @@ class RagApplication:
                         return_reference=chat_request.return_reference,
                     )
 
-            if chat_request.chat_knowledgebase:
-                if new_question != question:
-                    query_bundle.query_str = " ".join([question, new_question])
+            if new_question != question:
+                query_bundle.query_str = " ".join([question, new_question])
 
-                logger.info(f"Querying with question '{query_bundle.query_str}'.")
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
-                session_config = self.config.model_copy()
-                index_entry = index_manager.get_index_by_name(chat_request.index_name)
-                session_config.embedding = index_entry.embedding_config
-                session_config.index.vector_store = index_entry.vector_store_config
-                query_engine = resolve_query_engine(session_config)
-                response_wrapper = await query_engine.aquery(
-                    query_bundle,
-                    system_role_str=system_prompt,
-                    prompt_template_str=" " if system_prompt else None,
+            session_config = self.config.model_copy()
+            index_entry = index_manager.get_index_by_name(chat_request.index_name)
+            session_config.embedding = index_entry.embedding_config
+            session_config.index.vector_store = index_entry.vector_store_config
+            query_engine = resolve_query_engine(session_config)
+            response_wrapper = await query_engine.aquery(
+                query_bundle,
+                system_role_str=system_prompt,
+                prompt_template_str=" " if system_prompt else None,
+            )
+            if chat_request.stream:
+                return _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
                 )
-                if chat_request.stream:
-                    return _make_chat_completion_chunk_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                        start_time=start,
-                    )
-                else:
-                    return _make_chat_completion_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                    )
+            else:
+                return _make_chat_completion_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                )
         except Exception:
             logger.error(
                 f"Chat failed for query {chat_request.messages[-1].content} due to {traceback.format_exc()}"
