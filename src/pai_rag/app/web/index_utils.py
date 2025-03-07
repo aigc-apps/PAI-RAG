@@ -9,8 +9,8 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_MODEL_LIST,
     EMBEDDING_TYPE_DICT,
 )
-from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
-from pai_rag.core.rag_index_manager import RagIndexEntry
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.integrations.index.pai.vector_store_config import (
     DEFAULT_LOCAL_STORAGE_PATH,
     AnalyticDBVectorStoreConfig,
@@ -87,14 +87,14 @@ index_related_component_keys = [
 
 
 def index_to_components_settings(
-    index_entry: RagIndexEntry, index_list: List[str], is_new_index: bool = False
+    index_entry: KnowledgeBase, index_list: List[str], is_new_index: bool = False
 ):
     if is_new_index:
         index_component_settings = [
             {"value": "NEW", "choices": index_list + ["NEW"]},
             {
-                "placeholder": index_entry.index_name,
-                "value": index_entry.index_name,
+                "placeholder": index_entry.name,
+                "value": index_entry.name,
                 "visible": True,
             },
             {"visible": True},
@@ -103,7 +103,7 @@ def index_to_components_settings(
         ]
     else:
         index_component_settings = [
-            {"value": index_entry.index_name, "choices": index_list + ["NEW"]},
+            {"value": index_entry.name, "choices": index_list + ["NEW"]},
             {"placeholder": "", "value": "", "visible": False},
             {"visible": False},
             {"visible": True},
@@ -356,14 +356,14 @@ def index_to_components_settings(
 
 
 def index_to_components(
-    index_entry: RagIndexEntry, index_list: List[str], is_new_index: bool = False
+    index_entry: KnowledgeBase, index_list: List[str], is_new_index: bool = False
 ):
     component_settings = index_to_components_settings(
         index_entry, index_list, is_new_index
     )
     return [gr.update(**setting) for setting in component_settings.values()] + [
-        # gr.update(choices=index_list, value=index_entry.index_name),
-        gr.update(choices=index_list, value=index_entry.index_name),
+        # gr.update(choices=index_list, value=index_entry.name),
+        gr.update(choices=index_list, value=index_entry.name),
     ]
 
 
@@ -422,7 +422,7 @@ def components_to_index(
     dashvector_collection_name,
     dashvector_partition_name,
     **kwargs,
-) -> RagIndexEntry:
+) -> KnowledgeBase:
     if vector_index is None or vector_index.lower() == "new":
         index_name = new_index_name
     else:
@@ -449,7 +449,7 @@ def components_to_index(
         }
     elif vectordb_type.lower() == "faiss":
         faiss_persist_path = os.path.join(
-            DEFAULT_KNOWLEDGE_PATH, index_name, ".index", ".faiss"
+            DEFAULT_KNOWLEDGEBASE_PATH, index_name, ".index", ".faiss"
         )
         vector_store = {
             "type": vectordb_type.lower(),
@@ -528,9 +528,9 @@ def components_to_index(
     else:
         raise ValueError(f"Unknown vector db type: {vectordb_type}")
 
-    index_entry = RagIndexEntry.model_validate(
+    index_entry = KnowledgeBase.model_validate(
         {
-            "index_name": index_name,
+            "name": index_name,
             "vector_store_config": vector_store,
             "embedding_config": embedding,
         }

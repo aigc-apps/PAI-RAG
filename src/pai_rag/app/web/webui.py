@@ -9,8 +9,8 @@ from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
-from pai_rag.core.rag_index_manager import RagIndexEntry
-from pai_rag.utils.constants import DEFAULT_INDEX_NAME
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
 
 # from pai_rag.app.web.tabs.eval_tab import create_evaluation_tab
 from pai_rag.app.web.element_manager import elem_manager
@@ -28,17 +28,14 @@ def resume_ui():
     view_model = ViewModel.from_app_config(rag_config)
     index_map = get_index_map()
     component_settings = view_model.to_component_settings()
-    if index_map.current_index_name in index_map.indexes:
-        default_index = index_map.indexes[index_map.current_index_name]
-    else:
-        default_index = RagIndexEntry(
-            index_name=DEFAULT_INDEX_NAME,
-            vector_store_config=rag_config.index.vector_store,
-            embedding_config=rag_config.embedding,
-        )
+    default_index = KnowledgeBase(
+        name=DEFAULT_KNOWLEDGEBASE_NAME,
+        vector_store_config=rag_config.index.vector_store,
+        embedding_config=rag_config.embedding,
+    )
     component_settings.update(
         index_to_components_settings(
-            default_index, index_list=list(index_map.indexes.keys())
+            default_index, index_list=list(index_map.knowledgebases.keys())
         )
     )
 
@@ -64,7 +61,7 @@ def change_vector_index_button(index_name):
             gr.update(),
         ]
     index_map = get_index_map()
-    index_list = list(index_map.indexes.keys())
+    index_list = list(index_map.knowledgebases.keys())
     return [
         gr.update(choices=index_list + ["NEW"], value=index_name),
         gr.update(choices=index_list, value=index_name),

@@ -8,7 +8,8 @@ import tempfile
 import shutil
 import pandas as pd
 from pai_rag.core.models.errors import UserInputError
-from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
+from pai_rag.knowledgebase.rag_job_manager import job_manager
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
@@ -93,16 +94,16 @@ async def aconfig():
 @router_v1.get("/indexes/{index_name}")
 async def get_index(index_name: str):
     try:
-        return index_manager.get_index_by_name(index_name=index_name)
+        return knowledgebase_manager.get_knowledgebase(name=index_name)
     except Exception as ex:
         logger.error(f"Get index '{index_name}' failed: {ex} {traceback.format_exc()}")
         raise UserInputError(f"Get index '{index_name}' failed: {ex}")
 
 
 @router_v1.post("/indexes/{index_name}")
-async def add_index(index_name: str, index_entry: RagIndexEntry):
+async def add_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.add_index(index_entry)
+        knowledgebase_manager.add_knowledgebase(index_entry)
         return {"msg": f"Add index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(f"Add index '{index_name}' failed: {ex} {traceback.format_exc()}")
@@ -110,9 +111,9 @@ async def add_index(index_name: str, index_entry: RagIndexEntry):
 
 
 @router_v1.patch("/indexes/{index_name}")
-async def update_index(index_name: str, index_entry: RagIndexEntry):
+async def update_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.update_index(index_entry)
+        knowledgebase_manager.update_knowledgebase(index_entry)
         return {"msg": f"Update index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -124,7 +125,7 @@ async def update_index(index_name: str, index_entry: RagIndexEntry):
 @router_v1.delete("/indexes/{index_name}")
 async def delete_index(index_name: str):
     try:
-        index_manager.delete_index(index_name)
+        knowledgebase_manager.delete_knowledgebase(index_name)
         return {"msg": f"Delete index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -135,7 +136,72 @@ async def delete_index(index_name: str):
 
 @router_v1.get("/indexes")
 async def list_indexes():
-    return index_manager.list_indexes()
+    return knowledgebase_manager.list_knowledgebases()
+
+
+# New knowledgebase API
+
+
+@router_v1.get("/knowledgebases/{name}")
+async def get_knowledgebase(name: str):
+    try:
+        return knowledgebase_manager.get_knowledgebase(name=name)
+    except Exception as ex:
+        logger.error(
+            f"Get knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Get knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.post("/knowledgebases/{name}")
+async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    try:
+        knowledgebase_manager.add_knowledgebase(knowledgebase)
+        return {"msg": f"Add knowledgebase '{name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Add knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Add knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.patch("/knowledgebases/{name}")
+async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    try:
+        knowledgebase_manager.update_knowledgebase(knowledgebase)
+        return {"msg": f"Update knowledgebase '{knowledgebase}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Update knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Update knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.delete("/knowledgebases/{name}")
+async def delete_knowledgebase(name: str):
+    try:
+        knowledgebase_manager.delete_knowledgebase(name)
+        return {"msg": f"Delete knowledgebase '{name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Delete knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Delete knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.get("/knowledgebases")
+async def list_knowledgebases():
+    return knowledgebase_manager.list_knowledgebases()
+
+
+@router_v1.get("/knowledgebases/{name}/files")
+async def list_knowledgebase_files(name: str):
+    return knowledgebase_manager.get_docs_from_knowledgebase(name)
+
+
+@router_v1.get("/knowledgebases/{name}/history")
+async def get_upload_history(name: str):
+    return job_manager.get_job_history(name)
 
 
 @router_v1.get("/get_upload_state")

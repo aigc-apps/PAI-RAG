@@ -8,7 +8,7 @@ import tempfile
 import shutil
 import pandas as pd
 from pai_rag.core.models.errors import UserInputError
-from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
@@ -101,16 +101,16 @@ async def aconfig():
 @router.get("/indexes/{index_name}")
 async def get_index(index_name: str):
     try:
-        return index_manager.get_index_by_name(index_name=index_name)
+        return knowledgebase_manager.get_knowledgebase(name=index_name)
     except Exception as ex:
         logger.error(f"Get index '{index_name}' failed: {ex} {traceback.format_exc()}")
         raise UserInputError(f"Get index '{index_name}' failed: {ex}")
 
 
 @router.post("/indexes/{index_name}")
-async def add_index(index_name: str, index_entry: RagIndexEntry):
+async def add_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.add_index(index_entry)
+        knowledgebase_manager.add_knowledgebase(index_entry)
         return {"msg": f"Add index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(f"Add index '{index_name}' failed: {ex} {traceback.format_exc()}")
@@ -118,9 +118,9 @@ async def add_index(index_name: str, index_entry: RagIndexEntry):
 
 
 @router.patch("/indexes/{index_name}")
-async def update_index(index_name: str, index_entry: RagIndexEntry):
+async def update_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.update_index(index_entry)
+        knowledgebase_manager.update_knowledgebase(index_entry)
         return {"msg": f"Update index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -132,7 +132,7 @@ async def update_index(index_name: str, index_entry: RagIndexEntry):
 @router.delete("/indexes/{index_name}")
 async def delete_index(index_name: str):
     try:
-        index_manager.delete_index(index_name)
+        knowledgebase_manager.delete_knowledgebase(index_name)
         return {"msg": f"Delete index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -143,7 +143,7 @@ async def delete_index(index_name: str):
 
 @router.get("/indexes")
 async def list_indexes():
-    return index_manager.list_indexes()
+    return knowledgebase_manager.list_knowledgebases()
 
 
 @router.get("/get_upload_state")

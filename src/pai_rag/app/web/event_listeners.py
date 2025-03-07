@@ -12,12 +12,12 @@ from pai_rag.app.web.ui_constants import (
     EMBEDDING_DIM_DICT,
     EMBEDDING_TYPE_DICT,
 )
-from pai_rag.core.rag_index_manager import RagIndexEntry
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     HuggingFaceEmbeddingConfig,
 )
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
-from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
 
@@ -26,11 +26,11 @@ def add_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.add_index(index_entry)
     index_map = get_index_map()
-    logger.info(f"Add index {index_entry.index_name} successfully")
+    logger.info(f"Add index {index_entry.name} successfully")
     return [
         gr.update(
-            choices=list(index_map.indexes.keys()) + ["NEW"],
-            value=index_entry.index_name,
+            choices=list(index_map.knowledgebases.keys()) + ["NEW"],
+            value=index_entry.name,
         ),
         gr.update(visible=False),
         gr.update(visible=False),
@@ -44,11 +44,11 @@ def update_index(*components):
     index_entry = components_to_index(**component_args)
     rag_client.update_index(index_entry)
     index_map = get_index_map()
-    logger.info(f"Update index {index_entry.index_name} successfully")
+    logger.info(f"Update index {index_entry.name} successfully")
     return [
         gr.update(
-            choices=list(index_map.indexes.keys()) + ["NEW"],
-            value=index_entry.index_name,
+            choices=list(index_map.knowledgebases.keys()) + ["NEW"],
+            value=index_entry.name,
         ),
         gr.update(visible=False),
         gr.update(visible=False),
@@ -111,13 +111,13 @@ def choose_use_mllm(value):
 
 
 def get_default_index_entry(index_map):
-    index_name = f"INDEX_{len(index_map.indexes)}"
-    return RagIndexEntry(
-        index_name=index_name,
+    index_name = f"INDEX_{len(index_map.knowledgebases)}"
+    return KnowledgeBase(
+        name=index_name,
         embedding_config=HuggingFaceEmbeddingConfig(),
         vector_store_config=FaissVectorStoreConfig(
             persist_path=os.path.join(
-                DEFAULT_KNOWLEDGE_PATH, index_name, ".index", ".faiss"
+                DEFAULT_KNOWLEDGEBASE_PATH, index_name, ".index", ".faiss"
             )
         ),
     )
@@ -125,13 +125,13 @@ def get_default_index_entry(index_map):
 
 def change_vector_index(index_name):
     index_map = get_index_map()
-    index_list = [index.index_name for index in index_map.indexes.values()]
+    index_list = [index.name for index in index_map.knowledgebases.values()]
     if index_name.lower() == "new":
         is_new = True
         index_entry = get_default_index_entry(index_map)
     else:
         is_new = False
-        index_entry = index_map.indexes[index_name]
+        index_entry = index_map.knowledgebases[index_name]
     return index_to_components(index_entry, index_list, is_new_index=is_new)
 
 

@@ -32,7 +32,7 @@ def filter_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in data.items() if k not in EXCLUDE_NODE_KEYS}
 
 
-class RagKnowledgeBaseManager:
+class RagKnowledgeBaseHelper:
     @staticmethod
     def create_new_knowledgebase_dir(knowledgebase_paths: Dict[str, str]):
         try:

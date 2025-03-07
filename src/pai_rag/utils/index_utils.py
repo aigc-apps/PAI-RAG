@@ -1,7 +1,7 @@
 import os
 import shutil
 from loguru import logger
-from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 
 
 def delete_file(file_path):
@@ -26,13 +26,13 @@ def delete_dir(folder_path):
 
 def delete_index_dir(index_name):
     destination_folder = os.path.join(
-        DEFAULT_KNOWLEDGE_PATH, index_name, ".index", ".faiss"
+        DEFAULT_KNOWLEDGEBASE_PATH, index_name, ".index", ".faiss"
     )
     delete_dir(destination_folder)
 
 
 def delete_default_index_dir():
-    destination_folder = os.path.join(DEFAULT_KNOWLEDGE_PATH, "default")
+    destination_folder = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "default")
     delete_dir(destination_folder)
 
 
