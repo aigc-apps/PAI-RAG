@@ -175,8 +175,8 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    llm = resolve_llm(config)
-    llm.max_tokens = 1024
+    llm_config_nl2sql = config.llm.set_max_tokens(1024)
+    llm = resolve(cls=PaiLlm, llm_config=llm_config_nl2sql)
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
