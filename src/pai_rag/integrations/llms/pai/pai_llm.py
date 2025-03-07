@@ -20,7 +20,6 @@ from llama_index.core.base.llms.generic_utils import (
 from pai_rag.integrations.llms.pai.llm_utils import create_llm
 from pai_rag.integrations.llms.pai.llm_config import (
     DASHSCOPE_MODEL_META,
-    DEFAULT_MAX_TOKENS,
     PaiBaseLlmConfig,
 )
 
@@ -57,7 +56,7 @@ class PaiLlm(OpenAILike):
         else:
             return LLMMetadata(
                 model_name=self.model,
-                num_output=DEFAULT_MAX_TOKENS,
+                num_output=self.llm_config.max_tokens,
                 is_chat_model=True,
                 is_function_calling_model=True,
             )
