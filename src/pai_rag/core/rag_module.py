@@ -27,7 +27,6 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
-from pai_rag.utils.prompt_template import CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
     PaiIntentRouter,
@@ -176,14 +175,22 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    # llm = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm or config.llm)
-    llm_da_config = {
-        "source": config.llm.source,
-        "model": config.llm.model,
-        "api_key": config.llm.api_key,
-        "max_tokens": 1024,
-    }
-    llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+    if (
+        config.data_analysis.llm
+        and config.data_analysis.llm.base_url
+        and config.data_analysis.llm.api_key
+        and config.data_analysis.llm.model
+    ):
+        llm_da = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm)
+    else:
+        llm_da_config = {
+            "source": config.llm.source,
+            "model": config.llm.model,
+            "api_key": config.llm.api_key,
+            "max_tokens": 1024,
+        }
+        llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
@@ -193,19 +200,6 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         llm=llm_da,
         callback_manager=None,
     )
-
-
-def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
-    if not config.query_rewrite.enabled:
-        return None
-
-    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
-    condense_query_transform = resolve(
-        OpenAICompatibleQueryTransform,
-        llm=llm,
-        condense_question_prompt=CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
-    )
-    return condense_query_transform
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
