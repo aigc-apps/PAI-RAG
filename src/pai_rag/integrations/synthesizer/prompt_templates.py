@@ -54,12 +54,18 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"**参考内容：**
 ------
 {context_str}
 ------
+**历史问答记录：**
+{history_str}
+------
 **需要回答的问题：**
 {query_str}
 """
 DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """**Reference Content:**
 ------
 {context_str}
+------
+**History of Conversation:**
+{history_str}
 ------
 **Question to Answer:**
 {query_str}
