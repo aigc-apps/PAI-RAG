@@ -18,7 +18,7 @@ def upload_file_fn(input_file):
         res = rag_client.add_datasheet(input_file.name)
         # 更新config
         update_dict = {
-            "analysis_type": "pandas",
+            "analysis_type": "nl2pandas",
             "analysis_file_path": res["destination_path"],
         }
         rag_client.patch_config(update_dict)

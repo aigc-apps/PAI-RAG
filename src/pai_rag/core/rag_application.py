@@ -117,6 +117,7 @@ async def event_generator_async(
 
     if chat_store:
         content = re.sub(r"<think>.*?</think>\n*", "", content, flags=re.DOTALL)
+        content = content.replace("<think>", "").replace("</think>", "")
         messages.append(
             ChatMessage(
                 role=MessageRole.ASSISTANT,
@@ -518,6 +519,19 @@ class RagApplication:
                 return _make_chat_completion_response_with_text(
                     session_id, DEFAULT_EMPTY_RESPONSE
                 )
+
+        for i, message in enumerate(chat_request.messages):
+            chat_request.messages[i].content = re.sub(
+                r"<think>.*?</think>\n*",
+                "",
+                chat_request.messages[i].content,
+                flags=re.DOTALL,
+            )
+            chat_request.messages[i].content = (
+                chat_request.messages[i]
+                .content.replace("<think>", "")
+                .replace("</think>", "")
+            )
 
         _switch_control(chat_request)
 
@@ -945,6 +959,7 @@ class RagApplication:
                 response_wrapper.response.message.content,
                 flags=re.DOTALL,
             )
+            content = content.replace("<think>", "").replace("</think>", "")
             query.messages.append(
                 ChatMessage(role=MessageRole.ASSISTANT, content=content),
             )

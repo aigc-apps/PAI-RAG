@@ -234,6 +234,10 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
+        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
+            "</think>", ""
+        )
+
         if chat_type == "nl2sql":
             return PaiQueryBundle(
                 query_str=transformed_query_str,
@@ -319,6 +323,9 @@ class OpenAICompatibleQueryTransform:
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
+            "</think>", ""
         )
         if chat_type == "nl2sql":
             return PaiQueryBundle(
