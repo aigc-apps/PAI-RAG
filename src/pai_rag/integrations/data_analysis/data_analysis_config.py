@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 
+from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.app.web.ui_constants import NL2SQL_GENERAL_PROMPTS, SYN_GENERAL_PROMPTS
 
 
@@ -17,6 +18,7 @@ class BaseAnalysisConfig(BaseModel):
     """Base class for data analysis config."""
 
     type: DataAnalysisType
+    llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
     nl2sql_prompt: str = NL2SQL_GENERAL_PROMPTS
     synthesizer_prompt: str = SYN_GENERAL_PROMPTS
 

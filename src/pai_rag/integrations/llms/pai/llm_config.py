@@ -144,13 +144,6 @@ class PaiBaseLlmConfig(BaseModel):
     def get_type(cls):
         return cls.model_fields["source"].default
 
-    def set_max_tokens(self, max_tokens: int):
-        """Set the max_tokens attribute."""
-        config_dict = self.model_dump()
-        config_dict["max_tokens"] = max_tokens
-        new_config = parse_llm_config(config_dict)
-        return new_config
-
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):
     source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope

@@ -12,6 +12,7 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
+from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
 # cnclip import should come before others. otherwise will segment fault.
@@ -175,15 +176,21 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    llm_config_nl2sql = config.llm.set_max_tokens(1024)
-    llm = resolve(cls=PaiLlm, llm_config=llm_config_nl2sql)
+    # llm = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm or config.llm)
+    llm_da_config = {
+        "source": config.llm.source,
+        "model": config.llm.model,
+        "api_key": config.llm.api_key,
+        "max_tokens": 1024,
+    }
+    llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
         cls=DataAnalysisQuery,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
-        llm=llm,
+        llm=llm_da,
         callback_manager=None,
     )
 
@@ -204,7 +211,6 @@ def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
     if not config.query_rewrite.enabled:
         return None
-
     if (
         config.query_rewrite.llm
         and config.query_rewrite.llm.base_url
