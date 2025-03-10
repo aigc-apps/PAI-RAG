@@ -68,7 +68,11 @@ async def host_filebrowser_in_background():
 
 async def watch_knowledgebase_changes():
     async for changes in awatch(
-        DEFAULT_KNOWLEDGEBASE_PATH, recursive=True, debounce=5000
+        DEFAULT_KNOWLEDGEBASE_PATH,
+        recursive=True,
+        debounce=5000,
+        force_polling=True,
+        poll_delay_ms=1000,
     ):
         # change_type: 1 add, 2 modified, 3 delete.
         for change_type, file_path in changes:
