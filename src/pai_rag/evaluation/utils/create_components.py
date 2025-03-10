@@ -71,7 +71,7 @@ def get_eval_components(
     if mode == "text":
         llm = resolve(cls=PaiLlm, llm_config=config.llm)
     else:
-        llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+        llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm.llm)
 
     state_manager = StateManager(
         os.path.join(config.index.vector_store.persist_path, "state.json")
@@ -121,7 +121,7 @@ def get_multimodal_eval_components(
     tested_multimodal_llm_config,
     qca_dataset_path: str = None,
 ):
-    llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm.llm)
     eval_llm_config = parse_llm_config(eval_model_llm_config)
     eval_llm = create_multi_modal_llm(eval_llm_config)
     tested_multimodal_llm_config = parse_llm_config(tested_multimodal_llm_config)

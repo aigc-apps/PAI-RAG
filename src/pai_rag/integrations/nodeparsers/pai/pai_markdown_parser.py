@@ -112,6 +112,10 @@ class StructuredNodeParser(BaseModel):
             nodes_list.append(new_node)
             """
             return f"\n<图片>\n图片链接: {image_url}\n图片描述: {image_text}\n</图片>\n"
+        elif node.category == "image" and not (
+            self.image_caption_tool and node.content and node.content != "None"
+        ):
+            return ""
         if not node.children:
             return node.content
 
@@ -267,6 +271,12 @@ class StructuredNodeParser(BaseModel):
                         chunk_text += (
                             f"\n<图片>\n图片链接: {image_url}\n图片描述: {image_text}\n</图片>\n"
                         )
+                    elif child.category == "image" and not (
+                        self.image_caption_tool
+                        and child.content
+                        and child.content != "None"
+                    ):
+                        continue
                     else:
                         chunk_text += "\n" + self._format_tree_nodes(
                             child,

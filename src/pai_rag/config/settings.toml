@@ -49,7 +49,9 @@ source = "DashScope"
 source = "cnclip"
 
 [rag.multimodal_llm]
-source = "dashscope"
+enable = false
+
+[rag.multimodal_llm.llm]
 
 [rag.node_enhancement]
 tree_depth = 3

@@ -13,6 +13,11 @@ DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
+class MultimodalConfig(BaseModel):
+    enable: bool = False
+    llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
+
+
 class QueryRewriteConfig(BaseModel):
     enabled: bool = True
     rewrite_prompt_template: str = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH

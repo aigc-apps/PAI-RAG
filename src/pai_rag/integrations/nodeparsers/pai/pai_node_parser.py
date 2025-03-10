@@ -131,13 +131,11 @@ class PaiNodeParser(TransformComponent):
         self._parser = get_data_parser(self._parser_config)
         self._doc_cnt_map = {}
 
-        self._caption_tool = caption_tool
-
     def _extract_image_info(self, image_path):
         assert (
-            self._caption_tool is not None
+            self._image_caption_tool is not None
         ), "Multimodal LLM must be provided for image processing."
-        return self._caption_tool.extract_path(image_path)
+        return self._image_caption_tool.extract_path(image_path)
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
@@ -164,7 +162,7 @@ class PaiNodeParser(TransformComponent):
             )
             doc_type = self._extract_file_type(doc_node.metadata)
             doc_key = f"""{doc_node.metadata.get("file_path", "dummy")}"""
-            if isinstance(doc_node, ImageDocument):
+            if isinstance(doc_node, ImageDocument) and self._image_caption_tool:
                 node_id = node_id_hash(
                     self._get_auto_increment_node_id(doc_key), doc_node
                 )

@@ -89,7 +89,7 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             endpoint=config.oss_store.endpoint,
         )
 
-    multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm.llm)
 
     caption_tool = None
     if multimodal_llm is not None and config.multimodal_llm.enable:
@@ -227,8 +227,14 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     Settings.llm = llm
     multimodal_llm = None
-    if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
-        multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    if (
+        config.multimodal_llm.enable
+        and config.multimodal_llm.llm
+        and config.synthesizer.use_multimodal_llm
+    ):
+        multimodal_llm = resolve(
+            cls=PaiMultiModalLlm, llm_config=config.multimodal_llm.llm
+        )
 
     synthesizer = resolve(
         cls=PaiSynthesizer,

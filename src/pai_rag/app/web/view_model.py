@@ -214,16 +214,16 @@ class ViewModel(BaseModel):
             config.system.query_type, "Chat（Knowledge Base）"
         )
 
-        if isinstance(config.multimodal_llm, PaiEasLlmConfig):
-            view_model.mllm_base_url = config.multimodal_llm.endpoint
-            view_model.mllm_model_name = config.multimodal_llm.model
-            view_model.mllm_api_key = config.multimodal_llm.token
+        if isinstance(config.multimodal_llm.llm, PaiEasLlmConfig):
+            view_model.mllm_base_url = config.multimodal_llm.llm.endpoint
+            view_model.mllm_model_name = config.multimodal_llm.llm.model
+            view_model.mllm_api_key = config.multimodal_llm.llm.token
         else:
-            view_model.mllm_model_name = config.multimodal_llm.model
-            view_model.mllm_api_key = config.multimodal_llm.api_key or os.getenv(
+            view_model.mllm_model_name = config.multimodal_llm.llm.model
+            view_model.mllm_api_key = config.multimodal_llm.llm.api_key or os.getenv(
                 "DASHSCOPE_API_KEY"
             )
-            view_model.mllm_base_url = config.multimodal_llm.base_url
+            view_model.mllm_base_url = config.multimodal_llm.llm.base_url
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -381,10 +381,10 @@ class ViewModel(BaseModel):
         config["llm"]["model"] = self.llm_model_name
 
         config["multimodal_llm"]["enable"] = self.use_mllm
-        config["multimodal_llm"]["source"] = SupportedLlmType.openai_compatible
-        config["multimodal_llm"]["base_url"] = self.mllm_base_url
-        config["multimodal_llm"]["api_key"] = self.mllm_api_key
-        config["multimodal_llm"]["model"] = self.mllm_model_name
+        config["multimodal_llm"]["llm"]["source"] = SupportedLlmType.openai_compatible
+        config["multimodal_llm"]["llm"]["base_url"] = self.mllm_base_url
+        config["multimodal_llm"]["llm"]["api_key"] = self.mllm_api_key
+        config["multimodal_llm"]["llm"]["model"] = self.mllm_model_name
 
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak

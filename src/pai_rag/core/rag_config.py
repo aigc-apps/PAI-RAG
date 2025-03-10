@@ -7,6 +7,7 @@ from pai_rag.core.models.config import (
     QueryRewriteConfig,
     RetrieverConfig,
     SynthesizerConfig,
+    MultimodalConfig,
 )
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
 from pai_rag.integrations.chat_store.pai.pai_chat_store import (
@@ -23,11 +24,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 )
 from pai_rag.integrations.index.pai.vector_store_config import PaiVectorIndexConfig
 from pai_rag.integrations.llms.pai.llm_config import (
-    DashScopeMultiModalLlmConfig,
-    OpenAILlmConfig,
     PaiBaseLlmConfig,
-    PaiEasLlmConfig,
-    OpenAICompatibleLlmConfig,
 )
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
@@ -101,16 +98,7 @@ class RagConfig(BaseModel):
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]
-    multimodal_llm: Annotated[
-        Union[
-            DashScopeMultiModalLlmConfig,
-            PaiEasLlmConfig,
-            OpenAILlmConfig,
-            OpenAICompatibleLlmConfig,
-        ],
-        Field(discriminator="source"),
-        BeforeValidator(validate_case_insensitive),
-    ] | None = None
+    multimodal_llm: MultimodalConfig = MultimodalConfig()
 
     # currently not used
     functioncalling_llm: Annotated[
