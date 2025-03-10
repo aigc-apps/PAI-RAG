@@ -1,4 +1,4 @@
-from typing import Generator, AsyncGenerator
+from typing import Generator
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
@@ -98,10 +98,10 @@ class FileTaskExecutor:
             try:
                 self._delete(task)
                 logger.info(f"Delete file {task.file_name} successfully.")
-                yield FileProcessResult(FileProcessStatus.Done, message=None)
+                yield FileProcessResult(status=FileProcessStatus.Done, message=None)
             except Exception as e:
                 logger.error(f"Delete file {task.file_name} failed: {e}")
-                yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
+                yield FileProcessResult(status=FileProcessStatus.Failed, message=str(e))
         elif task.operation == FileOperationType.ADD:
             for resp in self._add_gen(task):
                 yield resp
@@ -110,91 +110,3 @@ class FileTaskExecutor:
                 yield resp
         else:
             raise ValueError(f"Unknown operation {task.operation}.")
-
-    async def arun(self, task: FileItem) -> AsyncGenerator[FileProcessResult, None]:
-        if task.operation == FileOperationType.DELETE:
-            try:
-                await self._async_delete(task)
-                logger.info(f"Delete file {task.file_name} successfully.")
-                yield FileProcessResult(status=FileProcessStatus.Done, message=None)
-            except Exception as e:
-                logger.error(f"Delete file {task.file_name} failed: {e}")
-                yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-        elif task.operation == FileOperationType.ADD:
-            async for resp in self._async_add_gen(task):
-                yield resp
-        elif task.operation == FileOperationType.UPDATE:
-            async for resp in self._async_update(task):
-                yield resp
-        else:
-            raise ValueError(f"Unknown operation {task.operation}.")
-
-    async def _async_update(
-        self, task: FileItem
-    ) -> AsyncGenerator[FileProcessResult, None]:
-        try:
-            await self._async_delete(task)
-            logger.info(f"Delete file {task.file_name} successfully.")
-        except Exception as e:
-            logger.error(
-                f"Delete file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-
-        async for resp in self._async_add_gen(task):
-            yield resp
-
-    async def _async_add_gen(
-        self, task: FileItem
-    ) -> AsyncGenerator[FileProcessResult, None]:
-        yield FileProcessResult(status=FileProcessStatus.Parsing, message=None)
-        try:
-            docs = self.data_reader.load_data(file_path_or_directory=task.file_name)
-            # 对于表格类型，会变成多个文件的，共用同一个id
-            for doc in docs:
-                doc.id_ = task.task_id
-            logger.info(f"Parse file successfully for {task.file_name}")
-        except Exception as e:
-            logger.error(
-                f"Parse file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-            return
-
-        yield FileProcessResult(status=FileProcessStatus.Chunking, message=None)
-        try:
-            chunks = self.node_parser(docs)
-            logger.info(f"Chunk nodes successfully for file {task.file_name}")
-        except Exception as e:
-            logger.error(
-                f"Chunk file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-            return
-
-        yield FileProcessResult(status=FileProcessStatus.Embedding, message=None)
-        try:
-            embedded_nodes = self.embed_model(chunks)
-            logger.info(f"Get nodes embedding successfully for file {task.file_name}")
-        except Exception as e:
-            logger.error(
-                f"Embedding file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-            return
-
-        yield FileProcessResult(status=FileProcessStatus.Persisting, message=None)
-        try:
-            self.vector_index.insert_nodes(nodes=embedded_nodes)
-            logger.info(f"Persist nodes successfully for file {task.file_name}")
-        except Exception as e:
-            logger.error(
-                f"Persist nodes for file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(FileProcessStatus.Failed, message=str(e))
-            return
-
-        yield FileProcessResult(status=FileProcessStatus.Done, message=None)
-
-    async def _async_delete(self, task: FileItem):
-        await self.vector_index.adelete_ref_doc(ref_doc_id=task.task_id)
