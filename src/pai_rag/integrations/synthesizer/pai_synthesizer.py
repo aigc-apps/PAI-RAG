@@ -183,12 +183,18 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            query_str = query.query_str
+            if query.original_query_str:
+                query_str = query.original_query_str + "\nassistant: "
+                history_str = query.original_query_str
+            else:
+                query_str = query.query_str + "\nassistant: "
+                history_str = query.query_str
             if query.chat_messages_str:
-                query_str = query.chat_messages_str + "\nassistant: "
+                history_str = query.chat_messages_str
             if query.no_retrieval:
                 response = await self.aget_llm_only_response(
                     query_str=query_str,
+                    history_str=history_str,
                     streaming=query.stream,
                     system_role_str=system_role_str or self._system_role_template,
                     prompt_template_str=prompt_template_str
@@ -199,6 +205,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 response = await self.aget_response(
                     query_str=query_str,
                     nodes=nodes,
+                    history_str=history_str,
                     streaming=query.stream,
                     citation=query.citation,
                     system_role_str=system_role_str or self._system_role_template,
@@ -231,6 +238,7 @@ class PaiSynthesizer(BaseSynthesizer):
         self,
         query_str: str,
         nodes: List[NodeWithScore],
+        history_str: str = None,
         streaming: bool = False,
         citation: bool = False,
         system_role_str: str = None,
@@ -271,11 +279,13 @@ class PaiSynthesizer(BaseSynthesizer):
                 or self._citation_multimodal_qa_template
             )
 
-        text_qa_template = prompt_template.partial_format(query_str=query_str)
+        text_qa_template = prompt_template.partial_format(
+            history_str=history_str, query_str=query_str
+        )
 
         response: RESPONSE_TEXT_TYPE
         logger.info(
-            f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Query: {query_str}"
+            f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Chat History: {history_str} \n Query: {query_str}"
         )
         messages = self._llm._get_messages(
             text_qa_template,
@@ -299,6 +309,7 @@ class PaiSynthesizer(BaseSynthesizer):
     async def aget_llm_only_response(
         self,
         query_str: str,
+        history_str: str = None,
         streaming: bool = False,
         system_role_str: str = None,
         prompt_template_str: str = None,
@@ -315,8 +326,10 @@ class PaiSynthesizer(BaseSynthesizer):
                 DEFAULT_ANSWER_TEMPLATE,
             )
         )
+
+        _llm_only_template = _llm_only_template.partial_format(history_str=history_str)
         logger.info(
-            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Query: {query_str}"
+            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Chat History: {history_str} \n Query: {query_str}"
         )
         messages = self._llm._get_messages(
             _llm_only_template,
