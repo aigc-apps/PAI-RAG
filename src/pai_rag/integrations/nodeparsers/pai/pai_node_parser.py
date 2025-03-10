@@ -4,6 +4,7 @@ import re
 from typing import List, Any, Dict
 from llama_index.core.schema import BaseNode, TextNode, ImageDocument
 from llama_index.core.schema import TransformComponent
+from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.node_parser import TokenTextSplitter
@@ -177,7 +178,11 @@ class PaiNodeParser(TransformComponent):
                         id_=node_id,
                         text=image_text,
                         metadata=metadata,
-                        ref_doc_id=doc_node.doc_id,
+                        relationships={
+                            NodeRelationship.SOURCE: RelatedNodeInfo(
+                                node_id=doc_node.node_id, metadata={}
+                            ),
+                        },
                     )
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
@@ -191,7 +196,11 @@ class PaiNodeParser(TransformComponent):
                         id_=node_id,
                         text=doc_node.text,
                         metadata=metadata,
-                        ref_doc_id=doc_node.doc_id,
+                        relationships={
+                            NodeRelationship.SOURCE: RelatedNodeInfo(
+                                node_id=doc_node.node_id, metadata={}
+                            ),
+                        },
                     )
                 )
             else:
