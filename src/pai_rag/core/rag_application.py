@@ -117,6 +117,7 @@ async def event_generator_async(
 
     if chat_store:
         content = re.sub(r"<think>.*?</think>\n*", "", content, flags=re.DOTALL)
+        content = content.replace("<think>", "").replace("</think>", "")
         messages.append(
             ChatMessage(
                 role=MessageRole.ASSISTANT,
@@ -481,6 +482,19 @@ class RagApplication:
                     session_id, DEFAULT_EMPTY_RESPONSE
                 )
 
+        for i, message in enumerate(chat_request.messages):
+            chat_request.messages[i].content = re.sub(
+                r"<think>.*?</think>\n*",
+                "",
+                chat_request.messages[i].content,
+                flags=re.DOTALL,
+            )
+            chat_request.messages[i].content = (
+                chat_request.messages[i]
+                .content.replace("<think>", "")
+                .replace("</think>", "")
+            )
+
         try:
             guardrail = resolve_llm_guardrail(self.config)
             passed_guardrail = False if guardrail is not None else True
@@ -555,9 +569,10 @@ class RagApplication:
             else:
                 new_query_bundle = PaiQueryBundle(
                     query_str=question,
+                    original_query_str=question,
                     need_web_search=chat_request.search_web,
                     chat_messages_str=messages_to_history_str(
-                        messages[-7:], max_length=500
+                        messages[-7:-1], max_length=500
                     ),
                 )
 
@@ -585,6 +600,7 @@ class RagApplication:
 
             query_bundle = PaiQueryBundle(
                 query_str=new_question,
+                original_query_str=question,
                 stream=chat_request.stream,
                 citation=chat_request.citation,
                 need_web_search=new_query_bundle.need_web_search,
@@ -787,9 +803,10 @@ class RagApplication:
             need_web_search = chat_type == RagChatType.WEB
             new_query_bundle = PaiQueryBundle(
                 query_str=question,
+                original_query_str=question,
                 need_web_search=need_web_search,
                 chat_messages_str=messages_to_history_str(
-                    query.messages, max_length=500
+                    query.messages[:-1], max_length=500
                 ),
             )
 
@@ -834,6 +851,7 @@ class RagApplication:
 
         query_bundle = PaiQueryBundle(
             query_str=new_question,
+            original_query_str=question,
             need_web_search=new_query_bundle.need_web_search,
             stream=query.stream,
             citation=query.citation,
@@ -905,6 +923,7 @@ class RagApplication:
                 response_wrapper.response.message.content,
                 flags=re.DOTALL,
             )
+            content = content.replace("<think>", "").replace("</think>", "")
             query.messages.append(
                 ChatMessage(role=MessageRole.ASSISTANT, content=content),
             )

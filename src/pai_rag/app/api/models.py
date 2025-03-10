@@ -70,6 +70,7 @@ class PaiQueryBundle(QueryBundle):
     stream: bool = False
     no_retrieval: bool = False
     citation: bool = False
+    original_query_str: str = None
     chat_messages_str: str = None
     need_web_search: bool = False
     completion_tokens: int = 0
