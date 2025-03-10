@@ -236,8 +236,7 @@ class KnowledgeBaseManager:
                 < DEFAULT_MAX_KNOWLEDGEBASE_COUNT
             ), f"新建知识库失败: 知识库数量超过最大限制{DEFAULT_MAX_KNOWLEDGEBASE_COUNT}."
             assert (
-                knowledgebase.knowledgebase_name
-                not in self._knowledgebase_map.knowledgebases
+                knowledgebase.name not in self._knowledgebase_map.knowledgebases
             ), f"新建知识库失败: 知识库'{knowledgebase.name}' 已存在。"
 
             self._knowledgebase_map.knowledgebases[knowledgebase.name] = knowledgebase

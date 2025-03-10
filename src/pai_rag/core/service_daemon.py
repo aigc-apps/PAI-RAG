@@ -34,7 +34,7 @@ async def host_filebrowser_in_background():
     if service_environment.SHOULD_START_WEB:
         logger.debug("Starting up filebrowser in background.")
         process = subprocess.Popen(
-            f"rm -rf /tmp/filebrowser.db && /bin/filebrowser -b /filebrowser --address 0.0.0.0 -p {DEFAULT_FILE_BROWER_PORT} -r {DEFAULT_KNOWLEDGEBASE_PATH} --noauth -d /tmp/filebrowser.db",
+            f"rm -rf /tmp/filebrowser.db && filebrowser -b /filebrowser --address 0.0.0.0 -p {DEFAULT_FILE_BROWER_PORT} -r {DEFAULT_KNOWLEDGEBASE_PATH} --noauth -d /tmp/filebrowser.db",
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

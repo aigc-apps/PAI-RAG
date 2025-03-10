@@ -15,6 +15,7 @@ from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager, KnowledgeBase
+from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.core.rag_service import rag_service
 from datetime import datetime
 import time
@@ -382,6 +383,9 @@ class RagLocalClient:
         await upload_job
         logger.info(f"[Upload] Finished task_id: {task_id}")
 
+    def get_upload_history(self, knowledgebase_name):
+        return job_manager.get_job_history(name=knowledgebase_name)
+
     def handle_task_result(self, task, task_id):
         try:
             # 尝试获取任务的结果，以捕捉异常
@@ -615,7 +619,7 @@ class RagLocalClient:
 
     def add_index(self, index_entry: KnowledgeBase):
         try:
-            knowledgebase_manager.add_knowledgebase(index_entry=index_entry)
+            knowledgebase_manager.add_knowledgebase(knowledgebase=index_entry)
         except Exception as e:
             logger.exception(f"add index {index_entry.name} failed: {e}")
             raise RagApiError(
@@ -625,7 +629,7 @@ class RagLocalClient:
 
     def update_index(self, index_entry: KnowledgeBase):
         try:
-            knowledgebase_manager.update_knowledgebase(index_entry=index_entry)
+            knowledgebase_manager.update_knowledgebase(knowledgebase=index_entry)
         except Exception as e:
             logger.exception(f"update index {index_entry.name} failed: {e}")
             raise RagApiError(

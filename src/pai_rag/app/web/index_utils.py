@@ -362,7 +362,7 @@ def index_to_components(
         index_entry, index_list, is_new_index
     )
     return [gr.update(**setting) for setting in component_settings.values()] + [
-        # gr.update(choices=index_list, value=index_entry.name),
+        gr.update(choices=index_list, value=index_entry.name),
         gr.update(choices=index_list, value=index_entry.name),
     ]
 

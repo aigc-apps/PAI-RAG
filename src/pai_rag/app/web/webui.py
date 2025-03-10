@@ -8,6 +8,10 @@ from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
+from pai_rag.app.web.tabs.history_tab import (
+    create_upload_history,
+    refresh_upload_history,
+)
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -38,6 +42,10 @@ def resume_ui():
             default_index, index_list=list(index_map.knowledgebases.keys())
         )
     )
+
+    upload_summary, upload_history = refresh_upload_history(DEFAULT_KNOWLEDGEBASE_NAME)
+    outputs[elem_manager.get_elem_by_id("upload_summary")] = upload_summary
+    outputs[elem_manager.get_elem_by_id("upload_history")] = upload_history
 
     for elem in elem_manager.get_elem_list():
         elem_id = elem.elem_id
@@ -88,15 +96,20 @@ def make_homepage():
         with gr.Tab("\N{bar chart} DBChat"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
-        with gr.Tab("\N{rocket} KnowledgeBase"):
-            with gr.Blocks():
-                html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
-                gr.HTML(html)
+        with gr.Tab("\N{rocket} 知识库"):
+            with gr.Tab("文件管理"):
+                with gr.Blocks():
+                    html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
+                    gr.HTML(html)
+            with gr.Tab("上传历史"):
+                history_elements = create_upload_history()
+                elem_manager.add_elems(history_elements)
 
         index_selector_elements = [
             setting_elements["vector_index"],
             # upload_elements["upload_index"],
             chat_elements["chat_index"],
+            history_elements["history_index"],
         ]
         index_related_components = [
             setting_elements[key] for key in index_related_component_keys
@@ -105,13 +118,14 @@ def make_homepage():
         setting_elements["vector_index"].change(
             event_listeners.change_vector_index,
             inputs=setting_elements["vector_index"],
-            outputs=index_related_components + [chat_elements["chat_index"]],
+            outputs=index_related_components
+            + [chat_elements["chat_index"], history_elements["history_index"]],
         )
-        # upload_elements["upload_index"].input(
-        #     change_vector_index_button,
-        #     inputs=upload_elements["upload_index"],
-        #     outputs=index_selector_elements,
-        # )
+        history_elements["history_index"].input(
+            change_vector_index_button,
+            inputs=history_elements["history_index"],
+            outputs=index_selector_elements,
+        )
         chat_elements["chat_index"].input(
             change_vector_index_button,
             inputs=chat_elements["chat_index"],
