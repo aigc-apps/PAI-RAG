@@ -344,6 +344,44 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
     yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
 
+def _switch_control(
+    chat_request: ChatCompletionRequest,
+):
+    """
+    priority:
+    chat_knowledgebase > search_web > chat_agent > chat_db > chat_llm
+    """
+    # 如果多个开关为true，按照优先级顺序控制
+    if chat_request.chat_knowledgebase:
+        chat_request.chat_llm = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    elif chat_request.search_web:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.chat_llm = False
+    elif chat_request.chat_agent:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_llm = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    elif chat_request.chat_db:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_llm = False
+        chat_request.chat_agent = False
+        chat_request.search_web = False
+    elif chat_request.chat_llm:
+        chat_request.chat_knowledgebase = False
+        chat_request.chat_agent = False
+        chat_request.chat_db = False
+        chat_request.search_web = False
+    else:
+        # 如果开关均为false，默认使用chat_knowledgebase
+        chat_request.chat_knowledgebase = True
+
+
 class RagApplication:
     def __init__(self, config: RagConfig):
         self.name = "RagApplication"
@@ -495,6 +533,8 @@ class RagApplication:
                 .replace("</think>", "")
             )
 
+        _switch_control(chat_request)
+
         try:
             guardrail = resolve_llm_guardrail(self.config)
             passed_guardrail = False if guardrail is not None else True
@@ -526,7 +566,7 @@ class RagApplication:
             if self.config.system.default_web_search:
                 chat_request.search_web = True
 
-            if (chat_request.chat_llm) and (not chat_request.search_web):
+            if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
                 llm: PaiLlm = resolve_llm(self.config)
                 if chat_request.stream:
