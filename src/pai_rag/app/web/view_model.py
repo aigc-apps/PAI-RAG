@@ -133,6 +133,10 @@ class ViewModel(BaseModel):
     enable_db_selector: bool = False
     db_nl2sql_prompt: str = None
     synthesizer_prompt: str = None
+    da_llm_base_url: str = None
+    da_llm_api_key: str = None
+    da_llm_model_name: str = "default"
+    da_llm_max_tokens: int = 1024
 
     # postprocessor
     reranker_type: str = "no-reranker"  # no-reranker / model-based-reranker
@@ -304,6 +308,7 @@ class ViewModel(BaseModel):
         if isinstance(config.data_analysis, PandasAnalysisConfig):
             view_model.analysis_type = "nl2pandas"
             view_model.analysis_file_path = config.data_analysis.file_path
+
         elif isinstance(config.data_analysis, SqliteAnalysisConfig):
             view_model.analysis_type = "nl2sql"
             view_model.db_dialect = config.data_analysis.type.value
@@ -338,6 +343,11 @@ class ViewModel(BaseModel):
             view_model.enable_db_selector = config.data_analysis.enable_db_selector
         view_model.db_nl2sql_prompt = config.data_analysis.nl2sql_prompt
         view_model.synthesizer_prompt = config.data_analysis.synthesizer_prompt
+
+        if config.data_analysis.llm is not None:
+            view_model.da_llm_base_url = config.data_analysis.llm.base_url
+            view_model.da_llm_api_key = config.data_analysis.llm.api_key
+            view_model.da_llm_model_name = config.data_analysis.llm.model
 
         view_model.agent_api_definition = config.agent.api_definition
         view_model.agent_function_definition = config.agent.function_definition
@@ -457,6 +467,11 @@ class ViewModel(BaseModel):
                 )
             else:
                 config["data_analysis"]["descriptions"] = {}
+        config["data_analysis"]["llm"]["source"] = SupportedLlmType.openai_compatible
+        config["data_analysis"]["llm"]["base_url"] = self.da_llm_base_url
+        config["data_analysis"]["llm"]["api_key"] = self.da_llm_api_key
+        config["data_analysis"]["llm"]["model"] = self.da_llm_model_name
+        config["data_analysis"]["llm"]["max_tokens"] = self.da_llm_max_tokens
 
         config["postprocessor"]["reranker_type"] = self.reranker_type
         config["postprocessor"]["reranker_model"] = self.reranker_model
@@ -768,6 +783,19 @@ class ViewModel(BaseModel):
         settings["enable_db_selector"] = {"value": self.enable_db_selector}
         settings["db_nl2sql_prompt"] = {"value": self.db_nl2sql_prompt}
         settings["synthesizer_prompt"] = {"value": self.synthesizer_prompt}
+
+        settings["da_llm_base_url"] = {
+            "value": self.da_llm_base_url,
+        }
+        settings["da_llm_api_key"] = {
+            "value": self.da_llm_api_key,
+        }
+        settings["da_llm_model_name"] = {
+            "value": self.da_llm_model_name,
+        }
+        settings["da_llm_max_tokens"] = {
+            "value": self.da_llm_max_tokens,
+        }
 
         settings["agent_system_prompt"] = {"value": self.agent_system_prompt}
         settings["agent_python_scripts"] = {"value": self.agent_python_scripts}
