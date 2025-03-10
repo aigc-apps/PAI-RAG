@@ -404,10 +404,10 @@ class KnowledgeBaseManager:
     def get_change_files(
         self, file_path, is_delete=False
     ) -> Tuple[str, List[KnowledgeDoc]]:
-        file_path_pattern = f"^.+?/{DEFAULT_KNOWLEDGEBASE_PATH}/(.+?)/docs/(.+)$"
+        file_path_pattern = f"^(.+/)?{DEFAULT_KNOWLEDGEBASE_PATH}/(.+?)/docs/(.+)$"
         match = re.match(file_path_pattern, file_path)
         if match:
-            index_name = match.group(1)
+            index_name = match.group(2)
             if index_name in self._knowledgebase_map.knowledgebases:
                 if is_delete:
                     return index_name, self.get_related_docs_for_deletion(

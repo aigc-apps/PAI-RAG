@@ -171,20 +171,28 @@ class PaiNodeParser(TransformComponent):
                 )
                 image_text = self._extract_image_info(doc_node.metadata["file_path"])
                 metadata = doc_node.metadata
-                metadata["ref_doc_id"] = doc_node.doc_id
                 metadata["image_url"] = doc_node.image_url
                 splitted_nodes.append(
-                    TextNode(id_=node_id, text=image_text, metadata=metadata)
+                    TextNode(
+                        id_=node_id,
+                        text=image_text,
+                        metadata=metadata,
+                        ref_doc_id=doc_node.doc_id,
+                    )
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 metadata = doc_node.metadata
-                metadata["ref_doc_id"] = doc_node.doc_id
 
                 node_id = node_id_hash(
                     self._get_auto_increment_node_id(doc_key), doc_node
                 )
                 splitted_nodes.append(
-                    TextNode(id_=node_id, text=doc_node.text, metadata=metadata)
+                    TextNode(
+                        id_=node_id,
+                        text=doc_node.text,
+                        metadata=metadata,
+                        ref_doc_id=doc_node.doc_id,
+                    )
                 )
             else:
                 if doc_type in DOC_TYPES_CONVERT_TO_MD:
