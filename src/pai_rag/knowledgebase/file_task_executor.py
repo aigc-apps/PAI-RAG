@@ -12,6 +12,9 @@ from pai_rag.knowledgebase.models import (
 import traceback
 from loguru import logger
 
+from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
+from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
+
 
 class FileTaskExecutor:
     def __init__(
@@ -40,12 +43,17 @@ class FileTaskExecutor:
         return self._add_gen(task)
 
     def _add_gen(self, task: FileItem) -> Generator[FileProcessResult, None, None]:
+        knowledgebase = knowledgebase_manager.get_knowledgebase(task.knowledgebase)
         yield FileProcessResult(status=FileProcessStatus.Parsing, message=None)
         try:
             docs = self.data_reader.load_data(file_path_or_directory=task.file_name)
             # 对于表格类型，会变成多个文件的，共用同一个id
             for doc in docs:
                 doc.id_ = task.task_id
+
+            RagKnowledgeBaseHelper.save_parse_files(
+                knowledgebase.knowledgebase_paths, docs
+            )
             logger.info(f"Parse file successfully for {task.file_name}")
         except Exception as ex:
             logger.error(
@@ -57,6 +65,9 @@ class FileTaskExecutor:
         yield FileProcessResult(status=FileProcessStatus.Chunking, message=None)
         try:
             chunks = self.node_parser(docs)
+            RagKnowledgeBaseHelper.save_chunk_nodes(
+                knowledgebase.knowledgebase_paths, chunks, "split"
+            )
             logger.info(f"Chunk nodes successfully for file {task.file_name}")
         except Exception as ex:
             logger.error(
@@ -68,6 +79,9 @@ class FileTaskExecutor:
         yield FileProcessResult(status=FileProcessStatus.Embedding, message=None)
         try:
             embedded_nodes = self.embed_model(chunks)
+            RagKnowledgeBaseHelper.save_chunk_nodes(
+                knowledgebase.knowledgebase_paths, embedded_nodes, "embed"
+            )
             logger.info(f"Get nodes embedding successfully for file {task.file_name}")
         except Exception as ex:
             logger.error(
