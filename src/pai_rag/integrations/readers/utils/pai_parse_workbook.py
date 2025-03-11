@@ -9,6 +9,8 @@ from loguru import logger
 
 import re
 
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+
 IMAGE_REGEX = r'<img src="([^"]+)" alt="PAIRAG_IMAGE_TAG">\n'
 
 
@@ -485,13 +487,14 @@ def split_sheet_v2(sheet, oss_client, splitter):
 
 def parse_workbook(workbook_file, oss_client, splitter):
     docs = []
-    directory_path = os.path.dirname(workbook_file)
-    file_name_without_extension = os.path.splitext(os.path.basename(workbook_file))[0]
     file_extension = os.path.splitext(os.path.basename(workbook_file))[1]
     logger.info(f"Parsing workbook {file_extension}.")
     if file_extension.lower() == ".xls":
+        tmp_file_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "pai_rag_tmp_dir")
+        file_name_without_extension = os.path.splitext(os.path.basename(workbook_file))[
+            0
+        ]
         data_xls = pd.read_excel(workbook_file, engine="xlrd")
-        tmp_file_dir = os.path.join(directory_path, "pai_rag_temp_dir")
         os.makedirs(tmp_file_dir, exist_ok=True)
         new_file_path = os.path.join(
             tmp_file_dir, f"{file_name_without_extension}.xlsx"

@@ -1,13 +1,11 @@
 import traceback
 from typing import Any, List
-from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
+from fastapi import APIRouter, Body, File, UploadFile, Form
 import uuid
-import hashlib
 import os
-import tempfile
 import shutil
 import pandas as pd
-from pai_rag.core.models.errors import UserInputError
+from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
@@ -15,9 +13,6 @@ from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
-    COMMON_FILE_PATH_FODER_NAME,
-)
 from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DESCRIPTION_FOLDER_PATH,
     DEFAULT_DB_HISTORY_PATH,
@@ -206,12 +201,15 @@ async def get_upload_history(name: str):
 
 
 @router_v1.post("/knowledgebases/{name}/files")
-async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = Body(None)):
+async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(...)):
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
-        return {"message": f"Knowledgebase '{name}' not found"}
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
 
     if not files:
-        return {"message": "No upload file found."}
+        raise UserInputError("No files provided.")
+
+    knowledge_docs_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, name, "docs")
+    os.makedirs(knowledge_docs_dir, exist_ok=True)
 
     for file in files:
         file_name = file.filename
@@ -232,10 +230,10 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = Body(No
 @router_v1.delete("/knowledgebases/{name}/files/{file_name}")
 async def delete_file_from_knowledgebase(name: str, file_name: str):
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
-        return {"message": f"Knowledgebase '{name}' not found"}
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
 
     if not file_name:
-        return {"message": f"file_name '{file_name}' cannot be empty."}
+        raise UserInputError(f"file_name '{file_name}' cannot be empty.")
 
     save_file_name = os.path.join(
         DEFAULT_KNOWLEDGEBASE_PATH,
@@ -244,75 +242,16 @@ async def delete_file_from_knowledgebase(name: str, file_name: str):
         file_name,
     )
     if not os.path.exists(save_file_name):
-        return {"message": f"File '{file_name}' not found"}
+        raise UserInputError(f"File '{file_name}' not found")
 
     if os.path.isdir(save_file_name):
-        return {"message": f"Deleting a directory '{file_name}' is not supported."}
+        raise UserInputError(f"Deleting a directory '{file_name}' is not supported.")
 
     try:
         os.path.unlink(save_file_name)
         return {"message": f"File '{file_name}' have been successfully removed."}
     except Exception as e:
-        return {"message": f"Error deleting file '{file_name}': {str(e)}"}
-
-
-@router_v1.post("/upload_data")
-async def upload_data(
-    files: List[UploadFile] = Body(None),
-    oss_path: str = Form(None),
-    index_name: str = Form(None),
-    enable_raptor: bool = Form(False),
-    enable_multimodal: bool = Form(False),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-):
-    task_id = uuid.uuid4().hex
-    logger.info(
-        f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
-    )
-    if oss_path:
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            filter_pattern=None,
-            oss_path=oss_path,
-            from_oss=True,
-            index_name=index_name,
-            enable_raptor=enable_raptor,
-            enable_multimodal=enable_multimodal,
-        )
-    else:
-        if not files:
-            return {"message": "No upload file sent"}
-        tmpdir = tempfile.mkdtemp()
-        input_files = []
-        for file in files:
-            fn = file.filename
-            data = await file.read()
-            file_hash = hashlib.md5(data).hexdigest()
-            tmp_file_dir = os.path.join(
-                tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
-            )
-            os.makedirs(tmp_file_dir, exist_ok=True)
-            save_file = os.path.join(tmp_file_dir, fn)
-
-            with open(save_file, "wb") as f:
-                f.write(data)
-                f.close()
-            input_files.append(save_file)
-
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            input_files=input_files,
-            filter_pattern=None,
-            index_name=index_name,
-            oss_path=None,
-            enable_raptor=enable_raptor,
-            temp_file_dir=tmpdir,
-            enable_multimodal=enable_multimodal,
-        )
-
-    return {"task_id": task_id}
+        raise ServiceError(f"Error deleting file '{file_name}': {str(e)}")
 
 
 @router_v1.post("/upload_datasheet")
