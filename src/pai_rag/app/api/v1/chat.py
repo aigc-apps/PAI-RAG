@@ -227,6 +227,17 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(..
     return {"message": "Files have been successfully uploaded."}
 
 
+@router_v1.get("/knowledgebases/{name}/files/{file_name}")
+async def get_file_from_knowledgebase(name: str, file_name: str):
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
+
+    if not file_name:
+        raise UserInputError(f"file_name '{file_name}' cannot be empty.")
+
+    return job_manager.get_file_upload_status(name, file_name)
+
+
 @router_v1.delete("/knowledgebases/{name}/files/{file_name}")
 async def delete_file_from_knowledgebase(name: str, file_name: str):
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
@@ -248,7 +259,7 @@ async def delete_file_from_knowledgebase(name: str, file_name: str):
         raise UserInputError(f"Deleting a directory '{file_name}' is not supported.")
 
     try:
-        os.path.unlink(save_file_name)
+        os.remove(save_file_name)
         return {"message": f"File '{file_name}' have been successfully removed."}
     except Exception as e:
         raise ServiceError(f"Error deleting file '{file_name}': {str(e)}")

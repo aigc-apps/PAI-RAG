@@ -4,6 +4,7 @@ import os
 import json
 import time
 from typing import Dict, List, OrderedDict, Tuple
+from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_module import resolve_task_executor
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
@@ -153,6 +154,7 @@ class JobManager:
         return [
             {
                 "task_id": task.task_id,
+                "operation": task.operation.name,
                 "file_name": self._remove_file_prefix(name, task.file_name),
                 "status": task.status,
                 "message": task.failed_reason,
@@ -160,6 +162,26 @@ class JobManager:
             }
             for _, task in task_history.items()
         ]
+
+    def get_file_upload_status(self, knowledgebase_name: str, file_name: str):
+        if knowledgebase_name not in self._job_status.task_statuses:
+            raise UserInputError(f"knowledgebase {knowledgebase_name} not found.")
+
+        if file_name not in self._job_status.task_statuses[knowledgebase_name].task_map:
+            raise UserInputError(
+                f"File {file_name} not found in knowledgebase '{knowledgebase_name}'."
+            )
+
+        task = self._job_status.task_statuses[knowledgebase_name].task_map[file_name]
+
+        return {
+            "task_id": task.task_id,
+            "operation": task.operation.name,
+            "file_name": self._remove_file_prefix(knowledgebase_name, task.file_name),
+            "status": task.status,
+            "message": task.failed_reason,
+            "last_modified_time": task.last_modified_time,
+        }
 
     def submit_job(self, file_changes: List[FileChange]):
         with self._lock:
