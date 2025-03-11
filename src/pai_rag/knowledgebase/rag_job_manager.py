@@ -168,7 +168,9 @@ class JobManager:
             raise UserInputError(f"knowledgebase {knowledgebase_name} not found.")
 
         if not file_name.startswith(DEFAULT_KNOWLEDGEBASE_PATH):
-            file_name = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "docs", file_name)
+            file_name = os.path.join(
+                DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, "docs", file_name
+            )
 
         if file_name not in self._job_status.task_statuses[knowledgebase_name].task_map:
             raise UserInputError(
