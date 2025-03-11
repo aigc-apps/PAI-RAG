@@ -155,7 +155,7 @@ If you prefer to run or develop PAI-RAG locally, please refer to [local developm
 
 ## API specification
 
-You can access and integrate our RAG service according to our [API specification](./docs/api.md).
+You can access and integrate our RAG service according to our [API specification](./docs/api_250305.md).
 
 ## MultiModal RAG
 

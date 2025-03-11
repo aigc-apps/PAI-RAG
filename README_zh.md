@@ -154,7 +154,7 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
 
 ## API服务
 
-可以直接通过API服务调用RAG能力（上传数据，RAG查询，检索，NL2SQL, Function call等等）。更多细节可以查看[API文档](./docs/api_zh.md)
+可以直接通过API服务调用RAG能力（上传数据，RAG查询，检索，NL2SQL, Function call等等）。更多细节可以查看[API文档](./docs/api_250305.md)
 
 ## 多模态问答
 

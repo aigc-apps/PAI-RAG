@@ -403,7 +403,9 @@ async def upload_description(
 
 @router_v1.post("/query/load_db_info")
 async def aload_db_info():
-    return await rag_service.aload_db_info()
+    task_id = uuid.uuid4().hex
+    await rag_service.aload_db_info()
+    return {"task_id": task_id}
 
 
 @router_v1.post("/query/data_analysis")

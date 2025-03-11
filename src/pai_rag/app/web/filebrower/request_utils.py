@@ -42,7 +42,9 @@ async def postprocess_middleware(request, call_next):
     if "/filebrowser" in request.url.path and not request.url.path.endswith(
         ".DS_Store"
     ):
-        url = request.url.replace(hostname="localhost", port=DEFAULT_FILE_BROWER_PORT)
+        url = request.url.replace(
+            scheme="http", hostname="localhost", port=DEFAULT_FILE_BROWER_PORT
+        )
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(
                 total=500 * 60,

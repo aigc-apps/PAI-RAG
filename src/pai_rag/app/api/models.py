@@ -52,9 +52,10 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.1  # temperature
     stream: Optional[bool] = False  # 流式输出
     index_name: Optional[str] = None  # 索引名称
+    chat_knowledgebase: Optional[bool] = False  # 查询知识库
     search_web: Optional[bool] = False  # 搜索网络
     citation: Optional[bool] = False  # 生成引用
-    return_reference: Optional[bool] = False
+    return_reference: Optional[bool] = False  # 返回参考
     chat_llm: Optional[bool] = False  # llm聊天
     chat_agent: Optional[bool] = False  # 使用agent
     chat_db: Optional[bool] = False  # 查询数据库
@@ -70,6 +71,7 @@ class PaiQueryBundle(QueryBundle):
     stream: bool = False
     no_retrieval: bool = False
     citation: bool = False
+    original_query_str: str = None
     chat_messages_str: str = None
     need_web_search: bool = False
     completion_tokens: int = 0

@@ -12,6 +12,7 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
+from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
 # cnclip import should come before others. otherwise will segment fault.
@@ -26,7 +27,6 @@ from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
-from pai_rag.utils.prompt_template import CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
     PaiIntentRouter,
@@ -167,36 +167,36 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    llm = resolve_llm(config)
-    llm.max_tokens = 1024
+    if (
+        config.data_analysis.llm
+        and config.data_analysis.llm.base_url
+        and config.data_analysis.llm.api_key
+        and config.data_analysis.llm.model
+    ):
+        llm_da = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm)
+    else:
+        llm_da_config = {
+            "source": config.llm.source,
+            "model": config.llm.model,
+            "api_key": config.llm.api_key,
+            "max_tokens": 1024,
+        }
+        llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
         cls=DataAnalysisQuery,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
-        llm=llm,
+        llm=llm_da,
         callback_manager=None,
     )
-
-
-def resolve_nl2sql_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
-    if not config.query_rewrite.enabled:
-        return None
-
-    llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm or config.llm)
-    condense_query_transform = resolve(
-        OpenAICompatibleQueryTransform,
-        llm=llm,
-        condense_question_prompt=CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
-    )
-    return condense_query_transform
 
 
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
     if not config.query_rewrite.enabled:
         return None
-
     if (
         config.query_rewrite.llm
         and config.query_rewrite.llm.base_url

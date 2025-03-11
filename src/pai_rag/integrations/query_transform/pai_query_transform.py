@@ -201,7 +201,7 @@ class OpenAICompatibleQueryTransform:
     def run(
         self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
     ) -> QueryBundle:
-        chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
+        chat_history_str = messages_to_history_str(chat_messages[-7:-1], max_length=500)
         if chat_type != "nl2sql":
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
@@ -234,6 +234,10 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
         )
+        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
+            "</think>", ""
+        )
+
         if chat_type == "nl2sql":
             return PaiQueryBundle(
                 query_str=transformed_query_str,
@@ -286,7 +290,7 @@ class OpenAICompatibleQueryTransform:
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
-        chat_history_str = messages_to_history_str(chat_messages[-7:], max_length=500)
+        chat_history_str = messages_to_history_str(chat_messages[-7:-1], max_length=500)
         if chat_type != "nl2sql":
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
@@ -319,6 +323,9 @@ class OpenAICompatibleQueryTransform:
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
+            "</think>", ""
         )
         if chat_type == "nl2sql":
             return PaiQueryBundle(
