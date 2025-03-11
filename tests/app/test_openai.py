@@ -3,7 +3,8 @@ import mimetypes
 import os
 import pytest
 from httpx import ASGITransport, AsyncClient
-import asyncio
+from fastapi.testclient import TestClient
+import time
 
 
 if (
@@ -23,54 +24,53 @@ DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
 
 
-async def upload_file(input_files, index_name="default"):
+def upload_file(input_files, index_name="default"):
     files = []
     file_obj_list = []
+    file_names_added = []
     if input_files:
         for file_name in input_files:
             file_obj = open(file_name, "rb")
             mimetype = mimetypes.guess_type(file_name)[0]
             files.append(("files", (os.path.basename(file_name), file_obj, mimetype)))
             file_obj_list.append(file_obj)
+            file_names_added.append(os.path.basename(file_name))
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/api/v1/upload_data", files=files, data={"index_name": index_name}
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/v1/knowledgebases/{index_name}/files", files=files
         )
-    assert response.status_code == 200
-    task_id = response.json()["task_id"]
-    assert task_id is not None and len(task_id) > 0
-
-    i = 0
-    task_status = "pending"
-    while True and i < 20:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            response = await client.get(
-                f"/api/v1/get_upload_state?task_id={task_id}",
-            )
         assert response.status_code == 200
-        task_status = response.json()["status"]
-        if task_status == "completed" or task_status == "failed":
-            break
 
-        i += 1
-        await asyncio.sleep(1)
+        i = 0
+        task_status = "pending"
 
-    assert task_status == "completed"
+        for file_name in file_names_added:
+            while True and i < 40:
+                response = client.get(
+                    f"/api/v1/knowledgebases/{index_name}/files/{file_name}",
+                )
+                if response.status_code != 200:
+                    time.sleep(1)
+                    continue
+
+                assert response.status_code == 200
+                task_status = response.json()["status"]
+                if task_status == "done" or task_status == "failed":
+                    break
+
+                i += 1
+                time.sleep(1)
+
+        assert task_status == "done"
 
     for file in file_obj_list:
         file.close()
 
 
-async def setup_app():
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.patch(
+def setup_app():
+    with TestClient(app) as client:
+        response = client.patch(
             "/api/v1/config",
             json={
                 "llm": {
@@ -92,19 +92,15 @@ async def setup_app():
         )
         assert response.status_code == 200
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/api/v1/indexes")
+    with TestClient(app) as client:
+        response = client.get("/api/v1/knowledgebases")
         assert response.status_code == 200
-        indexes = response.json()["indexes"]
+        indexes = response.json()["knowledgebases"]
 
     if "test_index" not in indexes:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            response = await client.post(
-                "/api/v1/indexes/test_index",
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/knowledgebases/test_index",
                 json={
                     "index_name": "test_index",
                     "embedding_config": {
@@ -119,15 +115,17 @@ async def setup_app():
             )
 
             assert response.status_code == 200
-            assert response.json()["msg"] == "Add index 'test_index' successfully."
+            assert (
+                response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
+            )
 
-    await upload_file(["tests/testdata/data/md_data/pai_document.md"])
-    await upload_file(
+    upload_file(["tests/testdata/data/md_data/pai_document.md"])
+    upload_file(
         ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
 
 
-asyncio.run(setup_app())
+setup_app()
 
 
 @pytest.mark.asyncio(scope="session")
@@ -422,7 +420,6 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    print(citations)
     assert "Machine Learning Studio" in answer
     assert len(citations) > 0
 
