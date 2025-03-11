@@ -40,7 +40,8 @@ class FileTaskExecutor:
             )
             yield FileProcessResult(status=FileProcessStatus.Failed, message=str(ex))
 
-        return self._add_gen(task)
+        for r in self._add_gen(task):
+            yield r
 
     def _add_gen(self, task: FileItem) -> Generator[FileProcessResult, None, None]:
         knowledgebase = knowledgebase_manager.get_knowledgebase(task.knowledgebase)
