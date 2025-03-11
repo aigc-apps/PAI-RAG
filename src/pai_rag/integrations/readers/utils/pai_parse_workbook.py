@@ -490,7 +490,7 @@ def parse_workbook(workbook_file, oss_client, splitter):
     file_extension = os.path.splitext(os.path.basename(workbook_file))[1]
     logger.info(f"Parsing workbook {file_extension}.")
     if file_extension.lower() == ".xls":
-        tmp_file_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "pai_rag_tmp_dir")
+        tmp_file_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "../pairag_parse_tmp")
         file_name_without_extension = os.path.splitext(os.path.basename(workbook_file))[
             0
         ]

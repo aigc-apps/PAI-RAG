@@ -55,6 +55,7 @@ class TimeDebouncedTaskQueue:
         merged = False
         old_item = self.task_queue.get(item_key)
         if old_item is not None and old_item.timestamp + self.time_window > cur_time:
+            logger.info(f"Merge file changes for {item_key}.")
             self.task_queue.pop(item_key)
             merged = True
 
@@ -65,11 +66,13 @@ class TimeDebouncedTaskQueue:
         merged = False
         old_item2 = self.task_queue.get(item_key2)
         if old_item2 is not None and old_item2.timestamp + self.time_window > cur_time:
+            logger.info(f"Merge file changes for {item_key}.")
             self.task_queue.pop(old_item2)
             merged = True
 
         old_item = self.task_queue.get(item_key)
         if old_item is not None and old_item.timestamp + self.time_window > cur_time:
+            logger.info(f"Merge file changes for {item_key}.")
             self.task_queue.pop(item_key)
             merged = True
 
@@ -205,11 +208,10 @@ class JobManager:
                     operation=file_change.operation,
                     status=FileProcessStatus.PENDING,
                 )
-                is_success = self._task_queue.put(file_item)
-                if is_success:
-                    self._job_status.task_statuses[file_change.knowledgebase].task_map[
-                        file_item.file_name
-                    ] = file_item
+                self._task_queue.put(file_item)
+                self._job_status.task_statuses[file_change.knowledgebase].task_map[
+                    file_item.file_name
+                ] = file_item
             self.persist_task_status()
 
     def execute_job(self):
