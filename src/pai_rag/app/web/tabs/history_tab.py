@@ -11,7 +11,9 @@ def refresh_upload_history(knowledgebase_name):
         history_data["上传状态"] = history_data["status"]
         history_data["更新时间"] = history_data["last_modified_time"]
         history_data["错误原因"] = history_data["message"]
-        history_data = history_data[["文件名", "上传状态", "更新时间", "错误原因"]]
+        history_data = history_data[["文件名", "上传状态", "更新时间", "错误原因"]].sort_values(
+            by="last_modified_time", ascending=False
+        )
     else:
         history_data = pd.DataFrame(columns=["文件名", "上传状态", "更新时间", "错误原因"])
     summary = f"累计上传{len(upload_jobs)}个文件。"

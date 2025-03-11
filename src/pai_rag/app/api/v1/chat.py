@@ -23,6 +23,7 @@ from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DB_HISTORY_PATH,
     DEFAULT_DB_HISTORY_NAME,
 )
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 
 router_v1 = APIRouter()
 
@@ -204,10 +205,55 @@ async def get_upload_history(name: str):
     return job_manager.get_job_history(name)
 
 
-@router_v1.get("/get_upload_state")
-def task_status(task_id: str):
-    status, detail = rag_service.get_task_status(task_id)
-    return {"task_id": task_id, "status": status, "detail": detail}
+@router_v1.post("/knowledgebases/{name}/files")
+async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = Body(None)):
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        return {"message": f"Knowledgebase '{name}' not found"}
+
+    if not files:
+        return {"message": "No upload file found."}
+
+    for file in files:
+        file_name = file.filename
+        file_data = await file.read()
+        save_file_name = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH,
+            name,
+            "docs",
+            file_name,
+        )
+        with open(save_file_name, "wb") as f:
+            f.write(file_data)
+        logger.info(f"File {file_name} has been save to {save_file_name}.")
+
+    return {"message": "Files have been successfully uploaded."}
+
+
+@router_v1.delete("/knowledgebases/{name}/files/{file_name}")
+async def delete_file_from_knowledgebase(name: str, file_name: str):
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        return {"message": f"Knowledgebase '{name}' not found"}
+
+    if not file_name:
+        return {"message": f"file_name '{file_name}' cannot be empty."}
+
+    save_file_name = os.path.join(
+        DEFAULT_KNOWLEDGEBASE_PATH,
+        name,
+        "docs",
+        file_name,
+    )
+    if not os.path.exists(save_file_name):
+        return {"message": f"File '{file_name}' not found"}
+
+    if os.path.isdir(save_file_name):
+        return {"message": f"Deleting a directory '{file_name}' is not supported."}
+
+    try:
+        os.path.unlink(save_file_name)
+        return {"message": f"File '{file_name}' have been successfully removed."}
+    except Exception as e:
+        return {"message": f"Error deleting file '{file_name}': {str(e)}"}
 
 
 @router_v1.post("/upload_data")

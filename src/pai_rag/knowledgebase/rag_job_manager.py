@@ -2,9 +2,8 @@ import asyncio
 import traceback
 import os
 import json
-from queue import Empty, Queue
 import time
-from typing import List
+from typing import Dict, List, OrderedDict, Tuple
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_module import resolve_task_executor
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
@@ -27,6 +26,83 @@ import threading
 from pai_rag.utils.time_utils import get_current_time_str
 
 
+"""
+文件信号短期容易出现重复提交，所以需要做防抖处理。
+设置时间窗口为5s, 5s内重复提交的信号会合并任务队列。
+5s内不被更新的信号会被当作稳定的信号取出。
+"""
+
+
+class TimeDebouncedTaskQueue:
+    def __init__(self, max_size: int = 5000, time_window: int = 5):
+        self.max_size = max_size
+        self.time_window = time_window
+        self.task_queue: OrderedDict[Tuple[str, str, int], FileItem] = {}
+        self.lock = threading.Lock()
+
+    def first(self):
+        """Return the first element from an ordered collection
+        or an arbitrary element from an unordered collection.
+        Raise StopIteration if the collection is empty.
+        """
+        if not self.task_queue:
+            return None
+
+        return next(iter(self.task_queue))
+
+    def _merge_old(self, item_key, item, cur_time):
+        merged = False
+        old_item = self.task_queue.get(item_key)
+        if old_item is not None and old_item.timestamp + self.time_window > cur_time:
+            self.task_queue.pop(item_key)
+            merged = True
+
+        self.task_queue[item_key] = item
+        return merged
+
+    def _merge_with_two_key(self, item_key, item_key2, item, cur_time):
+        merged = False
+        old_item2 = self.task_queue.get(item_key2)
+        if old_item2 is not None and old_item2.timestamp + self.time_window > cur_time:
+            self.task_queue.pop(old_item2)
+            merged = True
+
+        old_item = self.task_queue.get(item_key)
+        if old_item is not None and old_item.timestamp + self.time_window > cur_time:
+            self.task_queue.pop(item_key)
+            merged = True
+
+        self.task_queue[item_key] = item
+        return merged
+
+    def put(self, item: FileItem):
+        with self.lock:
+            cur_time = time.time()
+            item_key = (item.knowledgebase, item.file_name, item.operation)
+            if (
+                item.operation == FileOperationType.DELETE
+                or item.operation == FileOperationType.ADD
+            ):
+                merged = self._merge_old(item_key, item, cur_time)
+            else:
+                # update操作需要同时merge update和add
+                item_key2 = (item.knowledgebase, item.file_name, FileOperationType.ADD)
+                merged = self._merge_with_two_key(
+                    item_key=item_key, item_key2=item_key2, item=item, cur_time=cur_time
+                )
+            return not merged
+
+    def get(self):
+        with self.lock:
+            first_key = self.first()
+            if first_key is not None:
+                item = self.task_queue[first_key]
+                if item.timestamp + self.time_window < time.time():
+                    self.task_queue.pop(first_key)
+                    return item
+            return None
+
+
 class JobManager:
     def __init__(
         self, task_file=DEFAULT_TASK_FILE, rag_config: RagConfig | None = None
@@ -34,7 +110,7 @@ class JobManager:
         self.task_file = task_file
         self._lock = threading.Lock()
         self._job_status: JobStatus = self.load_status()
-        self._task_queue = Queue(maxsize=DEFAILT_MAX_FILE_TASK_COUNT)
+        self._task_queue = TimeDebouncedTaskQueue(max_size=DEFAILT_MAX_FILE_TASK_COUNT)
         self.rag_config = rag_config
 
     # 后续可以加resume机制
@@ -56,8 +132,10 @@ class JobManager:
         knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
         return resolve_task_executor(self.rag_config, knowledgebase)
 
-    def _remove_file_prefix(self, file_path: str):
-        common_prefix = "/" + DEFAULT_KNOWLEDGEBASE_PATH + "/"
+    def _remove_file_prefix(self, knowledgebase_name: str, file_path: str):
+        common_prefix = (
+            "/" + DEFAULT_KNOWLEDGEBASE_PATH + f"/{knowledgebase_name}/docs/"
+        )
         prefix_index = file_path.find(common_prefix)
         if prefix_index == -1:
             start_index = 0
@@ -69,16 +147,18 @@ class JobManager:
         if name not in self._job_status.task_statuses:
             return []
 
-        task_history = self._job_status.task_statuses[name].task_map
+        task_history: Dict[str, FileItem] = self._job_status.task_statuses[
+            name
+        ].task_map
         return [
             {
-                "task_id": task_id,
-                "file_name": self._remove_file_prefix(task.file_name),
+                "task_id": task.task_id,
+                "file_name": self._remove_file_prefix(name, task.file_name),
                 "status": task.status,
                 "message": task.failed_reason,
                 "last_modified_time": task.last_modified_time,
             }
-            for task_id, task in task_history.items()
+            for _, task in task_history.items()
         ]
 
     def submit_job(self, file_changes: List[FileChange]):
@@ -98,10 +178,11 @@ class JobManager:
                     operation=file_change.operation,
                     status=FileProcessStatus.PENDING,
                 )
-                self._task_queue.put(file_item)
-                self._job_status.task_statuses[file_change.knowledgebase].task_map[
-                    file_change.task_id
-                ] = file_item
+                is_success = self._task_queue.put(file_item)
+                if is_success:
+                    self._job_status.task_statuses[file_change.knowledgebase].task_map[
+                        file_item.file_name
+                    ] = file_item
             self.persist_task_status()
 
     def execute_job(self):
@@ -117,9 +198,8 @@ class JobManager:
                 logger.debug("任务队列准备中...")
                 time.sleep(2)
                 continue
-            try:
-                file_item: FileItem = self._task_queue.get_nowait()
-            except Empty:
+            file_item: FileItem = self._task_queue.get()
+            if file_item is None:
                 logger.debug("后台任务队列为空。sleeping...")
                 time.sleep(5)  # 后续还是要做成异步？
                 continue
@@ -131,18 +211,18 @@ class JobManager:
                 executor = self._get_task_executor(file_item.knowledgebase)
                 for resp in executor.run(file_item):
                     self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.task_id
+                        file_item.file_name
                     ].status = resp.status
                     self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.task_id
+                        file_item.file_name
                     ].failed_reason = resp.message
                     self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.task_id
+                        file_item.file_name
                     ].last_modified_time = get_current_time_str()
 
                 if (
                     self._job_status.task_statuses[file_item.knowledgebase]
-                    .task_map[file_item.task_id]
+                    .task_map[file_item.file_name]
                     .status
                     == FileProcessStatus.Done
                 ):
@@ -158,7 +238,7 @@ class JobManager:
                             last_modified_time=self._job_status.task_statuses[
                                 file_item.knowledgebase
                             ]
-                            .task_map[file_item.task_id]
+                            .task_map[file_item.file_name]
                             .last_modified_time,
                         )
 
@@ -173,13 +253,13 @@ class JobManager:
                     f"后台任务队列处理 '{file_item.file_name}' 出错: {traceback.format_exc()}"
                 )
                 self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.task_id
+                    file_item.file_name
                 ].status = FileProcessStatus.Failed
                 self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.task_id
+                    file_item.file_name
                 ].failed_reason = str(ex)
                 self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.task_id
+                    file_item.file_name
                 ].last_modified_time = get_current_time_str()
                 with self._lock:
                     self.persist_task_status()

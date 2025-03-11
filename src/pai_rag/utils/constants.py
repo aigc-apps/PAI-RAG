@@ -25,7 +25,7 @@ DEFAULT_DATAFILE_DIR = "./data"
 DEFAULT_DASHSCOPE_EMBEDDING_MODEL = "text-embedding-v2"
 
 
-DEFAULT_TASK_FILE = "localdata/task_jobs.json"
+DEFAULT_TASK_FILE = "localdata/ingestion__task__summary.json"
 
 DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
 DEFAULT_INDEX_NAME = "default"
@@ -39,6 +39,6 @@ DEFAULT_KNOWLEDGEBASE_PATH = "localdata/knowledgebase"
 DEFAULT_KNOWLEDGEBASE_NAME = "default"
 DEFAULT_KNOWLEDGEBASE_NAME_OLD = "default_index"
 DEFAULT_KNOWLEDGEBASE_FILE = "localdata/default__rag__index.json"
-DEFAULT_DOC_STORE_NAME = "doc_store.json"
+DEFAULT_DOC_STORE_NAME = "default__knowledge__docs.json"
 DEFAULT_MAX_KNOWLEDGEBASE_COUNT = os.environ.get("DEFAULT_MAX_KNOWLEDGEBASE_COUNT", 20)
 DEFAILT_MAX_FILE_TASK_COUNT = os.environ.get("DEFAILT_MAX_FILE_TASK_COUNT", 10000)

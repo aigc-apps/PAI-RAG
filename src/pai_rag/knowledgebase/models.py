@@ -1,3 +1,4 @@
+import time
 from pydantic import BaseModel, Field
 from typing import Dict
 from enum import Enum
@@ -31,6 +32,7 @@ class FileProcessStatus(str, Enum):
 class FileItem(FileChange):
     status: FileProcessStatus
     last_modified_time: str = Field(default_factory=lambda: get_current_time_str())
+    timestamp: float = Field(default_factory=lambda: time.time())
     failed_reason: str | None = None
 
 
