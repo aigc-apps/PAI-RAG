@@ -132,6 +132,7 @@ class PaiBaseLlmConfig(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     model: str = None
+    vision_support: bool = False
 
     @classmethod
     def get_subclasses(cls):

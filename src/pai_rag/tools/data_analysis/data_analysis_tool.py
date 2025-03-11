@@ -7,7 +7,7 @@ from llama_index.core.schema import QueryBundle
 
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_module import resolve_llm
+from pai_rag.core.rag_module import resolve_chat_llm
 from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisConnector,
@@ -38,7 +38,7 @@ def resolve_data_analysis_connector(config: RagConfig):
 
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
-    llm = resolve_llm(config)
+    llm = resolve_chat_llm(config)
     sql_database = DataAnalysisConnector(
         config.data_analysis
     ).connect()  # 每次load info都会重连数据库
@@ -52,7 +52,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
 
 
 def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    llm = resolve_llm(config)
+    llm = resolve_chat_llm(config)
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(

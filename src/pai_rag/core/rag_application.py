@@ -9,7 +9,7 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_query,
     resolve_data_loader,
     resolve_intent_router,
-    resolve_llm,
+    resolve_chat_llm,
     resolve_llm_guardrail,
     resolve_query_engine,
     resolve_searcher,
@@ -568,7 +568,7 @@ class RagApplication:
 
             if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
-                llm: PaiLlm = resolve_llm(self.config)
+                llm: PaiLlm = resolve_chat_llm(self.config)
                 if chat_request.stream:
                     response = await llm.astream_chat(messages=messages)
 
@@ -823,7 +823,7 @@ class RagApplication:
 
         # Chat to LLM, return directly
         if chat_type == RagChatType.LLM:
-            llm: PaiLlm = resolve_llm(self.config)
+            llm: PaiLlm = resolve_chat_llm(self.config)
             if not query.stream:
                 response = await llm.achat(messages=query.messages)
                 return RagResponse(

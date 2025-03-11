@@ -8,6 +8,9 @@ version = "0.1.1"
 custom_agent_config_file = ""
 agent_tool_type = ""
 
+[rag.chat]
+model_id = "qwen-max"
+
 [rag.chat_store]
 type = "Local" # [Local, Aliyun-Redis]
 host = "Aliyun-Redis host"
@@ -36,14 +39,30 @@ persist_path = "localdata/knowledgebase/default/.index/.faiss"
 enable_multimodal = true
 vector_store.type = "FAISS"
 
+[rag.llm]
+source = "dashscope"
+
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
 # source = "PaiEas"
 # model = ""
-# endpoint = ""
-# token = ""
-[rag.llm]
-source = "DashScope"
+# base_url = ""
+# api_key = ""
+# vision_support = false
+[[rag.llms]]
+source = "dashscope"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "qwen-max"
+vision_support = false
+
+[[rag.llms]]
+source = "dashscope"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "qwen-vl-max"
+max_tokens = 2048
+vision_support = true
+
+[rag.multimodal]
 
 [rag.multimodal_embedding]
 source = "cnclip"
@@ -75,6 +94,7 @@ top_n = 2
 
 [rag.query_rewrite]
 enabled = true
+model_id = "qwen-max"
 
 [rag.query_rewrite.llm]
 

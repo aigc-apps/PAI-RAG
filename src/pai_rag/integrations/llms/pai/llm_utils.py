@@ -121,7 +121,10 @@ def create_llm(llm_config: PaiBaseLlmConfig):
 
 
 def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
-    max_tokens = min(llm_config.max_tokens, DEFAULT_MLLM_MAX_TOKENS)
+    if llm_config.max_tokens:
+        max_tokens = min(llm_config.max_tokens, DEFAULT_MLLM_MAX_TOKENS)
+    else:
+        max_tokens = DEFAULT_MLLM_MAX_TOKENS
     if isinstance(llm_config, OpenAILlmConfig):
         logger.info(
             f"""

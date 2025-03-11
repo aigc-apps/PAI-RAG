@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 
 from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
@@ -58,6 +58,69 @@ def resolve(cls: Any, **kwargs):
     return cls_cache[cls_key]
 
 
+def resolve_llms(config: RagConfig) -> List[PaiLlm]:
+    llms = [resolve(cls=PaiLlm, llm_config=llm_config) for llm_config in config.llms]
+    return llms
+
+
+def resolve_chat_llm(config: RagConfig) -> PaiLlm:
+    # 兼容之前的配置
+    if config.llm and all(
+        [
+            config.llm.source not in [None, ""],
+            config.llm.api_key not in [None, ""],
+            config.llm.base_url not in [None, ""],
+            config.llm.model not in [None, ""],
+        ]
+    ):
+        llm = resolve(cls=PaiLlm, llm_config=config.llm)
+        Settings.llm = llm
+        return llm
+    # 新配置
+    llms = resolve_llms(config)
+    for llm in llms:
+        if llm.model == config.chat.model_id:
+            Settings.llm = llm
+            return llm
+    Settings.llm = llm[0]
+    return llms[0]
+
+
+def resolve_multimodal_llms(config: RagConfig) -> List[PaiMultiModalLlm]:
+    # 兼容之前的配置
+    if config.multimodal_llm and all(
+        [
+            config.multimodal_llm.source not in [None, ""],
+            config.multimodal_llm.api_key not in [None, ""],
+            config.multimodal_llm.base_url not in [None, ""],
+            config.multimodal_llm.model not in [None, ""],
+        ]
+    ):
+        multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+        return [multimodal_llm]
+    # 新配置
+    multimodal_llms = [
+        resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
+        for llm_config in config.llms
+        if llm_config.vision_support
+    ]
+    return multimodal_llms
+
+
+def resolve_query_rewrite_llm(config: RagConfig):
+    llms = resolve_llms(config)
+    for llm in llms:
+        if llm.model == config.query_rewrite.model_id:
+            return llm
+    return resolve_chat_llm(config)
+
+
+# def resolve_llm(config: RagConfig) -> PaiLlm:
+#     llm = resolve(cls=PaiLlm, llm_config=config.llm)
+#     Settings.llm = llm
+#     return llm
+
+
 def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     if config.guardrail.is_enabled():
         guardrail = resolve(
@@ -75,7 +138,7 @@ def resolve_chat_store(config: RagConfig) -> PaiChatStore:
 
 
 def resolve_intent_router(config: RagConfig) -> PaiIntentRouter:
-    llm = resolve(cls=PaiLlm, llm_config=config.llm)
+    llm = resolve_chat_llm(config)
     intent_router = resolve(cls=PaiIntentRouter, intent_config=config.intent, llm=llm)
     return intent_router
 
@@ -89,13 +152,13 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             endpoint=config.oss_store.endpoint,
         )
 
-    multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    multimodal_llms = resolve_multimodal_llms(config)
 
     caption_tool = None
-    if multimodal_llm is not None:
+    if multimodal_llms is not None and len(multimodal_llms) > 0:
         caption_tool = resolve(
             cls=ImageCaptionTool,
-            multimodal_llm=multimodal_llm,
+            multimodal_llm=multimodal_llms[0],
         )
 
     data_reader = resolve(
@@ -146,12 +209,6 @@ def resolve_agent(config: RagConfig) -> PaiAgent:
     return agent
 
 
-def resolve_llm(config: RagConfig) -> PaiLlm:
-    llm = resolve(cls=PaiLlm, llm_config=config.llm)
-    Settings.llm = llm
-    return llm
-
-
 def resolve_data_analysis_connector(config: RagConfig):
     db_connector = resolve(
         cls=DataAnalysisConnector,
@@ -161,7 +218,7 @@ def resolve_data_analysis_connector(config: RagConfig):
 
 
 def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
-    llm = resolve_llm(config)
+    llm = resolve_chat_llm(config)
     sql_database = DataAnalysisConnector(
         config.data_analysis
     ).connect()  # 每次load都会重连数据库
@@ -205,15 +262,25 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
 def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
     if not config.query_rewrite.enabled:
         return None
-    if (
-        config.query_rewrite.llm
-        and config.query_rewrite.llm.base_url
-        and config.query_rewrite.llm.api_key
-        and config.query_rewrite.llm.model
+    if config.query_rewrite.llm and all(
+        [
+            config.query_rewrite.llm.base_url not in [None, ""],
+            config.query_rewrite.llm.api_key not in [None, ""],
+            config.query_rewrite.llm.model not in [None, ""],
+        ]
     ):
         llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
-    else:
+    elif config.llm and all(
+        [
+            config.llm.source not in [None, ""],
+            config.llm.api_key not in [None, ""],
+            config.llm.base_url not in [None, ""],
+            config.llm.model not in [None, ""],
+        ]
+    ):
         llm = resolve(cls=PaiLlm, llm_config=config.llm)
+    else:
+        llm = resolve_query_rewrite_llm(config)
 
     openai_query_transform = resolve(
         OpenAICompatibleQueryTransform,
@@ -224,11 +291,16 @@ def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
 
 
 def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
-    llm = resolve(cls=PaiLlm, llm_config=config.llm)
+    llm = resolve_chat_llm(config)
     Settings.llm = llm
     multimodal_llm = None
-    if config.multimodal_llm and config.synthesizer.use_multimodal_llm:
-        multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
+    multimodal_llms = resolve_multimodal_llms(config)
+    if (
+        multimodal_llms
+        and len(multimodal_llms) > 0
+        and config.synthesizer.use_multimodal_llm
+    ):
+        multimodal_llm = multimodal_llms[0]
 
     synthesizer = resolve(
         cls=PaiSynthesizer,
