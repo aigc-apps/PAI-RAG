@@ -66,8 +66,8 @@ class TimeDebouncedTaskQueue:
         merged = False
         old_item2 = self.task_queue.get(item_key2)
         if old_item2 is not None and old_item2.timestamp + self.time_window > cur_time:
-            logger.info(f"Merge file changes for {item_key}.")
-            self.task_queue.pop(old_item2)
+            logger.info(f"Merge file changes for {item_key2}.")
+            self.task_queue.pop(item_key2)
             merged = True
 
         old_item = self.task_queue.get(item_key)
