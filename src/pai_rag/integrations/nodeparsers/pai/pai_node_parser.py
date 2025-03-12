@@ -4,6 +4,7 @@ import re
 from typing import List, Any, Dict
 from llama_index.core.schema import BaseNode, TextNode, ImageDocument
 from llama_index.core.schema import TransformComponent
+from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.node_parser import TokenTextSplitter
@@ -63,6 +64,7 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
     "row_number",
     "image_info_list",
     "file_url",
+    "ref_doc_id",
 ]
 
 
@@ -172,15 +174,33 @@ class PaiNodeParser(TransformComponent):
                 metadata = doc_node.metadata
                 metadata["image_url"] = doc_node.image_url
                 splitted_nodes.append(
-                    TextNode(id_=node_id, text=image_text, metadata=metadata)
+                    TextNode(
+                        id_=node_id,
+                        text=image_text,
+                        metadata=metadata,
+                        relationships={
+                            NodeRelationship.SOURCE: RelatedNodeInfo(
+                                node_id=doc_node.node_id, metadata={}
+                            ),
+                        },
+                    )
                 )
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
+                metadata = doc_node.metadata
+
                 node_id = node_id_hash(
                     self._get_auto_increment_node_id(doc_key), doc_node
                 )
                 splitted_nodes.append(
                     TextNode(
-                        id_=node_id, text=doc_node.text, metadata=doc_node.metadata
+                        id_=node_id,
+                        text=doc_node.text,
+                        metadata=metadata,
+                        relationships={
+                            NodeRelationship.SOURCE: RelatedNodeInfo(
+                                node_id=doc_node.node_id, metadata={}
+                            ),
+                        },
                     )
                 )
             else:

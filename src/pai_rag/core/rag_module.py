@@ -4,7 +4,7 @@ from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_data_loader import RagDataLoader
+from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
 from pai_rag.integrations.data_analysis.data_analysis_tool import (
@@ -19,7 +19,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
-from pai_rag.integrations.nodes.raptor_nodes_enhance import RaptorProcessor
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PaiPostProcessor
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
@@ -27,6 +26,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
     PaiIntentRouter,
@@ -80,7 +80,9 @@ def resolve_intent_router(config: RagConfig) -> PaiIntentRouter:
     return intent_router
 
 
-def resolve_data_loader(config: RagConfig) -> RagDataLoader:
+def resolve_task_executor(
+    config: RagConfig, knowledgebase: KnowledgeBase
+) -> FileTaskExecutor:
     oss_store = None
     if config.oss_store.bucket:
         oss_store = resolve(
@@ -108,32 +110,22 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
         cls=PaiNodeParser, parser_config=config.node_parser, caption_tool=caption_tool
     )
 
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+    embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
 
     vector_index = resolve(
         cls=PaiVectorStoreIndex,
-        vector_store_config=config.index.vector_store,
+        vector_store_config=knowledgebase.vector_store_config,
         embed_model=embed_model,
         enable_local_keyword_index=True,
     )
 
-    raptor_processor = resolve(
-        cls=RaptorProcessor,
-        tree_depth=config.node_enhancement.tree_depth,
-        max_clusters=config.node_enhancement.max_clusters,
-        threshold=config.node_enhancement.proba_threshold,
-        embed_model=embed_model,
-    )
-
-    data_loader = RagDataLoader(
-        data_reader=data_reader,
+    return resolve(
+        cls=FileTaskExecutor,
         node_parser=node_parser,
-        raptor_processor=raptor_processor,
         embed_model=embed_model,
         vector_index=vector_index,
+        data_reader=data_reader,
     )
-
-    return data_loader
 
 
 def resolve_agent(config: RagConfig) -> PaiAgent:

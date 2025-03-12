@@ -233,7 +233,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             logger.warning(
                 "Currently delete_nodes supports for Milvus & ElasticSearch vector stores"
             )
-            raise NotImplementedError
+            raise Exception(
+                "Deleting nodes only supported for Milvus & Elasticsearch vectorstore."
+            )
 
     async def adelete_nodes(
         self,
@@ -254,7 +256,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
                 return
         else:
             logger.warning("Currently delete_nodes supports for Milvus vector store")
-            raise NotImplementedError
+            raise NotImplementedError(
+                "Deleting nodes only supported for Milvus & Elasticsearch vectorstore."
+            )
 
     def delete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
@@ -269,7 +273,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             logger.warning(
                 "Currently delete_ref_doc supports for Milvus & ElasticSearch vector stores"
             )
-            raise NotImplementedError
+            raise NotImplementedError(
+                "Deleting docs only supported for Milvus & Elasticsearch vectorstore."
+            )
 
     async def adelete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
@@ -284,7 +290,9 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             )
         else:
             logger.warning("Currently delete_ref_doc supports for Milvus vector store")
-            raise NotImplementedError
+            raise NotImplementedError(
+                "Deleting docs only supported for Milvus & Elasticsearch vectorstore."
+            )
 
     def clear(
         self,

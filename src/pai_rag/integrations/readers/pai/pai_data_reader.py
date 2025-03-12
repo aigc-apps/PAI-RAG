@@ -206,11 +206,13 @@ class PaiDataReader(BaseReader):
             input_files=input_files,
             file_extractor=self.file_readers,
             file_metadata=file_metadata_func,
+            raise_on_error=True,
         )
 
         """Load data from the input directory."""
         documents = directory_reader.load_data(
-            show_progress=show_progress, num_workers=self.number_workers
+            show_progress=show_progress,
+            num_workers=self.number_workers,
         )
         return documents
 
