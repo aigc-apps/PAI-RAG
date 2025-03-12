@@ -1,4 +1,5 @@
-from typing import Any, List
+from typing import Any
+from loguru import logger
 
 from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
@@ -58,61 +59,54 @@ def resolve(cls: Any, **kwargs):
     return cls_cache[cls_key]
 
 
-def resolve_llms(config: RagConfig) -> List[PaiLlm]:
-    llms = [resolve(cls=PaiLlm, llm_config=llm_config) for llm_config in config.llms]
-    return llms
-
-
-def resolve_chat_llm(config: RagConfig) -> PaiLlm:
-    # 兼容之前的配置
-    if config.llm and all(
-        [
-            config.llm.source not in [None, ""],
-            config.llm.api_key not in [None, ""],
-            config.llm.base_url not in [None, ""],
-            config.llm.model not in [None, ""],
-        ]
-    ):
-        llm = resolve(cls=PaiLlm, llm_config=config.llm)
-        Settings.llm = llm
-        return llm
-    # 新配置
-    llms = resolve_llms(config)
-    for llm in llms:
-        if llm.model == config.chat.model_id:
-            Settings.llm = llm
-            return llm
-    Settings.llm = llm[0]
+def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+    llms = []
+    for llm_config in config.llms:
+        if llm_config.is_validate():
+            llm = resolve(cls=PaiLlm, llm_config=llm_config)
+            llms.append(llm)
+            if not model_id:
+                Settings.llm = llm
+                return llm
+            else:
+                llm_model_id = llm.llm_config.model_id or llm.llm_config.model
+                if llm_model_id == model_id:
+                    Settings.llm = llm
+                    return llm
+    if len(llms) == 0:
+        raise ValueError(f"No llm found for chat model_id: {model_id}")
+    Settings.llm = llms[0]
     return llms[0]
 
 
-def resolve_multimodal_llms(config: RagConfig) -> List[PaiMultiModalLlm]:
-    # 兼容之前的配置
-    if config.multimodal_llm and all(
-        [
-            config.multimodal_llm.source not in [None, ""],
-            config.multimodal_llm.api_key not in [None, ""],
-            config.multimodal_llm.base_url not in [None, ""],
-            config.multimodal_llm.model not in [None, ""],
-        ]
-    ):
-        multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
-        return [multimodal_llm]
-    # 新配置
-    multimodal_llms = [
-        resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
-        for llm_config in config.llms
-        if llm_config.vision_support
-    ]
-    return multimodal_llms
+def resolve_multimodal_llm(config: RagConfig, model_id: str = None) -> PaiMultiModalLlm:
+    for vllm_config in config.llms:
+        if vllm_config.is_validate() and vllm_config.vision_support:
+            vllm = resolve(cls=PaiMultiModalLlm, llm_config=vllm_config)
+            if vllm.is_validate():
+                return vllm
+    logger.info(f"No llm found for chat model_id: {model_id}")
+    return None
 
 
-def resolve_query_rewrite_llm(config: RagConfig):
-    llms = resolve_llms(config)
-    for llm in llms:
-        if llm.model == config.query_rewrite.model_id:
-            return llm
-    return resolve_chat_llm(config)
+def resolve_query_rewrite_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+    llms = []
+    for llm_config in config.llms:
+        if llm_config.is_validate():
+            llm = resolve(cls=PaiLlm, llm_config=llm_config)
+            llms.append(llm)
+            if not model_id:
+                Settings.llm = llm
+                return llm
+            else:
+                llm_model_id = llm.llm_config.model_id or llm.llm_config.model
+                if llm_model_id == model_id:
+                    Settings.llm = llm
+                    return llm
+    if len(llms) == 0:
+        raise ValueError(f"No llm found for query rewrite model_id: {model_id}")
+    Settings.llm = llms[0]
+    return llms[0]
 
 
 # def resolve_llm(config: RagConfig) -> PaiLlm:
@@ -152,13 +146,13 @@ def resolve_data_loader(config: RagConfig) -> RagDataLoader:
             endpoint=config.oss_store.endpoint,
         )
 
-    multimodal_llms = resolve_multimodal_llms(config)
+    multimodal_llm = resolve_multimodal_llm(config)
 
     caption_tool = None
-    if multimodal_llms is not None and len(multimodal_llms) > 0:
+    if multimodal_llm:
         caption_tool = resolve(
             cls=ImageCaptionTool,
-            multimodal_llm=multimodal_llms[0],
+            multimodal_llm=multimodal_llm,
         )
 
     data_reader = resolve(
@@ -294,13 +288,7 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     llm = resolve_chat_llm(config)
     Settings.llm = llm
     multimodal_llm = None
-    multimodal_llms = resolve_multimodal_llms(config)
-    if (
-        multimodal_llms
-        and len(multimodal_llms) > 0
-        and config.synthesizer.use_multimodal_llm
-    ):
-        multimodal_llm = multimodal_llms[0]
+    multimodal_llm = resolve_multimodal_llm(config)
 
     synthesizer = resolve(
         cls=PaiSynthesizer,

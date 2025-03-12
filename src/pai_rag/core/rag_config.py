@@ -1,6 +1,5 @@
 from typing import Annotated, Dict, Union, List
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
-from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.core.models.config import (
     AliyunTextModerationPlusConfig,
     NodeEnhancementConfig,
@@ -100,7 +99,7 @@ class RagConfig(BaseModel):
     llms: Annotated[
         List[Union[PaiBaseLlmConfig.get_subclasses()]],
         Field(default_factory=list),
-        BeforeValidator(lambda x: [parse_llm_config(item) for item in x]),
+        BeforeValidator(lambda x: [validate_case_insensitive(item) for item in x]),
     ]
 
     chat: ChatConfig()

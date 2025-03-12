@@ -125,14 +125,15 @@ class SupportedLlmType(str, Enum):
 
 
 class PaiBaseLlmConfig(BaseModel):
-    source: SupportedLlmType
+    source: SupportedLlmType | None = None
     temperature: float = DEFAULT_TEMPERATURE
     system_prompt: str | None = None
     max_tokens: int = DEFAULT_MAX_TOKENS
     base_url: str | None = None
     api_key: str | None = None
-    model: str = None
-    vision_support: bool = False
+    model: str | None = None
+    vision_support: bool | None = None
+    model_id: str | None = None
 
     @classmethod
     def get_subclasses(cls):
@@ -144,6 +145,16 @@ class PaiBaseLlmConfig(BaseModel):
     @classmethod
     def get_type(cls):
         return cls.model_fields["source"].default
+
+    def is_validate(self):
+        return all(
+            [
+                self.source not in [None, ""],
+                self.api_key not in [None, ""],
+                self.base_url not in [None, ""],
+                self.model not in [None, ""],
+            ]
+        )
 
 
 class DashScopeLlmConfig(PaiBaseLlmConfig):

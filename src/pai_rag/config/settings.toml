@@ -50,19 +50,6 @@ source = "dashscope"
 # api_key = ""
 # vision_support = false
 [[rag.llms]]
-source = "dashscope"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-max"
-vision_support = false
-
-[[rag.llms]]
-source = "dashscope"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-vl-max"
-max_tokens = 2048
-vision_support = true
-
-[rag.multimodal]
 
 [rag.multimodal_embedding]
 source = "cnclip"

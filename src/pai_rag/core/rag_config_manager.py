@@ -60,6 +60,13 @@ class RagConfigManager:
 
     def get_value(self) -> RagConfig:
         rag_config = RagConfig.model_validate(self.config.rag)
+        # 兼容之前的配置
+        if len(rag_config.llms) == 0 and rag_config.llm:
+            rag_config.llm["vision_support"] = False
+            rag_config.llms.append(rag_config.llm)
+        if len(rag_config.llms) == 0 and rag_config.multimodal_llm:
+            rag_config.multimodal_llm["vision_support"] = True
+            rag_config.llms.append(rag_config.multimodal_llm)
         return rag_config
 
     def update(self, new_value: Dynaconf):

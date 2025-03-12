@@ -8,7 +8,7 @@ from pai_rag.core.rag_module import (
     resolve_vector_index,
     resolve_query_engine,
     resolve_chat_llm,
-    resolve_multimodal_llms,
+    resolve_multimodal_llm,
 )
 from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.integrations.llms.pai.llm_utils import create_llm, create_multi_modal_llm
@@ -69,7 +69,7 @@ def get_eval_components(
     if mode == "text":
         llm = resolve_chat_llm(config)
     else:
-        llm = resolve_multimodal_llms(config)[0]
+        llm = resolve_multimodal_llm(config)
 
     state_manager = StateManager(
         os.path.join(config.index.vector_store.persist_path, "state.json")
@@ -119,7 +119,7 @@ def get_multimodal_eval_components(
     tested_multimodal_llm_config,
     qca_dataset_path: str = None,
 ):
-    llm = resolve_multimodal_llms(config)[0]
+    llm = resolve_multimodal_llm(config)
     eval_llm_config = parse_llm_config(eval_model_llm_config)
     eval_llm = create_multi_modal_llm(eval_llm_config)
     tested_multimodal_llm_config = parse_llm_config(tested_multimodal_llm_config)

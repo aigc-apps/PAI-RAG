@@ -596,6 +596,13 @@ class RagLocalClient:
         try:
             config = rag_service.get_config()
             rag_config = RagConfig.model_validate(config)
+            # 兼容之前的配置
+            if len(rag_config.llms) == 0 and rag_config.llm:
+                rag_config.llm["vision_support"] = False
+                rag_config.llms.append(rag_config.llm)
+            if len(rag_config.llms) == 0 and rag_config.multimodal_llm:
+                rag_config.multimodal_llm["vision_support"] = True
+                rag_config.llms.append(rag_config.multimodal_llm)
             return rag_config
 
         except Exception as e:
