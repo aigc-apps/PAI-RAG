@@ -150,7 +150,6 @@ class PaiBaseLlmConfig(BaseModel):
         return all(
             [
                 self.source not in [None, ""],
-                self.api_key not in [None, ""],
                 self.base_url not in [None, ""],
                 self.model not in [None, ""],
             ]

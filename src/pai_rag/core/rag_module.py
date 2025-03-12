@@ -13,7 +13,6 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
-from pai_rag.integrations.llms.pai.llm_config import parse_llm_config
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
 # cnclip import should come before others. otherwise will segment fault.
@@ -60,10 +59,14 @@ def resolve(cls: Any, **kwargs):
 
 
 def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+    model_id = model_id or config.chat.model_id
     llms = []
     for llm_config in config.llms:
         if llm_config.is_validate():
-            llm = resolve(cls=PaiLlm, llm_config=llm_config)
+            if not llm_config.vision_support:
+                llm = resolve(cls=PaiLlm, llm_config=llm_config)
+            else:
+                llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
             llms.append(llm)
             if not model_id:
                 Settings.llm = llm
@@ -74,7 +77,7 @@ def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
                     Settings.llm = llm
                     return llm
     if len(llms) == 0:
-        raise ValueError(f"No llm found for chat model_id: {model_id}")
+        return None
     Settings.llm = llms[0]
     return llms[0]
 
@@ -83,30 +86,21 @@ def resolve_multimodal_llm(config: RagConfig, model_id: str = None) -> PaiMultiM
     for vllm_config in config.llms:
         if vllm_config.is_validate() and vllm_config.vision_support:
             vllm = resolve(cls=PaiMultiModalLlm, llm_config=vllm_config)
-            if vllm.is_validate():
-                return vllm
-    logger.info(f"No llm found for chat model_id: {model_id}")
+            return vllm
+    logger.info(f"No llm found for multimodal model_id: {model_id}")
     return None
 
 
 def resolve_query_rewrite_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
-    llms = []
-    for llm_config in config.llms:
-        if llm_config.is_validate():
-            llm = resolve(cls=PaiLlm, llm_config=llm_config)
-            llms.append(llm)
-            if not model_id:
-                Settings.llm = llm
-                return llm
-            else:
-                llm_model_id = llm.llm_config.model_id or llm.llm_config.model
-                if llm_model_id == model_id:
-                    Settings.llm = llm
-                    return llm
-    if len(llms) == 0:
-        raise ValueError(f"No llm found for query rewrite model_id: {model_id}")
-    Settings.llm = llms[0]
-    return llms[0]
+    model_id = model_id or config.query_rewrite.model_id
+    if (
+        config.query_rewrite.llm
+        and config.query_rewrite.llm.base_url
+        and config.query_rewrite.llm.api_key
+        and config.query_rewrite.llm.model
+    ):
+        return resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
+    return resolve_chat_llm(config, model_id)
 
 
 # def resolve_llm(config: RagConfig) -> PaiLlm:
@@ -131,8 +125,8 @@ def resolve_chat_store(config: RagConfig) -> PaiChatStore:
     return chat_store
 
 
-def resolve_intent_router(config: RagConfig) -> PaiIntentRouter:
-    llm = resolve_chat_llm(config)
+def resolve_intent_router(config: RagConfig, model_id: str = None) -> PaiIntentRouter:
+    llm = resolve_chat_llm(config, model_id)
     intent_router = resolve(cls=PaiIntentRouter, intent_config=config.intent, llm=llm)
     return intent_router
 
@@ -211,8 +205,10 @@ def resolve_data_analysis_connector(config: RagConfig):
     return db_connector
 
 
-def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
-    llm = resolve_chat_llm(config)
+def resolve_data_analysis_loader(
+    config: RagConfig, model_id: str = None
+) -> DataAnalysisLoader:
+    llm = resolve_chat_llm(config, model_id)
     sql_database = DataAnalysisConnector(
         config.data_analysis
     ).connect()  # 每次load都会重连数据库
@@ -234,13 +230,14 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     ):
         llm_da = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm)
     else:
-        llm_da_config = {
-            "source": config.llm.source,
-            "model": config.llm.model,
-            "api_key": config.llm.api_key,
-            "max_tokens": 1024,
-        }
-        llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+        # llm_da_config = {
+        #     "source": config.llm.source,
+        #     "model": config.llm.model,
+        #     "api_key": config.llm.api_key,
+        #     "max_tokens": 1024,
+        # }
+        # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+        llm_da = resolve_chat_llm(config)
 
     sql_database = resolve_data_analysis_connector(config).connect()
 
@@ -253,28 +250,12 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
     )
 
 
-def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTransform:
+def resolve_openai_query_transform(
+    config: RagConfig, model_id: str = None
+) -> OpenAICompatibleQueryTransform:
     if not config.query_rewrite.enabled:
         return None
-    if config.query_rewrite.llm and all(
-        [
-            config.query_rewrite.llm.base_url not in [None, ""],
-            config.query_rewrite.llm.api_key not in [None, ""],
-            config.query_rewrite.llm.model not in [None, ""],
-        ]
-    ):
-        llm = resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
-    elif config.llm and all(
-        [
-            config.llm.source not in [None, ""],
-            config.llm.api_key not in [None, ""],
-            config.llm.base_url not in [None, ""],
-            config.llm.model not in [None, ""],
-        ]
-    ):
-        llm = resolve(cls=PaiLlm, llm_config=config.llm)
-    else:
-        llm = resolve_query_rewrite_llm(config)
+    llm = resolve_query_rewrite_llm(config, model_id)
 
     openai_query_transform = resolve(
         OpenAICompatibleQueryTransform,
@@ -284,8 +265,8 @@ def resolve_openai_query_transform(config: RagConfig) -> OpenAICompatibleQueryTr
     return openai_query_transform
 
 
-def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
-    llm = resolve_chat_llm(config)
+def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesizer:
+    llm = resolve_chat_llm(config, model_id)
     Settings.llm = llm
     multimodal_llm = None
     multimodal_llm = resolve_multimodal_llm(config)
@@ -311,7 +292,9 @@ def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
     return vector_index
 
 
-def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
+def resolve_query_engine(
+    config: RagConfig, model_id: str = None
+) -> PaiRetrieverQueryEngine:
     vector_index = resolve_vector_index(config)
 
     retriever = vector_index.as_retriever(
@@ -322,7 +305,7 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
         hybrid_fusion_weights=config.retriever.hybrid_fusion_weights,
     )
 
-    synthesizer = resolve_synthesizer(config)
+    synthesizer = resolve_synthesizer(config, model_id)
     postprocessor = resolve(
         cls=PaiPostProcessor, postprocessor_config=config.postprocessor
     )
@@ -338,8 +321,8 @@ def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
     return query_engine
 
 
-def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
-    synthesizer = resolve_synthesizer(config)
+def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine:
+    synthesizer = resolve_synthesizer(config, model_id)
     searcher = None
 
     if isinstance(config.search, BingSearchConfig) and config.search.search_api_key:

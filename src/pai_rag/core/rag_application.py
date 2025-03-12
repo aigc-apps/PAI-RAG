@@ -568,7 +568,7 @@ class RagApplication:
 
             if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
-                llm: PaiLlm = resolve_chat_llm(self.config)
+                llm: PaiLlm = resolve_chat_llm(self.config, chat_request.model)
                 if chat_request.stream:
                     response = await llm.astream_chat(messages=messages)
 
@@ -594,7 +594,9 @@ class RagApplication:
             logger.info(
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
-            openai_query_transform = resolve_openai_query_transform(self.config)
+            openai_query_transform = resolve_openai_query_transform(
+                self.config, chat_request.query_rewrite_model
+            )
             if chat_request.chat_db:
                 chat_type = "nl2sql"
             else:
@@ -719,7 +721,7 @@ class RagApplication:
                     f"{session_id} Starting search web: Elapsed {time.time() - start}"
                 )
 
-                search_engine = resolve_searcher(self.config)
+                search_engine = resolve_searcher(self.config, chat_request.model)
                 if not search_engine:
                     raise ValueError(
                         "AI search config is not valid. Please check your search api configuration."
@@ -758,7 +760,7 @@ class RagApplication:
             index_entry = index_manager.get_index_by_name(chat_request.index_name)
             session_config.embedding = index_entry.embedding_config
             session_config.index.vector_store = index_entry.vector_store_config
-            query_engine = resolve_query_engine(session_config)
+            query_engine = resolve_query_engine(session_config, chat_request.model)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,

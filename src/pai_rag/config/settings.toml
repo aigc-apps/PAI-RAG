@@ -40,7 +40,7 @@ enable_multimodal = true
 vector_store.type = "FAISS"
 
 [rag.llm]
-source = "dashscope"
+source = "openai_compatible"
 
 # llm configurations, source support API: OpenAI,DashScope or PAI-EAS's deployment
 # eg.
@@ -55,7 +55,7 @@ source = "dashscope"
 source = "cnclip"
 
 [rag.multimodal_llm]
-source = "dashscope"
+source = "openai_compatible"
 
 [rag.node_enhancement]
 tree_depth = 3
