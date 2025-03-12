@@ -320,7 +320,9 @@ class KnowledgeBaseManager:
             file_name=file_name,
             last_modified_time=last_modified_time,
         )
-        doc_store = self._doc_store_map[knowledgebase_name]
+        doc_store = self._doc_store_map.get(
+            knowledgebase_name, KnowledgeBaseDocStore(knowledgebase=knowledgebase_name)
+        )
         doc_store.doc_map[doc.file_name] = doc
         self.persist_doc_store(doc_store)
         logger.info(f"文件'{doc.file_name}'成功添加到知识库'{knowledgebase_name}'。")
@@ -329,7 +331,9 @@ class KnowledgeBaseManager:
         if knowledgebase_name not in self._knowledgebase_map.knowledgebases:
             raise ValueError(f"知识库 '{knowledgebase_name}' 不存在。")
 
-        doc_store = self._doc_store_map[knowledgebase_name]
+        doc_store = self._doc_store_map.get(
+            knowledgebase_name, KnowledgeBaseDocStore(knowledgebase=knowledgebase_name)
+        )
         if file_name in doc_store.doc_map:
             del doc_store.doc_map[file_name]
             self.persist_doc_store(doc_store)
@@ -342,7 +346,9 @@ class KnowledgeBaseManager:
         if knowledgebase_name not in self._knowledgebase_map.knowledgebases:
             raise ValueError(f"知识库 '{knowledgebase_name}' 不存在。")
 
-        doc_store = self._doc_store_map[knowledgebase_name]
+        doc_store = self._doc_store_map.get(
+            knowledgebase_name, KnowledgeBaseDocStore(knowledgebase=knowledgebase_name)
+        )
         return list(doc_store.doc_map.values())
 
     """
