@@ -4,6 +4,7 @@ from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
+from pai_rag.extensions.news.miaobi_news import MiaobiNewsTool
 from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
@@ -318,3 +319,16 @@ def resolve_searcher(config: RagConfig) -> BaseQueryEngine:
         )
 
     return searcher
+
+
+def resolve_news_tool(config: RagConfig) -> MiaobiNewsTool:
+    if config.news_extension.is_enabled():
+        llm = resolve(cls=PaiLlm, llm_config=config.llm)
+        news_tool = resolve(
+            cls=MiaobiNewsTool,
+            llm=llm,
+            config=config.news_extension,
+        )
+        return news_tool
+
+    return None

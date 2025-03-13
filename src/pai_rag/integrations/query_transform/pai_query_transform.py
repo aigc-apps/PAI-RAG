@@ -9,7 +9,7 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.base.llms.types import ChatMessage
 from pai_rag.utils.prompt_template import (
-    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH,
+    INTENT_REWRITE_PROMPT_ZH,
     DEFAULT_FUSION_TRANSFORM_PROMPT,
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
     CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
@@ -183,7 +183,7 @@ class OpenAICompatibleQueryTransform:
             resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
         )
         self._query_transform_prompt = (
-            query_transform_prompt or CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH
+            query_transform_prompt or INTENT_REWRITE_PROMPT_ZH
         )
         default_condense_question_prompt = PromptTemplate(
             template="{}\n{}\n{}".format(
@@ -201,7 +201,9 @@ class OpenAICompatibleQueryTransform:
     def run(
         self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
     ) -> QueryBundle:
-        chat_history_str = messages_to_history_str(chat_messages[-7:-1], max_length=500)
+        chat_history_str = messages_to_history_str(
+            chat_messages[-7:-1], max_length=1000
+        )
         if chat_type != "nl2sql":
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
@@ -290,7 +292,9 @@ class OpenAICompatibleQueryTransform:
     ) -> QueryBundle:
         """Run query transform.
         Generate standalone question from conversation context and last message."""
-        chat_history_str = messages_to_history_str(chat_messages[-7:-1], max_length=500)
+        chat_history_str = messages_to_history_str(
+            chat_messages[-7:-1], max_length=1000
+        )
         if chat_type != "nl2sql":
             current_condense_question_prompt = PromptTemplate(
                 template="{}\n{}\n{}".format(
@@ -339,9 +343,11 @@ class OpenAICompatibleQueryTransform:
             )
         else:
             query_json = parse_json_from_code_block_str(transformed_query_str)
+            intent = query_json.get("intent", "NONE")
 
             if ("query" not in query_json) or (len(query_json["query"]) == 0):
                 return PaiQueryBundle(
+                    intent=intent,
                     query_str=chat_messages[-1].content,
                     need_web_search=False,
                     custom_embedding_strs=[chat_messages[-1].content],
@@ -356,6 +362,7 @@ class OpenAICompatibleQueryTransform:
                 )
             else:
                 return PaiQueryBundle(
+                    intent=intent,
                     query_str=query_json["query"],
                     need_web_search=True,
                     custom_embedding_strs=[transformed_query_str],

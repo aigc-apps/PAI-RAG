@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel
 from typing import Any, List, Dict, Optional
 from llama_index.core.schema import QueryBundle
@@ -66,9 +67,18 @@ class ChatCompletionRequest(BaseModel):
     force_search_knowledgebase: Optional[bool] = False  # 始终执行知识库搜索
 
 
+class ChatIntent(str, Enum):
+    SEARCH_WEB = "search_web"  # search web
+    CHAT = "chat"  # llm chat
+    LIST_NEWS = "list_news"  # list news
+    CHAT_NEWS = "chat_news"  # chat news
+    CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
+
+
 @dataclass
 class PaiQueryBundle(QueryBundle):
     stream: bool = False
+    intent: ChatIntent = ChatIntent.CHAT
     no_retrieval: bool = False
     citation: bool = False
     original_query_str: str = None

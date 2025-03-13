@@ -8,6 +8,7 @@ from pai_rag.core.models.config import (
     RetrieverConfig,
     SynthesizerConfig,
 )
+from pai_rag.extensions.news.news_config import MiaobiNewsConfig
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
 from pai_rag.integrations.chat_store.pai.pai_chat_store import (
     LocalChatStoreConfig,
@@ -168,3 +169,5 @@ class RagConfig(BaseModel):
     query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
 
     guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()
+
+    news_extension: MiaobiNewsConfig = MiaobiNewsConfig()

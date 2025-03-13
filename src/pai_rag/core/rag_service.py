@@ -114,7 +114,14 @@ class RagService:
             return await self.rag.achat(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
-            raise UserInputError(f"Chat RAG failed: {ex}")
+            raise UserInputError(f"Chat failed: {ex}")
+
+    async def astream_chat(self, query):
+        try:
+            return self.rag.astream_chat(query)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Stream chat failed: {ex}")
 
     async def aquery_search_v1(self, query: RagQuery):
         try:

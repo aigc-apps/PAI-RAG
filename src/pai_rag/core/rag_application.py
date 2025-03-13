@@ -1,5 +1,9 @@
 import traceback
-from pai_rag.app.api.models import ChatCompletionRequest, ChatResponseWrapper
+from pai_rag.app.api.models import (
+    ChatCompletionRequest,
+    ChatIntent,
+    ChatResponseWrapper,
+)
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.core.rag_module import (
@@ -10,6 +14,7 @@ from pai_rag.core.rag_module import (
     resolve_intent_router,
     resolve_llm,
     resolve_llm_guardrail,
+    resolve_news_tool,
     resolve_query_engine,
     resolve_searcher,
     resolve_openai_query_transform,
@@ -261,6 +266,7 @@ async def _make_chat_completion_chunk_response(
                     ],
                     usage=chunk_usage,
                     object="chat.completion.chunk",
+                    **chat_response.additional_kwargs,
                 )
                 i += 1
                 yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
@@ -340,6 +346,35 @@ async def _make_chat_completion_chunk_response_with_text(session_id, text):
     )
 
     logger.info(f"Finished streaming: {text}")
+    yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+
+
+async def _make_event_chunk_reponse(session_id, intent_result):
+    # yield f"event: intent_recognition"
+
+    created_ts = int(time.time())
+    model_name = Settings.llm.metadata.model_name
+    chunk = ChatCompletionChunk(
+        id=session_id,
+        created=created_ts,
+        model=model_name,
+        citations=[],
+        citation_details=[],
+        intent=intent_result,
+        choices=[
+            chat_completion_chunk.Choice(
+                index=0,
+                delta=chat_completion_chunk.ChoiceDelta(
+                    role=MessageRole.ASSISTANT.value,
+                    content="",
+                ),
+                finish_reason=None,
+            )
+        ],
+        object="chat.completion.chunk",
+    )
+
+    logger.info(f"added intent chunk: {intent_result}")
     yield f"data: {json.dumps(chunk.model_dump(mode='json'), ensure_ascii=False)}\n\n"
 
 
@@ -445,7 +480,7 @@ class RagApplication:
 
         return RetrievalResponse(docs=docs)
 
-    async def achat(
+    async def astream_chat(
         self,
         chat_request: ChatCompletionRequest,
     ):
@@ -457,43 +492,30 @@ class RagApplication:
         )
 
         start = time.time()
-        if len(chat_request.messages) == 0:
-            if chat_request.stream:
-                return _make_chat_completion_chunk_response_with_text(
-                    session_id, DEFAULT_EMPTY_RESPONSE
-                )
-            else:
-                return _make_chat_completion_response_with_text(
-                    session_id, DEFAULT_EMPTY_RESPONSE
-                )
-
         if (
             len(chat_request.messages) == 0
             or chat_request.messages[-1].content is None
             or chat_request.messages[-1].content == ""
         ):
-            if chat_request.stream:
-                return _make_chat_completion_chunk_response_with_text(
-                    session_id, DEFAULT_EMPTY_RESPONSE
-                )
-            else:
-                return _make_chat_completion_response_with_text(
-                    session_id, DEFAULT_EMPTY_RESPONSE
-                )
+            async for chunk in _make_chat_completion_chunk_response_with_text(
+                session_id, DEFAULT_EMPTY_RESPONSE
+            ):
+                yield chunk
+            return
 
         for i, message in enumerate(chat_request.messages):
-            chat_request.messages[i].content = re.sub(
+            message.content = re.sub(
                 r"<think>.*?</think>\n*",
                 "",
-                chat_request.messages[i].content,
+                message.content,
                 flags=re.DOTALL,
             )
-            chat_request.messages[i].content = (
-                chat_request.messages[i]
-                .content.replace("<think>", "")
-                .replace("</think>", "")
+            message.content = message.content.replace("<think>", "").replace(
+                "</think>", ""
             )
 
+        if self.config.system.default_web_search:
+            chat_request.search_web = True
         _switch_control(chat_request)
 
         try:
@@ -514,44 +536,29 @@ class RagApplication:
                 if len(user_messages) == 1:
                     guardrail_result = await guardrail.acheck(user_messages[0].content)
                     if guardrail_result.reject:
-                        if chat_request.stream:
-                            return _make_chat_completion_chunk_response_with_text(
-                                session_id, guardrail_result.advice
-                            )
-                        else:
-                            return _make_chat_completion_response_with_text(
-                                session_id, guardrail_result.advice
-                            )
+                        async for chunk in _make_chat_completion_chunk_response_with_text(
+                            session_id, guardrail_result.advice
+                        ):
+                            yield chunk
+                        return
                     passed_guardrail = True
-
-            if self.config.system.default_web_search:
-                chat_request.search_web = True
 
             if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
                 llm: PaiLlm = resolve_llm(self.config)
-                if chat_request.stream:
-                    response = await llm.astream_chat(messages=messages)
+                response = await llm.astream_chat(messages=messages)
 
-                    return _make_chat_completion_chunk_response(
-                        session_id=session_id,
-                        response_wrapper=ChatResponseWrapper(response=response),
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                        start_time=start,
-                    )
-                else:
-                    response = await llm.achat(messages=messages)
-
-                    return _make_chat_completion_response(
-                        session_id=session_id,
-                        response_wrapper=ChatResponseWrapper(response=response),
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                    )
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=ChatResponseWrapper(response=response),
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
 
             question = messages[-1].content
-
             logger.info(
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
@@ -573,13 +580,46 @@ class RagApplication:
                     original_query_str=question,
                     need_web_search=chat_request.search_web,
                     chat_messages_str=messages_to_history_str(
-                        messages[-7:-1], max_length=500
+                        messages[-7:-1], max_length=1000
                     ),
                 )
 
             logger.info(
                 f"{session_id} Finished query transformation: Usage: {base_token_usage}, Need_web_search {new_query_bundle.need_web_search}, Elapsed {time.time() - start}"
             )
+            async for chunk in _make_event_chunk_reponse(
+                session_id=session_id, intent_result=new_query_bundle.intent
+            ):
+                yield chunk
+
+            if new_query_bundle.intent == ChatIntent.LIST_NEWS:
+                news_tool = resolve_news_tool(self.config)
+                response_wrapper = await news_tool.alist_topics()
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
+
+            elif new_query_bundle.intent == ChatIntent.CHAT_NEWS:
+                news_tool = resolve_news_tool(self.config)
+                response_wrapper = await news_tool.astream_chat(
+                    prompt=new_query_bundle.query_str,
+                    # messages=messages[-8:-1],
+                )
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
 
             # Condense question
             new_question = new_query_bundle.query_str
@@ -589,14 +629,11 @@ class RagApplication:
                 # 多轮对话，用新查询检查
                 guardrail_result = await guardrail.acheck(new_question)
                 if guardrail_result.reject:
-                    if chat_request.stream:
-                        return _make_chat_completion_chunk_response_with_text(
-                            session_id, guardrail_result.advice
-                        )
-                    else:
-                        return _make_chat_completion_response_with_text(
-                            session_id, guardrail_result.advice
-                        )
+                    async for chunk in _make_chat_completion_chunk_response_with_text(
+                        session_id, guardrail_result.advice
+                    ):
+                        yield chunk
+                    return
                 passed_guardrail = True
 
             query_bundle = PaiQueryBundle(
@@ -625,27 +662,16 @@ class RagApplication:
                     raise ValueError(
                         "Agent config is not valid. Please check your Agent api configuration."
                     )
-                if chat_request.stream:
-                    response_wrapper = await agent_tool.astream_chat(
-                        message=query_bundle.query_str,
-                    )
-                    return _make_chat_completion_chunk_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                        start_time=start,
-                    )
-                else:
-                    response_wrapper = await agent_tool.achat(
-                        message=query_bundle.query_str,
-                    )
-                    return _make_chat_completion_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                    )
+
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
 
             if chat_request.chat_db:
                 logger.info(f"Querying with question: {query_bundle.query_str}.")
@@ -657,21 +683,15 @@ class RagApplication:
                     )
                 response_wrapper = await data_analysis_query_engine.aquery(query_bundle)
 
-                if chat_request.stream:
-                    return _make_chat_completion_chunk_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=True,
-                        start_time=start,
-                    )
-                else:
-                    return _make_chat_completion_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=True,
-                    )
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
 
             if chat_request.search_web:
                 logger.info(f"Querying with question '{query_bundle.query_str}'.")
@@ -694,21 +714,15 @@ class RagApplication:
                 logger.info(
                     f"{session_id} Finished search web: Elapsed {time.time() - start}"
                 )
-                if chat_request.stream:
-                    return _make_chat_completion_chunk_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                        start_time=start,
-                    )
-                else:
-                    return _make_chat_completion_response(
-                        session_id=session_id,
-                        response_wrapper=response_wrapper,
-                        base_token_usage=base_token_usage,
-                        return_reference=chat_request.return_reference,
-                    )
+                async for chunk in _make_chat_completion_chunk_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                    start_time=start,
+                ):
+                    yield chunk
+                return
 
             if new_question != question:
                 query_bundle.query_str = " ".join([question, new_question])
@@ -727,33 +741,258 @@ class RagApplication:
                 system_role_str=system_prompt,
                 prompt_template_str=" " if system_prompt else None,
             )
+            async for chunk in _make_chat_completion_chunk_response(
+                session_id=session_id,
+                response_wrapper=response_wrapper,
+                base_token_usage=base_token_usage,
+                return_reference=chat_request.return_reference,
+                start_time=start,
+            ):
+                yield chunk
+            return
+        except Exception:
+            logger.error(
+                f"Chat failed for query {chat_request.messages[-1].content} due to {traceback.format_exc()}"
+            )
+            async for chunk in _make_chat_completion_chunk_response_with_text(
+                session_id, DEFAULT_ERROR_RESPONSE
+            ):
+                yield chunk
+
+    async def achat(
+        self,
+        chat_request: ChatCompletionRequest,
+    ):
+        session_id = uuid_generator()
+        base_token_usage = CompletionUsage(
+            completion_tokens=0,
+            prompt_tokens=0,
+            total_tokens=0,
+        )
+
+        start = time.time()
+        if (
+            len(chat_request.messages) == 0
+            or chat_request.messages[-1].content is None
+            or chat_request.messages[-1].content == ""
+        ):
             if chat_request.stream:
-                return _make_chat_completion_chunk_response(
-                    session_id=session_id,
-                    response_wrapper=response_wrapper,
-                    base_token_usage=base_token_usage,
-                    return_reference=chat_request.return_reference,
-                    start_time=start,
+                return _make_chat_completion_chunk_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
                 )
             else:
+                return _make_chat_completion_response_with_text(
+                    session_id, DEFAULT_EMPTY_RESPONSE
+                )
+
+        for i, message in enumerate(chat_request.messages):
+            message.content = re.sub(
+                r"<think>.*?</think>\n*",
+                "",
+                message.content,
+                flags=re.DOTALL,
+            )
+            message.content = message.content.replace("<think>", "").replace(
+                "</think>", ""
+            )
+        if self.config.system.default_web_search:
+            chat_request.search_web = True
+        _switch_control(chat_request)
+
+        try:
+            guardrail = resolve_llm_guardrail(self.config)
+            passed_guardrail = False if guardrail is not None else True
+
+            messages = chat_request.messages
+            system_prompt = None
+            if messages[0].role == MessageRole.SYSTEM:
+                system_prompt = messages[0].content
+                messages = messages[1:]
+
+            if not passed_guardrail:
+                user_messages = [
+                    msg for msg in messages if msg.role == MessageRole.USER
+                ]
+                # 只有一条对话，直接检查
+                if len(user_messages) == 1:
+                    guardrail_result = await guardrail.acheck(user_messages[0].content)
+                    if guardrail_result.reject:
+                        return _make_chat_completion_response_with_text(
+                            session_id, guardrail_result.advice
+                        )
+                    passed_guardrail = True
+
+            if chat_request.chat_llm:
+                logger.info(f"Querying with question: {messages[-1].content}.")
+                llm: PaiLlm = resolve_llm(self.config)
+                response = await llm.achat(messages=messages)
+
+                return _make_chat_completion_response(
+                    session_id=session_id,
+                    response_wrapper=ChatResponseWrapper(response=response),
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                )
+            question = messages[-1].content
+
+            logger.info(
+                f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
+            )
+            openai_query_transform = resolve_openai_query_transform(self.config)
+            if chat_request.chat_db:
+                chat_type = "nl2sql"
+            else:
+                chat_type = "default"
+            if openai_query_transform is not None:
+                new_query_bundle = await openai_query_transform.arun(
+                    chat_messages=messages, chat_type=chat_type
+                )
+                base_token_usage.completion_tokens += new_query_bundle.completion_tokens
+                base_token_usage.prompt_tokens += new_query_bundle.prompt_tokens
+                base_token_usage.total_tokens += new_query_bundle.total_tokens
+            else:
+                new_query_bundle = PaiQueryBundle(
+                    query_str=question,
+                    original_query_str=question,
+                    need_web_search=chat_request.search_web,
+                    chat_messages_str=messages_to_history_str(
+                        messages[-7:-1], max_length=1000
+                    ),
+                )
+
+            logger.info(
+                f"{session_id} Finished query transformation: Usage: {base_token_usage}, Need_web_search {new_query_bundle.need_web_search}, Elapsed {time.time() - start}"
+            )
+
+            if new_query_bundle.intent == ChatIntent.LIST_NEWS:
+                raise NotImplementedError("List news is not implemented yet.")
+            elif new_query_bundle.intent == ChatIntent.CHAT_NEWS:
+                raise NotImplementedError("Chat news is not implemented yet.")
+
+            # Condense question
+            new_question = new_query_bundle.query_str
+            logger.info(f"Transformed question '{new_question}'.")
+
+            if not passed_guardrail:
+                # 多轮对话，用新查询检查
+                guardrail_result = await guardrail.acheck(new_question)
+                if guardrail_result.reject:
+                    return _make_chat_completion_response_with_text(
+                        session_id, guardrail_result.advice
+                    )
+                passed_guardrail = True
+
+            query_bundle = PaiQueryBundle(
+                query_str=new_question,
+                original_query_str=question,
+                stream=chat_request.stream,
+                citation=chat_request.citation,
+                need_web_search=new_query_bundle.need_web_search,
+                chat_messages_str=new_query_bundle.chat_messages_str,
+            )
+
+            if chat_request.force_no_search:
+                chat_request.search_web = True
+                query_bundle.need_web_search = False
+            elif chat_request.force_search_web:
+                chat_request.search_web = True
+                query_bundle.need_web_search = True
+            elif chat_request.force_search_knowledgebase:
+                chat_request.search_web = False
+
+            if chat_request.chat_agent:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                agent_tool = resolve_agent(self.config)
+                if not agent_tool:
+                    raise ValueError(
+                        "Agent config is not valid. Please check your Agent api configuration."
+                    )
+                response_wrapper = await agent_tool.achat(
+                    message=query_bundle.query_str,
+                )
                 return _make_chat_completion_response(
                     session_id=session_id,
                     response_wrapper=response_wrapper,
                     base_token_usage=base_token_usage,
                     return_reference=chat_request.return_reference,
                 )
+
+            if chat_request.chat_db:
+                logger.info(f"Querying with question: {query_bundle.query_str}.")
+
+                data_analysis_query_engine = resolve_data_analysis_query(self.config)
+                if not data_analysis_query_engine:
+                    raise ValueError(
+                        "DBChat config is not valid. Please check your DBChat api configuration."
+                    )
+                response_wrapper = await data_analysis_query_engine.aquery(query_bundle)
+
+                return _make_chat_completion_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=True,
+                )
+
+            if chat_request.search_web:
+                logger.info(f"Querying with question '{query_bundle.query_str}'.")
+
+                logger.info(
+                    f"{session_id} Starting search web: Elapsed {time.time() - start}"
+                )
+
+                search_engine = resolve_searcher(self.config)
+                if not search_engine:
+                    raise ValueError(
+                        "AI search config is not valid. Please check your search api configuration."
+                    )
+
+                response_wrapper = await search_engine.aquery(
+                    query_bundle,
+                    system_role_str=system_prompt,
+                    prompt_template_str=" " if system_prompt else None,
+                )
+                logger.info(
+                    f"{session_id} Finished search web: Elapsed {time.time() - start}"
+                )
+                return _make_chat_completion_response(
+                    session_id=session_id,
+                    response_wrapper=response_wrapper,
+                    base_token_usage=base_token_usage,
+                    return_reference=chat_request.return_reference,
+                )
+
+            if new_question != question:
+                query_bundle.query_str = " ".join([question, new_question])
+
+            logger.info(f"Querying with question '{query_bundle.query_str}'.")
+
+            session_config = self.config.model_copy()
+            knowledgebase = knowledgebase_manager.get_knowledgebase(
+                chat_request.index_name
+            )
+            session_config.embedding = knowledgebase.embedding_config
+            session_config.index.vector_store = knowledgebase.vector_store_config
+            query_engine = resolve_query_engine(session_config)
+            response_wrapper = await query_engine.aquery(
+                query_bundle,
+                system_role_str=system_prompt,
+                prompt_template_str=" " if system_prompt else None,
+            )
+            return _make_chat_completion_response(
+                session_id=session_id,
+                response_wrapper=response_wrapper,
+                base_token_usage=base_token_usage,
+                return_reference=chat_request.return_reference,
+            )
         except Exception:
             logger.error(
                 f"Chat failed for query {chat_request.messages[-1].content} due to {traceback.format_exc()}"
             )
-            if chat_request.stream:
-                return _make_chat_completion_chunk_response_with_text(
-                    session_id, DEFAULT_ERROR_RESPONSE
-                )
-            else:
-                return _make_chat_completion_response_with_text(
-                    session_id, DEFAULT_ERROR_RESPONSE
-                )
+            return _make_chat_completion_response_with_text(
+                session_id, DEFAULT_ERROR_RESPONSE
+            )
 
     async def aquery(
         self,
@@ -809,7 +1048,7 @@ class RagApplication:
                 original_query_str=question,
                 need_web_search=need_web_search,
                 chat_messages_str=messages_to_history_str(
-                    query.messages[:-1], max_length=500
+                    query.messages[:-1], max_length=1000
                 ),
             )
 
@@ -972,7 +1211,7 @@ class RagApplication:
         if new_query_bundle and new_query_bundle.query_str:
             msg = new_query_bundle.query_str
         else:
-            msg = messages_to_history_str(query.messages, max_length=600)
+            msg = messages_to_history_str(query.messages, max_length=1000)
 
         if query.stream:
             response = await agent.astream_chat(message=msg)
