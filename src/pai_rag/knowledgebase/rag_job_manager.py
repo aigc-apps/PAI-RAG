@@ -261,7 +261,7 @@ class JobManager:
             # 去重复，不让同一个文件同时处理（短时间上传多次同时处理会出现冲突）
             current_running_files = set()
 
-            while not stop_event.is_set:
+            while not stop_event.is_set():
                 try:
                     if len(running_tasks) >= max_concurrent_task:
                         logger.info(
