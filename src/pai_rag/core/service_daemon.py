@@ -72,7 +72,7 @@ async def watch_knowledgebase_changes():
         recursive=True,
         debounce=5000,
         force_polling=True,
-        poll_delay_ms=1000,
+        poll_delay_ms=2000,
     ):
         # change_type: 1 add, 2 modified, 3 delete.
         for change_type, file_path in changes:
@@ -82,7 +82,9 @@ async def watch_knowledgebase_changes():
                     file_path, is_delete=is_delete
                 )
             except Exception:
-                logger.error(f"Error when watching knowledgebase changes: {file_path}")
+                logger.error(
+                    f"Error when watching knowledgebase changes: {file_path}. Details:{traceback.format_exc()}"
+                )
                 continue
             if knowledgebase and len(change_docs) > 0:
                 file_changes = [
@@ -90,6 +92,7 @@ async def watch_knowledgebase_changes():
                         task_id=doc.doc_id,
                         operation=change_type,
                         file_name=doc.file_name,
+                        file_hash=doc.file_hash,
                         knowledgebase=knowledgebase,
                     )
                     for doc in change_docs

@@ -39,9 +39,7 @@ async def postprocess_middleware_to_filebrower(session, request, url):
 
 async def postprocess_middleware(request, call_next):
     logger.debug(f"request_path: {request.url.path} , method: {request.method}")
-    if "/filebrowser" in request.url.path and not request.url.path.endswith(
-        ".DS_Store"
-    ):
+    if "/filebrowser" in request.url.path:
         url = request.url.replace(
             scheme="http", hostname="localhost", port=DEFAULT_FILE_BROWER_PORT
         )

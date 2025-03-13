@@ -77,9 +77,7 @@ class FileTaskExecutor:
             for doc in docs:
                 doc.id_ = task.task_id
 
-            RagKnowledgeBaseHelper.save_parse_files(
-                knowledgebase.knowledgebase_paths, docs
-            )
+            RagKnowledgeBaseHelper.save_parse_files(knowledgebase.name, docs)
             logger.info(f"Parse file successfully for {task.file_name}")
         except Exception as ex:
             logger.error(
@@ -91,9 +89,7 @@ class FileTaskExecutor:
         yield FileProcessResult(status=FileProcessStatus.Chunking, message=None)
         try:
             chunks = self.node_parser(docs)
-            RagKnowledgeBaseHelper.save_chunk_nodes(
-                knowledgebase.knowledgebase_paths, chunks, "split"
-            )
+            RagKnowledgeBaseHelper.save_chunk_nodes(knowledgebase.name, chunks, "split")
             logger.info(f"Chunk nodes successfully for file {task.file_name}")
         except Exception as ex:
             logger.error(
@@ -106,7 +102,7 @@ class FileTaskExecutor:
         try:
             embedded_nodes = self.embed_model(chunks)
             RagKnowledgeBaseHelper.save_chunk_nodes(
-                knowledgebase.knowledgebase_paths, embedded_nodes, "embed"
+                knowledgebase.name, embedded_nodes, "embed"
             )
             logger.info(f"Get nodes embedding successfully for file {task.file_name}")
         except Exception as ex:
