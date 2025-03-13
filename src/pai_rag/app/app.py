@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(startup_event())
     yield
     logger.info("Gracefully exit. Exiting background thread...")
+    stop_event.set()
     background_thread.join()
 
     logger.info("Application shutting down...")
