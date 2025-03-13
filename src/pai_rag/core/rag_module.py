@@ -4,7 +4,6 @@ from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
 from pai_rag.integrations.data_analysis.data_analysis_tool import (
@@ -18,7 +17,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 # cnclip import should come before others. otherwise will segment fault.
 from pai_rag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PaiPostProcessor
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
@@ -26,8 +24,6 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
-from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
-from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.router.pai.pai_router import (
     PaiIntentRouter,
 )
@@ -38,8 +34,6 @@ from pai_rag.integrations.search.google_search import GoogleSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
-from pai_rag.utils.oss_client import OssClient
-from pai_rag.utils.image_caption_utils import ImageCaptionTool
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,
@@ -78,54 +72,6 @@ def resolve_intent_router(config: RagConfig) -> PaiIntentRouter:
     llm = resolve(cls=PaiLlm, llm_config=config.llm)
     intent_router = resolve(cls=PaiIntentRouter, intent_config=config.intent, llm=llm)
     return intent_router
-
-
-def resolve_task_executor(
-    config: RagConfig, knowledgebase: KnowledgeBase
-) -> FileTaskExecutor:
-    oss_store = None
-    if config.oss_store.bucket:
-        oss_store = resolve(
-            cls=OssClient,
-            bucket_name=config.oss_store.bucket,
-            endpoint=config.oss_store.endpoint,
-        )
-
-    multimodal_llm = resolve(cls=PaiMultiModalLlm, llm_config=config.multimodal_llm)
-
-    caption_tool = None
-    if multimodal_llm is not None:
-        caption_tool = resolve(
-            cls=ImageCaptionTool,
-            multimodal_llm=multimodal_llm,
-        )
-
-    data_reader = resolve(
-        cls=PaiDataReader,
-        reader_config=config.data_reader,
-        oss_store=oss_store,
-    )
-
-    node_parser = resolve(
-        cls=PaiNodeParser, parser_config=config.node_parser, caption_tool=caption_tool
-    )
-
-    embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
-
-    vector_index = resolve(
-        cls=PaiVectorStoreIndex,
-        vector_store_config=knowledgebase.vector_store_config,
-        embed_model=embed_model,
-        enable_local_keyword_index=True,
-    )
-
-    return resolve(
-        cls=FileTaskExecutor,
-        node_parser=node_parser,
-        embed_model=embed_model,
-        vector_index=vector_index,
-        data_reader=data_reader,
-    )
 
 
 def resolve_agent(config: RagConfig) -> PaiAgent:

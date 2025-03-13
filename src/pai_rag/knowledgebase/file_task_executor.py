@@ -1,6 +1,8 @@
 from typing import Generator, Tuple
+from pai_rag.core.rag_config import RagConfig
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.knowledgebase.models import (
@@ -12,22 +14,46 @@ from pai_rag.knowledgebase.models import (
 import traceback
 from loguru import logger
 
-from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
+from pai_rag.utils.image_caption_utils import ImageCaptionTool
+from pai_rag.utils.oss_client import OssClient
 
 
 class FileTaskExecutor:
-    def __init__(
-        self,
-        data_reader: PaiDataReader,
-        node_parser: PaiNodeParser,
-        embed_model: PaiEmbedding,
-        vector_index: PaiVectorStoreIndex,
-    ):
-        self.data_reader = data_reader
-        self.node_parser = node_parser
-        self.embed_model = embed_model
-        self.vector_index = vector_index
+    def __init__(self, knowledgebase: KnowledgeBase, config: RagConfig):
+        oss_store = None
+        if config.oss_store.bucket:
+            oss_store = OssClient(
+                bucket_name=config.oss_store.bucket,
+                endpoint=config.oss_store.endpoint,
+            )
+
+        multimodal_llm = PaiMultiModalLlm(llm_config=config.multimodal_llm)
+
+        caption_tool = None
+        if multimodal_llm is not None:
+            caption_tool = ImageCaptionTool(
+                multimodal_llm=multimodal_llm,
+            )
+
+        self.data_reader = PaiDataReader(
+            reader_config=config.data_reader,
+            oss_store=oss_store,
+        )
+
+        self.node_parser = PaiNodeParser(
+            parser_config=config.node_parser, caption_tool=caption_tool
+        )
+
+        self.embed_model = PaiEmbedding(embed_config=knowledgebase.embedding_config)
+
+        self.vector_index = PaiVectorStoreIndex(
+            cls=PaiVectorStoreIndex,
+            vector_store_config=knowledgebase.vector_store_config,
+            embed_model=self.embed_model,
+            enable_local_keyword_index=True,
+        )
 
     def _update(self, task: FileItem) -> Generator[FileProcessResult, None, None]:
         try:

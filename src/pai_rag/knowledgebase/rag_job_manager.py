@@ -6,7 +6,7 @@ import time
 from typing import Dict, List, OrderedDict, Tuple
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_module import resolve_task_executor
+from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.knowledgebase.models import (
     FileChange,
@@ -146,10 +146,6 @@ class JobManager:
     def update_config(self, new_config: RagConfig):
         self.rag_config = new_config
 
-    def _get_task_executor(self, knowledgebase_name):
-        knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
-        return resolve_task_executor(self.rag_config, knowledgebase)
-
     def _remove_file_prefix(self, knowledgebase_name: str, file_path: str):
         common_prefix = (
             "/" + DEFAULT_KNOWLEDGEBASE_PATH + f"/{knowledgebase_name}/docs/"
@@ -243,6 +239,14 @@ class JobManager:
         with self._lock:
             self.persist_task_status()
 
+    def _execute_task(
+        self,
+        file_item: FileItem,
+    ):
+        knowledgebase = knowledgebase_manager.get_knowledgebase(file_item.knowledgebase)
+        executor = FileTaskExecutor(knowledgebase, self.rag_config)
+        return executor.run_once(file_item)
+
     def execute_job_with_workers(
         self, stop_event: threading.Event = None, worker_num=1
     ):
@@ -332,8 +336,7 @@ class JobManager:
                     logger.info(
                         f"开始处理: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库: {file_item.knowledgebase} operation{file_item.operation}."
                     )
-                    task_executor = self._get_task_executor(file_item.knowledgebase)
-                    new_task = pool.submit(task_executor.run_once, file_item)  # 不支持流式返回
+                    new_task = pool.submit(self._execute_task, file_item)  # 不支持流式返回
                     self._job_status.task_statuses[file_item.knowledgebase].task_map[
                         file_item.file_name
                     ].status = FileProcessStatus.Processing
@@ -344,85 +347,6 @@ class JobManager:
                     pass
 
         logger.info("Exiting background job")
-
-    def execute_job(self):
-        try:
-            asyncio.get_event_loop()
-        except Exception as ex:
-            logger.warning(f"No event loop found, will create new: {ex}")
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-
-        while True:
-            if self.rag_config is None:
-                logger.debug("任务队列准备中...")
-                time.sleep(2)
-                continue
-            file_item: FileItem = self._task_queue.get()
-            if file_item is None:
-                logger.debug("后台任务队列为空。sleeping...")
-                time.sleep(5)  # 后续还是要做成异步？
-                continue
-
-            try:
-                logger.info(
-                    f"开始处理: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库: {file_item.knowledgebase} operation{file_item.operation}."
-                )
-                executor = self._get_task_executor(file_item.knowledgebase)
-                for resp in executor.run(file_item):
-                    self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.file_name
-                    ].status = resp.status
-                    self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.file_name
-                    ].failed_reason = resp.message
-                    self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                        file_item.file_name
-                    ].last_modified_time = get_current_time_str()
-
-                if (
-                    self._job_status.task_statuses[file_item.knowledgebase]
-                    .task_map[file_item.file_name]
-                    .status
-                    == FileProcessStatus.Done
-                ):
-                    if file_item.operation == FileOperationType.DELETE:
-                        knowledgebase_manager.delete_doc_from_knowledgebase(
-                            file_item.knowledgebase, file_item.file_name
-                        )
-                    else:
-                        knowledgebase_manager.add_doc_to_knowledgebase(
-                            knowledgebase_name=file_item.knowledgebase,
-                            doc_id=file_item.task_id,
-                            file_name=file_item.file_name,
-                            last_modified_time=self._job_status.task_statuses[
-                                file_item.knowledgebase
-                            ]
-                            .task_map[file_item.file_name]
-                            .last_modified_time,
-                        )
-
-                logger.info(
-                    f"处理完成: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库:{file_item.knowledgebase}."
-                )
-                with self._lock:
-                    self.persist_task_status()
-
-            except Exception as ex:
-                logger.error(
-                    f"后台任务队列处理 '{file_item.file_name}' 出错: {traceback.format_exc()}"
-                )
-                self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.file_name
-                ].status = FileProcessStatus.Failed
-                self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.file_name
-                ].failed_reason = str(ex)
-                self._job_status.task_statuses[file_item.knowledgebase].task_map[
-                    file_item.file_name
-                ].last_modified_time = get_current_time_str()
-                with self._lock:
-                    self.persist_task_status()
 
 
 job_manager = JobManager()
