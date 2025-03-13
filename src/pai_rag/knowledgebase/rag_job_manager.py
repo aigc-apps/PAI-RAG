@@ -109,6 +109,12 @@ class TimeDebouncedTaskQueue:
             return None
 
 
+def execute_task(task: FileItem, rag_config: RagConfig):
+    knowledgebase = knowledgebase_manager.get_knowledgebase(task.knowledgebase)
+    executor = FileTaskExecutor(knowledgebase, rag_config)
+    return executor.run_once(task)
+
+
 class JobManager:
     def __init__(
         self, task_file=DEFAULT_TASK_FILE, rag_config: RagConfig | None = None
@@ -239,14 +245,6 @@ class JobManager:
         with self._lock:
             self.persist_task_status()
 
-    def _execute_task(
-        self,
-        file_item: FileItem,
-    ):
-        knowledgebase = knowledgebase_manager.get_knowledgebase(file_item.knowledgebase)
-        executor = FileTaskExecutor(knowledgebase, self.rag_config)
-        return executor.run_once(file_item)
-
     def execute_job_with_workers(
         self, stop_event: threading.Event = None, worker_num=1
     ):
@@ -336,7 +334,9 @@ class JobManager:
                     logger.info(
                         f"开始处理: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库: {file_item.knowledgebase} operation{file_item.operation}."
                     )
-                    new_task = pool.submit(self._execute_task, file_item)  # 不支持流式返回
+                    new_task = pool.submit(
+                        execute_task, file_item, self.rag_config
+                    )  # 不支持流式返回
                     self._job_status.task_statuses[file_item.knowledgebase].task_map[
                         file_item.file_name
                     ].status = FileProcessStatus.Processing
