@@ -276,7 +276,7 @@ class JobManager:
                         # 队列空，清空所有运行中任务
                         if len(running_tasks) > 0:
                             completed_tasks, processing_tasks = wait(
-                                running_tasks, ALL_COMPLETED
+                                running_tasks, return_when=ALL_COMPLETED
                             )
                             running_tasks = list(processing_tasks)
                             for complete in completed_tasks:
