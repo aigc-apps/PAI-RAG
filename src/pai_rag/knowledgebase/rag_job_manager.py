@@ -68,7 +68,9 @@ class TimeDebouncedTaskQueue:
         if old_item2 is not None and old_item2.timestamp + self.time_window > cur_time:
             logger.info(f"Merge file changes for {item_key2}.")
             self.task_queue.pop(item_key2)
+            self.task_queue[item_key2] = item
             merged = True
+            return merged
 
         old_item = self.task_queue.get(item_key)
         if old_item is not None and old_item.timestamp + self.time_window > cur_time:
@@ -205,9 +207,25 @@ class JobManager:
                     task_id=file_change.task_id,
                     knowledgebase=file_change.knowledgebase,
                     file_name=file_change.file_name,
+                    file_content=file_change.file_content,
                     operation=file_change.operation,
                     status=FileProcessStatus.PENDING,
                 )
+                if (
+                    file_item.file_name
+                    in self._job_status.task_statuses[
+                        file_change.knowledgebase
+                    ].task_map
+                ):
+                    file_task = self._job_status.task_statuses[
+                        file_change.knowledgebase
+                    ].task_map[file_item.file_name]
+                    if file_task.operation == 1 and file_task.status == "pending":
+                        logger.debug(
+                            f"File_item {file_item.file_name} is already existed in task_map with ADD pending."
+                        )
+                        file_item.operation = FileOperationType.ADD
+                        logger.debug(f"Update file_item operation: {file_item}")
                 self._task_queue.put(file_item)
                 self._job_status.task_statuses[file_change.knowledgebase].task_map[
                     file_item.file_name
@@ -264,6 +282,7 @@ class JobManager:
                             knowledgebase_name=file_item.knowledgebase,
                             doc_id=file_item.task_id,
                             file_name=file_item.file_name,
+                            file_content=file_item.file_content,
                             last_modified_time=self._job_status.task_statuses[
                                 file_item.knowledgebase
                             ]

@@ -37,7 +37,6 @@ class RagKnowledgeBaseHelper:
             os.makedirs(knowledgebase_paths["base_path"], exist_ok=True)
             os.makedirs(knowledgebase_paths["docs_path"], exist_ok=True)
             os.makedirs(knowledgebase_paths["index_path"], exist_ok=True)
-            os.makedirs(knowledgebase_paths["logs_path"], exist_ok=True)
             logger.info(f"知识库目录 {knowledgebase_paths['base_path']} 及其子目录已成功创建或已存在。")
         except Exception as e:
             logger.error(f"创建目录knowledgebase_paths:{knowledgebase_paths}时发生错误: {e} ")
