@@ -176,14 +176,6 @@ def create_setting_tab() -> Dict[str, Any]:
 
             # 新增/编辑配置区域
             with gr.Row(visible=False) as config_row:
-                llm_base_url = gr.Textbox(
-                    label="API Base URL",
-                    placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
-                    interactive=True,
-                )
-                llm_api_key = gr.Textbox(
-                    label="API Key", type="password", interactive=True
-                )
                 llm_model_name = gr.Textbox(
                     label="Model Name",
                     placeholder="Model Name, e.g. qwen-max",
@@ -192,6 +184,14 @@ def create_setting_tab() -> Dict[str, Any]:
                 llm_model_id = gr.Textbox(
                     label="Model ID",
                     placeholder="Model ID, e.g. model_1",
+                    interactive=True,
+                )
+                llm_api_key = gr.Textbox(
+                    label="API Key", type="password", interactive=True
+                )
+                llm_base_url = gr.Textbox(
+                    label="API Base URL",
+                    placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
                     interactive=True,
                 )
                 llm_vision_support = gr.Checkbox(
