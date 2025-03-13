@@ -3,6 +3,7 @@ import os
 from typing import Any, List
 from pai_rag.app.web.index_utils import components_to_index, index_to_components
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
+from pai_rag.core.rag_service import rag_service
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 import datetime
@@ -18,6 +19,9 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 )
 from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGE_PATH
+from pai_rag.integrations.llms.pai.llm_config import (
+    PaiBaseLlmConfig,
+)
 from loguru import logger
 
 
@@ -53,6 +57,117 @@ def update_index(*components):
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True),
+        gr.update(visible=False),
+    ]
+
+
+def update_llms(selected_model):
+    rag_config = rag_client.get_config()
+    is_new = selected_model == "NEW"
+
+    # Extract the relevant LLM configuration based on the selected model
+    llm_config = next(
+        (
+            llm
+            for llm in rag_config.llms
+            if llm.model_id == selected_model
+            or (not llm.model_id and llm.model == selected_model)
+        ),
+        None,
+    )
+
+    initial_values = {
+        "base_url": llm_config.base_url if llm_config else "",
+        "api_key": llm_config.api_key if llm_config else "",
+        "model_name": llm_config.model if llm_config and not is_new else "",
+        "model_id": llm_config.model_id if llm_config else "",
+        "vision_support": llm_config.vision_support if llm_config else False,
+    }
+
+    # Update UI components based on the configuration
+    return [
+        gr.update(visible=True),
+        gr.update(visible=not is_new),
+        gr.update(value=initial_values["base_url"]),
+        gr.update(value=initial_values["api_key"]),
+        gr.update(value=initial_values["model_name"]),
+        gr.update(value=initial_values["model_id"]),
+        gr.update(value=initial_values["vision_support"]),
+    ]
+
+
+def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
+    rag_config = rag_client.get_config()
+    if not all([base_url, api_key, model_name]):
+        raise gr.Error("please fill in all fields")
+
+    existing_model = next(
+        (
+            llm
+            for llm in rag_config.llms
+            if llm.model_id == model_id or (not llm.model_id and llm.model == model_id)
+        ),
+        None,
+    )
+
+    if existing_model:
+        existing_model.base_url = base_url
+        existing_model.api_key = api_key
+        existing_model.model = model_name
+        existing_model.model_id = model_id
+        existing_model.vision_support = vision_support
+    else:
+        new_llm_config = {
+            "source": "openai_compatible",
+            "model_id": model_id,
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model_name,
+            "vision_support": vision_support,
+        }
+        new_llm = PaiBaseLlmConfig(**new_llm_config)
+
+        rag_config.llms.append(new_llm)
+        config = rag_service.get_config()
+        update_dict = {}
+        config["llms"].append(new_llm_config)
+        update_dict["llms"] = config["llms"]
+        rag_client.patch_config(update_dict)
+
+    new_choices = ["NEW"] + [
+        llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+    ]
+    return [
+        gr.update(choices=new_choices, value=model_id or model_name),
+        gr.update(visible=True),
+    ]
+
+
+def delete_llm(selected_model):
+    rag_config = rag_client.get_config()
+    # Find the LLM configuration by model_id
+    rag_config.llms = [
+        llm
+        for llm in rag_config.llms
+        if llm.model != selected_model and llm.model_id != selected_model
+    ]
+
+    config = rag_service.get_config()
+    update_dict = {}
+    update_dict["llms"] = [
+        config_llm
+        for config_llm in config["llms"]
+        if config_llm.get("model") != selected_model
+        and config_llm.get("model_id") != selected_model
+    ]
+    rag_client.patch_config(update_dict)
+
+    new_choices = ["NEW"] + [
+        llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+    ]
+    return [
+        gr.update(choices=new_choices, value="NEW"),
+        gr.update(visible=False),
         gr.update(visible=False),
     ]
 

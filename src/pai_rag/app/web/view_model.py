@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Dict
+from typing import Any, Dict, List
 from collections import defaultdict
 import pandas as pd
 import os
@@ -19,6 +19,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
     DashScopeLlmConfig,
     PaiEasLlmConfig,
     SupportedLlmType,
+    PaiBaseLlmConfig,
 )
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
@@ -177,6 +178,9 @@ class ViewModel(BaseModel):
     guardrail_region: str = None
     enable_guardrail: bool = False
 
+    # llms
+    llms: List[PaiBaseLlmConfig] = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -208,6 +212,8 @@ class ViewModel(BaseModel):
             )
 
         view_model.llm_temperature = config.llm.temperature
+
+        view_model.llms = config.llms
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
@@ -533,6 +539,8 @@ class ViewModel(BaseModel):
         config["agent"]["function_definition"] = self.agent_function_definition
         config["agent"]["api_definition"] = self.agent_api_definition
 
+        config["llms"] = self.llms
+
         return _transform_to_dict(config)
 
     def get_local_generated_qa_file(self):
@@ -813,6 +821,11 @@ class ViewModel(BaseModel):
         settings["guardrail_endpoint"] = {"value": self.guardrail_endpoint}
         settings["guardrail_ak"] = {"value": self.guardrail_ak}
         settings["guardrail_sk"] = {"value": self.guardrail_sk}
+        settings["llm_model"] = {
+            "choices": ["NEW"]
+            + [llm.model_id if llm.model_id else llm.model for llm in self.llms],
+            "value": "NEW",
+        }
 
         # print("view model settings:", settings)
 

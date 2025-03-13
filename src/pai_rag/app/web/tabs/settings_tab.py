@@ -5,6 +5,7 @@ from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
 import pai_rag.app.web.event_listeners as ev_listeners
+from pai_rag.app.web.rag_local_client import rag_client
 
 
 def create_setting_tab() -> Dict[str, Any]:
@@ -149,57 +150,90 @@ def create_setting_tab() -> Dict[str, Any]:
             )
             """
 
+        ############################ llms settings start ############################
+        rag_config = rag_client.get_config()
         with gr.Column(variant="panel"):
-            with gr.Column(variant="panel"):
-                _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **Large Language Model**")
-                with gr.Row():
-                    llm_base_url = gr.Textbox(
-                        label="LLM Base URL",
-                        elem_id="llm_base_url",
-                        interactive=True,
-                        placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
-                    )
-                    llm_api_key = gr.Textbox(
-                        label="API Key",
-                        elem_id="llm_api_key",
-                        type="password",
-                        interactive=True,
-                    )
-                    llm_model_name = gr.Textbox(
-                        label="Model Name",
-                        elem_id="llm_model_name",
-                        placeholder="Model Name, e.g. qwen-max, gpt-4",
-                        interactive=True,
-                    )
+            # 模型选择区域
+            model_choices = ["NEW"] + [
+                llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+            ]
 
-            with gr.Column(variant="panel"):
-                _ = gr.Markdown(
-                    value="\N{WHITE MEDIUM STAR} **(Optional) Multi-Modal Large Language Model**"
+            with gr.Row():
+                llm_model = gr.Dropdown(
+                    label="LLM Settings",
+                    choices=model_choices,
+                    value="NEW"
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else model_choices[1],
+                    interactive=True,
+                    elem_id="llm_model",
+                    allow_custom_value=False,
                 )
-                use_mllm = gr.Checkbox(
-                    label="Use Multi-Modal LLM",
-                    elem_id="use_mllm",
+
+                delete_btn = gr.Button(
+                    "DELETE", visible=bool(rag_config.llms), variant="primary"
+                )
+
+            # 新增/编辑配置区域
+            with gr.Row(visible=False) as config_row:
+                llm_base_url = gr.Textbox(
+                    label="API Base URL",
+                    placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
+                    interactive=True,
+                )
+                llm_api_key = gr.Textbox(
+                    label="API Key", type="password", interactive=True
+                )
+                llm_model_name = gr.Textbox(
+                    label="Model Name",
+                    placeholder="Model Name, e.g. qwen-max",
+                    interactive=True,
+                )
+                llm_model_id = gr.Textbox(
+                    label="Model ID",
+                    placeholder="Model ID, e.g. model_1",
+                    interactive=True,
+                )
+                llm_vision_support = gr.Checkbox(
+                    label="Vision Support",
+                    elem_id="vision_support",
                     container=False,
                 )
-                with gr.Row(visible=False, elem_id="use_mllm_col") as use_mllm_col:
-                    mllm_base_url = gr.Textbox(
-                        label="Multimodal-LLM Base URL",
-                        elem_id="mllm_base_url",
-                        interactive=True,
-                        placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
-                    )
-                    mllm_api_key = gr.Textbox(
-                        label="API Key",
-                        elem_id="mllm_api_key",
-                        type="password",
-                        interactive=True,
-                    )
-                    mllm_model_name = gr.Textbox(
-                        label="Multimodal-LLM Model Name",
-                        elem_id="mllm_model_name",
-                        interactive=True,
-                        placeholder="Model Name, e.g. qwen-vl-max",
-                    )
+            save_btn = gr.Button("Save LLM Setting", variant="primary")
+
+            llm_model.change(
+                fn=ev_listeners.update_llms,
+                inputs=llm_model,
+                outputs=[
+                    config_row,
+                    delete_btn,
+                    llm_base_url,
+                    llm_api_key,
+                    llm_model_name,
+                    llm_model_id,
+                    llm_vision_support,
+                ],
+            )
+
+            save_btn.click(
+                fn=ev_listeners.save_new_llm,
+                inputs=[
+                    llm_model_name,
+                    llm_base_url,
+                    llm_api_key,
+                    llm_model_id,
+                    llm_vision_support,
+                ],
+                outputs=[llm_model, delete_btn],
+            )
+
+            delete_btn.click(
+                fn=ev_listeners.delete_llm,
+                inputs=llm_model,
+                outputs=[llm_model, config_row, delete_btn],
+            )
+            ############################ llms settings end  ############################
+
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
                     value="\N{WHITE MEDIUM STAR} **(Optional, for saving image & load data) OSS Bucket**"
@@ -270,14 +304,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     outputs=guardrail_col,
                 )
 
-            llm_components = [
-                llm_base_url,
-                llm_model_name,
-                llm_api_key,
-                use_mllm,
-                mllm_base_url,
-                mllm_model_name,
-                mllm_api_key,
+            oss_components = [
                 use_oss,
                 oss_ak,
                 oss_sk,
@@ -289,30 +316,26 @@ def create_setting_tab() -> Dict[str, Any]:
                 guardrail_endpoint,
             ]
 
-            components.extend(llm_components)
+            components.extend(oss_components)
+            components.append(llm_model)
 
-            use_mllm.input(
-                fn=ev_listeners.choose_use_mllm,
-                inputs=use_mllm,
-                outputs=[use_mllm_col],
-            )
+            # use_mllm.input(
+            #     fn=ev_listeners.choose_use_mllm,
+            #     inputs=use_mllm,
+            #     outputs=[use_mllm_col],
+            # )
 
-            save_btn = gr.Button("Save Llm Setting", variant="primary")
+            save_oss_btn = gr.Button("Save OSS Setting", variant="primary")
             save_state = gr.Textbox(
                 label="Connection Info: ", container=False, visible=False
             )
-            save_btn.click(
+            save_oss_btn.click(
                 fn=ev_listeners.save_config,
-                inputs=set(llm_components),
+                inputs=set(oss_components),
                 outputs=[oss_ak, oss_sk, save_state],
                 api_name="save_config",
             )
     elems = components_to_dict(components)
     elems.update(vector_db_components)
-    elems.update(
-        {
-            use_oss_col.elem_id: use_oss_col,
-            use_mllm_col.elem_id: use_mllm_col,
-        }
-    )
+    elems.update({use_oss_col.elem_id: use_oss_col})
     return elems

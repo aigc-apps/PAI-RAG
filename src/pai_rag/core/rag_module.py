@@ -78,7 +78,6 @@ def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
                     return llm
     if len(llms) == 0:
         return None
-    Settings.llm = llms[0]
     return llms[0]
 
 
@@ -267,7 +266,6 @@ def resolve_openai_query_transform(
 
 def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesizer:
     llm = resolve_chat_llm(config, model_id)
-    Settings.llm = llm
     multimodal_llm = None
     multimodal_llm = resolve_multimodal_llm(config)
 

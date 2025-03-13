@@ -49,6 +49,9 @@ def validate_case_insensitive(value: Dict) -> Dict:
     if value is None:
         return value
 
+    if isinstance(value, PaiBaseLlmConfig):
+        value = value.model_dump()
+
     keys = ["type", "source", "reranker_type"]
     for key in keys:
         if key in value:
