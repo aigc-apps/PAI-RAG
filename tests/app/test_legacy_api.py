@@ -6,7 +6,6 @@ from httpx import ASGITransport, AsyncClient
 from fastapi.testclient import TestClient
 import time
 from dotenv import load_dotenv
-from pai_rag.app.app import app
 
 
 # 加载 .env 文件
@@ -21,6 +20,7 @@ if (
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
+from pai_rag.app.app import app
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -49,7 +49,7 @@ def upload_file(input_files, index_name="default"):
         task_status = "pending"
 
         for file_name in file_names_added:
-            while True and i < 40:
+            while True and i < 200:
                 response = client.get(
                     f"/api/v1/knowledgebases/{index_name}/files/{file_name}",
                 )
@@ -122,11 +122,9 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
+    upload_file(["tests/testdata/data/md_data/pai_document.md"], index_name="default")
     upload_file(
-        ["tests/testdata/data/md_data/pai_document.md"], index_name="test_index"
-    )
-    upload_file(
-        ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="default"
+        ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
 
 
@@ -166,7 +164,7 @@ async def test_legacy_query():
                         "content": "What are the first programs the author write?",
                     }
                 ],
-                "index_name": "default",
+                "index_name": "test_index",
                 "search_web": False,
                 "stream": False,
             },
@@ -187,7 +185,7 @@ async def test_legacy_query_stream():
             "api/v1/query",
             json={
                 "messages": [{"role": "user", "content": "中国的首都是哪里？"}],
-                "index_name": "default",
+                "index_name": "test_index",
                 "search_web": False,
                 "stream": True,
             },
@@ -217,7 +215,7 @@ async def test_legacy_query_stream():
                         "content": "What are the first programs the author write?",
                     }
                 ],
-                "index_name": "default",
+                "index_name": "test_index",
                 "search_web": False,
                 "stream": True,
             },
@@ -437,6 +435,7 @@ async def test_legacy_query_chat():
                         "content": "Where do you recommend for a good trip to China?",
                     }
                 ],
+                "index_name": "test_index",
                 "stream": True,
                 "return_reference": True,
             },
@@ -468,6 +467,7 @@ async def test_legacy_query_chat():
                         "content": "What are the first programs the author write?",
                     }
                 ],
+                "index_name": "test_index",
                 "stream": True,
                 "return_reference": True,
             },
@@ -501,7 +501,7 @@ async def test_legacy_query_chat():
                 ],
                 "stream": True,
                 "return_reference": True,
-                "index_name": "test_index",  # change to test_index
+                "index_name": "default",  # change to default
             },
         )
     assert response.status_code == 200
