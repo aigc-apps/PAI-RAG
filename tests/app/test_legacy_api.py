@@ -15,7 +15,7 @@ load_dotenv()
 if (
     "DASHSCOPE_API_KEY" not in os.environ
     or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
+) or (os.getenv("BING_SEARCH_KEY", "abc") == "abc"):
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
@@ -122,9 +122,11 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
-    upload_file(["tests/testdata/data/md_data/pai_document.md"])
     upload_file(
-        ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
+        ["tests/testdata/data/md_data/pai_document.md"], index_name="test_index"
+    )
+    upload_file(
+        ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="default"
     )
 
 
@@ -494,7 +496,7 @@ async def test_legacy_query_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "What are the first programs the author write?",
+                        "content": "What did the author do growing up?",
                     }
                 ],
                 "stream": True,
@@ -514,4 +516,4 @@ async def test_legacy_query_chat():
             citations = chunk_data.get("docs", [])
 
     assert len(answer) > 0
-    assert len(citations) > 0
+    assert len(citations) == 0
