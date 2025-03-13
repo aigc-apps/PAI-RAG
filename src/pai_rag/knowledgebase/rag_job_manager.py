@@ -211,21 +211,6 @@ class JobManager:
                     operation=file_change.operation,
                     status=FileProcessStatus.PENDING,
                 )
-                if (
-                    file_item.file_name
-                    in self._job_status.task_statuses[
-                        file_change.knowledgebase
-                    ].task_map
-                ):
-                    file_task = self._job_status.task_statuses[
-                        file_change.knowledgebase
-                    ].task_map[file_item.file_name]
-                    if file_task.operation == 1 and file_task.status == "pending":
-                        logger.debug(
-                            f"File_item {file_item.file_name} is already existed in task_map with ADD pending."
-                        )
-                        file_item.operation = FileOperationType.ADD
-                        logger.debug(f"Update file_item operation: {file_item}")
                 self._task_queue.put(file_item)
                 self._job_status.task_statuses[file_change.knowledgebase].task_map[
                     file_item.file_name
