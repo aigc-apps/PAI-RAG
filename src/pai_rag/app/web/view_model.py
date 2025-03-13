@@ -88,7 +88,7 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_mandatory_ocr: bool = False
-    number_workers: int = 4
+    number_workers: int = 1
 
     config_file: str = None
 
