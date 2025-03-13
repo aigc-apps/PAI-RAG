@@ -2,6 +2,7 @@
 import os
 import asyncio
 import threading
+import multiprocessing
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pai_rag.utils.format_logging import format_logging
@@ -12,6 +13,8 @@ from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.core.service_daemon import startup_event
 from loguru import logger
 
+
+multiprocessing.set_start_method("spawn")
 format_logging()
 
 DEFAULT_BACKGROUND_WORKER_NUM = os.environ.get("DEFAULT_BACKGROUND_WORKER_NUM", 4)
