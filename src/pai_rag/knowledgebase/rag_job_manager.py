@@ -29,8 +29,6 @@ from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED, ALL_C
 from pai_rag.utils.time_utils import get_current_time_str
 
 
-DEFAULT_BACKGROUND_WORKER_NUM = os.environ.get("DEFAULT_BACKGROUND_WORKER_NUM", 4)
-
 """
 文件信号短期容易出现重复提交，所以需要做防抖处理。
 设置时间窗口为5s, 5s内重复提交的信号会合并任务队列。
@@ -245,7 +243,10 @@ class JobManager:
         with self._lock:
             self.persist_task_status()
 
-    def execute_job_with_workers(self, worker_num=DEFAULT_BACKGROUND_WORKER_NUM):
+    def execute_job_with_workers(
+        self, stop_event: threading.Event = None, worker_num=1
+    ):
+        logger.info(f"Executing background jobs with {worker_num} workers.")
         try:
             asyncio.get_event_loop()
         except Exception as ex:
@@ -260,7 +261,7 @@ class JobManager:
             # 去重复，不让同一个文件同时处理（短时间上传多次同时处理会出现冲突）
             current_running_files = set()
 
-            while True:
+            while not stop_event.is_set:
                 try:
                     if len(running_tasks) >= max_concurrent_task:
                         logger.info(
@@ -341,6 +342,8 @@ class JobManager:
                 except Exception:
                     logger.error(f"后台任务队列处理出错: {traceback.format_exc()}")
                     pass
+
+        logger.info("Exiting background job")
 
     def execute_job(self):
         try:

@@ -14,15 +14,21 @@ from loguru import logger
 
 format_logging()
 
+DEFAULT_BACKGROUND_WORKER_NUM = os.environ.get("DEFAULT_BACKGROUND_WORKER_NUM", 4)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
-    daemon_thread = threading.Thread(target=job_manager.execute_job_with_workers, daemon=True)
-    daemon_thread.start()
+    stop_event = threading.Event()
+
+    background_thread = threading.Thread(target=job_manager.execute_job_with_workers, args=(stop_event,DEFAULT_BACKGROUND_WORKER_NUM))
+    background_thread.start()
 
     asyncio.create_task(startup_event())
     yield
+    logger.info("Gracefully exit. Exiting background thread...")
+    background_thread.join()
 
     logger.info("Application shutting down...")
 
