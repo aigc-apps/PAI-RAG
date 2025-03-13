@@ -214,9 +214,16 @@ class PaiDataReader(BaseReader):
         )
 
         """Load data from the input directory."""
-        documents = directory_reader.load_data(
-            show_progress=show_progress,
-        )
+
+        try:
+            documents = directory_reader.load_data(
+                show_progress=show_progress,
+            )
+        except Exception as e:
+            logger.error("捕获到异常: %s", e)
+            if e.__cause__:
+                logger.error("原始异常: %s", e.__cause__)
+                raise e.__cause__
         return documents
 
     async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:

@@ -31,9 +31,8 @@ class PaiImageReader(BaseReader):
         extra_info: Optional[Dict] = None,
         fs: Optional[AbstractFileSystem] = None,
     ) -> List[Document]:
-        assert (
-            self._oss_cache is not None
-        ), "Oss config must be provided for image processing."
+        if self._oss_cache is None:
+            raise Exception("Oss config must be provided for image processing.")
 
         file_ext = os.path.splitext(file_path)[1]
         with open(file_path, "rb") as file:
