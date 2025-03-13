@@ -18,7 +18,7 @@ format_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
-    daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
+    daemon_thread = threading.Thread(target=job_manager.execute_job_with_workers, daemon=True)
     daemon_thread.start()
 
     asyncio.create_task(startup_event())

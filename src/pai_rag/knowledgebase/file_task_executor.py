@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Generator, Tuple
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import PaiNodeParser
@@ -123,5 +123,31 @@ class FileTaskExecutor:
         elif task.operation == FileOperationType.UPDATE:
             for resp in self._update(task):
                 yield resp
+        else:
+            raise ValueError(f"Unknown operation {task.operation}.")
+
+    def run_once(self, task: FileItem) -> Tuple[FileItem, FileProcessResult]:
+        if task.operation == FileOperationType.DELETE:
+            try:
+                self._delete(task)
+                logger.info(f"Delete file {task.file_name} successfully.")
+                return task, FileProcessResult(
+                    status=FileProcessStatus.Done, message=None
+                )
+            except Exception as e:
+                logger.error(f"Delete file {task.file_name} failed: {e}")
+                return task, FileProcessResult(
+                    status=FileProcessStatus.Failed, message=str(e)
+                )
+        elif task.operation == FileOperationType.ADD:
+            res = None
+            for resp in self._add_gen(task):
+                res = resp
+            return task, res
+        elif task.operation == FileOperationType.UPDATE:
+            res = None
+            for resp in self._update(task):
+                res = resp
+            return task, res
         else:
             raise ValueError(f"Unknown operation {task.operation}.")

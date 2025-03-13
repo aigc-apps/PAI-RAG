@@ -12,6 +12,7 @@ from pai_rag.knowledgebase.models import (
     FileChange,
     FileItem,
     FileOperationType,
+    FileProcessResult,
     FileProcessStatus,
     JobStatus,
     TaskInfo,
@@ -23,9 +24,12 @@ from pai_rag.utils.constants import (
 )
 from loguru import logger
 import threading
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED, ALL_COMPLETED
 
 from pai_rag.utils.time_utils import get_current_time_str
 
+
+DEFAULT_WORKER_NUM = 2
 
 """
 文件信号短期容易出现重复提交，所以需要做防抖处理。
@@ -122,7 +126,19 @@ class JobManager:
         if not os.path.exists(self.task_file):
             return JobStatus()
 
-        return JobStatus.model_validate(json.load(open(self.task_file)))
+        job_status = JobStatus.model_validate(json.load(open(self.task_file)))
+        for knowledgebase in job_status.task_statuses:
+            task_info = job_status.task_statuses[knowledgebase]
+            for task in task_info.task_map:
+                if (
+                    task_info.task_map[task].status != FileProcessStatus.Done
+                    or task_info.task_map[task].status != FileProcessStatus.Failed
+                ):
+                    task_info.task_map[task].status = FileProcessStatus.Failed
+                    task_info.task_map[
+                        task
+                    ].failed_reason = "Task timeout. You can try reupload the files."
+        return job_status
 
     def persist_task_status(self):
         with open(self.task_file, "w") as f:
@@ -213,6 +229,73 @@ class JobManager:
                     file_item.file_name
                 ] = file_item
             self.persist_task_status()
+
+    def _update_task_status(
+        self, file_item: FileItem, process_result: FileProcessResult
+    ):
+        self._job_status.task_statuses[file_item.knowledgebase].task_map[
+            file_item.file_name
+        ].status = process_result.status
+        self._job_status.task_statuses[file_item.knowledgebase].task_map[
+            file_item.file_name
+        ].failed_reason = process_result.message
+        self._job_status.task_statuses[file_item.knowledgebase].task_map[
+            file_item.file_name
+        ].last_modified_time = get_current_time_str()
+        with self._lock:
+            self.persist_task_status()
+
+    def execute_job_with_workers(self, worker_num=DEFAULT_WORKER_NUM):
+        try:
+            asyncio.get_event_loop()
+        except Exception as ex:
+            logger.warning(f"No event loop found, will create new: {ex}")
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+
+        with ProcessPoolExecutor(max_workers=worker_num) as pool:
+            running_tasks = []
+            max_concurrent_task = 10
+            while True:
+                try:
+                    if len(running_tasks) >= max_concurrent_task:
+                        completed_tasks, processing_tasks = wait(
+                            running_tasks, return_when=FIRST_COMPLETED
+                        )
+                        running_tasks = list(processing_tasks)
+                        for complete in completed_tasks:
+                            item, result = complete.result()
+                            self._update_task_status(item, result)
+
+                    if self.rag_config is None:
+                        logger.debug("任务队列准备中...")
+                        time.sleep(2)
+                        continue
+                    file_item: FileItem = self._task_queue.get()
+                    if file_item is None:
+                        # 队列空，清空所有运行中任务
+                        if len(running_tasks) > 0:
+                            completed_tasks, processing_tasks = wait(
+                                running_tasks, ALL_COMPLETED
+                            )
+                            running_tasks = list(processing_tasks)
+                            for complete in completed_tasks:
+                                item, result = complete.result()
+                                self._update_task_status(item, result)
+
+                        logger.debug("后台任务队列为空。sleeping...")
+                        time.sleep(5)  # 后续还是要做成异步？
+                        continue
+
+                    logger.info(
+                        f"开始处理: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库: {file_item.knowledgebase} operation{file_item.operation}."
+                    )
+                    task_executor = self._get_task_executor(file_item.knowledgebase)
+                    new_task = pool.submit(task_executor.run_once, file_item)  # 不支持流式返回
+                    running_tasks.append(new_task)
+                except Exception:
+                    logger.error(f"后台任务队列处理出错: {traceback.format_exc()}")
+                    pass
 
     def execute_job(self):
         try:

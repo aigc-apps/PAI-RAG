@@ -25,6 +25,7 @@ class FileProcessStatus(str, Enum):
     Chunking = "chunking"
     Embedding = "embedding"
     Persisting = "persisting"
+    Processing = "processing"
     Done = "done"
     Failed = "failed"
 
