@@ -3,7 +3,7 @@ import json
 import re
 import shutil
 import threading
-from typing import Annotated, Self, Tuple, Union, Dict, List
+from typing import Annotated, Tuple, Union, Dict, List
 from loguru import logger
 from pydantic import BaseModel, Field, model_validator
 from pai_rag.core.models.state import FileServiceState
@@ -47,7 +47,6 @@ class KnowledgeBase(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
-    knowledgebase_paths: Dict[str, str] = {}
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:
@@ -55,38 +54,11 @@ class KnowledgeBase(BaseModel):
             values["name"] = values["index_name"]
         return values
 
-    @model_validator(mode="after")
-    def set_knowledgebase_paths(self) -> Self:
-        self.knowledgebase_paths = {
-            "base_path": os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, self.name),
-            "docs_path": os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, self.name, "docs"),
-            "index_path": os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".index"),
-            "logs_path": os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".logs"),
-            "parse_path": os.path.join(
-                DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".index", "parse"
-            ),
-            "split_path": os.path.join(
-                DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".index", "split"
-            ),
-            "embed_path": os.path.join(
-                DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".index", "embed"
-            ),
-            "faiss_index_path": os.path.join(
-                DEFAULT_KNOWLEDGEBASE_PATH, self.name, ".index", ".faiss"
-            ),
-            "doc_ids_map_file": os.path.join(
-                DEFAULT_KNOWLEDGEBASE_PATH,
-                self.name,
-                ".index",
-                "file_to_docid_map.json",
-            ),
-        }
-        return self
-
 
 class KnowledgeDoc(BaseModel):
     file_name: str
     doc_id: str
+    file_hash: str
     last_modified_time: str = Field(default_factory=lambda x: get_current_time_str())
 
 
@@ -141,9 +113,7 @@ class KnowledgeBaseManager:
             vector_store_config=rag_config.index.vector_store,
             embedding_config=rag_config.embedding,
         )
-        RagKnowledgeBaseHelper.create_new_knowledgebase_dir(
-            default_knowledge_base.knowledgebase_paths
-        )
+        RagKnowledgeBaseHelper.create_new_knowledgebase_dir(DEFAULT_KNOWLEDGEBASE_NAME)
         self._knowledgebase_map.knowledgebases[
             DEFAULT_KNOWLEDGEBASE_NAME
         ] = default_knowledge_base
@@ -157,14 +127,10 @@ class KnowledgeBaseManager:
 
         if DEFAULT_KNOWLEDGEBASE_NAME in self._knowledgebase_map.knowledgebases:
             if not os.path.exists(
-                self._knowledgebase_map.knowledgebases[
-                    DEFAULT_KNOWLEDGEBASE_NAME
-                ].knowledgebase_paths["base_path"]
+                os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, DEFAULT_KNOWLEDGEBASE_NAME)
             ):
                 RagKnowledgeBaseHelper.create_new_knowledgebase_dir(
-                    self._knowledgebase_map.knowledgebases[
-                        DEFAULT_KNOWLEDGEBASE_NAME
-                    ].knowledgebase_paths
+                    DEFAULT_KNOWLEDGEBASE_NAME
                 )
             return
 
@@ -184,15 +150,23 @@ class KnowledgeBaseManager:
                     embedding_config=old_knowledgebase.embedding_config,
                 )
                 RagKnowledgeBaseHelper.create_new_knowledgebase_dir(
-                    new_knowledgebase.knowledgebase_paths
+                    new_knowledgebase_name
                 )
                 if old_knowledgebase.vector_store_config.type == "faiss":
                     self.move_old_index_persist_path(
                         old_knowledgebase.vector_store_config.persist_path,
-                        new_knowledgebase.knowledgebase_paths["faiss_index_path"],
+                        os.path.join(
+                            DEFAULT_KNOWLEDGEBASE_PATH,
+                            new_knowledgebase_name,
+                            ".index",
+                            ".faiss",
+                        ),
                     )
-                new_knowledgebase.vector_store_config.persist_path = (
-                    new_knowledgebase.knowledgebase_paths["faiss_index_path"]
+                new_knowledgebase.vector_store_config.persist_path = os.path.join(
+                    DEFAULT_KNOWLEDGEBASE_PATH,
+                    new_knowledgebase_name,
+                    ".index",
+                    ".faiss",
                 )
 
                 self._knowledgebase_map.knowledgebases[
@@ -240,9 +214,7 @@ class KnowledgeBaseManager:
             ), f"新建知识库失败: 知识库'{knowledgebase.name}' 已存在。"
 
             self._knowledgebase_map.knowledgebases[knowledgebase.name] = knowledgebase
-            RagKnowledgeBaseHelper.create_new_knowledgebase_dir(
-                knowledgebase.knowledgebase_paths
-            )
+            RagKnowledgeBaseHelper.create_new_knowledgebase_dir(knowledgebase.name)
 
             new_state = self.save_knowledgebase_map()
             self._state.update_state(new_state)
@@ -310,6 +282,7 @@ class KnowledgeBaseManager:
         knowledgebase_name: str,
         doc_id: str,
         file_name: str,
+        file_hash: str,
         last_modified_time: str,
     ):
         if knowledgebase_name not in self._knowledgebase_map.knowledgebases:
@@ -318,11 +291,14 @@ class KnowledgeBaseManager:
         doc = KnowledgeDoc(
             doc_id=doc_id,
             file_name=file_name,
+            file_hash=file_hash,
             last_modified_time=last_modified_time,
         )
-        doc_store = self._doc_store_map.get(
-            knowledgebase_name, KnowledgeBaseDocStore(knowledgebase=knowledgebase_name)
-        )
+        if not self._doc_store_map.get(knowledgebase_name):
+            self._doc_store_map[knowledgebase_name] = KnowledgeBaseDocStore(
+                knowledgebase=knowledgebase_name
+            )
+        doc_store = self._doc_store_map.get(knowledgebase_name)
         doc_store.doc_map[doc.file_name] = doc
         self.persist_doc_store(doc_store)
         logger.info(f"文件'{doc.file_name}'成功添加到知识库'{knowledgebase_name}'。")
@@ -420,9 +396,23 @@ class KnowledgeBaseManager:
                         index_name, file_path
                     )
                 else:
-                    file_md5 = generate_md5(file_path)
-                    doc = KnowledgeDoc(file_name=file_path, doc_id=file_md5)
-                    return index_name, [doc]
+                    if os.path.isfile(file_path):
+                        file_path_md5, file_content_md5 = generate_md5(file_path)
+                        doc = KnowledgeDoc(
+                            file_name=file_path,
+                            doc_id=file_path_md5,
+                            file_hash=file_content_md5,
+                        )
+                        if index_name in self._doc_store_map:
+                            _doc_map = self._doc_store_map[index_name].doc_map
+                            if (
+                                file_path in _doc_map
+                                and _doc_map[file_path].file_hash == file_content_md5
+                            ):
+                                return index_name, []
+                        return index_name, [doc]
+                    else:
+                        return index_name, []
         return None, []
 
 

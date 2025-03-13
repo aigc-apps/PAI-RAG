@@ -32,6 +32,7 @@ from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorSt
 from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
     MyElasticsearchStore,
 )
+from pai_rag.integrations.vector_stores.faiss.my_faiss import MyFaissVectorStore
 from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
@@ -269,6 +270,51 @@ class PaiVectorStoreIndex(VectorStoreIndex):
             return self._vector_index.delete_ref_doc(
                 ref_doc_id, delete_from_docstore, **delete_kwargs
             )
+        elif isinstance(self._vector_store, MyFaissVectorStore):
+            ref_doc_info = self._vector_index.storage_context.docstore.get_ref_doc_info(
+                ref_doc_id
+            )
+            if ref_doc_id is not None and ref_doc_info is not None:
+                to_del_node_ids = ref_doc_info.node_ids.copy()
+                if to_del_node_ids:
+                    # 删除docstore中的doc并更新引用
+                    for node_id in to_del_node_ids:
+                        self._vector_index.storage_context.docstore.delete_document(
+                            node_id
+                        )
+                        # 按键的数值顺序排序索引结构
+                        sorted_items = sorted(
+                            self._vector_index.index_struct.nodes_dict.items(),
+                            key=lambda item: int(item[0]),
+                        )
+                        # 更新索引结构的节点引用
+                        remaining_nodes_dict = {}
+                        remaining_key = 0
+                        to_del_keys = []
+                        for k, v in sorted_items:
+                            if v not in to_del_node_ids:
+                                remaining_nodes_dict[str(remaining_key)] = v
+                                remaining_key += 1
+                            else:
+                                to_del_keys.append(k)
+
+                        logger.debug(
+                            f"remaining_nodes_dict: {remaining_nodes_dict} , to_del_keys:{to_del_keys}"
+                        )
+                        self._vector_index.index_struct.nodes_dict = (
+                            remaining_nodes_dict
+                        )
+                        self.storage_context.index_store.add_index_struct(
+                            self._vector_index.index_struct
+                        )
+                        # 保存更改
+                        self._vector_index.storage_context.persist(self._persist_path)
+                        # 删除faiss中的id
+                        self._vector_index._vector_store.remove_ids(to_del_keys)
+            else:
+                raise ValueError(
+                    f"ref_doc_id {ref_doc_id} not found in faiss vector store."
+                )
         else:
             logger.warning(
                 "Currently delete_ref_doc supports for Milvus & ElasticSearch vector stores"
