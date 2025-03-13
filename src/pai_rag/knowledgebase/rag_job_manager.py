@@ -29,7 +29,7 @@ from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED, ALL_C
 from pai_rag.utils.time_utils import get_current_time_str
 
 
-DEFAULT_WORKER_NUM = 2
+DEFAULT_BACKGROUND_WORKER_NUM = os.environ.get("DEFAULT_BACKGROUND_WORKER_NUM", 4)
 
 """
 文件信号短期容易出现重复提交，所以需要做防抖处理。
@@ -245,7 +245,7 @@ class JobManager:
         with self._lock:
             self.persist_task_status()
 
-    def execute_job_with_workers(self, worker_num=DEFAULT_WORKER_NUM):
+    def execute_job_with_workers(self, worker_num=DEFAULT_BACKGROUND_WORKER_NUM):
         try:
             asyncio.get_event_loop()
         except Exception as ex:
@@ -255,17 +255,30 @@ class JobManager:
 
         with ProcessPoolExecutor(max_workers=worker_num) as pool:
             running_tasks = []
-            max_concurrent_task = 10
+            max_concurrent_task = worker_num * 3
+
+            # 去重复，不让同一个文件同时处理（短时间上传多次同时处理会出现冲突）
+            current_running_files = set()
+
             while True:
                 try:
                     if len(running_tasks) >= max_concurrent_task:
+                        logger.info(
+                            f"Wait any '{len(running_tasks)}' tasks to complete before submitting."
+                        )
+
                         completed_tasks, processing_tasks = wait(
                             running_tasks, return_when=FIRST_COMPLETED
                         )
                         running_tasks = list(processing_tasks)
                         for complete in completed_tasks:
                             item, result = complete.result()
+                            current_running_files.remove(
+                                (item.knowledgebase, item.file_name)
+                            )
                             self._update_task_status(item, result)
+
+                        logger.info(f"Now '{len(running_tasks)}' tasks running.")
 
                     if self.rag_config is None:
                         logger.debug("任务队列准备中...")
@@ -275,23 +288,55 @@ class JobManager:
                     if file_item is None:
                         # 队列空，清空所有运行中任务
                         if len(running_tasks) > 0:
+                            logger.info(
+                                f"No tasks dequeued. Wait all '{len(running_tasks)}' tasks to complete before submitting."
+                            )
                             completed_tasks, processing_tasks = wait(
                                 running_tasks, return_when=ALL_COMPLETED
                             )
                             running_tasks = list(processing_tasks)
                             for complete in completed_tasks:
                                 item, result = complete.result()
+                                current_running_files.remove(
+                                    (item.knowledgebase, item.file_name)
+                                )
                                 self._update_task_status(item, result)
 
                         logger.debug("后台任务队列为空。sleeping...")
                         time.sleep(5)  # 后续还是要做成异步？
                         continue
 
+                    file_key = (file_item.knowledgebase, file_item.file_name)
+                    if file_key in current_running_files:
+                        logger.info(
+                            f"File {file_key} is already running. Wait all '{len(running_tasks)}' tasks to complete before submitting."
+                        )
+
+                        # 文件已经在执行中，清空所有运行任务再提交
+                        if len(running_tasks) > 0:
+                            completed_tasks, processing_tasks = wait(
+                                running_tasks, return_when=ALL_COMPLETED
+                            )
+                        running_tasks = list(processing_tasks)
+                        for complete in completed_tasks:
+                            item, result = complete.result()
+                            current_running_files.remove(
+                                (item.knowledgebase, item.file_name)
+                            )
+                            self._update_task_status(item, result)
+                        logger.info(f"{len(running_tasks)} tasks completed.")
+
+                    current_running_files.add(file_key)
+
                     logger.info(
                         f"开始处理: TaskId:{file_item.task_id} 文件: {file_item.file_name} 知识库: {file_item.knowledgebase} operation{file_item.operation}."
                     )
                     task_executor = self._get_task_executor(file_item.knowledgebase)
                     new_task = pool.submit(task_executor.run_once, file_item)  # 不支持流式返回
+                    self._job_status.task_statuses[file_item.knowledgebase].task_map[
+                        file_item.file_name
+                    ].status = FileProcessStatus.Processing
+
                     running_tasks.append(new_task)
                 except Exception:
                     logger.error(f"后台任务队列处理出错: {traceback.format_exc()}")
