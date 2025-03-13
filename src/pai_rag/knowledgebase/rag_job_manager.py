@@ -66,17 +66,25 @@ class TimeDebouncedTaskQueue:
         merged = False
         old_item2 = self.task_queue.get(item_key2)
         if old_item2 is not None and old_item2.timestamp + self.time_window > cur_time:
-            logger.info(f"Merge file changes for {item_key2}.")
             self.task_queue.pop(item_key2)
+            item.operation = old_item2.operation
+            self.task_queue[item_key2] = item
             merged = True
+            logger.info(
+                f"Merged file changes: pop {item_key2} from task queue and add {item_key2} --> {item} to task queue."
+            )
+            return merged
 
         old_item = self.task_queue.get(item_key)
         if old_item is not None and old_item.timestamp + self.time_window > cur_time:
-            logger.info(f"Merge file changes for {item_key}.")
             self.task_queue.pop(item_key)
             merged = True
+            logger.info(f"Merged file changes: pop {item_key} from task queue.")
 
         self.task_queue[item_key] = item
+        logger.info(
+            f"Merged {merged} file changes: add {item_key} --> {item} to task queue.."
+        )
         return merged
 
     def put(self, item: FileItem):
@@ -205,6 +213,7 @@ class JobManager:
                     task_id=file_change.task_id,
                     knowledgebase=file_change.knowledgebase,
                     file_name=file_change.file_name,
+                    file_hash=file_change.file_hash,
                     operation=file_change.operation,
                     status=FileProcessStatus.PENDING,
                 )
@@ -264,6 +273,7 @@ class JobManager:
                             knowledgebase_name=file_item.knowledgebase,
                             doc_id=file_item.task_id,
                             file_name=file_item.file_name,
+                            file_hash=file_item.file_hash,
                             last_modified_time=self._job_status.task_statuses[
                                 file_item.knowledgebase
                             ]

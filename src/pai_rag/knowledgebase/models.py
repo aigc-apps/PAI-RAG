@@ -15,6 +15,7 @@ class FileOperationType(int, Enum):
 class FileChange(BaseModel):
     task_id: str
     file_name: str
+    file_hash: str
     operation: FileOperationType
     knowledgebase: str
 

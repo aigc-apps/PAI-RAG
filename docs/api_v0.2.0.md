@@ -580,7 +580,6 @@ chat()
           "base_path": "localdata/knowledgebase/default",
           "docs_path": "localdata/knowledgebase/default/docs",
           "index_path": "localdata/knowledgebase/default/.index",
-          "logs_path": "localdata/knowledgebase/default/.logs",
           "doc_ids_map_file": "localdata/knowledgebase/default/.index/file_to_docid_map.json",
           "parse_path": "localdata/knowledgebase/default/.index/parse",
           "split_path": "localdata/knowledgebase/default/.index/split",
