@@ -49,7 +49,6 @@ class FileTaskExecutor:
         self.embed_model = PaiEmbedding(embed_config=knowledgebase.embedding_config)
 
         self.vector_index = PaiVectorStoreIndex(
-            cls=PaiVectorStoreIndex,
             vector_store_config=knowledgebase.vector_store_config,
             embed_model=self.embed_model,
             enable_local_keyword_index=True,
