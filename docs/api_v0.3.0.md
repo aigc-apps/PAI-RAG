@@ -337,7 +337,22 @@ chat()
 - curl 请求示例：
 
   ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/knowledgebases/my_milvus/files -H 'Authorization: EAS_TOKEN' -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
+  curl -X 'POST' http://localhost:8680/api/v1/knowledgebases/my_milvus/files \
+  -H 'Authorization: EAS_TOKEN' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
+  ```
+
+- 如果需要上传多份文档，可以使用多个 -F 'files=@path' 参数，每个参数对应一个要上传的文件，示例：
+
+  ```bash
+  curl -X 'POST' http://localhost:8680/api/v1/knowledgebases/my_milvus/files \
+  -H 'Authorization: EAS_TOKEN' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'files=@example_data/paul_graham/paul_graham_essay.txt' \
+  -F 'files=@example_data/another_file1.md' \
+  -F 'files=@example_data/another_file2.pdf' \
+  -F 'index_name=default'
   ```
 
 - 返回示例：
@@ -737,355 +752,11 @@ chat()
   ]
   ```
 
-# 3. Management API
+**注意：** 旧版知识库管理API请参考[API Service v0.2.0](./api_v0.2.0.md)。
 
-## 3.1 加载信息
+# 3. Other API
 
-### 上传知识库文件
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_data
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: multipart/form-data
-- 请求参数：
-  - files: 文件
-  - oss_path: oss路径(需开通oss存储服务)
-  - index_name: 索引名称(默认default)
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/upload_data -H 'Authorization: EAS_TOKEN' -H 'Content-Type: multipart/form-data' -F 'files=@example_data/paul_graham/paul_graham_essay.txt' -F 'index_name=default'
-  ```
-
-- 返回示例：
-  ```json
-  { "task_id": "2c1e557733764fdb9fefa063538914da" }
-  ```
-
-</details>
-
-### 检查上传任务状态
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/get_upload_state
-- 请求方式：GET
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-    curl -X 'GET' '{EAS_SERVICE_URL}/api/vi/get_upload_state?task_id=2c1e557733764fdb9fefa063538914da' -H 'Authorization: EAS_TOKEN'
-  ```
-
-- 返回示例：
-  ```json
-  {
-    "task_id": "2c1e557733764fdb9fefa063538914da",
-    "status": "completed",
-    "detail": null
-  }
-  ```
-
-</details>
-
-### 上传excel/csv文件用于chat_db的表格内容查询
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_datasheet
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: multipart/form-data
-- 请求参数：
-  - file: excel/csv文件
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/upload_datasheet -H 'Authorization: EAS_TOKEN' -H 'Content-Type: multipart/form-data' -F 'file=@example_data/titanic_train.csv'
-  ```
-
-- 返回示例：
-  ```json
-  {
-    "task_id": "3b12cf5fabee4a99a32895d2f6935c0d",
-    "destination_path": "./localdata/data_analysis/titanic_train.csv",
-    "data_preview": "xxx"
-  }
-  ```
-
-</details>
-
-### 上传json文件用于chat_db的数据库信息补充——问答对
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_db_history
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: multipart/form-data
-- 请求参数：
-  - file: json文件
-  - db_name: 数据库名称
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/upload_db_history -H 'Authorization: EAS_TOKEN' -H 'Content-Type: multipart/form-data' -F 'file=@example_data/db_query_history.json' -F 'db_name=my_pets'
-  ```
-
-- 返回示例：
-  ```json
-  {
-    "task_id": "204191f946384a54a48b13ec00fd5374",
-    "destination_path": "./localdata/data_analysis/text2sql/history/my_pets_db_query_history.json"
-  }
-  ```
-
-</details>
-
-### 上传csv文件用于chat_db的数据库信息补充——列描述
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_db_history
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: multipart/form-data
-- 请求参数：
-  - files: csv文件
-  - db_name: 数据库名称
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/upload_db_description -H 'Authorization: EAS_TOKEN' -H 'Content-Type: multipart/form-data' -F 'files=@example_data/database_description/schools.csv' -F 'db_name=california_schools'
-  ```
-
-- 返回示例：
-  ```json
-  {
-    "task_id": "f417e436cf8b4c329f7b48a7f3c4af64",
-    "destination_path": "./localdata/data_analysis/text2sql/input_description"
-  }
-  ```
-
-</details>
-
-### 加载数据库信息
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/query/load_db_info
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-- 请求参数：无
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-
-  ```bash
-  curl -X 'POST' http://localhost:8680/api/v1/load_db_info -H 'Authorization: EAS_TOKEN'
-  ```
-
-- 返回示例：
-  ```json
-  { "task_id": "2389f546af2b6c359d7b19c8b5c3bf88" }
-  ```
-
-</details>
-
-## 3.2 管理现有知识库
-
-### 获取当前所有知识库索引
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/indexes
-- 请求方式：GET
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例：
-  ```bash
-  curl -X 'GET' '{EAS_SERVICE_URL}/api/v1/indexes' -H 'Authorization: EAS_TOKEN'
-  ```
-- 返回示例：
-  ```json
-  {
-    "indexes": {
-      "default": {
-        "index_name": "default",
-        "vector_store_config": {
-          "persist_path": "./localdata/knowledgebase/default/.index/.faiss",
-          "type": "faiss",
-          "is_image_store": false
-        },
-        "embedding_config": {
-          "source": "huggingface",
-          "model": "bge-m3",
-          "embed_batch_size": 10,
-          "enable_sparse": false
-        },
-        "knowledgebase_manager": {
-          "index_name": "default",
-          "base_path": "localdata/knowledgebase/default",
-          "docs_path": "localdata/knowledgebase/default/docs",
-          "index_path": "localdata/knowledgebase/default/.index",
-          "logs_path": "localdata/knowledgebase/default/.logs",
-          "doc_ids_map_file": "localdata/knowledgebase/default/.index/file_to_docid_map.json",
-          "parse_path": "localdata/knowledgebase/default/.index/parse",
-          "split_path": "localdata/knowledgebase/default/.index/split",
-          "embed_path": "localdata/knowledgebase/default/.index/embed"
-        }
-      }
-    },
-    "current_index_name": "default"
-  }
-  ```
-
-</details>
-
-### 创建知识库index_name
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/indexes/{index_name}
-- 请求方式：POST
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: application/json
-- 请求参数：
-  - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
-  - embedding_config: embedding 模型配置
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例
-
-  ```bash
-    curl -X 'POST' '{EAS_SERVICE_URL}/api/v1/indexes/my_index' \
-    -H 'Authorization: EAS_TOKEN' \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "index_name": "my_index",
-        "vector_store_config": {
-            "type": "faiss"
-        },
-        "embedding_config": {
-            "model": "bge-m3",
-            "source": "huggingface"
-        }
-    }'
-  ```
-
-- 返回示例：
-  ```json
-  { "msg": "Add index 'my_index' successfully." }
-  ```
-  </details>
-
-### 更新知识库index_name
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/indexes/{index_name}
-- 请求方式：PATCH
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: application/json
-- 请求参数：
-  - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
-  - embedding_config: embedding 模型配置
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例
-
-  ```bash
-    curl -X 'PATCH' '{EAS_SERVICE_URL}/api/v1/indexes/my_index' \
-    -H 'Authorization: EAS_TOKEN' \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "index_name": "my_index",
-        "vector_store_config": {
-            "type": "faiss"
-        },
-        "embedding_config": {
-            "model": "bge-m3",
-            "source": "huggingface"
-        }
-    }'
-  ```
-
-- 返回示例：
-  ```json
-  { "msg": "Update index 'my_index' successfully." }
-  ```
-  </details>
-
-### 删除知识库index_name
-
-调用方式
-
-- 调用地址：{EAS_SERVICE_URL}/api/v1/indexes/{index_name}
-- 请求方式：DELETE
-- 请求 HEADERS
-  - Authorization: EAS_TOKEN # Eas调用token
-  - Content-Type: application/json
-- 请求参数：
-  - index_name: 索引名称
-
-<details>
-<summary>调用示例</summary>
-
-- curl 请求示例
-
-  ```bash
-  curl -X 'DELETE' '{EAS_SERVICE_URL}/api/v1/indexes/my_index' -H 'Authorization: EAS_TOKEN' -H 'Content-Type: application/json' -d '{"index_name":"my_index"}'
-  ```
-
-- 返回示例：
-  ```json
-  { "msg": "Delete index 'my_index' successfully." }
-  ```
-  </details>
-
-## 3.3 配置服务
+## 3.1 RAG配置服务
 
 ### 获取RAG配置
 
@@ -1318,6 +989,141 @@ chat()
 - 返回示例：
   ```json
   { "msg": "Update RAG configuration successfully." }
+  ```
+
+</details>
+
+## 3.2 CHAT_DB信息加载
+
+### 上传excel/csv文件用于chat_db的表格内容查询
+
+调用方式
+
+- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_datasheet
+- 请求方式：POST
+- 请求 HEADERS
+  - Authorization: EAS_TOKEN # Eas调用token
+  - Content-Type: multipart/form-data
+- 请求参数：
+  - file: excel/csv文件
+
+<details>
+<summary>调用示例</summary>
+
+- curl 请求示例：
+
+  ```bash
+  curl -X 'POST' http://localhost:8680/api/v1/upload_datasheet \
+  -H 'Authorization: EAS_TOKEN' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@example_data/titanic_train.csv'
+  ```
+
+- 返回示例：
+  ```json
+  {
+    "task_id": "3b12cf5fabee4a99a32895d2f6935c0d",
+    "destination_path": "./localdata/data_analysis/titanic_train.csv",
+    "data_preview": "xxx"
+  }
+  ```
+
+</details>
+
+### 上传json文件用于chat_db的数据库信息补充——问答对
+
+调用方式
+
+- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_db_history
+- 请求方式：POST
+- 请求 HEADERS
+  - Authorization: EAS_TOKEN # Eas调用token
+  - Content-Type: multipart/form-data
+- 请求参数：
+  - file: json文件
+  - db_name: 数据库名称
+
+<details>
+<summary>调用示例</summary>
+
+- curl 请求示例：
+
+  ```bash
+  curl -X 'POST' http://localhost:8680/api/v1/upload_db_history \
+  -H 'Authorization: EAS_TOKEN' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@example_data/db_query_history.json' \
+  -F 'db_name=my_pets'
+  ```
+
+- 返回示例：
+  ```json
+  {
+    "task_id": "204191f946384a54a48b13ec00fd5374",
+    "destination_path": "./localdata/data_analysis/text2sql/history/my_pets_db_query_history.json"
+  }
+  ```
+
+</details>
+
+### 上传csv文件用于chat_db的数据库信息补充——列描述
+
+调用方式
+
+- 调用地址：{EAS_SERVICE_URL}/api/v1/upload_db_history
+- 请求方式：POST
+- 请求 HEADERS
+  - Authorization: EAS_TOKEN # Eas调用token
+  - Content-Type: multipart/form-data
+- 请求参数：
+  - files: csv文件
+  - db_name: 数据库名称
+
+<details>
+<summary>调用示例</summary>
+
+- curl 请求示例：
+
+  ```bash
+  curl -X 'POST' http://localhost:8680/api/v1/upload_db_description \
+  -H 'Authorization: EAS_TOKEN' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'files=@example_data/database_description/schools.csv' \
+  -F 'db_name=california_schools'
+  ```
+
+- 返回示例：
+  ```json
+  {
+    "task_id": "f417e436cf8b4c329f7b48a7f3c4af64",
+    "destination_path": "./localdata/data_analysis/text2sql/input_description"
+  }
+  ```
+
+</details>
+
+### 加载数据库信息
+
+调用方式
+
+- 调用地址：{EAS_SERVICE_URL}/api/v1/query/load_db_info
+- 请求方式：POST
+- 请求 HEADERS
+  - Authorization: EAS_TOKEN # Eas调用token
+- 请求参数：无
+
+<details>
+<summary>调用示例</summary>
+
+- curl 请求示例：
+
+  ```bash
+  curl -X 'POST' http://localhost:8680/api/v1/load_db_info -H 'Authorization: EAS_TOKEN'
+  ```
+
+- 返回示例：
+  ```json
+  { "task_id": "2389f546af2b6c359d7b19c8b5c3bf88" }
   ```
 
 </details>
