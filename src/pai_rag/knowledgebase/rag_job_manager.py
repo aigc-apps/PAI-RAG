@@ -24,7 +24,7 @@ from pai_rag.utils.constants import (
 )
 from loguru import logger
 import threading
-from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED, ALL_COMPLETED
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
 
 from pai_rag.utils.time_utils import get_current_time_str
 
@@ -294,16 +294,17 @@ class JobManager:
                             logger.info(
                                 f"No tasks dequeued. Wait all '{len(running_tasks)}' tasks to complete before submitting."
                             )
-                            completed_tasks, processing_tasks = wait(
-                                running_tasks, return_when=ALL_COMPLETED
-                            )
-                            running_tasks = list(processing_tasks)
-                            for complete in completed_tasks:
-                                item, result = complete.result()
-                                current_running_files.remove(
-                                    (item.knowledgebase, item.file_name)
+                            while len(running_tasks) > 0:
+                                completed_tasks, processing_tasks = wait(
+                                    running_tasks, return_when=FIRST_COMPLETED
                                 )
-                                self._update_task_status(item, result)
+                                running_tasks = list(processing_tasks)
+                                for complete in completed_tasks:
+                                    item, result = complete.result()
+                                    current_running_files.remove(
+                                        (item.knowledgebase, item.file_name)
+                                    )
+                                    self._update_task_status(item, result)
 
                         logger.debug("后台任务队列为空。sleeping...")
                         time.sleep(5)  # 后续还是要做成异步？
@@ -316,17 +317,17 @@ class JobManager:
                         )
 
                         # 文件已经在执行中，清空所有运行任务再提交
-                        if len(running_tasks) > 0:
+                        while len(running_tasks) > 0:
                             completed_tasks, processing_tasks = wait(
-                                running_tasks, return_when=ALL_COMPLETED
+                                running_tasks, return_when=FIRST_COMPLETED
                             )
-                        running_tasks = list(processing_tasks)
-                        for complete in completed_tasks:
-                            item, result = complete.result()
-                            current_running_files.remove(
-                                (item.knowledgebase, item.file_name)
-                            )
-                            self._update_task_status(item, result)
+                            running_tasks = list(processing_tasks)
+                            for complete in completed_tasks:
+                                item, result = complete.result()
+                                current_running_files.remove(
+                                    (item.knowledgebase, item.file_name)
+                                )
+                                self._update_task_status(item, result)
                         logger.info(f"{len(running_tasks)} tasks completed.")
 
                     current_running_files.add(file_key)
