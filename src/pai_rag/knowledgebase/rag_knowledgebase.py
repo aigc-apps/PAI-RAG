@@ -58,7 +58,7 @@ class KnowledgeBase(BaseModel):
 class KnowledgeDoc(BaseModel):
     file_name: str
     doc_id: str
-    file_content: str
+    file_hash: str
     last_modified_time: str = Field(default_factory=lambda x: get_current_time_str())
 
 
@@ -282,7 +282,7 @@ class KnowledgeBaseManager:
         knowledgebase_name: str,
         doc_id: str,
         file_name: str,
-        file_content: str,
+        file_hash: str,
         last_modified_time: str,
     ):
         if knowledgebase_name not in self._knowledgebase_map.knowledgebases:
@@ -291,7 +291,7 @@ class KnowledgeBaseManager:
         doc = KnowledgeDoc(
             doc_id=doc_id,
             file_name=file_name,
-            file_content=file_content,
+            file_hash=file_hash,
             last_modified_time=last_modified_time,
         )
         if not self._doc_store_map.get(knowledgebase_name):
@@ -401,17 +401,15 @@ class KnowledgeBaseManager:
                         doc = KnowledgeDoc(
                             file_name=file_path,
                             doc_id=file_path_md5,
-                            file_content=file_content_md5,
+                            file_hash=file_content_md5,
                         )
                         if index_name in self._doc_store_map:
                             _doc_map = self._doc_store_map[index_name].doc_map
-                            if file_path in _doc_map:
-                                if (
-                                    _doc_map[file_path].doc_id == file_path_md5
-                                    and _doc_map[file_path].file_content
-                                    == file_content_md5
-                                ):
-                                    return index_name, []
+                            if (
+                                file_path in _doc_map
+                                and _doc_map[file_path].file_hash == file_content_md5
+                            ):
+                                return index_name, []
                         return index_name, [doc]
                     else:
                         return index_name, []

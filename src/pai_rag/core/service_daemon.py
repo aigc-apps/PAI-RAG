@@ -92,7 +92,7 @@ async def watch_knowledgebase_changes():
                         task_id=doc.doc_id,
                         operation=change_type,
                         file_name=doc.file_name,
-                        file_content=doc.file_content,
+                        file_hash=doc.file_hash,
                         knowledgebase=knowledgebase,
                     )
                     for doc in change_docs
