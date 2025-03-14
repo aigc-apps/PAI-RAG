@@ -151,6 +151,8 @@ class RagLocalClient:
         index_name: str = None,
         search_web: bool = False,
         return_reference: bool = False,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
     ):
         query = RagQuery(
             messages=chat_messages,
@@ -163,7 +165,9 @@ class RagLocalClient:
         )
 
         try:
-            response = await rag_service.aquery_v1(query)
+            response = await rag_service.aquery_v1(
+                query, chat_model_id, query_rewrite_model_id
+            )
             if isinstance(response, RagResponse):
                 result = {
                     "delta": response.answer,
@@ -220,6 +224,8 @@ class RagLocalClient:
         self,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
+        chat_model_id: str = None,
+        query_rewrite_model_id=None,
     ):
         query = RagQuery(
             messages=chat_messages,
@@ -227,7 +233,9 @@ class RagLocalClient:
         )
 
         try:
-            response = await rag_service.aquery_llm_v1(query)
+            response = await rag_service.aquery_llm_v1(
+                query, chat_model_id, query_rewrite_model_id
+            )
             if isinstance(response, RagResponse):
                 result = {
                     "delta": response.answer,

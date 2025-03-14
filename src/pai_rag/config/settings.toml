@@ -9,7 +9,6 @@ custom_agent_config_file = ""
 agent_tool_type = ""
 
 [rag.chat]
-model_id = "qwen-max"
 
 [rag.chat_store]
 type = "Local" # [Local, Aliyun-Redis]
@@ -81,7 +80,6 @@ top_n = 2
 
 [rag.query_rewrite]
 enabled = true
-model_id = "qwen-max"
 
 [rag.query_rewrite.llm]
 

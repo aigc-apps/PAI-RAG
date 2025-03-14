@@ -48,6 +48,8 @@ async def respond(input_elements: List[Any]):
     chatbot.append(q_msg)
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
+    chat_model_id = update_dict["chat_model_id"]
+    query_rewrite_model_id = update_dict["query_rewrite_model_id"]
     citation = update_dict["citation"]
     return_reference = update_dict["return_reference"]
 
@@ -62,6 +64,8 @@ async def respond(input_elements: List[Any]):
             response_gen = rag_client.query_llm(
                 chat_messages=chatbot[:-1],
                 stream=is_streaming,
+                chat_model_id=chat_model_id,
+                query_rewrite_model_id=query_rewrite_model_id,
             )
         elif query_type == "Retrieval":
             response_gen = rag_client.query_vector(
@@ -75,6 +79,8 @@ async def respond(input_elements: List[Any]):
                 citation=citation,
                 search_web=True,
                 return_reference=return_reference,
+                chat_model_id=chat_model_id,
+                query_rewrite_model_id=query_rewrite_model_id,
             )
         else:
             response_gen = rag_client.query(
@@ -83,6 +89,8 @@ async def respond(input_elements: List[Any]):
                 citation=citation,
                 index_name=index_name,
                 return_reference=return_reference,
+                chat_model_id=chat_model_id,
+                query_rewrite_model_id=query_rewrite_model_id,
             )
 
         is_thinking = False
@@ -121,8 +129,22 @@ async def respond(input_elements: List[Any]):
 
 
 def create_chat_tab() -> Dict[str, Any]:
+    rag_config = rag_client.get_config()
+    model_choices = [
+        llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+    ]
+    if len(model_choices) == 0:
+        model_name = ""
+    else:
+        model_name = model_choices[0]
     with gr.Row():
         with gr.Column(scale=2):
+            chat_model_id = gr.Dropdown(
+                choices=model_choices,
+                value=model_name,
+                label="\N{bookmark} Chat Model Name",
+                elem_id="chat_model_id",
+            )
             chat_index = gr.Dropdown(
                 choices=[],
                 value="",
@@ -181,30 +203,18 @@ def create_chat_tab() -> Dict[str, Any]:
                     with gr.Row(
                         visible=False, elem_id="enable_query_transform_col"
                     ) as enable_query_transform_col:
+                        query_rewrite_model_id = gr.Dropdown(
+                            choices=model_choices,
+                            value=model_name,
+                            label="\N{bookmark} Model Name",
+                            elem_id="query_rewrite_model_id",
+                        )
                         query_transform_template = gr.Textbox(
                             label="Query Transform Template",
                             value="",
                             elem_id="query_transform_template",
                             lines=10,
                             interactive=True,
-                        )
-                        qt_llm_base_url = gr.Textbox(
-                            label="Query Transform LLM Base URL",
-                            elem_id="qt_llm_base_url",
-                            interactive=True,
-                            placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
-                        )
-                        qt_llm_api_key = gr.Textbox(
-                            label="Query Transform LLM API Key",
-                            elem_id="qt_llm_api_key",
-                            type="password",
-                            interactive=True,
-                        )
-                        qt_llm_model_name = gr.Textbox(
-                            label="Query Transform LLM Model Name",
-                            elem_id="qt_llm_model_name",
-                            interactive=True,
-                            placeholder="Model Name, e.g. qwen-max",
                         )
 
                     def change_query_transform_parameter(enable_query_transform):
@@ -577,11 +587,10 @@ def create_chat_tab() -> Dict[str, Any]:
 
         chat_args = (
             {
+                chat_model_id,
                 default_web_search,
                 enable_query_transform,
-                qt_llm_base_url,
-                qt_llm_api_key,
-                qt_llm_model_name,
+                query_rewrite_model_id,
                 query_transform_template,
                 system_role_template,
                 custom_prompt_template,
@@ -641,9 +650,8 @@ def create_chat_tab() -> Dict[str, Any]:
             reranker_similarity_top_k.elem_id: reranker_similarity_top_k,
             enable_query_transform.elem_id: enable_query_transform,
             query_transform_template.elem_id: query_transform_template,
-            qt_llm_base_url.elem_id: qt_llm_base_url,
-            qt_llm_api_key.elem_id: qt_llm_api_key,
-            qt_llm_model_name.elem_id: qt_llm_model_name,
+            chat_model_id.elem_id: chat_model_id,
+            query_rewrite_model_id.elem_id: query_rewrite_model_id,
             system_role_template.elem_id: system_role_template,
             custom_prompt_template.elem_id: custom_prompt_template,
             search_lang.elem_id: search_lang,

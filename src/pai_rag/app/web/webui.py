@@ -56,6 +56,17 @@ def resume_ui():
     return outputs
 
 
+def change_chat_page_model_list(model_id):
+    rag_config = rag_client.get_config()
+    model_choices = [
+        llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+    ]
+    return [
+        gr.update(choices=model_choices, value=rag_config.chat.model_id),
+        gr.update(choices=model_choices, value=rag_config.query_rewrite.model_id),
+    ]
+
+
 def change_vector_index_button(index_name):
     if index_name == "NEW":
         return [
@@ -119,6 +130,15 @@ def make_homepage():
             change_vector_index_button,
             inputs=chat_elements["chat_index"],
             outputs=index_selector_elements,
+        )
+
+        setting_elements["llm_model"].change(
+            change_chat_page_model_list,
+            inputs=setting_elements["llm_model"],
+            outputs=[
+                chat_elements["chat_model_id"],
+                chat_elements["query_rewrite_model_id"],
+            ],
         )
 
         # with gr.Tab("\N{rocket} Evaluation"):

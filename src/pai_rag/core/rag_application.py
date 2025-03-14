@@ -797,6 +797,8 @@ class RagApplication:
     async def aquery(
         self,
         query: RagQuery,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
         chat_type: RagChatType = RagChatType.RAG,
         sse_version: SseVersion = SseVersion.V0,
     ):
@@ -825,7 +827,7 @@ class RagApplication:
 
         # Chat to LLM, return directly
         if chat_type == RagChatType.LLM:
-            llm: PaiLlm = resolve_chat_llm(self.config)
+            llm: PaiLlm = resolve_chat_llm(self.config, chat_model_id)
             if not query.stream:
                 response = await llm.achat(messages=query.messages)
                 return RagResponse(
@@ -835,7 +837,9 @@ class RagApplication:
                 response = await llm.astream_chat(messages=query.messages)
                 return event_generator_async(response, sse_version=sse_version)
 
-        openai_query_transform = resolve_openai_query_transform(self.config)
+        openai_query_transform = resolve_openai_query_transform(
+            self.config, query_rewrite_model_id
+        )
         question = query.messages[-1].content
         if openai_query_transform is not None:
             new_query_bundle = await openai_query_transform.arun(

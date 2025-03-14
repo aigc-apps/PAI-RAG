@@ -129,14 +129,27 @@ class RagService:
         status = upload_job_manager.get_task_status(task_id)
         return status, detail
 
-    async def aquery_v1(self, query: RagQuery):
+    async def aquery_v1(
+        self,
+        query: RagQuery,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
+    ):
         try:
             if query.search_web:
                 return await self.rag.aquery(
-                    query, RagChatType.WEB, sse_version=SseVersion.V1
+                    query,
+                    chat_model_id,
+                    query_rewrite_model_id,
+                    RagChatType.WEB,
+                    sse_version=SseVersion.V1,
                 )
             return await self.rag.aquery(
-                query, RagChatType.RAG, sse_version=SseVersion.V1
+                query,
+                chat_model_id,
+                query_rewrite_model_id,
+                RagChatType.RAG,
+                sse_version=SseVersion.V1,
             )
         except Exception as ex:
             logger.error(traceback.format_exc())
@@ -158,10 +171,19 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Search failed: {ex}")
 
-    async def aquery_llm_v1(self, query: RagQuery):
+    async def aquery_llm_v1(
+        self,
+        query: RagQuery,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
+    ):
         try:
             return await self.rag.aquery(
-                query, RagChatType.LLM, sse_version=SseVersion.V1
+                query,
+                chat_model_id,
+                query_rewrite_model_id,
+                RagChatType.LLM,
+                sse_version=SseVersion.V1,
             )
         except Exception as ex:
             logger.error(traceback.format_exc())

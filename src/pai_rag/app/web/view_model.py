@@ -16,8 +16,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
 )
 from pai_rag.integrations.llms.pai.llm_config import (
-    DashScopeLlmConfig,
-    PaiEasLlmConfig,
     SupportedLlmType,
     PaiBaseLlmConfig,
 )
@@ -61,17 +59,21 @@ def _transform_to_dict(config):
 
 class ViewModel(BaseModel):
     # llm
-    llm_base_url: str = None
-    llm_api_key: str = None
-    llm_model_name: str = "default"
-    llm_temperature: float = 0.1
+    # llm_base_url: str = None
+    # llm_api_key: str = None
+    # llm_model_name: str = "default"
+    # llm_temperature: float = 0.1
 
     # mllm
-    use_mllm: bool = False
-    mllm_base_url: str = None
-    mllm_api_key: str = None
-    mllm_model_name: str = "default"
-    mllm_temperature: float = 0.1
+    # use_mllm: bool = False
+    # mllm_base_url: str = None
+    # mllm_api_key: str = None
+    # mllm_model_name: str = "default"
+    # mllm_temperature: float = 0.1
+
+    chat_model_id: str = None
+
+    query_rewrite_model_id: str = None
 
     # oss
     use_oss: bool = False
@@ -151,9 +153,9 @@ class ViewModel(BaseModel):
     query_type: str = "Chat（Knowledge Base）"
 
     enable_query_transform: bool = True
-    qt_llm_base_url: str = None
-    qt_llm_api_key: str = None
-    qt_llm_model_name: str = "default"
+    # qt_llm_base_url: str = None
+    # qt_llm_api_key: str = None
+    # qt_llm_model_name: str = "default"
     query_transform_template: str = None
 
     synthesizer_type: str = None
@@ -193,43 +195,13 @@ class ViewModel(BaseModel):
 
         view_model.default_web_search = config.system.default_web_search
 
-        # llm
-        if isinstance(config.llm, PaiEasLlmConfig):
-            view_model.llm_model_name = config.llm.model
-            view_model.llm_base_url = config.llm.endpoint
-            view_model.llm_api_key = str(config.llm.token)
-        elif isinstance(config.llm, DashScopeLlmConfig):
-            view_model.llm_api_key = config.llm.api_key or os.getenv(
-                "DASHSCOPE_API_KEY"
-            )
-            view_model.llm_base_url = config.llm.base_url
-            view_model.llm_model_name = config.llm.model
-        else:
-            view_model.llm_model_name = config.llm.model
-            view_model.llm_base_url = config.llm.base_url
-            view_model.llm_api_key = config.llm.api_key or os.getenv(
-                "DASHSCOPE_API_KEY"
-            )
-
-        view_model.llm_temperature = config.llm.temperature
-
         view_model.llms = config.llms
 
-        view_model.use_mllm = config.synthesizer.use_multimodal_llm
+        view_model.chat_model_id = config.chat.model_id
+
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "Chat（Knowledge Base）"
         )
-
-        if isinstance(config.multimodal_llm, PaiEasLlmConfig):
-            view_model.mllm_base_url = config.multimodal_llm.endpoint
-            view_model.mllm_model_name = config.multimodal_llm.model
-            view_model.mllm_api_key = config.multimodal_llm.token
-        else:
-            view_model.mllm_model_name = config.multimodal_llm.model
-            view_model.mllm_api_key = config.multimodal_llm.api_key or os.getenv(
-                "DASHSCOPE_API_KEY"
-            )
-            view_model.mllm_base_url = config.multimodal_llm.base_url
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -272,10 +244,7 @@ class ViewModel(BaseModel):
         view_model.query_transform_template = (
             config.query_rewrite.rewrite_prompt_template
         )
-        if config.query_rewrite.llm is not None:
-            view_model.qt_llm_base_url = config.query_rewrite.llm.base_url
-            view_model.qt_llm_api_key = config.query_rewrite.llm.api_key
-            view_model.qt_llm_model_name = config.query_rewrite.llm.model
+        view_model.query_rewrite_model_id = config.query_rewrite.model_id
 
         view_model.system_role_template = config.synthesizer.system_role_template
         view_model.custom_prompt_template = config.synthesizer.custom_prompt_template
@@ -380,16 +349,8 @@ class ViewModel(BaseModel):
 
         config["system"]["query_type"] = QUERY_TYPE_MAP.get(self.query_type, "rag")
 
-        config["llm"]["source"] = SupportedLlmType.openai_compatible
-        config["llm"]["base_url"] = self.llm_base_url
-        config["llm"]["api_key"] = self.llm_api_key
-        config["llm"]["temperature"] = self.llm_temperature
-        config["llm"]["model"] = self.llm_model_name
-
-        config["multimodal_llm"]["source"] = SupportedLlmType.openai_compatible
-        config["multimodal_llm"]["base_url"] = self.mllm_base_url
-        config["multimodal_llm"]["api_key"] = self.mllm_api_key
-        config["multimodal_llm"]["model"] = self.mllm_model_name
+        config["chat_model_id"] = self.chat_model_id
+        config["query_rewrite_model_id"] = self.query_rewrite_model_id
 
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
@@ -489,7 +450,6 @@ class ViewModel(BaseModel):
             ] = self.reranker_similarity_threshold
             config["postprocessor"]["top_n"] = self.reranker_similarity_top_k
 
-        config["synthesizer"]["use_multimodal_llm"] = self.use_mllm
         config["synthesizer"]["custom_prompt_template"] = self.custom_prompt_template
         config["synthesizer"]["system_role_template"] = self.system_role_template
 
@@ -497,10 +457,6 @@ class ViewModel(BaseModel):
             "rewrite_prompt_template"
         ] = self.query_transform_template
         config["query_rewrite"]["enabled"] = self.enable_query_transform
-        config["query_rewrite"]["llm"]["source"] = SupportedLlmType.openai_compatible
-        config["query_rewrite"]["llm"]["base_url"] = self.qt_llm_base_url
-        config["query_rewrite"]["llm"]["api_key"] = self.qt_llm_api_key
-        config["query_rewrite"]["llm"]["model"] = self.qt_llm_model_name
         # config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         # config["synthesizer"][
         #     "citation_multimodal_qa_template"
@@ -614,21 +570,18 @@ class ViewModel(BaseModel):
 
     def to_component_settings(self) -> Dict[str, Dict[str, Any]]:
         settings = {}
-        settings["llm_base_url"] = {"value": self.llm_base_url}
-        settings["llm_api_key"] = {
-            "value": self.llm_api_key or os.getenv("DASHSCOPE_API_KEY")
+        settings["chat_model_id"] = {
+            "choices": [
+                llm.model_id if llm.model_id else llm.model for llm in self.llms
+            ],
+            "value": self.chat_model_id,
         }
-
-        settings["llm_model_name"] = {"value": self.llm_model_name}
-        settings["llm_temperature"] = {"value": self.llm_temperature}
-
-        settings["use_mllm"] = {"value": self.use_mllm}
-        settings["use_mllm_col"] = {"visible": self.use_mllm}
-
-        settings["mllm_base_url"] = {"value": self.mllm_base_url}
-        settings["mllm_api_key"] = {"value": self.mllm_api_key}
-        settings["mllm_model_name"] = {"value": self.mllm_model_name}
-
+        settings["query_rewrite_model_id"] = {
+            "choices": [
+                llm.model_id if llm.model_id else llm.model for llm in self.llms
+            ],
+            "value": self.query_rewrite_model_id,
+        }
         settings["use_oss"] = {"value": self.use_oss}
         settings["use_oss_col"] = {"visible": self.use_oss}
 
@@ -686,15 +639,6 @@ class ViewModel(BaseModel):
         }
         settings["enable_query_transform"] = {
             "value": self.enable_query_transform,
-        }
-        settings["qt_llm_base_url"] = {
-            "value": self.qt_llm_base_url,
-        }
-        settings["qt_llm_api_key"] = {
-            "value": self.qt_llm_api_key,
-        }
-        settings["qt_llm_model_name"] = {
-            "value": self.qt_llm_model_name,
         }
         settings["system_role_template"] = {
             "value": self.system_role_template,
