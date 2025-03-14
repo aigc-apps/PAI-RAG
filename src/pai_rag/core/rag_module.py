@@ -77,6 +77,7 @@ def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
                     Settings.llm = llm
                     return llm
     if len(llms) == 0:
+        Settings.llm = None
         return None
     return llms[0]
 
