@@ -361,13 +361,13 @@ chat()
   -F 'index_name=default'
   ```
 
-- 如果需要通过 oss 存储服务上传文件，可以使用 -F 'oss_path=oss_path' 参数：
+- 如果需要通过 oss 存储服务上传文件，可以使用 -F 'oss_path=oss_path' 参数，文件夹路径或者具体文件路径均可：
 
   ```bash
   curl -X 'POST' http://localhost:8680/api/v1/upload_data \
   -H 'Authorization: EAS_TOKEN' \
   -H 'Content-Type: multipart/form-data' \
-  -F 'oss_path=https://pai-rag.oss-cn-hangzhou.aliyuncs.com/reader_file_test/paul_graham_essay.txt' \
+  -F 'oss_path=oss://bucket_name/reader_file_test/test' \
   -F 'index_name=default'
   ```
 
