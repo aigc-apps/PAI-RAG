@@ -52,13 +52,28 @@ def get_citations_from_node(
                         }
                     )
                 else:
-                    citation_details.append(
-                        {
-                            "name": score_node.node.metadata.get("file_name"),
-                            "text": score_node.node.text,
-                            "url": url,
-                            "score": score_node.score,
-                        }
-                    )
+                    if score_node.node.metadata.get("web_search"):
+                        citation_details.append(
+                            {
+                                "name": score_node.node.metadata.get("file_name"),
+                                "text": score_node.node.text,
+                                "url": url,
+                                "host_name": score_node.node.metadata.get("host_name"),
+                                "host_logo": score_node.node.metadata.get("host_logo"),
+                                "publish_time": score_node.node.metadata.get(
+                                    "publish_time"
+                                ),
+                                "score": score_node.score,
+                            }
+                        )
+                    else:
+                        citation_details.append(
+                            {
+                                "name": score_node.node.metadata.get("file_name"),
+                                "text": score_node.node.text,
+                                "url": url,
+                                "score": score_node.score,
+                            }
+                        )
 
     return citations, citation_details

@@ -53,15 +53,32 @@ class BingSearchTool(BaseQueryEngine):
             if "webPages" not in response_json:
                 logger.warning(f"Bing Search API response: {response_json}")
                 return []
-            titles = [value["name"] for value in response_json["webPages"]["value"]]
-            urls = [value["url"] for value in response_json["webPages"]["value"]]
-            url2titles = dict(zip(urls, titles))
+
+            urls = []
+            url2titles = {}
+            url2snippets = {}
+            url2dates = {}
+            for value in response_json["webPages"]["value"]:
+                url = value.get("url")
+                if url:
+                    urls.append(url)
+                    url2titles[url] = value.get("name")
+                    url2snippets[url] = value.get("snippet")
+                    url2dates[url] = value.get("dateLastCrawled")
+
             logger.info(f"Get {len(urls)} url links using Bing Search.")
 
             docs = self.html_reader.load_data(urls, include_url_in_text=False)
             for doc in docs:
+                if doc.text_resource.text is None or len(doc.text_resource.text) < len(
+                    url2snippets[doc.metadata["URL"]]
+                ):
+                    doc.text_resource.text = url2snippets[doc.metadata["URL"]]
+                doc.text_resource.text = doc.text_resource.text[:800]
+                doc.metadata["web_search"] = True
                 doc.metadata["file_url"] = doc.metadata["URL"]
                 doc.metadata["file_name"] = url2titles[doc.metadata["URL"]]
+                doc.metadata["publish_time"] = url2dates[doc.metadata["URL"]]
 
             return docs
 
