@@ -175,7 +175,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
             # 新增/编辑配置区域
-            with gr.Row(visible=False) as config_row:
+            with gr.Row(visible=True) as config_row:
                 llm_model_name = gr.Textbox(
                     label="Model Name",
                     placeholder="Model Name, e.g. qwen-max",

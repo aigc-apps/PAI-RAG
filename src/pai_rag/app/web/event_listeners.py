@@ -3,7 +3,6 @@ import os
 from typing import Any, List
 from pai_rag.app.web.index_utils import components_to_index, index_to_components
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
-from pai_rag.core.rag_service import rag_service
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.app.web.tabs.model.index_info import get_index_map
 import datetime
@@ -128,10 +127,8 @@ def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
         new_llm = PaiBaseLlmConfig(**new_llm_config)
 
         rag_config.llms.append(new_llm)
-        config = rag_service.get_config()
         update_dict = {}
-        config["llms"].append(new_llm_config)
-        update_dict["llms"] = config["llms"]
+        update_dict["llms"] = rag_config.llms
         rag_client.patch_config(update_dict)
 
     new_choices = ["NEW"] + [
@@ -152,14 +149,8 @@ def delete_llm(selected_model):
         if llm.model != selected_model and llm.model_id != selected_model
     ]
 
-    config = rag_service.get_config()
     update_dict = {}
-    update_dict["llms"] = [
-        config_llm
-        for config_llm in config["llms"]
-        if config_llm.get("model") != selected_model
-        and config_llm.get("model_id") != selected_model
-    ]
+    update_dict["llms"] = rag_config.llms
     rag_client.patch_config(update_dict)
 
     new_choices = ["NEW"] + [
@@ -309,7 +300,7 @@ def save_config(input_elements: List[Any]):
                 value=input_oss_ak_sk(value_sk), type="text" if value_sk else "password"
             ),
             gr.update(
-                value=f"[{datetime.datetime.now()}] Snapshot configuration saved successfully!",
+                value=f"[{datetime.datetime.now()}] OSS Snapshot configuration saved successfully!",
                 visible=True,
             ),
         ]
