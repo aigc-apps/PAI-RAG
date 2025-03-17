@@ -23,7 +23,7 @@ from pai_rag.app.web.ui_constants import (
     WELCOME_MESSAGE,
 )
 from pai_rag.app.web.tabs.model.index_info import get_index_map
-from pai_rag.app.web.filebrower.request_utils import postprocess_middleware
+from pai_rag.app.web.filebrowser.request_utils import postprocess_middleware
 
 
 def resume_ui():
@@ -81,19 +81,19 @@ def make_homepage():
     with gr.Blocks(css=DEFAULT_CSS_STYPE) as homepage:
         # generate components
         gr.Markdown(value=WELCOME_MESSAGE)
-        with gr.Tab("\N{rocket} Settings"):
+        with gr.Tab("\N{rocket} 系统设置"):
             setting_elements = create_setting_tab()
             elem_manager.add_elems(setting_elements)
         # with gr.Tab("\N{whale} Upload"):
         #     upload_elements = create_upload_tab()
         #     elem_manager.add_elems(upload_elements)
-        with gr.Tab("\N{fire} Chat"):
+        with gr.Tab("\N{fire} 对话"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        with gr.Tab("\N{rocket} Agent"):
+        with gr.Tab("\N{rocket} 智能体"):
             agent_elements = create_agent_tab()
             elem_manager.add_elems(agent_elements)
-        with gr.Tab("\N{bar chart} DBChat"):
+        with gr.Tab("\N{bar chart} 数据分析"):
             analysis_elements = create_data_analysis_tab()
             elem_manager.add_elems(analysis_elements)
         with gr.Tab("\N{rocket} 知识库"):

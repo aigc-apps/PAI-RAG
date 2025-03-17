@@ -10,7 +10,7 @@ from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.knowledgebase.rag_job_manager import job_manager, FileChange
 from loguru import logger
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
-from pai_rag.app.web.filebrower.constants import DEFAULT_FILE_BROWER_PORT
+from pai_rag.app.web.filebrowser.constants import DEFAULT_FILE_BROWER_PORT
 
 # Check every 30 seconds.
 CHECK_INTERVAL = 30
