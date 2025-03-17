@@ -595,7 +595,7 @@ class RagApplication:
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
             openai_query_transform = resolve_openai_query_transform(
-                self.config, chat_request.query_rewrite_model
+                self.config, self.config.query_rewrite.model_id
             )
             if chat_request.chat_db:
                 chat_type = "nl2sql"
