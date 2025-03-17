@@ -142,7 +142,7 @@ def create_chat_tab() -> Dict[str, Any]:
             chat_model_id = gr.Dropdown(
                 choices=model_choices,
                 value=model_name,
-                label="\N{bookmark} Chat Model Name",
+                label="\N{bookmark} 对话模型ID",
                 elem_id="chat_model_id",
             )
             chat_index = gr.Dropdown(
@@ -204,7 +204,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         query_rewrite_model_id = gr.Dropdown(
                             choices=model_choices,
                             value=model_name,
-                            label="\N{bookmark} Model Name",
+                            label="\N{bookmark} 查询改写模型ID",
                             elem_id="query_rewrite_model_id",
                         )
                         query_transform_template = gr.Textbox(

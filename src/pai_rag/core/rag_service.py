@@ -96,9 +96,12 @@ class RagService:
             self._state.update_state(config_mtime)
             logger.info("Reloaded rag configuration from API.")
 
-
-
-    async def aquery_v1(self, query: RagQuery):
+    async def aquery_v1(
+        self,
+        query: RagQuery,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
+    ):
         try:
             if query.search_web:
                 return await self.rag.aquery(

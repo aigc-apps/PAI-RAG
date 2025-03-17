@@ -160,7 +160,7 @@ def create_setting_tab() -> Dict[str, Any]:
 
             with gr.Row():
                 llm_model = gr.Dropdown(
-                    label="LLM Settings",
+                    label="模型配置",
                     choices=model_choices,
                     value="NEW"
                     if not rag_config.llms and len(rag_config.llms) == 0
@@ -171,7 +171,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 delete_btn = gr.Button(
-                    "DELETE", visible=bool(rag_config.llms), variant="primary"
+                    "删除", visible=bool(rag_config.llms), variant="primary"
                 )
 
             # 新增/编辑配置区域
@@ -180,7 +180,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=""
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].model,
-                    label="Model Name",
+                    label="模型名称",
                     placeholder="Model Name, e.g. qwen-max",
                     interactive=True,
                 )
@@ -188,7 +188,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=""
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].model_id,
-                    label="Model ID",
+                    label="模型ID",
                     placeholder="Model ID, e.g. model_1",
                     interactive=True,
                 )
@@ -196,7 +196,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=""
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].api_key,
-                    label="API Key",
+                    label="密钥",
                     type="password",
                     interactive=True,
                 )
@@ -204,7 +204,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=""
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].base_url,
-                    label="API Base URL",
+                    label="URL",
                     placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
                     interactive=True,
                 )
@@ -212,11 +212,11 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=False
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].vision_support,
-                    label="Vision Support",
+                    label="多模态",
                     elem_id="vision_support",
                     container=False,
                 )
-            save_btn = gr.Button("Save LLM Setting", variant="primary")
+            save_btn = gr.Button("保存模型配置", variant="primary")
 
             llm_model.change(
                 fn=ev_listeners.update_llms,
@@ -251,7 +251,6 @@ def create_setting_tab() -> Dict[str, Any]:
                 outputs=[llm_model, config_row, delete_btn],
             )
             ############################ llms settings end  ############################
-
 
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
@@ -343,7 +342,6 @@ def create_setting_tab() -> Dict[str, Any]:
             #     inputs=use_mllm,
             #     outputs=[use_mllm_col],
             # )
-
 
             save_oss_btn = gr.Button("保存OSS配置", variant="primary")
             save_state = gr.Textbox(
