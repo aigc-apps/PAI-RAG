@@ -140,6 +140,7 @@ async def list_indexes():
 
 @router_v1.get("/knowledgebases/{name}")
 async def get_knowledgebase(name: str):
+    """查询指定知识库信息"""
     try:
         return knowledgebase_manager.get_knowledgebase(name=name)
     except Exception as ex:
@@ -151,6 +152,7 @@ async def get_knowledgebase(name: str):
 
 @router_v1.post("/knowledgebases/{name}")
 async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    """新增知识库"""
     try:
         knowledgebase_manager.add_knowledgebase(knowledgebase)
         return {"msg": f"Add knowledgebase '{name}' successfully."}
@@ -163,9 +165,10 @@ async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
 
 @router_v1.patch("/knowledgebases/{name}")
 async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    """更新指定知识库"""
     try:
         knowledgebase_manager.update_knowledgebase(knowledgebase)
-        return {"msg": f"Update knowledgebase '{knowledgebase}' successfully."}
+        return {"msg": f"Update knowledgebase '{name}' successfully."}
     except Exception as ex:
         logger.error(
             f"Update knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
@@ -175,6 +178,7 @@ async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
 
 @router_v1.delete("/knowledgebases/{name}")
 async def delete_knowledgebase(name: str):
+    """删除指定知识库"""
     try:
         knowledgebase_manager.delete_knowledgebase(name)
         return {"msg": f"Delete knowledgebase '{name}' successfully."}
@@ -187,21 +191,25 @@ async def delete_knowledgebase(name: str):
 
 @router_v1.get("/knowledgebases")
 async def list_knowledgebases():
+    """知识库列表"""
     return knowledgebase_manager.list_knowledgebases()
 
 
 @router_v1.get("/knowledgebases/{name}/files")
 async def list_knowledgebase_files(name: str):
+    """指定知识库查询文件列表"""
     return knowledgebase_manager.get_docs_from_knowledgebase(name)
 
 
 @router_v1.get("/knowledgebases/{name}/history")
 async def get_upload_history(name: str):
+    """新知识库查询上传历史"""
     return job_manager.get_job_history(name)
 
 
 @router_v1.post("/knowledgebases/{name}/files")
 async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(...)):
+    """新知识库上传文件"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
         raise UserInputError(f"Knowledgebase '{name}' not found.")
 
@@ -229,6 +237,7 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(..
 
 @router_v1.get("/knowledgebases/{name}/files/{file_name}")
 async def get_file_from_knowledgebase(name: str, file_name: str):
+    """新知识库查询文件上传状态"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
         raise UserInputError(f"Knowledgebase '{name}' not found.")
 
@@ -240,6 +249,7 @@ async def get_file_from_knowledgebase(name: str, file_name: str):
 
 @router_v1.delete("/knowledgebases/{name}/files/{file_name}")
 async def delete_file_from_knowledgebase(name: str, file_name: str):
+    """新知识库删除文件"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
         raise UserInputError(f"Knowledgebase '{name}' not found.")
 
