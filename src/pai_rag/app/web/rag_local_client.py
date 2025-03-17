@@ -604,15 +604,15 @@ class RagLocalClient:
         try:
             config = rag_service.get_config()
             rag_config = RagConfig.model_validate(config)
-            # 兼容之前的配置
-            if rag_config.llm.is_validate():
-                updated_llm = rag_config.llm.copy(update={"vision_support": False})
-                rag_config.llms.append(updated_llm)
-            if rag_config.multimodal_llm.is_validate():
-                updated_vllm = rag_config.multimodal_llm.copy(
-                    update={"vision_support": True}
-                )
-                rag_config.llms.append(updated_vllm)
+            # # 兼容之前的配置
+            # if rag_config.llm.is_validate():
+            #     updated_llm = rag_config.llm.copy(update={"vision_support": False})
+            #     rag_config.llms.append(updated_llm)
+            # if rag_config.multimodal_llm.is_validate():
+            #     updated_vllm = rag_config.multimodal_llm.copy(
+            #         update={"vision_support": True}
+            #     )
+            #     rag_config.llms.append(updated_vllm)
             return rag_config
 
         except Exception as e:
