@@ -1,5 +1,5 @@
 from fastapi import Request, Response
-from pai_rag.app.web.filebrower.constants import (
+from pai_rag.app.web.filebrowser.constants import (
     DEFAULT_FILE_BROWER_PORT,
 )
 import aiohttp
@@ -18,7 +18,7 @@ async def sender_data(req: Request):
         yield chunk
 
 
-async def postprocess_middleware_to_filebrower(session, request, url):
+async def postprocess_middleware_to_filebrowser(session, request, url):
     async with session.request(
         request.method,
         str(url),
@@ -49,7 +49,7 @@ async def postprocess_middleware(request, call_next):
                 connect=500 * 60,
             )
         ) as session:
-            return await postprocess_middleware_to_filebrower(session, request, url)
+            return await postprocess_middleware_to_filebrowser(session, request, url)
     else:
         response = await call_next(request)
         return response

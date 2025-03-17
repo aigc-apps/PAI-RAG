@@ -229,7 +229,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                     "database",
                 ],
                 value="database",
-                label="Please choose the analysis type",
+                label="请选择待分析的数据类型",
                 elem_id="analysis_type",
             )
 
@@ -238,14 +238,14 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 visible=(data_analysis_type.value == "datafile")
             ) as file_col:
                 upload_file = gr.File(
-                    label="Upload csv/xlsx file for data analysis",
+                    label="上传 csv/xlsx 文件以进行数据分析",
                     file_count="single",
                     file_types=[".xlsx", ".csv"],
                     elem_id="upload_file",
                     scale=8,
                 )
                 output_text = gr.DataFrame(
-                    label="Data File Preview",
+                    label="数据文件预览",
                     value=pd.DataFrame(),
                     visible=True,
                     scale=10,
@@ -262,33 +262,31 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             with gr.Column(visible=(data_analysis_type.value == "database")) as db_col:
                 with gr.Row():
                     dialect = gr.Textbox(
-                        label="Dialect", elem_id="db_dialect", value="mysql"
+                        label="数据库类型", elem_id="db_dialect", value="mysql"
                     )
-                    port = gr.Textbox(label="Port", elem_id="db_port", value=3306)
-                    host = gr.Textbox(label="Host", elem_id="db_host")
+                    port = gr.Textbox(label="数据库端口号", elem_id="db_port", value=3306)
+                    host = gr.Textbox(label="数据库主机地址", elem_id="db_host")
                 with gr.Row():
-                    user = gr.Textbox(label="Username", elem_id="db_username")
+                    user = gr.Textbox(label="用户名", elem_id="db_username")
                     password = gr.Textbox(
-                        label="Password", elem_id="db_password", type="password"
+                        label="密码", elem_id="db_password", type="password"
                     )
                 with gr.Row():
-                    database = gr.Textbox(label="Database", elem_id="database")
+                    database = gr.Textbox(label="数据库名称", elem_id="database")
                     tables = gr.Textbox(
-                        label="Tables",
+                        label="数据表名称",
                         elem_id="db_tables",
-                        placeholder="List useful tables, separated by commas, e.g. table_A, table_B, ... , using all tables if blank",
+                        placeholder="列出有用的表名，用逗号分隔，例如：表_A, 表_B, ...，如果为空则使用所有表",
                     )
                 descriptions = gr.Textbox(
-                    label="Table Comment",
+                    label="表的描述性信息",
                     lines=2,
                     elem_id="db_descriptions",
-                    placeholder='A dict of table comments, e.g. {"table_A": "comment_A", "table_B": "comment_B"}',
+                    placeholder='一个表描述的字典，例如：{"table_A": "comment_A", "table_B": "comment_B"}',
                 )
 
                 with gr.Column(visible=True):
-                    enhance_argument = gr.Accordion(
-                        "Enhancement options for larger database", open=False
-                    )
+                    enhance_argument = gr.Accordion("大型数据库的增强方案", open=False)
                     with enhance_argument:
                         with gr.Row():
                             with gr.Column(scale=1):
@@ -299,7 +297,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                 # )
                                 enable_db_embedding = gr.Checkbox(
                                     label="Yes",
-                                    info="Enhance db retrieval by embedding",
+                                    info="通过向量嵌入技术优化数据库检索",
                                     elem_id="enable_db_embedding",
                                 )
 
@@ -307,8 +305,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     minimum=50,
                                     maximum=200,
                                     step=10,
-                                    label="Max Column Number",
-                                    info="Max number of columns to extract unique values.",
+                                    label="最大列数",
+                                    info="提取唯一值的最大列数",
                                     elem_id="max_column_num",
                                     value=100,
                                     visible=False,  # 初始状态为不可见
@@ -317,8 +315,8 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     minimum=1000,
                                     maximum=20000,
                                     step=1000,
-                                    label="Max Value Number",
-                                    info="Maximum number of unique values per column to be embedded. Larger number may take longer time.",
+                                    label="最大唯一值数量",
+                                    info="每列嵌入的唯一值的最大数量。数值越大，可能耗费的时间越长。",
                                     elem_id="max_value_num",
                                     value=1000,
                                     visible=False,  # 初始状态为不可见
@@ -332,24 +330,24 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                                 enable_db_selector = gr.Checkbox(
                                     label="Yes",
-                                    info="Enable db schema selection by llm",
+                                    info="通过LLM选表选列",
                                     elem_id="enable_db_selector",
                                 )
 
                                 enable_db_history = gr.Checkbox(
                                     label="Yes",
-                                    info="Enable db query history/example",
+                                    info="使用数据库查询历史/示例",
                                     elem_id="enable_db_history",
                                 )
 
                                 db_description_upload = gr.Checkbox(
                                     label="Yes",
-                                    info="Enable db description upload",
+                                    info="上传数据表描述信息",
                                     elem_id="enable_db_description_upload",
                                 )
 
                                 history_file_upload = gr.File(
-                                    label="Upload q-sql json file",
+                                    label="上传 Q-SQL JSON 文件",
                                     file_count="single",
                                     file_types=[".json"],
                                     elem_id="query_history_upload",
@@ -357,13 +355,13 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                 )
 
                                 history_update_state = gr.Textbox(
-                                    label="History upload state",
+                                    label="JSON文件上传状态",
                                     container=False,
                                     visible=False,  # 初始状态为不可见
                                 )
 
                                 db_description_file_upload = gr.File(
-                                    label="Upload db description files",
+                                    label="上传数据库描述文件",
                                     file_count="multiple",
                                     file_types=[".csv"],
                                     elem_id="db_description_file_upload",
@@ -371,7 +369,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                     visible=False,  # 初始状态为不可见
                                 )
                                 description_update_state = gr.Textbox(
-                                    label="Description upload state",
+                                    label="数据库描述文件上传状态",
                                     visible=False,  # 初始状态为不可见
                                     container=False,
                                 )
@@ -410,11 +408,9 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 # load db info
                 with gr.Row():
                     load_db_info_btn = gr.Button(
-                        value="Load DB Info", variant="primary", scale=4
+                        value="加载数据库信息", variant="primary", scale=4
                     )
-                    save_state = gr.Textbox(
-                        label="DB Load Info: ", container=False, scale=6
-                    )
+                    save_state = gr.Textbox(label="数据库加载状态: ", container=False, scale=6)
 
                 load_args = {
                     data_analysis_type,
@@ -443,26 +439,24 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 )
 
                 with gr.Column(visible=True):
-                    with gr.Tab("Nl2sql Prompt"):
+                    with gr.Tab("Nl2sql 提示词模板"):
                         db_nl2sql_prompt = gr.Textbox(
-                            label="nl2sql template",
+                            label="nl2sql 提示词模板",
                             elem_id="db_nl2sql_prompt",
                             value=NL2SQL_GENERAL_PROMPTS,
                             lines=6,
                         )
 
-                    with gr.Tab("Synthesizer Prompt"):
+                    with gr.Tab("合成器 提示词模板"):
                         synthesizer_prompt = gr.Textbox(
-                            label="synthesizer template",
+                            label="合成器 提示词模板",
                             elem_id="synthesizer_prompt",
                             value=SYN_GENERAL_PROMPTS,
                             lines=6,
                         )
-                    with gr.Tab("Prompt Reset"):
-                        reset_nl2sql_prompt_btn = gr.Button("Reset Nl2sql Prompt")
-                        reset_synthesizer_prompt_btn = gr.Button(
-                            "Reset Synthesizer Prompt"
-                        )
+                    with gr.Tab("提示词模板重置"):
+                        reset_nl2sql_prompt_btn = gr.Button("重置 Nl2sql 提示词模板")
+                        reset_synthesizer_prompt_btn = gr.Button("重置 合成器 提示词模板")
 
                     def reset_nl2sql_prompt():
                         return gr.update(value=NL2SQL_GENERAL_PROMPTS)
@@ -514,10 +508,10 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             #     question = gr.Textbox(
             #         label="Enter your question.", elem_id="question", scale=9
             #     )
-            question = gr.Textbox(label="Enter your question.", elem_id="question")
+            question = gr.Textbox(label="在这里输入您的问题", elem_id="question")
             with gr.Row():
-                submitBtn = gr.Button("Submit", variant="primary")
-                clearBtn = gr.Button("Clear History", variant="secondary")
+                submitBtn = gr.Button("提交", variant="primary")
+                clearBtn = gr.Button("清空历史", variant="secondary")
 
         chat_args = {
             data_analysis_type,
