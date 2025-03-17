@@ -108,14 +108,14 @@ class RagService:
                     query,
                     chat_model_id,
                     query_rewrite_model_id,
-                    RagChatType.WEB,
+                    chat_type=RagChatType.WEB,
                     sse_version=SseVersion.V1,
                 )
             return await self.rag.aquery(
                 query,
                 chat_model_id,
                 query_rewrite_model_id,
-                RagChatType.RAG,
+                chat_type=RagChatType.RAG,
                 sse_version=SseVersion.V1,
             )
         except Exception as ex:
@@ -132,7 +132,7 @@ class RagService:
     async def aquery_search_v1(self, query: RagQuery):
         try:
             return await self.rag.aquery(
-                query, RagChatType.WEB, sse_version=SseVersion.V1
+                query, chat_type=RagChatType.WEB, sse_version=SseVersion.V1
             )
         except Exception as ex:
             logger.error(traceback.format_exc())
@@ -149,7 +149,7 @@ class RagService:
                 query,
                 chat_model_id,
                 query_rewrite_model_id,
-                RagChatType.LLM,
+                chat_type=RagChatType.LLM,
                 sse_version=SseVersion.V1,
             )
         except Exception as ex:
@@ -159,8 +159,8 @@ class RagService:
     async def aquery(self, query: RagQuery):
         try:
             if query.search_web:
-                return await self.rag.aquery(query, RagChatType.WEB)
-            return await self.rag.aquery(query, RagChatType.RAG)
+                return await self.rag.aquery(query, chat_type=RagChatType.WEB)
+            return await self.rag.aquery(query, chat_type=RagChatType.RAG)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")
@@ -169,14 +169,14 @@ class RagService:
         self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
     ):
         try:
-            return await self.rag.aquery(query, RagChatType.WEB)
+            return await self.rag.aquery(query, chat_type=RagChatType.WEB)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Search failed: {ex}")
 
     async def aquery_llm(self, query: RagQuery):
         try:
-            return await self.rag.aquery(query, RagChatType.LLM)
+            return await self.rag.aquery(query, chat_type=RagChatType.LLM)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

@@ -60,6 +60,8 @@ def resolve(cls: Any, **kwargs):
 
 def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
     model_id = model_id or config.chat.model_id
+    if model_id == "default":
+        model_id = None
     llms = []
     for llm_config in config.llms:
         if llm_config.is_validate():
