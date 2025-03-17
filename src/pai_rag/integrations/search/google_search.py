@@ -75,7 +75,7 @@ class GoogleSearchTool(BaseQueryEngine):
             ):
                 doc.text_resource.text = url2snippets[doc.metadata["URL"]]
             doc.text_resource.text = doc.text_resource.text[:800]
-            doc.metadata["web_search"] = True
+            doc.metadata["source"] = "web_search"
             doc.metadata["file_url"] = doc.metadata["URL"]
             doc.metadata["file_name"] = url2titles[doc.metadata["URL"]]
             doc.metadata["host_name"] = url2sources[doc.metadata["URL"]]

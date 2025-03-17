@@ -52,7 +52,7 @@ def get_citations_from_node(
                         }
                     )
                 else:
-                    if score_node.node.metadata.get("web_search"):
+                    if score_node.node.metadata.get("source") == "web_search":
                         citation_details.append(
                             {
                                 "name": score_node.node.metadata.get("file_name"),

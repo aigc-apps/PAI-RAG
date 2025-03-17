@@ -86,7 +86,7 @@ class AliyunSearchTool(BaseQueryEngine):
                 node = TextNode(
                     text=text[:800],
                     metadata={
-                        "web_search": True,
+                        "source": "web_search",
                         "file_url": item.get("link"),
                         "file_name": item.get("title") or item.get("htmlTitle"),
                         "host_name": item.get("hostname"),
