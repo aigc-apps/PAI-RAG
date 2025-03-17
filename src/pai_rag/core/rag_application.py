@@ -622,7 +622,7 @@ class RagApplication:
             if chat_request.chat_agent:
                 logger.info(f"Querying with question: {query_bundle.query_str}.")
 
-                agent_tool = resolve_agent(self.config)
+                agent_tool = resolve_agent(self.config, chat_request.model)
                 if not agent_tool:
                     raise ValueError(
                         "Agent config is not valid. Please check your Agent api configuration."
@@ -724,7 +724,7 @@ class RagApplication:
             )
             session_config.embedding = knowledgebase.embedding_config
             session_config.index.vector_store = knowledgebase.vector_store_config
-            query_engine = resolve_query_engine(session_config)
+            query_engine = resolve_query_engine(session_config, chat_request.model)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
@@ -843,7 +843,7 @@ class RagApplication:
                     )
 
         if query.with_intent:
-            intent_router = resolve_intent_router(self.config)
+            intent_router = resolve_intent_router(self.config, chat_model_id)
             intent = await intent_router.aselect(
                 str_or_query_bundle=new_query_bundle.chat_messages_str
             )
@@ -878,7 +878,7 @@ class RagApplication:
             session_config.embedding = knowledgebase.embedding_config
             session_config.index.vector_store = knowledgebase.vector_store_config
 
-            query_engine = resolve_query_engine(session_config)
+            query_engine = resolve_query_engine(session_config, chat_model_id)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=query.system_role_template,
@@ -887,7 +887,7 @@ class RagApplication:
         elif chat_type == RagChatType.WEB:
             logger.info(f"Querying with question '{new_question}'.")
 
-            search_engine = resolve_searcher(self.config)
+            search_engine = resolve_searcher(self.config, chat_model_id)
             if not search_engine:
                 raise ValueError(
                     "AI search config is not valid. Please check your search api configuration."

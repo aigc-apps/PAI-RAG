@@ -181,8 +181,8 @@ def resolve_task_executor(
     )
 
 
-def resolve_agent(config: RagConfig) -> PaiAgent:
-    llm = resolve(cls=PaiLlm, llm_config=config.llm)
+def resolve_agent(config: RagConfig, model_id: str = None) -> PaiAgent:
+    llm = resolve_chat_llm(config, model_id)
     agent = resolve(
         cls=PaiAgent.from_tools,
         agent_config=config.agent,
