@@ -1,7 +1,7 @@
 import traceback
 from typing import Dict, List
 
-from pai_rag.app.api.models import ChatResponseWrapper
+from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
 from pai_rag.extensions.news.news_config import MiaobiNewsConfig
 
 from llama_index.core.base.llms.types import (
@@ -22,6 +22,9 @@ from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+
+
+DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
 
 
 def _create_client(
@@ -157,33 +160,102 @@ class MiaobiNewsTool:
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def alist_topics(
-        self,
-    ) -> ChatResponseWrapper:
+    async def _alist_hot_topics(self):
         request = aimiaobi_models.GetHotTopicBroadcastRequest(
             workspace_id=self.config.workspace_id,
             size=self.config.top_news_count,
             current=1,
         )
-        try:
-            broadcast_response = await self.miaobi_client.get_hot_topic_broadcast_async(
-                request=request
+
+        broadcast_response = await self.miaobi_client.get_hot_topic_broadcast_async(
+            request=request
+        )
+        assert (
+            broadcast_response.status_code == 200
+        ), "Get hot topic status code is not 200."
+        hot_topics = []
+        for topic in broadcast_response.body.data.data:
+            hot_topics.append(
+                {
+                    "title": topic.news[0].title,
+                    "url": topic.news[0].url,
+                    "summary": topic.news[0].summary,
+                    "category": topic.category,
+                }
             )
-            assert (
-                broadcast_response.status_code == 200
-            ), "Get hot topic status code is not 200."
-            hot_topics = []
-            for topic in broadcast_response.body.data.data:
-                hot_topics.append(
-                    {
-                        "title": topic.news[0].title,
-                        "url": topic.news[0].url,
-                        "summary": topic.news[0].summary,
-                        "category": topic.news[0].category,
-                    }
+
+        return hot_topics
+
+    async def alist_topics(
+        self,
+    ) -> ChatResponseWrapper:
+        try:
+            hot_topics = await self._alist_hot_topics()
+        except Exception as ex:
+            logger.error(
+                f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
+            )
+            response = ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=DEFAULT_NEWS_ERROR_MESSAGE,
+                ),
+                delta=DEFAULT_NEWS_ERROR_MESSAGE,
+                additional_kwargs={"news_articles": []},
+            )
+            return ChatResponseWrapper(response=response)
+
+        try:
+            messages = [
+                ChatMessage(
+                    role="user",
+                    content=DEFAULT_PROMPT_TEMPLATE.format(
+                        hot_topics_str=_make_context(hot_topics)
+                    ),
                 )
+            ]
+
+            response = await self.llm.achat(messages)
+            response.additional_kwargs["news_articles"] = hot_topics
+            return ChatResponseWrapper(response=response)
+        except Exception as ex:
+            logger.error(
+                f"News chat llm failed. Exception: {ex}. {traceback.format_exc()}"
+            )
+            raise ex
+
+    async def astream_list_topics(
+        self,
+    ) -> ChatResponseWrapper:
+        try:
 
             async def gen() -> ChatResponseAsyncGen:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role="assistant",
+                        content="",
+                    ),
+                    delta="",
+                    intent=ChatIntentType.LIST_NEWS,
+                    additional_kwargs={"intent": ChatIntentType.LIST_NEWS},
+                )
+
+                try:
+                    hot_topics = await self._alist_hot_topics()
+                except Exception as ex:
+                    logger.error(
+                        f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
+                    )
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role="assistant",
+                            content=DEFAULT_NEWS_ERROR_MESSAGE,
+                        ),
+                        delta=DEFAULT_NEWS_ERROR_MESSAGE,
+                        additional_kwargs={"news_articles": []},
+                    )
+                    return
+
                 messages = [
                     ChatMessage(
                         role="user",
@@ -192,14 +264,18 @@ class MiaobiNewsTool:
                         ),
                     )
                 ]
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role="assistant",
+                        content="",
+                    ),
+                    delta="",
+                    additional_kwargs={"news_articles": hot_topics},
+                )
 
-                is_first = True
                 async for response in await self.llm.astream_chat(
                     messages=messages,
                 ):
-                    if is_first:
-                        response.additional_kwargs["news_articles"] = hot_topics
-                        is_first = False
                     yield response
 
             return ChatResponseWrapper(response=gen())
@@ -208,6 +284,32 @@ class MiaobiNewsTool:
                 f"Error while getting hot topics: {e}, {traceback.format_exc()}"
             )
             raise e
+
+    async def achat(
+        self,
+        prompt: str,
+        messages: List[ChatMessage] = [],
+    ):
+        stream_response_wrapper = await self.astream_chat(
+            prompt=prompt,
+            messages=messages,
+        )
+        message_content = ""
+        additional_kwargs = {}
+        async for response in stream_response_wrapper.response:
+            message_content += response.delta
+            additional_kwargs.update(response.additional_kwargs)
+
+        return ChatResponseWrapper(
+            response=ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=message_content,
+                ),
+                additional_kwargs=additional_kwargs,
+                source_nodes=stream_response_wrapper.source_nodes,
+            )
+        )
 
     async def astream_chat(
         self,
@@ -225,18 +327,33 @@ class MiaobiNewsTool:
 
         async def gen() -> ChatResponseAsyncGen:
             origin_text = ""
+            yield ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content="",
+                ),
+                delta="",
+                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
+            )
+
             async for item in await self.chat_client.do_sse_query(param):
                 try:
                     data = json.loads(item.get("event").data)
-                    if data.get("header").get("event") != "task-finished":
+                    logger.info(data)
+
+                    event = data.get("header").get("event")
+                    if event != "task-finished":
                         additional_kwargs = {}
+
                         usage = data.get("payload").get("usage")
                         if usage:
-                            additional_kwargs = {
-                                "completion_tokens": usage.get("outputTokens", 0),
-                                "prompt_tokens": usage.get("inputTokens", 0),
-                                "total_tokens": usage.get("totalTokens", 0),
-                            }
+                            additional_kwargs.update(
+                                {
+                                    "completion_tokens": usage.get("outputTokens", 0),
+                                    "prompt_tokens": usage.get("inputTokens", 0),
+                                    "total_tokens": usage.get("totalTokens", 0),
+                                }
+                            )
 
                         search_query = (
                             data.get("payload").get("output").get("searchQuery")
@@ -259,12 +376,6 @@ class MiaobiNewsTool:
                                 )
                             additional_kwargs["news_articles"] = news_articles
 
-                        recommend_queries = (
-                            data.get("payload").get("output").get("recommendQueries")
-                        )
-                        if recommend_queries:
-                            additional_kwargs["recommend_queries"] = recommend_queries
-
                         text = data.get("payload").get("output").get("text")
                         if text:
                             response = ChatResponse(
@@ -277,9 +388,30 @@ class MiaobiNewsTool:
                             )
                             origin_text = text
                             yield response
-                except json.JSONDecodeError as ex:
+
+                        # 不只有usage信息
+                        elif len(additional_kwargs) > 3:
+                            empty_response = ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content="",
+                                ),
+                                delta="",
+                                additional_kwargs=additional_kwargs,
+                            )
+                            yield empty_response
+
+                except Exception as ex:
                     logger.warning(
                         f"Error when decoding Miaobi outputs {ex}, data: {item}"
+                    )
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content=DEFAULT_NEWS_ERROR_MESSAGE,
+                        ),
+                        delta=DEFAULT_NEWS_ERROR_MESSAGE,
+                        additional_kwargs={},
                     )
                     continue
 

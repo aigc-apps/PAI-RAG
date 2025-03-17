@@ -25,6 +25,7 @@ def create_embedding(
             api_base=embed_config.api_base,
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
+            model=embed_config.model,
         )
         logger.info(
             f"Initialized Open AI embedding model with {embed_config.embed_batch_size} batch size."
@@ -34,6 +35,7 @@ def create_embedding(
             api_key=embed_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             embed_batch_size=embed_config.embed_batch_size,
             callback_manager=Settings.callback_manager,
+            model_name=embed_config.model,
         )
         logger.info(
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."

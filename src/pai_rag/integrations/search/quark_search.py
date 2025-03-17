@@ -10,7 +10,6 @@ from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from llama_index.core.query_engine import BaseQueryEngine
 from urllib.parse import urljoin, urlencode
-from pai_rag.app.api.models import PaiQueryBundle
 import httpx
 from loguru import logger
 
@@ -111,19 +110,6 @@ class QuarkSearchTool(BaseQueryEngine):
         prompt_template_str: Optional[str] = None,
     ):
         start = time.time()
-        if not query.need_web_search:
-            no_search_query = PaiQueryBundle(
-                query_str=query.query_str,
-                no_retrieval=True,
-                stream=query.stream,
-                chat_messages_str=query.chat_messages_str,
-            )
-            return await self.synthesizer.asynthesize(
-                query=no_search_query,
-                nodes=[],
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
 
         logger.info(f"Quark Search with query {query.query_str}.")
         nodes = await self.asearch(query=query.query_str)

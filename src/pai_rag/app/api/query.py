@@ -74,19 +74,6 @@ async def aquery_agent(query: RagQuery):
         )
 
 
-@router.post("/config/agent")
-async def aload_agent_config(file: UploadFile):
-    fn = file.filename
-    data = await file.read()
-    file_hash = hashlib.md5(data).hexdigest()
-    save_file = os.path.join("localdata", f"{file_hash}_{fn}")
-
-    with open(save_file, "wb") as f:
-        f.write(data)
-        f.close()
-    return await rag_service.aload_agent_config(save_file)
-
-
 @router.patch("/config")
 async def aupdate(new_config: Any = Body(None)):
     rag_service.reload(new_config)

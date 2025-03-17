@@ -233,20 +233,20 @@ def resolve_synthesizer(config: RagConfig) -> PaiSynthesizer:
     return synthesizer
 
 
-def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+def resolve_vector_index(knowledgebase: KnowledgeBase) -> PaiVectorStoreIndex:
+    embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
     vector_index = resolve(
         cls=PaiVectorStoreIndex,
-        vector_store_config=config.index.vector_store,
+        vector_store_config=knowledgebase.vector_store_config,
         embed_model=embed_model,
         enable_local_keyword_index=True,
     )
     return vector_index
 
 
-def resolve_query_engine(config: RagConfig) -> PaiRetrieverQueryEngine:
-    vector_index = resolve_vector_index(config)
-
+def resolve_query_engine(
+    config: RagConfig, vector_index: PaiVectorStoreIndex
+) -> PaiRetrieverQueryEngine:
     retriever = vector_index.as_retriever(
         vector_store_query_mode=config.retriever.vector_store_query_mode,
         similarity_top_k=config.retriever.similarity_top_k,

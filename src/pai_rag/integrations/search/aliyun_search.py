@@ -9,7 +9,6 @@ from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 
-from pai_rag.app.api.models import PaiQueryBundle
 from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
@@ -104,20 +103,6 @@ class AliyunSearchTool(BaseQueryEngine):
         system_role_str: str = None,
         prompt_template_str: str = None,
     ):
-        if not query.need_web_search:
-            no_search_query = PaiQueryBundle(
-                query_str=query.query_str,
-                no_retrieval=True,
-                stream=query.stream,
-                chat_messages_str=query.chat_messages_str,
-            )
-            return await self.synthesizer.asynthesize(
-                query=no_search_query,
-                nodes=[],
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
-
         start = time.time()
         logger.info(f"Aliyun Search with query {query.query_str}.")
         nodes = await self._asearch(query=query.query_str)

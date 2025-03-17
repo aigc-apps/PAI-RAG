@@ -1,29 +1,37 @@
-from abc import abstractmethod
-from typing import Dict, List, Optional, Sequence, cast
+from typing import List, Optional, Sequence
 from llama_index.core.settings import Settings
 from llama_index.core.llms.utils import LLMType, resolve_llm
 from llama_index.core.prompts import BasePromptTemplate
-from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
-from llama_index.core.indices.query.query_transform import HyDEQueryTransform
-from llama_index.core.prompts.mixin import PromptDictType
-from llama_index.core.schema import QueryBundle, QueryType
 from llama_index.core.base.llms.types import ChatMessage
 from pai_rag.utils.prompt_template import (
     INTENT_REWRITE_PROMPT_ZH,
-    DEFAULT_FUSION_TRANSFORM_PROMPT,
     CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-    CONDENSE_QUESTION_CHAT_ENGINE_PROMPT,
+    KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
+    CHAT_LLM_REWRITE_PROMPT_ZH,
+    WEBSEARCH_REWRITE_PROMPT_ZH,
+    NL2SQL_REWRITE_PROMPT_ZH,
+    NEWS_REWRITE_PROMPT_ZH,
+    AGENT_REWRITE_PROMPT_ZH,
+    REWRITE_PROMPT_ROLE_ZH,
 )
 from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_QUERY_TIME_PROMPT
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.app.api.models import ChatToolType, ChatIntentType, PaiQueryBundle
 from pai_rag.utils.json_parser import parse_json_from_code_block_str
 from datetime import datetime
 from loguru import logger
 import re
 
-DEFAULT_FUSION_NUM_QUERIES = 4
+
+query_rewrite_prompts = {
+    ChatToolType.CHAT_LLM: CHAT_LLM_REWRITE_PROMPT_ZH,
+    ChatToolType.CHAT_DB: NL2SQL_REWRITE_PROMPT_ZH,
+    ChatToolType.CHAT_KNOWLEDGEBASE: KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
+    ChatToolType.SEARCH_WEB: WEBSEARCH_REWRITE_PROMPT_ZH,
+    ChatToolType.CHAT_NEWS: NEWS_REWRITE_PROMPT_ZH,
+    ChatToolType.CHAT_AGENT: AGENT_REWRITE_PROMPT_ZH,
+}
 
 
 def messages_to_history_str(
@@ -49,126 +57,6 @@ def messages_to_history_str(
     return "\n".join(string_messages)
 
 
-class PaiBaseQueryTransform(BaseQueryTransform):
-    @abstractmethod
-    async def _arun(self, query_bundle: QueryBundle, metadata: Dict) -> QueryBundle:
-        """Run query transform."""
-
-    async def arun(
-        self,
-        query_bundle_or_str: QueryType,
-        metadata: Optional[Dict] = None,
-    ) -> QueryBundle:
-        """Run query transform."""
-        metadata = metadata or {}
-        if isinstance(query_bundle_or_str, str):
-            query_bundle = QueryBundle(
-                query_str=query_bundle_or_str,
-                custom_embedding_strs=[query_bundle_or_str],
-            )
-        else:
-            query_bundle = query_bundle_or_str
-
-        return await self._arun(query_bundle, metadata=metadata)
-
-
-class PaiFusionQueryTransform(PaiBaseQueryTransform):
-    def __init__(
-        self,
-        llm: Optional[LLMType] = None,
-        fusion_transform_prompt: Optional[BasePromptTemplate] = None,
-        num_queries: int = DEFAULT_FUSION_NUM_QUERIES,
-        callback_manager: Optional[CallbackManager] = None,
-    ) -> None:
-        """ """
-        super().__init__()
-
-        self._llm = (
-            resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
-        )
-        self._prompt = fusion_transform_prompt or DEFAULT_FUSION_TRANSFORM_PROMPT
-        self._num_queries = num_queries
-
-    def _get_prompts(self) -> PromptDictType:
-        """Get prompts."""
-        return {"fusion_query_prompt": PromptTemplate(self._prompt)}
-
-    def _update_prompts(self, prompts: PromptDictType) -> None:
-        """Update prompts."""
-        if "fusion_query_prompt" in prompts:
-            self._prompt = cast(PromptTemplate, prompts["fusion_query_prompt"]).template
-
-    def _run(self, query_bundle: QueryBundle, metadata: Dict) -> List[QueryBundle]:
-        """Run query transform."""
-        query_str = query_bundle.query_str
-        prompt_str = self._prompt.format(
-            num_queries=self._num_queries - 1,
-            query=query_str,
-        )
-        response = self._llm.complete(prompt_str)
-
-        # assume LLM proper put each query on a newline
-        # TODO: query改写的结构化输出
-        queries = response.text.split("\n")
-        queries = [q.strip() for q in queries if q.strip()]
-        if self._verbose:
-            queries_str = "\n".join(queries)
-            logger.info(f"Generated queries:\n{queries_str}")
-
-        # The LLM often returns more queries than we asked for, so trim the list.
-        return [
-            QueryBundle(
-                query_str=new_query_str,
-                custom_embedding_strs=[new_query_str],
-            )
-            for new_query_str in queries[: self.num_queries - 1]
-        ]
-
-    async def _arun(
-        self, query_bundle: QueryBundle, metadata: Dict
-    ) -> List[QueryBundle]:
-        """Run query transform."""
-        query_str = query_bundle.query_str
-        prompt_str = self._prompt.format(
-            num_queries=self._num_queries - 1,
-            query=query_str,
-        )
-        response = await self._llm.acomplete(prompt_str)
-
-        # assume LLM proper put each query on a newline
-        queries = response.text.split("\n")
-        queries = [q.strip() for q in queries if q.strip()]
-        if self._verbose:
-            queries_str = "\n".join(queries)
-            logger.info(f"Generated queries:\n{queries_str}")
-
-        # The LLM often returns more queries than we asked for, so trim the list.
-        return [
-            QueryBundle(
-                query_str=new_query_str,
-                custom_embedding_strs=[new_query_str],
-            )
-            for new_query_str in queries[: self.num_queries - 1]
-        ]
-
-
-class PaiHyDEQueryTransform(PaiBaseQueryTransform, HyDEQueryTransform):
-    async def _arun(self, query_bundle: QueryBundle, metadata: Dict) -> QueryBundle:
-        """Run query transform."""
-        # TODO: support generating multiple hypothetical docs
-        query_str = query_bundle.query_str
-        hypothetical_doc = await self._llm.apredict(
-            self._hyde_prompt, context_str=query_str
-        )
-        embedding_strs = [hypothetical_doc]
-        if self._include_original:
-            embedding_strs.extend(query_bundle.embedding_strs)
-        return QueryBundle(
-            query_str=query_str,
-            custom_embedding_strs=embedding_strs,
-        )
-
-
 class OpenAICompatibleQueryTransform:
     def __init__(
         self,
@@ -176,7 +64,7 @@ class OpenAICompatibleQueryTransform:
         query_transform_prompt: Optional[BasePromptTemplate] = None,
         condense_question_prompt: Optional[BasePromptTemplate] = None,
         callback_manager: Optional[CallbackManager] = None,
-    ) -> None:
+    ):
         super().__init__()
 
         self._llm = (
@@ -198,122 +86,40 @@ class OpenAICompatibleQueryTransform:
             condense_question_prompt or default_condense_question_prompt
         )
 
-    def run(
-        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
-    ) -> QueryBundle:
-        chat_history_str = messages_to_history_str(
-            chat_messages[-7:-1], max_length=1000
+    def get_prompt(self, query_str: str, chat_history: str, potential_intents):
+        tool_prompt = "\n\n".join(
+            [query_rewrite_prompts[intent] for intent in potential_intents]
         )
-        if chat_type != "nl2sql":
-            current_condense_question_prompt = PromptTemplate(
-                template="{}\n{}\n{}".format(
-                    self._query_transform_prompt,
-                    CURRENT_QUERY_TIME_PROMPT.format(
-                        current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                    ),
-                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-                )
+        return PromptTemplate(
+            template=REWRITE_PROMPT_ROLE_ZH.format(
+                tool_list=tool_prompt,
+                chat_history=chat_history,
+                query_str=query_str,
+                cur_date=datetime.now().strftime("%Y年%m月%d日"),
             )
-        else:
-            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
-
-        logger.debug(
-            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
         )
-        messages = self._llm._get_messages(
-            current_condense_question_prompt,
-            question=chat_messages[-1].content,
-            chat_history=chat_history_str,
-        )
-        chat_response = self._llm.chat(
-            messages=messages,
-        )
-        transformed_query_str = chat_response.message.content
-        logger.debug(
-            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
-        )
-        # 修复thought输出
-        transformed_query_str = re.sub(
-            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
-        )
-        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
-            "</think>", ""
-        )
-
-        if chat_type == "nl2sql":
-            return PaiQueryBundle(
-                query_str=transformed_query_str,
-                need_web_search=False,
-                custom_embedding_strs=[
-                    chat_messages[-1].content,
-                    transformed_query_str,
-                ],
-                chat_messages_str=chat_history_str,
-            )
-        else:
-            query_json = parse_json_from_code_block_str(transformed_query_str)
-            if ("query" not in query_json) or (len(query_json["query"]) == 0):
-                return PaiQueryBundle(
-                    query_str=chat_messages[-1].content,
-                    need_web_search=False,
-                    custom_embedding_strs=[
-                        chat_messages[-1].content,
-                        transformed_query_str,
-                    ],
-                    chat_messages_str=chat_history_str,
-                    completion_tokens=chat_response.additional_kwargs.get(
-                        "completion_tokens", 0
-                    ),
-                    prompt_tokens=chat_response.additional_kwargs.get(
-                        "prompt_tokens", 0
-                    ),
-                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
-            else:
-                return PaiQueryBundle(
-                    query_str=query_json["query"],
-                    need_web_search=True,
-                    custom_embedding_strs=[
-                        chat_messages[-1].content,
-                        transformed_query_str,
-                    ],
-                    chat_messages_str=chat_history_str,
-                    completion_tokens=chat_response.additional_kwargs.get(
-                        "completion_tokens", 0
-                    ),
-                    prompt_tokens=chat_response.additional_kwargs.get(
-                        "prompt_tokens", 0
-                    ),
-                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
 
     async def arun(
-        self, chat_messages: List[ChatMessage] = [], chat_type: str = "default"
-    ) -> QueryBundle:
-        """Run query transform.
-        Generate standalone question from conversation context and last message."""
+        self,
+        chat_messages: List[ChatMessage] = [],
+        potential_intents: List[ChatToolType] = [],
+    ) -> PaiQueryBundle:
         chat_history_str = messages_to_history_str(
             chat_messages[-7:-1], max_length=1000
         )
-        if chat_type != "nl2sql":
-            current_condense_question_prompt = PromptTemplate(
-                template="{}\n{}\n{}".format(
-                    self._query_transform_prompt,
-                    CURRENT_QUERY_TIME_PROMPT.format(
-                        current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                    ),
-                    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-                )
-            )
-        else:
-            current_condense_question_prompt = CONDENSE_QUESTION_CHAT_ENGINE_PROMPT
+        query_str = chat_messages[-1].content
+        rewrite_prompt = self.get_prompt(
+            chat_history=chat_history_str,
+            query_str=query_str,
+            potential_intents=potential_intents,
+        )
 
         logger.debug(
-            f"Chat history: {chat_history_str} \n condense_question_prompt: {current_condense_question_prompt}"
+            f"Chat history: {chat_history_str} \n rewrite_prompt: {rewrite_prompt}"
         )
         messages = self._llm._get_messages(
-            current_condense_question_prompt,
-            question=chat_messages[-1].content,
+            rewrite_prompt,
+            question=query_str,
             chat_history=chat_history_str,
         )
         chat_response = await self._llm.achat(
@@ -321,9 +127,7 @@ class OpenAICompatibleQueryTransform:
         )
         transformed_query_str = chat_response.message.content
 
-        logger.debug(
-            f"Transformed query [{chat_messages[-1].content}] --> [{transformed_query_str}]"
-        )
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
         # 修复thought输出
         transformed_query_str = re.sub(
             r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
@@ -331,47 +135,19 @@ class OpenAICompatibleQueryTransform:
         transformed_query_str = transformed_query_str.replace("<think>", "").replace(
             "</think>", ""
         )
-        if chat_type == "nl2sql":
-            return PaiQueryBundle(
-                query_str=transformed_query_str,
-                need_web_search=False,
-                custom_embedding_strs=[
-                    chat_messages[-1].content,
-                    transformed_query_str,
-                ],
-                chat_messages_str=chat_history_str,
-            )
-        else:
-            query_json = parse_json_from_code_block_str(transformed_query_str)
-            intent = query_json.get("intent", "NONE")
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
+        query = query_json.get("query", query_str)
 
-            if ("query" not in query_json) or (len(query_json["query"]) == 0):
-                return PaiQueryBundle(
-                    intent=intent,
-                    query_str=chat_messages[-1].content,
-                    need_web_search=False,
-                    custom_embedding_strs=[chat_messages[-1].content],
-                    chat_messages_str=chat_history_str,
-                    completion_tokens=chat_response.additional_kwargs.get(
-                        "completion_tokens", 0
-                    ),
-                    prompt_tokens=chat_response.additional_kwargs.get(
-                        "prompt_tokens", 0
-                    ),
-                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
-            else:
-                return PaiQueryBundle(
-                    intent=intent,
-                    query_str=query_json["query"],
-                    need_web_search=True,
-                    custom_embedding_strs=[transformed_query_str],
-                    chat_messages_str=chat_history_str,
-                    completion_tokens=chat_response.additional_kwargs.get(
-                        "completion_tokens", 0
-                    ),
-                    prompt_tokens=chat_response.additional_kwargs.get(
-                        "prompt_tokens", 0
-                    ),
-                    total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
-                )
+        return PaiQueryBundle(
+            intent=intent,
+            messages=chat_messages,
+            query_str=query,
+            custom_embedding_strs=[transformed_query_str],
+            chat_messages_str=chat_history_str,
+            completion_tokens=chat_response.additional_kwargs.get(
+                "completion_tokens", 0
+            ),
+            prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+            total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+        )
