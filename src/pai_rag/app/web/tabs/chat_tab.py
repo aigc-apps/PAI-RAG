@@ -133,10 +133,12 @@ def create_chat_tab() -> Dict[str, Any]:
     model_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
     ]
-    if len(model_choices) == 0:
-        model_name = ""
-    else:
-        model_name = model_choices[0]
+    model_name = rag_config.chat.model_id
+    if not model_name:
+        if len(model_choices) == 0:
+            model_name = ""
+        else:
+            model_name = model_choices[0]
     with gr.Row():
         with gr.Column(scale=2):
             chat_model_id = gr.Dropdown(
@@ -190,6 +192,13 @@ def create_chat_tab() -> Dict[str, Any]:
                 value=False,
             )
 
+            quer_rewrite_model_name = rag_config.query_rewrite.model_id
+            if not quer_rewrite_model_name:
+                if len(model_choices) == 0:
+                    quer_rewrite_model_name = ""
+                else:
+                    quer_rewrite_model_name = model_choices[0]
+
             with gr.Column(visible=True) as qt_col:
                 query_transform_argument = gr.Accordion("查询改写配置", open=False)
                 with query_transform_argument:
@@ -203,7 +212,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     ) as enable_query_transform_col:
                         query_rewrite_model_id = gr.Dropdown(
                             choices=model_choices,
-                            value=model_name,
+                            value=quer_rewrite_model_name,
                             label="\N{bookmark} 查询改写模型ID",
                             elem_id="query_rewrite_model_id",
                         )
