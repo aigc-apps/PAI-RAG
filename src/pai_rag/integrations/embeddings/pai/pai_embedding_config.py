@@ -35,7 +35,7 @@ class PaiBaseEmbeddingConfig(BaseModel):
 
 class DashScopeEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.dashscope] = SupportedEmbedType.dashscope
-    model: str | None = None  # use default
+    model: str | None = "text-embedding-v2"  # use default
     api_key: str | None = Field(default=os.getenv("DASHSCOPE_API_KEY"))  # use default
 
 

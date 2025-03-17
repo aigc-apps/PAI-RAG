@@ -20,23 +20,38 @@ def create_embedding(
     embed_config: PaiBaseEmbeddingConfig, pai_rag_model_dir: str = None
 ):
     if isinstance(embed_config, OpenAIEmbeddingConfig):
-        embed_model = OpenAIEmbedding(
-            api_key=embed_config.api_key,
-            api_base=embed_config.api_base,
-            embed_batch_size=embed_config.embed_batch_size,
-            callback_manager=Settings.callback_manager,
-            model=embed_config.model,
-        )
+        if embed_config.model is not None:
+            embed_model = OpenAIEmbedding(
+                api_key=embed_config.api_key,
+                api_base=embed_config.api_base,
+                embed_batch_size=embed_config.embed_batch_size,
+                callback_manager=Settings.callback_manager,
+                model=embed_config.model,
+            )
+        else:
+            embed_model = OpenAIEmbedding(
+                api_key=embed_config.api_key,
+                api_base=embed_config.api_base,
+                embed_batch_size=embed_config.embed_batch_size,
+                callback_manager=Settings.callback_manager,
+            )
         logger.info(
             f"Initialized Open AI embedding model with {embed_config.embed_batch_size} batch size."
         )
     elif isinstance(embed_config, DashScopeEmbeddingConfig):
-        embed_model = DashScopeEmbedding(
-            api_key=embed_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
-            embed_batch_size=embed_config.embed_batch_size,
-            callback_manager=Settings.callback_manager,
-            model_name=embed_config.model,
-        )
+        if embed_config.model is not None:
+            embed_model = DashScopeEmbedding(
+                api_key=embed_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
+                embed_batch_size=embed_config.embed_batch_size,
+                callback_manager=Settings.callback_manager,
+                model_name=embed_config.model,
+            )
+        else:
+            embed_model = DashScopeEmbedding(
+                api_key=embed_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
+                embed_batch_size=embed_config.embed_batch_size,
+                callback_manager=Settings.callback_manager,
+            )
         logger.info(
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."
         )
