@@ -330,7 +330,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                                 enable_db_selector = gr.Checkbox(
                                     label="Yes",
-                                    info="通过LLM选择数据库",
+                                    info="通过LLM选表选列",
                                     elem_id="enable_db_selector",
                                 )
 
@@ -342,7 +342,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
 
                                 db_description_upload = gr.Checkbox(
                                     label="Yes",
-                                    info="使用数据库描述上传",
+                                    info="上传数据表描述信息",
                                     elem_id="enable_db_description_upload",
                                 )
 
@@ -355,7 +355,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                                 )
 
                                 history_update_state = gr.Textbox(
-                                    label="历史上传状态",
+                                    label="JSON文件上传状态",
                                     container=False,
                                     visible=False,  # 初始状态为不可见
                                 )

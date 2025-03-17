@@ -220,12 +220,12 @@ def create_setting_tab() -> Dict[str, Any]:
                         placeholder="oss-cn-hangzhou.aliyuncs.com",
                     )
                     oss_ak = gr.Textbox(
-                        label="Access Key",
+                        label="AccessKey ID",
                         elem_id="oss_ak",
                         type="password",
                     )
                     oss_sk = gr.Textbox(
-                        label="Access Key Secret",
+                        label="AccessKey Secret",
                         elem_id="oss_sk",
                         type="password",
                     )
@@ -256,11 +256,11 @@ def create_setting_tab() -> Dict[str, Any]:
                         placeholder="cn-hangzhou",
                     )
                     guardrail_ak = gr.Textbox(
-                        label="Access Key",
+                        label="AccessKey ID",
                         elem_id="guardrail_ak",
                     )
                     guardrail_sk = gr.Textbox(
-                        label="Access Key Secret",
+                        label="AccessKey Secret",
                         elem_id="guardrail_sk",
                         type="password",
                     )
