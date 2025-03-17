@@ -58,19 +58,6 @@ def _transform_to_dict(config):
 
 
 class ViewModel(BaseModel):
-    # llm
-    # llm_base_url: str = None
-    # llm_api_key: str = None
-    # llm_model_name: str = "default"
-    # llm_temperature: float = 0.1
-
-    # mllm
-    # use_mllm: bool = False
-    # mllm_base_url: str = None
-    # mllm_api_key: str = None
-    # mllm_model_name: str = "default"
-    # mllm_temperature: float = 0.1
-
     chat_model_id: str = None
 
     query_rewrite_model_id: str = None
@@ -349,8 +336,8 @@ class ViewModel(BaseModel):
 
         config["system"]["query_type"] = QUERY_TYPE_MAP.get(self.query_type, "rag")
 
-        config["chat_model_id"] = self.chat_model_id
-        config["query_rewrite_model_id"] = self.query_rewrite_model_id
+        config["chat"]["model_id"] = self.chat_model_id
+        config["query_rewrite"]["model_id"] = self.query_rewrite_model_id
 
         if os.getenv("OSS_ACCESS_KEY_ID") is None and self.oss_ak:
             os.environ["OSS_ACCESS_KEY_ID"] = self.oss_ak
@@ -765,10 +752,14 @@ class ViewModel(BaseModel):
         settings["guardrail_endpoint"] = {"value": self.guardrail_endpoint}
         settings["guardrail_ak"] = {"value": self.guardrail_ak}
         settings["guardrail_sk"] = {"value": self.guardrail_sk}
+        model_choices = [
+            llm.model_id if llm.model_id else llm.model for llm in self.llms
+        ]
         settings["llm_model"] = {
-            "choices": ["NEW"]
-            + [llm.model_id if llm.model_id else llm.model for llm in self.llms],
-            "value": "NEW",
+            "choices": model_choices + ["NEW"],
+            "value": "NEW"
+            if not self.llms and len(self.llms) == 0
+            else model_choices[0],
         }
 
         # print("view model settings:", settings)

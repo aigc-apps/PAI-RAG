@@ -164,7 +164,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     choices=model_choices,
                     value="NEW"
                     if not rag_config.llms and len(rag_config.llms) == 0
-                    else model_choices[1],
+                    else model_choices[0],
                     interactive=True,
                     elem_id="llm_model",
                     allow_custom_value=False,
@@ -177,24 +177,41 @@ def create_setting_tab() -> Dict[str, Any]:
             # 新增/编辑配置区域
             with gr.Row(visible=True) as config_row:
                 llm_model_name = gr.Textbox(
+                    value=""
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else rag_config.llms[0].model,
                     label="Model Name",
                     placeholder="Model Name, e.g. qwen-max",
                     interactive=True,
                 )
                 llm_model_id = gr.Textbox(
+                    value=""
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else rag_config.llms[0].model_id,
                     label="Model ID",
                     placeholder="Model ID, e.g. model_1",
                     interactive=True,
                 )
                 llm_api_key = gr.Textbox(
-                    label="API Key", type="password", interactive=True
+                    value=""
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else rag_config.llms[0].api_key,
+                    label="API Key",
+                    type="password",
+                    interactive=True,
                 )
                 llm_base_url = gr.Textbox(
+                    value=""
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else rag_config.llms[0].base_url,
                     label="API Base URL",
                     placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
                     interactive=True,
                 )
                 llm_vision_support = gr.Checkbox(
+                    value=False
+                    if not rag_config.llms and len(rag_config.llms) == 0
+                    else rag_config.llms[0].vision_support,
                     label="Vision Support",
                     elem_id="vision_support",
                     container=False,
