@@ -437,11 +437,18 @@ class ChatFlow:
         config: RagConfig,
     ) -> ChatResponseWrapper:
         llm = resolve_llm(config)
+        system_role = (
+            query_bundle.system_role or config.synthesizer.system_role_template
+        )
+        messages = query_bundle.messages
+        if system_role:
+            messages = [
+                ChatMessage(role=MessageRole.SYSTEM, content=system_role)
+            ] + query_bundle.messages
+
         if query_bundle.stream:
-            response_gen = await llm.astream_chat(
-                query_bundle.messages, **query_bundle.llm_kwargs
-            )
+            response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:
-            response = await llm.achat(query_bundle.messages, **query_bundle.llm_kwargs)
+            response = await llm.achat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response)

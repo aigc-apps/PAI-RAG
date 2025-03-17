@@ -104,6 +104,8 @@ alibabacloud-green20220302 = "^2.2.8"
 opentelemetry-api = "1.29.0"
 serpapi = "^0.1.5"
 watchfiles = "^1.0.4"
+alibabacloud-aimiaobi20230801 = "^1.21.0"
+alibabacloud-tea-openapi-sse = "^1.0.2"
 
 [tool.poetry.scripts]
 load_data = "pai_rag.tools.load_data_tool:run"

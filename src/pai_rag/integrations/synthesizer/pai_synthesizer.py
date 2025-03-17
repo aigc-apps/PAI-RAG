@@ -283,6 +283,7 @@ class PaiSynthesizer(BaseSynthesizer):
             history_str=history_str, query_str=query_str
         )
 
+        print(text_qa_template)
         response: RESPONSE_TEXT_TYPE
         logger.info(
             f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Chat History: {history_str} \n Query: {query_str}"
