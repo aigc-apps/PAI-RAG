@@ -235,6 +235,7 @@ def create_setting_tab() -> Dict[str, Any]:
             save_btn.click(
                 fn=ev_listeners.save_new_llm,
                 inputs=[
+                    llm_model,
                     llm_model_name,
                     llm_base_url,
                     llm_api_key,

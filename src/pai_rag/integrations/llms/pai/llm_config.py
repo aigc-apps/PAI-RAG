@@ -140,7 +140,7 @@ class PaiBaseLlmConfig(BaseModel):
         return tuple(cls.__subclasses__())
 
     class Config:
-        frozen = True
+        frozen = False
 
     @classmethod
     def get_type(cls):

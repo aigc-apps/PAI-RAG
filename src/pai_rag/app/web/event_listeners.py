@@ -95,19 +95,34 @@ def update_llms(selected_model):
     ]
 
 
-def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
+def save_new_llm(
+    selected_model, model_name, base_url, api_key, model_id, vision_support
+):
     rag_config = rag_client.get_config()
+    is_new = selected_model == "NEW"
     if not all([base_url, api_key, model_name]):
         raise gr.Error("please fill in all fields")
 
-    existing_model = next(
-        (
-            llm
-            for llm in rag_config.llms
-            if llm.model_id == model_id or (not llm.model_id and llm.model == model_id)
-        ),
-        None,
-    )
+    if is_new:
+        model_index, existing_model = next(
+            (
+                (index, llm)
+                for index, llm in enumerate(rag_config.llms)
+                if llm.model_id == model_id
+                or (not llm.model_id and llm.model == model_id)
+            ),
+            (-1, None),
+        )
+    else:
+        model_index, existing_model = next(
+            (
+                (index, llm)
+                for index, llm in enumerate(rag_config.llms)
+                if llm.model_id == selected_model
+                or (not llm.model_id and llm.model == selected_model)
+            ),
+            (-1, None),
+        )
 
     if existing_model:
         existing_model.base_url = base_url
@@ -115,6 +130,8 @@ def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
         existing_model.model = model_name
         existing_model.model_id = model_id
         existing_model.vision_support = vision_support
+        rag_config.llms[model_index] = existing_model
+
     else:
         new_llm_config = {
             "source": "openai_compatible",
@@ -127,9 +144,10 @@ def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
         new_llm = PaiBaseLlmConfig(**new_llm_config)
 
         rag_config.llms.append(new_llm)
-        update_dict = {}
-        update_dict["llms"] = rag_config.llms
-        rag_client.patch_config(update_dict)
+
+    update_dict = {}
+    update_dict["llms"] = rag_config.llms
+    rag_client.patch_config(update_dict)
 
     new_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
@@ -157,7 +175,7 @@ def delete_llm(selected_model):
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
     ] + ["NEW"]
     return [
-        gr.update(choices=new_choices, value="NEW"),
+        gr.update(choices=new_choices, value=new_choices[0]),
         gr.update(visible=False),
         gr.update(visible=False),
     ]
