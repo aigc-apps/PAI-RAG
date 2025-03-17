@@ -129,7 +129,7 @@ def get_input_files(
         return get_oss_files(
             oss_path=oss_path, filter_pattern=filter_pattern, oss_store=oss_store
         )
-
+    input_files = None
     if isinstance(file_path_or_directory, list):
         # file list
         input_files = [
@@ -152,6 +152,10 @@ def get_input_files(
     elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
         # Single file
         input_files = [pathlib.Path(file_path_or_directory)]
+    else:
+        raise ValueError(
+            f"Invalid input path or not supported file type for '{file_path_or_directory}'."
+        )
 
     if not input_files:
         raise ValueError(
@@ -210,10 +214,16 @@ class PaiDataReader(BaseReader):
         )
 
         """Load data from the input directory."""
-        documents = directory_reader.load_data(
-            show_progress=show_progress,
-            num_workers=self.number_workers,
-        )
+
+        try:
+            documents = directory_reader.load_data(
+                show_progress=show_progress,
+            )
+        except Exception as e:
+            logger.error("捕获到异常: %s", e)
+            if e.__cause__:
+                logger.error("原始异常: %s", e.__cause__)
+                raise e.__cause__
         return documents
 
     async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:

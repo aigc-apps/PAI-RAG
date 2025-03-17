@@ -7,6 +7,7 @@ from pai_rag.utils.index_utils import (
     write_markdown_to_parse_dir,
     copy_original_files_to_parse_dir,
 )
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
 EXCLUDE_NODE_KEYS = set(
@@ -32,26 +33,34 @@ def filter_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 class RagKnowledgeBaseHelper:
     @staticmethod
-    def create_new_knowledgebase_dir(knowledgebase_paths: Dict[str, str]):
+    def create_new_knowledgebase_dir(knowledgebase_name: str):
         try:
-            os.makedirs(knowledgebase_paths["base_path"], exist_ok=True)
-            os.makedirs(knowledgebase_paths["docs_path"], exist_ok=True)
-            os.makedirs(knowledgebase_paths["index_path"], exist_ok=True)
-            os.makedirs(knowledgebase_paths["logs_path"], exist_ok=True)
-            logger.info(f"知识库目录 {knowledgebase_paths['base_path']} 及其子目录已成功创建或已存在。")
+            base_path = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name)
+            docs_path = os.path.join(
+                DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, "docs"
+            )
+            index_path = os.path.join(
+                DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, ".index"
+            )
+            os.makedirs(base_path, exist_ok=True)
+            os.makedirs(docs_path, exist_ok=True)
+            os.makedirs(index_path, exist_ok=True)
+            logger.info(f"知识库 {knowledgebase_name} 及其子目录已成功创建或已存在。")
         except Exception as e:
-            logger.error(f"创建目录knowledgebase_paths:{knowledgebase_paths}时发生错误: {e} ")
+            logger.error(f"创建知识库 {knowledgebase_name}时发生错误: {e} ")
 
     @staticmethod
-    def save_parse_files(knowledgebase_paths, documents):
+    def save_parse_files(knowledgebase_name, documents):
+        parse_path = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, ".index", "parse"
+        )
         for doc in documents:
             file_name = doc.metadata.get("file_name", "dummy.none")
             file_path = doc.metadata.get("file_path", None)
             file_type = os.path.splitext(file_name)[1]
             relative_path = "/".join(file_path.split("/")[4:-1])
-            relative_parse_path = os.path.join(
-                knowledgebase_paths["parse_path"], relative_path
-            )
+
+            relative_parse_path = os.path.join(parse_path, relative_path)
             os.makedirs(relative_parse_path, exist_ok=True)
             if file_type in DOC_TYPES_CONVERT_TO_MD:
                 write_markdown_to_parse_dir(
@@ -63,8 +72,11 @@ class RagKnowledgeBaseHelper:
                 raise ValueError(f"不支持的文件类型: {file_type}")
 
     @staticmethod
-    def save_chunk_nodes(knowledgebase_paths, nodes, operation):
-        chunk_path = os.path.join(knowledgebase_paths["index_path"], operation)
+    def save_chunk_nodes(knowledgebase_name, nodes, operation):
+        index_path = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, ".index"
+        )
+        chunk_path = os.path.join(index_path, operation)
         os.makedirs(chunk_path, exist_ok=True)
         file_name_dict = {}
         for node in nodes:
