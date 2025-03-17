@@ -60,6 +60,7 @@ class RagConfigManager:
             raise error
 
     def get_value(self) -> RagConfig:
+        self.config.rag["llms"] = [item for item in self.config.rag["llms"] if item]
         rag_config = RagConfig.model_validate(self.config.rag)
         # 兼容之前的配置
         if rag_config.llm.is_validate():

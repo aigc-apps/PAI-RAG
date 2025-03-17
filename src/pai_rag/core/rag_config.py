@@ -49,7 +49,7 @@ def validate_case_insensitive(value: Dict) -> Dict:
     if value is None:
         return value
 
-    if isinstance(value, PaiBaseLlmConfig):
+    if isinstance(value, PaiBaseLlmConfig) and value.is_validate():
         value = value.model_dump()
 
     keys = ["type", "source", "reranker_type"]

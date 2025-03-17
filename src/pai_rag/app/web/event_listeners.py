@@ -131,9 +131,9 @@ def save_new_llm(model_name, base_url, api_key, model_id, vision_support):
         update_dict["llms"] = rag_config.llms
         rag_client.patch_config(update_dict)
 
-    new_choices = ["NEW"] + [
+    new_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
-    ]
+    ] + ["NEW"]
     return [
         gr.update(choices=new_choices, value=model_id or model_name),
         gr.update(visible=True),
@@ -153,9 +153,9 @@ def delete_llm(selected_model):
     update_dict["llms"] = rag_config.llms
     rag_client.patch_config(update_dict)
 
-    new_choices = ["NEW"] + [
+    new_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
-    ]
+    ] + ["NEW"]
     return [
         gr.update(choices=new_choices, value="NEW"),
         gr.update(visible=False),

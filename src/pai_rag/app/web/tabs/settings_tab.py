@@ -154,9 +154,9 @@ def create_setting_tab() -> Dict[str, Any]:
         rag_config = rag_client.get_config()
         with gr.Column(variant="panel"):
             # 模型选择区域
-            model_choices = ["NEW"] + [
+            model_choices = [
                 llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
-            ]
+            ] + ["NEW"]
 
             with gr.Row():
                 llm_model = gr.Dropdown(
