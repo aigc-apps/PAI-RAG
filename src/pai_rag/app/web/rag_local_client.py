@@ -84,7 +84,7 @@ class RagLocalClient:
                     )
                     content = f"""
 <span>
-    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc.get("score")}
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> 分数:{doc.get("score")}
 </span>
 <br>
 """
@@ -101,7 +101,7 @@ class RagLocalClient:
                         )
                     content = f"""
 <span class="text">
-    [{i+1}]: {formatted_file_name} Score:{doc.get("score")}
+    [{i+1}]: {formatted_file_name} 分数:{doc.get("score")}
     <span style='color: gray; font-size: 12px;'> ( {html_content} ) </span>
 </span>
 <br>
@@ -135,7 +135,7 @@ class RagLocalClient:
 
         formatted_answer = text
         if referenced_docs:
-            formatted_answer += f"\n\n**Reference**:\n {referenced_docs}"
+            formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
 
         response["delta"] = formatted_answer
 
@@ -259,9 +259,7 @@ class RagLocalClient:
             )
 
             result = {}
-            formatted_text = (
-                "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
-            )
+            formatted_text = "<tr><th>切片</th><th>分数</th><th>文本</th></tr>\n"
             if len(response.docs) == 0:
                 result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
             else:
@@ -286,8 +284,8 @@ class RagLocalClient:
                         safe_html_content = (
                             f"""<a href="{file_url}">{safe_html_content}</a>"""
                         )
-                    formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                        i + 1, doc.score, safe_html_content, media_url
+                    formatted_text += '<tr style="font-size: 13px;"><td>切片 {}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                        i + 1, doc.score, safe_html_content
                     )
                 formatted_text = (
                     "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"

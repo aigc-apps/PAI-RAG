@@ -20,7 +20,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                     "tablestore",
                     "dashvector",
                 ],
-                label="Which VectorStore do you want to use?",
+                label="请配置您的向量数据库连接信息",
                 elem_id="vectordb_type",
                 interactive=True,
             )

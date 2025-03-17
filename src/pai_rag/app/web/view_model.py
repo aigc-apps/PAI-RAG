@@ -31,19 +31,20 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
 
 
 QUERY_TYPE_MAP = {
-    "LLM": "llm",
-    "Retrieval": "retrieval",
-    "Chat（Web Search）": "websearch",
-    "Chat（Knowledge Base）": "rag",
+    "对话 (大模型)": "llm",
+    "检索测试": "retrieval",
+    "对话 (网络搜索)": "websearch",
+    "对话 (知识库)": "rag",
 }
 INVERTED_QUERY_TYPE_MAP = {
-    "llm": "LLM",
-    "retrieval": "Retrieval",
-    "websearch": "Chat（Web Search）",
-    "rag": "Chat（Knowledge Base）",
+    "llm": "对话 (大模型)",
+    "retrieval": "检索测试",
+    "websearch": "对话 (网络搜索)",
+    "rag": "对话 (知识库)",
 }
 
 
@@ -96,7 +97,7 @@ class ViewModel(BaseModel):
     similarity_top_k: int = 5
     image_similarity_top_k: int = 2
     need_image: bool = False
-    retrieval_mode: str = "hybrid"  # hybrid / embedding / keyword
+    retrieval_mode: str = "混合检索"  # "向量检索" / "关键字检索" / "混合检索"
     query_rewrite_n: int = 1
 
     # websearch
@@ -139,7 +140,7 @@ class ViewModel(BaseModel):
     da_llm_max_tokens: int = 1024
 
     # postprocessor
-    reranker_type: str = "no-reranker"  # no-reranker / model-based-reranker
+    reranker_type: str = "无重排序"  # 无重排序 / 基于模型的重排序
     reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
     keyword_weight: float = 0.3
     vector_weight: float = 0.7
@@ -147,7 +148,7 @@ class ViewModel(BaseModel):
     reranker_similarity_threshold: float = 0
     reranker_similarity_top_k: int = 3
 
-    query_type: str = "Chat（Knowledge Base）"
+    query_type: str = "对话 (知识库)"
 
     enable_query_transform: bool = True
     qt_llm_base_url: str = None
@@ -211,7 +212,7 @@ class ViewModel(BaseModel):
 
         view_model.use_mllm = config.synthesizer.use_multimodal_llm
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
-            config.system.query_type, "Chat（Knowledge Base）"
+            config.system.query_type, "对话 (知识库)"
         )
 
         if isinstance(config.multimodal_llm, PaiEasLlmConfig):
@@ -246,13 +247,17 @@ class ViewModel(BaseModel):
         view_model.vector_weight = config.retriever.hybrid_fusion_weights[0]
         view_model.keyword_weight = config.retriever.hybrid_fusion_weights[1]
         if config.retriever.vector_store_query_mode == VectorStoreQueryMode.DEFAULT:
-            view_model.retrieval_mode = "Embedding Only"
+            view_model.retrieval_mode = "向量检索"
         elif config.retriever.vector_store_query_mode == VectorStoreQueryMode.HYBRID:
-            view_model.retrieval_mode = "Hybrid"
+            view_model.retrieval_mode = "混合检索"
         else:
-            view_model.retrieval_mode = "Keyword Only"
+            view_model.retrieval_mode = "关键字检索"
 
-        view_model.reranker_type = config.postprocessor.reranker_type.value
+        if config.postprocessor.reranker_type.value == PostProcessorType.reranker_model:
+            view_model.reranker_type = "基于模型的重排序"
+        else:
+            view_model.reranker_type = "无重排序"
+
         if isinstance(config.postprocessor, SimilarityPostProcessorConfig):
             view_model.similarity_threshold = config.postprocessor.similarity_threshold
         else:
@@ -409,17 +414,17 @@ class ViewModel(BaseModel):
         config["retriever"]["keyword_weight"] = self.keyword_weight
 
         config["retriever"]["search_image"] = self.need_image
-        if self.retrieval_mode == "Hybrid":
+        if self.retrieval_mode == "混合检索":
             config["retriever"]["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
             config["retriever"]["hybrid_fusion_weights"] = [
                 self.vector_weight,
                 self.keyword_weight,
             ]
-        elif self.retrieval_mode == "Embedding Only":
+        elif self.retrieval_mode == "向量检索":
             config["retriever"][
                 "vector_store_query_mode"
             ] = VectorStoreQueryMode.DEFAULT
-        elif self.retrieval_mode == "Keyword Only":
+        elif self.retrieval_mode == "关键字检索":
             config["retriever"][
                 "vector_store_query_mode"
             ] = VectorStoreQueryMode.TEXT_SEARCH
@@ -473,9 +478,13 @@ class ViewModel(BaseModel):
         config["data_analysis"]["llm"]["model"] = self.da_llm_model_name
         config["data_analysis"]["llm"]["max_tokens"] = self.da_llm_max_tokens
 
-        config["postprocessor"]["reranker_type"] = self.reranker_type
+        if self.reranker_type == "基于模型的重排序":
+            config["postprocessor"]["reranker_type"] = PostProcessorType.reranker_model
+        else:
+            config["postprocessor"]["reranker_type"] = PostProcessorType.no_reranker
+
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        if self.reranker_type == "no-reranker":
+        if self.reranker_type == "无重排序":
             config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         else:
             config["postprocessor"][
@@ -654,11 +663,11 @@ class ViewModel(BaseModel):
         settings["reranker_model"] = {"value": self.reranker_model}
         settings["vector_weight"] = {
             "value": self.vector_weight,
-            "visible": self.retrieval_mode == "Hybrid",
+            "visible": self.retrieval_mode == "混合检索",
         }
         settings["keyword_weight"] = {
             "value": self.keyword_weight,
-            "visible": self.retrieval_mode == "Hybrid",
+            "visible": self.retrieval_mode == "混合检索",
         }
         settings["query_type"] = {
             "value": self.query_type,
@@ -670,9 +679,7 @@ class ViewModel(BaseModel):
         settings["reranker_similarity_top_k"] = {
             "value": self.reranker_similarity_top_k
         }
-        settings["model_reranker_col"] = {
-            "visible": self.reranker_type == "model-based-reranker"
-        }
+        settings["model_reranker_col"] = {"visible": self.reranker_type == "基于模型的重排序"}
         settings["query_transform_template"] = {
             "value": self.query_transform_template,
         }

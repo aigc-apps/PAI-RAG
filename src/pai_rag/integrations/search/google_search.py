@@ -48,15 +48,38 @@ class GoogleSearchTool(BaseQueryEngine):
             logger.warning(f"Google Search API response: {results}")
             return []
 
-        titles = [result["title"] for result in results["organic_results"]]
-        urls = [result["link"] for result in results["organic_results"]]
-        url2titles = dict(zip(urls, titles))
+        urls = []
+        url2titles = {}
+        url2snippets = {}
+        url2dates = {}
+        url2sources = {}
+        url2favicons = {}
+
+        for result in results["organic_results"]:
+            url = result.get("link")
+            if url:
+                urls.append(url)
+                url2titles[url] = result.get("title")
+                url2snippets[url] = result.get("snippet")
+                url2dates[url] = result.get("date")
+                url2sources[url] = result.get("source")
+                url2favicons[url] = result.get("favicon")
+
         logger.info(f"Get {len(urls)} url links using Google Search.")
 
         docs = self.html_reader.load_data(urls, include_url_in_text=False)
         for doc in docs:
+            if doc.text_resource.text is None or len(doc.text_resource.text) < len(
+                url2snippets[doc.metadata["URL"]]
+            ):
+                doc.text_resource.text = url2snippets[doc.metadata["URL"]]
+            doc.text_resource.text = doc.text_resource.text[:800]
+            doc.metadata["source"] = "web_search"
             doc.metadata["file_url"] = doc.metadata["URL"]
             doc.metadata["file_name"] = url2titles[doc.metadata["URL"]]
+            doc.metadata["host_name"] = url2sources[doc.metadata["URL"]]
+            doc.metadata["host_logo"] = url2favicons[doc.metadata["URL"]]
+            doc.metadata["publish_time"] = url2dates[doc.metadata["URL"]]
 
         return docs
 

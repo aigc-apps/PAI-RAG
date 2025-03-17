@@ -50,44 +50,42 @@ def reset_textbox():
 def create_agent_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
-            with gr.Tab(label="API tools"):
+            with gr.Tab(label="API 工具"):
                 agent_system_prompt = gr.Textbox(
-                    label="Function-call system Prompt",
+                    label="工具调用系统提示词模板",
                     elem_id="agent_system_prompt",
                     lines=5,
                     interactive=True,
                 )
                 agent_api_definition = gr.Code(
-                    label="API Tool Definitions",
+                    label="API 工具定义",
                     elem_id="agent_api_definition",
                     interactive=True,
                     language="json",
                 )
-            with gr.Tab(label="Python tools"):
+            with gr.Tab(label="Python 工具"):
                 agent_function_definition = gr.Code(
-                    label="Python Tool Definitions",
+                    label="Python 工具定义",
                     elem_id="agent_function_definition",
                     interactive=True,
                     language="json",
                 )
                 agent_python_scripts = gr.Code(
-                    label="Python Tool Scripts",
+                    label="Python 工具脚本",
                     elem_id="agent_python_scripts",
                     language="python",
                     interactive=True,
                 )
 
         with gr.Column(scale=6):
-            _ = gr.Markdown(value="**Agentic RAG Chatbot Test**")
+            _ = gr.Markdown(value="**智能体对话测试**")
             agent_chatbot = gr.Chatbot(
                 height=500, elem_id="agent_chatbot", type="messages"
             )
-            agent_question = gr.Textbox(
-                label="Enter your question.", elem_id="agent_question"
-            )
+            agent_question = gr.Textbox(label="在这里输入您的问题.", elem_id="agent_question")
             with gr.Row():
-                submitBtn = gr.Button("Submit", variant="primary")
-                clearBtn = gr.Button("Clear History", variant="secondary")
+                submitBtn = gr.Button("提交", variant="primary")
+                clearBtn = gr.Button("清空历史", variant="secondary")
             submitBtn.click(
                 respond,
                 [

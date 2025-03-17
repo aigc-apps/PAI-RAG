@@ -69,12 +69,15 @@ class AliyunSearchTool(BaseQueryEngine):
             )
 
         search_results = await asyncio.gather(*search_tasks)
-
         nodes = []
         for result in search_results:
             items = result.get("pageItems")
             for item in items:
-                text = item.get("mainText") or item.get("markdownText")
+                text = (
+                    item.get("markdownText")
+                    or item.get("mainText")
+                    or item.get("htmlSnippet")
+                )
                 if not text:
                     continue
 
@@ -82,14 +85,14 @@ class AliyunSearchTool(BaseQueryEngine):
                 node = TextNode(
                     text=text[:800],
                     metadata={
+                        "source": "web_search",
                         "file_url": item.get("link"),
-                        "file_name": item.get("htmlTitle") or item.get("title"),
+                        "file_name": item.get("title") or item.get("htmlTitle"),
+                        "host_name": item.get("hostname"),
+                        "host_logo": item.get("hostLogo"),
+                        "publish_time": item.get("publishTime"),
                     },
                 )
-                if item.get("publishTime"):
-                    node.metadata["publish_time"] = item.get("publishTime")
-                if item.get("hostname"):
-                    node.metadata["source"] = item.get("hostname")
                 if item.get("score"):
                     score = item.get("score")
                 nodes.append(NodeWithScore(node=node, score=score))
