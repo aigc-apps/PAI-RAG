@@ -13,10 +13,10 @@ def create_setting_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(variant="panel"):
             with gr.Column(scale=5):
-                _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **Index**")
+                _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **知识库**")
 
                 vector_index = gr.Dropdown(
-                    label="Index Name",
+                    label="知识库名称",
                     choices=["NEW"],
                     value="NEW",
                     interactive=True,
@@ -25,36 +25,36 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 new_index_name = gr.Textbox(
-                    label="New Index Name",
+                    label="新知识库名称",
                     value="",
                     interactive=True,
                     elem_id="new_index_name",
                     visible=False,
                 )
 
-                _ = gr.Markdown(value="**Index - Embedding Model**")
+                _ = gr.Markdown(value="**知识库 - 向量模型**")
                 embed_source = gr.Radio(
                     EMBEDDING_API_KEY_DICT.keys(),
-                    label="Embedding Type",
+                    label="向量模型来源",
                     elem_id="embed_source",
                     interactive=True,
                 )
                 embed_model = gr.Dropdown(
-                    label="Embedding Model Name",
+                    label="向量模型名称",
                     elem_id="embed_model",
                     visible=False,
                 )
                 with gr.Row():
                     embed_dim = gr.Textbox(
-                        label="Embedding Dimension",
+                        label="向量维度",
                         elem_id="embed_dim",
                     )
                     embed_batch_size = gr.Textbox(
-                        label="Embedding Batch Size",
+                        label="向量Batch大小",
                         elem_id="embed_batch_size",
                     )
                     embed_type = gr.Textbox(
-                        label="Embedding Type",
+                        label="向量模型类型",
                         elem_id="embed_type",
                     )
                     embed_api_key = gr.Textbox(
@@ -66,19 +66,19 @@ def create_setting_tab() -> Dict[str, Any]:
             vector_db_elems, vector_db_components = create_vector_db_panel()
 
             add_index_button = gr.Button(
-                "Add Index",
+                "添加知识库",
                 variant="primary",
                 visible=False,
                 elem_id="add_index_button",
             )
             update_index_button = gr.Button(
-                "Update Index",
+                "更新知识库",
                 variant="primary",
                 visible=False,
                 elem_id="update_index_button",
             )
             delete_index_button = gr.Button(
-                "Delete Index",
+                "删除知识库",
                 variant="stop",
                 visible=False,
                 elem_id="delete_index_button",
@@ -252,34 +252,35 @@ def create_setting_tab() -> Dict[str, Any]:
             )
             ############################ llms settings end  ############################
 
+
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
                     value="\N{WHITE MEDIUM STAR} **(Optional, for saving image & load data) OSS Bucket**"
                 )
                 use_oss = gr.Checkbox(
-                    label="Use OSS Storage",
+                    label="使用OSS存储",
                     elem_id="use_oss",
                     container=False,
                 )
                 with gr.Row(visible=False, elem_id="use_oss_col") as use_oss_col:
                     oss_bucket = gr.Textbox(
-                        label="OSS Bucket",
+                        label="OSS存储空间",
                         elem_id="oss_bucket",
                     )
+                    oss_endpoint = gr.Textbox(
+                        label="OSS访问域名",
+                        elem_id="oss_endpoint",
+                        placeholder="oss-cn-hangzhou.aliyuncs.com",
+                    )
                     oss_ak = gr.Textbox(
-                        label="Access Key",
+                        label="AccessKey ID",
                         elem_id="oss_ak",
                         type="password",
                     )
                     oss_sk = gr.Textbox(
-                        label="Access Secret",
+                        label="AccessKey Secret",
                         elem_id="oss_sk",
                         type="password",
-                    )
-                    oss_endpoint = gr.Textbox(
-                        label="OSS Endpoint",
-                        elem_id="oss_endpoint",
-                        placeholder="oss-cn-hangzhou.aliyuncs.com",
                     )
                 use_oss.input(
                     fn=ev_listeners.change_use_oss,
@@ -289,30 +290,30 @@ def create_setting_tab() -> Dict[str, Any]:
 
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
-                    value="\N{WHITE MEDIUM STAR} **(Optional) LLM Guardrail [doc](https://help.aliyun.com/document_detail/464388.html?spm=a2c4g.11186623.help-menu-28415.d_1_0.18923104V0TR1X)**"
+                    value="\N{WHITE MEDIUM STAR} **(可选) LLM护栏 [doc](https://help.aliyun.com/document_detail/464388.html?spm=a2c4g.11186623.help-menu-28415.d_1_0.18923104V0TR1X)**"
                 )
                 enable_guardrail = gr.Checkbox(
-                    label="Enable LLM Guardrail",
+                    label="开启LLM护栏",
                     elem_id="enable_guardrail",
                     container=False,
                 )
                 with gr.Row(visible=False, elem_id="guardrail_col") as guardrail_col:
                     guardrail_endpoint = gr.Textbox(
-                        label="Endpoint",
+                        label="接入地址",
                         elem_id="guardrail_endpoint",
                         placeholder="green-cip.cn-hangzhou.aliyuncs.com",
                     )
                     guardrail_region = gr.Textbox(
-                        label="Region",
+                        label="地域",
                         elem_id="guardrail_region",
                         placeholder="cn-hangzhou",
                     )
                     guardrail_ak = gr.Textbox(
-                        label="Access Key Id",
+                        label="AccessKey ID",
                         elem_id="guardrail_ak",
                     )
                     guardrail_sk = gr.Textbox(
-                        label="Access Key Secret",
+                        label="AccessKey Secret",
                         elem_id="guardrail_sk",
                         type="password",
                     )
@@ -343,7 +344,8 @@ def create_setting_tab() -> Dict[str, Any]:
             #     outputs=[use_mllm_col],
             # )
 
-            save_oss_btn = gr.Button("Save OSS Setting", variant="primary")
+
+            save_oss_btn = gr.Button("保存OSS配置", variant="primary")
             save_state = gr.Textbox(
                 label="Connection Info: ", container=False, visible=False
             )

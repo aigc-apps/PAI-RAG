@@ -25,8 +25,8 @@ class QueryRewriteConfig(BaseModel):
 
 
 class AliyunTextModerationPlusConfig(BaseModel):
-    endpoint: str | None = "green-cip.cn-hangzhou.aliyuncs.com"
-    region: str | None = "cn-hangzhou"
+    endpoint: str | None = None
+    region: str | None = None
     access_key_id: str | None = None
     access_key_secret: str | None = None
     custom_advice: str | None = None
@@ -37,6 +37,10 @@ class AliyunTextModerationPlusConfig(BaseModel):
             and self.access_key_secret is not None
             and len(self.access_key_id) > 0
             and len(self.access_key_secret) > 0
+            and self.endpoint is not None
+            and self.endpoint != ""
+            and self.region is not None
+            and self.region != ""
         )
 
 

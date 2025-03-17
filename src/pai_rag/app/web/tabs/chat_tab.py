@@ -60,19 +60,19 @@ async def respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        if query_type == "LLM":
+        if query_type == "对话 (大模型)":
             response_gen = rag_client.query_llm(
                 chat_messages=chatbot[:-1],
                 stream=is_streaming,
                 chat_model_id=chat_model_id,
                 query_rewrite_model_id=query_rewrite_model_id,
             )
-        elif query_type == "Retrieval":
+        elif query_type == "检索测试":
             response_gen = rag_client.query_vector(
                 chatbot[:-1], question, index_name=index_name
             )
 
-        elif query_type == "Chat（Web Search）":
+        elif query_type == "对话 (网络搜索)":
             response_gen = rag_client.query(
                 chat_messages=chatbot[:-1],
                 stream=is_streaming,
@@ -148,55 +148,53 @@ def create_chat_tab() -> Dict[str, Any]:
             chat_index = gr.Dropdown(
                 choices=[],
                 value="",
-                label="\N{bookmark} Index Name",
+                label="\N{bookmark} 知识库名称",
                 elem_id="chat_index",
                 allow_custom_value=True,
             )
             query_type = gr.Radio(
-                ["Retrieval", "LLM", "Chat（Web Search）", "Chat（Knowledge Base）"],
-                label="\N{fire} Which query do you want to use?",
+                ["检索测试", "对话 (大模型)", "对话 (网络搜索)", "对话 (知识库)"],
+                label="\N{fire} 对话方式",
                 elem_id="query_type",
-                value="Chat（Knowledge Base）",
+                value="对话 (知识库)",
             )
             is_streaming = gr.Checkbox(
-                label="Streaming Output",
-                info="Streaming Output",
+                label="流式输出",
+                info="开启流式输出",
                 elem_id="is_streaming",
                 value=True,
             )
             citation = gr.Checkbox(
-                label="Citation",
-                info="Need Citation",
+                label="返回引用",
+                info="在回答中返回引用编号",
                 elem_id="citation",
                 value=False,
             )
             need_image = gr.Checkbox(
-                label="Display Image",
-                info="Inference with multi-modal LLM.",
+                label="多模态推理",
+                info="使用多模态大模型推理.",
                 elem_id="need_image",
                 visible=False,
             )
             return_reference = gr.Checkbox(
-                label="Show References",
-                info="Show references for RAG and web search.",
+                label="展示参考资料",
+                info="展示 RAG 和网页搜索的参考资料",
                 elem_id="return_reference",
                 visible=True,
                 value=False,
             )
             default_web_search = gr.Checkbox(
-                label="Default search web",
-                info="Default search web for openai endpoint",
+                label="默认网络搜索",
+                info="使用OpenAI调用时默认开启网络搜索",
                 elem_id="default_web_search",
                 value=False,
             )
 
             with gr.Column(visible=True) as qt_col:
-                query_transform_argument = gr.Accordion(
-                    "Add query transform", open=False
-                )
+                query_transform_argument = gr.Accordion("查询改写配置", open=False)
                 with query_transform_argument:
                     enable_query_transform = gr.Checkbox(
-                        label="enable query transform",
+                        label="开启查询改写",
                         elem_id="enable_query_transform",
                         container=True,
                     )
@@ -210,7 +208,7 @@ def create_chat_tab() -> Dict[str, Any]:
                             elem_id="query_rewrite_model_id",
                         )
                         query_transform_template = gr.Textbox(
-                            label="Query Transform Template",
+                            label="查询改写模板",
                             value="",
                             elem_id="query_transform_template",
                             lines=10,
@@ -230,13 +228,11 @@ def create_chat_tab() -> Dict[str, Any]:
                     )
 
             with gr.Column(visible=True) as vs_col:
-                vec_model_argument = gr.Accordion(
-                    "Parameters of Vector Retrieval", open=False
-                )
+                vec_model_argument = gr.Accordion("向量检索参数设置", open=False)
                 with vec_model_argument:
                     retrieval_mode = gr.Radio(
-                        ["Embedding Only", "Keyword Only", "Hybrid"],
-                        label="Retrieval Mode",
+                        ["向量检索", "关键字检索", "混合检索"],
+                        label="检索模式",
                         elem_id="retrieval_mode",
                     )
 
@@ -245,17 +241,17 @@ def create_chat_tab() -> Dict[str, Any]:
                         maximum=1,
                         value=0.7,
                         elem_id="vector_weight",
-                        label="Weight of embedding retrieval results",
-                        visible=(retrieval_mode == "Hybrid"),
+                        label="向量检索权重",
+                        visible=(retrieval_mode == "混合检索"),
                     )
                     keyword_weight = gr.Slider(
                         minimum=0,
                         maximum=1,
                         value=float(1 - vector_weight.value),
                         elem_id="keyword_weight",
-                        label="Weight of keyword retrieval results",
+                        label="关键字检索权重",
                         interactive=False,
-                        visible=(retrieval_mode == "Hybrid"),
+                        visible=(retrieval_mode == "混合检索"),
                     )
 
                     similarity_top_k = gr.Slider(
@@ -263,30 +259,30 @@ def create_chat_tab() -> Dict[str, Any]:
                         maximum=100,
                         step=1,
                         elem_id="similarity_top_k",
-                        label="Text Top K (choose between 0 and 100)",
+                        label="返回Top-K条文本结果 (0 到 100)",
                     )
                     image_similarity_top_k = gr.Slider(
                         minimum=0,
                         maximum=10,
                         step=1,
                         elem_id="image_similarity_top_k",
-                        label="Image Top K (choose between 0 and 10)",
+                        label="返回Top-K条图片结果 (0 到 10)",
                     )
                     similarity_threshold = gr.Slider(
                         minimum=0,
                         maximum=1,
                         step=0.01,
                         elem_id="similarity_threshold",
-                        label="Similarity Score Threshold (The more similar the items, the bigger the value.)",
+                        label="相似度分数阈值 (内容越相似，分数越大)",
                     )
 
                     reranker_type = gr.Radio(
-                        ["no-reranker", "model-based-reranker"],
-                        label="Reranker Type",
+                        ["无重排序", "基于模型的重排序"],
+                        label="重排序类型",
                         elem_id="reranker_type",
                     )
                     with gr.Column(
-                        visible=(reranker_type == "model-based-reranker"),
+                        visible=(reranker_type == "基于模型的重排序"),
                         elem_id="model_reranker_col",
                     ) as model_reranker_col:
                         reranker_model = gr.Radio(
@@ -294,7 +290,7 @@ def create_chat_tab() -> Dict[str, Any]:
                                 "bge-reranker-base",
                                 "bge-reranker-large",
                             ],
-                            label="Re-Ranker Model (Note: It will take a long time to load the model when using it for the first time.)",
+                            label="重排序模型（注意：首次使用该模型时，加载模型将需要较长时间）",
                             elem_id="reranker_model",
                         )
                         reranker_similarity_threshold = gr.Slider(
@@ -302,14 +298,14 @@ def create_chat_tab() -> Dict[str, Any]:
                             maximum=10,
                             step=0.01,
                             elem_id="reranker_similarity_threshold",
-                            label="Reranker Similarity Score Threshold (The more similar the items, the bigger the value.)",
+                            label="重排序相似度分数阈值（结果越相似，数值越大）",
                         )
                         reranker_similarity_top_k = gr.Slider(
                             minimum=0,
                             maximum=50,
                             step=1,
                             elem_id="reranker_similarity_top_k",
-                            label="Reranker Text Top K (choose between 0 and 50)",
+                            label="重排序文本 Top-K (0 到 50)",
                         )
 
                     def change_weight(change_weight):
@@ -322,11 +318,11 @@ def create_chat_tab() -> Dict[str, Any]:
                     )
 
                     def change_reranker_type(reranker_type):
-                        if reranker_type == "no-reranker":
+                        if reranker_type == "无重排序":
                             return {
                                 model_reranker_col: gr.update(visible=False),
                             }
-                        elif reranker_type == "model-based-reranker":
+                        elif reranker_type == "基于模型的重排序":
                             return {
                                 model_reranker_col: gr.update(visible=True),
                             }
@@ -336,7 +332,7 @@ def create_chat_tab() -> Dict[str, Any]:
                             }
 
                     def change_retrieval_mode(retrieval_mode):
-                        if retrieval_mode == "Hybrid":
+                        if retrieval_mode == "混合检索":
                             return {
                                 vector_weight: gr.update(visible=True),
                                 keyword_weight: gr.update(visible=True),
@@ -373,17 +369,17 @@ def create_chat_tab() -> Dict[str, Any]:
                 }
 
             with gr.Column(visible=True) as lc_col:
-                prompt_argument = gr.Accordion("Prompt Templates", open=False)
+                prompt_argument = gr.Accordion("提示词模板", open=False)
                 with prompt_argument:
                     system_role_template = gr.Textbox(
-                        label="System Role",
+                        label="系统角色设定",
                         value="",
                         elem_id="system_role_template",
                         lines=4,
                         interactive=True,
                     )
                     custom_prompt_template = gr.Textbox(
-                        label="Prompt Template",
+                        label="任务描述",
                         value="",
                         elem_id="custom_prompt_template",
                         lines=10,
@@ -408,7 +404,7 @@ def create_chat_tab() -> Dict[str, Any]:
                     #     )
 
             with gr.Column(visible=True) as llm_col:
-                model_argument = gr.Accordion("Inference Parameters of LLM", open=False)
+                model_argument = gr.Accordion("LLM推理参数设置", open=False)
                 with model_argument:
                     llm_temperature = gr.Slider(
                         minimum=0,
@@ -416,22 +412,20 @@ def create_chat_tab() -> Dict[str, Any]:
                         step=0.001,
                         value=0.1,
                         elem_id="llm_temperature",
-                        label="Temperature (choose between 0 and 1)",
+                        label="温度 (0 到 1)",
                     )
                 llm_args = {llm_temperature}
 
             with gr.Column(visible=False) as search_col:
-                search_model_argument = gr.Accordion(
-                    "Parameters of Web Search", open=False
-                )
+                search_model_argument = gr.Accordion("网络搜索参数设置", open=False)
                 with search_model_argument:
                     search_type = gr.Radio(
                         ["bing", "aliyun", "google"],
-                        label="Search Engine",
+                        label="搜索引擎",
                         elem_id="search_type",
                     )
                     serpapi_key_tips = gr.Markdown(
-                        value="How to get [SerpAPI Key](https://serpapi.com)"
+                        value="如何获取 [SerpAPI Key](https://serpapi.com)"
                     )
                     search_api_key = gr.Text(
                         label="Bing API Key",
@@ -446,14 +440,14 @@ def create_chat_tab() -> Dict[str, Any]:
                         elem_id="serpapi_key",
                     )
                     search_count = gr.Slider(
-                        label="Search Count",
+                        label="搜索数量",
                         minimum=5,
                         maximum=50,
                         step=1,
                         elem_id="search_count",
                     )
                     search_lang = gr.Radio(
-                        label="Language",
+                        label="语言",
                         choices=["zh-CN", "en-US"],
                         value="zh-CN",
                         elem_id="search_lang",
@@ -495,12 +489,10 @@ def create_chat_tab() -> Dict[str, Any]:
                     ],
                 )
 
-            cur_tokens = gr.Textbox(
-                label="\N{fire} Current total count of tokens", visible=False
-            )
+            cur_tokens = gr.Textbox(label="\N{fire} 当前Tokens总数", visible=False)
 
             def change_query_radio(query_type):
-                if query_type == "Retrieval":
+                if query_type == "检索测试":
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=True),
@@ -514,7 +506,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         prompt_argument: gr.update(open=False),
                         return_reference: gr.update(visible=False),
                     }
-                elif query_type == "LLM":
+                elif query_type == "对话 (大模型)":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
@@ -528,7 +520,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         prompt_argument: gr.update(open=True),
                         return_reference: gr.update(visible=False),
                     }
-                elif query_type == "Chat（Knowledge Base）":
+                elif query_type == "对话 (知识库)":
                     return {
                         vs_col: gr.update(visible=True),
                         vec_model_argument: gr.update(open=False),
@@ -542,7 +534,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         prompt_argument: gr.update(open=True),
                         return_reference: gr.update(visible=True),
                     }
-                elif query_type == "Chat（Web Search）":
+                elif query_type == "对话 (网络搜索)":
                     return {
                         vs_col: gr.update(visible=False),
                         vec_model_argument: gr.update(open=False),
@@ -578,12 +570,10 @@ def create_chat_tab() -> Dict[str, Any]:
         with gr.Column(scale=8):
             chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
             with gr.Row():
-                question = gr.Textbox(
-                    label="Enter your question.", elem_id="question", scale=9
-                )
+                question = gr.Textbox(label="在这里输入您的问题", elem_id="question", scale=9)
             with gr.Row():
-                submitBtn = gr.Button("Submit", variant="primary")
-                clearBtn = gr.Button("Clear History", variant="secondary")
+                submitBtn = gr.Button("提交", variant="primary")
+                clearBtn = gr.Button("清空历史", variant="secondary")
 
         chat_args = (
             {

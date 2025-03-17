@@ -13,7 +13,7 @@ SYN_GENERAL_PROMPTS = "给定一个输入问题，根据查询代码指令以及
 #             """
 
 WELCOME_MESSAGE = """
-        <div class="title"> <span class="head"> \N{fire} PAI-RAG Dashboard</span><span class="subhead"> \N{rocket} Join the DingTalk Q&A Group: 27370042974</span> </div>
+        <div class="title"> <span class="head"> \N{fire} PAI-RAG 控制台</span><span class="subhead"> \N{rocket} 欢迎搜索加入我们的钉钉答疑群: 27370042974</span> </div>
     """
 
 DEFAULT_CSS_STYPE = """

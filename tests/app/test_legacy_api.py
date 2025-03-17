@@ -5,17 +5,20 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from fastapi.testclient import TestClient
 import time
+from dotenv import load_dotenv
 
+
+# 加载 .env 文件
+load_dotenv()
 
 if (
     "DASHSCOPE_API_KEY" not in os.environ
     or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
+) or (os.getenv("BING_SEARCH_KEY", "abc") == "abc"):
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
-
 
 from pai_rag.app.app import app
 
@@ -46,7 +49,7 @@ def upload_file(input_files, index_name="default"):
         task_status = "pending"
 
         for file_name in file_names_added:
-            while True and i < 40:
+            while True and i < 200:
                 response = client.get(
                     f"/api/v1/knowledgebases/{index_name}/files/{file_name}",
                 )
@@ -76,12 +79,12 @@ def setup_app():
                 "llm": {
                     "source": "openai_compatible",
                     "model": "qwen-max",
-                    "api_key": os.environ.get("DASHSCOPE_API_KEY", "abc"),
+                    "api_key": os.getenv("DASHSCOPE_API_KEY", "abc"),
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 },
                 "search": {
                     "source": "bing",
-                    "search_api_key": os.environ.get("BING_SEARCH_KEY", "abc"),
+                    "search_api_key": os.getenv("BING_SEARCH_KEY", "abc"),
                 },
                 "postprocessor": {
                     "reranker_type": "no-reranker",
@@ -119,7 +122,7 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
-    upload_file(["tests/testdata/data/md_data/pai_document.md"])
+    upload_file(["tests/testdata/data/md_data/pai_document.md"], index_name="default")
     upload_file(
         ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
@@ -129,45 +132,60 @@ setup_app()
 
 
 @pytest.mark.asyncio(scope="session")
-async def test_get_v1_path():
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/v1")
-    assert response.status_code == 200
-
-
-@pytest.mark.asyncio(scope="session")
-async def test_openai_chat():
+async def test_legacy_query():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query",
             json={
-                "model": "default",
-                "messages": [{"role": "user", "content": "中国首都在哪里"}],
+                "messages": [{"role": "user", "content": "中国的首都是哪里？"}],
+                "index_name": "default",
                 "search_web": False,
                 "stream": False,
             },
         )
     assert response.status_code == 200
 
-    answer = response.json()["choices"][0]["message"]["content"]
+    answer = response.json()["answer"]
 
     assert "北京" in answer
 
-
-@pytest.mark.asyncio(scope="session")
-async def test_openai_chat_stream():
+    # 使用知识库
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query",
             json={
-                "model": "default",
-                "messages": [{"role": "user", "content": "中国首都在哪里"}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "What are the first programs the author write?",
+                    }
+                ],
+                "index_name": "test_index",
+                "search_web": False,
+                "stream": False,
+            },
+        )
+    assert response.status_code == 200
+
+    answer = response.json()["answer"]
+
+    assert "IBM" in answer
+
+
+@pytest.mark.asyncio(scope="session")
+async def test_legacy_query_stream():
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "api/v1/query",
+            json={
+                "messages": [{"role": "user", "content": "中国的首都是哪里？"}],
+                "index_name": "test_index",
                 "search_web": False,
                 "stream": True,
             },
@@ -179,22 +197,72 @@ async def test_openai_chat_stream():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
 
     assert "北京" in answer
 
+    # 使用知识库
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "api/v1/query",
+            json={
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "What are the first programs the author write?",
+                    }
+                ],
+                "index_name": "test_index",
+                "search_web": False,
+                "stream": True,
+            },
+        )
+    assert response.status_code == 200
+
+    answer = ""
+    for chunk in response.iter_lines():
+        if chunk.startswith("data:"):
+            chunk = chunk[5:]
+            chunk_data = json.loads(chunk)
+            delta = chunk_data["delta"]
+            answer += delta
+
+    assert "IBM" in answer
+
 
 @pytest.mark.asyncio(scope="session")
-async def test_openai_websearch():
+async def test_legacy_query_search():
+    # # 普通问题，会search
+    # async with AsyncClient(
+    #     transport=ASGITransport(app=app), base_url="http://test"
+    # ) as client:
+    #     response = await client.post(
+    #         "api/v1/query/search",
+    #         json={
+    #             "messages": [
+    #                 {"role": "user", "content": "美国总统是谁"}
+    #                 ],
+    #             "index_name": "default",
+    #             "search_web": True,
+    #             "stream": False,
+    #         },
+    #     )
+    # assert response.status_code == 200
+
+    # answer = response.json()["answer"]
+
+    # assert "特朗普" in answer
+
     # 普通问题，不会search
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "你是谁"}],
                 "search_web": True,
                 "stream": False,
@@ -203,19 +271,18 @@ async def test_openai_websearch():
         )
     assert response.status_code == 200
 
-    answer = response.json()["choices"][0]["message"]["content"]
+    answer = response.json()["answer"]
 
     assert "助手" in answer
-    assert len(response.json()["citations"]) == 0
+    assert len(response.json()["docs"]) == 0
 
     # search并返回reference
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
                 "search_web": True,
                 "stream": False,
@@ -224,23 +291,22 @@ async def test_openai_websearch():
         )
     assert response.status_code == 200
 
-    answer = response.json()["choices"][0]["message"]["content"]
+    answer = response.json()["answer"]
 
     assert (
         answer != DEFAULT_GUARDRAIL_RESPONSE
         and answer != DEFAULT_EMPTY_RESPONSE
         and answer != DEFAULT_ERROR_RESPONSE
     )
-    assert len(response.json()["citations"]) > 0
+    assert len(response.json()["docs"]) > 0
 
     # 不返回reference
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
                 "search_web": True,
                 "stream": False,
@@ -249,26 +315,25 @@ async def test_openai_websearch():
         )
     assert response.status_code == 200
 
-    answer = response.json()["choices"][0]["message"]["content"]
+    answer = response.json()["answer"]
 
     assert (
         answer != DEFAULT_GUARDRAIL_RESPONSE
         and answer != DEFAULT_EMPTY_RESPONSE
         and answer != DEFAULT_ERROR_RESPONSE
     )
-    assert len(response.json()["citations"]) == 0
+    assert response.json()["docs"] is None
 
 
 @pytest.mark.asyncio(scope="session")
-async def test_openai_websearch_stream():
+async def test_legacy_query_search_stream():
     # 普通问题，不会search
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "你是谁"}],
                 "search_web": True,
                 "stream": True,
@@ -283,9 +348,9 @@ async def test_openai_websearch_stream():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citations", [])
+            citations = chunk_data.get("docs", [])
 
     assert "助手" in answer
     assert len(citations) == 0
@@ -295,9 +360,8 @@ async def test_openai_websearch_stream():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
                 "search_web": True,
                 "stream": True,
@@ -312,9 +376,9 @@ async def test_openai_websearch_stream():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citations", [])
+            citations = chunk_data.get("docs", [])
 
     assert (
         answer != DEFAULT_GUARDRAIL_RESPONSE
@@ -328,9 +392,8 @@ async def test_openai_websearch_stream():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query/search",
             json={
-                "model": "default",
                 "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
                 "search_web": True,
                 "stream": True,
@@ -345,9 +408,9 @@ async def test_openai_websearch_stream():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citations", [])
+            citations = chunk_data.get("docs", [])
 
     assert (
         answer != DEFAULT_GUARDRAIL_RESPONSE
@@ -358,21 +421,21 @@ async def test_openai_websearch_stream():
 
 
 @pytest.mark.asyncio(scope="session")
-async def test_rag_chat():
+async def test_legacy_query_chat():
     # 不相关问题
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query",
             json={
-                "model": "default",
                 "messages": [
                     {
                         "role": "user",
                         "content": "Where do you recommend for a good trip to China?",
                     }
                 ],
+                "index_name": "test_index",
                 "stream": True,
                 "return_reference": True,
             },
@@ -384,9 +447,9 @@ async def test_rag_chat():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citations", [])
+            citations = chunk_data.get("docs", [])
 
     assert len(answer) > 0
     assert len(citations) == 0
@@ -396,15 +459,15 @@ async def test_rag_chat():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query",
             json={
-                "model": "default",
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Why does my experiment generate an empty model?",
+                        "content": "What are the first programs the author write?",
                     }
                 ],
+                "index_name": "test_index",
                 "stream": True,
                 "return_reference": True,
             },
@@ -416,11 +479,11 @@ async def test_rag_chat():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citation_details", [])
+            citations = chunk_data.get("docs", [])
 
-    assert "Machine Learning Studio" in answer
+    assert "IBM" in answer
     assert len(citations) > 0
 
     # 使用另一个index提问
@@ -428,18 +491,17 @@ async def test_rag_chat():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/v1/chat/completions",
+            "api/v1/query",
             json={
-                "model": "default",
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Why does my experiment generate an empty model?",
+                        "content": "What did the author do growing up?",
                     }
                 ],
                 "stream": True,
                 "return_reference": True,
-                "index_name": "test_index",  # change to test_index
+                "index_name": "default",  # change to default
             },
         )
     assert response.status_code == 200
@@ -449,42 +511,9 @@ async def test_rag_chat():
         if chunk.startswith("data:"):
             chunk = chunk[5:]
             chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
+            delta = chunk_data["delta"]
             answer += delta
-            citations = chunk_data.get("citation_details", [])
+            citations = chunk_data.get("docs", [])
 
-    print(citations)
     assert len(answer) > 0
     assert len(citations) == 0
-
-    # 使用相关的index名字
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/v1/chat/completions",
-            json={
-                "model": "default",
-                "messages": [
-                    {"role": "user", "content": "What did the author do growing up?"}
-                ],
-                "stream": True,
-                "return_reference": True,
-                "index_name": "test_index",  # change to test_index
-            },
-        )
-    assert response.status_code == 200
-
-    answer = ""
-    citations = []
-    for chunk in response.iter_lines():
-        if chunk.startswith("data:"):
-            chunk = chunk[5:]
-            chunk_data = json.loads(chunk)
-            delta = chunk_data["choices"][0]["delta"]["content"]
-            answer += delta
-            citations = chunk_data.get("citation_details", [])
-
-    print(citations)
-    assert "program" in answer
-    assert len(citations) > 0

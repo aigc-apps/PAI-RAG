@@ -1,27 +1,24 @@
 import traceback
 from typing import Any, List
-from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
+from fastapi import APIRouter, Body, File, UploadFile, Form
 import uuid
-import hashlib
 import os
-import tempfile
 import shutil
 import pandas as pd
-from pai_rag.core.models.errors import UserInputError
-from pai_rag.core.rag_index_manager import RagIndexEntry, index_manager
+from pai_rag.core.models.errors import ServiceError, UserInputError
+from pai_rag.knowledgebase.rag_job_manager import job_manager
+from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
-    COMMON_FILE_PATH_FODER_NAME,
-)
 from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DESCRIPTION_FOLDER_PATH,
     DEFAULT_DB_HISTORY_PATH,
     DEFAULT_DB_HISTORY_NAME,
 )
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 
 router_v1 = APIRouter()
 
@@ -93,16 +90,16 @@ async def aconfig():
 @router_v1.get("/indexes/{index_name}")
 async def get_index(index_name: str):
     try:
-        return index_manager.get_index_by_name(index_name=index_name)
+        return knowledgebase_manager.get_knowledgebase(name=index_name)
     except Exception as ex:
         logger.error(f"Get index '{index_name}' failed: {ex} {traceback.format_exc()}")
         raise UserInputError(f"Get index '{index_name}' failed: {ex}")
 
 
 @router_v1.post("/indexes/{index_name}")
-async def add_index(index_name: str, index_entry: RagIndexEntry):
+async def add_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.add_index(index_entry)
+        knowledgebase_manager.add_knowledgebase(index_entry)
         return {"msg": f"Add index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(f"Add index '{index_name}' failed: {ex} {traceback.format_exc()}")
@@ -110,9 +107,9 @@ async def add_index(index_name: str, index_entry: RagIndexEntry):
 
 
 @router_v1.patch("/indexes/{index_name}")
-async def update_index(index_name: str, index_entry: RagIndexEntry):
+async def update_index(index_name: str, index_entry: KnowledgeBase):
     try:
-        index_manager.update_index(index_entry)
+        knowledgebase_manager.update_knowledgebase(index_entry)
         return {"msg": f"Update index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -124,7 +121,7 @@ async def update_index(index_name: str, index_entry: RagIndexEntry):
 @router_v1.delete("/indexes/{index_name}")
 async def delete_index(index_name: str):
     try:
-        index_manager.delete_index(index_name)
+        knowledgebase_manager.delete_knowledgebase(index_name)
         return {"msg": f"Delete index '{index_name}' successfully."}
     except Exception as ex:
         logger.error(
@@ -135,72 +132,147 @@ async def delete_index(index_name: str):
 
 @router_v1.get("/indexes")
 async def list_indexes():
-    return index_manager.list_indexes()
+    return knowledgebase_manager.list_knowledgebases()
 
 
-@router_v1.get("/get_upload_state")
-def task_status(task_id: str):
-    status, detail = rag_service.get_task_status(task_id)
-    return {"task_id": task_id, "status": status, "detail": detail}
+# New knowledgebase API
 
 
-@router_v1.post("/upload_data")
-async def upload_data(
-    files: List[UploadFile] = Body(None),
-    oss_path: str = Form(None),
-    index_name: str = Form(None),
-    enable_raptor: bool = Form(False),
-    enable_multimodal: bool = Form(False),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-):
-    task_id = uuid.uuid4().hex
-    logger.info(
-        f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
+@router_v1.get("/knowledgebases/{name}")
+async def get_knowledgebase(name: str):
+    """查询指定知识库信息"""
+    try:
+        return knowledgebase_manager.get_knowledgebase(name=name)
+    except Exception as ex:
+        logger.error(
+            f"Get knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Get knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.post("/knowledgebases/{name}")
+async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    """新增知识库"""
+    try:
+        knowledgebase_manager.add_knowledgebase(knowledgebase)
+        return {"msg": f"Add knowledgebase '{name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Add knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Add knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.patch("/knowledgebases/{name}")
+async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
+    """更新指定知识库"""
+    try:
+        knowledgebase_manager.update_knowledgebase(knowledgebase)
+        return {"msg": f"Update knowledgebase '{name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Update knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Update knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.delete("/knowledgebases/{name}")
+async def delete_knowledgebase(name: str):
+    """删除指定知识库"""
+    try:
+        knowledgebase_manager.delete_knowledgebase(name)
+        return {"msg": f"Delete knowledgebase '{name}' successfully."}
+    except Exception as ex:
+        logger.error(
+            f"Delete knowledgebase '{name}' failed: {ex} {traceback.format_exc()}"
+        )
+        raise UserInputError(f"Delete knowledgebase '{name}' failed: {ex}")
+
+
+@router_v1.get("/knowledgebases")
+async def list_knowledgebases():
+    """知识库列表"""
+    return knowledgebase_manager.list_knowledgebases()
+
+
+@router_v1.get("/knowledgebases/{name}/files")
+async def list_knowledgebase_files(name: str):
+    """指定知识库查询文件列表"""
+    return knowledgebase_manager.get_docs_from_knowledgebase(name)
+
+
+@router_v1.get("/knowledgebases/{name}/history")
+async def get_upload_history(name: str):
+    """新知识库查询上传历史"""
+    return job_manager.get_job_history(name)
+
+
+@router_v1.post("/knowledgebases/{name}/files")
+async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(...)):
+    """新知识库上传文件"""
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
+
+    if not files:
+        raise UserInputError("No files provided.")
+
+    knowledge_docs_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, name, "docs")
+    os.makedirs(knowledge_docs_dir, exist_ok=True)
+
+    for file in files:
+        file_name = file.filename
+        file_data = await file.read()
+        save_file_name = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH,
+            name,
+            "docs",
+            file_name,
+        )
+        with open(save_file_name, "wb") as f:
+            f.write(file_data)
+        logger.info(f"File {file_name} has been save to {save_file_name}.")
+
+    return {"message": "Files have been successfully uploaded."}
+
+
+@router_v1.get("/knowledgebases/{name}/files/{file_name}")
+async def get_file_from_knowledgebase(name: str, file_name: str):
+    """新知识库查询文件上传状态"""
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
+
+    if not file_name:
+        raise UserInputError(f"file_name '{file_name}' cannot be empty.")
+
+    return job_manager.get_file_upload_status(name, file_name)
+
+
+@router_v1.delete("/knowledgebases/{name}/files/{file_name}")
+async def delete_file_from_knowledgebase(name: str, file_name: str):
+    """新知识库删除文件"""
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
+
+    if not file_name:
+        raise UserInputError(f"file_name '{file_name}' cannot be empty.")
+
+    save_file_name = os.path.join(
+        DEFAULT_KNOWLEDGEBASE_PATH,
+        name,
+        "docs",
+        file_name,
     )
-    if oss_path:
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            filter_pattern=None,
-            oss_path=oss_path,
-            from_oss=True,
-            index_name=index_name,
-            enable_raptor=enable_raptor,
-            enable_multimodal=enable_multimodal,
-        )
-    else:
-        if not files:
-            return {"message": "No upload file sent"}
-        tmpdir = tempfile.mkdtemp()
-        input_files = []
-        for file in files:
-            fn = file.filename
-            data = await file.read()
-            file_hash = hashlib.md5(data).hexdigest()
-            tmp_file_dir = os.path.join(
-                tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
-            )
-            os.makedirs(tmp_file_dir, exist_ok=True)
-            save_file = os.path.join(tmp_file_dir, fn)
+    if not os.path.exists(save_file_name):
+        raise UserInputError(f"File '{file_name}' not found")
 
-            with open(save_file, "wb") as f:
-                f.write(data)
-                f.close()
-            input_files.append(save_file)
+    if os.path.isdir(save_file_name):
+        raise UserInputError(f"Deleting a directory '{file_name}' is not supported.")
 
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            input_files=input_files,
-            filter_pattern=None,
-            index_name=index_name,
-            oss_path=None,
-            enable_raptor=enable_raptor,
-            temp_file_dir=tmpdir,
-            enable_multimodal=enable_multimodal,
-        )
-
-    return {"task_id": task_id}
+    try:
+        os.remove(save_file_name)
+        return {"message": f"File '{file_name}' have been successfully removed."}
+    except Exception as e:
+        raise ServiceError(f"Error deleting file '{file_name}': {str(e)}")
 
 
 @router_v1.post("/upload_datasheet")

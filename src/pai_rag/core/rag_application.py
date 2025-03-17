@@ -1,13 +1,12 @@
 import traceback
 from pai_rag.app.api.models import ChatCompletionRequest, ChatResponseWrapper
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_index_manager import index_manager
+from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.core.rag_module import (
     resolve_agent,
     resolve_chat_store,
     resolve_data_analysis_loader,
     resolve_data_analysis_query,
-    resolve_data_loader,
     resolve_intent_router,
     resolve_chat_llm,
     resolve_llm_guardrail,
@@ -386,48 +385,10 @@ class RagApplication:
     def __init__(self, config: RagConfig):
         self.name = "RagApplication"
         self.config = config
-        index_manager.add_default_index(self.config)
         _ = resolve_query_engine(self.config)
 
     def refresh(self, config: RagConfig):
         self.config = config
-        index_manager.add_default_index(self.config)
-
-    def load_knowledge(
-        self,
-        input_files,
-        filter_pattern=None,
-        index_name=None,
-        from_oss=False,
-        oss_path=None,
-        enable_raptor=False,
-        enable_multimodal=False,
-        task_id=None,
-    ):
-        logger.info(
-            f"""Loading data:
-            input_files: {input_files}
-            index_name: {index_name}
-            enable_multimodal: {enable_multimodal}
-            enable_raptor: {enable_raptor}"""
-        )
-
-        session_config = self.config.model_copy()
-        index_entry = index_manager.get_index_by_name(index_name)
-        session_config.embedding = index_entry.embedding_config
-        session_config.index.vector_store = index_entry.vector_store_config
-        session_config.node_parser.enable_multimodal = enable_multimodal
-
-        data_loader = resolve_data_loader(session_config)
-        data_loader.load_data(
-            file_path_or_directory=input_files,
-            filter_pattern=filter_pattern,
-            from_oss=from_oss,
-            oss_path=oss_path,
-            enable_raptor=enable_raptor,
-            index_entry=index_entry,
-            task_id=task_id,
-        )
 
     async def aretrieve(
         self, query: RagQuery, sse_version: SseVersion = SseVersion.V0
@@ -460,9 +421,9 @@ class RagApplication:
 
         query_bundle = QueryBundle(question)
         session_config = self.config.model_copy()
-        index_entry = index_manager.get_index_by_name(query.index_name)
-        session_config.embedding = index_entry.embedding_config
-        session_config.index.vector_store = index_entry.vector_store_config
+        knowledgebase = knowledgebase_manager.get_knowledgebase(query.index_name)
+        session_config.embedding = knowledgebase.embedding_config
+        session_config.index.vector_store = knowledgebase.vector_store_config
         query_engine = resolve_query_engine(session_config)
         node_results = await query_engine.aretrieve(query_bundle)
 
@@ -757,10 +718,13 @@ class RagApplication:
             logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
             session_config = self.config.model_copy()
-            index_entry = index_manager.get_index_by_name(chat_request.index_name)
-            session_config.embedding = index_entry.embedding_config
-            session_config.index.vector_store = index_entry.vector_store_config
-            query_engine = resolve_query_engine(session_config, chat_request.model)
+
+            knowledgebase = knowledgebase_manager.get_knowledgebase(
+                chat_request.index_name
+            )
+            session_config.embedding = knowledgebase.embedding_config
+            session_config.index.vector_store = knowledgebase.vector_store_config
+            query_engine = resolve_query_engine(session_config)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
@@ -910,9 +874,9 @@ class RagApplication:
             logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
             session_config = self.config.model_copy()
-            index_entry = index_manager.get_index_by_name(query.index_name)
-            session_config.embedding = index_entry.embedding_config
-            session_config.index.vector_store = index_entry.vector_store_config
+            knowledgebase = knowledgebase_manager.get_knowledgebase(query.index_name)
+            session_config.embedding = knowledgebase.embedding_config
+            session_config.index.vector_store = knowledgebase.vector_store_config
 
             query_engine = resolve_query_engine(session_config)
             response_wrapper = await query_engine.aquery(

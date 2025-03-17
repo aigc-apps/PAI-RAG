@@ -11,11 +11,11 @@ import markdown
 import html
 from loguru import logger
 from pai_rag.app.api.models import RagQuery, RagResponse
-from pai_rag.app.web.rag_client import RagApiError, dotdict
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_index_manager import RagIndexEntry, RagIndexMap, index_manager
+from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager, KnowledgeBase
+from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.core.rag_service import rag_service
 from datetime import datetime
 import time
@@ -31,25 +31,24 @@ from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
 )
 
 
+class RagApiError(Exception):
+    def __init__(self, code, msg):
+        self.code = code
+        self.msg = msg
+
+
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
 def get_ts():
     dt = datetime.now()
     ms = dt.microsecond // 1000
     return datetime.now().strftime("%Y%m%d%H%M%S") + f"{ms:03d}"
-
-
-def _create_chat_history_from_messages(chat_messages):
-    chat_history = []
-    for message in chat_messages:
-        if message["role"] == "user":
-            chat_history.append(
-                {
-                    "user": str(message["content"]),
-                }
-            )
-        elif message["role"] == "assistant" and len(chat_history) > 0:
-            chat_history[-1]["bot"] = str(message["content"])
-
-    return chat_history
 
 
 DEFAULT_CLIENT_TIME_OUT = 120
@@ -85,7 +84,7 @@ class RagLocalClient:
                     )
                     content = f"""
 <span>
-    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> Score:{doc.get("score")}
+    <a href="{media_url}"> [{i+1}]: {formatted_image_name} </a> 分数:{doc.get("score")}
 </span>
 <br>
 """
@@ -102,7 +101,7 @@ class RagLocalClient:
                         )
                     content = f"""
 <span class="text">
-    [{i+1}]: {formatted_file_name} Score:{doc.get("score")}
+    [{i+1}]: {formatted_file_name} 分数:{doc.get("score")}
     <span style='color: gray; font-size: 12px;'> ( {html_content} ) </span>
 </span>
 <br>
@@ -136,7 +135,7 @@ class RagLocalClient:
 
         formatted_answer = text
         if referenced_docs:
-            formatted_answer += f"\n\n**Reference**:\n {referenced_docs}"
+            formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
 
         response["delta"] = formatted_answer
 
@@ -268,9 +267,7 @@ class RagLocalClient:
             )
 
             result = {}
-            formatted_text = (
-                "<tr><th>Document</th><th>Score</th><th>Text</th><th>Media</tr>\n"
-            )
+            formatted_text = "<tr><th>切片</th><th>分数</th><th>文本</th></tr>\n"
             if len(response.docs) == 0:
                 result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
             else:
@@ -295,8 +292,8 @@ class RagLocalClient:
                         safe_html_content = (
                             f"""<a href="{file_url}">{safe_html_content}</a>"""
                         )
-                    formatted_text += '<tr style="font-size: 13px;"><td>Doc {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                        i + 1, doc.score, safe_html_content, media_url
+                    formatted_text += '<tr style="font-size: 13px;"><td>切片 {}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                        i + 1, doc.score, safe_html_content
                     )
                 formatted_text = (
                     "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
@@ -391,6 +388,9 @@ class RagLocalClient:
 
         await upload_job
         logger.info(f"[Upload] Finished task_id: {task_id}")
+
+    def get_upload_history(self, knowledgebase_name):
+        return job_manager.get_job_history(name=knowledgebase_name)
 
     def handle_task_result(self, task, task_id):
         try:
@@ -622,9 +622,9 @@ class RagLocalClient:
                 msg=f"get config failed. {e}",
             )
 
-    def list_indexes(self) -> RagIndexMap:
+    def list_indexes(self):
         try:
-            return index_manager.list_indexes()
+            return knowledgebase_manager.list_knowledgebases()
         except Exception as e:
             logger.exception(f"list index failed: {e}")
             raise RagApiError(
@@ -632,55 +632,35 @@ class RagLocalClient:
                 msg=f"list index failed. {e}",
             )
 
-    def add_index(self, index_entry: RagIndexEntry):
+    def add_index(self, index_entry: KnowledgeBase):
         try:
-            index_manager.add_index(index_entry=index_entry)
+            knowledgebase_manager.add_knowledgebase(knowledgebase=index_entry)
         except Exception as e:
-            logger.exception(f"add index {index_entry.index_name} failed: {e}")
+            logger.exception(f"add index {index_entry.name} failed: {e}")
             raise RagApiError(
                 code=500,
-                msg=f"add index {index_entry.index_name} failed. {e}",
+                msg=f"add index {index_entry.name} failed. {e}",
             )
 
-    def update_index(self, index_entry: RagIndexEntry):
+    def update_index(self, index_entry: KnowledgeBase):
         try:
-            index_manager.update_index(index_entry=index_entry)
+            knowledgebase_manager.update_knowledgebase(knowledgebase=index_entry)
         except Exception as e:
-            logger.exception(f"update index {index_entry.index_name} failed: {e}")
+            logger.exception(f"update index {index_entry.name} failed: {e}")
             raise RagApiError(
                 code=500,
-                msg=f"update index {index_entry.index_name} failed. {e}",
+                msg=f"update index {index_entry.name} failed. {e}",
             )
 
     def delete_index(self, index_name: str):
         try:
-            index_manager.delete_index(index_name=index_name)
+            knowledgebase_manager.delete_knowledgebase(name=index_name)
         except Exception as e:
             logger.exception(f"delete index {index_name} failed: {e}")
             raise RagApiError(
                 code=500,
                 msg=f"delete index {index_name} failed. {e}",
             )
-
-    def add_file_to_index(self, index_name: str, file_path: str):
-        try:
-            index_manager.add_file_to_index(index_name=index_name, file_path=file_path)
-        except Exception as e:
-            logger.exception(f"Add file {file_path} to_index {index_name} failed: {e}")
-            raise RagApiError(
-                code=500,
-                msg=f"Add file {file_path} to_index {index_name} failed. {e}",
-            )
-
-    def delete_file_from_index(self, index_name: str, file_path: str):
-        return index_manager.delete_file_from_index(
-            index_name=index_name, file_path=file_path
-        )
-
-    def delete_dir_from_index(self, index_name: str, dir_path: str):
-        return index_manager.delete_dir_from_index(
-            index_name=index_name, file_path=dir_path
-        )
 
 
 rag_client = RagLocalClient()

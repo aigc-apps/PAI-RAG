@@ -14,9 +14,10 @@ from pai_rag.app.api.models import (
     RagResponse,
 )
 from openinference.instrumentation import using_attributes
-from typing import Dict, List
+from typing import Dict
 from loguru import logger
-from pai_rag.core.rag_job_manager import upload_job_manager
+from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
+from pai_rag.knowledgebase.rag_job_manager import job_manager
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 
@@ -52,6 +53,9 @@ class RagService:
             self._state.update_state(new_state)
 
         self.rag_configuration = rag_configuration
+
+        knowledgebase_manager.compatible_init(rag_configuration.get_value())
+        job_manager.update_config(new_config=rag_configuration.get_value())
         self.rag = RagApplication(config=rag_configuration.get_value())
 
         self.reload_lock = threading.Lock()
@@ -87,54 +91,14 @@ class RagService:
             logger.info("Reloading rag configuration from API.")
             self.rag_configuration.update(new_config)
             self.rag.refresh(self.rag_configuration.get_value())
+            job_manager.update_config(new_config=self.rag_configuration.get_value())
             config_mtime = self.rag_configuration.persist()
             self._state.update_state(config_mtime)
             logger.info("Reloaded rag configuration from API.")
 
-    def add_knowledge(
-        self,
-        task_id: str,
-        input_files: List[str] = None,
-        filter_pattern: str = None,
-        oss_path: str = None,
-        index_name: str = None,
-        enable_raptor: bool = False,
-        enable_multimodal: bool = False,
-        from_oss: bool = False,
-        temp_file_dir: str = None,
-    ):
-        try:
-            asyncio.get_event_loop()
-        except Exception as ex:
-            logger.warning(f"No event loop found, will create new: {ex}")
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-        try:
-            self.rag.load_knowledge(
-                input_files=input_files,
-                filter_pattern=filter_pattern,
-                from_oss=from_oss,
-                index_name=index_name,
-                oss_path=oss_path,
-                enable_raptor=enable_raptor,
-                enable_multimodal=enable_multimodal,
-                task_id=task_id,
-            )
-        except Exception as ex:
-            logger.error(f"Upload failed: {ex} {traceback.format_exc()}")
-            raise UserInputError(f"Upload knowledge failed: {ex}")
 
-    def get_task_status(self, task_id: str):
-        detail = None
-        status = upload_job_manager.get_task_status(task_id)
-        return status, detail
 
-    async def aquery_v1(
-        self,
-        query: RagQuery,
-        chat_model_id: str = None,
-        query_rewrite_model_id: str = None,
-    ):
+    async def aquery_v1(self, query: RagQuery):
         try:
             if query.search_web:
                 return await self.rag.aquery(
@@ -257,13 +221,6 @@ class RagService:
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Data Analysis failed: {ex}")
-
-    # async def aquery_analysis_v1(self, query: RagQuery):
-    #     try:
-    #         return await self.rag.aquery_analysis(query, sse_version=SseVersion.V1)
-    #     except Exception as ex:
-    #         logger.error(traceback.format_exc())
-    #         raise UserInputError(f"Query Analysis failed: {ex}")
 
 
 rag_service = RagService()
