@@ -241,7 +241,6 @@ class ViewModel(BaseModel):
             config.query_rewrite.knowledge_tool_prompt_str
         )
 
-
         view_model.rewrite_agent_prompt = config.query_rewrite.agent_tool_prompt_str
         view_model.rewrite_search_prompt = (
             config.query_rewrite.websearch_tool_prompt_str
