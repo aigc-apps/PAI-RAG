@@ -6,6 +6,7 @@ import os
 
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.utils.oss_utils import check_and_set_oss_auth
+from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
 
 # store config file generated from ui.
 GENERATED_CONFIG_FILE_NAME = "localdata/settings.snapshot.toml"
@@ -59,7 +60,22 @@ class RagConfigManager:
             raise error
 
     def get_value(self) -> RagConfig:
+        self.config.rag["llms"] = [item for item in self.config.rag["llms"] if item]
         rag_config = RagConfig.model_validate(self.config.rag)
+        rag_config_copy = rag_config
+        # 兼容之前的配置
+        if rag_config.llm.is_validate() and (
+            not rag_config_copy.llms or len(rag_config_copy.llms) == 0
+        ):
+            updated_llm = rag_config.llm.copy(update={"vision_support": False})
+            rag_config.llms.append(updated_llm)
+        if rag_config.multimodal_llm.is_validate() and (
+            not rag_config_copy.llms or len(rag_config_copy.llms) == 0
+        ):
+            updated_vllm = rag_config.multimodal_llm.copy(
+                update={"vision_support": True}
+            )
+            rag_config.llms.append(updated_vllm)
         return rag_config
 
     def update(self, new_value: Dynaconf):
@@ -70,6 +86,12 @@ class RagConfigManager:
     def persist(self):
         """Save configuration to file."""
         data = self.config.as_dict()
+        if data["RAG"]["llms"]:
+            data["RAG"]["llms"] = [
+                llm.model_dump()
+                for llm in data["RAG"]["llms"]
+                if isinstance(llm, PaiBaseLlmConfig)
+            ]
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())
         return self.get_config_mtime()

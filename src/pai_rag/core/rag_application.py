@@ -8,7 +8,7 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_loader,
     resolve_data_analysis_query,
     resolve_intent_router,
-    resolve_llm,
+    resolve_chat_llm,
     resolve_llm_guardrail,
     resolve_query_engine,
     resolve_searcher,
@@ -529,7 +529,7 @@ class RagApplication:
 
             if chat_request.chat_llm:
                 logger.info(f"Querying with question: {messages[-1].content}.")
-                llm: PaiLlm = resolve_llm(self.config)
+                llm: PaiLlm = resolve_chat_llm(self.config, chat_request.model)
                 if chat_request.stream:
                     response = await llm.astream_chat(messages=messages)
 
@@ -555,7 +555,9 @@ class RagApplication:
             logger.info(
                 f"{session_id} Starting query transformation: Elapsed {time.time() - start}"
             )
-            openai_query_transform = resolve_openai_query_transform(self.config)
+            openai_query_transform = resolve_openai_query_transform(
+                self.config, self.config.query_rewrite.model_id
+            )
             if chat_request.chat_db:
                 chat_type = "nl2sql"
             else:
@@ -620,7 +622,7 @@ class RagApplication:
             if chat_request.chat_agent:
                 logger.info(f"Querying with question: {query_bundle.query_str}.")
 
-                agent_tool = resolve_agent(self.config)
+                agent_tool = resolve_agent(self.config, chat_request.model)
                 if not agent_tool:
                     raise ValueError(
                         "Agent config is not valid. Please check your Agent api configuration."
@@ -680,7 +682,7 @@ class RagApplication:
                     f"{session_id} Starting search web: Elapsed {time.time() - start}"
                 )
 
-                search_engine = resolve_searcher(self.config)
+                search_engine = resolve_searcher(self.config, chat_request.model)
                 if not search_engine:
                     raise ValueError(
                         "AI search config is not valid. Please check your search api configuration."
@@ -716,12 +718,13 @@ class RagApplication:
             logger.info(f"Querying with question '{query_bundle.query_str}'.")
 
             session_config = self.config.model_copy()
+
             knowledgebase = knowledgebase_manager.get_knowledgebase(
                 chat_request.index_name
             )
             session_config.embedding = knowledgebase.embedding_config
             session_config.index.vector_store = knowledgebase.vector_store_config
-            query_engine = resolve_query_engine(session_config)
+            query_engine = resolve_query_engine(session_config, chat_request.model)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=system_prompt,
@@ -758,6 +761,8 @@ class RagApplication:
     async def aquery(
         self,
         query: RagQuery,
+        chat_model_id: str = None,
+        query_rewrite_model_id: str = None,
         chat_type: RagChatType = RagChatType.RAG,
         sse_version: SseVersion = SseVersion.V0,
     ):
@@ -786,7 +791,7 @@ class RagApplication:
 
         # Chat to LLM, return directly
         if chat_type == RagChatType.LLM:
-            llm: PaiLlm = resolve_llm(self.config)
+            llm: PaiLlm = resolve_chat_llm(self.config, chat_model_id)
             if not query.stream:
                 response = await llm.achat(messages=query.messages)
                 return RagResponse(
@@ -796,7 +801,9 @@ class RagApplication:
                 response = await llm.astream_chat(messages=query.messages)
                 return event_generator_async(response, sse_version=sse_version)
 
-        openai_query_transform = resolve_openai_query_transform(self.config)
+        openai_query_transform = resolve_openai_query_transform(
+            self.config, query_rewrite_model_id
+        )
         question = query.messages[-1].content
         if openai_query_transform is not None:
             new_query_bundle = await openai_query_transform.arun(
@@ -836,7 +843,7 @@ class RagApplication:
                     )
 
         if query.with_intent:
-            intent_router = resolve_intent_router(self.config)
+            intent_router = resolve_intent_router(self.config, chat_model_id)
             intent = await intent_router.aselect(
                 str_or_query_bundle=new_query_bundle.chat_messages_str
             )
@@ -871,7 +878,7 @@ class RagApplication:
             session_config.embedding = knowledgebase.embedding_config
             session_config.index.vector_store = knowledgebase.vector_store_config
 
-            query_engine = resolve_query_engine(session_config)
+            query_engine = resolve_query_engine(session_config, chat_model_id)
             response_wrapper = await query_engine.aquery(
                 query_bundle,
                 system_role_str=query.system_role_template,
@@ -880,7 +887,7 @@ class RagApplication:
         elif chat_type == RagChatType.WEB:
             logger.info(f"Querying with question '{new_question}'.")
 
-            search_engine = resolve_searcher(self.config)
+            search_engine = resolve_searcher(self.config, chat_model_id)
             if not search_engine:
                 raise ValueError(
                     "AI search config is not valid. Please check your search api configuration."
