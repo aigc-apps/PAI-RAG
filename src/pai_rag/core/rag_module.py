@@ -251,7 +251,13 @@ def resolve_openai_query_transform(
     openai_query_transform = resolve(
         OpenAICompatibleQueryTransform,
         llm=llm,
-        query_transform_prompt=config.query_rewrite.rewrite_prompt_template,
+        base_transform_prompt=config.query_rewrite.base_prompt_template_str,
+        llm_tool_prompt_str=config.query_rewrite.llm_tool_prompt_str,
+        knowledge_tool_prompt_str=config.query_rewrite.knowledge_tool_prompt_str,
+        websearch_tool_prompt_str=config.query_rewrite.websearch_tool_prompt_str,
+        agent_tool_prompt_str=config.query_rewrite.agent_tool_prompt_str,
+        db_tool_prompt_str=config.query_rewrite.db_tool_prompt_str,
+        news_tool_prompt_str=config.query_rewrite.news_tool_prompt_str,
     )
     return openai_query_transform
 
