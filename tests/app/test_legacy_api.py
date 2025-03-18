@@ -273,7 +273,7 @@ async def test_legacy_query_search():
 
     answer = response.json()["answer"]
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(response.json()["docs"]) == 0
 
     # search并返回reference
@@ -322,7 +322,7 @@ async def test_legacy_query_search():
         and answer != DEFAULT_EMPTY_RESPONSE
         and answer != DEFAULT_ERROR_RESPONSE
     )
-    assert response.json()["docs"] is None
+    assert response.json()["docs"] == []
 
 
 @pytest.mark.asyncio(scope="session")
@@ -352,7 +352,7 @@ async def test_legacy_query_search_stream():
             answer += delta
             citations = chunk_data.get("docs", [])
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(citations) == 0
 
     # search并返回引用

@@ -253,11 +253,9 @@ def create_setting_tab() -> Dict[str, Any]:
             ############################ llms settings end  ############################
 
             with gr.Column(scale=5, variant="panel"):
-                _ = gr.Markdown(
-                    value="\N{WHITE MEDIUM STAR} **(Optional, for saving image & load data) OSS Bucket**"
-                )
+                _ = gr.Markdown(value="\N{WHITE MEDIUM STAR} **(可选) 图片OSS存储配置**")
                 use_oss = gr.Checkbox(
-                    label="使用OSS存储",
+                    label="使用图片OSS存储",
                     elem_id="use_oss",
                     container=False,
                 )
@@ -289,10 +287,10 @@ def create_setting_tab() -> Dict[str, Any]:
 
             with gr.Column(scale=5, variant="panel"):
                 _ = gr.Markdown(
-                    value="\N{WHITE MEDIUM STAR} **(可选) LLM护栏 [doc](https://help.aliyun.com/document_detail/464388.html?spm=a2c4g.11186623.help-menu-28415.d_1_0.18923104V0TR1X)**"
+                    value="\N{WHITE MEDIUM STAR} **(可选) LLM安全护栏 [doc](https://help.aliyun.com/document_detail/464388.html?spm=a2c4g.11186623.help-menu-28415.d_1_0.18923104V0TR1X)**"
                 )
                 enable_guardrail = gr.Checkbox(
-                    label="开启LLM护栏",
+                    label="开启LLM安全护栏",
                     elem_id="enable_guardrail",
                     container=False,
                 )

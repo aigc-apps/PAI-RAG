@@ -85,7 +85,6 @@ def setup_app():
                 },
                 "postprocessor": {
                     "reranker_type": "no-reranker",
-                    "similarity_threshold": 0.7,
                 },
                 "retriever": {"retrieval_mode": "default"},
             },
@@ -205,7 +204,7 @@ async def test_openai_websearch():
 
     answer = response.json()["choices"][0]["message"]["content"]
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(response.json()["citations"]) == 0
 
     # search并返回reference
@@ -287,7 +286,7 @@ async def test_openai_websearch_stream():
             answer += delta
             citations = chunk_data.get("citations", [])
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(citations) == 0
 
     # search并返回引用
@@ -389,7 +388,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citations", [])
 
     assert len(answer) > 0
-    assert len(citations) == 0
+    assert len(citations) == 5
 
     # 相关问题
     async with AsyncClient(
@@ -402,7 +401,7 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Why does my experiment generate an empty model?",
+                        "content": "为什么会生成空模型?",
                     }
                 ],
                 "stream": True,
@@ -420,7 +419,7 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    assert "Machine Learning Studio" in answer
+    assert "空模型" in answer
     assert len(citations) > 0
 
     # 使用另一个index提问
@@ -453,9 +452,8 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    print(citations)
     assert len(answer) > 0
-    assert len(citations) == 0
+    assert len(citations) == 5
 
     # 使用相关的index名字
     async with AsyncClient(
@@ -485,6 +483,5 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    print(citations)
     assert "program" in answer
     assert len(citations) > 0

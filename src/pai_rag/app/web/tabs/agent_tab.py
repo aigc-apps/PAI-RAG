@@ -4,7 +4,6 @@ import gradio as gr
 
 
 async def respond(
-    intent_description,
     agent_api_definition,
     agent_function_definition,
     agent_python_scripts,
@@ -13,7 +12,6 @@ async def respond(
     agent_chatbot,
 ):
     update_dict = {
-        "intent_description": intent_description,
         "agent_api_definition": agent_api_definition,
         "agent_function_definition": agent_function_definition,
         "agent_python_scripts": agent_python_scripts,
@@ -41,7 +39,6 @@ async def respond(
 
 
 def clear_history(chatbot):
-    rag_client.clear_history()
     chatbot = []
     return chatbot
 
@@ -53,13 +50,6 @@ def reset_textbox():
 def create_agent_tab() -> Dict[str, Any]:
     with gr.Row():
         with gr.Column(scale=4):
-            with gr.Tab(label="意图 & 提示词配置"):
-                intent_description = gr.Code(
-                    label="Intent Descriptions",
-                    elem_id="intent_description",
-                    interactive=True,
-                    language="json",
-                )
             with gr.Tab(label="API 工具"):
                 agent_system_prompt = gr.Textbox(
                     label="工具调用系统提示词模板",
@@ -99,7 +89,6 @@ def create_agent_tab() -> Dict[str, Any]:
             submitBtn.click(
                 respond,
                 [
-                    intent_description,
                     agent_api_definition,
                     agent_function_definition,
                     agent_python_scripts,
@@ -113,7 +102,6 @@ def create_agent_tab() -> Dict[str, Any]:
             agent_question.submit(
                 respond,
                 [
-                    intent_description,
                     agent_api_definition,
                     agent_function_definition,
                     agent_python_scripts,
@@ -139,7 +127,6 @@ def create_agent_tab() -> Dict[str, Any]:
 
             clearBtn.click(clear_history, [agent_chatbot], [agent_chatbot])
         return {
-            intent_description.elem_id: intent_description,
             agent_system_prompt.elem_id: agent_system_prompt,
             agent_api_definition.elem_id: agent_api_definition,
             agent_function_definition.elem_id: agent_function_definition,

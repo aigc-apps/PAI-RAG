@@ -24,10 +24,11 @@ async def get_models():
 
 @router_openai.post("/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
-    response = await rag_service.achat(request)
     if not request.stream:
+        response = await rag_service.achat(request)
         return response
     else:
+        response = await rag_service.astream_chat(request)
         return StreamingResponse(
             response,
             media_type="text/event-stream",

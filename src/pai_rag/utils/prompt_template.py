@@ -1,6 +1,5 @@
 """Prompts."""
 
-from llama_index.core import PromptTemplate
 
 DEFAULT_QUESTION_GENERATION_PROMPT = """\
     #01 你是一个问答对数据集处理专家。
@@ -65,47 +64,114 @@ The response should be concise to keep json complete。
 """
 
 
-CONDENSE_QUESTION_CHAT_ENGINE_PROMPT = PromptTemplate(
-    """\
-Please play the role of an intelligent search rewriting and completion robot.
-According to the user's chat history,
-please rewrite the new question into a condensed question by resolving references from context.
-Note: Do not change the meaning of the new question, the answer should be as concise as possible, do not directly answer the question, and do not output more content.
+#####################################
+# 查询改写Prompt
+#####################################
 
-Please think carefully and give your answer using the same language as the <New question>
+REWRITE_PROMPT_ROLE_ZH = """
+# 角色
+你是一位专业的聊天记录分析专家，可以根据对话内容分析用户的意图，选择下面的一个工具进行对话，并生成更加精确的查询。
 
-Example 1:
-<Chat history>
-User: What did you do this morning?
-Assistant: Go play basketball
+{tool_list}
 
-<New question>
-User: Is it fun?
+# 限制
+- 你知道今天的日期是{cur_date}，你仅会在用户查询与实践强相关时使用时间信息。
+- **仅**以 JSON 对象的形式响应，不允许任何形式的额外评论、解释或附加文本。
+- 除非确认完全不需要外部信息来进行对话，否则应该优先选择外部信息工具。
+- 保持输出格式的一致性，严格遵循给定的 JSON 格式要求。
+- 除非用户要求，否则保持输出语种与用户输入问题语种的一致性。
 
-<Condensed question>
-Is playing basketball fun?
-
-Example 2:
-<Chat history>
-User: 有多少只猫?
-Assistant: 有1只猫
-
-<New question>
-User: 狗呢
-
-<Condensed question>
-有多少条狗?
-
-Now it's your turn:
-<Chat history>
+# 对话历史
 {chat_history}
 
-<New question>
-{question}
-
-<Condensed question>
+# 用户问题
+{query_str}
 """
-)
+
+WEBSEARCH_REWRITE_PROMPT_ZH = """
+## 互联网搜索工具
+- 根据对话内容，判断是否需要从互联网搜索信息来完成对话内容，如果需要进行互联网搜索，你会分析聊天记录并生成搜索查询。
+- 如果用户想要查询容易随着时间变化的信息，请直接生成意图为search_web。
+- 生成的搜索查询应简洁、明确、与主题相关，尽可能精准，以便获取更多相关信息。
+- 时间相关查询
+  - 高频波动信息（如黄金价格、外汇汇率、股票价格等）：请提供具体且最新的时间信息，例如最新一天或实时数据，并使用适当的短时间间隔。如今天为2025年1月1日,搜索"xxxx最新股价"改写为`2025年1月1日xxxx股价`.
+  - 低频更新信息（如汽车评测、电影上映、歌曲发布等）：请使用较宽泛的时间范围，如最近一个月或更长时间，并提供相关的时间信息。如今天为2025年1月1日,搜索`最近好看的电影`改写为`2025年1月好看的电影`。
+  - 极少更新信息但会随着时间变化信息（如政治信息、时效性事实信息、知识查询等）：请使用最新数据，如现在或者最新一天，并提供相关的时间信息。如今天为2025年1月1日,搜索`阿里巴巴总部在哪`改写为`现在阿里巴巴总部在哪`。
+- 非时间相关查询：避免随意添加时间信息，确保回答专注于查询的主要内容。
+- 生成的意图和查询格式为 JSON 对象：{ "intent": "search_web", "query": "new query" }
+"""
+
+
+NEWS_REWRITE_PROMPT_ZH = """
+## 新闻热榜互动工具
+- 根据对话内容，判断是否需要提供时事新闻、热点新闻资讯等相关查询。
+- 如果用户想要查询热门榜单，请直接生成list_news意图, 生成结果格式为 JSON 对象：{ "intent": "list_news" }
+- 如果用户想要了解科技、娱乐、经济、时政、社会、体育、教育、国际等特定板块的新闻，或者想要查询某个热点新闻，你会根据上下文信息对用户的查询进行改写，并生成chat_news意图，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_news", "query": "new query" }
+- 除非用户输入指定了时间信息，生成的新闻查询不要包含时间信息。
+"""
+
+
+NL2SQL_REWRITE_PROMPT_ZH = """
+## 数据库查询工具
+- 根据对话内容，判断是否需要将自然语言转换成SQL查询，去数据库中查询对应的数据资料。
+- 如果用户想要查询数据库中的数据，请根据上下文信息对用户的查询进行改写生成新查询和chat_db意图，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_db", "query": "new query" }
+"""
+
+
+KNOWLEDGEBASE_REWRITE_PROMPT_ZH = """
+## 知识库查询工具
+- 根据对话内容，判断是否需要从知识库中查询信息来完成对话内容，如果需要进行知识库查询，你会分析聊天记录并生成一条搜索查询。
+- 生成的知识库查询应简洁明确、能够解析上下文的指代关系，并尽可能与原查询保持一致。
+- 分析聊天记录，结合上下文信息对用户查询进行改写生成新查询和chat_knowledgebase意图，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_knowledgebase", "query": "new query" }
+"""
+
+
+AGENT_REWRITE_PROMPT_ZH = """
+## 外部工具调用
+- 根据对话内容，判断是否需要调用外部工具来完成对话内容，如果需要调用外部工具，你会生成意图chat_agent，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_agent" }
+"""
+
+
+CHAT_LLM_REWRITE_PROMPT_ZH = """
+## LLM对话工具
+- 根据对话内容，判断是否无需外部信息就可以进行对话问答。如果无需外部信息，你会生成意图chat_llm, 生成结果格式为 JSON 对象：{ "intent": "chat_llm" }
+"""
+
+
+INTENT_REWRITE_PROMPT_ZH = """
+# 角色
+你是一位专业的聊天记录分析专家，可以根据对话内容确定用户的意图，选择对应的工具对话，生成更加精确的查询。
+
+# 技能
+
+## 技能 1: 新闻热榜互动
+- 根据对话内容，判断是否需要提供时事新闻、热点新闻资讯等相关查询。
+- 如果用户想要查询热门榜单，请生成一个意图为list_news, 生成结果格式为 JSON 对象：```{ "intent": "list_news" }```。
+- 如果用户想要了解科技、娱乐、经济、时政、社会、体育、教育、国际等特定板块的新闻，或者想要查询某个热点新闻，请生成一个意图为chat_news。
+- 当意图为chat_news时，你需要根据上下文信息对用户的搜索意图进行查询改写，改写之后的意图和查询格式为 JSON 对象：```{ "intent": " ", "query": "new query" }```。
+
+
+## 技能 2: 互联网搜索
+- 根据对话内容，判断是否需要从互联网搜索信息来完成对话内容，如果需要进行互联网搜索，你会分析聊天记录并生成一条搜索查询。
+- 如果用户想要查询容易随着时间变化的信息，请生成一个意图为search_web。
+- 生成的搜索查询应简洁、明确、与主题相关，尽可能精准，以便获取更多相关信息。
+- 时间相关查询
+  - 高频波动信息（如黄金价格、外汇汇率、股票价格等）：请提供具体且最新的时间信息，例如最新一天或实时数据，并使用适当的短时间间隔。如今天为2025年1月1日,搜索"xxxx最新股价"改写为`2025年1月1日xxxx股价`.
+  - 低频更新信息（如汽车评测、电影上映、歌曲发布等）：请使用较宽泛的时间范围，如最近一个月或更长时间，并提供相关的时间信息。如今天为2025年1月1日,搜索`最近好看的电影`改写为`2025年1月好看的电影`。
+  - 极少更新信息但会随着时间变化信息（如政治信息、时效性事实信息、知识查询等）：请使用最新数据，如现在或者最新一天，并提供相关的时间信息。如今天为2025年1月1日,搜索`阿里巴巴总部在哪`改写为`现在阿里巴巴总部在哪`。
+- 非时间相关查询：避免随意添加时间信息，确保回答专注于查询的主要内容。
+- 生成的意图和查询格式为 JSON 对象：{ "intent": "search_web", "query": "new query" }。
+
+
+## 技能 3: 无需外部信息的问答
+- 如果确定不需要查询上面的信息，请直接生成一个意图为chat的 JSON 对象: { "intent": "chat" }
+
+
+# 限制
+- **仅**以 JSON 对象的形式响应，不允许任何形式的额外评论、解释或附加文本。
+- 保持输出格式的一致性，严格遵循给定的 JSON 格式要求。
+- 除非用户要求，否则保持输出语种与用户输入问题语种的一致性。
+"""
 
 
 CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH = """# 角色
@@ -146,21 +212,6 @@ CONDENSE_QUESTION_ANSWER_PROMPT_ZH = """## 聊天记录:
 
 请仔细思考后，给出你的答案。除非用户要求，否则请保持输出语种与用户输入问题语种的一致性：
 """
-
-QUERY_GEN_PROMPT = (
-    "You are a helpful assistant that generates multiple search queries based on a single input query. "
-    "Generate {num_queries} search queries in Chinese, one on each line, related to the following input query:\n"
-    "Query: {query}\n"
-    "Queries:\n"
-)
-
-DEFAULT_FUSION_TRANSFORM_PROMPT = (
-    "You are a helpful assistant that generates multiple search queries based on a "
-    "single input query. Generate {num_queries} search queries, one on each line, "
-    "related to the following input query:\n"
-    "Query: {query}\n"
-    "Queries:\n"
-)
 
 
 DEFAULT_SUMMARY_PROMPT = (

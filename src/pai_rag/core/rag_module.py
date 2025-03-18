@@ -5,6 +5,7 @@ from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
+from pai_rag.extensions.news.miaobi_news import MiaobiNewsTool
 from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
@@ -59,29 +60,27 @@ def resolve(cls: Any, **kwargs):
 
 
 def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
-    model_id = model_id or config.chat.model_id
     if model_id == "default":
         model_id = None
-    llms = []
+    if model_id is None and len(config.llms) > 0:
+        llm_config = config.llms[0]
+        if not llm_config.vision_support:
+            llm = resolve(cls=PaiLlm, llm_config=llm_config)
+        else:
+            llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
+        return llm
+
     for llm_config in config.llms:
-        if llm_config.is_validate():
+        if llm_config.is_validate() and (
+            llm_config.model_id == model_id or llm_config.model == model_id
+        ):
             if not llm_config.vision_support:
                 llm = resolve(cls=PaiLlm, llm_config=llm_config)
             else:
                 llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
-            llms.append(llm)
-            if not model_id:
-                Settings.llm = llm
-                return llm
-            else:
-                llm_model_id = llm.llm_config.model_id or llm.llm_config.model
-                if llm_model_id == model_id:
-                    Settings.llm = llm
-                    return llm
-    if len(llms) == 0:
-        Settings.llm = None
-        return None
-    return llms[0]
+            return llm
+
+    raise ValueError(f"Model {model_id} not found.")
 
 
 def resolve_multimodal_llm(config: RagConfig, model_id: str = None) -> PaiMultiModalLlm:
@@ -103,12 +102,6 @@ def resolve_query_rewrite_llm(config: RagConfig, model_id: str = None) -> PaiLlm
     ):
         return resolve(cls=PaiLlm, llm_config=config.query_rewrite.llm)
     return resolve_chat_llm(config, model_id)
-
-
-# def resolve_llm(config: RagConfig) -> PaiLlm:
-#     llm = resolve(cls=PaiLlm, llm_config=config.llm)
-#     Settings.llm = llm
-#     return llm
 
 
 def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
@@ -274,11 +267,11 @@ def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesiz
     return synthesizer
 
 
-def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
-    embed_model = resolve(cls=PaiEmbedding, embed_config=config.embedding)
+def resolve_vector_index(knowledgebase: KnowledgeBase) -> PaiVectorStoreIndex:
+    embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
     vector_index = resolve(
         cls=PaiVectorStoreIndex,
-        vector_store_config=config.index.vector_store,
+        vector_store_config=knowledgebase.vector_store_config,
         embed_model=embed_model,
         enable_local_keyword_index=True,
     )
@@ -286,10 +279,8 @@ def resolve_vector_index(config: RagConfig) -> PaiVectorStoreIndex:
 
 
 def resolve_query_engine(
-    config: RagConfig, model_id: str = None
+    config: RagConfig, vector_index: PaiVectorStoreIndex, model_id: str = None
 ) -> PaiRetrieverQueryEngine:
-    vector_index = resolve_vector_index(config)
-
     retriever = vector_index.as_retriever(
         vector_store_query_mode=config.retriever.vector_store_query_mode,
         similarity_top_k=config.retriever.similarity_top_k,
@@ -362,3 +353,16 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
         )
 
     return searcher
+
+
+def resolve_news_tool(config: RagConfig, model_id: str = None) -> MiaobiNewsTool:
+    if config.news_extension.is_enabled():
+        llm = resolve_chat_llm(config=config, model_id=model_id)
+        news_tool = resolve(
+            cls=MiaobiNewsTool,
+            llm=llm,
+            config=config.news_extension,
+        )
+        return news_tool
+
+    return None

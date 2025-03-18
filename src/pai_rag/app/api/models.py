@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel
 from typing import Any, List, Dict, Optional
 from llama_index.core.schema import QueryBundle
@@ -25,6 +26,7 @@ class RagQuery(BaseModel):
     system_role_template: str | None = None  # system prompt模板
     custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
+    model: str | None = None  # 推理模型
 
 
 class ContextDoc(BaseModel):
@@ -42,7 +44,6 @@ class RagResponse(BaseModel):
     answer: str  # 答案
     session_id: str | None = None  # 会话id，用于区分不同会话
     docs: List[ContextDoc] | None = None  # 搜索到的文档
-    new_query: str | None = None  # 改写生成的查询
 
 
 class ChatCompletionRequest(BaseModel):
@@ -59,26 +60,50 @@ class ChatCompletionRequest(BaseModel):
     chat_llm: Optional[bool] = False  # llm聊天
     chat_agent: Optional[bool] = False  # 使用agent
     chat_db: Optional[bool] = False  # 查询数据库
+    chat_news: Optional[bool] = False  # 使用新闻工具
 
-    # debug purpose
-    force_search_web: Optional[bool] = False  # 始终执行搜索
-    force_no_search: Optional[bool] = False  # 始终执行llm，不搜索知识库和网络
-    force_search_knowledgebase: Optional[bool] = False  # 始终执行知识库搜索
+    # llm args
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+
+class ChatToolType(str, Enum):
+    SEARCH_WEB = "search_web"
+    CHAT_NEWS = "chat_news"
+    CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
+    CHAT_DB = "chat_db"
+    CHAT_AGENT = "chat_agent"
+    CHAT_LLM = "chat_llm"
+
+
+class ChatIntentType(str, Enum):
+    SEARCH_WEB = "search_web"  # search web
+    CHAT_LLM = "chat_llm"  # llm chat
+    LIST_NEWS = "list_news"  # list news
+    CHAT_NEWS = "chat_news"  # chat news
+    CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
+    CHAT_AGENT = "chat_agent"  # chat agent
+    CHAT_DB = "chat_db"  # chat sql
 
 
 @dataclass
 class PaiQueryBundle(QueryBundle):
+    system_role: str | None = None
+    messages: Optional[List[ChatMessage]] = None
     stream: bool = False
+    intent: ChatIntentType = ChatIntentType.CHAT_KNOWLEDGEBASE
     no_retrieval: bool = False
     citation: bool = False
     original_query_str: str = None
     chat_messages_str: str = None
-    need_web_search: bool = False
     completion_tokens: int = 0
     prompt_tokens: int = 0
     total_tokens: int = 0
+    llm_kwargs: Optional[Dict[str, Any]] = None
+    model: str | None = None
 
 
 class ChatResponseWrapper(BaseModel):
     response: Any
+    additional_kwargs: Dict[str, Any] = {}
     source_nodes: List[NodeWithScore] = []

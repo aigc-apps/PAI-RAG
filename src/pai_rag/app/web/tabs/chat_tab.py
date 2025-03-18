@@ -49,7 +49,6 @@ async def respond(input_elements: List[Any]):
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
     chat_model_id = update_dict["chat_model_id"]
-    query_rewrite_model_id = update_dict["query_rewrite_model_id"]
     citation = update_dict["citation"]
     return_reference = update_dict["return_reference"]
 
@@ -65,7 +64,6 @@ async def respond(input_elements: List[Any]):
                 chat_messages=chatbot[:-1],
                 stream=is_streaming,
                 chat_model_id=chat_model_id,
-                query_rewrite_model_id=query_rewrite_model_id,
             )
         elif query_type == "检索测试":
             response_gen = rag_client.query_vector(
@@ -80,7 +78,6 @@ async def respond(input_elements: List[Any]):
                 search_web=True,
                 return_reference=return_reference,
                 chat_model_id=chat_model_id,
-                query_rewrite_model_id=query_rewrite_model_id,
             )
         else:
             response_gen = rag_client.query(
@@ -90,7 +87,6 @@ async def respond(input_elements: List[Any]):
                 index_name=index_name,
                 return_reference=return_reference,
                 chat_model_id=chat_model_id,
-                query_rewrite_model_id=query_rewrite_model_id,
             )
 
         is_thinking = False

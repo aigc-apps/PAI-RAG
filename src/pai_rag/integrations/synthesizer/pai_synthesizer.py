@@ -185,12 +185,12 @@ class PaiSynthesizer(BaseSynthesizer):
         ) as event:
             if query.original_query_str:
                 query_str = query.original_query_str + "\nassistant: "
-                history_str = query.original_query_str
             else:
                 query_str = query.query_str + "\nassistant: "
-                history_str = query.query_str
             if query.chat_messages_str:
                 history_str = query.chat_messages_str
+            else:
+                history_str = ""
             if query.no_retrieval:
                 response = await self.aget_llm_only_response(
                     query_str=query_str,

@@ -3,7 +3,6 @@ from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.query_engine import BaseQueryEngine
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
-from pai_rag.app.api.models import PaiQueryBundle
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 import time
 from loguru import logger
@@ -98,20 +97,6 @@ class GoogleSearchTool(BaseQueryEngine):
             self.search_lang = lang
         if search_top_k:
             self.search_count = search_top_k
-
-        if not query.need_web_search:
-            no_search_query = PaiQueryBundle(
-                query_str=query.query_str,
-                no_retrieval=True,
-                stream=query.stream,
-                chat_messages_str=query.chat_messages_str,
-            )
-            return await self.synthesizer.asynthesize(
-                query=no_search_query,
-                nodes=[],
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
 
         logger.info(f"Google Search with query {query.query_str}.")
         docs = await self._asearch(

@@ -197,8 +197,8 @@ class KnowledgeBaseManager:
     def get_knowledgebase_map(self) -> KnowledgeBaseMap:
         return self._knowledgebase_map
 
-    def get_knowledgebase(self, name) -> KnowledgeBase:
-        if not name:
+    def get_knowledgebase(self, name: str = None) -> KnowledgeBase:
+        if not name or name == "default_index":
             return self._knowledgebase_map.knowledgebases[DEFAULT_KNOWLEDGEBASE_NAME]
 
         return self._knowledgebase_map.knowledgebases[name]
