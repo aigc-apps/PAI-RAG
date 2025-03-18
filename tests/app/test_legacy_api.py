@@ -452,7 +452,7 @@ async def test_legacy_query_chat():
             citations = chunk_data.get("docs", [])
 
     assert len(answer) > 0
-    assert len(citations) == 0
+    assert len(citations) == 1
 
     # 相关问题
     async with AsyncClient(

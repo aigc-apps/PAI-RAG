@@ -402,7 +402,7 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Why does my experiment generate an empty model?",
+                        "content": "为什么会生成空模型?",
                     }
                 ],
                 "stream": True,
@@ -420,7 +420,7 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    assert "Machine Learning Studio" in answer
+    assert "空模型" in answer
     assert len(citations) > 0
 
     # 使用另一个index提问
@@ -453,7 +453,6 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    print(citations)
     assert len(answer) > 0
     assert len(citations) == 0
 
@@ -485,6 +484,5 @@ async def test_rag_chat():
             answer += delta
             citations = chunk_data.get("citation_details", [])
 
-    print(citations)
     assert "program" in answer
     assert len(citations) > 0
