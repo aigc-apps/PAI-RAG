@@ -1,10 +1,8 @@
 import traceback
-from typing import Any, List
-from fastapi import APIRouter, Body, BackgroundTasks, UploadFile, Form
+from typing import Any
+from fastapi import APIRouter, Body, UploadFile
 import uuid
-import hashlib
 import os
-import tempfile
 import shutil
 import pandas as pd
 from pai_rag.core.models.errors import UserInputError
@@ -14,9 +12,6 @@ from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
-    COMMON_FILE_PATH_FODER_NAME,
-)
 
 router = APIRouter()
 
@@ -131,71 +126,6 @@ async def delete_index(index_name: str):
 @router.get("/indexes")
 async def list_indexes():
     return knowledgebase_manager.list_knowledgebases()
-
-
-@router.get("/get_upload_state")
-def task_status(task_id: str):
-    status, detail = rag_service.get_task_status(task_id)
-    return {"task_id": task_id, "status": status, "detail": detail}
-
-
-@router.post("/upload_data")
-async def upload_data(
-    files: List[UploadFile] = Body(None),
-    oss_path: str = Form(None),
-    index_name: str = Form(None),
-    enable_raptor: bool = Form(False),
-    enable_multimodal: bool = Form(False),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-):
-    task_id = uuid.uuid4().hex
-    logger.info(
-        f"Upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
-    )
-    if oss_path:
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            filter_pattern=None,
-            oss_path=oss_path,
-            from_oss=True,
-            index_name=index_name,
-            enable_raptor=enable_raptor,
-            enable_multimodal=enable_multimodal,
-        )
-    else:
-        if not files:
-            return {"message": "No upload file sent"}
-        tmpdir = tempfile.mkdtemp()
-        input_files = []
-        for file in files:
-            fn = file.filename
-            data = await file.read()
-            file_hash = hashlib.md5(data).hexdigest()
-            tmp_file_dir = os.path.join(
-                tmpdir, f"{COMMON_FILE_PATH_FODER_NAME}/{file_hash}"
-            )
-            os.makedirs(tmp_file_dir, exist_ok=True)
-            save_file = os.path.join(tmp_file_dir, fn)
-
-            with open(save_file, "wb") as f:
-                f.write(data)
-                f.close()
-            input_files.append(save_file)
-
-        background_tasks.add_task(
-            rag_service.add_knowledge,
-            task_id=task_id,
-            input_files=input_files,
-            filter_pattern=None,
-            index_name=index_name,
-            oss_path=None,
-            enable_raptor=enable_raptor,
-            temp_file_dir=tmpdir,
-            enable_multimodal=enable_multimodal,
-        )
-
-    return {"task_id": task_id}
 
 
 @router.post("/upload_datasheet")

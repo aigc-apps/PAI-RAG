@@ -273,7 +273,7 @@ async def test_legacy_query_search():
 
     answer = response.json()["answer"]
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(response.json()["docs"]) == 0
 
     # search并返回reference
@@ -352,7 +352,7 @@ async def test_legacy_query_search_stream():
             answer += delta
             citations = chunk_data.get("docs", [])
 
-    assert "助手" in answer
+    assert "千问" in answer
     assert len(citations) == 0
 
     # search并返回引用
