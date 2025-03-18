@@ -185,11 +185,7 @@ class ViewModel(BaseModel):
 
         view_model.llms = config.llms
 
-        default_model_id = None
-        if view_model.llms and len(view_model.llms) > 0:
-            default_model_id = view_model.llms[0].model_id
-
-        view_model.chat_model_id = config.chat.model_id or default_model_id or "default"
+        view_model.chat_model_id = config.chat.model_id
 
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "对话 (知识库)"
@@ -240,9 +236,7 @@ class ViewModel(BaseModel):
         view_model.query_transform_template = (
             config.query_rewrite.rewrite_prompt_template
         )
-        view_model.query_rewrite_model_id = (
-            config.query_rewrite.model_id or default_model_id or "default"
-        )
+        view_model.query_rewrite_model_id = config.query_rewrite.model_id
 
         view_model.system_role_template = config.synthesizer.system_role_template
         view_model.custom_prompt_template = config.synthesizer.custom_prompt_template
