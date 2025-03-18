@@ -82,7 +82,8 @@ def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
             llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
         return llm
     else:
-        logger.info("No llm found")
+        logger.warning("No llm found")
+        Settings.llm = None
         return None
 
 
