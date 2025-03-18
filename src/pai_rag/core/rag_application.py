@@ -93,7 +93,7 @@ class PaiApp:
         chat_request = ChatCompletionRequest(
             messages=messages,
             stream=query.stream,
-            model=query.model,
+            model=query.model or "default",
             index_name=query.index_name,
             chat_knowledgebase=chat_knowledgebase,
             search_web=search_web,
