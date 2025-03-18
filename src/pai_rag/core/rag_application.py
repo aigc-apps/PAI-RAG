@@ -93,7 +93,7 @@ class PaiApp:
         chat_request = ChatCompletionRequest(
             messages=messages,
             stream=query.stream,
-            model="default",
+            model=query.model,
             index_name=query.index_name,
             chat_knowledgebase=chat_knowledgebase,
             search_web=search_web,
@@ -102,8 +102,6 @@ class PaiApp:
             chat_db=chat_db,
             return_reference=query.return_reference,
         )
-
-        print(chat_request)
 
         return await self.chat_flow.aquery(
             session_id=session_id,

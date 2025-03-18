@@ -5,7 +5,7 @@ from typing import AsyncGenerator, List
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.core.rag_module import (
     resolve_agent,
-    resolve_llm,
+    resolve_chat_llm,
     resolve_llm_guardrail,
     resolve_openai_query_transform,
     resolve_query_engine,
@@ -132,6 +132,7 @@ class ChatFlow:
             )
             query_bundle.llm_kwargs = llm_kwargs
             query_bundle.stream = chat_request.stream
+            query_bundle.model = chat_request.model
             return query_bundle
         else:
             return PaiQueryBundle(
@@ -139,6 +140,7 @@ class ChatFlow:
                 messages=chat_request.messages,
                 intent=potential_intents[-1].value,
                 stream=chat_request.stream,
+                model=chat_request.model,
                 chat_messages_str=messages_to_history_str(chat_request.messages[-7:-1]),
                 llm_kwargs=llm_kwargs,
             )
@@ -351,7 +353,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config)
+        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
         else:
@@ -366,7 +368,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        search_engine = resolve_searcher(config)
+        search_engine = resolve_searcher(config, model_id=query_bundle.model)
         if not search_engine:
             raise ValueError(
                 "Web search config is not valid. Please check your search api configuration."
@@ -384,7 +386,9 @@ class ChatFlow:
         knowledgebase: KnowledgeBase,
     ) -> ChatResponseWrapper:
         vector_index = resolve_vector_index(knowledgebase)
-        query_engine = resolve_query_engine(config, vector_index=vector_index)
+        query_engine = resolve_query_engine(
+            config, vector_index=vector_index, model_id=query_bundle.model
+        )
         response = await query_engine.aquery(
             str_or_query_bundle=query_bundle,
             system_role_str=query_bundle.system_role,
@@ -397,7 +401,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ) -> ChatResponseWrapper:
-        agent = resolve_agent(config)
+        agent = resolve_agent(config, model_id=query_bundle.model)
 
         if query_bundle.stream:
 
@@ -436,7 +440,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ) -> ChatResponseWrapper:
-        llm = resolve_llm(config)
+        llm = resolve_chat_llm(config, model_id=query_bundle.model)
         system_role = (
             query_bundle.system_role or config.synthesizer.system_role_template
         )

@@ -3,7 +3,7 @@ from llama_index.core.multi_modal_llms import MultiModalLLM, MultiModalLLMMetada
 from llama_index.multi_modal_llms.openai import OpenAIMultiModal
 from llama_index.core.schema import ImageDocument
 from llama_index.core import Settings
-from llama_index.core.bridge.pydantic import PrivateAttr
+from llama_index.core.bridge.pydantic import PrivateAttr, Field
 from llama_index.core.base.llms.types import (
     ChatMessage,
     ChatResponse,
@@ -19,9 +19,15 @@ from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
 
 class PaiMultiModalLlm(OpenAIMultiModal):
     _llm: MultiModalLLM = PrivateAttr()
+    llm_config: PaiBaseLlmConfig = Field(
+        default=None,
+        description="Llm configuration",
+    )
 
     def __init__(self, llm_config: PaiBaseLlmConfig):
         super().__init__()
+        self.llm_config = llm_config
+        self.model = llm_config.model
 
         self._llm = create_multi_modal_llm(llm_config)
         self._llm.callback_manager = Settings.callback_manager

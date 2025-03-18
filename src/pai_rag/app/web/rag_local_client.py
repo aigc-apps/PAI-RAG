@@ -150,6 +150,7 @@ class RagLocalClient:
         index_name: str = None,
         search_web: bool = False,
         return_reference: bool = False,
+        chat_model_id: str = None,
     ):
         query = RagQuery(
             messages=chat_messages,
@@ -159,6 +160,7 @@ class RagLocalClient:
             index_name=index_name,
             search_web=search_web,
             return_reference=return_reference,
+            model=chat_model_id,
         )
 
         try:
@@ -219,10 +221,12 @@ class RagLocalClient:
         self,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
+        chat_model_id: str = None,
     ):
         query = RagQuery(
             messages=chat_messages,
             stream=stream,
+            model=chat_model_id,
         )
 
         try:
@@ -596,6 +600,15 @@ class RagLocalClient:
         try:
             config = rag_service.get_config()
             rag_config = RagConfig.model_validate(config)
+            # # 兼容之前的配置
+            # if rag_config.llm.is_validate():
+            #     updated_llm = rag_config.llm.copy(update={"vision_support": False})
+            #     rag_config.llms.append(updated_llm)
+            # if rag_config.multimodal_llm.is_validate():
+            #     updated_vllm = rag_config.multimodal_llm.copy(
+            #         update={"vision_support": True}
+            #     )
+            #     rag_config.llms.append(updated_vllm)
             return rag_config
 
         except Exception as e:

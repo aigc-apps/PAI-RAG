@@ -26,6 +26,7 @@ class RagQuery(BaseModel):
     system_role_template: str | None = None  # system prompt模板
     custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
+    model: str | None = None  # 推理模型
 
 
 class ContextDoc(BaseModel):
@@ -99,6 +100,7 @@ class PaiQueryBundle(QueryBundle):
     prompt_tokens: int = 0
     total_tokens: int = 0
     llm_kwargs: Optional[Dict[str, Any]] = None
+    model: str | None = None
 
 
 class ChatResponseWrapper(BaseModel):

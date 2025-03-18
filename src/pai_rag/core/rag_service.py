@@ -109,10 +109,15 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query Search failed: {ex}")
 
-    async def aquery_llm_v1(self, query: RagQuery):
+    async def aquery_llm_v1(
+        self,
+        query: RagQuery,
+    ):
         try:
             return await self.app.aquery(
-                query, RagChatType.LLM, sse_version=SseVersion.V1
+                query,
+                chat_type=RagChatType.LLM,
+                sse_version=SseVersion.V1,
             )
         except Exception as ex:
             logger.error(traceback.format_exc())

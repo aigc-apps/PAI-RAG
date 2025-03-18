@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, Union
+from typing import Annotated, Dict, Union, List
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from pai_rag.core.models.config import (
     AliyunTextModerationPlusConfig,
@@ -7,6 +7,7 @@ from pai_rag.core.models.config import (
     QueryRewriteConfig,
     RetrieverConfig,
     SynthesizerConfig,
+    ChatConfig,
 )
 from pai_rag.extensions.news.news_config import MiaobiNewsConfig
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
@@ -48,6 +49,9 @@ from pai_rag.integrations.search.search_config import (
 def validate_case_insensitive(value: Dict) -> Dict:
     if value is None:
         return value
+
+    if isinstance(value, PaiBaseLlmConfig) and value.is_validate():
+        value = value.model_dump()
 
     keys = ["type", "source", "reranker_type"]
     for key in keys:
@@ -95,6 +99,14 @@ class RagConfig(BaseModel):
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ] | None = None
+
+    llms: Annotated[
+        List[Union[PaiBaseLlmConfig.get_subclasses()]],
+        Field(default_factory=list),
+        BeforeValidator(lambda x: [validate_case_insensitive(item) for item in x]),
+    ]
+
+    chat: ChatConfig()
 
     # llm
     llm: Annotated[

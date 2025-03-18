@@ -13,9 +13,14 @@ DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
+class ChatConfig(BaseModel):
+    model_id: str | None = None
+
+
 class QueryRewriteConfig(BaseModel):
     enabled: bool = True
     rewrite_prompt_template: str = INTENT_REWRITE_PROMPT_ZH
+    model_id: str | None = None
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
 
 
