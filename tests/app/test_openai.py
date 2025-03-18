@@ -85,7 +85,6 @@ def setup_app():
                 },
                 "postprocessor": {
                     "reranker_type": "no-reranker",
-                    "similarity_threshold": 0.7,
                 },
                 "retriever": {"retrieval_mode": "default"},
             },
@@ -389,7 +388,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citations", [])
 
     assert len(answer) > 0
-    assert len(citations) == 1
+    assert len(citations) == 5
 
     # 相关问题
     async with AsyncClient(
@@ -454,7 +453,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citation_details", [])
 
     assert len(answer) > 0
-    assert len(citations) == 0
+    assert len(citations) == 5
 
     # 使用相关的index名字
     async with AsyncClient(

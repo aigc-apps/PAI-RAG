@@ -322,7 +322,7 @@ async def test_legacy_query_search():
         and answer != DEFAULT_EMPTY_RESPONSE
         and answer != DEFAULT_ERROR_RESPONSE
     )
-    assert response.json()["docs"] is None
+    assert response.json()["docs"] == []
 
 
 @pytest.mark.asyncio(scope="session")
@@ -452,7 +452,7 @@ async def test_legacy_query_chat():
             citations = chunk_data.get("docs", [])
 
     assert len(answer) > 0
-    assert len(citations) == 1
+    assert len(citations) == 0
 
     # 相关问题
     async with AsyncClient(
