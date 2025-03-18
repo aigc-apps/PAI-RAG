@@ -87,8 +87,6 @@ class GoogleSearchTool(BaseQueryEngine):
         self,
         query: QueryBundle,
         lang: str = None,
-        system_role_str: Optional[str] = None,
-        prompt_template_str: Optional[str] = None,
         search_top_k: Optional[int] = None,
     ):
         start = time.time()
@@ -115,8 +113,9 @@ class GoogleSearchTool(BaseQueryEngine):
         return await self.synthesizer.asynthesize(
             query=query,
             nodes=nodes,
-            system_role_str=system_role_str,
-            prompt_template_str=prompt_template_str,
+            system_role_str=query.system_role,
+            prompt_template_str=" " if query.system_role else None,
+            **query.llm_kwargs,
         )
 
     def _get_prompt_modules(self):

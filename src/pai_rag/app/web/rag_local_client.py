@@ -151,6 +151,7 @@ class RagLocalClient:
         search_web: bool = False,
         return_reference: bool = False,
         chat_model_id: str = None,
+        temperature: float = 0.1,
     ):
         query = RagQuery(
             messages=chat_messages,
@@ -161,6 +162,7 @@ class RagLocalClient:
             search_web=search_web,
             return_reference=return_reference,
             model=chat_model_id,
+            temperature=temperature,
         )
 
         try:
@@ -222,11 +224,13 @@ class RagLocalClient:
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
         chat_model_id: str = None,
+        temperature: float = 0.1,
     ):
         query = RagQuery(
             messages=chat_messages,
             stream=stream,
             model=chat_model_id,
+            temperature=temperature,
         )
 
         try:

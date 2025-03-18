@@ -27,6 +27,7 @@ class RagQuery(BaseModel):
     custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
     model: str | None = None  # 推理模型
+    temperature: float | None = 0.1  # 推理时参数：温度值
 
 
 class ContextDoc(BaseModel):

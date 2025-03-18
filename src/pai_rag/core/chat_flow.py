@@ -73,12 +73,13 @@ def message_is_empty(messages: List[ChatMessage]):
 def remove_think_from_messages(messages: List[ChatMessage]):
     new_messages = []
     for message in messages:
-        message.content = re.sub(
-            r"<think>.*?</think>\n*",
-            "",
-            message.content,
-            flags=re.DOTALL,
-        )
+        if message.content is not None:
+            message.content = re.sub(
+                r"<think>.*?</think>\n*",
+                "",
+                message.content,
+                flags=re.DOTALL,
+            )
         new_messages.append(message)
     return new_messages
 
@@ -135,6 +136,7 @@ class ChatFlow:
             query_bundle.model = chat_request.model
             return query_bundle
         else:
+            logger.info("No query transform found, using default intent.")
             return PaiQueryBundle(
                 query_str=chat_request.messages[-1].content,
                 messages=chat_request.messages,
@@ -375,8 +377,6 @@ class ChatFlow:
             )
         return await search_engine.aquery(
             query_bundle,
-            system_role_str=query_bundle.system_role,
-            prompt_template_str=" " if query_bundle.system_role else None,
         )
 
     async def achat_knowledgebase(
@@ -389,11 +389,7 @@ class ChatFlow:
         query_engine = resolve_query_engine(
             config, vector_index=vector_index, model_id=query_bundle.model
         )
-        response = await query_engine.aquery(
-            str_or_query_bundle=query_bundle,
-            system_role_str=query_bundle.system_role,
-            prompt_template_str=" " if query_bundle.system_role else None,
-        )
+        response = await query_engine.aquery(query_bundle)
         return response
 
     async def achat_agent(

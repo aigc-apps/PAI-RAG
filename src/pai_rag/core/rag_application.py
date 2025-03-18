@@ -101,6 +101,7 @@ class PaiApp:
             chat_agent=chat_agent,
             chat_db=chat_db,
             return_reference=query.return_reference,
+            temperature=query.temperature,
         )
 
         return await self.chat_flow.aquery(
