@@ -63,7 +63,7 @@ jobs:
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
           IS_PAI_RAG_CI_TEST: true
-          PAIRAG_RAG__embedding__source: "DashScope"
+          PAIRAG_RAG__embedding__source: "huggingface"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
           SKIP_GPU_TESTS: true
