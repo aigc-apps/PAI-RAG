@@ -65,7 +65,9 @@ class RagConfigManager:
         rag_config_copy = rag_config
         # 兼容之前的配置
         if not rag_config_copy.llms or len(rag_config_copy.llms) == 0:
-            updated_llm = rag_config.llm.copy(update={"vision_support": False})
+            updated_llm = rag_config.llm.copy(
+                update={"vision_support": False, "model_id": "default"}
+            )
             rag_config.llms.append(updated_llm)
         if rag_config.multimodal_llm.is_validate() and (
             not rag_config_copy.llms or len(rag_config_copy.llms) == 0
