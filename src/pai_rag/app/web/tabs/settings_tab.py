@@ -199,7 +199,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         llm_model_name = gr.Textbox(
                             value=rag_config.llms[0].model if rag_config.llms else "",
                             label="模型名称",
-                            placeholder="Model Name, e.g. qwen-max",
+                            placeholder="模型名称, e.g. qwen-max",
                             interactive=True,
                             scale=1,
                         )
@@ -208,7 +208,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             if rag_config.llms
                             else "",
                             label="模型ID",
-                            placeholder="Model ID, e.g. model_1",
+                            placeholder="模型ID(建议模型ID与模型名称保持一致，或填写一个您偏好的、便于区分的名称), e.g. model_1",
                             interactive=True,
                             scale=1,
                         )
