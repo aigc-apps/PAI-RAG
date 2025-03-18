@@ -57,6 +57,9 @@ from llama_index.core.chat_engine.types import (
 
 from loguru import logger
 
+from pai_rag.utils.prompt_template import DEFALT_LLM_CHAT_PROMPT_TEMPL
+from pai_rag.utils.time_utils import get_prompt_current_time_str
+
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -84,6 +87,7 @@ def remove_think_from_messages(messages: List[ChatMessage]):
 
 
 def parse_system_prompt(messages: List[ChatMessage]):
+    messages = [message for message in messages if message.content]
     if len(messages) > 0 and messages[0].role == MessageRole.SYSTEM:
         system_prompt = messages[0].content
         return system_prompt, messages[1:]
@@ -447,9 +451,16 @@ class ChatFlow:
         messages = query_bundle.messages
         if system_role:
             messages = [
-                ChatMessage(role=MessageRole.SYSTEM, content=system_role)
+                ChatMessage(role=MessageRole.USER, content=system_role)
             ] + query_bundle.messages
 
+        prompt_message = ChatMessage(
+            role=MessageRole.USER,
+            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                cur_date=get_prompt_current_time_str()
+            ),
+        )
+        messages = [prompt_message] + messages
         if query_bundle.stream:
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)

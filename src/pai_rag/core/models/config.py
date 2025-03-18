@@ -6,7 +6,15 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
-from pai_rag.utils.prompt_template import INTENT_REWRITE_PROMPT_ZH
+from pai_rag.utils.prompt_template import (
+    AGENT_REWRITE_PROMPT_ZH,
+    CHAT_LLM_REWRITE_PROMPT_ZH,
+    KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
+    NEWS_REWRITE_PROMPT_ZH,
+    NL2SQL_REWRITE_PROMPT_ZH,
+    REWRITE_PROMPT_ROLE_ZH,
+    WEBSEARCH_REWRITE_PROMPT_ZH,
+)
 
 
 DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
@@ -19,7 +27,14 @@ class ChatConfig(BaseModel):
 
 class QueryRewriteConfig(BaseModel):
     enabled: bool = True
-    rewrite_prompt_template: str = INTENT_REWRITE_PROMPT_ZH
+    base_prompt_template_str: str = REWRITE_PROMPT_ROLE_ZH
+    llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH
+    knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH
+    websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH
+    agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH
+    db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH
+    news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH
+
     model_id: str | None = None
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
 
