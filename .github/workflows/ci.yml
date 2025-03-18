@@ -56,6 +56,6 @@ jobs:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
           BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}
           IS_PAI_RAG_CI_TEST: true
-          PAIRAG_RAG__embedding__source: "DashScope"
+          PAIRAG_RAG__embedding__source: "huggingface"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"

@@ -38,7 +38,8 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
 )
 from loguru import logger
-from datetime import datetime
+
+from pai_rag.utils.time_utils import get_prompt_current_time_str
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -98,7 +99,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._system_role_template,
                 self._custom_prompt_template,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_ANSWER_TEMPLATE,
             )
@@ -108,7 +109,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._system_role_template,
                 self._custom_prompt_template,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
@@ -119,7 +120,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._custom_prompt_template,
                 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
@@ -130,7 +131,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._custom_prompt_template,
                 DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
@@ -141,7 +142,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 self._custom_prompt_template,
                 DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                 DEFAULT_CONTEXT_ANSWER_TEMPLATE,
@@ -255,7 +256,7 @@ class PaiSynthesizer(BaseSynthesizer):
                         prompt_template_str,
                         DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                         CURRENT_TIME_PROMPT.format(
-                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                            current_datetime=get_prompt_current_time_str()
                         ),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
@@ -271,7 +272,7 @@ class PaiSynthesizer(BaseSynthesizer):
                         DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                         CURRENT_TIME_PROMPT.format(
-                            current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                            current_datetime=get_prompt_current_time_str()
                         ),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
@@ -321,7 +322,7 @@ class PaiSynthesizer(BaseSynthesizer):
                 system_role_str,
                 prompt_template_str,
                 CURRENT_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
+                    current_datetime=get_prompt_current_time_str()
                 ),
                 DEFAULT_ANSWER_TEMPLATE,
             )

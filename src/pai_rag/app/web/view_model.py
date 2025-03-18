@@ -141,10 +141,12 @@ class ViewModel(BaseModel):
     query_type: str = "对话 (知识库)"
 
     enable_query_transform: bool = True
-    # qt_llm_base_url: str = None
-    # qt_llm_api_key: str = None
-    # qt_llm_model_name: str = "default"
-    query_transform_template: str = None
+    rewrite_base_prompt: str = None
+    rewrite_llm_prompt: str = None
+    rewrite_knowledgebase_prompt: str = None
+    rewrite_agent_prompt: str = None
+    rewrite_search_prompt: str = None
+    rewrite_db_prompt: str = None
 
     synthesizer_type: str = None
     system_role_template: str = None
@@ -233,9 +235,18 @@ class ViewModel(BaseModel):
             )
 
         view_model.enable_query_transform = config.query_rewrite.enabled
-        view_model.query_transform_template = (
-            config.query_rewrite.rewrite_prompt_template
+        view_model.rewrite_base_prompt = config.query_rewrite.base_prompt_template_str
+        view_model.rewrite_llm_prompt = config.query_rewrite.llm_tool_prompt_str
+        view_model.rewrite_knowledgebase_prompt = (
+            config.query_rewrite.knowledge_tool_prompt_str
         )
+
+        view_model.rewrite_agent_prompt = config.query_rewrite.agent_tool_prompt_str
+        view_model.rewrite_search_prompt = (
+            config.query_rewrite.websearch_tool_prompt_str
+        )
+        view_model.rewrite_db_prompt = config.query_rewrite.db_tool_prompt_str
+
         view_model.query_rewrite_model_id = config.query_rewrite.model_id
 
         view_model.system_role_template = config.synthesizer.system_role_template
@@ -449,9 +460,17 @@ class ViewModel(BaseModel):
         config["synthesizer"]["custom_prompt_template"] = self.custom_prompt_template
         config["synthesizer"]["system_role_template"] = self.system_role_template
 
+        config["query_rewrite"]["base_prompt_template_str"] = self.rewrite_base_prompt
+        config["query_rewrite"]["llm_tool_prompt_str"] = self.rewrite_llm_prompt
         config["query_rewrite"][
-            "rewrite_prompt_template"
-        ] = self.query_transform_template
+            "knowledge_tool_prompt_str"
+        ] = self.rewrite_knowledgebase_prompt
+        config["query_rewrite"]["agent_tool_prompt_str"] = self.rewrite_agent_prompt
+        config["query_rewrite"][
+            "websearch_tool_prompt_str"
+        ] = self.rewrite_search_prompt
+        config["query_rewrite"]["db_tool_prompt_str"] = self.rewrite_db_prompt
+
         config["query_rewrite"]["enabled"] = self.enable_query_transform
         # config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
         # config["synthesizer"][
@@ -578,6 +597,15 @@ class ViewModel(BaseModel):
             ],
             "value": self.query_rewrite_model_id,
         }
+        settings["rewrite_base_prompt"] = {"value": self.rewrite_base_prompt}
+        settings["rewrite_agent_prompt"] = {"value": self.rewrite_agent_prompt}
+        settings["rewrite_db_prompt"] = {"value": self.rewrite_db_prompt}
+        settings["rewrite_knowledgebase_prompt"] = {
+            "value": self.rewrite_knowledgebase_prompt
+        }
+        settings["rewrite_llm_prompt"] = {"value": self.rewrite_llm_prompt}
+        settings["rewrite_search_prompt"] = {"value": self.rewrite_search_prompt}
+
         settings["use_oss"] = {"value": self.use_oss}
         settings["use_oss_col"] = {"visible": self.use_oss}
 
@@ -628,9 +656,7 @@ class ViewModel(BaseModel):
             "value": self.reranker_similarity_top_k
         }
         settings["model_reranker_col"] = {"visible": self.reranker_type == "基于模型的重排序"}
-        settings["query_transform_template"] = {
-            "value": self.query_transform_template,
-        }
+
         settings["enable_query_transform"] = {
             "value": self.enable_query_transform,
         }

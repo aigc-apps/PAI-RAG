@@ -167,6 +167,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 info="在回答中返回引用编号",
                 elem_id="citation",
                 value=False,
+                visible=False,
             )
             need_image = gr.Checkbox(
                 label="多模态推理",
@@ -212,13 +213,54 @@ def create_chat_tab() -> Dict[str, Any]:
                             label="\N{bookmark} 查询改写模型ID",
                             elem_id="query_rewrite_model_id",
                         )
-                        query_transform_template = gr.Textbox(
-                            label="查询改写模板",
-                            value="",
-                            elem_id="query_transform_template",
-                            lines=10,
-                            interactive=True,
-                        )
+                        with gr.Tab(label="改写Prompt"):
+                            rewrite_base_prompt = gr.Textbox(
+                                label="基础改写模板",
+                                value="",
+                                elem_id="rewrite_base_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="大模型对话"):
+                            rewrite_llm_prompt = gr.Textbox(
+                                label="大模型对话",
+                                value="",
+                                elem_id="rewrite_llm_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="知识库问答"):
+                            rewrite_knowledgebase_prompt = gr.Textbox(
+                                label="知识库问答",
+                                value="",
+                                elem_id="rewrite_knowledgebase_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="联网搜索"):
+                            rewrite_search_prompt = gr.Textbox(
+                                label="联网搜索",
+                                value="",
+                                elem_id="rewrite_search_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="工具调用"):
+                            rewrite_agent_prompt = gr.Textbox(
+                                label="工具调用",
+                                value="",
+                                elem_id="rewrite_agent_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="数据库查询"):
+                            rewrite_db_prompt = gr.Textbox(
+                                label="数据库查询",
+                                value="",
+                                elem_id="rewrite_db_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
 
                     def change_query_transform_parameter(enable_query_transform):
                         if enable_query_transform:
@@ -586,7 +628,12 @@ def create_chat_tab() -> Dict[str, Any]:
                 default_web_search,
                 enable_query_transform,
                 query_rewrite_model_id,
-                query_transform_template,
+                rewrite_base_prompt,
+                rewrite_llm_prompt,
+                rewrite_knowledgebase_prompt,
+                rewrite_agent_prompt,
+                rewrite_search_prompt,
+                rewrite_db_prompt,
                 system_role_template,
                 custom_prompt_template,
                 question,
@@ -644,7 +691,12 @@ def create_chat_tab() -> Dict[str, Any]:
             reranker_similarity_threshold.elem_id: reranker_similarity_threshold,
             reranker_similarity_top_k.elem_id: reranker_similarity_top_k,
             enable_query_transform.elem_id: enable_query_transform,
-            query_transform_template.elem_id: query_transform_template,
+            rewrite_base_prompt.elem_id: rewrite_base_prompt,
+            rewrite_agent_prompt.elem_id: rewrite_agent_prompt,
+            rewrite_knowledgebase_prompt.elem_id: rewrite_knowledgebase_prompt,
+            rewrite_llm_prompt.elem_id: rewrite_llm_prompt,
+            rewrite_search_prompt.elem_id: rewrite_search_prompt,
+            rewrite_db_prompt.elem_id: rewrite_db_prompt,
             chat_model_id.elem_id: chat_model_id,
             query_rewrite_model_id.elem_id: query_rewrite_model_id,
             system_role_template.elem_id: system_role_template,

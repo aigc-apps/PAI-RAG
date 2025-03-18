@@ -1,11 +1,7 @@
 from typing import List, Optional, Sequence
-from llama_index.core.settings import Settings
-from llama_index.core.llms.utils import LLMType, resolve_llm
-from llama_index.core.prompts import BasePromptTemplate
+from llama_index.core.llms.utils import LLMType
 from llama_index.core.base.llms.types import ChatMessage
 from pai_rag.utils.prompt_template import (
-    INTENT_REWRITE_PROMPT_ZH,
-    CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
@@ -14,24 +10,13 @@ from pai_rag.utils.prompt_template import (
     AGENT_REWRITE_PROMPT_ZH,
     REWRITE_PROMPT_ROLE_ZH,
 )
-from pai_rag.integrations.synthesizer.prompt_templates import CURRENT_QUERY_TIME_PROMPT
-from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatToolType, ChatIntentType, PaiQueryBundle
 from pai_rag.utils.json_parser import parse_json_from_code_block_str
-from datetime import datetime
 from loguru import logger
 import re
 
-
-query_rewrite_prompts = {
-    ChatToolType.CHAT_LLM: CHAT_LLM_REWRITE_PROMPT_ZH,
-    ChatToolType.CHAT_DB: NL2SQL_REWRITE_PROMPT_ZH,
-    ChatToolType.CHAT_KNOWLEDGEBASE: KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
-    ChatToolType.SEARCH_WEB: WEBSEARCH_REWRITE_PROMPT_ZH,
-    ChatToolType.CHAT_NEWS: NEWS_REWRITE_PROMPT_ZH,
-    ChatToolType.CHAT_AGENT: AGENT_REWRITE_PROMPT_ZH,
-}
+from pai_rag.utils.time_utils import get_prompt_current_time_str
 
 
 def messages_to_history_str(
@@ -61,41 +46,38 @@ class OpenAICompatibleQueryTransform:
     def __init__(
         self,
         llm: Optional[LLMType] = None,
-        query_transform_prompt: Optional[BasePromptTemplate] = None,
-        condense_question_prompt: Optional[BasePromptTemplate] = None,
-        callback_manager: Optional[CallbackManager] = None,
+        base_transform_prompt: str = REWRITE_PROMPT_ROLE_ZH,
+        llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH,
+        knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
+        websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH,
+        agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH,
+        db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH,
+        news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH,
     ):
         super().__init__()
 
-        self._llm = (
-            resolve_llm(llm, callback_manager=callback_manager) if llm else Settings.llm
-        )
-        self._query_transform_prompt = (
-            query_transform_prompt or INTENT_REWRITE_PROMPT_ZH
-        )
-        default_condense_question_prompt = PromptTemplate(
-            template="{}\n{}\n{}".format(
-                self._query_transform_prompt,
-                CURRENT_QUERY_TIME_PROMPT.format(
-                    current_datetime=datetime.now().strftime("%Y年%m月%d日")
-                ),
-                CONDENSE_QUESTION_ANSWER_PROMPT_ZH,
-            )
-        )
-        self._condense_question_prompt = (
-            condense_question_prompt or default_condense_question_prompt
-        )
+        self._llm = llm
+        self._base_transform_prompt = PromptTemplate(template=base_transform_prompt)
+
+        self._tool_prompts = {
+            ChatToolType.CHAT_LLM: llm_tool_prompt_str,
+            ChatToolType.CHAT_DB: db_tool_prompt_str,
+            ChatToolType.CHAT_KNOWLEDGEBASE: knowledge_tool_prompt_str,
+            ChatToolType.SEARCH_WEB: websearch_tool_prompt_str,
+            ChatToolType.CHAT_NEWS: news_tool_prompt_str,
+            ChatToolType.CHAT_AGENT: agent_tool_prompt_str,
+        }
 
     def get_prompt(self, query_str: str, chat_history: str, potential_intents):
         tool_prompt = "\n\n".join(
-            [query_rewrite_prompts[intent] for intent in potential_intents]
+            [self._tool_prompts[intent] for intent in potential_intents]
         )
         return PromptTemplate(
-            template=REWRITE_PROMPT_ROLE_ZH.format(
+            template=self._base_transform_prompt.format(
                 tool_list=tool_prompt,
                 chat_history=chat_history,
                 query_str=query_str,
-                cur_date=datetime.now().strftime("%Y年%m月%d日"),
+                cur_date=get_prompt_current_time_str(),
             )
         )
 
