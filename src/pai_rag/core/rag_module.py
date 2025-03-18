@@ -62,25 +62,28 @@ def resolve(cls: Any, **kwargs):
 def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
     if model_id == "default":
         model_id = None
-    if model_id is None and len(config.llms) > 0:
+
+    if model_id is not None:
+        for llm_config in config.llms:
+            if llm_config.is_validate() and (
+                llm_config.model_id == model_id or llm_config.model == model_id
+            ):
+                if not llm_config.vision_support:
+                    llm = resolve(cls=PaiLlm, llm_config=llm_config)
+                else:
+                    llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
+                return llm
+
+    if len(config.llms) > 0:
         llm_config = config.llms[0]
         if not llm_config.vision_support:
             llm = resolve(cls=PaiLlm, llm_config=llm_config)
         else:
             llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
         return llm
-
-    for llm_config in config.llms:
-        if llm_config.is_validate() and (
-            llm_config.model_id == model_id or llm_config.model == model_id
-        ):
-            if not llm_config.vision_support:
-                llm = resolve(cls=PaiLlm, llm_config=llm_config)
-            else:
-                llm = resolve(cls=PaiMultiModalLlm, llm_config=llm_config)
-            return llm
-
-    raise ValueError(f"Model {model_id} not found.")
+    else:
+        logger.info("No llm found")
+        return None
 
 
 def resolve_multimodal_llm(config: RagConfig, model_id: str = None) -> PaiMultiModalLlm:
