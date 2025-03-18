@@ -171,7 +171,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 )
 
                 delete_btn = gr.Button(
-                    "删除", visible=bool(rag_config.llms), variant="primary"
+                    "删除模型", visible=bool(rag_config.llms), variant="secondary"
                 )
 
             # 新增/编辑配置区域
@@ -212,7 +212,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     value=False
                     if not rag_config.llms and len(rag_config.llms) == 0
                     else rag_config.llms[0].vision_support,
-                    label="多模态",
+                    label="是否支持多模态",
                     elem_id="vision_support",
                     container=False,
                 )
