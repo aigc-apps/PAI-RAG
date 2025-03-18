@@ -176,46 +176,54 @@ def create_setting_tab() -> Dict[str, Any]:
 
             # 新增/编辑配置区域
             with gr.Row(visible=True) as config_row:
-                llm_model_name = gr.Textbox(
-                    value=""
-                    if not rag_config.llms and len(rag_config.llms) == 0
-                    else rag_config.llms[0].model,
-                    label="模型名称",
-                    placeholder="Model Name, e.g. qwen-max",
-                    interactive=True,
-                )
-                llm_model_id = gr.Textbox(
-                    value=""
-                    if not rag_config.llms and len(rag_config.llms) == 0
-                    else rag_config.llms[0].model_id,
-                    label="模型ID",
-                    placeholder="Model ID, e.g. model_1",
-                    interactive=True,
-                )
-                llm_api_key = gr.Textbox(
-                    value=""
-                    if not rag_config.llms and len(rag_config.llms) == 0
-                    else rag_config.llms[0].api_key,
-                    label="密钥",
-                    type="password",
-                    interactive=True,
-                )
-                llm_base_url = gr.Textbox(
-                    value=""
-                    if not rag_config.llms and len(rag_config.llms) == 0
-                    else rag_config.llms[0].base_url,
-                    label="URL",
-                    placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
-                    interactive=True,
-                )
-                llm_vision_support = gr.Checkbox(
-                    value=False
-                    if not rag_config.llms and len(rag_config.llms) == 0
-                    else rag_config.llms[0].vision_support,
-                    label="是否支持多模态",
-                    elem_id="vision_support",
-                    container=False,
-                )
+                with gr.Column():
+                    with gr.Row():
+                        llm_base_url = gr.Textbox(
+                            value=rag_config.llms[0].base_url
+                            if rag_config.llms
+                            else "",
+                            label="URL",
+                            placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
+                            interactive=True,
+                            scale=1,
+                        )
+                        llm_api_key = gr.Textbox(
+                            value=rag_config.llms[0].api_key if rag_config.llms else "",
+                            label="密钥",
+                            type="password",
+                            interactive=True,
+                            scale=1,
+                        )
+
+                    with gr.Row():
+                        llm_model_name = gr.Textbox(
+                            value=rag_config.llms[0].model if rag_config.llms else "",
+                            label="模型名称",
+                            placeholder="Model Name, e.g. qwen-max",
+                            interactive=True,
+                            scale=1,
+                        )
+                        llm_model_id = gr.Textbox(
+                            value=rag_config.llms[0].model_id
+                            if rag_config.llms
+                            else "",
+                            label="模型ID",
+                            placeholder="Model ID, e.g. model_1",
+                            interactive=True,
+                            scale=1,
+                        )
+
+                    # 第三行：多模态支持
+                    with gr.Row():
+                        llm_vision_support = gr.Checkbox(
+                            value=rag_config.llms[0].vision_support
+                            if rag_config.llms
+                            else False,
+                            label="是否支持多模态",
+                            elem_id="vision_support",
+                            container=True,  # 让复选框有背景容器
+                            scale=1,
+                        )
             save_btn = gr.Button("保存模型配置", variant="primary")
 
             llm_model.change(

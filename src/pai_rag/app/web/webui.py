@@ -66,9 +66,13 @@ def change_chat_page_model_list(model_id):
     model_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
     ]
+    if rag_config.chat.model_id and rag_config.chat.model_id in model_choices:
+        new_model_id = rag_config.chat.model_id
+    else:
+        new_model_id = model_choices[0]
     return [
-        gr.update(choices=model_choices, value=rag_config.chat.model_id),
-        gr.update(choices=model_choices, value=rag_config.query_rewrite.model_id),
+        gr.update(choices=model_choices, value=new_model_id),
+        gr.update(choices=model_choices, value=new_model_id),
     ]
 
 
