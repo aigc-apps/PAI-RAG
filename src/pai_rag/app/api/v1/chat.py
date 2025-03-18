@@ -9,6 +9,7 @@ from pai_rag.core.models.errors import ServiceError, UserInputError
 from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
+from pai_rag.core.rag_module import resolve
 from pai_rag.app.api.models import RagQuery
 from fastapi.responses import StreamingResponse
 from loguru import logger
@@ -19,6 +20,8 @@ from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DB_HISTORY_NAME,
 )
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+from pai_rag.utils.oss_client import OssClient
+from pai_rag.integrations.readers.pai.pai_data_reader import get_oss_files
 
 router_v1 = APIRouter()
 
@@ -233,6 +236,61 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(..
         logger.info(f"File {file_name} has been save to {save_file_name}.")
 
     return {"message": "Files have been successfully uploaded."}
+
+
+@router_v1.post("/knowledgebases/{name}/oss_files")
+async def add_oss_file_to_knowledgebase(
+    name: str,
+    files: List[str] = Form(...),
+    oss_bucket_name: str = Form(...),
+    oss_endpoint: str = Form(...),
+):
+    """新知识库上传文件"""
+    """"
+    Example:
+    curl -X "POST" http://127.0.0.1:8687/api/v1/knowledgebases/INDEX_2/oss_files
+    -F 'files=oss://pai-rag/files/file1.pdf'
+    -F 'files=oss://pai-rag/files/file2.pdf'
+    -F 'oss_bucket_name=pai-rag'
+    -F 'oss_endpoint=oss-cn-hangzhou.aliyuncs.com'
+    """
+    if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
+        raise UserInputError(f"Knowledgebase '{name}' not found.")
+
+    if not files:
+        raise UserInputError("Oss_files not provided.")
+
+    knowledge_docs_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, name, "docs")
+    os.makedirs(knowledge_docs_dir, exist_ok=True)
+
+    oss_store = None
+    if oss_bucket_name and oss_endpoint:
+        oss_store = resolve(
+            cls=OssClient,
+            bucket_name=oss_bucket_name,
+            endpoint=oss_endpoint,
+        )
+    else:
+        raise UserInputError("Either oss_bucket_name or oss_endpoint is provided.")
+
+    for oss_file_path in files:
+        oss_file_name = oss_file_path.split("/")[-1]
+        oss_to_local_files, _ = get_oss_files(
+            oss_path=oss_file_path, oss_store=oss_store
+        )
+        save_file_name = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH,
+            name,
+            "docs",
+            oss_file_name,
+        )
+        with open(oss_to_local_files[0], "rb") as rf:
+            file_data = rf.read()
+            with open(save_file_name, "wb") as wf:
+                wf.write(file_data)
+        logger.info(f"Oss file {oss_file_name} has been save to {save_file_name}.")
+
+    return {"message": "Oss files have been successfully uploaded."}
 
 
 @router_v1.get("/knowledgebases/{name}/files/{file_name}")
