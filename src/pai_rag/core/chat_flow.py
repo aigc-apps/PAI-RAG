@@ -347,11 +347,15 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config)
+        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
         if not query_bundle.stream:
-            response_wrapper = await news_tool.alist_topics()
+            response_wrapper = await news_tool.alist_topics(
+                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
+            )
         else:
-            response_wrapper = await news_tool.astream_list_topics()
+            response_wrapper = await news_tool.astream_list_topics(
+                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
+            )
         return response_wrapper
 
     async def achat_news(

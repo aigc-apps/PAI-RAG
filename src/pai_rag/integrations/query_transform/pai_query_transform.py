@@ -1,6 +1,7 @@
 from typing import List, Optional, Sequence
 from llama_index.core.llms.utils import LLMType
 from llama_index.core.base.llms.types import ChatMessage
+from pai_rag.extensions.news.miaobi_news import ACCEPATABLE_NEWS_TOPICS
 from pai_rag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
@@ -120,11 +121,18 @@ class OpenAICompatibleQueryTransform:
         query_json = parse_json_from_code_block_str(transformed_query_str)
         intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
         query = query_json.get("query", query_str)
+        news_topics = query_json.get("news_topics", [])
+
+        # 过滤掉无关话题
+        news_topics = [
+            topic for topic in news_topics if topic in ACCEPATABLE_NEWS_TOPICS
+        ]
 
         return PaiQueryBundle(
             intent=intent,
             messages=chat_messages,
             query_str=query,
+            news_topics=news_topics,
             custom_embedding_strs=[transformed_query_str],
             chat_messages_str=chat_history_str,
             completion_tokens=chat_response.additional_kwargs.get(

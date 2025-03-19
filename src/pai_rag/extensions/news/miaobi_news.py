@@ -25,6 +25,7 @@ from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 
 
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
+ACCEPATABLE_NEWS_TOPICS = set(["科技", "娱乐", "经济", "时政", "社会", "体育", "教育", "国际"])
 
 
 def _create_client(
@@ -124,8 +125,11 @@ def _transform_messages(messages: List[ChatMessage]):
 
 
 def _make_context(topics):
-    return "\n\n".join(
-        [f"标题: {topic['title']}\n摘要: {topic['summary']}" for topic in topics]
+    return "\n".join(
+        [
+            f"【新闻 {i+1}】. {topic['title']}\n{topic['summary']}\n"
+            for i, topic in enumerate(topics)
+        ]
     )
 
 
@@ -136,16 +140,17 @@ class NewsChatParameter(BaseModel):
 
 
 DEFAULT_PROMPT_TEMPLATE = """
-你是一个专业的新闻播报员，负责整理每天的热点资讯列表并广播给车机端的用户。
+你是一个专业的新闻播音员。
+你会根据下面给出的新闻材料，按顺序有条理的播报所有新闻。
 
-# 【人设风格】
-风格亲切、自然但不失专业性的新闻女主播
-
-# 【热点新闻列表】
-{hot_topics_str}
+# 【精选{topics_str}新闻列表】
+{news_list_str}
 
 # 【输出格式】
-- 请根据上下文信息，不要使用其他信息，参考【人设风格】，结构条理化的播放热点资讯。
+- 简短、友好的开场导语，如为您带来今天的热点资讯、为你推荐下面的科技热点等。
+- 保持亲切、自然的语言风格同时不失专业性。
+- 请根据新闻列表中信息播报，不要使用其他信息。
+- 请遵循新闻给出的顺序，结构化、有条理的归纳每条新闻内容并用数字序号标识。
 - 注意每条新闻播报不要超过100个字。
 """
 
@@ -160,11 +165,14 @@ class MiaobiNewsTool:
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def _alist_hot_topics(self):
+    async def _alist_hot_topics(self, news_topics):
         request = aimiaobi_models.GetHotTopicBroadcastRequest(
             workspace_id=self.config.workspace_id,
             size=self.config.top_news_count,
             current=1,
+            step_for_news_broadcast_content_config=aimiaobi_models.GetHotTopicBroadcastRequestStepForNewsBroadcastContentConfig(
+                categories=news_topics
+            ),
         )
 
         broadcast_response = await self.miaobi_client.get_hot_topic_broadcast_async(
@@ -188,9 +196,11 @@ class MiaobiNewsTool:
 
     async def alist_topics(
         self,
+        query_str: str,
+        news_topics: List[str] = [],
     ) -> ChatResponseWrapper:
         try:
-            hot_topics = await self._alist_hot_topics()
+            hot_topics = await self._alist_hot_topics(news_topics=news_topics)
         except Exception as ex:
             logger.error(
                 f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
@@ -206,12 +216,15 @@ class MiaobiNewsTool:
             return ChatResponseWrapper(response=response)
 
         try:
+            content = DEFAULT_PROMPT_TEMPLATE.format(
+                news_list_str=_make_context(hot_topics),
+                query_str=query_str,
+                topics_str="、".join(news_topics),
+            )
             messages = [
                 ChatMessage(
                     role="user",
-                    content=DEFAULT_PROMPT_TEMPLATE.format(
-                        hot_topics_str=_make_context(hot_topics)
-                    ),
+                    content=content,
                 )
             ]
 
@@ -226,6 +239,8 @@ class MiaobiNewsTool:
 
     async def astream_list_topics(
         self,
+        query_str: str,
+        news_topics: List[str] = [],
     ) -> ChatResponseWrapper:
         try:
 
@@ -236,12 +251,14 @@ class MiaobiNewsTool:
                         content="",
                     ),
                     delta="",
-                    intent=ChatIntentType.LIST_NEWS,
-                    additional_kwargs={"intent": ChatIntentType.LIST_NEWS},
+                    additional_kwargs={
+                        "intent": ChatIntentType.LIST_NEWS,
+                        "news_topics": news_topics,
+                    },
                 )
 
                 try:
-                    hot_topics = await self._alist_hot_topics()
+                    hot_topics = await self._alist_hot_topics(news_topics=news_topics)
                 except Exception as ex:
                     logger.error(
                         f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
@@ -260,7 +277,9 @@ class MiaobiNewsTool:
                     ChatMessage(
                         role="user",
                         content=DEFAULT_PROMPT_TEMPLATE.format(
-                            hot_topics_str=_make_context(hot_topics)
+                            news_list_str=_make_context(hot_topics),
+                            query_str=query_str,
+                            topics_str="、".join(news_topics),
                         ),
                     )
                 ]

@@ -102,6 +102,7 @@ class PaiQueryBundle(QueryBundle):
     total_tokens: int = 0
     llm_kwargs: Optional[Dict[str, Any]] = None
     model: str | None = None
+    news_topics: Optional[List[str]] = None
 
 
 class ChatResponseWrapper(BaseModel):
