@@ -59,9 +59,9 @@ def _transform_to_dict(config):
 
 
 class ViewModel(BaseModel):
-    chat_model_id: str = None
+    chat_model_id: str = "default"
 
-    query_rewrite_model_id: str = None
+    query_rewrite_model_id: str = "default"
 
     # oss
     use_oss: bool = False
@@ -187,7 +187,7 @@ class ViewModel(BaseModel):
 
         view_model.llms = config.llms
 
-        view_model.chat_model_id = config.chat.model_id
+        view_model.chat_model_id = config.chat.model_id or "default"
 
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "对话 (知识库)"
@@ -247,7 +247,7 @@ class ViewModel(BaseModel):
         )
         view_model.rewrite_db_prompt = config.query_rewrite.db_tool_prompt_str
 
-        view_model.query_rewrite_model_id = config.query_rewrite.model_id
+        view_model.query_rewrite_model_id = config.query_rewrite.model_id or "default"
 
         view_model.system_role_template = config.synthesizer.system_role_template
         view_model.custom_prompt_template = config.synthesizer.custom_prompt_template
