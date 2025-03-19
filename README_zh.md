@@ -167,7 +167,7 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
 
 ## 数据分析 Nl2sql
 
-您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc_250303.md)
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc_zh.md)
 
 ## 支持文件类型
 
