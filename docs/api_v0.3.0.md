@@ -38,8 +38,6 @@
       "chat_agent": false,  # 是否使用agent
       "chat_db": false,  # 是否查询数据库
       "index_name": "default",  # 索引名称，RAG场景使用，不传使用默认索引
-      "max_tokens": 1024,  # 最大输出长度，如1024
-      "temperature": 0.1,  # 控制生成内容随机性，取值范围[0,1]，值越低确定性越高，值越高内容越多样化
   }
   ```
   **注意：**
