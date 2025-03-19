@@ -103,8 +103,6 @@ class AliyunSearchTool(BaseQueryEngine):
     async def aquery(
         self,
         query: QueryBundle,
-        system_role_str: str = None,
-        prompt_template_str: str = None,
     ):
         start = time.time()
         logger.info(f"Aliyun Search with query {query.query_str}.")
@@ -116,8 +114,9 @@ class AliyunSearchTool(BaseQueryEngine):
         return await self.synthesizer.asynthesize(
             query=query,
             nodes=nodes,
-            system_role_str=system_role_str,
-            prompt_template_str=prompt_template_str,
+            system_role_str=query.system_role,
+            prompt_template_str=" " if query.system_role else None,
+            **query.llm_kwargs,
         )
 
     def _get_prompt_modules(self):

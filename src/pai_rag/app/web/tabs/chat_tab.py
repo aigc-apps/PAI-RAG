@@ -51,6 +51,7 @@ async def respond(input_elements: List[Any]):
     chat_model_id = update_dict["chat_model_id"]
     citation = update_dict["citation"]
     return_reference = update_dict["return_reference"]
+    temperature = update_dict["llm_temperature"]
 
     if chatbot is not None:
         chatbot.append(
@@ -64,6 +65,7 @@ async def respond(input_elements: List[Any]):
                 chat_messages=chatbot[:-1],
                 stream=is_streaming,
                 chat_model_id=chat_model_id,
+                temperature=temperature,
             )
         elif query_type == "检索测试":
             response_gen = rag_client.query_vector(
@@ -78,6 +80,7 @@ async def respond(input_elements: List[Any]):
                 search_web=True,
                 return_reference=return_reference,
                 chat_model_id=chat_model_id,
+                temperature=temperature,
             )
         else:
             response_gen = rag_client.query(
@@ -87,6 +90,7 @@ async def respond(input_elements: List[Any]):
                 index_name=index_name,
                 return_reference=return_reference,
                 chat_model_id=chat_model_id,
+                temperature=temperature,
             )
 
         is_thinking = False
@@ -590,7 +594,7 @@ def create_chat_tab() -> Dict[str, Any]:
                         search_model_argument: gr.update(open=True),
                         search_col: gr.update(visible=True),
                         prompt_argument: gr.update(open=True),
-                        llm_col: gr.update(visible=False),
+                        llm_col: gr.update(visible=True),
                         model_argument: gr.update(open=False),
                         lc_col: gr.update(visible=True),
                         return_reference: gr.update(visible=True),

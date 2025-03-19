@@ -121,8 +121,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
     async def _aquery(
         self,
         query_bundle: PaiQueryBundle,
-        system_role_str: str = None,
-        prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
@@ -132,8 +130,9 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
             response = await self._response_synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
+                system_role_str=query_bundle.system_role,
+                prompt_template_str=" " if query_bundle.system_role else None,
+                **query_bundle.llm_kwargs
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
@@ -161,21 +160,12 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         return query_result
 
     @dispatcher.span
-    async def aquery(
-        self,
-        str_or_query_bundle: QueryType,
-        system_role_str: str = None,
-        prompt_template_str: str = None,
-    ) -> RESPONSE_TYPE:
+    async def aquery(self, query_bundle: QueryType) -> RESPONSE_TYPE:
         # dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
         with self.callback_manager.as_trace("query"):
-            if isinstance(str_or_query_bundle, str):
-                str_or_query_bundle = QueryBundle(str_or_query_bundle)
-            query_result = await self._aquery(
-                str_or_query_bundle,
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
+            if isinstance(query_bundle, str):
+                query_bundle = QueryBundle(query_bundle)
+            query_result = await self._aquery(query_bundle)
         # dispatcher.event(
         #    QueryEndEvent(query=str_or_query_bundle, response=query_result)
         # )
