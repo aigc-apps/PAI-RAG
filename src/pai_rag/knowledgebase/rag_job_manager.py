@@ -130,7 +130,12 @@ class JobManager:
         if not os.path.exists(self.task_file):
             return JobStatus()
 
-        return JobStatus.model_validate(json.load(open(self.task_file)))
+        try:
+            return JobStatus.model_validate(json.load(open(self.task_file)))
+        except Exception as e:
+            logger.error(f"Load task status error: {e}, use empty status.")
+            logger.error(traceback.format_exc())
+            return JobStatus()
 
     def persist_task_status(self):
         with open(self.task_file, "w") as f:
