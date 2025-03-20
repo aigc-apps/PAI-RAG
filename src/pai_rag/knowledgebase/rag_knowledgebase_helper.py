@@ -54,6 +54,7 @@ class RagKnowledgeBaseHelper:
         parse_path = os.path.join(
             DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, ".index", "parse"
         )
+        ORIGINAL_DOCS_MAP = dict()
         for doc in documents:
             file_name = doc.metadata.get("file_name", "dummy.none")
             file_path = doc.metadata.get("file_path", None)
@@ -67,9 +68,14 @@ class RagKnowledgeBaseHelper:
                     doc.text, doc.metadata.get("file_name", None), relative_parse_path
                 )
             elif file_type in ACCEPTABLE_DOC_TYPES:
-                copy_original_files_to_parse_dir(file_path, relative_parse_path)
+                if file_path not in ORIGINAL_DOCS_MAP:
+                    ORIGINAL_DOCS_MAP[file_path] = relative_parse_path
             else:
                 raise ValueError(f"不支持的文件类型: {file_type}")
+        # copy original excel/jsonl files to parse dir only once
+        if len(ORIGINAL_DOCS_MAP) > 0:
+            for file_path, relative_parse_path in ORIGINAL_DOCS_MAP.items():
+                copy_original_files_to_parse_dir(file_path, relative_parse_path)
 
     @staticmethod
     def save_chunk_nodes(knowledgebase_name, nodes, operation):
