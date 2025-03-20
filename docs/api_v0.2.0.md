@@ -42,7 +42,7 @@
   ```
   **注意：**
 - 如果所有功能开关有多个true，会按照以下优先级规则进行调用：
-  chat_knowledgebase > search_web > chat_agent > chat_db > chat_llm
+  search_web > chat_knowledgebase > chat_agent > chat_db > chat_llm，在每个功能中，会有前置意图识别区分是否调用该功能或直接llm回复
 - 如果所有功能都为false或者都不传，则默认查询本地知识库，chat_knowledgebase=true
 
 <details>
