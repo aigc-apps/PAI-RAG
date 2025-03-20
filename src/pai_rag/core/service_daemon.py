@@ -78,7 +78,7 @@ async def watch_knowledgebase_changes():
         change_count = 0
         for change_type, file_path in changes:
             change_count += 1
-            if change_count > 20:
+            if change_count % 10 == 0:
                 await asyncio.sleep(0.5)
 
             is_delete = change_type == 3
