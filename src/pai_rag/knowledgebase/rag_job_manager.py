@@ -130,7 +130,12 @@ class JobManager:
         if not os.path.exists(self.task_file):
             return JobStatus()
 
-        return JobStatus.model_validate(json.load(open(self.task_file)))
+        try:
+            return JobStatus.model_validate(json.load(open(self.task_file)))
+        except Exception as e:
+            logger.error(f"Load task status error: {e}, use empty status.")
+            logger.error(traceback.format_exc())
+            return JobStatus()
 
     def persist_task_status(self):
         with open(self.task_file, "w") as f:
@@ -142,6 +147,7 @@ class JobManager:
 
     def _get_task_executor(self, knowledgebase_name):
         knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
+        print("********_get_task_executor", self.rag_config.llms)
         return resolve_task_executor(self.rag_config, knowledgebase)
 
     def _remove_file_prefix(self, knowledgebase_name: str, file_path: str):
