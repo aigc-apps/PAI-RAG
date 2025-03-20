@@ -147,7 +147,6 @@ class JobManager:
 
     def _get_task_executor(self, knowledgebase_name):
         knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
-        print("********_get_task_executor", self.rag_config.llms)
         return resolve_task_executor(self.rag_config, knowledgebase)
 
     def _remove_file_prefix(self, knowledgebase_name: str, file_path: str):
