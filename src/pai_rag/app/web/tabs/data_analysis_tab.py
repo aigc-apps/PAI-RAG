@@ -194,7 +194,7 @@ async def respond(input_elements: List[Any]):
 
 def _extract_core_content(content: str) -> str:
     """
-    从 content 中提取核心内容，去掉参考资料部分。
+    从 content 中去掉参考资料部分。
     """
     # 找到“参考资料”开始的位置
     ref_start = content.find("**参考资料**")
@@ -208,16 +208,23 @@ def _filter_chatbot(chatbot: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     遍历 chatbot 列表，提取每条消息的核心内容，去掉参考资料部分。
     """
     filtered_chatbot = []
+    if not chatbot:
+        return chatbot
     for message in chatbot:
-        # 提取核心内容
-        core_content = _extract_core_content(message.get("content", ""))
-        # 构造新的消息字典
-        filtered_message = {
-            "content": core_content,
-            "role": message.get("role", ""),
-            "metadata": message.get("metadata", {}),
-        }
-        filtered_chatbot.append(filtered_message)
+        if message.get("role", "") == "assistant":
+            # 提取核心内容，避免参考资料的信息干扰
+            core_content = _extract_core_content(message.get("content", ""))
+            # 构造新的消息字典
+            filtered_message = {
+                "content": core_content,
+                "role": message.get("role", ""),
+                "metadata": message.get("metadata", {}),
+                "options": message.get("options", None),
+            }
+            filtered_chatbot.append(filtered_message)
+        else:
+            filtered_chatbot.append(message)
+
     return filtered_chatbot
 
 
