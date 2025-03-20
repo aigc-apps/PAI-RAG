@@ -118,6 +118,12 @@ async def respond(input_elements: List[Any]):
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
 
+    # 过滤 chatbot 内容
+    chatbot = update_dict["chatbot"]
+    filtered_chatbot = _filter_chatbot(chatbot)
+    # 更新 update_dict 中的 chatbot
+    update_dict["chatbot"] = filtered_chatbot
+
     if update_dict["analysis_type"] == "datafile":
         update_dict["analysis_type"] = "nl2pandas"
     else:
@@ -184,6 +190,42 @@ async def respond(input_elements: List[Any]):
     finally:
         logger.info(f"Chatbot finished: {chatbot}")
         yield chatbot
+
+
+def _extract_core_content(content: str) -> str:
+    """
+    从 content 中去掉参考资料部分。
+    """
+    # 找到“参考资料”开始的位置
+    ref_start = content.find("**参考资料**")
+    if ref_start != -1:
+        return content[:ref_start].strip()  # 截取参考资料之前的内容
+    return content.strip()
+
+
+def _filter_chatbot(chatbot: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    遍历 chatbot 列表，提取每条消息的核心内容，去掉参考资料部分。
+    """
+    filtered_chatbot = []
+    if not chatbot:
+        return chatbot
+    for message in chatbot:
+        if message.get("role", "") == "assistant":
+            # 提取核心内容，避免参考资料的信息干扰
+            core_content = _extract_core_content(message.get("content", ""))
+            # 构造新的消息字典
+            filtered_message = {
+                "content": core_content,
+                "role": message.get("role", ""),
+                "metadata": message.get("metadata", {}),
+                "options": message.get("options", None),
+            }
+            filtered_chatbot.append(filtered_message)
+        else:
+            filtered_chatbot.append(message)
+
+    return filtered_chatbot
 
 
 def clear_history(chatbot):
