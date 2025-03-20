@@ -122,7 +122,32 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
-    upload_file(["tests/testdata/data/md_data/pai_document.md"], index_name="default")
+    if "test_index2" not in indexes:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/knowledgebases/test_index2",
+                json={
+                    "index_name": "test_index2",
+                    "embedding_config": {
+                        "source": "dashscope",
+                        "api_key": os.environ.get("DASHSCOPE_API_KEY", "abc"),
+                    },
+                    "vector_store_config": {
+                        "type": "faiss",
+                        "persist_path": "localdata/storage/test_index2",
+                    },
+                },
+            )
+
+            assert response.status_code == 200
+            assert (
+                response.json()["msg"]
+                == "Add knowledgebase 'test_index2' successfully."
+            )
+
+    upload_file(
+        ["tests/testdata/data/md_data/pai_document.md"], index_name="test_index2"
+    )
     upload_file(
         ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
@@ -172,6 +197,9 @@ async def test_legacy_query():
     assert response.status_code == 200
 
     answer = response.json()["answer"]
+    import pdb
+
+    pdb.set_trace()
 
     assert "IBM" in answer
 
@@ -501,7 +529,7 @@ async def test_legacy_query_chat():
                 ],
                 "stream": True,
                 "return_reference": True,
-                "index_name": "default",  # change to default
+                "index_name": "test_index2",  # change to test_index2
             },
         )
     assert response.status_code == 200
