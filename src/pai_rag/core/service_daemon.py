@@ -77,6 +77,7 @@ async def watch_knowledgebase_changes():
         # change_type: 1 add, 2 modified, 3 delete.
         change_count = 0
         for change_type, file_path in changes:
+            change_count += 1
             if change_count % 20 == 0:
                 await asyncio.sleep(0.5)
             is_delete = change_type == 3
@@ -104,7 +105,7 @@ async def watch_knowledgebase_changes():
                 logger.info(
                     f"changes enqueued. {knowledgebase}, {file_changes}, {change_type}"
                 )
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
 
 
 async def startup_event():
