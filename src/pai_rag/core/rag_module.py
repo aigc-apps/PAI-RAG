@@ -108,6 +108,18 @@ def resolve_query_rewrite_llm(config: RagConfig, model_id: str = None) -> PaiLlm
     return resolve_chat_llm(config, model_id)
 
 
+def resolve_news_extension_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+    model_id = model_id or config.news_extension.model_id
+    if (
+        config.news_extension.llm
+        and config.news_extension.llm.base_url
+        and config.news_extension.llm.api_key
+        and config.news_extension.llm.model
+    ):
+        return resolve(cls=PaiLlm, llm_config=config.news_extension.llm)
+    return resolve_chat_llm(config, model_id)
+
+
 def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     if config.guardrail.is_enabled():
         guardrail = resolve(
@@ -367,7 +379,7 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
 
 def resolve_news_tool(config: RagConfig, model_id: str = None) -> MiaobiNewsTool:
     if config.news_extension.is_enabled():
-        llm = resolve_chat_llm(config=config, model_id=model_id)
+        llm = resolve_news_extension_llm(config, model_id)
         news_tool = resolve(
             cls=MiaobiNewsTool,
             llm=llm,
