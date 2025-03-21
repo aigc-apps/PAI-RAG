@@ -173,6 +173,16 @@ class ViewModel(BaseModel):
     # llms
     llms: List[PaiBaseLlmConfig] = None
 
+    # news_extension
+    news_extension_model_id: str = "default"
+    bailian_workspaceid: str = None
+    bailian_ak: str = None
+    bailian_sk: str = None
+    top_news_count: int = 10
+    list_news_pmt: str = None
+    # chat_news_answer_len: int = 200
+    chat_news_pmt: str = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -343,6 +353,16 @@ class ViewModel(BaseModel):
             view_model.guardrail_endpoint = config.guardrail.endpoint
             view_model.guardrail_region = config.guardrail.region
 
+        # news_extension
+        view_model.news_extension_model_id = config.news_extension.model_id or "default"
+        view_model.bailian_workspaceid = config.news_extension.workspace_id
+        view_model.bailian_ak = config.news_extension.access_key_id
+        view_model.bailian_sk = config.news_extension.access_key_secret
+        view_model.top_news_count = config.news_extension.top_news_count
+        view_model.list_news_pmt = config.news_extension.list_topics_prompt_str
+        # view_model.chat_news_answer_len = config.news_extension.chat_news_answer_len
+        view_model.chat_news_pmt = config.news_extension.chat_news_prompt_str
+
         return view_model
 
     def to_app_config(self):
@@ -511,6 +531,16 @@ class ViewModel(BaseModel):
         config["agent"]["api_definition"] = self.agent_api_definition
 
         config["llms"] = self.llms
+
+        # news_extension
+        config["news_extension"]["workspace_id"] = self.bailian_workspaceid
+        config["news_extension"]["access_key_id"] = self.bailian_ak
+        config["news_extension"]["access_key_secret"] = self.bailian_sk
+        config["news_extension"]["model_id"] = self.news_extension_model_id
+        config["news_extension"]["top_news_count"] = self.top_news_count
+        config["news_extension"]["list_topics_prompt_str"] = self.list_news_pmt
+        # config["news_extension"]["chat_news_answer_len"] = self.chat_news_answer_len
+        config["news_extension"]["chat_news_prompt_str"] = self.chat_news_pmt
 
         return _transform_to_dict(config)
 
@@ -794,6 +824,21 @@ class ViewModel(BaseModel):
             if not self.llms and len(self.llms) == 0
             else model_choices[0],
         }
+
+        # news_extension
+        settings["news_extension_model_id"] = {
+            "choices": [
+                llm.model_id if llm.model_id else llm.model for llm in self.llms
+            ],
+            "value": self.news_extension_model_id,
+        }
+        settings["bailian_workspaceid"] = {"value": self.bailian_workspaceid}
+        settings["bailian_ak"] = {"value": self.bailian_ak}
+        settings["bailian_sk"] = {"value": self.bailian_sk}
+        settings["top_news_count"] = {"value": self.top_news_count}
+        settings["list_news_pmt"] = {"value": self.list_news_pmt}
+        # settings["chat_news_answer_len"] = {"value": self.chat_news_answer_len}
+        settings["chat_news_pmt"] = {"value": self.chat_news_pmt}
 
         # print("view model settings:", settings)
 

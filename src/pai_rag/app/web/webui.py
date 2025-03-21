@@ -2,7 +2,6 @@ from fastapi import FastAPI
 import gradio as gr
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
-from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import create_setting_tab
@@ -12,6 +11,7 @@ from pai_rag.app.web.tabs.history_tab import (
     create_upload_history,
     refresh_upload_history,
 )
+from pai_rag.app.web.tabs.news_extension import create_news_extension_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -96,21 +96,18 @@ def make_homepage():
     with gr.Blocks(css=DEFAULT_CSS_STYPE) as homepage:
         # generate components
         gr.Markdown(value=WELCOME_MESSAGE)
-        with gr.Tab("\N{rocket} 系统设置"):
-            setting_elements = create_setting_tab()
-            elem_manager.add_elems(setting_elements)
         # with gr.Tab("\N{whale} Upload"):
         #     upload_elements = create_upload_tab()
         #     elem_manager.add_elems(upload_elements)
+        # with gr.Tab("\N{rocket} 智能体"):
+        #     agent_elements = create_agent_tab()
+        #     elem_manager.add_elems(agent_elements)
+        # with gr.Tab("\N{bar chart} 数据分析"):
+        #     analysis_elements = create_data_analysis_tab()
+        #     elem_manager.add_elems(analysis_elements)
         with gr.Tab("\N{fire} 对话"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        with gr.Tab("\N{rocket} 智能体"):
-            agent_elements = create_agent_tab()
-            elem_manager.add_elems(agent_elements)
-        with gr.Tab("\N{bar chart} 数据分析"):
-            analysis_elements = create_data_analysis_tab()
-            elem_manager.add_elems(analysis_elements)
         with gr.Tab("\N{rocket} 知识库"):
             with gr.Tab("文件管理"):
                 with gr.Blocks():
@@ -119,6 +116,17 @@ def make_homepage():
             with gr.Tab("上传历史"):
                 history_elements = create_upload_history()
                 elem_manager.add_elems(history_elements)
+        with gr.Tab("\N{rocket} 系统设置"):
+            setting_elements = create_setting_tab()
+            elem_manager.add_elems(setting_elements)
+        with gr.Tab("\N{rocket} 应用"):
+            with gr.Tab("数据分析"):
+                analysis_elements = create_data_analysis_tab()
+                elem_manager.add_elems(analysis_elements)
+            with gr.Tab("新闻智能体"):
+                with gr.Blocks():
+                    news_elements = create_news_extension_tab()
+                    elem_manager.add_elems(news_elements)
 
         index_selector_elements = [
             setting_elements["vector_index"],
