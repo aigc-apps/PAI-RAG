@@ -11,7 +11,7 @@ from pai_rag.app.web.tabs.history_tab import (
     create_upload_history,
     refresh_upload_history,
 )
-from pai_rag.app.web.tabs.news_agent import create_news_agent_tab
+from pai_rag.app.web.tabs.news_extension import create_news_extension_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -125,7 +125,7 @@ def make_homepage():
                 elem_manager.add_elems(analysis_elements)
             with gr.Tab("新闻智能体"):
                 with gr.Blocks():
-                    news_elements = create_news_agent_tab()
+                    news_elements = create_news_extension_tab()
                     elem_manager.add_elems(news_elements)
 
         index_selector_elements = [

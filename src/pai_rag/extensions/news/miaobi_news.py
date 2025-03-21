@@ -1,6 +1,6 @@
 import traceback
 from typing import Dict, List
-
+from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
 from pai_rag.extensions.news.news_config import MiaobiNewsConfig
 
@@ -133,44 +133,12 @@ def _make_context(topics):
     )
 
 
-DEFAULT_PROMPT_TEMPLATE = """
-# 【任务描述】你是深小闻，是一个车机新闻播报小助手。你会根据下面给出的新闻材料，按顺序有条理的播报所有新闻。
-
-# 【人设风格】风格亲切、自然但不失专业性的新闻主播深小闻。
-
-# 【精选{topics_str}新闻列表】
-{news_list_str}
-
-# 【输出格式】
-- 简短、友好的开场导语，如深小闻为您带来今天的热点资讯、深小闻为你推荐下面的科技热点等。
-- 保持亲切、自然的语言风格同时不失专业性。
-- 请根据新闻列表中信息播报，不要使用其他信息。
-- 请遵循新闻给出的顺序，结构化、有条理的归纳每条新闻内容并用数字序号标识。
-- 注意每条新闻播报不要超过100个字。
-"""
-
-DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE = """
-# 【任务描述】你是深小闻，一个智能车机问答助手，你的职责是根据给定的上下文信息回答问题。
-
-# 【上下文信息】
-{content}
-
-# 【人设风格】风格亲切、自然但不失专业性的新闻主播深小闻
-
-# 【输出格式】
-- 请根据上下文信息，不要使用其他信息，参考【人设风格】，结构条理化的回答问题“{prompt}”。
-- 回答时使用简短、友好的开场导语，如深小闻为您带来关于（）的热点新闻.
-- 内容的字数一定控制在{answerLength}个字符以内。
-- 如果不能回答，请输出：根据已知信息无法回答。
-"""
-
-
 class NewsChatParameter(BaseModel):
     workspaceId: str
     messages: List[Dict[str, str]] = []
     prompt: str = None
-    modelCustomPromptTemplate: str = DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE
-    answerLength: int = 200
+    modelCustomPromptTemplate: str = None
+    # answerLength: int = 200 # temporarily inactive
 
 
 class MiaobiNewsTool:
@@ -179,6 +147,11 @@ class MiaobiNewsTool:
         self.config = config
         self.chat_client = create_light_app_client(config)
         self.miaobi_client = create_aimiaobi_client(config)
+        # self.chat_news_answer_len = config.chat_news_answer_len
+        self.list_topics_prompt_template = PromptTemplate(
+            template=config.list_topics_prompt_str
+        )
+        self.chat_news_prompt_template = config.chat_news_prompt_str
         logger.info(
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
@@ -234,7 +207,10 @@ class MiaobiNewsTool:
             return ChatResponseWrapper(response=response)
 
         try:
-            content = DEFAULT_PROMPT_TEMPLATE.format(
+            logger.debug(
+                f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
+            )
+            content = self.list_topics_prompt_template.format(
                 news_list_str=_make_context(hot_topics),
                 query_str=query_str,
                 topics_str="、".join(news_topics),
@@ -291,10 +267,13 @@ class MiaobiNewsTool:
                     )
                     return
 
+                logger.debug(
+                    f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
+                )
                 messages = [
                     ChatMessage(
                         role="user",
-                        content=DEFAULT_PROMPT_TEMPLATE.format(
+                        content=self.list_topics_prompt_template.format(
                             news_list_str=_make_context(hot_topics),
                             query_str=query_str,
                             topics_str="、".join(news_topics),
@@ -360,6 +339,8 @@ class MiaobiNewsTool:
             messages=transformed_messages,
             workspaceId=self.config.workspace_id,
             prompt=prompt,
+            # answerLength=self.chat_news_answer_len,
+            modelCustomPromptTemplate=self.chat_news_prompt_template,
         ).model_dump()
 
         async def gen() -> ChatResponseAsyncGen:
@@ -372,7 +353,7 @@ class MiaobiNewsTool:
                 delta="",
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
-            logger.info(f" Chat news with param {param}.")
+            logger.info(f"Chat news with param {param}.")
             async for item in await self.chat_client.do_sse_query(param):
                 try:
                     data = json.loads(item.get("event").data)
