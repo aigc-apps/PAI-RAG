@@ -64,8 +64,15 @@ class FileTaskExecutor:
         yield FileProcessResult(status=FileProcessStatus.Chunking, message=None)
         try:
             chunks = self.node_parser(docs)
-            RagKnowledgeBaseHelper.save_chunk_nodes(knowledgebase.name, chunks, "split")
-            logger.info(f"Chunk nodes successfully for file {task.file_name}")
+            if len(chunks) > 1000:
+                logger.warning(
+                    f"File {task.file_name} has too many chunks with size {len(chunks)}, skipping save chunks."
+                )
+            else:
+                RagKnowledgeBaseHelper.save_chunk_nodes(
+                    knowledgebase.name, chunks, "split"
+                )
+                logger.info(f"Chunk nodes successfully for file {task.file_name}")
         except Exception as ex:
             logger.error(
                 f"Chunk file {task.file_name} failed: {traceback.format_exc()}"
@@ -76,10 +83,17 @@ class FileTaskExecutor:
         yield FileProcessResult(status=FileProcessStatus.Embedding, message=None)
         try:
             embedded_nodes = self.embed_model(chunks)
-            RagKnowledgeBaseHelper.save_chunk_nodes(
-                knowledgebase.name, embedded_nodes, "embed"
-            )
-            logger.info(f"Get nodes embedding successfully for file {task.file_name}")
+            if len(embedded_nodes) > 1000:
+                logger.warning(
+                    f"File {task.file_name} has too many chunks with size {len(embedded_nodes)}, skipping save embed chunks."
+                )
+            else:
+                RagKnowledgeBaseHelper.save_chunk_nodes(
+                    knowledgebase.name, embedded_nodes, "embed"
+                )
+                logger.info(
+                    f"Get nodes embedding successfully for file {task.file_name}"
+                )
         except Exception as ex:
             logger.error(
                 f"Embedding file {task.file_name} failed: {traceback.format_exc()}"
