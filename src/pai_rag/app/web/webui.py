@@ -4,7 +4,10 @@ from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_local_client import rag_client
-from pai_rag.app.web.tabs.settings_tab import create_setting_tab
+from pai_rag.app.web.tabs.settings_tab import (
+    create_setting_tab,
+    create_knowledgebase_settings_tab,
+)
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.tabs.history_tab import (
@@ -108,7 +111,10 @@ def make_homepage():
         with gr.Tab("\N{fire} 对话"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        with gr.Tab("\N{rocket} 知识库"):
+        with gr.Tab("\N{bookmark} 知识库"):
+            with gr.Tab("知识库设置"):
+                knowledgebase_settings_elements = create_knowledgebase_settings_tab()
+                elem_manager.add_elems(knowledgebase_settings_elements)
             with gr.Tab("文件管理"):
                 with gr.Blocks():
                     html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
@@ -119,7 +125,7 @@ def make_homepage():
         with gr.Tab("\N{rocket} 系统设置"):
             setting_elements = create_setting_tab()
             elem_manager.add_elems(setting_elements)
-        with gr.Tab("\N{rocket} 应用"):
+        with gr.Tab("\N{WHITE MEDIUM STAR} 应用"):
             with gr.Tab("数据分析"):
                 analysis_elements = create_data_analysis_tab()
                 elem_manager.add_elems(analysis_elements)
@@ -129,18 +135,18 @@ def make_homepage():
                     elem_manager.add_elems(news_elements)
 
         index_selector_elements = [
-            setting_elements["vector_index"],
+            knowledgebase_settings_elements["vector_index"],
             # upload_elements["upload_index"],
             chat_elements["chat_index"],
             history_elements["history_index"],
         ]
         index_related_components = [
-            setting_elements[key] for key in index_related_component_keys
+            knowledgebase_settings_elements[key] for key in index_related_component_keys
         ]
 
-        setting_elements["vector_index"].change(
+        knowledgebase_settings_elements["vector_index"].change(
             event_listeners.change_vector_index,
-            inputs=setting_elements["vector_index"],
+            inputs=knowledgebase_settings_elements["vector_index"],
             outputs=index_related_components
             + [chat_elements["chat_index"], history_elements["history_index"]],
         )
