@@ -82,6 +82,7 @@ class ChatIntentType(str, Enum):
     CHAT_LLM = "chat_llm"  # llm chat
     LIST_NEWS = "list_news"  # list news
     CHAT_NEWS = "chat_news"  # chat news
+    CHAT_NEWS_LLM = "chat_news_llm"  # chat news only by llm
     CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
     CHAT_AGENT = "chat_agent"  # chat agent
     CHAT_DB = "chat_db"  # chat sql
