@@ -57,7 +57,10 @@ from llama_index.core.chat_engine.types import (
 
 from loguru import logger
 
-from pai_rag.utils.prompt_template import DEFALT_LLM_CHAT_PROMPT_TEMPL
+from pai_rag.utils.prompt_template import (
+    DEFALT_LLM_CHAT_PROMPT_TEMPL,
+    DEFAULT_NEWS_ROLE,
+)
 from pai_rag.utils.time_utils import get_prompt_current_time_str
 
 
@@ -302,6 +305,8 @@ class ChatFlow:
             response_wrapper = await self.achat_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS:
             response_wrapper = await self.achat_news(query_bundle, config=config)
+        elif query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
+            response_wrapper = await self.achat_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.LIST_NEWS:
             response_wrapper = await self.alist_news(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_AGENT:
@@ -454,13 +459,24 @@ class ChatFlow:
                 ChatMessage(role=MessageRole.USER, content=system_role)
             ] + query_bundle.messages
 
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            ),
-        )
+        if query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
+            prompt_message = ChatMessage(
+                role=MessageRole.USER,
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                    cur_date=get_prompt_current_time_str()
+                )
+                + "\n"
+                + DEFAULT_NEWS_ROLE,
+            )
+        else:
+            prompt_message = ChatMessage(
+                role=MessageRole.USER,
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                    cur_date=get_prompt_current_time_str()
+                ),
+            )
         messages = [prompt_message] + messages
+        logger.debug(f"achat_llm messages: {messages}")
         if query_bundle.stream:
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
