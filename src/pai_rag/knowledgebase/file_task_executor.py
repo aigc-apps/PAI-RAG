@@ -84,19 +84,23 @@ class FileTaskExecutor:
 
         yield FileProcessResult(status=FileProcessStatus.Embedding, message=None)
         try:
-            embedded_nodes = []
             embedding_batch_size = DEFAULT_EMBEDDING_BATCH_SIZE
             yield FileProcessResult(status=FileProcessStatus.Persisting, message=None)
             for i in range(0, len(chunks), embedding_batch_size):
                 batch_chunks = chunks[i : i + embedding_batch_size]
                 embedded_batch_nodes = self.embed_model(batch_chunks)
-                del batch_chunks
-                embedded_nodes.extend(embedded_batch_nodes)
                 try:
                     self.vector_index.insert_nodes(nodes=embedded_batch_nodes)
                     logger.info(
                         f"Persist {i + embedding_batch_size} nodes successfully."
                     )
+                    if i < embedding_batch_size:
+                        RagKnowledgeBaseHelper.save_chunk_nodes(
+                            knowledgebase.name, embedded_batch_nodes, "embed"
+                        )
+                        logger.info(
+                            f"Get nodes embedding successfully for file {task.file_name}"
+                        )
                     del embedded_batch_nodes
                 except Exception as ex:
                     logger.error(
@@ -109,17 +113,6 @@ class FileTaskExecutor:
             logger.info(f"Persist nodes successfully for file {task.file_name}")
             logger.info(f"Add file to index succuessfully {task.file_name}.")
             yield FileProcessResult(status=FileProcessStatus.Done, message=None)
-            if len(embedded_nodes) > 1000:
-                logger.warning(
-                    f"File {task.file_name} has too many chunks with size {len(embedded_nodes)}, skipping save embed chunks."
-                )
-            else:
-                RagKnowledgeBaseHelper.save_chunk_nodes(
-                    knowledgebase.name, embedded_nodes, "embed"
-                )
-                logger.info(
-                    f"Get nodes embedding successfully for file {task.file_name}"
-                )
         except Exception as ex:
             logger.error(
                 f"Embedding file {task.file_name} failed: {traceback.format_exc()}"
