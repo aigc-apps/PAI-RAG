@@ -301,6 +301,7 @@ class ChatFlow:
             logger.info(f"Guadrail check passed: {query_bundle.query_str}.")
 
         # 意图分发
+        logger.info(f"Routing query {query_bundle.query_str} to {query_bundle.intent}")
         if query_bundle.intent == ChatIntentType.CHAT_LLM:
             response_wrapper = await self.achat_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS:

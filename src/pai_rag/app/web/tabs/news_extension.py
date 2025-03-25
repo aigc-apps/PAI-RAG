@@ -1,4 +1,5 @@
 import gradio as gr
+import re
 from pai_rag.app.web.utils import components_to_dict
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from typing import Any, List
@@ -9,6 +10,17 @@ def check_variables_in_string(text, variables):
     missing_variables = [var for var in variables if f"{{{var}}}" not in text]
     if missing_variables:
         raise ValueError(f"以下变量名缺失: {', '.join(missing_variables)}")
+
+
+def is_valid_comma_separated_string(s):
+    # 使用正则表达式校验
+    # ^[\u4e00-\u9fa5]+(,[\u4e00-\u9fa5]+)*$ 的含义：
+    # ^ 开头
+    # [\u4e00-\u9fa5]+ 至少一个中文字符
+    # (,[\u4e00-\u9fa5]+)* 零个或多个由逗号分隔的中文字符
+    # $ 结尾
+    pattern = r"^[\u4e00-\u9fa5]+(,[\u4e00-\u9fa5]+)*$"
+    return bool(re.match(pattern, s))
 
 
 list_news_pmt_required_variables = ["topics_str", "news_list_str"]
@@ -29,6 +41,9 @@ def save_news_extension_config(input_elements: List[Any]):
                     check_variables_in_string(value, chat_news_pmt_required_variables)
                 except RagApiError:
                     return gr.Error("查询某个具体新闻的提示词模板保存出错，缺少变量")
+            elif element.elem_id == "domain_list":
+                if not is_valid_comma_separated_string(value):
+                    raise ValueError(f"{value} is invalid domain list.")
             update_dict[element.elem_id] = value
         rag_client.patch_config(update_dict)
 
@@ -93,6 +108,12 @@ def create_news_extension_tab():
                         elem_id="top_news_count",
                         interactive=True,
                     )
+                    domain_list = gr.Textbox(
+                        label="新闻领域集合(用','分隔，如: 科技,娱乐)",
+                        placeholder="新闻领域集合，用','分隔，如: 科技,娱乐",
+                        elem_id="domain_list",
+                        interactive=True,
+                    )
                     list_news_pmt = gr.Textbox(
                         label="查询全局热门新闻的提示词模板",
                         value="",
@@ -131,6 +152,7 @@ def create_news_extension_tab():
         bailian_ak,
         bailian_sk,
         top_news_count,
+        domain_list,
         list_news_pmt,
         # chat_news_answer_len,
         chat_news_pmt,
