@@ -126,17 +126,21 @@ class OpenAICompatibleQueryTransform:
         news_topics = query_json.get("news_topics", [])
 
         # 过滤掉无关话题
-        news_topics = [
+        filtered_news_topics = [
             topic for topic in news_topics if topic in set(self._news_valid_domain_list)
         ]
-        if len(news_topics) == 0:
+        if (
+            len(news_topics) > 0
+            and len(filtered_news_topics) == 0
+            and intent == ChatIntentType.LIST_NEWS
+        ):
             intent = ChatIntentType.CHAT_NEWS
 
         return PaiQueryBundle(
             intent=intent,
             messages=chat_messages,
             query_str=query,
-            news_topics=news_topics,
+            news_topics=filtered_news_topics,
             custom_embedding_strs=[transformed_query_str],
             chat_messages_str=chat_history_str,
             completion_tokens=chat_response.additional_kwargs.get(

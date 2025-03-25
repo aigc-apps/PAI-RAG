@@ -25,6 +25,7 @@ from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 
 
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
+DEFAULT_WEB_SEARCH_INFO_MESSAGE = "当前内容来自于互联网，请仔细甄别。"
 
 
 def _create_client(
@@ -443,9 +444,58 @@ class MiaobiNewsTool:
                 yield ChatResponse(
                     message=ChatMessage(
                         role="assistant",
-                        content="当前内容来自于互联网，请仔细甄别。",
+                        content=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
                     ),
-                    delta="当前内容来自于互联网，请仔细甄别。",
+                    delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
                 )
+
+        return ChatResponseWrapper(response=gen())
+
+    async def achat_llm(
+        self,
+        query_str: str,
+        messages: List[ChatMessage] = [],
+    ):
+        stream_response_wrapper = await self.astream_chat_llm(query_str, messages)
+        message_content = ""
+        additional_kwargs = {}
+        async for response in stream_response_wrapper.response:
+            message_content += response.delta
+            additional_kwargs.update(response.additional_kwargs)
+
+        return ChatResponseWrapper(
+            response=ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=message_content,
+                ),
+                additional_kwargs=additional_kwargs,
+                source_nodes=stream_response_wrapper.source_nodes,
+            )
+        )
+
+    async def astream_chat_llm(
+        self,
+        query_str: str,
+        messages: List[ChatMessage] = [],
+    ) -> ChatResponseWrapper:
+        logger.info(
+            f"Chat news only llm with query {query_str}, chat_history: {messages}"
+        )
+
+        async def gen() -> ChatResponseAsyncGen:
+            yield ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content="",
+                ),
+                delta="",
+                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
+            )
+
+            async for response in await self.llm.astream_chat(
+                messages=messages,
+            ):
+                yield response
 
         return ChatResponseWrapper(response=gen())
