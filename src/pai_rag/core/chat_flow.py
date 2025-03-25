@@ -334,7 +334,9 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        data_analysis_query_engine = resolve_data_analysis_query(config)
+        data_analysis_query_engine = resolve_data_analysis_query(
+            config, model_id=query_bundle.model
+        )
         if not data_analysis_query_engine:
             raise ValueError(
                 "DBChat config is not valid. Please check your DBChat api configuration."
