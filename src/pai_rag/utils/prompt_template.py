@@ -105,10 +105,11 @@ WEBSEARCH_REWRITE_PROMPT_ZH = """
 NEWS_REWRITE_PROMPT_ZH = """
 ## 新闻热榜互动工具
 - 根据对话内容，判断是否需要提供时事新闻、热点新闻资讯等相关查询。
-- 如果用户想要查询热门榜单，请直接生成list_news意图, 生成结果格式为 JSON 对象：{ "intent": "list_news" }
-- 如果用户想要查询科技、娱乐、经济、时政、社会、体育、教育、国际等特定板块的新闻，请直接生成list_news意图并带上相应板块的名字，生成结果格式为 JSON 对象：{ "intent": "list_news", "news_topics": ["domain_name"] }
-- 如果用户想要了解或者想要查询某个热点新闻，你会根据上下文信息对用户的查询进行改写，并生成chat_news意图，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_news", "query": "new query" }
-- 如果用户想要了解与“深小闻”相关的内容，不需要对用户查询进行改写，直接生成chat_news_llm意图，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_news_llm"}
+- 如果用户想要查询热门榜单，请直接生成list_news意图, 生成结果格式为 JSON 对象：{{ "intent": "list_news" }}
+- 如果用户想要查询的板块在给定的列表 {domain_list} 中，请直接生成list_news意图并带上相应板块的名字，生成结果格式为 JSON 对象：{{ "intent": "list_news", "news_topics": ["domain_name"] }}
+- 如果用户想要查询的板块不在给定的列表 {domain_list} 中，请生成chat_news意图，生成结果格式为 JSON 对象：{{ "intent": "chat_news", "query": "query" }}。如查询“经济相关的新闻”，生成结果应该为{{ "intent": "chat_news", "query": "经济相关的新闻" }}。
+- 如果用户想要了解或者想要查询某个热点新闻，你会根据上下文信息对用户的查询进行改写，并生成chat_news意图，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_news", "query": "new query" }}
+- 如果用户想要了解与“深小闻是谁”“深小闻能做什么”类似的内容，并且问题不涉及搜索和检索，直接生成chat_news_llm意图，返回格式为 JSON 对象：{{ "intent": "chat_news_llm"}}
 - 除非用户输入指定了时间信息，生成的新闻查询不要包含时间信息。
 """
 
@@ -221,5 +222,5 @@ DEFALT_LLM_CHAT_PROMPT_TEMPL = (
 DEFAULT_NEWS_ROLE = """
 如果用户问题有关“深小闻”，你需要知道：
 深小闻是配置在深蓝车机中的一个智能新闻助手，车主可以通过语音聊天与其互动，获取多个领域最新热门的新闻或者某一条具体的新闻。
-深小闻涵盖以下几个领域：["科技", "娱乐", "经济", "时政", "社会", "体育", "教育", "国际"]
+深小闻涵盖以下几个领域：[{domain_list}]
 """

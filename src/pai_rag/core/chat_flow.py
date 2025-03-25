@@ -301,12 +301,13 @@ class ChatFlow:
             logger.info(f"Guadrail check passed: {query_bundle.query_str}.")
 
         # 意图分发
+        logger.info(f"Routing query {query_bundle.query_str} to {query_bundle.intent}")
         if query_bundle.intent == ChatIntentType.CHAT_LLM:
             response_wrapper = await self.achat_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS:
             response_wrapper = await self.achat_news(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
-            response_wrapper = await self.achat_llm(query_bundle, config=config)
+            response_wrapper = await self.achat_news_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.LIST_NEWS:
             response_wrapper = await self.alist_news(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_AGENT:
@@ -374,6 +375,38 @@ class ChatFlow:
         else:
             response_wrapper = await news_tool.astream_chat(
                 prompt=query_bundle.query_str
+            )
+
+        return response_wrapper
+
+    async def achat_news_llm(
+        self,
+        query_bundle: PaiQueryBundle,
+        config: RagConfig,
+    ):
+        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
+        messages = query_bundle.messages
+
+        prompt_message = ChatMessage(
+            role=MessageRole.USER,
+            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                cur_date=get_prompt_current_time_str()
+            )
+            + "\n"
+            + DEFAULT_NEWS_ROLE.format(
+                domain_list=",".join(config.news_extension.domain_list)
+            ),
+        )
+        messages = [prompt_message] + messages
+        logger.debug(f"achat_llm messages: {messages}")
+
+        if not query_bundle.stream:
+            response_wrapper = await news_tool.achat_llm(
+                query_str=query_bundle.query_str, messages=messages
+            )
+        else:
+            response_wrapper = await news_tool.astream_chat_llm(
+                query_str=query_bundle.query_str, messages=messages
             )
 
         return response_wrapper
@@ -459,22 +492,12 @@ class ChatFlow:
                 ChatMessage(role=MessageRole.USER, content=system_role)
             ] + query_bundle.messages
 
-        if query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
-            prompt_message = ChatMessage(
-                role=MessageRole.USER,
-                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                    cur_date=get_prompt_current_time_str()
-                )
-                + "\n"
-                + DEFAULT_NEWS_ROLE,
-            )
-        else:
-            prompt_message = ChatMessage(
-                role=MessageRole.USER,
-                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                    cur_date=get_prompt_current_time_str()
-                ),
-            )
+        prompt_message = ChatMessage(
+            role=MessageRole.USER,
+            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                cur_date=get_prompt_current_time_str()
+            ),
+        )
         messages = [prompt_message] + messages
         logger.debug(f"achat_llm messages: {messages}")
         if query_bundle.stream:

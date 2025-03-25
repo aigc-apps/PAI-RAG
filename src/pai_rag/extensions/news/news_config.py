@@ -37,6 +37,8 @@ DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE = """
 - 如果不能回答，请输出：根据已知信息无法回答。
 """
 
+DEFAULT_NEWS_DOMAIN_LIST = ["科技", "娱乐", "社会", "体育", "教育", "汽车", "旅游", "文化"]
+
 
 class MiaobiNewsConfig(BaseModel):
     workspace_id: str | None = None
@@ -49,6 +51,7 @@ class MiaobiNewsConfig(BaseModel):
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
     list_topics_prompt_str: str = DEFAULT_PROMPT_TEMPLATE
     chat_news_prompt_str: str = DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE
+    domain_list: list[str] = DEFAULT_NEWS_DOMAIN_LIST
 
     def is_enabled(self) -> bool:
         return (
