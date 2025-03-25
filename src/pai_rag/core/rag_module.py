@@ -269,7 +269,10 @@ def resolve_openai_query_transform(
         websearch_tool_prompt_str=config.query_rewrite.websearch_tool_prompt_str,
         agent_tool_prompt_str=config.query_rewrite.agent_tool_prompt_str,
         db_tool_prompt_str=config.query_rewrite.db_tool_prompt_str,
-        news_tool_prompt_str=config.query_rewrite.news_tool_prompt_str,
+        news_tool_prompt_str=config.query_rewrite.news_tool_prompt_str.format(
+            domain_list=config.news_extension.domain_list
+        ),
+        news_valid_domain_list=config.news_extension.domain_list,
     )
     return openai_query_transform
 

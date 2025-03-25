@@ -25,7 +25,7 @@ from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 
 
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
-ACCEPATABLE_NEWS_TOPICS = set(["科技", "娱乐", "经济", "时政", "社会", "体育", "教育", "国际"])
+DEFAULT_WEB_SEARCH_INFO_MESSAGE = "当前内容来自于互联网，请仔细甄别。"
 
 
 def _create_client(
@@ -176,14 +176,18 @@ class MiaobiNewsTool:
         for topic in broadcast_response.body.data.data:
             hot_topics.append(
                 {
+                    "hot_topic": topic.hot_topic,
                     "title": topic.news[0].title,
                     "url": topic.news[0].url,
-                    "summary": topic.news[0].summary,
+                    "summary": topic.text_summary,
                     "category": topic.category,
+                    "hot_value": topic.hot_value,
                 }
             )
-
-        return hot_topics
+        sorted_hot_topics = sorted(
+            hot_topics, key=lambda x: x["hot_value"], reverse=True
+        )
+        return sorted_hot_topics
 
     async def alist_topics(
         self,
@@ -354,12 +358,15 @@ class MiaobiNewsTool:
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
             logger.info(f"Chat news with param {param}.")
+            use_web_search = False
             async for item in await self.chat_client.do_sse_query(param):
                 try:
                     data = json.loads(item.get("event").data)
                     logger.info(data)
 
                     event = data.get("header").get("event")
+                    if event == "task-hot-topic-chat-internet-search-start":
+                        use_web_search = True
                     if event != "task-finished":
                         additional_kwargs = {}
 
@@ -432,5 +439,63 @@ class MiaobiNewsTool:
                         additional_kwargs={},
                     )
                     continue
+
+            if use_web_search:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role="assistant",
+                        content=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                    ),
+                    delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                )
+
+        return ChatResponseWrapper(response=gen())
+
+    async def achat_llm(
+        self,
+        query_str: str,
+        messages: List[ChatMessage] = [],
+    ):
+        stream_response_wrapper = await self.astream_chat_llm(query_str, messages)
+        message_content = ""
+        additional_kwargs = {}
+        async for response in stream_response_wrapper.response:
+            message_content += response.delta
+            additional_kwargs.update(response.additional_kwargs)
+
+        return ChatResponseWrapper(
+            response=ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=message_content,
+                ),
+                additional_kwargs=additional_kwargs,
+                source_nodes=stream_response_wrapper.source_nodes,
+            )
+        )
+
+    async def astream_chat_llm(
+        self,
+        query_str: str,
+        messages: List[ChatMessage] = [],
+    ) -> ChatResponseWrapper:
+        logger.info(
+            f"Chat news only llm with query {query_str}, chat_history: {messages}"
+        )
+
+        async def gen() -> ChatResponseAsyncGen:
+            yield ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content="",
+                ),
+                delta="",
+                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
+            )
+
+            async for response in await self.llm.astream_chat(
+                messages=messages,
+            ):
+                yield response
 
         return ChatResponseWrapper(response=gen())
