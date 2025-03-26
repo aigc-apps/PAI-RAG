@@ -1,0 +1,415 @@
+from typing import Dict, Any, List
+import gradio as gr
+from pai_rag.app.web.ui_constants import EMBEDDING_API_KEY_DICT
+from pai_rag.app.web.utils import components_to_dict
+from pai_rag.app.web.index_utils import index_related_component_keys
+from pai_rag.app.web.tabs.vector_db_panel import create_vector_db_panel
+import pai_rag.app.web.event_listeners as ev_listeners
+from pai_rag.app.web.rag_local_client import RagApiError, rag_client
+from pai_rag.app.web.tabs.history_tab import create_upload_history
+from pai_rag.app.web.tabs.chat_tab import reset_textbox, clear_history
+from loguru import logger
+
+
+async def retrieval_test_respond(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+
+    # empty input.
+    if not update_dict["retrieval_test_question"]:
+        yield update_dict["retrieval_test_chatbot"]
+        return
+
+    try:
+        rag_client.patch_config(update_dict)
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+    chatbot = update_dict["retrieval_test_chatbot"]
+    question = update_dict["retrieval_test_question"]
+    q_msg = {"content": question, "role": "user"}
+    chatbot.append(q_msg)
+    index_name = update_dict["retrieval_test_chat_index"]
+
+    if chatbot is not None:
+        chatbot.append(
+            {"content": "", "role": "assistant", "metadata": {"status": "pending"}}
+        )
+        yield chatbot
+
+    try:
+        response_gen = rag_client.query_vector(
+            chatbot[:-1], question, index_name=index_name
+        )
+
+        async for resp in response_gen:
+            chatbot[-1]["content"] += resp.delta
+            yield chatbot
+
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+    except Exception as e:
+        raise gr.Error(f"Error: {e}")
+    finally:
+        logger.info(f"Chatbot finished: {chatbot}")
+        yield chatbot
+
+
+def create_knowledgebase_settings_tab() -> Dict[str, Any]:
+    components = []
+    with gr.Row(variant="panel"):
+        with gr.Column(scale=5):
+            _ = gr.Markdown(value="### **知识库**")
+
+            vector_index = gr.Dropdown(
+                label="知识库名称",
+                choices=["NEW"],
+                value="NEW",
+                interactive=True,
+                elem_id="vector_index",
+                allow_custom_value=True,
+            )
+
+            new_index_name = gr.Textbox(
+                label="新知识库名称",
+                value="",
+                interactive=True,
+                elem_id="new_index_name",
+                visible=False,
+            )
+
+            _ = gr.Markdown(value="**知识库 - 向量模型**")
+            embed_source = gr.Radio(
+                EMBEDDING_API_KEY_DICT.keys(),
+                label="向量模型来源",
+                elem_id="embed_source",
+                interactive=True,
+            )
+            embed_model = gr.Dropdown(
+                label="向量模型名称",
+                elem_id="embed_model",
+                visible=False,
+            )
+            with gr.Row():
+                embed_dim = gr.Textbox(
+                    label="向量维度",
+                    elem_id="embed_dim",
+                )
+                embed_batch_size = gr.Textbox(
+                    label="向量Batch大小",
+                    elem_id="embed_batch_size",
+                )
+                embed_type = gr.Textbox(
+                    label="向量模型类型",
+                    elem_id="embed_type",
+                )
+                embed_api_key = gr.Textbox(
+                    label="API KEY",
+                    elem_id="embed_api_key",
+                    visible=False,
+                    type="password",
+                )
+        with gr.Column(scale=5):
+            vector_db_elems, vector_db_components = create_vector_db_panel()
+
+    with gr.Row():
+        add_index_button = gr.Button(
+            "添加知识库",
+            variant="primary",
+            visible=False,
+            elem_id="add_index_button",
+        )
+        update_index_button = gr.Button(
+            "更新知识库",
+            variant="primary",
+            visible=False,
+            elem_id="update_index_button",
+        )
+        delete_index_button = gr.Button(
+            "删除知识库",
+            variant="stop",
+            visible=False,
+            elem_id="delete_index_button",
+        )
+
+        embed_source.input(
+            fn=ev_listeners.change_emb_source,
+            inputs=[embed_source, embed_model],
+            outputs=[embed_model, embed_dim, embed_type, embed_api_key],
+        )
+        embed_model.input(
+            fn=ev_listeners.change_emb_model,
+            inputs=[embed_source, embed_model],
+            outputs=[embed_dim, embed_type],
+        )
+        components.extend(
+            [
+                embed_source,
+                embed_dim,
+                embed_type,
+                embed_model,
+                embed_api_key,
+                embed_batch_size,
+                vector_index,
+                new_index_name,
+                add_index_button,
+                update_index_button,
+                delete_index_button,
+            ]
+        )
+
+        all_component = {element.elem_id: element for element in vector_db_elems}
+        all_component.update({component.elem_id: component for component in components})
+        index_related_components = [
+            all_component[key] for key in index_related_component_keys
+        ]
+        add_index_button.click(
+            fn=ev_listeners.add_index,
+            inputs=index_related_components,
+            outputs=[
+                vector_index,
+                new_index_name,
+                add_index_button,
+                update_index_button,
+                delete_index_button,
+            ],
+        )
+
+        update_index_button.click(
+            fn=ev_listeners.update_index,
+            inputs=index_related_components,
+            outputs=[
+                vector_index,
+                new_index_name,
+                add_index_button,
+                update_index_button,
+                delete_index_button,
+            ],
+        )
+
+        """
+        delete_index_button.click(
+            fn=ev_listeners.delete_index,
+            inputs=[vector_index],
+            outputs=[],
+            visible=False,
+        )
+        """
+    elems = components_to_dict(components)
+    elems.update(vector_db_components)
+    return elems
+
+
+def create_retrieval_test_tab():
+    components = []
+    with gr.Row():
+        with gr.Column(scale=3):
+            _ = gr.Markdown(value="### **检索参数设置**")
+            retrieval_mode = gr.Radio(
+                ["向量检索", "关键字检索", "混合检索"],
+                label="检索模式",
+                elem_id="retrieval_mode",
+            )
+
+            vector_weight = gr.Slider(
+                minimum=0,
+                maximum=1,
+                value=0.7,
+                elem_id="vector_weight",
+                label="向量检索权重",
+                visible=(retrieval_mode == "混合检索"),
+            )
+            keyword_weight = gr.Slider(
+                minimum=0,
+                maximum=1,
+                value=float(1 - vector_weight.value),
+                elem_id="keyword_weight",
+                label="关键字检索权重",
+                interactive=False,
+                visible=(retrieval_mode == "混合检索"),
+            )
+
+            similarity_top_k = gr.Slider(
+                minimum=0,
+                maximum=100,
+                step=1,
+                elem_id="similarity_top_k",
+                label="返回Top-K条文本结果 (0 到 100)",
+            )
+            image_similarity_top_k = gr.Slider(
+                minimum=0,
+                maximum=10,
+                step=1,
+                elem_id="image_similarity_top_k",
+                label="返回Top-K条图片结果 (0 到 10)",
+            )
+            similarity_threshold = gr.Slider(
+                minimum=0,
+                maximum=1,
+                step=0.01,
+                elem_id="similarity_threshold",
+                label="相似度分数阈值 (内容越相似，分数越大)",
+            )
+
+            reranker_type = gr.Radio(
+                ["无重排序", "基于模型的重排序"],
+                label="重排序类型",
+                elem_id="reranker_type",
+            )
+            with gr.Column(
+                visible=(reranker_type == "基于模型的重排序"),
+                elem_id="model_reranker_col",
+            ) as model_reranker_col:
+                reranker_model = gr.Radio(
+                    [
+                        "bge-reranker-base",
+                        "bge-reranker-large",
+                    ],
+                    label="重排序模型（注意：首次使用该模型时，加载模型将需要较长时间）",
+                    elem_id="reranker_model",
+                )
+                reranker_similarity_threshold = gr.Slider(
+                    minimum=-10,
+                    maximum=10,
+                    step=0.01,
+                    elem_id="reranker_similarity_threshold",
+                    label="重排序相似度分数阈值（结果越相似，数值越大）",
+                )
+                reranker_similarity_top_k = gr.Slider(
+                    minimum=0,
+                    maximum=50,
+                    step=1,
+                    elem_id="reranker_similarity_top_k",
+                    label="重排序文本 Top-K (0 到 50)",
+                )
+
+            def change_weight(change_weight):
+                return round(float(1 - change_weight), 2)
+
+            vector_weight.input(
+                fn=change_weight,
+                inputs=vector_weight,
+                outputs=[keyword_weight],
+            )
+
+            def change_reranker_type(reranker_type):
+                if reranker_type == "无重排序":
+                    return {
+                        model_reranker_col: gr.update(visible=False),
+                    }
+                elif reranker_type == "基于模型的重排序":
+                    return {
+                        model_reranker_col: gr.update(visible=True),
+                    }
+                else:
+                    return {
+                        model_reranker_col: gr.update(visible=False),
+                    }
+
+            def change_retrieval_mode(retrieval_mode):
+                if retrieval_mode == "混合检索":
+                    return {
+                        vector_weight: gr.update(visible=True),
+                        keyword_weight: gr.update(visible=True),
+                    }
+                else:
+                    return {
+                        vector_weight: gr.update(visible=False),
+                        keyword_weight: gr.update(visible=False),
+                    }
+
+            reranker_type.input(
+                fn=change_reranker_type,
+                inputs=reranker_type,
+                outputs=[model_reranker_col],
+            )
+
+            retrieval_mode.input(
+                fn=change_retrieval_mode,
+                inputs=retrieval_mode,
+                outputs=[vector_weight, keyword_weight],
+            )
+
+            db_retrieval_elements = [
+                retrieval_mode,
+                reranker_type,
+                vector_weight,
+                keyword_weight,
+                similarity_top_k,
+                image_similarity_top_k,
+                similarity_threshold,
+                reranker_similarity_threshold,
+                reranker_model,
+                reranker_similarity_top_k,
+            ]
+            components.extend(db_retrieval_elements)
+
+        with gr.Column(scale=7):
+            chat_index = gr.Dropdown(
+                choices=[],
+                value="",
+                label="\N{bookmark} 知识库名称",
+                elem_id="retrieval_test_chat_index",
+                allow_custom_value=True,
+            )
+            chatbot = gr.Chatbot(
+                height=500, elem_id="retrieval_test_chatbot", type="messages"
+            )
+            with gr.Row():
+                question = gr.Textbox(
+                    label="在这里输入您的问题", elem_id="retrieval_test_question", scale=9
+                )
+            with gr.Row():
+                submitBtn = gr.Button("提交", variant="primary")
+                clearBtn = gr.Button("清空历史", variant="secondary")
+
+            retrieval_chat_elements = {chat_index, chatbot, question}
+
+            components.extend([chat_index, chatbot, question])
+
+            submitBtn.click(
+                retrieval_test_respond,
+                retrieval_chat_elements,
+                [chatbot],
+                api_name="retrieval_test_respond_clk",
+            )
+            question.submit(
+                retrieval_test_respond,
+                retrieval_chat_elements,
+                [chatbot],
+                api_name="retrieval_test_respond_q",
+            )
+            submitBtn.click(
+                reset_textbox,
+                [],
+                [question],
+                api_name="retrieval_test_reset_clk",
+            )
+            question.submit(
+                reset_textbox,
+                [],
+                [question],
+                api_name="retrieval_test_reset_q",
+            )
+            cur_tokens = gr.Textbox(label="\N{fire} 当前Tokens总数", visible=False)
+            clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
+        return components_to_dict(components)
+
+
+def create_knowledgebase_tab() -> Dict[str, Any]:
+    with gr.Tab("知识库设置"):
+        knowledgebase_settings_elements = create_knowledgebase_settings_tab()
+    with gr.Tab("文件管理"):
+        with gr.Blocks():
+            html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
+            gr.HTML(html)
+    with gr.Tab("上传历史"):
+        history_elements = create_upload_history()
+    with gr.Tab("检索测试"):
+        retrieval_test_elements = create_retrieval_test_tab()
+    return {
+        **knowledgebase_settings_elements,
+        **history_elements,
+        **retrieval_test_elements,
+    }

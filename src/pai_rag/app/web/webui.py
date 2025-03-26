@@ -6,15 +6,14 @@ from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import (
     create_setting_tab,
-    create_knowledgebase_settings_tab,
 )
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.tabs.history_tab import (
-    create_upload_history,
     refresh_upload_history,
 )
 from pai_rag.app.web.tabs.news_extension import create_news_extension_tab
+from pai_rag.app.web.tabs.knowledgebase_tab import create_knowledgebase_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -99,29 +98,12 @@ def make_homepage():
     with gr.Blocks(css=DEFAULT_CSS_STYPE) as homepage:
         # generate components
         gr.Markdown(value=WELCOME_MESSAGE)
-        # with gr.Tab("\N{whale} Upload"):
-        #     upload_elements = create_upload_tab()
-        #     elem_manager.add_elems(upload_elements)
-        # with gr.Tab("\N{rocket} 智能体"):
-        #     agent_elements = create_agent_tab()
-        #     elem_manager.add_elems(agent_elements)
-        # with gr.Tab("\N{bar chart} 数据分析"):
-        #     analysis_elements = create_data_analysis_tab()
-        #     elem_manager.add_elems(analysis_elements)
         with gr.Tab("\N{fire} 对话"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
         with gr.Tab("\N{bookmark} 知识库"):
-            with gr.Tab("知识库设置"):
-                knowledgebase_settings_elements = create_knowledgebase_settings_tab()
-                elem_manager.add_elems(knowledgebase_settings_elements)
-            with gr.Tab("文件管理"):
-                with gr.Blocks():
-                    html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
-                    gr.HTML(html)
-            with gr.Tab("上传历史"):
-                history_elements = create_upload_history()
-                elem_manager.add_elems(history_elements)
+            knowledgebase_elements = create_knowledgebase_tab()
+            elem_manager.add_elems(knowledgebase_elements)
         with gr.Tab("\N{rocket} 系统设置"):
             setting_elements = create_setting_tab()
             elem_manager.add_elems(setting_elements)
@@ -135,24 +117,24 @@ def make_homepage():
                     elem_manager.add_elems(news_elements)
 
         index_selector_elements = [
-            knowledgebase_settings_elements["vector_index"],
+            knowledgebase_elements["vector_index"],
             # upload_elements["upload_index"],
             chat_elements["chat_index"],
-            history_elements["history_index"],
+            knowledgebase_elements["history_index"],
         ]
         index_related_components = [
-            knowledgebase_settings_elements[key] for key in index_related_component_keys
+            knowledgebase_elements[key] for key in index_related_component_keys
         ]
 
-        knowledgebase_settings_elements["vector_index"].change(
+        knowledgebase_elements["vector_index"].change(
             event_listeners.change_vector_index,
-            inputs=knowledgebase_settings_elements["vector_index"],
+            inputs=knowledgebase_elements["vector_index"],
             outputs=index_related_components
-            + [chat_elements["chat_index"], history_elements["history_index"]],
+            + [chat_elements["chat_index"], knowledgebase_elements["history_index"]],
         )
-        history_elements["history_index"].input(
+        knowledgebase_elements["history_index"].input(
             change_vector_index_button,
-            inputs=history_elements["history_index"],
+            inputs=knowledgebase_elements["history_index"],
             outputs=index_selector_elements,
         )
         chat_elements["chat_index"].input(
