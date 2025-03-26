@@ -2,17 +2,6 @@ from pydantic import BaseModel
 from typing import List, Any
 import os
 import pathlib
-from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
-from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
-from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
-from pai_rag.integrations.readers.pai_csv_reader import (
-    PaiExcelReader,
-    PaiPandasCSVReader,
-)
-from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
-from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
-from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
-from pai_rag.integrations.readers.pai_markdown_reader import PaiMarkdownReader
 from llama_index.core.readers.file.base import default_file_metadata_func
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
@@ -34,6 +23,18 @@ class BaseDataReaderConfig(BaseModel):
 
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
+    from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
+    from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+    from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
+    from pai_rag.integrations.readers.pai_csv_reader import (
+        PaiExcelReader,
+        PaiPandasCSVReader,
+    )
+    from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
+    from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
+    from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
+    from pai_rag.integrations.readers.pai_markdown_reader import PaiMarkdownReader
+
     reader_config = reader_config or BaseDataReaderConfig()
     image_reader = PaiImageReader(oss_cache=oss_store)
 

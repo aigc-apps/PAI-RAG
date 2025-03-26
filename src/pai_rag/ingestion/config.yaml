@@ -1,0 +1,28 @@
+# process schedule
+# a list of several pai_rag offline process operators with their arguments
+process:
+  - op: "rag_parser"
+    oss_bucket: "pai-rag"
+    oss_endpoint: "oss-cn-hangzhou.aliyuncs.com"
+    device: "cpu" # cpu or cuda
+    num_cpus: 1
+
+  - op: "rag_splitter"
+    type: "Sentence"
+    chunk_size: 800
+    chunk_overlap: 20
+    num_cpus: 1
+
+  - op: "rag_embedder"
+    source: "huggingface"
+    model: "bge-m3"
+    device: "cuda" # cpu or cuda
+    cpu_required: 2
+    gpu_required: 0.2
+
+  - op: "rag_writer"
+    device: "cpu"
+    num_cpus: 1
+    rag_endpoint: "http://feiyue-rag-cpu2.1730760139076263.cn-hangzhou.pai-eas.aliyuncs.com/"
+    rag_key: ""
+    embed_dims: 1024

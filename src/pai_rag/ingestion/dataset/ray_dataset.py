@@ -5,7 +5,7 @@ import json
 from abc import ABC
 from pathlib import Path
 from loguru import logger
-from pai_rag.tools.data_process.utils.formatters import NumpyEncoder
+from pai_rag.ingestion.utils.formatters import NumpyEncoder
 
 
 class RayDataset(ABC):

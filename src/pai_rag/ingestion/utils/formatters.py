@@ -5,6 +5,18 @@ import numpy as np
 import json
 
 
+def convert_dict_to_node(input: dict) -> TextNode:
+    return TextNode(
+        text=input["text"],
+        id_=input["id"],
+        embedding=input["embedding"],
+        sparse_embedding=input["sparse_embedding"],
+        metadata=input["metadata"],
+        excluded_embed_metadata_keys=input["excluded_embed_metadata_keys"],
+        excluded_llm_metadata_keys=input["excluded_llm_metadata_keys"],
+    )
+
+
 def convert_node_to_dict(node):
     return {
         "id": getattr(node, "id_", None),

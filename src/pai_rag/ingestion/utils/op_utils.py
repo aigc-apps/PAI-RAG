@@ -1,9 +1,9 @@
 import os
 from loguru import logger
 from pathlib import Path
-from pai_rag.tools.data_process.ops.base_op import OPERATORS
-from pai_rag.tools.data_process.utils.mm_utils import size_to_bytes
-from pai_rag.tools.data_process.utils.cuda_utils import get_num_gpus, calculate_np
+from pai_rag.ingestion.ops.base_op import OPERATORS
+from pai_rag.ingestion.utils.mm_utils import size_to_bytes
+from pai_rag.ingestion.utils.cuda_utils import get_num_gpus, calculate_np
 
 OPERATIONS = ["rag_parser", "rag_splitter", "rag_embedder"]
 
@@ -26,29 +26,40 @@ def load_op(op_name, process_list):
             mem_required = size_to_bytes(op_args.get("mem_required", "1GB")) / 1024**3
             num_cpus = op_args.get("cpu_required", 1)
             if op_args.get("accelerator", "cpu") == "cuda":
-                op_proc = calculate_np(op_name, mem_required, num_cpus, None, True)
-                num_gpus = get_num_gpus(True, op_proc)
+                if op_args.get("concurrency", 0) > 0:
+                    op_proc_num = op_args.get("concurrency", 0)
+                else:
+                    op_proc_num = calculate_np(
+                        op_name, mem_required, num_cpus, None, True
+                    )
+
+                if op_args.get("node_concurrency", 0) > 0:
+                    node_concurrency = op_args.get("node_concurrency")
+                else:
+                    node_concurrency = op_proc_num
+
+                num_gpus = get_num_gpus(True, node_concurrency)
                 logger.info(
-                    f"Op {op_name} will be executed on cuda env with op_proc {op_proc} and use {num_cpus} cpus and {num_gpus} GPUs."
+                    f"Op {op_name} will be executed on cuda env with op_proc_num {op_proc_num} and use {num_cpus} cpus and {num_gpus} GPUs."
                 )
                 # 并发actor
                 return [
                     OPERATORS.modules[op_name]
                     .options(num_cpus=num_cpus, num_gpus=num_gpus)
                     .remote(**op_args)
-                    for _ in range(op_proc)
+                    for _ in range(op_proc_num)
                 ]
             else:
-                op_proc = calculate_np(op_name, mem_required, num_cpus, None, False)
+                op_proc_num = calculate_np(op_name, mem_required, num_cpus, None, False)
                 logger.info(
-                    f"Op {op_name} will be executed on cpu env with op_proc {op_proc} and use {num_cpus} cpus."
+                    f"Op {op_name} will be executed on cpu env with op_proc_num {op_proc_num} and use {num_cpus} cpus."
                 )
                 # 并发actor
                 return [
                     OPERATORS.modules[op_name]
                     .options(num_cpus=num_cpus)
                     .remote(**op_args)
-                    for _ in range(op_proc)
+                    for _ in range(op_proc_num)
                 ]
         else:
             continue

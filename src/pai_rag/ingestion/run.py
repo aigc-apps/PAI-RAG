@@ -2,9 +2,9 @@ import argparse
 import yaml
 from loguru import logger
 from typing import List
-from pai_rag.tools.data_process.ops.base_op import OPERATORS
-from pai_rag.tools.data_process.ray_executor import RayExecutor
-from pai_rag.tools.data_process.utils.compute_resource_utils import (
+from pai_rag.ingestion.operators.base import OperatorName
+from pai_rag.ingestion.ray_executor import RayExecutor
+from pai_rag.ingestion.utils.compute_resource_utils import (
     enforce_min_requirements,
 )
 
@@ -20,6 +20,24 @@ def str2bool(v):
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
+def update_op_process(args):
+    op_keys = [member.value for member in OperatorName]
+    logger.info(f"Loading all operation keys: {op_keys}")
+
+    if args.process is None:
+        args.process_config = {}
+
+    with open(args.config_file) as file:
+        process_cfg = yaml.safe_load(file)
+    for i, process_op in enumerate(process_cfg["process"]):
+        if process_op["op"] in op_keys:
+            args.process_config.update(
+                {process_op["op"]: extract_parameters(process_op, args)}
+            )
+
+    return args
+
+
 def extract_parameters(yaml_dict, cfg):
     print("yaml_dict", yaml_dict)
     extracted_params = {key: value for key, value in yaml_dict.items() if key != "op"}
@@ -27,23 +45,6 @@ def extract_parameters(yaml_dict, cfg):
     extracted_params["dataset_path"] = cfg.dataset_path
     extracted_params["export_path"] = cfg.export_path
     return extracted_params
-
-
-def update_op_process(args):
-    op_keys = list(OPERATORS.modules.keys())
-    logger.info(f"Loading all operation keys: {op_keys}")
-
-    if args.process is None:
-        args.process = []
-
-    with open(args.config_file) as file:
-        process_cfg = yaml.safe_load(file)
-    for i, process_op in enumerate(process_cfg["process"]):
-        if process_op["op"] in op_keys:
-            args.process.append(process_op["op"])
-            args.process[i] = {process_op["op"]: extract_parameters(process_op, args)}
-
-    return args
 
 
 def process_parser(args):
@@ -64,6 +65,8 @@ def process_parser(args):
             "sheet_column_filters",
             "oss_bucket",
             "oss_endpoint",
+            "concurrency",
+            "node_concurrency",
         ]
     }
     parser_required_args = enforce_min_requirements(op_name, parser_required_args)
@@ -87,6 +90,8 @@ def process_splitter(args):
             "chunk_size",
             "chunk_overlap",
             "enable_multimodal",
+            "concurrency",
+            "node_concurrency",
         ]
     }
     splitter_required_args = enforce_min_requirements(op_name, splitter_required_args)
@@ -114,6 +119,8 @@ def process_embedder(args):
             "multimodal_source",
             "connection_name",
             "workspace_id",
+            "concurrency",
+            "node_concurrency",
         ]
     }
     embedder_required_args = enforce_min_requirements(op_name, embedder_required_args)
@@ -144,7 +151,7 @@ def init_configs():
     parser.add_argument(
         "--export_path",
         type=str,
-        default="./outputs/hello_world.jsonl",
+        default="./outputs/",
         help="Path to export and save the output processed dataset. The "
         "directory to store the processed dataset will be the work "
         "directory of this process.",
@@ -167,13 +174,10 @@ def init_configs():
         default=2,
         help="Memory(GB) required for each rag operator.",
     )
-    parser.add_argument(
-        "--process", default=[], help="list of operator processes to run"
-    )
     # Only used for multi-operators mode
     parser.add_argument(
         "--config_file",
-        help="Path to a dj basic configuration file.",
+        help="Path to process configuration file.",
         type=str,
         default=None,
     )
