@@ -23,9 +23,8 @@ def str2bool(v):
 def update_op_process(args):
     op_keys = [member.value for member in OperatorName]
     logger.info(f"Loading all operation keys: {op_keys}")
-
-    if args.process is None:
-        args.process_config = {}
+    
+    setattr(args, "process_config", {})
 
     with open(args.config_file) as file:
         process_cfg = yaml.safe_load(file)
@@ -39,7 +38,6 @@ def update_op_process(args):
 
 
 def extract_parameters(yaml_dict, cfg):
-    print("yaml_dict", yaml_dict)
     extracted_params = {key: value for key, value in yaml_dict.items() if key != "op"}
     extracted_params["working_dir"] = cfg.working_dir
     extracted_params["dataset_path"] = cfg.dataset_path
@@ -161,6 +159,12 @@ def init_configs():
         type=str,
         default="/app",
         help="Path to working dir for ray cluster.",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=2,
+        help="Batch size to process files.",
     )
     parser.add_argument(
         "--cpu_required",

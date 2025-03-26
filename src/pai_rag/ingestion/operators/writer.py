@@ -8,7 +8,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     BaseVectorStoreConfig,
     SupportedVectorStoreType,
 )
-from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
+from pai_rag.knowledgebase.models import KnowledgeBase
 import ray
 from loguru import logger
 
@@ -18,7 +18,7 @@ def get_vector_store_config(
 ) -> BaseVectorStoreConfig:
     try:
         response = requests.get(
-            f"{rag_endpoint}/knowledgebases/{knowledgebase}",
+            f"{rag_endpoint}/api/v1/knowledgebases/{knowledgebase}",
             headers={"Authorization": f"Bearer {rag_key}"},
         )
         knowledgebase: KnowledgeBase = KnowledgeBase.model_validate(response.json())
@@ -62,7 +62,7 @@ class Writer(BaseOperator):
             vector_store_config.type != SupportedVectorStoreType.faiss
         ), "FAISS is not supported."
         self.vector_store = create_vector_store(
-            vector_store_config=vector_store_config,
+            vectordb_config=vector_store_config,
             embed_dims=embed_dims,
         )
 

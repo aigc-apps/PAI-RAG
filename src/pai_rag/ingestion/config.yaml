@@ -6,12 +6,14 @@ process:
     oss_endpoint: "oss-cn-hangzhou.aliyuncs.com"
     device: "cpu" # cpu or cuda
     num_cpus: 1
+    concurrency: 10
 
   - op: "rag_splitter"
     type: "Sentence"
     chunk_size: 800
     chunk_overlap: 20
     num_cpus: 1
+    concurrency: 10
 
   - op: "rag_embedder"
     source: "huggingface"
@@ -19,10 +21,13 @@ process:
     device: "cuda" # cpu or cuda
     cpu_required: 2
     gpu_required: 0.2
+    concurrency: 4
 
   - op: "rag_writer"
     device: "cpu"
     num_cpus: 1
     rag_endpoint: "http://feiyue-rag-cpu2.1730760139076263.cn-hangzhou.pai-eas.aliyuncs.com/"
-    rag_key: ""
+    knowledgebase: "es_test"
+    rag_key: "=="
     embed_dims: 1024
+    concurrency: 5

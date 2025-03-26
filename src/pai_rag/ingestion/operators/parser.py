@@ -1,7 +1,4 @@
-import json
-import time
 from typing import List, Optional
-from pai_rag.core.rag_module import resolve
 from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
 from pai_rag.ingestion.utils.download_utils import download_models_via_lock
 from pai_rag.ingestion.utils.formatters import convert_document_to_dict
@@ -11,7 +8,6 @@ from pai_rag.integrations.readers.pai.pai_data_reader import (
 )
 from pai_rag.utils.oss_client import OssClient
 import ray
-import fcntl
 from loguru import logger
 
 
@@ -45,7 +41,7 @@ class Parser(BaseOperator):
             **kwargs,
         )
 
-        download_models_via_lock(self.model_dir, "PDF-Extract-Kit", self.accelerator)
+        download_models_via_lock(self.model_dir, "PDF-Extract-Kit", self.device)
 
         self.data_reader_config = BaseDataReaderConfig(
             concat_csv_rows=concat_csv_rows,
@@ -54,16 +50,14 @@ class Parser(BaseOperator):
             sheet_column_filters=sheet_column_filters,
         )
         if oss_bucket is not None and oss_endpoint is not None:
-            self.oss_store = resolve(
-                cls=OssClient,
+            self.oss_store = OssClient(
                 bucket_name=oss_bucket,
                 endpoint=oss_endpoint,
             )
         else:
             self.oss_store = None
 
-        self.data_reader = resolve(
-            cls=PaiDataReader,
+        self.data_reader = PaiDataReader(
             reader_config=self.data_reader_config,
             oss_store=self.oss_store,
         )
@@ -87,29 +81,3 @@ class Parser(BaseOperator):
         results = convert_document_to_dict(documents)
         self.persist(results)
         return results
-
-    def persist(self, results: List[dict]):
-        logger.info(f"Start writing results to {self.output_filename}")
-
-        with open(self.output_filename, "a") as file:
-            start_time = time.time()
-            lock_timeout = 3600
-            while True:
-                try:
-                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    if time.time() - start_time > lock_timeout:
-                        logger.warning(
-                            f"Failed to acquire lock on {self.output_filename} after {lock_timeout} seconds"
-                        )
-                        raise TimeoutError(
-                            f"Failed to acquire lock on {self.output_filename} after {lock_timeout} seconds"
-                        )
-                    logger.info("File is locked by another process, waiting...")
-                    time.sleep(0.5)
-
-            for result in results:
-                json_line = json.dumps(result, ensure_ascii=False)
-                file.write(f"{json_line}\n")
-            fcntl.flock(file, fcntl.LOCK_UN)

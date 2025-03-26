@@ -1,8 +1,11 @@
 import time
-from pydantic import BaseModel, Field
-from typing import Dict
+from pydantic import BaseModel, Field, model_validator
+from typing import Annotated, Dict, Union
 from enum import Enum
 
+from pai_rag.integrations.embeddings.pai.pai_embedding_config import PaiBaseEmbeddingConfig
+from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
 from pai_rag.utils.time_utils import get_current_time_str
 
 
@@ -50,3 +53,24 @@ class TaskInfo(BaseModel):
 
 class JobStatus(BaseModel):
     task_statuses: Dict[str, TaskInfo] = {}
+
+
+class KnowledgeBase(BaseModel):
+    name: str = Field(
+        default=DEFAULT_KNOWLEDGEBASE_NAME,
+        description="Knowledgebase name.",
+        pattern=r"^[0-9a-zA-Z_-]{3, 20}$",
+    )
+
+    vector_store_config: Annotated[
+        Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
+    ]
+    embedding_config: Annotated[
+        Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
+    ]
+
+    @model_validator(mode="before")
+    def preprocess(cls, values: Dict) -> Dict:
+        if "index_name" in values:
+            values["name"] = values["index_name"]
+        return values

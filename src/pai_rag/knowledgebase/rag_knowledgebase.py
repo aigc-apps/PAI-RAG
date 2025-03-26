@@ -15,6 +15,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     DEFAULT_LOCAL_STORAGE_PATH_OLD,
     DEFAULT_LOCAL_STORAGE_PATH,
 )
+from pai_rag.knowledgebase.models import KnowledgeBase
 from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
 from pai_rag.utils.file_utils import generate_md5
 from pai_rag.utils.index_utils import (
@@ -34,27 +35,6 @@ from pai_rag.utils.constants import (
 from pai_rag.utils.time_utils import get_current_time_str
 
 
-class KnowledgeBase(BaseModel):
-    name: str = Field(
-        default=DEFAULT_KNOWLEDGEBASE_NAME,
-        description="Knowledgebase name.",
-        pattern=r"^[0-9a-zA-Z_-]{3, 20}$",
-    )
-
-    vector_store_config: Annotated[
-        Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
-    ]
-    embedding_config: Annotated[
-        Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
-    ]
-
-    @model_validator(mode="before")
-    def preprocess(cls, values: Dict) -> Dict:
-        if "index_name" in values:
-            values["name"] = values["index_name"]
-        return values
-
-
 class KnowledgeDoc(BaseModel):
     file_name: str
     doc_id: str
@@ -72,7 +52,6 @@ class KnowledgeBaseMap(BaseModel):
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:
-        print(values, type(values))
         if "indexes" in values:
             values["knowledgebases"] = values["indexes"]
         return values

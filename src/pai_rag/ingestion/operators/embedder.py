@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
 from pai_rag.ingestion.utils.download_utils import download_models_via_lock
@@ -22,8 +23,8 @@ class Embedder(BaseOperator):
         num_gpus: Optional[float] = None,
         model_dir: str = None,
         output_filename: str = None,
-        source: str = None,
-        model: str = None,
+        source: str = "huggingface",
+        model: str = "bge-m3",
         enable_sparse: bool = False,
         **kwargs,
     ):

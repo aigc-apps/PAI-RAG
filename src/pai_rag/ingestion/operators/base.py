@@ -2,6 +2,7 @@ from enum import Enum
 import fcntl
 import json
 import time
+import os
 from typing import List, Optional
 from pai_rag.ingestion.utils.cuda_utils import is_cuda_available
 from loguru import logger
@@ -43,6 +44,10 @@ class BaseOperator:
 
     def persist(self, results: List[dict]):
         logger.info(f"Start writing results to {self.output_filename}")
+        
+        output_dir = os.path.dirname(self.output_filename)
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"creating dir {output_dir}")
 
         with open(self.output_filename, "a") as file:
             start_time = time.time()

@@ -1,5 +1,4 @@
 from typing import List, Optional
-from pai_rag.core.rag_module import resolve
 from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
 from pai_rag.ingestion.utils.formatters import (
     convert_list_to_documents,
@@ -10,6 +9,7 @@ from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     PaiNodeParser,
 )
 import ray
+from loguru import logger
 
 
 @ray.remote
@@ -44,11 +44,10 @@ class Splitter(BaseOperator):
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
         )
-        self.node_parser = resolve(
-            cls=PaiNodeParser,
+        self.node_parser = PaiNodeParser(
             parser_config=self.node_parser_config,
         )
-        self.logger.info(
+        logger.info(
             f"""SplitterActor [PaiNodeParser] init finished with following parameters:
                         type: {type}
                         chunk_size: {chunk_size}

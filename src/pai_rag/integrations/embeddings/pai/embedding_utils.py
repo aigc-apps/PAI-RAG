@@ -15,7 +15,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
 from pai_rag.integrations.embeddings.clip.cnclip_embedding import CnClipEmbedding
 from loguru import logger
 
-
 def create_embedding(
     embed_config: PaiBaseEmbeddingConfig, pai_rag_model_dir: str = None
 ):
