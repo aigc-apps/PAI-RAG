@@ -127,7 +127,7 @@ def _transform_messages(messages: List[ChatMessage]):
 def _make_context(topics):
     return "\n".join(
         [
-            f"【新闻 {i+1}】. {topic['hot_topic']}\n{topic['summary']}\n"
+            f"【新闻 {i+1}】. {topic['title']}\n{topic['summary']}\n"
             for i, topic in enumerate(topics)
         ]
     )
@@ -176,7 +176,7 @@ class MiaobiNewsTool:
         for topic in broadcast_response.body.data.data:
             hot_topics.append(
                 {
-                    "hot_topic": topic.hot_topic,
+                    "title": topic.hot_topic,
                     "url": topic.news[0].url,
                     "summary": topic.text_summary,
                     "category": topic.category,
@@ -384,21 +384,6 @@ class MiaobiNewsTool:
                         )
                         if search_query:
                             additional_kwargs["search_query"] = search_query
-
-                        hot_topics = (
-                            data.get("payload").get("output").get("hotTopicSummaries")
-                        )
-                        if hot_topics:
-                            news_articles = []
-                            for topic in hot_topics:
-                                news_articles.append(
-                                    {
-                                        "hot_topic": topic["hotTopic"],
-                                        "url": topic["news"][0]["url"],
-                                        "summary": topic["textSummary"],
-                                    }
-                                )
-                            additional_kwargs["news_articles"] = news_articles
 
                         text = data.get("payload").get("output").get("text")
                         if text:
