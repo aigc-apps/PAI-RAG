@@ -25,7 +25,7 @@ from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 
 
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
-DEFAULT_WEB_SEARCH_INFO_MESSAGE = "当前内容来自于互联网，请仔细甄别。"
+DEFAULT_WEB_SEARCH_INFO_MESSAGE = "\n\n当前内容来自于互联网，请仔细甄别。"
 
 
 def _create_client(
@@ -127,7 +127,7 @@ def _transform_messages(messages: List[ChatMessage]):
 def _make_context(topics):
     return "\n".join(
         [
-            f"【新闻 {i+1}】. {topic['title']}\n{topic['summary']}\n"
+            f"【新闻 {i+1}】. {topic['hot_topic']}\n{topic['summary']}\n"
             for i, topic in enumerate(topics)
         ]
     )
@@ -177,7 +177,6 @@ class MiaobiNewsTool:
             hot_topics.append(
                 {
                     "hot_topic": topic.hot_topic,
-                    "title": topic.news[0].title,
                     "url": topic.news[0].url,
                     "summary": topic.text_summary,
                     "category": topic.category,
@@ -394,7 +393,7 @@ class MiaobiNewsTool:
                             for topic in hot_topics:
                                 news_articles.append(
                                     {
-                                        "title": topic["news"][0]["title"],
+                                        "hot_topic": topic["hotTopic"],
                                         "url": topic["news"][0]["url"],
                                         "summary": topic["textSummary"],
                                     }

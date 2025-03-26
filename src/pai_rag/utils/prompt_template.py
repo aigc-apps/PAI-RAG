@@ -105,10 +105,9 @@ WEBSEARCH_REWRITE_PROMPT_ZH = """
 NEWS_REWRITE_PROMPT_ZH = """
 ## 新闻热榜互动工具
 - 根据对话内容，判断是否需要提供时事新闻、热点新闻资讯等相关查询。
-- 如果用户想要查询热门榜单，请直接生成list_news意图, 生成结果格式为 JSON 对象：{{ "intent": "list_news" }}
-- 如果用户想要查询的板块在给定的列表 {domain_list} 中，请直接生成list_news意图并带上相应板块的名字，生成结果格式为 JSON 对象：{{ "intent": "list_news", "news_topics": ["domain_name"] }}
-- 如果用户想要查询的板块不在给定的列表 {domain_list} 中，请生成chat_news意图，生成结果格式为 JSON 对象：{{ "intent": "chat_news", "query": "query" }}。如查询“经济相关的新闻”，生成结果应该为{{ "intent": "chat_news", "query": "经济相关的新闻" }}。
-- 如果用户想要了解或者想要查询某个热点新闻，你会根据上下文信息对用户的查询进行改写，并生成chat_news意图，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_news", "query": "new query" }}
+- 如果用户想要查询不涉及任何领域或国家的全局热门榜单，如查询“新闻热点”“有什么新闻”，请直接生成list_news意图, 生成结果格式为 JSON 对象：{{ "intent": "list_news" }}。注意不允许将“国际新闻”视为“新闻热点”。
+- 如果用户想要查询某一个领域的新闻，首先判断该领域是否在给定的领域列表 {domain_list} 中，若在，请直接生成list_news意图并带上相应领域的名字，生成结果格式为 JSON 对象：{{ "intent": "list_news", "news_topics": ["domain_name"] }}。若不在，请生成chat_news意图，生成结果格式为 JSON 对象：{{ "intent": "chat_news", "query": "query" }}。例如，查询“科技的新闻”，已知“科技”存在给定的列表 {domain_list} 中，因此生成结果应该为{{ "intent": "list_news", "news_topics": ["科技"] }}。查询“经济的新闻”，已知“经济”不在给定的列表 {domain_list} 中，因此生成结果应该为{{ "intent": "chat_news", "query": "经济的新闻" }}。
+- 如果用户想要了解或者想要查询某个具体的热点新闻，你会根据上下文信息对用户的查询进行改写，并生成chat_news意图，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_news", "query": "new query" }}
 - 如果用户想要了解与“深小闻是谁”“深小闻能做什么”类似的内容，并且问题不涉及搜索和检索，直接生成chat_news_llm意图，返回格式为 JSON 对象：{{ "intent": "chat_news_llm"}}
 - 除非用户输入指定了时间信息，生成的新闻查询不要包含时间信息。
 """
