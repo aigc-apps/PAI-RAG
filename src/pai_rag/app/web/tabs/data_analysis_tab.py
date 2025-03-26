@@ -143,7 +143,7 @@ async def respond(input_elements: List[Any]):
 
     question = update_dict["question"]
     chatbot = update_dict["chatbot"]
-    chat_model_id = update_dict["chat_model_id"]
+    da_chat_model_id = update_dict["data_analysis_model_id"]
     # if not update_dict["include_history"]:
     #     chatbot = clear_history(chatbot)
 
@@ -161,7 +161,7 @@ async def respond(input_elements: List[Any]):
         response_gen = rag_client.query_data_analysis(
             chat_messages=chatbot[:-1],
             stream=True,
-            chat_model_id=chat_model_id,
+            chat_model_id=da_chat_model_id,
         )
 
         is_thinking = False
@@ -273,20 +273,19 @@ def create_data_analysis_tab() -> Dict[str, Any]:
     model_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
     ]
-    model_name = rag_config.chat.model_id
+    model_name = rag_config.data_analysis.model_id
     if not model_name:
         if len(model_choices) == 0:
             model_name = ""
         else:
             model_name = model_choices[0]
-
     with gr.Row():
         with gr.Column(scale=4):
-            chat_model_id = gr.Dropdown(
+            data_analysis_model_id = gr.Dropdown(
                 choices=model_choices,
                 value=model_name,
                 label="对话模型ID",
-                elem_id="chat_model_id",
+                elem_id="data_analysis_model_id",
             )
             data_analysis_type = gr.Radio(
                 choices=[
@@ -579,7 +578,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                 clearBtn = gr.Button("清空历史", variant="secondary")
 
         chat_args = {
-            chat_model_id,
+            data_analysis_model_id,
             data_analysis_type,
             dialect,
             user,
@@ -641,7 +640,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
             database.elem_id: database,
             tables.elem_id: tables,
             descriptions.elem_id: descriptions,
-            chat_model_id.elem_id: chat_model_id,
+            data_analysis_model_id.elem_id: data_analysis_model_id,
             # enable_enhanced_description.elem_id: enable_enhanced_description,
             enable_db_history.elem_id: enable_db_history,
             enable_db_embedding.elem_id: enable_db_embedding,

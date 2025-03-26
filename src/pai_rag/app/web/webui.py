@@ -76,6 +76,23 @@ def change_chat_page_model_list(model_id):
     ]
 
 
+def change_data_analysis_page_model_list(model_id):
+    rag_config = rag_client.get_config()
+    model_choices = [
+        llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
+    ]
+    if (
+        rag_config.data_analysis.model_id
+        and rag_config.data_analysis.model_id in model_choices
+    ):
+        new_model_id = rag_config.data_analysis.model_id
+    else:
+        new_model_id = model_choices[0]
+    return [
+        gr.update(choices=model_choices, value=new_model_id),
+    ]
+
+
 def change_vector_index_button(index_name):
     if index_name == "NEW":
         return [
@@ -153,6 +170,14 @@ def make_homepage():
             outputs=[
                 chat_elements["chat_model_id"],
                 chat_elements["query_rewrite_model_id"],
+            ],
+        )
+
+        setting_elements["llm_model"].change(
+            change_data_analysis_page_model_list,
+            inputs=setting_elements["llm_model"],
+            outputs=[
+                analysis_elements["data_analysis_model_id"],
             ],
         )
 

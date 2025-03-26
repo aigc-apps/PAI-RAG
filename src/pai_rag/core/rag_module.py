@@ -231,23 +231,15 @@ def resolve_da_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
 def resolve_data_analysis_query(
     config: RagConfig, model_id: str = None
 ) -> DataAnalysisQuery:
-    if (
-        config.data_analysis.llm
-        and config.data_analysis.llm.base_url
-        and config.data_analysis.llm.api_key
-        and config.data_analysis.llm.model
-    ):
-        llm_da = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm)
-    else:
-        # llm_da_config = {
-        #     "source": config.llm.source,
-        #     "model": config.llm.model,
-        #     "api_key": config.llm.api_key,
-        #     "max_tokens": 1024,
-        #     "model_id": config.llm.model_id,
-        # }
-        # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
-        llm_da = resolve_da_llm(config, model_id)
+    # llm_da_config = {
+    #     "source": config.llm.source,
+    #     "model": config.llm.model,
+    #     "api_key": config.llm.api_key,
+    #     "max_tokens": 1024,
+    #     "model_id": config.llm.model_id,
+    # }
+    # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+    llm_da = resolve_da_llm(config, model_id)
 
     sql_database = resolve_data_analysis_connector(config).connect()
 
