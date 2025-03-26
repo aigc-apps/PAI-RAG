@@ -166,7 +166,7 @@ def make_homepage():
             inputs=setting_elements["llm_model"],
             outputs=[
                 chat_elements["chat_model_id"],
-                chat_elements["query_rewrite_model_id"],
+                setting_elements["query_rewrite_model_id"],
             ],
         )
 
