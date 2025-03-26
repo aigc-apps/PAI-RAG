@@ -59,7 +59,6 @@ from loguru import logger
 
 from pai_rag.utils.prompt_template import (
     DEFALT_LLM_CHAT_PROMPT_TEMPL,
-    DEFAULT_NEWS_ROLE,
 )
 from pai_rag.utils.time_utils import get_prompt_current_time_str
 
@@ -369,7 +368,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
+        news_tool = resolve_news_tool(config)
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
         else:
@@ -384,29 +383,15 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
-        messages = query_bundle.messages
-
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            )
-            + "\n"
-            + DEFAULT_NEWS_ROLE.format(
-                domain_list=",".join(config.news_extension.domain_list)
-            ),
-        )
-        messages = [prompt_message] + messages
-        logger.debug(f"achat_llm messages: {messages}")
+        news_tool = resolve_news_tool(config)
 
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat_llm(
-                query_str=query_bundle.query_str, messages=messages
+                query_str=query_bundle.query_str
             )
         else:
             response_wrapper = await news_tool.astream_chat_llm(
-                query_str=query_bundle.query_str, messages=messages
+                query_str=query_bundle.query_str
             )
 
         return response_wrapper

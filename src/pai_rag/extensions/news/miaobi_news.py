@@ -16,6 +16,7 @@ from alibabacloud_tea_openapi.models import Config
 from alibabacloud_tea_openapi_sse.client import Client as OpenApiClient
 from alibabacloud_tea_openapi_sse import models as open_api_models
 from alibabacloud_tea_util_sse import models as open_api_util_models
+from pai_rag.utils.prompt_template import DEFAULT_NEWS_ROLE
 import json
 
 from pydantic import BaseModel
@@ -438,9 +439,8 @@ class MiaobiNewsTool:
     async def achat_llm(
         self,
         query_str: str,
-        messages: List[ChatMessage] = [],
     ):
-        stream_response_wrapper = await self.astream_chat_llm(query_str, messages)
+        stream_response_wrapper = await self.astream_chat_llm(query_str)
         message_content = ""
         additional_kwargs = {}
         async for response in stream_response_wrapper.response:
@@ -461,11 +461,8 @@ class MiaobiNewsTool:
     async def astream_chat_llm(
         self,
         query_str: str,
-        messages: List[ChatMessage] = [],
     ) -> ChatResponseWrapper:
-        logger.info(
-            f"Chat news only llm with query {query_str}, chat_history: {messages}"
-        )
+        logger.info(f"Chat news only llm with query {query_str}")
 
         async def gen() -> ChatResponseAsyncGen:
             yield ChatResponse(
@@ -476,10 +473,20 @@ class MiaobiNewsTool:
                 delta="",
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
+            default_news_role_response = DEFAULT_NEWS_ROLE.format(
+                domain_list="/".join(self.config.domain_list)
+            )
+            text_parts = default_news_role_response.split("\n")
 
-            async for response in await self.llm.astream_chat(
-                messages=messages,
-            ):
-                yield response
+            # 逐个 yield 返回
+            for part in text_parts:
+                if part.strip():
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role="assistant",
+                            content=part,
+                        ),
+                        delta=part,
+                    )
 
         return ChatResponseWrapper(response=gen())
