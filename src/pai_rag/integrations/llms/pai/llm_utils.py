@@ -1,4 +1,5 @@
 import os
+from typing import Sequence
 from urllib.parse import urljoin
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openai_like import OpenAILike
@@ -14,6 +15,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
 from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
+from llama_index.core.base.llms.types import ChatMessage
 
 from loguru import logger
 
@@ -195,3 +197,26 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
         raise ValueError(f"Unknown Multi-modal LLM source: '{llm_config}'")
 
     return llm
+
+
+def merge_consecutive_messages(
+    messages: Sequence[ChatMessage],
+) -> Sequence[ChatMessage]:
+    merged_messages = []
+    if not messages:
+        return merged_messages
+
+    current_role = messages[0].role
+    current_text = ""
+
+    for message in messages:
+        if message.role == current_role:
+            current_text += message.content
+        else:
+            merged_messages.append(ChatMessage(role=current_role, content=current_text))
+            current_role = message.role
+            current_text = message.content
+
+    merged_messages.append(ChatMessage(role=current_role, content=current_text))
+
+    return merged_messages
