@@ -952,35 +952,31 @@ chat()
 - curl 请求示例：
 
   ```bash
-    curl -X 'PATCH' '{EAS_SERVICE_URL}/api/v1/indexes/my_index' \
+    curl -X 'PATCH' '{EAS_SERVICE_URL}/api/v1/config' \
     -H 'Authorization: EAS_TOKEN' \
     -H 'Content-Type: application/json' \
     -d '{
-        "index_name": "my_index",
-        "vector_store_config": {
-            "type": "faiss"
-        },
-        "embedding_config": {
-            "model": "bge-m3",
-            "source": "huggingface"
+        "system": {
+          "default_web_search": false,
+          "query_type": "websearch"
         },
         "data_reader": {
-            "concat_csv_rows": false,
-            "enable_mandatory_ocr": false,
-            "format_sheet_data_to_json": false,
-            "sheet_column_filters": null,
-            "number_workers": 4
+          "concat_csv_rows": false,
+          "enable_mandatory_ocr": false,
+          "format_sheet_data_to_json": false,
+          "sheet_column_filters": null,
+          "number_workers": 4
         },
         "node_parser": {
-            "type": "Sentence",
-            "chunk_size": 500,
-            "chunk_overlap": 10,
-            "enable_multimodal": true,
-            "paragraph_separator": "\n\n\n",
-            "sentence_window_size": 3,
-            "sentence_chunk_overlap": 200,
-            "breakpoint_percentile_threshold": 95,
-            "buffer_size": 1
+          "type": "Sentence",
+          "chunk_size": 500,
+          "chunk_overlap": 10,
+          "enable_multimodal": true,
+          "paragraph_separator": "\n\n\n",
+          "sentence_window_size": 3,
+          "sentence_chunk_overlap": 200,
+          "breakpoint_percentile_threshold": 95,
+          "buffer_size": 1
         },
         ...
     }' #(更多配置信息可参考 获取RAG配置 的返回示例)
