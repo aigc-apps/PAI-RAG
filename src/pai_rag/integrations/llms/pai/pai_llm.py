@@ -182,31 +182,21 @@ class PaiLlm(OpenAILike):
                         yield ChatResponse(
                             message=ChatMessage(
                                 role=MessageRole.ASSISTANT,
-                                content="\n",
+                                content="<think>\n",
                                 additional_kwargs=response.additional_kwargs,
                             ),
                             delta="\n",
                             raw="\n",
                         )
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content=response.text,
-                                additional_kwargs=response.additional_kwargs,
-                            ),
-                            delta=response.delta,
-                            raw=response.raw,
-                        )
-                else:
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=response.text,
-                            additional_kwargs=response.additional_kwargs,
-                        ),
-                        delta=response.delta,
-                        raw=response.raw,
-                    )
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=response.text,
+                        additional_kwargs=response.additional_kwargs,
+                    ),
+                    delta=response.delta,
+                    raw=response.raw,
+                )
 
         return gen()
 
@@ -224,21 +214,19 @@ class PaiLlm(OpenAILike):
                         start_label = False
                         yield ChatResponse(
                             message=ChatMessage(
-                                role="assistant",
+                                role=MessageRole.ASSISTANT,
                                 content="<think>",
                             ),
                             delta="<think>",
                         )
                         yield ChatResponse(
                             message=ChatMessage(
-                                role="assistant",
-                                content="\n",
+                                role=MessageRole.ASSISTANT,
+                                content="<think>\n",
                             ),
                             delta="\n",
                         )
-                        yield response
-                    else:
-                        yield response
+                    yield response
 
             return gen()
 

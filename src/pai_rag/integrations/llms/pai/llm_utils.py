@@ -15,7 +15,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
 from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
-from llama_index.core.base.llms.types import ChatMessage, TextBlock
+from llama_index.core.base.llms.types import ChatMessage
 
 from loguru import logger
 
@@ -211,29 +211,12 @@ def merge_consecutive_messages(
 
     for message in messages:
         if message.role == current_role:
-            for block in message.blocks:
-                if block.block_type == "text":
-                    current_text += block.text + "\n"  # 合并文本
+            current_text += message.content
         else:
-            merged_messages.append(
-                ChatMessage(
-                    role=current_role,
-                    additional_kwargs={},
-                    blocks=[TextBlock(block_type="text", text=current_text.strip())],
-                )
-            )
+            merged_messages.append(ChatMessage(role=current_role, content=current_text))
             current_role = message.role
-            current_text = ""
-            for block in message.blocks:
-                if block.block_type == "text":
-                    current_text += block.text + "\n"
+            current_text = message.content
 
-    merged_messages.append(
-        ChatMessage(
-            role=current_role,
-            additional_kwargs={},
-            blocks=[TextBlock(block_type="text", text=current_text.strip())],
-        )
-    )
+    merged_messages.append(ChatMessage(role=current_role, content=current_text))
 
     return merged_messages
