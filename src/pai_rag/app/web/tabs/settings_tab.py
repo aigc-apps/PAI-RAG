@@ -231,7 +231,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         api_name="save_config",
                     )
         with gr.Tab("提示词模板配置"):
-            with gr.Column(visible=True):
+            with gr.Row():
                 system_role_template = gr.Textbox(
                     label="系统角色设定",
                     value="",
@@ -246,7 +246,19 @@ def create_setting_tab() -> Dict[str, Any]:
                     lines=10,
                     interactive=True,
                 )
-            components.extend([system_role_template, custom_prompt_template])
+            with gr.Row():
+                with gr.Column():
+                    save_prompt_btn = gr.Button(
+                        value="检查并保存配置",
+                        elem_id="save_prompt_btn",
+                        variant="primary",
+                    )
+                    save_state = gr.Textbox(
+                        label="Save Info: ", container=False, visible=True
+                    )
+            components.extend(
+                [system_role_template, custom_prompt_template, save_prompt_btn]
+            )
 
         with gr.Tab("查询改写配置"):
             quer_rewrite_model_name = rag_config.query_rewrite.model_id
@@ -264,60 +276,73 @@ def create_setting_tab() -> Dict[str, Any]:
                 with gr.Row(
                     visible=False, elem_id="enable_query_transform_col"
                 ) as enable_query_transform_col:
-                    query_rewrite_model_id = gr.Dropdown(
-                        choices=model_choices,
-                        value=quer_rewrite_model_name,
-                        label="\N{bookmark} 查询改写模型ID",
-                        elem_id="query_rewrite_model_id",
-                        interactive=True,
-                    )
-                    with gr.Tab(label="改写Prompt"):
+                    with gr.Column():
+                        _ = gr.Markdown("### 查询改写配置")
+                        query_rewrite_model_id = gr.Dropdown(
+                            choices=model_choices,
+                            value=quer_rewrite_model_name,
+                            label="\N{bookmark} 查询改写模型ID",
+                            elem_id="query_rewrite_model_id",
+                            interactive=True,
+                        )
                         rewrite_base_prompt = gr.Textbox(
-                            label="基础改写模板",
+                            label="查询改写提示词模板",
                             value="",
                             elem_id="rewrite_base_prompt",
                             lines=10,
                             interactive=True,
                         )
-                    with gr.Tab(label="大模型对话"):
-                        rewrite_llm_prompt = gr.Textbox(
-                            label="大模型对话",
-                            value="",
-                            elem_id="rewrite_llm_prompt",
-                            lines=10,
-                            interactive=True,
+                    with gr.Column():
+                        _ = gr.Markdown("### 使用工具的提示词模板")
+                        with gr.Tab(label="大模型对话"):
+                            rewrite_llm_prompt = gr.Textbox(
+                                label="大模型对话",
+                                value="",
+                                elem_id="rewrite_llm_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="知识库问答"):
+                            rewrite_knowledgebase_prompt = gr.Textbox(
+                                label="知识库问答",
+                                value="",
+                                elem_id="rewrite_knowledgebase_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="联网搜索"):
+                            rewrite_search_prompt = gr.Textbox(
+                                label="联网搜索",
+                                value="",
+                                elem_id="rewrite_search_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="工具调用"):
+                            rewrite_agent_prompt = gr.Textbox(
+                                label="工具调用",
+                                value="",
+                                elem_id="rewrite_agent_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                        with gr.Tab(label="数据库查询"):
+                            rewrite_db_prompt = gr.Textbox(
+                                label="数据库查询",
+                                value="",
+                                elem_id="rewrite_db_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
+                with gr.Row():
+                    with gr.Column():
+                        save_query_transform_btn = gr.Button(
+                            value="检查并保存配置",
+                            elem_id="save_query_transform_btn",
+                            variant="primary",
                         )
-                    with gr.Tab(label="知识库问答"):
-                        rewrite_knowledgebase_prompt = gr.Textbox(
-                            label="知识库问答",
-                            value="",
-                            elem_id="rewrite_knowledgebase_prompt",
-                            lines=10,
-                            interactive=True,
-                        )
-                    with gr.Tab(label="联网搜索"):
-                        rewrite_search_prompt = gr.Textbox(
-                            label="联网搜索",
-                            value="",
-                            elem_id="rewrite_search_prompt",
-                            lines=10,
-                            interactive=True,
-                        )
-                    with gr.Tab(label="工具调用"):
-                        rewrite_agent_prompt = gr.Textbox(
-                            label="工具调用",
-                            value="",
-                            elem_id="rewrite_agent_prompt",
-                            lines=10,
-                            interactive=True,
-                        )
-                    with gr.Tab(label="数据库查询"):
-                        rewrite_db_prompt = gr.Textbox(
-                            label="数据库查询",
-                            value="",
-                            elem_id="rewrite_db_prompt",
-                            lines=10,
-                            interactive=True,
+                        save_state = gr.Textbox(
+                            label="Save Info: ", container=False, visible=True
                         )
 
                 def change_query_transform_parameter(enable_query_transform):
@@ -341,6 +366,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     rewrite_agent_prompt,
                     rewrite_search_prompt,
                     rewrite_db_prompt,
+                    save_query_transform_btn,
                 ]
             )
     elems = components_to_dict(components)

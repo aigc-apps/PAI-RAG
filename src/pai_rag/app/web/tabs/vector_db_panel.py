@@ -8,7 +8,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
     components = []
     with gr.Row():
         with gr.Column():
-            _ = gr.Markdown(value="### **向量数据库配置**")
+            _ = gr.Markdown(value="**向量数据库配置**")
             vectordb_type = gr.Radio(
                 [
                     "hologres",

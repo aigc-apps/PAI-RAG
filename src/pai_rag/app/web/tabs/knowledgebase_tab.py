@@ -112,7 +112,20 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
                 )
         with gr.Column(scale=5):
             vector_db_elems, vector_db_components = create_vector_db_panel()
+            with gr.Row():
+                with gr.Column():
+                    _ = gr.Markdown(value="**切片配置**")
+                    chunk_size = gr.Textbox(
+                        label="\N{rocket} 块大小（文档被分割成的块的大小）",
+                        elem_id="chunk_size",
+                    )
 
+                    chunk_overlap = gr.Textbox(
+                        label="\N{fire} 块重叠（相邻文档块之间相互重叠的部分）",
+                        elem_id="chunk_overlap",
+                    )
+
+                    components.extend([chunk_size, chunk_overlap])
     with gr.Row():
         add_index_button = gr.Button(
             "添加知识库",
@@ -284,6 +297,16 @@ def create_retrieval_test_tab():
                     label="重排序文本 Top-K (0 到 50)",
                 )
 
+            with gr.Row():
+                with gr.Column():
+                    _ = gr.Markdown(value="**召回测试调优后，保存上述参数到配置文件进行持久化存储**")
+                    save_retrieval_button = gr.Button(
+                        value="保存并应用检索配置",
+                        elem_id="save_retrieval_button",
+                        variant="primary",
+                    )
+                    _ = gr.Textbox(label="Save Info: ", container=False, visible=False)
+
             def change_weight(change_weight):
                 return round(float(1 - change_weight), 2)
 
@@ -342,10 +365,12 @@ def create_retrieval_test_tab():
                 reranker_similarity_threshold,
                 reranker_model,
                 reranker_similarity_top_k,
+                save_retrieval_button,
             ]
             components.extend(db_retrieval_elements)
 
         with gr.Column(scale=7):
+            _ = gr.Markdown(value="### **召回测试**")
             chat_index = gr.Dropdown(
                 choices=[],
                 value="",
@@ -354,7 +379,7 @@ def create_retrieval_test_tab():
                 allow_custom_value=True,
             )
             chatbot = gr.Chatbot(
-                height=500, elem_id="retrieval_test_chatbot", type="messages"
+                height=300, elem_id="retrieval_test_chatbot", type="messages"
             )
             with gr.Row():
                 question = gr.Textbox(
