@@ -31,7 +31,7 @@ from elasticsearch.helpers.vectorstore import (
     DistanceMetric,
 )
 
-from llama_index.vector_stores.elasticsearch.utils import (
+from pai_rag.integrations.vector_stores.elasticsearch.elasticsearch_utils import (
     get_elasticsearch_client,
     get_user_agent,
 )
@@ -219,7 +219,13 @@ class MyElasticsearchStore(BasePydanticVectorStore):
         distance_strategy: Optional[DISTANCE_STRATEGIES] = "COSINE",
         retrieval_strategy: Optional[AsyncRetrievalStrategy] = None,
     ) -> None:
-        nest_asyncio.apply()
+        # This is necessary for use in Jupyter notebooks to allow for nested asyncio loops
+        try:
+            nest_asyncio.apply()
+        except ValueError as ex:
+            # May fail in some cloud environments: ignore.
+            logger.warning(f"patch event loop failed: {ex}.")
+            pass
 
         if retrieval_strategy is None:
             retrieval_strategy = AsyncDenseVectorStrategy(

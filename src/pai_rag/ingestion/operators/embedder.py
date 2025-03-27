@@ -16,7 +16,7 @@ from loguru import logger
 class Embedder(BaseOperator):
     def __init__(
         self,
-        name: str = OperatorName.SPLITTER,
+        name: str = OperatorName.EMBEDDER,
         batch_size: int = 10,
         device: str = "cpu",
         num_cpus: float = 1,
@@ -86,7 +86,7 @@ class Embedder(BaseOperator):
         chunks = [node for node in chunks if node["type"] == "text"]
 
         if len(chunks) > 0:
-            text_contents = [node["text"] for node in chunks]
+            text_contents = [node["text"][:1000] for node in chunks]
             embeddings = self.embed_model.get_text_embedding_batch(text_contents)
             if self.embedder_cfg.enable_sparse:
                 sparse_embeddings = self.sparse_embed_model.encode_documents(

@@ -9,6 +9,8 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     SupportedVectorStoreType,
 )
 from pai_rag.knowledgebase.models import KnowledgeBase
+import asyncio
+
 import ray
 from loguru import logger
 
@@ -32,7 +34,7 @@ def get_vector_store_config(
 class Writer(BaseOperator):
     def __init__(
         self,
-        name: str = OperatorName.SPLITTER,
+        name: str = OperatorName.WRITER,
         batch_size: int = 10,
         device: str = "cpu",
         num_cpus: float = 1,
@@ -61,6 +63,9 @@ class Writer(BaseOperator):
         assert (
             vector_store_config.type != SupportedVectorStoreType.faiss
         ), "FAISS is not supported."
+
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
         self.vector_store = create_vector_store(
             vectordb_config=vector_store_config,
             embed_dims=embed_dims,

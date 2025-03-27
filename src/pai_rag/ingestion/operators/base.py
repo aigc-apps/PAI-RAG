@@ -50,6 +50,7 @@ class BaseOperator:
         print(f"creating dir {output_dir}")
 
         with open(self.output_filename, "a") as file:
+            """
             start_time = time.time()
             lock_timeout = 3600
             while True:
@@ -66,8 +67,11 @@ class BaseOperator:
                         )
                     logger.info("File is locked by another process, waiting...")
                     time.sleep(0.5)
-
+            """
             for result in results:
                 json_line = json.dumps(result, ensure_ascii=False)
                 file.write(f"{json_line}\n")
-            fcntl.flock(file, fcntl.LOCK_UN)
+
+        logger.info(f"Finished writing {self.name} results to {self.output_filename}")
+
+        #fcntl.flock(file, fcntl.LOCK_UN)
