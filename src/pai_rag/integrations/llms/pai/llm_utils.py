@@ -1,4 +1,5 @@
 import os
+from typing import Sequence
 from urllib.parse import urljoin
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.openai_like import OpenAILike
@@ -14,6 +15,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
 from pai_rag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
+from llama_index.core.base.llms.types import ChatMessage, TextBlock
 
 from loguru import logger
 
@@ -195,3 +197,43 @@ def create_multi_modal_llm(llm_config: PaiBaseLlmConfig):
         raise ValueError(f"Unknown Multi-modal LLM source: '{llm_config}'")
 
     return llm
+
+
+def merge_consecutive_messages(
+    messages: Sequence[ChatMessage],
+) -> Sequence[ChatMessage]:
+    merged_messages = []
+    if not messages:
+        return merged_messages
+
+    current_role = messages[0].role
+    current_text = ""
+
+    for message in messages:
+        if message.role == current_role:
+            for block in message.blocks:
+                if block.block_type == "text":
+                    current_text += block.text + "\n"  # 合并文本
+        else:
+            merged_messages.append(
+                ChatMessage(
+                    role=current_role,
+                    additional_kwargs={},
+                    blocks=[TextBlock(block_type="text", text=current_text.strip())],
+                )
+            )
+            current_role = message.role
+            current_text = ""
+            for block in message.blocks:
+                if block.block_type == "text":
+                    current_text += block.text + "\n"
+
+    merged_messages.append(
+        ChatMessage(
+            role=current_role,
+            additional_kwargs={},
+            blocks=[TextBlock(block_type="text", text=current_text.strip())],
+        )
+    )
+
+    return merged_messages

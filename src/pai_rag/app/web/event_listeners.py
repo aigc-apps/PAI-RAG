@@ -82,6 +82,7 @@ def update_llms(selected_model):
         "model_name": llm_config.model if llm_config and not is_new else "",
         "model_id": llm_config.model_id if llm_config else "",
         "vision_support": llm_config.vision_support if llm_config else False,
+        "is_reasoning_models": llm_config.is_reasoning_models if llm_config else False,
     }
 
     # Update UI components based on the configuration
@@ -93,11 +94,18 @@ def update_llms(selected_model):
         gr.update(value=initial_values["model_name"]),
         gr.update(value=initial_values["model_id"]),
         gr.update(value=initial_values["vision_support"]),
+        gr.update(value=initial_values["is_reasoning_models"]),
     ]
 
 
 def save_new_llm(
-    selected_model, model_name, base_url, api_key, model_id, vision_support
+    selected_model,
+    model_name,
+    base_url,
+    api_key,
+    model_id,
+    vision_support,
+    is_reasoning_models,
 ):
     rag_config = rag_client.get_config()
     is_new = selected_model == "NEW"
@@ -131,6 +139,7 @@ def save_new_llm(
         existing_model.model = model_name
         existing_model.model_id = model_id
         existing_model.vision_support = vision_support
+        existing_model.is_reasoning_models = is_reasoning_models
         rag_config.llms[model_index] = existing_model
 
     else:
@@ -141,6 +150,7 @@ def save_new_llm(
             "api_key": api_key,
             "model": model_name,
             "vision_support": vision_support,
+            "is_reasoning_models": is_reasoning_models,
         }
         new_llm = PaiBaseLlmConfig(**new_llm_config)
 
