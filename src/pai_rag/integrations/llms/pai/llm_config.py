@@ -133,6 +133,7 @@ class PaiBaseLlmConfig(BaseModel):
     api_key: str | None = None
     model: str | None = None
     vision_support: bool | None = None
+    is_reasoning_model: bool | None = None
     model_id: str | None = None
 
     model_config = ConfigDict(coerce_numbers_to_str=True, frozen=False)

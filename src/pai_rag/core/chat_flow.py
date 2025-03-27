@@ -446,19 +446,20 @@ class ChatFlow:
         system_role = (
             query_bundle.system_role or config.synthesizer.system_role_template
         )
-        messages = query_bundle.messages
+        messages = []
         if system_role:
-            messages = [
-                ChatMessage(role=MessageRole.USER, content=system_role)
-            ] + query_bundle.messages
+            messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
 
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            ),
+        # prompt_message
+        messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                    cur_date=get_prompt_current_time_str()
+                ),
+            )
         )
-        messages = [prompt_message] + messages
+        messages.extend(query_bundle.messages)
         if query_bundle.stream:
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
