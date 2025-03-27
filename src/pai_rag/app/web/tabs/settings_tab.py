@@ -225,12 +225,12 @@ def create_setting_tab() -> Dict[str, Any]:
                                 container=True,  # 让复选框有背景容器
                                 scale=1,
                             )
-                            is_reasoning_models = gr.Checkbox(
-                                value=rag_config.llms[0].is_reasoning_models
+                            is_reasoning_model = gr.Checkbox(
+                                value=rag_config.llms[0].is_reasoning_model
                                 if rag_config.llms
                                 else False,
                                 label="是否为推理模型(Reasoning Models)",
-                                elem_id="is_reasoning_models",
+                                elem_id="is_reasoning_model",
                                 container=True,  # 让复选框有背景容器
                                 scale=1,
                             )
@@ -247,7 +247,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_model_name,
                     llm_model_id,
                     llm_vision_support,
-                    is_reasoning_models,
+                    is_reasoning_model,
                 ],
             )
 
@@ -260,7 +260,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_api_key,
                     llm_model_id,
                     llm_vision_support,
-                    is_reasoning_models,
+                    is_reasoning_model,
                 ],
                 outputs=[llm_model, delete_btn],
             )

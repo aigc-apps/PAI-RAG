@@ -69,7 +69,7 @@ class RagConfigManager:
                 update={
                     "vision_support": False,
                     "model_id": "default",
-                    "is_reasoning_models": False,
+                    "is_reasoning_model": False,
                 }
             )
             rag_config.llms.append(updated_llm)
@@ -77,7 +77,7 @@ class RagConfigManager:
             not rag_config_copy.llms or len(rag_config_copy.llms) == 0
         ):
             updated_vllm = rag_config.multimodal_llm.copy(
-                update={"vision_support": True, "is_reasoning_models": False}
+                update={"vision_support": True, "is_reasoning_model": False}
             )
             rag_config.llms.append(updated_vllm)
         return rag_config

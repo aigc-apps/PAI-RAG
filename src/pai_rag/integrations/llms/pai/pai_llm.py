@@ -129,7 +129,7 @@ class PaiLlm(OpenAILike):
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         # add mandatory think for reasoning models
-        if self.llm_config.is_reasoning_models:
+        if self.llm_config.is_reasoning_model:
             messages.append(ChatMessage(role="assistant", content="<think>\n"))
             logger.info(
                 f"add mandatory think for reasoning models, messages: {messages}"
@@ -139,7 +139,7 @@ class PaiLlm(OpenAILike):
             prompt = self.messages_to_prompt(messages)
             logger.info(f"llm complete, prompt: {prompt}")
             completion_response = await self.acomplete(prompt, formatted=True, **kwargs)
-            if self.llm_config.is_reasoning_models and not str(
+            if self.llm_config.is_reasoning_model and not str(
                 completion_response.text
             ).startswith("<think>"):
                 completion_response.text = "<think>\n" + completion_response.text
@@ -152,7 +152,7 @@ class PaiLlm(OpenAILike):
         ]
         logger.info(f"llm chat, filterd_messages: {filterd_messages}")
         _response = await self._llm.achat(filterd_messages, **kwargs)
-        if self.llm_config.is_reasoning_models and not str(_response.delta).startswith(
+        if self.llm_config.is_reasoning_model and not str(_response.delta).startswith(
             "<think>"
         ):
             _response.message.content = "<think>\n" + _response.message.content
@@ -167,7 +167,7 @@ class PaiLlm(OpenAILike):
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
             async for response in completion_response_gen:
-                if self.llm_config.is_reasoning_models:
+                if self.llm_config.is_reasoning_model:
                     if start_label and not response.text.startswith("<think>"):
                         start_label = False
                         yield ChatResponse(
@@ -213,7 +213,7 @@ class PaiLlm(OpenAILike):
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
-        if not self.llm_config.is_reasoning_models:
+        if not self.llm_config.is_reasoning_model:
             return await self._llm.astream_chat(messages, **kwargs)
         else:
 
@@ -249,7 +249,7 @@ class PaiLlm(OpenAILike):
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         messages = merge_consecutive_messages(messages)
-        if self.llm_config.is_reasoning_models:
+        if self.llm_config.is_reasoning_model:
             messages.append(ChatMessage(role="assistant", content="<think>\n"))
             logger.info(
                 f"add mandatory think for reasoning models, messages: {messages}"
