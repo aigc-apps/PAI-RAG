@@ -30,9 +30,9 @@ class PaiJsonLReader(BaseReader):
         with open(file_path, "r", encoding="utf-8") as file:
             json_lines = [line.strip() for line in file.readlines()]
 
-        file_name = os.path.basename(file)
+        file_name = os.path.basename(file_path)
         extra_info = extra_info or {}
-        extra_info["file_path"] = str(file)
+        extra_info["file_path"] = str(file_path)
         extra_info["file_name"] = file_name
         
         docs = []
