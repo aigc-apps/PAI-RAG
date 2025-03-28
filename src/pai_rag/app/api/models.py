@@ -50,8 +50,6 @@ class RagResponse(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str  # 模型名称
     messages: List[ChatMessage]  # 上下文聊天
-    max_tokens: Optional[int] = 1024  # 最大输出长度
-    temperature: Optional[float] = 0.1  # temperature
     stream: Optional[bool] = False  # 流式输出
     index_name: Optional[str] = None  # 索引名称
     chat_knowledgebase: Optional[bool] = False  # 查询知识库
@@ -62,7 +60,6 @@ class ChatCompletionRequest(BaseModel):
     chat_agent: Optional[bool] = False  # 使用agent
     chat_db: Optional[bool] = False  # 查询数据库
     chat_news: Optional[bool] = False  # 使用新闻工具
-
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None

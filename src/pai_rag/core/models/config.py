@@ -1,5 +1,5 @@
 from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.integrations.synthesizer.prompt_templates import (
@@ -23,6 +23,7 @@ DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 class ChatConfig(BaseModel):
     model_id: str | None = None
+    model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
 class QueryRewriteConfig(BaseModel):
@@ -37,6 +38,7 @@ class QueryRewriteConfig(BaseModel):
 
     model_id: str | None = None
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
+    model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
 class AliyunTextModerationPlusConfig(BaseModel):
@@ -70,6 +72,7 @@ class OssStoreConfig(BaseModel):
     endpoint: str = "oss-cn-hangzhou.aliyuncs.com"
     ak: str | None = None
     sk: str | None = None
+    model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
 class RetrieverConfig(BaseModel):

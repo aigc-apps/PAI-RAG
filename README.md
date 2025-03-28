@@ -168,7 +168,7 @@ You can use agent with function calling api-tools in PAI-RAG, please refer to th
 
 ## Data Analysis
 
-You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc_250303.md)
+You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc_zh.md)
 
 ## Supported File Types
 

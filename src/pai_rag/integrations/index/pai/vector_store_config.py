@@ -1,5 +1,5 @@
 from typing import Annotated, List, Literal, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 
 DEFAULT_LOCAL_STORAGE_PATH_OLD = "./localdata/storage"
@@ -37,6 +37,7 @@ class BaseVectorStoreConfig(BaseModel):
     persist_path: str = DEFAULT_LOCAL_STORAGE_PATH
     type: SupportedVectorStoreType
     is_image_store: bool = False
+    model_config = ConfigDict(coerce_numbers_to_str=True)
 
     @classmethod
     def get_subclasses(cls):
