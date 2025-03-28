@@ -4,11 +4,14 @@ Contains parsers for tabular data files.
 
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fsspec import AbstractFileSystem
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+
+from pai_rag.utils.nodeid_util import compute_node_id
 
 
 class PaiJsonLReader(BaseReader):
@@ -27,8 +30,14 @@ class PaiJsonLReader(BaseReader):
         with open(file_path, "r", encoding="utf-8") as file:
             json_lines = [line.strip() for line in file.readlines()]
 
+        file_name = os.path.basename(file)
+        extra_info = extra_info or {}
+        extra_info["file_path"] = str(file)
+        extra_info["file_name"] = file_name
+        
         docs = []
         for i, text in enumerate(json_lines):
+            doc_id = compute_node_id(i=i, file_name=file_name)
             extra_info["row_number"] = i + 1
-            docs.append(Document(text=text, metadata=extra_info))
+            docs.append(Document(id_=doc_id, text=text, metadata=extra_info))
         return docs

@@ -1,4 +1,3 @@
-import hashlib
 import os
 import re
 from typing import List, Any, Dict
@@ -27,6 +26,7 @@ from pai_rag.utils.constants import (
 from loguru import logger
 
 from pai_rag.utils.image_caption_utils import ImageCaptionTool
+from pai_rag.utils.nodeid_util import compute_node_id
 
 
 class NodeParserConfig(BaseModel):
@@ -74,11 +74,7 @@ def format_temp_file_path(temp_file_path):
 
 
 def node_id_hash(i: int, doc: BaseNode) -> str:
-    encoded_raw_text = (
-        f"""<<{i}>>{doc.metadata.get("file_name", "DUMMY_FILE_NAME")}""".encode()
-    )
-    hash = hashlib.sha256(encoded_raw_text).hexdigest()
-    return hash
+    return compute_node_id(i=i, file_name=doc.metadata.get("file_name", "DUMMY_FILE_NAME"))
 
 
 def get_data_parser(parser_config: NodeParserConfig):
@@ -167,9 +163,7 @@ class PaiNodeParser(TransformComponent):
             doc_type = self._extract_file_type(doc_node.metadata)
             doc_key = f"""{doc_node.metadata.get("file_path", "dummy")}"""
             if isinstance(doc_node, ImageDocument):
-                node_id = node_id_hash(
-                    self._get_auto_increment_node_id(doc_key), doc_node
-                )
+                node_id = doc_node.doc_id
                 image_text = self._extract_image_info(doc_node.metadata["file_path"])
                 metadata = doc_node.metadata
                 metadata["image_url"] = doc_node.image_url
@@ -188,9 +182,7 @@ class PaiNodeParser(TransformComponent):
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 metadata = doc_node.metadata
 
-                node_id = node_id_hash(
-                    self._get_auto_increment_node_id(doc_key), doc_node
-                )
+                node_id = doc_node.doc_id
                 splitted_nodes.append(
                     TextNode(
                         id_=node_id,

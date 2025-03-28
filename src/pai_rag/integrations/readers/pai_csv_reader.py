@@ -20,6 +20,7 @@ import os
 from loguru import logger
 
 from pai_rag.integrations.readers.utils.pai_parse_workbook import parse_workbook
+from pai_rag.utils.nodeid_util import compute_node_id
 
 
 class PaiCSVReader(BaseReader):
@@ -187,17 +188,24 @@ class PaiPandasCSVReader(BaseReader):
                 for record in df.to_dict("records")
             ]
 
+        file_name = os.path.basename(file)
+        extra_info = extra_info or {}
+        extra_info["file_path"] = str(file)
+        extra_info["file_name"] = file_name
+        
         if self._concat_rows:
+            doc_id = compute_node_id(i=0, file_name=file_name)
             return [
                 Document(
-                    text=(self._row_joiner).join(text_list), metadata=extra_info or {}
+                    id_=doc_id, text=(self._row_joiner).join(text_list), metadata=extra_info
                 )
             ]
         else:
             docs = []
             for i, text in enumerate(text_list):
+                doc_id = compute_node_id(i=i, file_name=file_name)
                 extra_info["row_number"] = i + 1
-                docs.append(Document(text=text, metadata=extra_info))
+                docs.append(Document(id_=doc_id, text=text, metadata=extra_info))
             return docs
 
 
@@ -224,10 +232,13 @@ class PaiExcelReader(BaseReader):
         )
 
         logger.info(f"Start parsing {file}.")
-        docs = parse_workbook(file, oss_client=self.oss_cache, splitter=splitter)
-        for doc in docs:
+        docs: List[Document] = parse_workbook(file, oss_client=self.oss_cache, splitter=splitter)
+        file_name = os.path.basename(file)
+
+        for i, doc in enumerate(docs):
+            doc.id_ = compute_node_id(i=i, file_name=file_name)
             doc.extra_info["file_path"] = str(file)
-            doc.extra_info["file_name"] = os.path.basename(file)
+            doc.extra_info["file_name"] = file_name
 
             if extra_info is not None:
                 doc.extra_info.update(extra_info)
