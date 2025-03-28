@@ -12,6 +12,7 @@ from llama_index.core.base.llms.types import (
     CompletionResponseAsyncGen,
     CompletionResponseGen,
 )
+from pai_rag.app.api.models import ChatIntentType
 from llama_index.core.base.llms.generic_utils import (
     completion_response_to_chat_response,
     stream_completion_response_to_chat_response,
@@ -223,7 +224,7 @@ class PaiLlm(OpenAILike):
                         ),
                         delta="",
                         additional_kwargs={
-                            "intent": kwargs.get("intent", "chat_llm"),
+                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
                         },
                     )
                     kwargs.pop("intent")
@@ -242,7 +243,7 @@ class PaiLlm(OpenAILike):
                         ),
                         delta="",
                         additional_kwargs={
-                            "intent": kwargs.get("intent", "chat_llm"),
+                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
                         },
                     )
                     kwargs.pop("intent")
@@ -283,7 +284,7 @@ class PaiLlm(OpenAILike):
         if not self.metadata.is_chat_model:
             intent = None
             if "intent" in kwargs:
-                intent = kwargs.get("intent", "chat_llm")
+                intent = kwargs.get("intent", ChatIntentType.CHAT_LLM)
                 kwargs.pop("intent")
             prompt = self.messages_to_prompt(messages)
             completion_response = await self.astream_complete(
