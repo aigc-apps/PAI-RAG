@@ -31,6 +31,14 @@
     poetry run aliyun-bootstrap -a install
    ```
 
+   安装filebrowser
+
+   ```bash
+   wget wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/sdwebui/filebrowser
+   mv filebrowser /bin/filebrowser
+   chmod u+x /bin/filebrowser
+   ```
+
 - 常见网络超时问题
 
   注：在安装过程中，若遇到网络连接超时的情况，可以添加阿里云或清华的镜像源，在 pyproject.toml 文件末尾追加以下几行：
@@ -50,14 +58,7 @@
   poetry install
   ```
 
-3. 下载其他模型到本地
-
-   ```bash
-   # 支持 model name (默认 ""), 没有参数时, 默认下载上述所有模型。
-   load_model [--model-name MODEL_NAME]
-   ```
-
-4. 启动RAG服务
+3. 启动RAG服务
 
    使用DashScope API，需要在命令行引入环境变量：
 
@@ -80,28 +81,4 @@
       ./scripts/start.sh
    ```
 
-5. 启动RAG WebUI
-
-   ```bash
-   # 启动，支持自定义host(默认0.0.0.0), port(默认8680), config(默认localhost:8680)
-   pai_rag ui [--host HOST] [--port PORT] [rag-url RAG_URL]
-   ```
-
-   你也可以打开http://localhost:8680/ 来配置RAG服务以及上传本地数据。
-
-6. 【可选】本地工具-上传数据
-
-   向当前索引存储中插入data_path路径下的新文件
-
-   ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
-   ```
-
-   path examples:
-
-   ```
-   a. load_data -d test/example
-   b. load_data -d test/example_data/pai_document.pdf
-   c. load_data -d test/example_data -p *.pdf
-
-   ```
+   你可以打开http://localhost:8680/ 来配置RAG服务以及上传本地数据。

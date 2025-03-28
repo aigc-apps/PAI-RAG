@@ -86,15 +86,14 @@ class FileTaskExecutor:
         try:
             embedding_batch_size = DEFAULT_EMBEDDING_BATCH_SIZE
             yield FileProcessResult(status=FileProcessStatus.Persisting, message=None)
-            for i in range(0, len(chunks), embedding_batch_size):
-                batch_chunks = chunks[i : i + embedding_batch_size]
-                embedded_batch_nodes = self.embed_model(batch_chunks)
+            count_embedding_nodes = 0
+            while chunks:
+                embedded_batch_nodes = self.embed_model(chunks[:embedding_batch_size])
+                count_embedding_nodes += len(chunks[:embedding_batch_size])
                 try:
                     self.vector_index.insert_nodes(nodes=embedded_batch_nodes)
-                    logger.info(
-                        f"Persist {i + embedding_batch_size} nodes successfully."
-                    )
-                    if i < embedding_batch_size:
+                    logger.info(f"Persist {count_embedding_nodes} nodes successfully.")
+                    if count_embedding_nodes <= embedding_batch_size:
                         RagKnowledgeBaseHelper.save_chunk_nodes(
                             knowledgebase.name, embedded_batch_nodes, "embed"
                         )
@@ -102,6 +101,7 @@ class FileTaskExecutor:
                             f"Get nodes embedding successfully for file {task.file_name}"
                         )
                     del embedded_batch_nodes
+                    del chunks[:embedding_batch_size]
                 except Exception as ex:
                     logger.error(
                         f"Persist nodes for file {task.file_name} failed: {traceback.format_exc()}"
