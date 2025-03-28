@@ -404,6 +404,7 @@ class ChatFlow:
         config: RagConfig,
     ):
         search_engine = resolve_searcher(config, model_id=query_bundle.model)
+        query_bundle.llm_kwargs["intent"] = "search_web"
         if not search_engine:
             raise ValueError(
                 "Web search config is not valid. Please check your search api configuration."
@@ -422,6 +423,7 @@ class ChatFlow:
         query_engine = resolve_query_engine(
             config, vector_index=vector_index, model_id=query_bundle.model
         )
+        query_bundle.llm_kwargs["intent"] = "chat_knowledgebase"
         response = await query_engine.aquery(query_bundle)
         return response
 
@@ -488,6 +490,7 @@ class ChatFlow:
         )
         messages.extend(query_bundle.messages)
         if query_bundle.stream:
+            query_bundle.llm_kwargs["intent"] = "chat_llm"
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:
