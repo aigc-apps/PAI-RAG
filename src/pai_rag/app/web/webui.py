@@ -14,6 +14,8 @@ from pai_rag.app.web.tabs.history_tab import (
 )
 from pai_rag.app.web.tabs.news_extension import create_news_extension_tab
 from pai_rag.app.web.tabs.knowledgebase_tab import create_knowledgebase_tab
+from pai_rag.app.web.tabs.search_web_tab import create_search_web_tab
+from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -108,9 +110,15 @@ def make_homepage():
             setting_elements = create_setting_tab()
             elem_manager.add_elems(setting_elements)
         with gr.Tab("\N{WHITE MEDIUM STAR} 应用"):
+            with gr.Tab("联网搜索"):
+                search_web_elements = create_search_web_tab()
+                elem_manager.add_elems(search_web_elements)
             with gr.Tab("数据分析"):
                 analysis_elements = create_data_analysis_tab()
                 elem_manager.add_elems(analysis_elements)
+            with gr.Tab("工具调用"):
+                tools_elements = create_agent_tab()
+                elem_manager.add_elems(tools_elements)
             with gr.Tab("新闻智能体"):
                 with gr.Blocks():
                     news_elements = create_news_extension_tab()
