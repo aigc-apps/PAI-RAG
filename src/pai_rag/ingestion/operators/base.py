@@ -1,6 +1,7 @@
 from enum import Enum
 import fcntl
 import json
+import math
 import time
 import os
 from typing import List, Optional
@@ -13,6 +14,9 @@ class OperatorName(str, Enum):
     SPLITTER = "rag_splitter"
     EMBEDDER = "rag_embedder"
     WRITER = "rag_writer"
+
+
+OUTPUT_BATCH_SIZE = 50000
 
 
 class BaseOperator:
@@ -35,6 +39,8 @@ class BaseOperator:
         self.model_dir = model_dir
         self.output_filename = output_filename
         self.kwargs = kwargs
+        self.result_count = 0
+        self.real_output_filename = self._get_output_filename()
 
     def process(self, *args, **kwargs):
         raise NotImplementedError
@@ -42,36 +48,28 @@ class BaseOperator:
     def use_cuda(self):
         return self.device.lower() == "cuda" and is_cuda_available()
 
+
+    def _get_output_filename(self):
+        if self.output_filename is None:
+            raise ValueError("output_filename must be specified")
+        
+        file_prefix, file_suffix = os.path.splitext(self.output_filename)
+        file_idx = math.floor(self.result_count / OUTPUT_BATCH_SIZE) + 1
+        return f"{file_prefix}_{file_idx:05d}{file_suffix}"
+    
     def persist(self, results: List[dict]):
         logger.info(f"Start writing results to {self.output_filename}")
         
         output_dir = os.path.dirname(self.output_filename)
         os.makedirs(output_dir, exist_ok=True)
+        self.result_count += len(results)
+
         print(f"creating dir {output_dir}")
 
-        with open(self.output_filename, "a") as file:
-            """
-            start_time = time.time()
-            lock_timeout = 3600
-            while True:
-                try:
-                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    if time.time() - start_time > lock_timeout:
-                        logger.warning(
-                            f"Failed to acquire lock on {self.output_filename} after {lock_timeout} seconds"
-                        )
-                        raise TimeoutError(
-                            f"Failed to acquire lock on {self.output_filename} after {lock_timeout} seconds"
-                        )
-                    logger.info("File is locked by another process, waiting...")
-                    time.sleep(0.5)
-            """
+        with open(self.real_output_filename, "a") as file:
             for result in results:
                 json_line = json.dumps(result, ensure_ascii=False)
                 file.write(f"{json_line}\n")
 
-        logger.info(f"Finished writing {self.name} results to {self.output_filename}")
-
-        #fcntl.flock(file, fcntl.LOCK_UN)
+        logger.info(f"Finished writing {self.name} results to {self.real_output_filename}. Current process count: {self.result_count}")
+        self.real_output_filename = self._get_output_filename()

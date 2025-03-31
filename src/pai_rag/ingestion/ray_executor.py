@@ -4,10 +4,13 @@ from pai_rag.ingestion.operators.embedder import Embedder
 from pai_rag.ingestion.operators.parser import Parser
 from pai_rag.ingestion.operators.split import Splitter
 from pai_rag.ingestion.operators.writer import Writer
-from pai_rag.ingestion.utils.dataset_utils import get_input_files
+from pai_rag.ingestion.utils.dataset_utils import get_input_files, get_input_files_with_es_backend
+
 import ray
 import time
 from loguru import logger
+
+from pai_rag.ingestion.utils.vectordb_utils import get_vector_store
 
 
 class RayExecutor:
@@ -118,6 +121,13 @@ class RayExecutor:
                 )
             )
 
+        self.vector_store = get_vector_store(
+            rag_endpoint=writer_config["rag_endpoint"],
+            rag_key=writer_config["rag_key"],
+            embed_dims=writer_config["embed_dims"],
+            knowledgebase=writer_config["knowledgebase"],
+        )
+
     def run(self):
         """
         Running the dataset process pipeline.
@@ -127,7 +137,19 @@ class RayExecutor:
         """
         all_tstart = time.time()
         logger.info(f"Loading dataset from {self.cfg.dataset_path} ...")
-        input_files = get_input_files(self.cfg.dataset_path)
+        # input_files = get_input_files(self.cfg.dataset_path)
+        input_files = get_input_files_with_es_backend(
+            file_path_or_directory=self.cfg.dataset_path,
+            es_store=self.vector_store,
+        )
+
+        if len(input_files) == 0:
+            logger.warning(f"No files found at {self.cfg.dataset_path}, exiting.")
+            return
+
+        logger.info(
+            f"Found {len(input_files)} files at path '{self.cfg.dataset_path}'. Samples: {input_files[:5]}"
+        )
 
         pending_doc_ref_list = []
         process_results = []

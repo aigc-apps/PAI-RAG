@@ -1,33 +1,12 @@
 from typing import List, Optional
 
-import requests
 from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
 from pai_rag.ingestion.utils.formatters import convert_dict_to_node
-from pai_rag.integrations.index.pai.utils.vector_store_utils import create_vector_store
-from pai_rag.integrations.index.pai.vector_store_config import (
-    BaseVectorStoreConfig,
-    SupportedVectorStoreType,
-)
-from pai_rag.knowledgebase.models import KnowledgeBase
-import asyncio
 
 import ray
 from loguru import logger
 
-
-def get_vector_store_config(
-    rag_endpoint: str, rag_key: str, knowledgebase: str
-) -> BaseVectorStoreConfig:
-    try:
-        response = requests.get(
-            f"{rag_endpoint}/api/v1/knowledgebases/{knowledgebase}",
-            headers={"Authorization": f"Bearer {rag_key}"},
-        )
-        knowledgebase: KnowledgeBase = KnowledgeBase.model_validate(response.json())
-        return knowledgebase.vector_store_config
-    except Exception as e:
-        logger.error(f"Failed to get vector store config: {e}")
-        raise e
+from pai_rag.ingestion.utils.vectordb_utils import get_vector_store
 
 
 @ray.remote
@@ -57,26 +36,15 @@ class Writer(BaseOperator):
             output_filename=output_filename,
             **kwargs,
         )
-        vector_store_config = get_vector_store_config(
-            rag_endpoint=rag_endpoint, rag_key=rag_key, knowledgebase=knowledgebase
-        )
-        assert (
-            vector_store_config.type != SupportedVectorStoreType.faiss
-        ), "FAISS is not supported."
 
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
-
-        self.vector_store = create_vector_store(
-            vectordb_config=vector_store_config,
+        self.vector_store = get_vector_store(
+            rag_endpoint=rag_endpoint,
+            rag_key=rag_key,
+            knowledgebase=knowledgebase,
             embed_dims=embed_dims,
         )
 
-        logger.info(
-            f"""Sinker [PaiVectorStore] init finished with following parameters:
-                        config: {vector_store_config}
-                        embed_dims: {embed_dims}
-            """
-        )
+        logger.info("Writer init successfully.")
 
     def process(self, chunks: List[dict]) -> List[dict]:
         nodes = [convert_dict_to_node(chunk) for chunk in chunks]
