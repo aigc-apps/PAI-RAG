@@ -35,7 +35,6 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_CONTEXT_ANSWER_TEMPLATE,
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
     CURRENT_TIME_PROMPT,
-    DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
 )
 from loguru import logger
 
@@ -126,10 +125,9 @@ class PaiSynthesizer(BaseSynthesizer):
             )
         )
         self._multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
                 self._custom_prompt_template,
-                DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=get_prompt_current_time_str()
                 ),
@@ -137,10 +135,9 @@ class PaiSynthesizer(BaseSynthesizer):
             )
         )
         self._citation_multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}\n{}".format(
                 self._system_role_template,
                 self._custom_prompt_template,
-                DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=get_prompt_current_time_str()
                 ),
@@ -251,10 +248,9 @@ class PaiSynthesizer(BaseSynthesizer):
         if not citation:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}".format(
                         system_role_str,
                         prompt_template_str,
-                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                         CURRENT_TIME_PROMPT.format(
                             current_datetime=get_prompt_current_time_str()
                         ),
@@ -266,10 +262,9 @@ class PaiSynthesizer(BaseSynthesizer):
         else:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}\n{}".format(
                         system_role_str,
                         prompt_template_str,
-                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
                         CURRENT_TIME_PROMPT.format(
                             current_datetime=get_prompt_current_time_str()

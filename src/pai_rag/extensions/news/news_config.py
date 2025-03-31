@@ -37,6 +37,18 @@ DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE = """
 - 如果不能回答，请输出：根据已知信息无法回答。
 """
 
+
+DEFAULT_NEWS_ROLE = """
+Hi，我是深小闻，\n 您的车载 AI 新闻助手。\n 我可以为你进行各个领域的新闻热点播报，\n还可以和你互动、\n根据你的问题进行新闻详细介绍与解析。\n 想知道有哪些新闻热点，\n 尽管来问我。\n
+温馨提示，\n 你可以问我 \n【{domain_list}】\n 这些领域的新闻哦~\n也可以直接问我你感兴趣的某条新闻，\n快来体验吧。\n
+"""
+DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
+DEFAULT_WEB_SEARCH_INFO_MESSAGE = "\n\n当前内容来源于互联网。"
+DEFAULT_LIST_NEWS_END_RESPONSE = """
+\n\n以上是本期主要内容，\n 感谢您的收听，\n 您可以选择感兴趣的新闻获取深度解读。\n
+"""
+
+
 DEFAULT_NEWS_DOMAIN_LIST = ["科技", "娱乐", "社会", "体育", "教育", "汽车", "旅游", "文化"]
 
 
