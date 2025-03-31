@@ -148,10 +148,15 @@ class RagLocalClient:
         citation: bool = False,
         with_intent: bool = False,
         index_name: str = None,
-        search_web: bool = False,
         return_reference: bool = False,
         chat_model_id: str = None,
         temperature: float = 0.1,
+        chat_knowledgebase: bool = False,
+        search_web: bool = False,
+        chat_llm: bool = False,
+        chat_agent: bool = False,
+        chat_db: bool = False,
+        chat_news: bool = False,
     ):
         query = RagQuery(
             messages=chat_messages,
@@ -159,10 +164,15 @@ class RagLocalClient:
             citation=citation,
             with_intent=with_intent,
             index_name=index_name,
-            search_web=search_web,
             return_reference=return_reference,
             model=chat_model_id,
             temperature=temperature,
+            chat_knowledgebase=chat_knowledgebase,
+            search_web=search_web,
+            chat_llm=chat_llm,
+            chat_agent=chat_agent,
+            chat_db=chat_db,
+            chat_news=chat_news,
         )
 
         try:

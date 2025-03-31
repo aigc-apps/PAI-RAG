@@ -13,19 +13,6 @@ def reset_textbox():
     return gr.update(value="")
 
 
-# def change_search_model_argument(search_type):
-#     return [
-#         gr.update(visible=True if search_type == "bing" else False),
-#         gr.update(visible=True),
-#         gr.update(visible=True if search_type in ["bing", "google"] else False),
-#         gr.update(visible=True if search_type == "aliyun" else False),
-#         gr.update(visible=True if search_type == "aliyun" else False),
-#         gr.update(visible=True if search_type == "aliyun" else False),
-#         gr.update(visible=True if search_type == "google" else False),
-#         gr.update(visible=True if search_type == "google" else False),
-#     ]
-
-
 async def respond(input_elements: List[Any]):
     update_dict = {}
     for element, value in input_elements.items():
@@ -59,39 +46,29 @@ async def respond(input_elements: List[Any]):
         )
         yield chatbot
 
-    try:
-        if query_type == "对话 (大模型)":
-            response_gen = rag_client.query_llm(
-                chat_messages=chatbot[:-1],
-                stream=is_streaming,
-                chat_model_id=chat_model_id,
-                temperature=temperature,
-            )
-        elif query_type == "检索测试":
-            response_gen = rag_client.query_vector(
-                chatbot[:-1], question, index_name=index_name
-            )
+    chat_knowledgebase = True if "查询知识库" in query_type else False
+    search_web = True if "联网搜索" in query_type else False
+    chat_llm = True if "大模型" in query_type else False
+    chat_agent = True if "agent" in query_type else False
+    chat_db = True if "查询数据库" in query_type else False
+    chat_news = True if "新闻工具" in query_type else False
 
-        elif query_type == "对话 (网络搜索)":
-            response_gen = rag_client.query(
-                chat_messages=chatbot[:-1],
-                stream=is_streaming,
-                citation=citation,
-                search_web=True,
-                return_reference=return_reference,
-                chat_model_id=chat_model_id,
-                temperature=temperature,
-            )
-        else:
-            response_gen = rag_client.query(
-                chat_messages=chatbot[:-1],
-                stream=is_streaming,
-                citation=citation,
-                index_name=index_name,
-                return_reference=return_reference,
-                chat_model_id=chat_model_id,
-                temperature=temperature,
-            )
+    try:
+        response_gen = rag_client.query(
+            chat_messages=chatbot[:-1],
+            stream=is_streaming,
+            citation=citation,
+            index_name=index_name,
+            return_reference=return_reference,
+            chat_model_id=chat_model_id,
+            temperature=temperature,
+            chat_knowledgebase=chat_knowledgebase,
+            search_web=search_web,
+            chat_db=chat_db,
+            chat_agent=chat_agent,
+            chat_llm=chat_llm,
+            chat_news=chat_news,
+        )
 
         is_thinking = False
         async for resp in response_gen:
@@ -140,7 +117,7 @@ def create_chat_tab() -> Dict[str, Any]:
         else:
             model_name = model_choices[0]
     with gr.Row():
-        with gr.Column(scale=2):
+        with gr.Column(scale=1):
             chat_model_id = gr.Dropdown(
                 choices=model_choices,
                 value=model_name,
@@ -343,13 +320,13 @@ def create_chat_tab() -> Dict[str, Any]:
             #     ],
             # )
 
-        with gr.Column(scale=8):
+        with gr.Column(scale=9):
             chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
             with gr.Row():
                 with gr.Column(variant="panel"):
                     query_type = gr.CheckboxGroup(
-                        ["大模型对话", "联网搜索", "查询知识库", "查询数据库", "使用agent", "使用新闻工具"],
-                        label="对话方式",
+                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
+                        label="使用更多工具",
                         elem_id="query_type",
                     )
                     question = gr.Textbox(
