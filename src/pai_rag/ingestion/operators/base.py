@@ -42,6 +42,16 @@ class BaseOperator:
         self.result_count = 0
         self.real_output_filename = self._get_output_filename()
 
+        output_dir = os.path.dirname(self.output_filename)
+
+        try:
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+
+            logger.info(f"created output dir {output_dir}")
+        except OSError as err:
+            logger.warning(f"create output dir {output_dir} failed: {err}")
+
     def process(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -60,16 +70,15 @@ class BaseOperator:
     def persist(self, results: List[dict]):
         logger.info(f"Start writing results to {self.output_filename}")
         
-        output_dir = os.path.dirname(self.output_filename)
-        os.makedirs(output_dir, exist_ok=True)
         self.result_count += len(results)
-
-        print(f"creating dir {output_dir}")
-
-        with open(self.real_output_filename, "a") as file:
-            for result in results:
-                json_line = json.dumps(result, ensure_ascii=False)
-                file.write(f"{json_line}\n")
+        try:
+            with open(self.real_output_filename, "a") as file:
+                for result in results:
+                    json_line = json.dumps(result, ensure_ascii=False)
+                    file.write(f"{json_line}\n")
+        except OSError as err:
+            logger.warning(f"Write file {self.real_output_filename} failed. Error: {err}")
+            pass
 
         logger.info(f"Finished writing {self.name} results to {self.real_output_filename}. Current process count: {self.result_count}")
         self.real_output_filename = self._get_output_filename()
