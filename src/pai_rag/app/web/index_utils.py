@@ -23,6 +23,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     TablestoreVectorStoreConfig,
     DashVectorVectorStoreConfig,
 )
+from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
 
 index_related_component_keys = [
     "vector_index",
@@ -83,6 +84,8 @@ index_related_component_keys = [
     "dashvector_api_key",
     "dashvector_collection_name",
     "dashvector_partition_name",
+    "chunk_size",
+    "chunk_overlap",
 ]
 
 
@@ -341,16 +344,19 @@ def index_to_components_settings(
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
-                {"value": ""},
             ]
         )
 
+    node_parser_component_settings = [
+        {"value": index_entry.node_parser_config.chunk_size},
+        {"value": index_entry.node_parser_config.chunk_overlap},
+    ]
     component_settings = [
         *index_component_settings,
         *embed_component_settings,
         *vector_component_settings,
+        *node_parser_component_settings,
     ]
-
     settings = dict(zip(index_related_component_keys, component_settings))
     return settings
 
@@ -421,12 +427,18 @@ def components_to_index(
     dashvector_api_key,
     dashvector_collection_name,
     dashvector_partition_name,
+    chunk_size,
+    chunk_overlap,
     **kwargs,
 ) -> KnowledgeBase:
     if vector_index is None or vector_index.lower() == "new":
         index_name = new_index_name
     else:
         index_name = vector_index
+
+    node_parser_config = NodeParserConfig(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    ).model_dump()
 
     embedding = {
         "source": embed_source,
@@ -533,7 +545,7 @@ def components_to_index(
             "name": index_name,
             "vector_store_config": vector_store,
             "embedding_config": embedding,
+            "node_parser_config": node_parser_config,
         }
     )
-
     return index_entry

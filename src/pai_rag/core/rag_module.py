@@ -169,7 +169,9 @@ def resolve_task_executor(
     )
 
     node_parser = resolve(
-        cls=PaiNodeParser, parser_config=config.node_parser, caption_tool=caption_tool
+        cls=PaiNodeParser,
+        parser_config=knowledgebase.node_parser_config,
+        caption_tool=caption_tool,
     )
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
@@ -181,6 +183,9 @@ def resolve_task_executor(
         enable_local_keyword_index=True,
     )
 
+    logger.debug(
+        f"create FileTaskExecutor with params [node_parser]: {node_parser}, [embed_model]: {embed_model}, [vector_index]: {vector_index}, [data_reader]: {data_reader}"
+    )
     return resolve(
         cls=FileTaskExecutor,
         node_parser=node_parser,

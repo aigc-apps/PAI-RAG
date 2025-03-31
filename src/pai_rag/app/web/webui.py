@@ -40,6 +40,7 @@ def resume_ui():
         name=DEFAULT_KNOWLEDGEBASE_NAME,
         vector_store_config=rag_config.index.vector_store,
         embedding_config=rag_config.embedding,
+        node_parser_config=rag_config.node_parser,
     )
     component_settings.update(
         index_to_components_settings(

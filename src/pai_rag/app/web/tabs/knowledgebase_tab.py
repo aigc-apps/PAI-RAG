@@ -118,14 +118,15 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
                     chunk_size = gr.Textbox(
                         label="\N{rocket} 块大小（文档被分割成的块的大小）",
                         elem_id="chunk_size",
+                        interactive=True,
                     )
 
                     chunk_overlap = gr.Textbox(
                         label="\N{fire} 块重叠（相邻文档块之间相互重叠的部分）",
                         elem_id="chunk_overlap",
+                        interactive=True,
                     )
 
-                    components.extend([chunk_size, chunk_overlap])
     with gr.Row():
         add_index_button = gr.Button(
             "添加知识库",
@@ -169,17 +170,20 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
                 add_index_button,
                 update_index_button,
                 delete_index_button,
+                chunk_size,
+                chunk_overlap,
             ]
         )
 
-        all_component = {element.elem_id: element for element in vector_db_elems}
-        all_component.update({component.elem_id: component for component in components})
-        index_related_components = [
-            all_component[key] for key in index_related_component_keys
+        all_elements = {element.elem_id: element for element in vector_db_elems}
+        all_elements.update({component.elem_id: component for component in components})
+
+        index_related_elements = [
+            all_elements[key] for key in index_related_component_keys
         ]
         add_index_button.click(
             fn=ev_listeners.add_index,
-            inputs=index_related_components,
+            inputs=index_related_elements,
             outputs=[
                 vector_index,
                 new_index_name,
@@ -191,7 +195,7 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
 
         update_index_button.click(
             fn=ev_listeners.update_index,
-            inputs=index_related_components,
+            inputs=index_related_elements,
             outputs=[
                 vector_index,
                 new_index_name,
@@ -209,9 +213,7 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
             visible=False,
         )
         """
-    elems = components_to_dict(components)
-    elems.update(vector_db_components)
-    return elems
+    return all_elements
 
 
 def create_retrieval_test_tab():

@@ -15,6 +15,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     DEFAULT_LOCAL_STORAGE_PATH_OLD,
     DEFAULT_LOCAL_STORAGE_PATH,
 )
+from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
 from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
 from pai_rag.utils.file_utils import generate_md5
 from pai_rag.utils.index_utils import (
@@ -44,6 +45,7 @@ class KnowledgeBase(BaseModel):
     vector_store_config: Annotated[
         Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
     ]
+    node_parser_config: NodeParserConfig = Field(default_factory=NodeParserConfig)
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
@@ -72,7 +74,6 @@ class KnowledgeBaseMap(BaseModel):
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:
-        print(values, type(values))
         if "indexes" in values:
             values["knowledgebases"] = values["indexes"]
         return values
@@ -112,6 +113,7 @@ class KnowledgeBaseManager:
             name=DEFAULT_KNOWLEDGEBASE_NAME,
             vector_store_config=rag_config.index.vector_store,
             embedding_config=rag_config.embedding,
+            node_parser_config=rag_config.node_parser,
         )
         RagKnowledgeBaseHelper.create_new_knowledgebase_dir(DEFAULT_KNOWLEDGEBASE_NAME)
         self._knowledgebase_map.knowledgebases[
@@ -148,6 +150,7 @@ class KnowledgeBaseManager:
                     name=new_knowledgebase_name,
                     vector_store_config=old_knowledgebase.vector_store_config,
                     embedding_config=old_knowledgebase.embedding_config,
+                    node_parser_config=NodeParserConfig(),
                 )
                 RagKnowledgeBaseHelper.create_new_knowledgebase_dir(
                     new_knowledgebase_name
