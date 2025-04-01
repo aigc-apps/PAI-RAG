@@ -20,7 +20,7 @@ DEFAULT_INSTRUCTION_STR = (
     "1. Convert the query to executable Python code using Pandas.\n"
     "2. The final line of code should be a Python expression that can be called with the `eval()` function.\n"
     "3. The code should represent a solution to the query.\n"
-    "4. PRINT ONLY THE EXPRESSION.\n"
+    # "4. PRINT ONLY THE EXPRESSION.\n"
     "5. Do not quote the expression.\n"
 )
 
@@ -31,9 +31,12 @@ DEFAULT_PANDAS_PROMPT = PromptTemplate(
     "This is the result of `print(df.head())`:\n"
     "{df_str}\n\n"
     "Follow these instructions:\n"
-    "{instruction_str}\n"
-    "Query: {query_str}\n\n"
-    "Expression:",
+    "{instruction_str}\n\n"
+    "You must use the following format, with each item on a separate line:\n"
+    "Question: {query_str}\n"
+    "PandasExpression: Pandas Expression (end with ;) to run",
+    # "Query: {query_str}\n\n"
+    # "Expression:",
     prompt_type=PromptType.PANDAS,
 )
 
@@ -184,6 +187,10 @@ class PandasQueryRetriever(BaseRetriever):
                 f"```\n{pandas_response_str}\n```\n"
             )
         )
+        pandas_response_str = self._parse_response_to_pandas(
+            pandas_response_str, query_bundle
+        )
+        logger.info(f"> Parsed Pandas query: {pandas_response_str}")
 
         # get pandas output
         pandas_output = self._instruction_parser.parse(pandas_response_str)
@@ -240,6 +247,10 @@ class PandasQueryRetriever(BaseRetriever):
                 f"```\n{pandas_response_str}\n```\n"
             )
         )
+        pandas_response_str = self._parse_response_to_pandas(
+            pandas_response_str, query_bundle
+        )
+        logger.info(f"> Parsed Pandas query: {pandas_response_str}")
 
         # get pandas output
         pandas_output = self._instruction_parser.parse(pandas_response_str)
@@ -272,3 +283,21 @@ class PandasQueryRetriever(BaseRetriever):
             )
         ]
         return retrieved_nodes
+
+    def _parse_response_to_pandas(
+        self, response: str, query_bundle: QueryBundle
+    ) -> str:
+        """Parse response to SQL."""
+        sql_query_start = response.find("PandasExpression:")
+        if sql_query_start != -1:  # -1 means not found
+            response = response[sql_query_start:]
+            # TODO: move to removeprefix after Python 3.9+
+            if response.startswith("PandasExpression:"):
+                response = response[len("PandasExpression:") :]
+        sql_query_end = response.find(";")
+        if sql_query_end != -1:
+            response = response[:sql_query_end].rstrip().replace("```", "")
+        # if sql_result_start != -1:
+        # response = response[:sql_result_start]
+        # return response.strip().strip("```").strip().strip(";").strip().lstrip("sql")
+        return response.strip().replace("```", "")  # .lstrip("sql")
