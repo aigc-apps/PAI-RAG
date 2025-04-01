@@ -239,8 +239,8 @@ def resolve_data_analysis_query(
     #     "model_id": config.llm.model_id,
     # }
     # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
-    llm_da = resolve_da_llm(config, model_id)
-
+    # llm_da = resolve_da_llm(config, model_id)
+    llm_da = resolve_chat_llm(config, model_id)
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
