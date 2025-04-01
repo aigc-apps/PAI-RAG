@@ -16,6 +16,10 @@ from pai_rag.integrations.data_analysis.pandas_instruction_parser import (
     PandasInstructionParser,
 )
 
+
+pd.options.display.max_columns = 500  # 最多500列
+
+
 DEFAULT_INSTRUCTION_STR = (
     "1. Convert the query to executable Python code using Pandas.\n"
     "2. The final line of code should be a Python expression that can be called with the `eval()` function.\n"
