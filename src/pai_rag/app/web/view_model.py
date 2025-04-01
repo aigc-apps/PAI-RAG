@@ -422,7 +422,7 @@ class ViewModel(BaseModel):
 
         if self.analysis_type == "nl2pandas":
             config["data_analysis"]["type"] = "pandas"
-            config["data_analysis"]["analysis_file_path"] = self.analysis_file_path
+            config["data_analysis"]["file_path"] = self.analysis_file_path
         elif self.analysis_type == "nl2sql":
             config["data_analysis"]["type"] = "mysql"
             config["data_analysis"]["user"] = self.db_username

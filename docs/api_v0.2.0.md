@@ -604,7 +604,7 @@ chat()
   - Content-Type: application/json
 - 请求参数：
   - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
+  - vector_store_config: 向量库配置
   - embedding_config: embedding 模型配置
 
 <details>
@@ -645,7 +645,7 @@ chat()
   - Content-Type: application/json
 - 请求参数：
   - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
+  - vector_store_config: 向量库配置
   - embedding_config: embedding 模型配置
 
 <details>
