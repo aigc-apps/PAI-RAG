@@ -447,7 +447,7 @@ class SQLNodeGenerator(SQLGenerator):
         """Generate naive SQL query from the first table."""
         if len(query_tables) != 0:
             first_table = query_tables[0]
-            naive_sql_query_str = f"SELECT * FROM {first_table} LIMIT 500"
+            naive_sql_query_str = f"SELECT * FROM {first_table} LIMIT 200"
             logger.warning(f"Use the whole table: {first_table} instead if possible")
         else:
             naive_sql_query_str = sql_query_str
