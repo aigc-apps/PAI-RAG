@@ -2,7 +2,13 @@ import traceback
 from typing import Dict, List
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
-from pai_rag.extensions.news.news_config import MiaobiNewsConfig
+from pai_rag.extensions.news.news_config import (
+    MiaobiNewsConfig,
+    DEFAULT_NEWS_ROLE,
+    DEFAULT_NEWS_ERROR_MESSAGE,
+    DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+    DEFAULT_LIST_NEWS_END_RESPONSE,
+)
 
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -16,17 +22,12 @@ from alibabacloud_tea_openapi.models import Config
 from alibabacloud_tea_openapi_sse.client import Client as OpenApiClient
 from alibabacloud_tea_openapi_sse import models as open_api_models
 from alibabacloud_tea_util_sse import models as open_api_util_models
-from pai_rag.utils.prompt_template import DEFAULT_NEWS_ROLE
 import json
 
 from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
-
-
-DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
-DEFAULT_WEB_SEARCH_INFO_MESSAGE = "\n\n当前内容来自于互联网，请仔细甄别。"
 
 
 def _create_client(
@@ -227,6 +228,10 @@ class MiaobiNewsTool:
             ]
 
             response = await self.llm.achat(messages)
+            response.message.content = (
+                response.message.content
+                + DEFAULT_LIST_NEWS_END_RESPONSE.replace("\n", "")
+            )
             response.additional_kwargs["news_articles"] = hot_topics
             return ChatResponseWrapper(response=response)
         except Exception as ex:
@@ -297,6 +302,19 @@ class MiaobiNewsTool:
                     messages=messages,
                 ):
                     yield response
+
+                text_parts = DEFAULT_LIST_NEWS_END_RESPONSE.split("\n")
+
+                # 逐个 yield 返回
+                for part in text_parts:
+                    if part.strip():
+                        yield ChatResponse(
+                            message=ChatMessage(
+                                role="assistant",
+                                content=part,
+                            ),
+                            delta=part,
+                        )
 
             return ChatResponseWrapper(response=gen())
         except Exception as e:
