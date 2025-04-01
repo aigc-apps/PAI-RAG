@@ -32,6 +32,20 @@ from pai_rag.integrations.search.search_config import (
 )
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
 
+# deprecated
+QUERY_TYPE_MAP = {
+    "对话 (大模型)": "llm",
+    "检索测试": "retrieval",
+    "对话 (网络搜索)": "websearch",
+    "对话 (知识库)": "rag",
+}
+INVERTED_QUERY_TYPE_MAP = {
+    "llm": "对话 (大模型)",
+    "retrieval": "检索测试",
+    "websearch": "对话 (网络搜索)",
+    "rag": "对话 (知识库)",
+}
+
 
 def recursive_dict():
     return defaultdict(recursive_dict)
@@ -124,7 +138,8 @@ class ViewModel(BaseModel):
     reranker_similarity_threshold: float = 0
     reranker_similarity_top_k: int = 3
 
-    query_type: List = ["大模型"]
+    query_type: str = "对话 (知识库)"  # deprecated
+    query_types: List = ["大模型"]
 
     enable_query_transform: bool = True
     rewrite_base_prompt: str = None
@@ -186,7 +201,10 @@ class ViewModel(BaseModel):
 
         view_model.chat_model_id = config.chat.model_id or "default"
 
-        view_model.query_type = [qt for qt in config.system.query_type]
+        view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
+            config.system.query_type, "对话 (知识库)"
+        )  # deprecated
+        view_model.query_types = [qt for qt in config.system.query_types]
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -356,7 +374,10 @@ class ViewModel(BaseModel):
 
         config["system"]["default_web_search"] = self.default_web_search
 
-        config["system"]["query_type"] = [qt for qt in self.query_type]
+        config["system"]["query_type"] = QUERY_TYPE_MAP.get(
+            self.query_type, "rag"
+        )  # deprecated
+        config["system"]["query_types"] = [qt for qt in self.query_types]
 
         config["chat"]["model_id"] = self.chat_model_id
         config["query_rewrite"]["model_id"] = self.query_rewrite_model_id
@@ -664,6 +685,9 @@ class ViewModel(BaseModel):
         }
         settings["query_type"] = {
             "value": self.query_type,
+        }  # deprecated
+        settings["query_types"] = {
+            "value": self.query_types,
         }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
         settings["reranker_similarity_threshold"] = {

@@ -10,7 +10,12 @@ import re
 import markdown
 import html
 from loguru import logger
-from pai_rag.app.api.models import RagQuery, RagResponse, ChatCompletionRequest
+from pai_rag.app.api.models import (
+    RagQuery,
+    RagResponse,
+    ChatCompletionRequest,
+    RetrievalRequest,
+)
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -189,7 +194,7 @@ class RagLocalClient:
                     if r.startswith("data: "):
                         chunk = json.loads(r[6:])
                         result = {
-                            "delta": chunk["delta"],
+                            "delta": chunk["choices"][0]["delta"]["content"],
                             "docs": chunk.get("docs"),
                             "is_finished": chunk.get("is_finished", False),
                         }
@@ -672,6 +677,45 @@ class RagLocalClient:
                 code=500,
                 msg=f"delete index {index_name} failed. {e}",
             )
+
+    async def knowledgebase_retrieval_test(
+        self,
+        knowledgebase_id: str,
+        query: str,
+        retrieval_setting: dict = {},
+    ):
+        try:
+            response = await rag_service.aknowledgebase_retrieval(
+                RetrievalRequest(
+                    query=query,
+                    knowledgebase_id=knowledgebase_id,
+                    retrieval_setting=retrieval_setting,
+                )
+            )
+            result = {}
+            formatted_text = "<tr><th>切片</th><th>分数</th><th>文本</th><th>标题</th></tr>\n"
+            if len(response.records) == 0:
+                result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=query)
+            else:
+                for i, record in enumerate(response.records):
+                    html_content = markdown.markdown(record.content)
+                    file_url = record.metadata.get("file_url", None)
+                    safe_html_content = html.escape(html_content).replace("\n", "<br>")
+                    if file_url:
+                        safe_html_content = (
+                            f"""<a href="{file_url}">{safe_html_content}</a>"""
+                        )
+                    formatted_text += '<tr style="font-size: 13px;"><td>切片 {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                        i + 1, record.score, safe_html_content, record.title
+                    )
+                formatted_text = (
+                    "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
+                )
+                result["delta"] = formatted_text
+            yield dotdict(result)
+
+        except Exception as error:
+            raise RagApiError(code=500, msg=str(error))
 
 
 rag_client = RagLocalClient()

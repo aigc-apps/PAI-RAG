@@ -29,7 +29,7 @@ async def respond(input_elements: List[Any]):
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     chatbot = update_dict["chatbot"]
-    query_type = update_dict["query_type"]
+    query_types = update_dict["query_types"]
     question = update_dict["question"]
     q_msg = {"content": question, "role": "user"}
     chatbot.append(q_msg)
@@ -46,12 +46,12 @@ async def respond(input_elements: List[Any]):
         )
         yield chatbot
 
-    chat_knowledgebase = True if "查询知识库" in query_type else False
-    search_web = True if "联网搜索" in query_type else False
-    chat_llm = True if "大模型" in query_type else False
-    chat_agent = True if "agent" in query_type else False
-    chat_db = True if "查询数据库" in query_type else False
-    chat_news = True if "新闻工具" in query_type else False
+    chat_knowledgebase = True if "查询知识库" in query_types else False
+    search_web = True if "联网搜索" in query_types else False
+    chat_llm = True if "大模型" in query_types else False
+    chat_agent = True if "agent" in query_types else False
+    chat_db = True if "查询数据库" in query_types else False
+    chat_news = True if "新闻工具" in query_types else False
 
     try:
         response_gen = rag_client.query(
@@ -324,10 +324,10 @@ def create_chat_tab() -> Dict[str, Any]:
             chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
             with gr.Row():
                 with gr.Column(variant="panel"):
-                    query_type = gr.CheckboxGroup(
+                    query_types = gr.CheckboxGroup(
                         ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
-                        elem_id="query_type",
+                        elem_id="query_types",
                     )
                     question = gr.Textbox(
                         label="在这里输入您的问题", elem_id="question", scale=9
@@ -341,7 +341,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 chat_model_id,
                 default_web_search,
                 question,
-                query_type,
+                query_types,
                 chatbot,
                 is_streaming,
                 citation,
@@ -392,5 +392,5 @@ def create_chat_tab() -> Dict[str, Any]:
             # aliyun_access_key_id.elem_id: aliyun_access_key_id,
             # aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
             llm_temperature.elem_id: llm_temperature,
-            query_type.elem_id: query_type,
+            query_types.elem_id: query_types,
         }

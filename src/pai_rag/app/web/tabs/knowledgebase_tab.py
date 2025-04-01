@@ -39,8 +39,8 @@ async def retrieval_test_respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        response_gen = rag_client.query_vector(
-            chatbot[:-1], question, index_name=index_name
+        response_gen = rag_client.knowledgebase_retrieval_test(
+            knowledgebase_id=index_name, query=question
         )
 
         async for resp in response_gen:
@@ -381,7 +381,7 @@ def create_retrieval_test_tab():
                 allow_custom_value=True,
             )
             chatbot = gr.Chatbot(
-                height=300, elem_id="retrieval_test_chatbot", type="messages"
+                height=500, elem_id="retrieval_test_chatbot", type="messages"
             )
             with gr.Row():
                 question = gr.Textbox(
@@ -391,7 +391,22 @@ def create_retrieval_test_tab():
                 submitBtn = gr.Button("提交", variant="primary")
                 clearBtn = gr.Button("清空历史", variant="secondary")
 
-            retrieval_chat_elements = {chat_index, chatbot, question}
+            retrieval_chat_elements = {
+                retrieval_mode,
+                reranker_type,
+                vector_weight,
+                keyword_weight,
+                similarity_top_k,
+                image_similarity_top_k,
+                similarity_threshold,
+                reranker_similarity_threshold,
+                reranker_model,
+                reranker_similarity_top_k,
+                save_retrieval_button,
+                chat_index,
+                chatbot,
+                question,
+            }
 
             components.extend([chat_index, chatbot, question])
 

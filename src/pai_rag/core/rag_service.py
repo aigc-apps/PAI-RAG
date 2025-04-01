@@ -11,6 +11,8 @@ from pai_rag.utils.oss_utils import get_oss_auth
 from pai_rag.app.api.models import (
     RagQuery,
     RagResponse,
+    RetrievalRequest,
+    NewRetrievalResponse,
 )
 from typing import Dict
 from loguru import logger
@@ -159,6 +161,15 @@ class RagService:
             return await self.app.aretrieve(
                 question=query.question, knowledgebase_name=query.index_name
             )
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Query RAG failed: {ex}")
+
+    async def aknowledgebase_retrieval(
+        self, retrieval_request: RetrievalRequest
+    ) -> NewRetrievalResponse:
+        try:
+            return await self.app.aknowledgebase_retrieve(retrieval_request)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

@@ -37,6 +37,23 @@ class ContextDoc(BaseModel):
     image_url: str | None = None  # 图片链接
 
 
+class RetrievalRequest(BaseModel):
+    knowledgebase_id: Optional[str] = "default"  # 知识库名称（index_name）
+    query: str  # 查询内容
+    retrieval_setting: Optional[Dict] = None
+
+
+class DocRecord(BaseModel):
+    content: str  # 包含知识库中数据源的文本块
+    score: float  # 结果与查询的相关性分数，范围：0~1
+    title: str  # 文档标题
+    metadata: Dict  # 包含数据源中文档的元数据属性及其值
+
+
+class NewRetrievalResponse(BaseModel):
+    records: List[DocRecord]
+
+
 class RetrievalResponse(BaseModel):
     docs: List[ContextDoc]
 
