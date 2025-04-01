@@ -10,7 +10,7 @@ import re
 import markdown
 import html
 from loguru import logger
-from pai_rag.app.api.models import RagQuery, RagResponse
+from pai_rag.app.api.models import RagQuery, RagResponse, ChatCompletionRequest
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -146,7 +146,6 @@ class RagLocalClient:
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
         citation: bool = False,
-        with_intent: bool = False,
         index_name: str = None,
         return_reference: bool = False,
         chat_model_id: str = None,
@@ -158,15 +157,14 @@ class RagLocalClient:
         chat_db: bool = False,
         chat_news: bool = False,
     ):
-        query = RagQuery(
-            messages=chat_messages,
-            stream=stream,
-            citation=citation,
-            with_intent=with_intent,
-            index_name=index_name,
-            return_reference=return_reference,
+        query = ChatCompletionRequest(
             model=chat_model_id,
+            messages=chat_messages,
             temperature=temperature,
+            stream=stream,
+            index_name=index_name,
+            citation=citation,
+            return_reference=return_reference,
             chat_knowledgebase=chat_knowledgebase,
             search_web=search_web,
             chat_llm=chat_llm,
@@ -176,7 +174,10 @@ class RagLocalClient:
         )
 
         try:
-            response = await rag_service.aquery_v1(query)
+            if stream:
+                response = await rag_service.astream_chat(query)
+            else:
+                response = await rag_service.achat(query)
             if isinstance(response, RagResponse):
                 result = {
                     "delta": response.answer,

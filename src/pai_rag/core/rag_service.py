@@ -89,11 +89,13 @@ class RagService:
 
     async def aquery_v1(self, query: RagQuery):
         try:
-            # if query.search_web:
-            #     return await self.app.aquery(
-            #         query, RagChatType.WEB, sse_version=SseVersion.V1
-            #     )
-            return await self.app.aquery(query, sse_version=SseVersion.V1)
+            if query.search_web:
+                return await self.app.aquery(
+                    query, RagChatType.WEB, sse_version=SseVersion.V1
+                )
+            return await self.app.aquery(
+                query, RagChatType.RAG, sse_version=SseVersion.V1
+            )
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

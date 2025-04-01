@@ -22,19 +22,12 @@ class RagQuery(BaseModel):
     citation: bool | None = False  # 是否使用引用标签
     with_intent: bool | None = False  # 是否使用意图
     index_name: str | None = None  # 索引名称
+    search_web: bool | None = False  # 是否搜索网页
     system_role_template: str | None = None  # system prompt模板
     custom_prompt_template: str | None = None  # custom prompt模板
     return_reference: bool | None = False  # 是否返回参考文档
     model: str | None = None  # 推理模型
     temperature: float | None = 0.1  # 推理时参数：温度值
-
-    # adapt to chat_request
-    chat_knowledgebase: Optional[bool] = False  # 查询知识库
-    search_web: Optional[bool] = False  # 搜索网络
-    chat_llm: Optional[bool] = False  # 是否使用llm聊天
-    chat_agent: Optional[bool] = False  # 是否使用agent
-    chat_db: Optional[bool] = False  # 查询数据库
-    chat_news: Optional[bool] = False  # 使用新闻工具
 
 
 class ContextDoc(BaseModel):
