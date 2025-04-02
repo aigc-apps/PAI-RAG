@@ -1,0 +1,55 @@
+{
+  "request_settings": {
+    "model": "default",
+    "stream": false,
+    "chat_news": true,
+    "search_web": true,
+    "temperature": 0.6
+  },
+  "samples": [
+    {
+      "query": "深小闻，有什么新闻",
+      "intent": "list_news",
+      "predicted_intent": "list_news",
+      "score": 1
+    },
+    {
+      "query": "深小闻，有什么国际新闻",
+      "intent": "list_news",
+      "news_topics": ["国际"],
+      "predicted_intent": "list_news",
+      "score": 1
+    },
+    {
+      "query": "深小闻，雷军的新闻",
+      "intent": "chat_news",
+      "predicted_intent": "chat_news",
+      "score": 1
+    },
+    {
+      "query": "打开深小闻",
+      "intent": "list_news",
+      "predicted_intent": "list_news",
+      "score": 1
+    },
+    {
+      "query": "介绍一下深小闻",
+      "intent": "chat_news_llm",
+      "predicted_intent": "chat_news_llm",
+      "score": 1
+    },
+    {
+      "query": "今天黄金金价多少了",
+      "intent": "search_web",
+      "predicted_intent": "search_web",
+      "score": 1
+    },
+    {
+      "query": "你是谁",
+      "intent": "chat_llm",
+      "predicted_intent": "chat_llm",
+      "score": 1
+    }
+  ],
+  "average_score": 1.0
+}
