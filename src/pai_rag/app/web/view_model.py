@@ -72,8 +72,6 @@ class ViewModel(BaseModel):
 
     # node_parser
     parser_type: str = "Sentence"
-    # chunk_size: int = 500
-    # chunk_overlap: int = 20
     enable_multimodal: bool = False
 
     # reader
@@ -215,8 +213,6 @@ class ViewModel(BaseModel):
         view_model.oss_bucket = config.oss_store.bucket
 
         view_model.parser_type = config.node_parser.type
-        # view_model.chunk_overlap = config.node_parser.chunk_overlap
-        # view_model.chunk_size = config.node_parser.chunk_size
 
         view_model.enable_mandatory_ocr = config.data_reader.enable_mandatory_ocr
         view_model.number_workers = config.data_reader.number_workers
@@ -394,8 +390,6 @@ class ViewModel(BaseModel):
         config["oss_store"]["bucket"] = self.oss_bucket
 
         config["node_parser"]["type"] = self.parser_type
-        # config["node_parser"]["chunk_size"] = int(self.chunk_size)
-        # config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
         config["data_reader"]["enable_mandatory_ocr"] = self.enable_mandatory_ocr
         config["data_reader"]["number_workers"] = int(self.number_workers)
@@ -662,8 +656,6 @@ class ViewModel(BaseModel):
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
 
-        # settings["chunk_size"] = {"value": self.chunk_size}
-        # settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_mandatory_ocr"] = {"value": self.enable_mandatory_ocr}
         settings["number_workers"] = {"value": self.number_workers}

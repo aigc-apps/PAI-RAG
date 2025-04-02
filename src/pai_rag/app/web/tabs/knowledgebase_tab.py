@@ -161,6 +161,7 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
             with gr.Row():
                 with gr.Column():
                     _ = gr.Markdown(value="**切片配置**")
+
                     chunk_size = gr.Textbox(
                         label="\N{rocket} 块大小（文档被分割成的块的大小）",
                         elem_id="chunk_size",
