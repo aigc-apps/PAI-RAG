@@ -94,7 +94,7 @@ def change_vector_index_button(index_name):
         gr.update(choices=index_list + ["NEW"], value=index_name),
         gr.update(choices=index_list, value=index_name),
         gr.update(choices=index_list, value=index_name),
-        gr.update(choices=index_list, value=index_name),
+        gr.update(choices=index_list),
     ]
 
 
@@ -152,11 +152,7 @@ def make_homepage():
             inputs=knowledgebase_elements["history_index"],
             outputs=index_selector_elements,
         )
-        knowledgebase_elements["retrieval_test_chat_index"].input(
-            change_vector_index_button,
-            inputs=knowledgebase_elements["retrieval_test_chat_index"],
-            outputs=index_selector_elements,
-        )
+
         chat_elements["chat_index"].input(
             change_vector_index_button,
             inputs=chat_elements["chat_index"],

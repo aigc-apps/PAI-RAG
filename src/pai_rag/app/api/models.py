@@ -40,7 +40,8 @@ class ContextDoc(BaseModel):
 class RetrievalRequest(BaseModel):
     knowledgebase_id: Optional[str] = "default"  # 知识库名称（index_name）
     query: str  # 查询内容
-    retrieval_setting: Optional[Dict] = None
+    retrieval_settings: Optional[Dict] = None
+    # ["retrieval_mode", "similarity_top_k", "vector_weight", "keyword_weight", "reranker_type", "similarity_threshold", "reranker_similarity_threshold", "reranker_model", "reranker_similarity_top_k"]
 
 
 class DocRecord(BaseModel):

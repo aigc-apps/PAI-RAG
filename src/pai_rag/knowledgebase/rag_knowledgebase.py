@@ -49,6 +49,7 @@ class KnowledgeBase(BaseModel):
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
+    retrieval_settings: Dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:

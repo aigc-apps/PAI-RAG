@@ -10,6 +10,7 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_loader,
     resolve_query_engine,
     resolve_vector_index,
+    resolve_query_engine_from_retrieval_request,
 )
 
 from pai_rag.app.api.models import (
@@ -152,7 +153,19 @@ class PaiApp:
             retrieval_request.knowledgebase_id
         )
         vector_index = resolve_vector_index(knowledgebase=knowledgebase)
-        query_engine = resolve_query_engine(self.config, vector_index=vector_index)
+        _retrieval_settings = (
+            retrieval_request.retrieval_settings
+            if retrieval_request.retrieval_settings
+            else knowledgebase.retrieval_settings
+        )
+        logger.info(
+            f"aknowledgebase_retrieve ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
+        )
+        query_engine = resolve_query_engine_from_retrieval_request(
+            self.config,
+            vector_index=vector_index,
+            retrieval_settings=_retrieval_settings,
+        )
         node_results = await query_engine.aretrieve(query_bundle)
 
         records = [

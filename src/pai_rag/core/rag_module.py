@@ -47,7 +47,16 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
-
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
+    SimilarityPostProcessorConfig,
+    RerankModelPostProcessorConfig,
+    DEFAULT_SIMILARITY_THRESHOLD,
+    DEFAULT_RERANK_SIMILARITY_THRESHOLD,
+    DEFAULT_RERANK_MODEL,
+    DEFAULT_RERANK_TOP_N,
+)
 
 cls_cache = {}
 
@@ -322,6 +331,80 @@ def resolve_query_engine(
     synthesizer = resolve_synthesizer(config, model_id)
     postprocessor = resolve(
         cls=PaiPostProcessor, postprocessor_config=config.postprocessor
+    )
+
+    query_engine = resolve(
+        cls=PaiRetrieverQueryEngine,
+        retriever=retriever,
+        response_synthesizer=synthesizer,
+        node_postprocessors=[postprocessor],
+        callback_manager=Settings.callback_manager,
+    )
+
+    return query_engine
+
+
+def resolve_query_engine_from_retrieval_request(
+    config: RagConfig,
+    vector_index: PaiVectorStoreIndex,
+    retrieval_settings: dict = None,
+    model_id: str = None,
+) -> PaiRetrieverQueryEngine:
+    retrieval_mode = retrieval_settings.get(
+        "retrieval_mode", config.retriever.vector_store_query_mode
+    )
+    if retrieval_mode == "向量检索":
+        retrieval_mode = VectorStoreQueryMode.DEFAULT
+    elif retrieval_mode == "关键字检索":
+        retrieval_mode = VectorStoreQueryMode.TEXT_SEARCH
+    elif retrieval_mode == "混合检索":
+        retrieval_mode = VectorStoreQueryMode.HYBRID
+
+    hybrid_fusion_weights = [
+        retrieval_settings.get(
+            "vector_weight", config.retriever.hybrid_fusion_weights[0]
+        ),
+        retrieval_settings.get(
+            "keyword_weight", config.retriever.hybrid_fusion_weights[1]
+        ),
+    ]
+
+    retriever = vector_index.as_retriever(
+        vector_store_query_mode=retrieval_mode,
+        similarity_top_k=retrieval_settings.get(
+            "similarity_top_k", config.retriever.similarity_top_k
+        ),
+        hybrid_fusion_weights=hybrid_fusion_weights,
+        image_similarity_top_k=config.retriever.image_similarity_top_k,  # not support yet
+        search_image=config.retriever.search_image,  # not support yet
+    )
+
+    synthesizer = resolve_synthesizer(config, model_id)
+
+    _reranker_type = retrieval_settings.get("reranker_type", "无重排序")
+    if _reranker_type == "无重排序":
+        _postprocessor_config = SimilarityPostProcessorConfig(
+            reranker_type=PostProcessorType.no_reranker,
+            similarity_threshold=retrieval_settings.get(
+                "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
+            ),
+        )
+    elif _reranker_type == "基于模型的重排序":
+        _postprocessor_config = RerankModelPostProcessorConfig(
+            reranker_type=PostProcessorType.reranker_model,
+            reranker_model=retrieval_settings.get(
+                "reranker_model", DEFAULT_RERANK_MODEL
+            ),
+            top_n=retrieval_settings.get(
+                "reranker_similarity_top_k", DEFAULT_RERANK_TOP_N
+            ),
+            similarity_threshold=retrieval_settings.get(
+                "reranker_similarity_threshold", DEFAULT_RERANK_SIMILARITY_THRESHOLD
+            ),
+        )
+
+    postprocessor = resolve(
+        cls=PaiPostProcessor, postprocessor_config=_postprocessor_config
     )
 
     query_engine = resolve(

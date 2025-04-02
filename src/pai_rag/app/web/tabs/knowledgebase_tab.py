@@ -9,6 +9,7 @@ from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from pai_rag.app.web.tabs.history_tab import create_upload_history
 from pai_rag.app.web.tabs.chat_tab import reset_textbox, clear_history
 from loguru import logger
+import json
 
 
 async def retrieval_test_respond(input_elements: List[Any]):
@@ -20,11 +21,6 @@ async def retrieval_test_respond(input_elements: List[Any]):
     if not update_dict["retrieval_test_question"]:
         yield update_dict["retrieval_test_chatbot"]
         return
-
-    try:
-        rag_client.patch_config(update_dict)
-    except RagApiError as api_error:
-        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
 
     chatbot = update_dict["retrieval_test_chatbot"]
     question = update_dict["retrieval_test_question"]
@@ -40,7 +36,22 @@ async def retrieval_test_respond(input_elements: List[Any]):
 
     try:
         response_gen = rag_client.knowledgebase_retrieval_test(
-            knowledgebase_id=index_name, query=question
+            knowledgebase_id=index_name,
+            query=question,
+            retrieval_settings={
+                "retrieval_mode": update_dict["retrieval_mode"],
+                "similarity_top_k": update_dict["similarity_top_k"],
+                # "image_similarity_top_k": update_dict["image_similarity_top_k"], # not supported yet
+                "vector_weight": update_dict["vector_weight"],
+                "keyword_weight": update_dict["keyword_weight"],
+                "reranker_type": update_dict["reranker_type"],
+                "similarity_threshold": update_dict["similarity_threshold"],
+                "reranker_similarity_threshold": update_dict[
+                    "reranker_similarity_threshold"
+                ],
+                "reranker_model": update_dict["reranker_model"],
+                "reranker_similarity_top_k": update_dict["reranker_similarity_top_k"],
+            },
         )
 
         async for resp in response_gen:
@@ -54,6 +65,41 @@ async def retrieval_test_respond(input_elements: List[Any]):
     finally:
         logger.info(f"Chatbot finished: {chatbot}")
         yield chatbot
+
+
+def save_retrieval_config(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+    knowledgebase_id = update_dict["retrieval_test_chat_index"]
+    retrieval_settings = {
+        "retrieval_mode": update_dict["retrieval_mode"],
+        "similarity_top_k": update_dict["similarity_top_k"],
+        "vector_weight": update_dict["vector_weight"],
+        "keyword_weight": update_dict["keyword_weight"],
+        "reranker_type": update_dict["reranker_type"],
+        "similarity_threshold": update_dict["similarity_threshold"],
+        "reranker_similarity_threshold": update_dict["reranker_similarity_threshold"],
+        "reranker_model": update_dict["reranker_model"],
+        "reranker_similarity_top_k": update_dict["reranker_similarity_top_k"],
+    }
+    rag_client.update_index_retrieval_settings(knowledgebase_id, retrieval_settings)
+    index_retrieval_settings = {
+        "knowledgebase_id": knowledgebase_id,
+        "retrieval_settings": retrieval_settings,
+    }
+    return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
+
+
+def show_retrieval_config(retrieval_test_chat_index):
+    retrieval_settings = rag_client.get_index_retrieval_settings(
+        retrieval_test_chat_index
+    )
+    index_retrieval_settings = {
+        "knowledgebase_id": retrieval_test_chat_index,
+        "retrieval_settings": retrieval_settings,
+    }
+    return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
 
 
 def create_knowledgebase_settings_tab() -> Dict[str, Any]:
@@ -220,90 +266,97 @@ def create_retrieval_test_tab():
     components = []
     with gr.Row():
         with gr.Column(scale=3):
-            _ = gr.Markdown(value="### **检索参数设置**")
-            retrieval_mode = gr.Radio(
-                ["向量检索", "关键字检索", "混合检索"],
-                label="检索模式",
-                elem_id="retrieval_mode",
-            )
-
-            vector_weight = gr.Slider(
-                minimum=0,
-                maximum=1,
-                value=0.7,
-                elem_id="vector_weight",
-                label="向量检索权重",
-                visible=(retrieval_mode == "混合检索"),
-            )
-            keyword_weight = gr.Slider(
-                minimum=0,
-                maximum=1,
-                value=float(1 - vector_weight.value),
-                elem_id="keyword_weight",
-                label="关键字检索权重",
-                interactive=False,
-                visible=(retrieval_mode == "混合检索"),
-            )
-
-            similarity_top_k = gr.Slider(
-                minimum=0,
-                maximum=100,
-                step=1,
-                elem_id="similarity_top_k",
-                label="返回Top-K条文本结果 (0 到 100)",
-            )
-            image_similarity_top_k = gr.Slider(
-                minimum=0,
-                maximum=10,
-                step=1,
-                elem_id="image_similarity_top_k",
-                label="返回Top-K条图片结果 (0 到 10)",
-            )
-            similarity_threshold = gr.Slider(
-                minimum=0,
-                maximum=1,
-                step=0.01,
-                elem_id="similarity_threshold",
-                label="相似度分数阈值 (内容越相似，分数越大)",
-            )
-
-            reranker_type = gr.Radio(
-                ["无重排序", "基于模型的重排序"],
-                label="重排序类型",
-                elem_id="reranker_type",
-            )
-            with gr.Column(
-                visible=(reranker_type == "基于模型的重排序"),
-                elem_id="model_reranker_col",
-            ) as model_reranker_col:
-                reranker_model = gr.Radio(
-                    [
-                        "bge-reranker-base",
-                        "bge-reranker-large",
-                    ],
-                    label="重排序模型（注意：首次使用该模型时，加载模型将需要较长时间）",
-                    elem_id="reranker_model",
+            with gr.Column():
+                _ = gr.Markdown(value="### **检索参数调试**")
+                retrieval_mode = gr.Radio(
+                    ["向量检索", "关键字检索", "混合检索"],
+                    label="检索模式",
+                    elem_id="retrieval_mode",
                 )
-                reranker_similarity_threshold = gr.Slider(
-                    minimum=-10,
-                    maximum=10,
-                    step=0.01,
-                    elem_id="reranker_similarity_threshold",
-                    label="重排序相似度分数阈值（结果越相似，数值越大）",
-                )
-                reranker_similarity_top_k = gr.Slider(
+
+                vector_weight = gr.Slider(
                     minimum=0,
-                    maximum=50,
-                    step=1,
-                    elem_id="reranker_similarity_top_k",
-                    label="重排序文本 Top-K (0 到 50)",
+                    maximum=1,
+                    value=0.7,
+                    elem_id="vector_weight",
+                    label="向量检索权重",
+                    visible=(retrieval_mode == "混合检索"),
+                )
+                keyword_weight = gr.Slider(
+                    minimum=0,
+                    maximum=1,
+                    value=float(1 - vector_weight.value),
+                    elem_id="keyword_weight",
+                    label="关键字检索权重",
+                    interactive=False,
+                    visible=(retrieval_mode == "混合检索"),
                 )
 
-            with gr.Row():
+                similarity_top_k = gr.Slider(
+                    minimum=0,
+                    maximum=100,
+                    step=1,
+                    elem_id="similarity_top_k",
+                    label="返回Top-K条文本结果 (0 到 100)",
+                )
+                # image_similarity_top_k = gr.Slider(
+                #     minimum=0,
+                #     maximum=10,
+                #     step=1,
+                #     elem_id="image_similarity_top_k",
+                #     label="返回Top-K条图片结果 (0 到 10)",
+                # )
+                similarity_threshold = gr.Slider(
+                    minimum=0,
+                    maximum=1,
+                    step=0.01,
+                    elem_id="similarity_threshold",
+                    label="相似度分数阈值 (内容越相似，分数越大)",
+                )
+
+                reranker_type = gr.Radio(
+                    ["无重排序", "基于模型的重排序"],
+                    label="重排序类型",
+                    elem_id="reranker_type",
+                )
+                with gr.Column(
+                    visible=(reranker_type == "基于模型的重排序"),
+                    elem_id="model_reranker_col",
+                ) as model_reranker_col:
+                    reranker_model = gr.Radio(
+                        [
+                            "bge-reranker-base",
+                            "bge-reranker-large",
+                        ],
+                        label="重排序模型（注意：首次使用该模型时，加载模型将需要较长时间）",
+                        elem_id="reranker_model",
+                    )
+                    reranker_similarity_threshold = gr.Slider(
+                        minimum=-10,
+                        maximum=10,
+                        step=0.01,
+                        elem_id="reranker_similarity_threshold",
+                        label="重排序相似度分数阈值（结果越相似，数值越大）",
+                    )
+                    reranker_similarity_top_k = gr.Slider(
+                        minimum=0,
+                        maximum=50,
+                        step=1,
+                        elem_id="reranker_similarity_top_k",
+                        label="重排序文本 Top-K (0 到 50)",
+                    )
+
+            with gr.Row(variant="panel"):
                 with gr.Column():
-                    _ = gr.Markdown(value="**召回测试调优后，保存上述参数到配置文件进行持久化存储**")
+                    _ = gr.Markdown(value="### **调试完成后保存将检索参数应用到线上**")
+                    online_retrieval_config = gr.Code(
+                        label="当前线上检索配置",
+                        elem_id="online_retrieval_config",
+                        language="json",
+                        interactive=False,
+                    )
                     save_retrieval_button = gr.Button(
-                        value="保存并应用检索配置",
+                        value="保存当前参数并应用到线上",
                         elem_id="save_retrieval_button",
                         variant="primary",
                     )
@@ -362,18 +415,18 @@ def create_retrieval_test_tab():
                 vector_weight,
                 keyword_weight,
                 similarity_top_k,
-                image_similarity_top_k,
+                # image_similarity_top_k,
                 similarity_threshold,
                 reranker_similarity_threshold,
                 reranker_model,
                 reranker_similarity_top_k,
+                online_retrieval_config,
                 save_retrieval_button,
             ]
             components.extend(db_retrieval_elements)
 
         with gr.Column(scale=7):
-            _ = gr.Markdown(value="### **召回测试**")
-            chat_index = gr.Dropdown(
+            retrieval_test_chat_index = gr.Dropdown(
                 choices=[],
                 value="",
                 label="\N{bookmark} 知识库名称",
@@ -397,18 +450,39 @@ def create_retrieval_test_tab():
                 vector_weight,
                 keyword_weight,
                 similarity_top_k,
-                image_similarity_top_k,
+                # image_similarity_top_k,
                 similarity_threshold,
                 reranker_similarity_threshold,
                 reranker_model,
                 reranker_similarity_top_k,
                 save_retrieval_button,
-                chat_index,
+                retrieval_test_chat_index,
                 chatbot,
                 question,
             }
 
-            components.extend([chat_index, chatbot, question])
+            components.extend([retrieval_test_chat_index, chatbot, question])
+
+            retrieval_test_chat_index.input(
+                fn=show_retrieval_config,
+                inputs=[retrieval_test_chat_index],
+                outputs=[online_retrieval_config],
+                api_name="show_retrieval_config",
+            )
+
+            retrieval_test_chat_index.change(
+                fn=show_retrieval_config,
+                inputs=[retrieval_test_chat_index],
+                outputs=[online_retrieval_config],
+                api_name="show_retrieval_config",
+            )
+
+            save_retrieval_button.click(
+                fn=save_retrieval_config,
+                inputs=retrieval_chat_elements,
+                outputs=[online_retrieval_config],
+                api_name="save_retrieval_button",
+            )
 
             submitBtn.click(
                 retrieval_test_respond,

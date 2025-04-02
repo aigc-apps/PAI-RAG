@@ -668,6 +668,37 @@ class RagLocalClient:
                 msg=f"update index {index_entry.name} failed. {e}",
             )
 
+    def update_index_retrieval_settings(
+        self,
+        knowledgebase_id: str,
+        retrieval_settings: dict = {},
+    ):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            _knowledgebase.retrieval_settings = retrieval_settings
+            knowledgebase_manager.update_knowledgebase(_knowledgebase)
+        except Exception as e:
+            logger.exception(
+                f"update retrieval_settings for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
+            )
+
+    def get_index_retrieval_settings(self, knowledgebase_id: str):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            return _knowledgebase.retrieval_settings
+        except Exception as e:
+            logger.exception(
+                f"update retrieval_settings for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
+            )
+
     def delete_index(self, index_name: str):
         try:
             knowledgebase_manager.delete_knowledgebase(name=index_name)
@@ -682,14 +713,14 @@ class RagLocalClient:
         self,
         knowledgebase_id: str,
         query: str,
-        retrieval_setting: dict = {},
+        retrieval_settings: dict = {},
     ):
         try:
             response = await rag_service.aknowledgebase_retrieval(
                 RetrievalRequest(
                     query=query,
                     knowledgebase_id=knowledgebase_id,
-                    retrieval_setting=retrieval_setting,
+                    retrieval_settings=retrieval_settings,
                 )
             )
             result = {}
@@ -716,6 +747,19 @@ class RagLocalClient:
 
         except Exception as error:
             raise RagApiError(code=500, msg=str(error))
+
+    def get_knowledgebase_retrieval_config(self, knowledgebase_id):
+        try:
+            config = rag_service.get_config()
+            rag_config = RagConfig.model_validate(config)
+            return rag_config
+
+        except Exception as e:
+            logger.exception(f"get config failed: {e}")
+            raise RagApiError(
+                code=500,
+                msg=f"get config failed. {e}",
+            )
 
 
 rag_client = RagLocalClient()
