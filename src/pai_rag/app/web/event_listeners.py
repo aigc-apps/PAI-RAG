@@ -329,3 +329,33 @@ def save_config(input_elements: List[Any]):
 
 def input_oss_ak_sk(input):
     return (input[:2] + "*" * (len(input) - 4) + input[-2:]) if input else input
+
+
+def save_pmt_cfg_func(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] Prompt configuration saved successfully!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def save_query_transform_cfg(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] Query transform prompt configuration saved successfully!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")

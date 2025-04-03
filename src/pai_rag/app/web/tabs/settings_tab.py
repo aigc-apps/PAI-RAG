@@ -253,11 +253,21 @@ def create_setting_tab() -> Dict[str, Any]:
                         elem_id="save_prompt_btn",
                         variant="primary",
                     )
-                    save_state = gr.Textbox(
+                    save_prompt_state = gr.Textbox(
                         label="Save Info: ", container=False, visible=True
                     )
             components.extend(
                 [system_role_template, custom_prompt_template, save_prompt_btn]
+            )
+            pmt_components = [
+                system_role_template,
+                custom_prompt_template,
+            ]
+            save_prompt_btn.click(
+                fn=ev_listeners.save_pmt_cfg_func,
+                inputs=set(pmt_components),
+                outputs=[save_prompt_state],
+                api_name="save_prompt_config",
             )
 
         with gr.Tab("查询改写配置"):
@@ -341,9 +351,27 @@ def create_setting_tab() -> Dict[str, Any]:
                             elem_id="save_query_transform_btn",
                             variant="primary",
                         )
-                        save_state = gr.Textbox(
+                        save_query_transform_state = gr.Textbox(
                             label="Save Info: ", container=False, visible=True
                         )
+
+                    query_transform_pmt_components = [
+                        enable_query_transform,
+                        query_rewrite_model_id,
+                        rewrite_base_prompt,
+                        rewrite_llm_prompt,
+                        rewrite_knowledgebase_prompt,
+                        rewrite_agent_prompt,
+                        rewrite_search_prompt,
+                        rewrite_db_prompt,
+                        save_query_transform_btn,
+                    ]
+                    save_query_transform_btn.click(
+                        fn=ev_listeners.save_query_transform_cfg,
+                        inputs=set(query_transform_pmt_components),
+                        outputs=[save_query_transform_state],
+                        api_name="save_query_transform_cfg",
+                    )
 
                 def change_query_transform_parameter(enable_query_transform):
                     if enable_query_transform:
