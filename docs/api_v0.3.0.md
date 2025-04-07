@@ -37,6 +37,7 @@
       "chat_llm": false,  # 是否仅使用llm聊天
       "chat_agent": false,  # 是否使用agent
       "chat_db": false,  # 是否查询数据库
+      "return_reference": false,  # 是否返回参考
       "index_name": "default",  # 索引名称，RAG场景使用，不传使用默认索引
   }
   ```
