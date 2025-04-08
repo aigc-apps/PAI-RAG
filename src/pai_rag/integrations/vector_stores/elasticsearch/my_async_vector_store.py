@@ -73,7 +73,7 @@ class AsyncVectorStore:
         """
         # Add integration-specific usage header for tracking usage in Elastic Cloud.
         # client.options preserves existing (non-user-agent) headers.
-        client = client.options(headers={"User-Agent": user_agent})
+        client = client.options(request_timeout=60, headers={"User-Agent": user_agent})
 
         if hasattr(retrieval_strategy, "text_field"):
             retrieval_strategy.text_field = text_field
