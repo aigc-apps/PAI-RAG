@@ -219,6 +219,7 @@ class MiaobiNewsTool:
                 news_list_str=_make_context(hot_topics),
                 query_str=query_str,
                 topics_str="、".join(news_topics),
+                conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
             )
             messages = [
                 ChatMessage(
@@ -228,10 +229,6 @@ class MiaobiNewsTool:
             ]
 
             response = await self.llm.achat(messages)
-            response.message.content = (
-                response.message.content
-                + DEFAULT_LIST_NEWS_END_RESPONSE.replace("\n", "")
-            )
             response.additional_kwargs["news_articles"] = hot_topics
             return ChatResponseWrapper(response=response)
         except Exception as ex:
@@ -286,6 +283,7 @@ class MiaobiNewsTool:
                             news_list_str=_make_context(hot_topics),
                             query_str=query_str,
                             topics_str="、".join(news_topics),
+                            conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
                         ),
                     )
                 ]
@@ -302,19 +300,6 @@ class MiaobiNewsTool:
                     messages=messages,
                 ):
                     yield response
-
-                text_parts = DEFAULT_LIST_NEWS_END_RESPONSE.split("\n")
-
-                # 逐个 yield 返回
-                for part in text_parts:
-                    if part.strip():
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role="assistant",
-                                content=part,
-                            ),
-                            delta=part,
-                        )
 
             return ChatResponseWrapper(response=gen())
         except Exception as e:

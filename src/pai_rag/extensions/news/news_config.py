@@ -19,6 +19,7 @@ DEFAULT_PROMPT_TEMPLATE = """
 - 保持亲切、自然的语言风格同时不失专业性。
 - 请根据新闻列表中信息播报，不要使用其他信息。
 - 请遵循新闻给出的顺序，结构化、有条理的归纳每条新闻内容并用数字序号标识。
+- 请使用"{conclusion_str}"当作结束语。
 - 注意每条新闻播报内容尽量丰富一些，不需要总结标题，播报内容在80-100个字左右。
 """
 
@@ -44,9 +45,7 @@ Hi，我是深小闻，\n 您的车载 AI 新闻助手。\n 我可以为你进�
 """
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
 DEFAULT_WEB_SEARCH_INFO_MESSAGE = "\n\n当前内容来源于互联网。"
-DEFAULT_LIST_NEWS_END_RESPONSE = """
-\n\n您可以选择感兴趣的新闻获取深度解读。
-"""
+DEFAULT_LIST_NEWS_END_RESPONSE = """以上是本期主要内容，感谢您的收听，您可以选择感兴趣的新闻获取深度解读。"""
 
 
 DEFAULT_NEWS_DOMAIN_LIST = ["科技", "娱乐", "社会", "体育", "教育", "汽车", "旅游", "文化"]

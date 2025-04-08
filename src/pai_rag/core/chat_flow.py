@@ -145,6 +145,7 @@ class ChatFlow:
             logger.info("No query transform found, using default intent.")
             return PaiQueryBundle(
                 query_str=chat_request.messages[-1].content,
+                original_query_str=chat_request.messages[-1].content,
                 messages=chat_request.messages,
                 intent=potential_intents[-1].value,
                 stream=chat_request.stream,
@@ -480,19 +481,22 @@ class ChatFlow:
             messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
 
         # prompt_message
+        cur_date = get_prompt_current_time_str()
         messages.append(
             ChatMessage(
                 role=MessageRole.USER,
-                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                    cur_date=get_prompt_current_time_str()
-                ),
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(cur_date=cur_date),
             )
         )
         messages.extend(query_bundle.messages)
         if query_bundle.stream:
             query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_LLM
+            query_bundle.llm_kwargs["query_str"] = query_bundle.original_query_str
+            query_bundle.llm_kwargs["cur_date"] = cur_date
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:
+            query_bundle.llm_kwargs["query_str"] = query_bundle.original_query_str
+            query_bundle.llm_kwargs["cur_date"] = cur_date
             response = await llm.achat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response)
