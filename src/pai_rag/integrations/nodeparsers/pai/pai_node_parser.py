@@ -41,7 +41,7 @@ class NodeParserConfig(BaseModel):
     buffer_size: int = DEFAULT_BUFFER_SIZE
 
 
-DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl"])
+DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl", "faq"])
 DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", ".pptx"])
 IMAGE_FILE_TYPES = set([".jpg", ".jpeg", ".png"])
 
