@@ -45,7 +45,7 @@ Hi，我是深小闻，\n 您的车载 AI 新闻助手。\n 我可以为你进�
 DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
 DEFAULT_WEB_SEARCH_INFO_MESSAGE = "\n\n当前内容来源于互联网。"
 DEFAULT_LIST_NEWS_END_RESPONSE = """
-\n\n以上是本期主要内容，\n 感谢您的收听，\n 您可以选择感兴趣的新闻获取深度解读。\n
+\n\n您可以选择感兴趣的新闻获取深度解读。
 """
 
 
