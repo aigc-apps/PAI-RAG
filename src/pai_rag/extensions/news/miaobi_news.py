@@ -409,7 +409,7 @@ class MiaobiNewsTool:
                             response = ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content=text[len(origin_text) :],
+                                    content=origin_text,
                                 ),
                                 delta=text[len(origin_text) :],
                                 additional_kwargs=additional_kwargs,
@@ -428,7 +428,23 @@ class MiaobiNewsTool:
                                 additional_kwargs=additional_kwargs,
                             )
                             yield empty_response
-
+                    elif origin_text == "":
+                        text = data.get("payload").get("output").get("text")
+                        err_code = data.get("header").get("errorCode")
+                        logger.info(
+                            f"News chat task-finished with err_code: {err_code}"
+                        )
+                        if text:
+                            response = ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=origin_text,
+                                ),
+                                delta=text[len(origin_text) :],
+                                additional_kwargs=additional_kwargs,
+                            )
+                            origin_text = text
+                            yield response
                 except Exception as ex:
                     logger.warning(
                         f"Error when decoding Miaobi outputs {ex}, data: {item}"
