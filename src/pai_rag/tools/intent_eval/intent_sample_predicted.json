@@ -9,47 +9,76 @@
   "samples": [
     {
       "query": "深小闻，有什么新闻",
-      "intent": "list_news",
-      "predicted_intent": "list_news",
-      "score": 1
+      "intent": {
+        "intent_name": "list_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 0
     },
     {
       "query": "深小闻，有什么国际新闻",
-      "intent": "list_news",
-      "news_topics": ["国际"],
-      "predicted_intent": "list_news",
-      "score": 1
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "intent_output": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "score": 1.0
     },
     {
       "query": "深小闻，雷军的新闻",
-      "intent": "chat_news",
-      "predicted_intent": "chat_news",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
       "score": 1
     },
     {
       "query": "打开深小闻",
-      "intent": "list_news",
-      "predicted_intent": "list_news",
+      "intent": {
+        "intent_name": "list_news"
+      },
+      "intent_output": {
+        "intent_name": "list_news"
+      },
       "score": 1
     },
     {
       "query": "介绍一下深小闻",
-      "intent": "chat_news_llm",
-      "predicted_intent": "chat_news_llm",
+      "intent": {
+        "intent_name": "chat_news_llm"
+      },
+      "intent_output": {
+        "intent_name": "chat_news_llm"
+      },
       "score": 1
     },
     {
       "query": "今天黄金金价多少了",
-      "intent": "search_web",
-      "predicted_intent": "search_web",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
       "score": 1
     },
     {
       "query": "你是谁",
-      "intent": "chat_llm",
-      "predicted_intent": "chat_llm",
+      "intent": {
+        "intent_name": "chat_llm"
+      },
+      "intent_output": {
+        "intent_name": "chat_llm"
+      },
       "score": 1
     }
   ],
-  "average_score": 1.0
+  "average_score": 0.8571428571428571
 }

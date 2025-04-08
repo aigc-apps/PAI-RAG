@@ -52,8 +52,30 @@ def run(
                 query_bundle = asyncio.run(
                     chat_flow._recognize_intent(chat_request, config)
                 )
-                sample["predicted_intent"] = query_bundle.intent
-                sample["score"] = int(query_bundle.intent == sample["intent"])
+                sample["intent_output"] = {}
+                sample["intent_output"]["intent_name"] = query_bundle.intent
+
+                if (
+                    str(sample["intent"]["intent_name"]) == "list_news"
+                    and "news_topics" in sample["intent"]
+                    and len(sample["intent"]["news_topics"]) > 0
+                ):
+                    sample["intent_output"]["news_topics"] = query_bundle.news_topics
+                    sample["score"] = (
+                        int(
+                            sample["intent_output"]["intent_name"]
+                            == sample["intent"]["intent_name"]
+                        )
+                        + int(
+                            sample["intent_output"]["news_topics"]
+                            == sample["intent"]["news_topics"]
+                        )
+                    ) / 2
+                else:
+                    sample["score"] = int(
+                        sample["intent_output"]["intent_name"]
+                        == sample["intent"]["intent_name"]
+                    )
                 scores += sample["score"]
                 results.append(sample)
             write_file_path = test_file.replace(".json", "_predicted.json")
