@@ -23,4 +23,4 @@ port="${port:-8680}"
 
 echo "Starting gunicorn with $workers workers on port $port..."
 
-gunicorn -w $workers -b "0.0.0.0:${port}" -c scripts/gunicorn.conf.py src.pai_rag.app.app:app --timeout 600
+gunicorn -w $workers -b "0.0.0.0:${port}" -c scripts/gunicorn.conf.py src.pai_rag.app.app:app --timeout 600 --preload
