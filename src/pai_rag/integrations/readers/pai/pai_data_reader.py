@@ -2,11 +2,11 @@ from pydantic import BaseModel
 from typing import List, Any
 import os
 import pathlib
+from pai_rag.integrations.readers.pai_excel_reader import PaiPandasExcelReader
 from pai_rag.integrations.readers.pai_image_reader import PaiImageReader
 from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
 from pai_rag.integrations.readers.pai_html_reader import PaiHtmlReader
 from pai_rag.integrations.readers.pai_csv_reader import (
-    PaiExcelReader,
     PaiPandasCSVReader,
 )
 from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
@@ -62,8 +62,16 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
             format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
             sheet_column_filters=reader_config.sheet_column_filters,
         ),
-        ".xlsx": PaiExcelReader(oss_cache=oss_store),
-        ".xls": PaiExcelReader(oss_cache=oss_store),
+        ".xlsx": PaiPandasExcelReader(
+            concat_rows=reader_config.concat_csv_rows,
+            format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
+            sheet_column_filters=reader_config.sheet_column_filters,
+        ),
+        ".xls": PaiPandasExcelReader(
+            concat_rows=reader_config.concat_csv_rows,
+            format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
+            sheet_column_filters=reader_config.sheet_column_filters,
+        ),
         ".jsonl": PaiJsonLReader(),
         ".jpg": image_reader,
         ".jpeg": image_reader,
