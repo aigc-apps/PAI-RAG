@@ -215,15 +215,25 @@ def create_setting_tab() -> Dict[str, Any]:
 
                     # 第三行：多模态支持
                     with gr.Row():
-                        llm_vision_support = gr.Checkbox(
-                            value=rag_config.llms[0].vision_support
-                            if rag_config.llms
-                            else False,
-                            label="是否支持多模态",
-                            elem_id="vision_support",
-                            container=True,  # 让复选框有背景容器
-                            scale=1,
-                        )
+                        with gr.Column():
+                            llm_vision_support = gr.Checkbox(
+                                value=rag_config.llms[0].vision_support
+                                if rag_config.llms
+                                else False,
+                                label="是否支持多模态",
+                                elem_id="vision_support",
+                                container=True,  # 让复选框有背景容器
+                                scale=1,
+                            )
+                            is_reasoning_model = gr.Checkbox(
+                                value=rag_config.llms[0].is_reasoning_model
+                                if rag_config.llms
+                                else False,
+                                label="是否为推理模型(Reasoning Models)",
+                                elem_id="is_reasoning_model",
+                                container=True,  # 让复选框有背景容器
+                                scale=1,
+                            )
             save_btn = gr.Button("保存模型配置", variant="primary")
 
             llm_model.change(
@@ -237,6 +247,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_model_name,
                     llm_model_id,
                     llm_vision_support,
+                    is_reasoning_model,
                 ],
             )
 
@@ -249,6 +260,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     llm_api_key,
                     llm_model_id,
                     llm_vision_support,
+                    is_reasoning_model,
                 ],
                 outputs=[llm_model, delete_btn],
             )

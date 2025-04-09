@@ -349,7 +349,9 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        data_analysis_query_engine = resolve_data_analysis_query(config)
+        data_analysis_query_engine = resolve_data_analysis_query(
+            config, model_id=query_bundle.model
+        )
         if not data_analysis_query_engine:
             raise ValueError(
                 "DBChat config is not valid. Please check your DBChat api configuration."
@@ -459,19 +461,20 @@ class ChatFlow:
         system_role = (
             query_bundle.system_role or config.synthesizer.system_role_template
         )
-        messages = query_bundle.messages
+        messages = []
         if system_role:
-            messages = [
-                ChatMessage(role=MessageRole.USER, content=system_role)
-            ] + query_bundle.messages
+            messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
 
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            ),
+        # prompt_message
+        messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
+                    cur_date=get_prompt_current_time_str()
+                ),
+            )
         )
-        messages = [prompt_message] + messages
+        messages.extend(query_bundle.messages)
         if query_bundle.stream:
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
