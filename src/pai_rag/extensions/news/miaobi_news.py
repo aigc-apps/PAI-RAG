@@ -2,7 +2,13 @@ import traceback
 from typing import Dict, List
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
-from pai_rag.extensions.news.news_config import MiaobiNewsConfig
+from pai_rag.extensions.news.news_config import (
+    MiaobiNewsConfig,
+    DEFAULT_NEWS_ROLE,
+    DEFAULT_NEWS_ERROR_MESSAGE,
+    DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+    DEFAULT_LIST_NEWS_END_RESPONSE,
+)
 
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -22,10 +28,6 @@ from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
-
-
-DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
-DEFAULT_WEB_SEARCH_INFO_MESSAGE = "当前内容来自于互联网，请仔细甄别。"
 
 
 def _create_client(
@@ -176,8 +178,7 @@ class MiaobiNewsTool:
         for topic in broadcast_response.body.data.data:
             hot_topics.append(
                 {
-                    "hot_topic": topic.hot_topic,
-                    "title": topic.news[0].title,
+                    "title": topic.hot_topic,
                     "url": topic.news[0].url,
                     "summary": topic.text_summary,
                     "category": topic.category,
@@ -218,6 +219,7 @@ class MiaobiNewsTool:
                 news_list_str=_make_context(hot_topics),
                 query_str=query_str,
                 topics_str="、".join(news_topics),
+                conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
             )
             messages = [
                 ChatMessage(
@@ -281,6 +283,7 @@ class MiaobiNewsTool:
                             news_list_str=_make_context(hot_topics),
                             query_str=query_str,
                             topics_str="、".join(news_topics),
+                            conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
                         ),
                     )
                 ]
@@ -386,27 +389,12 @@ class MiaobiNewsTool:
                         if search_query:
                             additional_kwargs["search_query"] = search_query
 
-                        hot_topics = (
-                            data.get("payload").get("output").get("hotTopicSummaries")
-                        )
-                        if hot_topics:
-                            news_articles = []
-                            for topic in hot_topics:
-                                news_articles.append(
-                                    {
-                                        "title": topic["news"][0]["title"],
-                                        "url": topic["news"][0]["url"],
-                                        "summary": topic["textSummary"],
-                                    }
-                                )
-                            additional_kwargs["news_articles"] = news_articles
-
                         text = data.get("payload").get("output").get("text")
                         if text:
                             response = ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content=text[len(origin_text) :],
+                                    content=origin_text,
                                 ),
                                 delta=text[len(origin_text) :],
                                 additional_kwargs=additional_kwargs,
@@ -425,7 +413,23 @@ class MiaobiNewsTool:
                                 additional_kwargs=additional_kwargs,
                             )
                             yield empty_response
-
+                    elif origin_text == "":
+                        text = data.get("payload").get("output").get("text")
+                        err_code = data.get("header").get("errorCode")
+                        logger.info(
+                            f"News chat task-finished with err_code: {err_code}"
+                        )
+                        if text:
+                            response = ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=origin_text,
+                                ),
+                                delta=text[len(origin_text) :],
+                                additional_kwargs=additional_kwargs,
+                            )
+                            origin_text = text
+                            yield response
                 except Exception as ex:
                     logger.warning(
                         f"Error when decoding Miaobi outputs {ex}, data: {item}"
@@ -454,9 +458,8 @@ class MiaobiNewsTool:
     async def achat_llm(
         self,
         query_str: str,
-        messages: List[ChatMessage] = [],
     ):
-        stream_response_wrapper = await self.astream_chat_llm(query_str, messages)
+        stream_response_wrapper = await self.astream_chat_llm(query_str)
         message_content = ""
         additional_kwargs = {}
         async for response in stream_response_wrapper.response:
@@ -477,11 +480,8 @@ class MiaobiNewsTool:
     async def astream_chat_llm(
         self,
         query_str: str,
-        messages: List[ChatMessage] = [],
     ) -> ChatResponseWrapper:
-        logger.info(
-            f"Chat news only llm with query {query_str}, chat_history: {messages}"
-        )
+        logger.info(f"Chat news only llm with query {query_str}")
 
         async def gen() -> ChatResponseAsyncGen:
             yield ChatResponse(
@@ -492,10 +492,20 @@ class MiaobiNewsTool:
                 delta="",
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
+            default_news_role_response = DEFAULT_NEWS_ROLE.format(
+                domain_list="/".join(self.config.domain_list)
+            )
+            text_parts = default_news_role_response.split("\n")
 
-            async for response in await self.llm.astream_chat(
-                messages=messages,
-            ):
-                yield response
+            # 逐个 yield 返回
+            for part in text_parts:
+                if part.strip():
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role="assistant",
+                            content=part,
+                        ),
+                        delta=part,
+                    )
 
         return ChatResponseWrapper(response=gen())

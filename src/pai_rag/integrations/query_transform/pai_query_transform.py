@@ -140,6 +140,7 @@ class OpenAICompatibleQueryTransform:
             intent=intent,
             messages=chat_messages,
             query_str=query,
+            original_query_str=query_str,
             news_topics=filtered_news_topics,
             custom_embedding_strs=[transformed_query_str],
             chat_messages_str=chat_history_str,

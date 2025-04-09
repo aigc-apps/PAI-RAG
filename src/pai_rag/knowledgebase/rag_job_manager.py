@@ -130,7 +130,12 @@ class JobManager:
         if not os.path.exists(self.task_file):
             return JobStatus()
 
-        return JobStatus.model_validate(json.load(open(self.task_file)))
+        try:
+            return JobStatus.model_validate(json.load(open(self.task_file)))
+        except Exception as e:
+            logger.error(f"Load task status error: {e}, use empty status.")
+            logger.error(traceback.format_exc())
+            return JobStatus()
 
     def persist_task_status(self):
         with open(self.task_file, "w") as f:
@@ -231,14 +236,17 @@ class JobManager:
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
 
+        work_iter_count = 0
         while True:
             if self.rag_config is None:
                 logger.debug("任务队列准备中...")
+                work_iter_count = 0
                 time.sleep(2)
                 continue
             file_item: FileItem = self._task_queue.get()
             if file_item is None:
                 logger.debug("后台任务队列为空。sleeping...")
+                work_iter_count = 0
                 time.sleep(5)  # 后续还是要做成异步？
                 continue
 
@@ -286,6 +294,11 @@ class JobManager:
                 )
                 with self._lock:
                     self.persist_task_status()
+
+                work_iter_count += 1
+                if work_iter_count % 5 == 0:
+                    logger.info(f"后台任务队列处理完成: {work_iter_count} 个任务, 等待...")
+                    time.sleep(1)
 
             except Exception as ex:
                 logger.error(

@@ -133,14 +133,14 @@ class PaiBaseLlmConfig(BaseModel):
     api_key: str | None = None
     model: str | None = None
     vision_support: bool | None = None
+    is_reasoning_model: bool | None = None
     model_id: str | None = None
+
+    model_config = ConfigDict(coerce_numbers_to_str=True, frozen=False)
 
     @classmethod
     def get_subclasses(cls):
         return tuple(cls.__subclasses__())
-
-    class Config:
-        frozen = False
 
     @classmethod
     def get_type(cls):
@@ -183,8 +183,6 @@ class PaiEasLlmConfig(PaiBaseLlmConfig):
     endpoint: str
     token: str
     model: str = "default"
-
-    model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
 class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):

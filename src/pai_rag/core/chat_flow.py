@@ -59,7 +59,6 @@ from loguru import logger
 
 from pai_rag.utils.prompt_template import (
     DEFALT_LLM_CHAT_PROMPT_TEMPL,
-    DEFAULT_NEWS_ROLE,
 )
 from pai_rag.utils.time_utils import get_prompt_current_time_str
 
@@ -146,6 +145,7 @@ class ChatFlow:
             logger.info("No query transform found, using default intent.")
             return PaiQueryBundle(
                 query_str=chat_request.messages[-1].content,
+                original_query_str=chat_request.messages[-1].content,
                 messages=chat_request.messages,
                 intent=potential_intents[-1].value,
                 stream=chat_request.stream,
@@ -340,7 +340,9 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        data_analysis_query_engine = resolve_data_analysis_query(config)
+        data_analysis_query_engine = resolve_data_analysis_query(
+            config, model_id=query_bundle.model
+        )
         if not data_analysis_query_engine:
             raise ValueError(
                 "DBChat config is not valid. Please check your DBChat api configuration."
@@ -369,7 +371,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
+        news_tool = resolve_news_tool(config)
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
         else:
@@ -384,29 +386,15 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
-        messages = query_bundle.messages
-
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            )
-            + "\n"
-            + DEFAULT_NEWS_ROLE.format(
-                domain_list=",".join(config.news_extension.domain_list)
-            ),
-        )
-        messages = [prompt_message] + messages
-        logger.debug(f"achat_llm messages: {messages}")
+        news_tool = resolve_news_tool(config)
 
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat_llm(
-                query_str=query_bundle.query_str, messages=messages
+                query_str=query_bundle.query_str
             )
         else:
             response_wrapper = await news_tool.astream_chat_llm(
-                query_str=query_bundle.query_str, messages=messages
+                query_str=query_bundle.query_str
             )
 
         return response_wrapper
@@ -417,6 +405,7 @@ class ChatFlow:
         config: RagConfig,
     ):
         search_engine = resolve_searcher(config, model_id=query_bundle.model)
+        query_bundle.llm_kwargs["intent"] = ChatIntentType.SEARCH_WEB
         if not search_engine:
             raise ValueError(
                 "Web search config is not valid. Please check your search api configuration."
@@ -435,6 +424,7 @@ class ChatFlow:
         query_engine = resolve_query_engine(
             config, vector_index=vector_index, model_id=query_bundle.model
         )
+        query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_KNOWLEDGEBASE
         response = await query_engine.aquery(query_bundle)
         return response
 
@@ -486,21 +476,21 @@ class ChatFlow:
         system_role = (
             query_bundle.system_role or config.synthesizer.system_role_template
         )
-        messages = query_bundle.messages
+        messages = []
         if system_role:
-            messages = [
-                ChatMessage(role=MessageRole.USER, content=system_role)
-            ] + query_bundle.messages
+            messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
 
-        prompt_message = ChatMessage(
-            role=MessageRole.USER,
-            content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                cur_date=get_prompt_current_time_str()
-            ),
+        # prompt_message
+        cur_date = get_prompt_current_time_str()
+        messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(cur_date=cur_date),
+            )
         )
-        messages = [prompt_message] + messages
-        logger.debug(f"achat_llm messages: {messages}")
+        messages.extend(query_bundle.messages)
         if query_bundle.stream:
+            query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_LLM
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:

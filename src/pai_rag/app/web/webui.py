@@ -75,9 +75,18 @@ def change_chat_page_model_list(model_id):
         new_model_id = rag_config.chat.model_id
     else:
         new_model_id = model_choices[0]
+
+    if (
+        rag_config.data_analysis.model_id
+        and rag_config.data_analysis.model_id in model_choices
+    ):
+        data_analysis_model_id = rag_config.data_analysis.model_id
+    else:
+        data_analysis_model_id = model_choices[0]
     return [
         gr.update(choices=model_choices, value=new_model_id),
         gr.update(choices=model_choices, value=new_model_id),
+        gr.update(choices=model_choices, value=data_analysis_model_id),
     ]
 
 
@@ -164,7 +173,8 @@ def make_homepage():
             inputs=setting_elements["llm_model"],
             outputs=[
                 chat_elements["chat_model_id"],
-                setting_elements["query_rewrite_model_id"],
+                chat_elements["query_rewrite_model_id"],
+                analysis_elements["data_analysis_model_id"],
             ],
         )
 

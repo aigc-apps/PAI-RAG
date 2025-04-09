@@ -97,8 +97,8 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
    **请求**
 
    ```shell
-   curl -X 'POST' http://localhost:8680/api/v1/upload_data \
-   -H 'Content-Type: multipart/form-data' \
+   curl -X 'POST' http://localhost:8680/api/v1/knowledgebases/{knowledgebase_name}/files \
+      -H 'Content-Type: multipart/form-data' \
       -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
    ```
 
@@ -106,7 +106,7 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
 
    ```json
    {
-     "task_id": "1bcea36a1db740d28194df8af40c7226"
+     "message": "Files have been successfully uploaded."
    }
    ```
 
@@ -115,38 +115,73 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
    **请求**
 
    ```shell
-   curl 'http://localhost:8680/api/v1/get_upload_state?task_id=1bcea36a1db740d28194df8af40c7226'
+   curl -X 'GET' http://localhost:8680/api/v1/knowledgebases/{knowledgebase_name}/history \
    ```
 
    **响应**
 
    ```json
-   {
-     "task_id": "1bcea36a1db740d28194df8af40c7226",
-     "status": "completed",
-     "detail": null
-   }
+   [
+     {
+       "task_id": "93d3782ccd4b33afdc1b6a1f0ce18e3a",
+       "operation": "ADD",
+       "file_name": "localdata/knowledgebase/default/docs/paul_graham_essay.txt",
+       "status": "done",
+       "last_modified_time": "2025-03-28 15:47:07"
+     }
+   ]
    ```
 
-4. Perform a RAG query:
+4. OpenAI接口兼容的查询:
 
    **请求**
 
    ```shell
-   curl -X 'POST' http://localhost:8680/api/v1/query \
+   curl -X 'POST' http://localhost:8680/v1/chat/completions \
       -H "Content-Type: application/json" \
-      -d '{"question":"What did the author do growing up?"}'
+      -d '{
+      "model": "default",
+      "messages": [
+         {"role": "user", "content": "杭州在中国哪个省?"}
+      ],
+      "stream":false,
+   }'
    ```
 
    **响应**
 
    ```json
    {
-      "answer":"Growing up, the author worked on writing and programming outside of school. Specifically, he wrote short stories, which he now considers to be awful due to their lack of plot and focus on characters with strong feelings. In terms of programming, he first tried writing programs on an IBM 1401 in 9th grade, using an early version of Fortran. The experience was limited because the only form of input for programs was data stored on punched cards, and he didn't have much data to work with. Later, after getting a TRS-80 microcomputer around 1980, he really started programming by creating simple games, a program to predict the flight height of model rockets, and even a word processor that his father used to write at least one book.",
-      "session_id":"ba245d630f4d44a295514345a05c24a3",
-      "docs":[
-         ...
-      ]
+     "id": "7aac074feef14c31a322b15bb1c4c452",
+     "choices": [
+       {
+         "finish_reason": "stop",
+         "index": 0,
+         "logprobs": null,
+         "message": {
+           "content": "杭州位于中国的**浙江省**。它是浙江省的省会城市，也是中国著名的历史文化名城和旅游胜地，以西湖、龙井茶等闻名于世。",
+           "refusal": null,
+           "role": "assistant",
+           "audio": null,
+           "function_call": null,
+           "tool_calls": null
+         }
+       }
+     ],
+     "created": 1743148661,
+     "model": "DeepSeek-V3",
+     "object": "chat.completion",
+     "service_tier": null,
+     "system_fingerprint": null,
+     "usage": {
+       "completion_tokens": 46,
+       "prompt_tokens": 2114,
+       "total_tokens": 2160,
+       "completion_tokens_details": null,
+       "prompt_tokens_details": null
+     },
+     "citation_details": [],
+     "citations": []
    }
    ```
 
@@ -167,7 +202,7 @@ https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
 
 ## 数据分析 Nl2sql
 
-您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc_250303.md)
+您可以在PAI-RAG中使用支持数据库和表格文件的数据分析功能，请参考文档：[数据分析 Nl2sql](./docs/data_analysis_doc_zh.md)
 
 ## 支持文件类型
 
