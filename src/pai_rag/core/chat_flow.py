@@ -106,17 +106,19 @@ class ChatFlow:
         potential_intents = [ChatToolType.CHAT_LLM]
 
         tool_switches = {
-            ChatToolType.CHAT_KNOWLEDGEBASE: True,
-            ChatToolType.SEARCH_WEB: True,
-            ChatToolType.CHAT_DB: True,
-            ChatToolType.CHAT_AGENT: True,
-            ChatToolType.CHAT_NEWS: True,
+            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase,
+            ChatToolType.SEARCH_WEB: chat_request.search_web,
+            ChatToolType.CHAT_DB: chat_request.chat_db,
+            ChatToolType.CHAT_AGENT: chat_request.chat_agent,
+            ChatToolType.CHAT_NEWS: chat_request.chat_news,
         }
 
         enabled_tools = [k for k, v in tool_switches.items() if v]
         if len(enabled_tools) > 4:
-            print("exceeding maximum tool count")
-            # 最多只能选4个
+            logger.warning(
+                "Selected tools exceeding the maximum number, truncating to 4."
+            )
+            # 初步限定最多选4个，加上chat_llm，共5个
             enabled_tools = enabled_tools[:4]
         potential_intents.extend(enabled_tools)
 
