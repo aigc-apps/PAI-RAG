@@ -181,10 +181,8 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            if query.original_query_str:
-                query_str = query.original_query_str + "\nassistant: "
-            else:
-                query_str = query.query_str + "\nassistant: "
+            query_str = query.query_str
+
             if query.chat_messages_str:
                 history_str = query.chat_messages_str
             else:
@@ -202,6 +200,7 @@ class PaiSynthesizer(BaseSynthesizer):
             else:
                 response = await self.aget_response(
                     query_str=query_str,
+                    original_query_str=query.original_query_str,
                     nodes=nodes,
                     history_str=history_str,
                     streaming=query.stream,
@@ -235,6 +234,7 @@ class PaiSynthesizer(BaseSynthesizer):
     async def aget_response(
         self,
         query_str: str,
+        original_query_str: str,
         nodes: List[NodeWithScore],
         history_str: str = None,
         streaming: bool = False,
@@ -244,6 +244,7 @@ class PaiSynthesizer(BaseSynthesizer):
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
+        cur_date = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:
             prompt_template = (
@@ -251,9 +252,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     template="{}\n{}\n{}\n{}".format(
                         system_role_str,
                         prompt_template_str,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=get_prompt_current_time_str()
-                        ),
+                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
@@ -266,9 +265,7 @@ class PaiSynthesizer(BaseSynthesizer):
                         system_role_str,
                         prompt_template_str,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=get_prompt_current_time_str()
-                        ),
+                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
@@ -288,6 +285,9 @@ class PaiSynthesizer(BaseSynthesizer):
             context_str=context_str,
             **response_kwargs,
         )
+
+        response_kwargs["query_str"] = query_str
+        response_kwargs["cur_date"] = cur_date
 
         if not streaming:
             response = await self._llm.achat(
