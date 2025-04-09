@@ -286,9 +286,6 @@ class PaiSynthesizer(BaseSynthesizer):
             **response_kwargs,
         )
 
-        response_kwargs["query_str"] = query_str
-        response_kwargs["cur_date"] = cur_date
-
         if not streaming:
             response = await self._llm.achat(
                 messages=messages,
