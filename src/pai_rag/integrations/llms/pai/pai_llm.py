@@ -28,8 +28,6 @@ from pai_rag.integrations.llms.pai.llm_config import (
 from llama_index.core.base.llms.types import MessageRole
 from loguru import logger
 
-from pai_rag.utils.time_utils import get_current_time_str
-
 
 class PaiLlm(OpenAILike):
     _llm: Any = PrivateAttr()
@@ -134,22 +132,8 @@ class PaiLlm(OpenAILike):
         if "intent" in kwargs:
             kwargs.pop("intent")
 
-        cur_date = kwargs.pop("cur_date", get_current_time_str())
-        query_str = kwargs.pop("query_str", None)
-        # add mandatory think for reasoning models
         if self.llm_config.is_reasoning_model:
-            if query_str:
-                messages.append(
-                    ChatMessage(
-                        role="assistant",
-                        content=f"<think>\n当前时间是{cur_date}，用户想知道“{query_str.strip()}”，注意回答中不要提到“从参考内容得出”、“从材料得出”等字眼，不要包含链接内容。",
-                    )
-                )
-            else:
-                messages.append(ChatMessage(role="assistant", content="<think>\n"))
-            logger.info(
-                f"add mandatory think for reasoning models, messages: {messages}"
-            )
+            logger.info(f"Using reasoning models, messages: {messages}")
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             logger.info(f"llm complete, prompt: {prompt}")
@@ -290,21 +274,8 @@ class PaiLlm(OpenAILike):
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         messages = merge_consecutive_messages(messages)
 
-        cur_date = kwargs.pop("cur_date", get_current_time_str())
-        query_str = kwargs.pop("query_str", None)
         if self.llm_config.is_reasoning_model:
-            if query_str:
-                messages.append(
-                    ChatMessage(
-                        role="assistant",
-                        content=f"<think>\n当前时间是{cur_date}，用户想知道“{query_str.strip()}”，注意回答中不要提到“从参考内容得出”、“从材料得出”等字眼，不要包含链接内容。",
-                    )
-                )
-            else:
-                messages.append(ChatMessage(role="assistant", content="<think>\n"))
-            logger.info(
-                f"add mandatory think for reasoning models, messages: {messages}"
-            )
+            logger.info(f"Using reasoning models, messages: {messages}")
         if not self.metadata.is_chat_model:
             intent = None
             if "intent" in kwargs:

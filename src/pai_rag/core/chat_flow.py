@@ -491,12 +491,8 @@ class ChatFlow:
         messages.extend(query_bundle.messages)
         if query_bundle.stream:
             query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_LLM
-            query_bundle.llm_kwargs["query_str"] = query_bundle.original_query_str
-            query_bundle.llm_kwargs["cur_date"] = cur_date
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:
-            query_bundle.llm_kwargs["query_str"] = query_bundle.original_query_str
-            query_bundle.llm_kwargs["cur_date"] = cur_date
             response = await llm.achat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response)
