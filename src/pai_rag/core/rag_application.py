@@ -58,7 +58,7 @@ class PaiApp:
     async def aquery(
         self,
         query: RagQuery,
-        # chat_type: RagChatType = RagChatType.RAG,
+        chat_type: RagChatType,
         sse_version: SseVersion = SseVersion.V1,
     ):
         session_id = query.session_id or chat_id_generator()
@@ -73,26 +73,21 @@ class PaiApp:
                 chat_history=query.chat_history,
                 chat_store=chat_store,
             )
+        if chat_type is None:
+            chat_knowledgebase = query.chat_knowledgebase
+            search_web = query.search_web
+            chat_agent = query.chat_agent
+            chat_db = query.chat_db
+            chat_llm = query.chat_llm
+        else:
+            if query.with_intent:
+                chat_type = RagChatType.Agent
 
-        chat_knowledgebase = query.chat_knowledgebase
-        search_web = query.search_web
-        chat_agent = query.chat_agent
-        chat_db = query.chat_db
-        chat_llm = query.chat_llm
-
-        # if query.with_intent:
-        #     chat_type = RagChatType.Agent
-
-        # if chat_type == RagChatType.RAG:
-        #     chat_knowledgebase = True
-        # elif chat_type == RagChatType.WEB:
-        #     search_web = True
-        # elif chat_type == RagChatType.LLM:
-        #     chat_llm = True
-        # elif chat_type == RagChatType.NL2SQL:
-        #     chat_db = True
-        # elif chat_type == RagChatType.Agent:
-        #     chat_agent = True
+            chat_knowledgebase = chat_type == RagChatType.RAG
+            search_web = chat_type == RagChatType.WEB
+            chat_llm = chat_type == RagChatType.LLM
+            chat_db = chat_type == RagChatType.NL2SQL
+            chat_agent = chat_type == RagChatType.Agent
 
         chat_request = ChatCompletionRequest(
             messages=messages,
