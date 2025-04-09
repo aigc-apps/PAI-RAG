@@ -289,6 +289,7 @@ def response_gen_from_text(text: str):
                 content=text,
             ),
             additional_kwargs={},
+            delta=text,
         )
 
     return ChatResponseWrapper(

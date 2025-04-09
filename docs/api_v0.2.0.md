@@ -37,6 +37,7 @@
       "chat_llm": false,  # 是否仅使用llm聊天
       "chat_agent": false,  # 是否使用agent
       "chat_db": false,  # 是否查询数据库
+      "return_reference": false,  # 是否返回参考
       "index_name": "default",  # 索引名称，RAG场景使用，不传使用默认索引
   }
   ```
@@ -604,7 +605,7 @@ chat()
   - Content-Type: application/json
 - 请求参数：
   - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
+  - vector_store_config: 向量库配置
   - embedding_config: embedding 模型配置
 
 <details>
@@ -645,7 +646,7 @@ chat()
   - Content-Type: application/json
 - 请求参数：
   - index_name: 索引名称
-  - vector_stroe_config: 向量库配置
+  - vector_store_config: 向量库配置
   - embedding_config: embedding 模型配置
 
 <details>
@@ -898,35 +899,31 @@ chat()
 - curl 请求示例：
 
   ```bash
-    curl -X 'PATCH' '{EAS_SERVICE_URL}/api/v1/indexes/my_index' \
+    curl -X 'PATCH' '{EAS_SERVICE_URL}/api/v1/config' \
     -H 'Authorization: EAS_TOKEN' \
     -H 'Content-Type: application/json' \
     -d '{
-        "index_name": "my_index",
-        "vector_store_config": {
-            "type": "faiss"
-        },
-        "embedding_config": {
-            "model": "bge-m3",
-            "source": "huggingface"
+        "system": {
+          "default_web_search": false,
+          "query_type": "websearch"
         },
         "data_reader": {
-            "concat_csv_rows": false,
-            "enable_mandatory_ocr": false,
-            "format_sheet_data_to_json": false,
-            "sheet_column_filters": null,
-            "number_workers": 4
+          "concat_csv_rows": false,
+          "enable_mandatory_ocr": false,
+          "format_sheet_data_to_json": false,
+          "sheet_column_filters": null,
+          "number_workers": 4
         },
         "node_parser": {
-            "type": "Sentence",
-            "chunk_size": 500,
-            "chunk_overlap": 10,
-            "enable_multimodal": true,
-            "paragraph_separator": "\n\n\n",
-            "sentence_window_size": 3,
-            "sentence_chunk_overlap": 200,
-            "breakpoint_percentile_threshold": 95,
-            "buffer_size": 1
+          "type": "Sentence",
+          "chunk_size": 500,
+          "chunk_overlap": 10,
+          "enable_multimodal": true,
+          "paragraph_separator": "\n\n\n",
+          "sentence_window_size": 3,
+          "sentence_chunk_overlap": 200,
+          "breakpoint_percentile_threshold": 95,
+          "buffer_size": 1
         },
         ...
     }' #(更多配置信息可参考 获取RAG配置 的返回示例)

@@ -1,5 +1,6 @@
 from typing import Any
 from loguru import logger
+from copy import deepcopy
 
 from llama_index.core import Settings
 from llama_index.core.query_engine import BaseQueryEngine
@@ -212,24 +213,34 @@ def resolve_data_analysis_loader(
     )
 
 
-def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
-    if (
-        config.data_analysis.llm
-        and config.data_analysis.llm.base_url
-        and config.data_analysis.llm.api_key
-        and config.data_analysis.llm.model
-    ):
-        llm_da = resolve(cls=PaiLlm, llm_config=config.data_analysis.llm)
+def resolve_da_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+    selected_llm_config = next(
+        (config for config in config.llms if config.model_id == model_id), None
+    )
+    if selected_llm_config:
+        llm_da_config = deepcopy(selected_llm_config)
+        llm_da_config.max_tokens = 1024
+        llm = resolve(cls=PaiLlm, llm_config=llm_da_config)
+        return llm
     else:
-        # llm_da_config = {
-        #     "source": config.llm.source,
-        #     "model": config.llm.model,
-        #     "api_key": config.llm.api_key,
-        #     "max_tokens": 1024,
-        # }
-        # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
-        llm_da = resolve_chat_llm(config)
+        logger.warning("No llm found")
+        Settings.llm = None
+        return None
 
+
+def resolve_data_analysis_query(
+    config: RagConfig, model_id: str = None
+) -> DataAnalysisQuery:
+    # llm_da_config = {
+    #     "source": config.llm.source,
+    #     "model": config.llm.model,
+    #     "api_key": config.llm.api_key,
+    #     "max_tokens": 1024,
+    #     "model_id": config.llm.model_id,
+    # }
+    # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
+    # llm_da = resolve_da_llm(config, model_id)
+    llm_da = resolve_chat_llm(config, model_id)
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(

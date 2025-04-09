@@ -15,6 +15,8 @@ from loguru import logger
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
 
+DEFAULT_EMBEDDING_BATCH_SIZE = 1000
+
 
 class FileTaskExecutor:
     def __init__(
@@ -82,38 +84,41 @@ class FileTaskExecutor:
 
         yield FileProcessResult(status=FileProcessStatus.Embedding, message=None)
         try:
-            embedded_nodes = self.embed_model(chunks)
-            if len(embedded_nodes) > 1000:
-                logger.warning(
-                    f"File {task.file_name} has too many chunks with size {len(embedded_nodes)}, skipping save embed chunks."
-                )
-            else:
-                RagKnowledgeBaseHelper.save_chunk_nodes(
-                    knowledgebase.name, embedded_nodes, "embed"
-                )
-                logger.info(
-                    f"Get nodes embedding successfully for file {task.file_name}"
-                )
+            embedding_batch_size = DEFAULT_EMBEDDING_BATCH_SIZE
+            yield FileProcessResult(status=FileProcessStatus.Persisting, message=None)
+            count_embedding_nodes = 0
+            while chunks:
+                embedded_batch_nodes = self.embed_model(chunks[:embedding_batch_size])
+                count_embedding_nodes += len(chunks[:embedding_batch_size])
+                try:
+                    self.vector_index.insert_nodes(nodes=embedded_batch_nodes)
+                    logger.info(f"Persist {count_embedding_nodes} nodes successfully.")
+                    if count_embedding_nodes <= embedding_batch_size:
+                        RagKnowledgeBaseHelper.save_chunk_nodes(
+                            knowledgebase.name, embedded_batch_nodes, "embed"
+                        )
+                        logger.info(
+                            f"Get nodes embedding successfully for file {task.file_name}"
+                        )
+                    del embedded_batch_nodes
+                    del chunks[:embedding_batch_size]
+                except Exception as ex:
+                    logger.error(
+                        f"Persist nodes for file {task.file_name} failed: {traceback.format_exc()}"
+                    )
+                    yield FileProcessResult(
+                        status=FileProcessStatus.Failed, message=str(ex)
+                    )
+                    return
+            logger.info(f"Persist nodes successfully for file {task.file_name}")
+            logger.info(f"Add file to index succuessfully {task.file_name}.")
+            yield FileProcessResult(status=FileProcessStatus.Done, message=None)
         except Exception as ex:
             logger.error(
                 f"Embedding file {task.file_name} failed: {traceback.format_exc()}"
             )
             yield FileProcessResult(status=FileProcessStatus.Failed, message=str(ex))
             return
-
-        yield FileProcessResult(status=FileProcessStatus.Persisting, message=None)
-        try:
-            self.vector_index.insert_nodes(nodes=embedded_nodes)
-            logger.info(f"Persist nodes successfully for file {task.file_name}")
-        except Exception as ex:
-            logger.error(
-                f"Persist nodes for file {task.file_name} failed: {traceback.format_exc()}"
-            )
-            yield FileProcessResult(status=FileProcessStatus.Failed, message=str(ex))
-            return
-
-        logger.info(f"Add file to index succuessfully {task.file_name}.")
-        yield FileProcessResult(status=FileProcessStatus.Done, message=None)
 
     def _delete(self, task: FileItem):
         self.vector_index.delete_ref_doc(ref_doc_id=task.task_id)

@@ -4,14 +4,18 @@ Contains parsers for tabular data files.
 
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fsspec import AbstractFileSystem
+from loguru import logger
 from openpyxl import load_workbook
 
 import pandas as pd
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+
+from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 
 
 class PaiPandasExcelReader(BaseReader):
@@ -109,7 +113,26 @@ class PaiPandasExcelReader(BaseReader):
     ) -> List[Document]:
         """Parse Excel file. only process the first sheet"""
 
-        df = self.read_xlsx(file, fs)
+        workbook_file = file
+        file_extension = os.path.splitext(os.path.basename(workbook_file))[1]
+        logger.info(f"Parsing workbook {workbook_file}.")
+        if file_extension.lower() == ".xls":
+            tmp_file_dir = os.path.join(
+                DEFAULT_KNOWLEDGEBASE_PATH, "../pairag_parse_tmp"
+            )
+            file_name_without_extension = os.path.splitext(
+                os.path.basename(workbook_file)
+            )[0]
+            data_xls = pd.read_excel(workbook_file, engine="xlrd")
+            os.makedirs(tmp_file_dir, exist_ok=True)
+            new_file_path = os.path.join(
+                tmp_file_dir, f"{file_name_without_extension}.xlsx"
+            )
+            logger.info(f"Transfer {workbook_file} to {new_file_path}.")
+            data_xls.to_excel(new_file_path, index=False, engine="openpyxl")
+            workbook_file = new_file_path
+
+        df = self.read_xlsx(workbook_file, fs)
 
         if self._sheet_column_filters:
             df = df[self._sheet_column_filters]
