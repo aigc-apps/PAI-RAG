@@ -181,10 +181,8 @@ class PaiSynthesizer(BaseSynthesizer):
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
-            if query.original_query_str:
-                query_str = query.original_query_str
-            else:
-                query_str = query.query_str
+            query_str = query.query_str
+
             if query.chat_messages_str:
                 history_str = query.chat_messages_str
             else:
@@ -288,7 +286,7 @@ class PaiSynthesizer(BaseSynthesizer):
             **response_kwargs,
         )
 
-        response_kwargs["query_str"] = original_query_str
+        response_kwargs["query_str"] = query_str
         response_kwargs["cur_date"] = cur_date
 
         if not streaming:

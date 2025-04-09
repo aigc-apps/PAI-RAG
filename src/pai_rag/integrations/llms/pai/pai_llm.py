@@ -142,7 +142,7 @@ class PaiLlm(OpenAILike):
                 messages.append(
                     ChatMessage(
                         role="assistant",
-                        content=f"<think>\n当前时间是{cur_date}，用户想知道”{query_str.strip()}“。",
+                        content=f"<think>\n当前时间是{cur_date}，用户想知道“{query_str.strip()}”，注意回答中不要提到“从参考内容得出”、“从材料得出”等字眼，不要包含链接内容。",
                     )
                 )
             else:
@@ -297,7 +297,7 @@ class PaiLlm(OpenAILike):
                 messages.append(
                     ChatMessage(
                         role="assistant",
-                        content=f"<think>\n当前时间是{cur_date}，用户想知道”{query_str.strip()}“。",
+                        content=f"<think>\n当前时间是{cur_date}，用户想知道“{query_str.strip()}”，注意回答中不要提到“从参考内容得出”、“从材料得出”等字眼，不要包含链接内容。",
                     )
                 )
             else:
