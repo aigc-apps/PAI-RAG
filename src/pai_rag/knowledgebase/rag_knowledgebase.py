@@ -135,7 +135,7 @@ class KnowledgeBaseManager:
             return
 
         _knowledges_cp = self._knowledgebase_map.knowledgebases.copy()
-        self._knowledgebase_map = {}
+        self._knowledgebase_map.knowledgebases = {}
 
         if len(_knowledges_cp) > 0:
             for knowledge_name, old_knowledgebase in _knowledges_cp.items():
