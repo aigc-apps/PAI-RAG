@@ -106,7 +106,7 @@ class RagConfig(BaseModel):
         BeforeValidator(lambda x: [validate_case_insensitive(item) for item in x]),
     ]
 
-    chat: ChatConfig()
+    chat: ChatConfig = ChatConfig()
 
     # llm
     llm: Annotated[
