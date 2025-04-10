@@ -230,7 +230,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         outputs=[oss_ak, oss_sk, save_state],
                         api_name="save_config",
                     )
-        with gr.Tab("提示词模板配置"):
+        with gr.Tab("大模型对话提示词模板配置"):
             with gr.Row():
                 system_role_template = gr.Textbox(
                     label="系统角色设定",

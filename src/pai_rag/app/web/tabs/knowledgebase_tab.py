@@ -10,6 +10,7 @@ from pai_rag.app.web.tabs.history_tab import create_upload_history
 from pai_rag.app.web.tabs.chat_tab import reset_textbox, clear_history
 from loguru import logger
 import json
+import datetime
 
 
 async def retrieval_test_respond(input_elements: List[Any]):
@@ -89,6 +90,34 @@ def save_retrieval_config(input_elements: List[Any]):
         "retrieval_settings": retrieval_settings,
     }
     return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
+
+
+def save_knowledgebase_qa_prompt_func(input_elements: List[Any]):
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+    knowledgebase_id = update_dict["knowledgebase_qa_prompt_index"]
+    qa_prompt_templates = {
+        "system_prompt_template": update_dict[
+            "knowledgebase_qa_system_prompt_template"
+        ],
+        "task_prompt_template": update_dict["knowledgebase_qa_task_prompt_template"],
+    }
+    rag_client.update_index_qa_prompt_templates(knowledgebase_id, qa_prompt_templates)
+    return gr.update(
+        value=f"[{datetime.datetime.now()}] QA prompt templated for knowledgebase {knowledgebase_id} saved successfully!",
+        visible=True,
+    )
+
+
+def show_knowledgebase_qa_prompt_templates(knowledgebase_qa_prompt_index):
+    qa_prompt_templates = rag_client.get_index_qa_prompt_templates(
+        knowledgebase_qa_prompt_index
+    )
+    return [
+        gr.update(value=qa_prompt_templates["system_prompt_template"]),
+        gr.update(value=qa_prompt_templates["task_prompt_template"]),
+    ]
 
 
 def show_retrieval_config(retrieval_test_chat_index):
@@ -252,14 +281,18 @@ def create_knowledgebase_settings_tab() -> Dict[str, Any]:
             ],
         )
 
-        """
         delete_index_button.click(
             fn=ev_listeners.delete_index,
             inputs=[vector_index],
-            outputs=[],
-            visible=False,
+            outputs=[
+                vector_index,
+                new_index_name,
+                add_index_button,
+                update_index_button,
+                delete_index_button,
+            ],
         )
-        """
+
     return all_elements
 
 
@@ -514,6 +547,78 @@ def create_retrieval_test_tab():
         return components_to_dict(components)
 
 
+def create_knowledgebase_qa_prompt_tab():
+    components = []
+    with gr.Row():
+        with gr.Column():
+            with gr.Row():
+                knowledgebase_qa_prompt_index = gr.Dropdown(
+                    choices=[],
+                    value="",
+                    label="\N{bookmark} 知识库名称",
+                    elem_id="knowledgebase_qa_prompt_index",
+                    allow_custom_value=True,
+                )
+            with gr.Row():
+                knowledgebase_qa_system_prompt_template = gr.Textbox(
+                    label="系统角色设定",
+                    value="",
+                    elem_id="knowledgebase_qa_system_prompt_template",
+                    lines=4,
+                    interactive=True,
+                )
+                knowledgebase_qa_task_prompt_template = gr.Textbox(
+                    label="任务描述",
+                    value="",
+                    elem_id="knowledgebase_qa_task_prompt_template",
+                    lines=10,
+                    interactive=True,
+                )
+    with gr.Row():
+        with gr.Column():
+            save_knowledgebase_qa_prompt_btn = gr.Button(
+                value="检查并保存配置",
+                elem_id="save_knowledgebase_qa_prompt_btn",
+                variant="primary",
+            )
+            save_knowledgebase_qa_prompt_state = gr.Textbox(
+                label="Save Info: ", container=False, visible=True
+            )
+    components.extend(
+        [
+            knowledgebase_qa_prompt_index,
+            knowledgebase_qa_system_prompt_template,
+            knowledgebase_qa_task_prompt_template,
+        ]
+    )
+
+    save_knowledgebase_qa_prompt_btn.click(
+        fn=save_knowledgebase_qa_prompt_func,
+        inputs=set(components),
+        outputs=[save_knowledgebase_qa_prompt_state],
+        api_name="save_knowledgebase_qa_prompt",
+    )
+    knowledgebase_qa_prompt_index.input(
+        fn=show_knowledgebase_qa_prompt_templates,
+        inputs=[knowledgebase_qa_prompt_index],
+        outputs=[
+            knowledgebase_qa_system_prompt_template,
+            knowledgebase_qa_task_prompt_template,
+        ],
+        api_name="show_knowledgebase_qa_prompt_templates",
+    )
+    knowledgebase_qa_prompt_index.change(
+        fn=show_knowledgebase_qa_prompt_templates,
+        inputs=[knowledgebase_qa_prompt_index],
+        outputs=[
+            knowledgebase_qa_system_prompt_template,
+            knowledgebase_qa_task_prompt_template,
+        ],
+        api_name="show_knowledgebase_qa_prompt_templates",
+    )
+    return components_to_dict(components)
+
+
 def create_knowledgebase_tab() -> Dict[str, Any]:
     with gr.Tab("知识库设置"):
         knowledgebase_settings_elements = create_knowledgebase_settings_tab()
@@ -525,8 +630,11 @@ def create_knowledgebase_tab() -> Dict[str, Any]:
         history_elements = create_upload_history()
     with gr.Tab("检索测试"):
         retrieval_test_elements = create_retrieval_test_tab()
+    with gr.Tab("知识库问答提示词模板配置"):
+        knowledgebase_qa_elements = create_knowledgebase_qa_prompt_tab()
     return {
         **knowledgebase_settings_elements,
         **history_elements,
         **retrieval_test_elements,
+        **knowledgebase_qa_elements,
     }

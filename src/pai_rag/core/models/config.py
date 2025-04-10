@@ -4,7 +4,6 @@ from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
-    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
 )
 from pai_rag.utils.prompt_template import (
     AGENT_REWRITE_PROMPT_ZH,
@@ -15,7 +14,9 @@ from pai_rag.utils.prompt_template import (
     REWRITE_PROMPT_ROLE_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
 )
-
+from pai_rag.utils.prompt_template import (
+    DEFALT_LLM_CHAT_PROMPT_TEMPL,
+)
 
 DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
 DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
@@ -89,4 +90,4 @@ class RetrieverConfig(BaseModel):
 class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
     system_role_template: str = DEFAULT_SYSTEM_ROLE_TEMPLATE
-    custom_prompt_template: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE
+    custom_prompt_template: str = DEFALT_LLM_CHAT_PROMPT_TEMPL

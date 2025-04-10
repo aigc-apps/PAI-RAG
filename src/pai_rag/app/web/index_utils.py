@@ -371,6 +371,8 @@ def index_to_components(
         gr.update(choices=index_list, value=index_entry.name),
         gr.update(choices=index_list, value=index_entry.name),
         gr.update(choices=index_list),
+        gr.update(choices=index_list),
+        gr.update(visible=False if is_new_index else True),
     ]
 
 

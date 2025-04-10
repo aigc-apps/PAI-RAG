@@ -71,7 +71,7 @@ class RagLocalClient:
             content_list = []
             for i, doc in enumerate(docs):
                 metadata = doc.get("metadata", {})
-                filename = metadata.get("file_name")
+                filename = metadata.get("name")
                 sheet_name = metadata.get("sheet_name")
                 ref_table = metadata.get("query_tables")
                 invalid_flag = metadata.get("invalid_flag", 0)
@@ -146,6 +146,39 @@ class RagLocalClient:
 
         return dotdict(response)
 
+    def _format_rag_response_v1_chat_completions(self, response):
+        text = response["delta"]
+        docs = response.get("docs", []) or []
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        if is_finished:
+            content_list = []
+            for i, doc in enumerate(docs):
+                filename = doc.get("name")
+                doc_text = doc.get("text")
+                score = doc.get("score")
+                url = doc.get("url", "")
+                if url.startswith("http"):
+                    filename = f'<a href="{url}"> {filename} </a>'
+                content = f"""
+<span class="text">
+    [{i+1}]: {filename} 分数:{score}
+    <span style='color: gray; font-size: 12px;'> ( {doc_text} ) </span>
+</span>
+<br>
+"""
+                content_list.append(content)
+            referenced_docs = "".join(content_list)
+
+        formatted_answer = text
+        if referenced_docs:
+            formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
+
+        response["delta"] = formatted_answer
+
+        return dotdict(response)
+
     async def query(
         self,
         chat_messages: List[Dict[str, str]],
@@ -195,10 +228,14 @@ class RagLocalClient:
                         chunk = json.loads(r[6:])
                         result = {
                             "delta": chunk["choices"][0]["delta"]["content"],
-                            "docs": chunk.get("docs"),
-                            "is_finished": chunk.get("is_finished", False),
+                            "docs": chunk.get("citation_details", []),
+                            "is_finished": chunk["choices"][0]["finish_reason"]
+                            == "stop",
                         }
-                        yield self._format_rag_response(result)
+                        if chat_knowledgebase or search_web:
+                            yield self._format_rag_response_v1_chat_completions(result)
+                        else:
+                            yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
@@ -690,6 +727,24 @@ class RagLocalClient:
                 msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
             )
 
+    def update_index_qa_prompt_templates(
+        self,
+        knowledgebase_id: str,
+        qa_prompt_templates: dict = {},
+    ):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            _knowledgebase.qa_prompt_templates = qa_prompt_templates
+            knowledgebase_manager.update_knowledgebase(_knowledgebase)
+        except Exception as e:
+            logger.exception(
+                f"update qa_prompt_templates for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update qa_prompt_templates for index {knowledgebase_id} failed. {e}",
+            )
+
     def get_index_retrieval_settings(self, knowledgebase_id: str):
         try:
             _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
@@ -701,6 +756,19 @@ class RagLocalClient:
             raise RagApiError(
                 code=500,
                 msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
+            )
+
+    def get_index_qa_prompt_templates(self, knowledgebase_id: str):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            return _knowledgebase.qa_prompt_templates
+        except Exception as e:
+            logger.exception(
+                f"Get qa_prompt_templates for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"Get qa_prompt_templates for index {knowledgebase_id} failed. {e}",
             )
 
     def delete_index(self, index_name: str):

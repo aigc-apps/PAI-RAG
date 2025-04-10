@@ -39,7 +39,7 @@ def add_index(*components):
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True),
-        gr.update(visible=False),
+        gr.update(visible=True),
     ]
 
 
@@ -57,7 +57,26 @@ def update_index(*components):
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True),
+        gr.update(visible=True),
+    ]
+
+
+def delete_index(vector_index):
+    try:
+        rag_client.delete_index(vector_index)
+        logger.info(f"Delete index {vector_index} successfully")
+    except Exception as e:
+        raise gr.Error(f"Failed to delete index: {e}")
+    index_map = get_index_map()
+    return [
+        gr.update(
+            choices=list(index_map.knowledgebases.keys()) + ["NEW"],
+            value=list(index_map.knowledgebases.keys())[0],
+        ),
         gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=True),
+        gr.update(visible=True),
     ]
 
 

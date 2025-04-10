@@ -24,14 +24,12 @@ def delete_dir(folder_path):
         logger.error(f"Error deleting folder {folder_path}: {e}")
 
 
-def delete_index_dir(index_name):
-    destination_folder = os.path.join(
-        DEFAULT_KNOWLEDGEBASE_PATH, index_name, ".index", ".faiss"
-    )
+def delete_knowledgebase_dir(index_name):
+    destination_folder = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, index_name)
     delete_dir(destination_folder)
 
 
-def delete_default_index_dir():
+def delete_default_knowledgebase_dir():
     destination_folder = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, "default")
     delete_dir(destination_folder)
 

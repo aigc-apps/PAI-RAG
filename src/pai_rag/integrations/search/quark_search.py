@@ -12,7 +12,10 @@ from urllib.parse import urljoin, urlencode
 import httpx
 from loguru import logger
 
-from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
+from pai_rag.integrations.search.search_config import (
+    DEFAULT_SEARCH_COUNT,
+    DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
+)
 
 
 class QuarkAccessTokenProvider:
@@ -48,6 +51,7 @@ class QuarkSearchTool(BaseQueryEngine):
         host: str,
         synthesizer: BaseSynthesizer = None,
         search_count: int = DEFAULT_SEARCH_COUNT,
+        search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
     ):
         self.host = host
         self.user = user
@@ -56,6 +60,7 @@ class QuarkSearchTool(BaseQueryEngine):
         self.token_provider = QuarkAccessTokenProvider(host, user, secret)
         self.synthesizer = synthesizer
         self.search_count = search_count
+        self.search_qa_prompt_template = search_qa_prompt_template
 
     async def _search_quark_single_page(self, query: str, token: str, page: int = 1):
         async with httpx.AsyncClient() as client:
@@ -114,8 +119,8 @@ class QuarkSearchTool(BaseQueryEngine):
         return await self.synthesizer.asynthesize(
             query=query,
             nodes=nodes,
-            system_role_str=query.system_role,
-            prompt_template_str=" " if query.system_role else None,
+            system_role_str=" ",
+            prompt_template_str=self.search_qa_prompt_template,
             **query.llm_kwargs,
         )
 

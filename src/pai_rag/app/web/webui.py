@@ -96,6 +96,8 @@ def change_vector_index_button(index_name):
             gr.update(),
             gr.update(),
             gr.update(),
+            gr.update(),
+            gr.update(),
         ]
     index_map = get_index_map()
     index_list = list(index_map.knowledgebases.keys())
@@ -104,6 +106,7 @@ def change_vector_index_button(index_name):
         gr.update(choices=index_list, value=index_name),
         gr.update(choices=index_list, value=index_name),
         gr.update(choices=index_list),
+        gr.update(choices=index_list, value=index_list[0]),
     ]
 
 
@@ -141,6 +144,7 @@ def make_homepage():
             chat_elements["chat_index"],
             knowledgebase_elements["history_index"],
             knowledgebase_elements["retrieval_test_chat_index"],
+            knowledgebase_elements["knowledgebase_qa_prompt_index"],
         ]
         index_related_components = [
             knowledgebase_elements[key] for key in index_related_component_keys
@@ -154,6 +158,8 @@ def make_homepage():
                 chat_elements["chat_index"],
                 knowledgebase_elements["history_index"],
                 knowledgebase_elements["retrieval_test_chat_index"],
+                knowledgebase_elements["knowledgebase_qa_prompt_index"],
+                knowledgebase_elements["delete_index_button"],
             ],
         )
         knowledgebase_elements["history_index"].input(
@@ -173,7 +179,7 @@ def make_homepage():
             inputs=setting_elements["llm_model"],
             outputs=[
                 chat_elements["chat_model_id"],
-                chat_elements["query_rewrite_model_id"],
+                setting_elements["query_rewrite_model_id"],
                 analysis_elements["data_analysis_model_id"],
             ],
         )

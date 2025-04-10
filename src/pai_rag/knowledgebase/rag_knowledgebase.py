@@ -20,8 +20,8 @@ from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelpe
 from pai_rag.utils.file_utils import generate_md5
 from pai_rag.utils.index_utils import (
     delete_dir,
-    delete_index_dir,
-    delete_default_index_dir,
+    delete_knowledgebase_dir,
+    delete_default_knowledgebase_dir,
 )
 
 from pai_rag.utils.constants import (
@@ -33,6 +33,10 @@ from pai_rag.utils.constants import (
     DEFAULT_DOC_STORE_NAME,
 )
 from pai_rag.utils.time_utils import get_current_time_str
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_SYSTEM_ROLE_TEMPLATE,
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
+)
 
 
 class KnowledgeBase(BaseModel):
@@ -50,6 +54,10 @@ class KnowledgeBase(BaseModel):
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
     retrieval_settings: Dict = Field(default_factory=dict)
+    qa_prompt_templates: Dict = {
+        "system_prompt_template": DEFAULT_SYSTEM_ROLE_TEMPLATE,
+        "task_prompt_template": DEFAULT_CUSTOM_PROMPT_TEMPLATE,
+    }
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:
@@ -241,11 +249,11 @@ class KnowledgeBaseManager:
             ), f"删除知识库失败: 无法找到知识库'{name}'."
 
             if name == DEFAULT_KNOWLEDGEBASE_NAME:
-                delete_default_index_dir()
+                delete_default_knowledgebase_dir()
                 logger.info(f"默认知识库 '{name}' 不能被删除。本地存储已经清空。")
             else:
                 del self._knowledgebase_map.knowledgebases[name]
-                delete_index_dir(name)
+                delete_knowledgebase_dir(name)
                 logger.info(f"知识库 '{name}' 删除成功。")
 
             new_state = self.save_knowledgebase_map()

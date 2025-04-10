@@ -273,9 +273,9 @@ class PaiLlm(OpenAILike):
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         messages = merge_consecutive_messages(messages)
-
+        logger.debug(f"Chat messages: {messages}")
         if self.llm_config.is_reasoning_model:
-            logger.info(f"Using reasoning models, messages: {messages}")
+            logger.info("Using reasoning models")
         if not self.metadata.is_chat_model:
             intent = None
             if "intent" in kwargs:
