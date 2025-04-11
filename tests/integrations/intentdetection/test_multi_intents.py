@@ -2,10 +2,7 @@ import os
 import json
 import pytest
 from pathlib import Path
-from pai_rag.core.chat_flow import ChatFlow
-from pai_rag.app.api.models import ChatCompletionRequest
 from llama_index.core.base.llms.types import ChatMessage
-from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 import asyncio
 
 
@@ -19,6 +16,10 @@ if (
     )
 
 from pai_rag.core.rag_config_manager import RagConfigManager
+from pai_rag.core.chat_flow import ChatFlow
+from pai_rag.app.api.models import ChatCompletionRequest
+from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+
 
 # 定义测试文件路径
 _BASE_DIR = Path(__file__).parent.parent
