@@ -112,15 +112,9 @@ class ChatFlow:
             ChatToolType.CHAT_AGENT: chat_request.chat_agent,
             ChatToolType.CHAT_NEWS: chat_request.chat_news,
         }
-
         enabled_tools = [k for k, v in tool_switches.items() if v]
-        if len(enabled_tools) > 4:
-            logger.warning(
-                "Selected tools exceeding the maximum number, truncating to 4."
-            )
-            # 初步限定最多选4个，加上chat_llm，共5个
-            enabled_tools = enabled_tools[:4]
         potential_intents.extend(enabled_tools)
+        logger.debug(f"Enabled tool candidates: {potential_intents}.")
 
         # if config.system.default_web_search or chat_request.search_web:
         #     potential_intents.append(ChatToolType.SEARCH_WEB)

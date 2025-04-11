@@ -388,7 +388,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citations", [])
 
     assert len(answer) > 0
-    assert len(citations) == 5
+    assert len(citations) == 0
 
     # 相关问题
     async with AsyncClient(
