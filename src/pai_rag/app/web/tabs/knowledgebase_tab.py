@@ -8,6 +8,7 @@ import pai_rag.app.web.event_listeners as ev_listeners
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from pai_rag.app.web.tabs.history_tab import create_upload_history
 from pai_rag.app.web.tabs.chat_tab import reset_textbox, clear_history
+from pai_rag.app.web.view_model import RETRIEVAL_MODE_MAP, RERANKER_TYPE_MAP
 from loguru import logger
 import json
 import datetime
@@ -36,16 +37,21 @@ async def retrieval_test_respond(input_elements: List[Any]):
         yield chatbot
 
     try:
+        print(
+            'QUERY_TYPE_MAP.get(update_dict["retrieval_mode"])',
+            RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
+            update_dict["retrieval_mode"],
+        )
         response_gen = rag_client.aknowledgebase_retrieval(
             knowledgebase_id=index_name,
             query=question,
             retrieval_settings={
-                "retrieval_mode": update_dict["retrieval_mode"],
+                "retrieval_mode": RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
                 "similarity_top_k": update_dict["similarity_top_k"],
                 # "image_similarity_top_k": update_dict["image_similarity_top_k"], # not supported yet
                 "vector_weight": update_dict["vector_weight"],
                 "keyword_weight": update_dict["keyword_weight"],
-                "reranker_type": update_dict["reranker_type"],
+                "reranker_type": RERANKER_TYPE_MAP.get(update_dict["reranker_type"]),
                 "similarity_threshold": update_dict["similarity_threshold"],
                 "reranker_similarity_threshold": update_dict[
                     "reranker_similarity_threshold"
@@ -74,11 +80,11 @@ def save_retrieval_config(input_elements: List[Any]):
         update_dict[element.elem_id] = value
     knowledgebase_id = update_dict["retrieval_test_chat_index"]
     retrieval_settings = {
-        "retrieval_mode": update_dict["retrieval_mode"],
+        "retrieval_mode": RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
         "similarity_top_k": update_dict["similarity_top_k"],
         "vector_weight": update_dict["vector_weight"],
         "keyword_weight": update_dict["keyword_weight"],
-        "reranker_type": update_dict["reranker_type"],
+        "reranker_type": RERANKER_TYPE_MAP.get(update_dict["reranker_type"]),
         "similarity_threshold": update_dict["similarity_threshold"],
         "reranker_similarity_threshold": update_dict["reranker_similarity_threshold"],
         "reranker_model": update_dict["reranker_model"],

@@ -364,13 +364,8 @@ def resolve_query_engine_from_retrieval_request(
     retrieval_mode = retrieval_settings.get(
         "retrieval_mode", config.retriever.vector_store_query_mode
     )
-    if retrieval_mode == "向量检索":
-        retrieval_mode = VectorStoreQueryMode.DEFAULT
-    elif retrieval_mode == "关键字检索":
-        retrieval_mode = VectorStoreQueryMode.TEXT_SEARCH
-    elif retrieval_mode == "混合检索":
-        retrieval_mode = VectorStoreQueryMode.HYBRID
-
+    if isinstance(retrieval_mode, str):
+        retrieval_mode = VectorStoreQueryMode(retrieval_mode)
     hybrid_fusion_weights = [
         retrieval_settings.get(
             "vector_weight", config.retriever.hybrid_fusion_weights[0]
@@ -392,15 +387,21 @@ def resolve_query_engine_from_retrieval_request(
 
     synthesizer = resolve_synthesizer(config, model_id)
 
-    _reranker_type = retrieval_settings.get("reranker_type", "无重排序")
-    if _reranker_type == "无重排序":
+    _reranker_type = retrieval_settings.get(
+        "reranker_type", config.postprocessor.reranker_type
+    )
+
+    if isinstance(_reranker_type, str):
+        _reranker_type = PostProcessorType(_reranker_type)
+
+    if _reranker_type == PostProcessorType.no_reranker:
         _postprocessor_config = SimilarityPostProcessorConfig(
             reranker_type=PostProcessorType.no_reranker,
             similarity_threshold=retrieval_settings.get(
                 "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
             ),
         )
-    elif _reranker_type == "基于模型的重排序":
+    elif _reranker_type == PostProcessorType.reranker_model:
         _postprocessor_config = RerankModelPostProcessorConfig(
             reranker_type=PostProcessorType.reranker_model,
             reranker_model=retrieval_settings.get(
@@ -440,13 +441,8 @@ def resolve_query_engine_from_knowledgebase(
         retrieval_mode = retrieval_settings.get(
             "retrieval_mode", config.retriever.vector_store_query_mode
         )
-        if retrieval_mode == "向量检索":
-            retrieval_mode = VectorStoreQueryMode.DEFAULT
-        elif retrieval_mode == "关键字检索":
-            retrieval_mode = VectorStoreQueryMode.TEXT_SEARCH
-        elif retrieval_mode == "混合检索":
-            retrieval_mode = VectorStoreQueryMode.HYBRID
-
+        if isinstance(retrieval_mode, str):
+            retrieval_mode = VectorStoreQueryMode(retrieval_mode)
         hybrid_fusion_weights = [
             retrieval_settings.get(
                 "vector_weight", config.retriever.hybrid_fusion_weights[0]
@@ -466,15 +462,20 @@ def resolve_query_engine_from_knowledgebase(
             search_image=config.retriever.search_image,  # not support yet
         )
 
-        _reranker_type = retrieval_settings.get("reranker_type", "无重排序")
-        if _reranker_type == "无重排序":
+        _reranker_type = retrieval_settings.get(
+            "reranker_type", config.postprocessor.reranker_type
+        )
+
+        if isinstance(_reranker_type, str):
+            _reranker_type = PostProcessorType(_reranker_type)
+        if _reranker_type == PostProcessorType.no_reranker:
             _postprocessor_config = SimilarityPostProcessorConfig(
                 reranker_type=PostProcessorType.no_reranker,
                 similarity_threshold=retrieval_settings.get(
                     "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
                 ),
             )
-        elif _reranker_type == "基于模型的重排序":
+        elif _reranker_type == PostProcessorType.reranker_model:
             _postprocessor_config = RerankModelPostProcessorConfig(
                 reranker_type=PostProcessorType.reranker_model,
                 reranker_model=retrieval_settings.get(

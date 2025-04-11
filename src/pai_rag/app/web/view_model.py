@@ -64,6 +64,28 @@ INVERTED_QUERY_TYPES_MAP = {
     "chat_news": "新闻工具",
 }
 
+RETRIEVAL_MODE_MAP = {
+    "向量检索": VectorStoreQueryMode.DEFAULT,
+    "关键字检索": VectorStoreQueryMode.TEXT_SEARCH,
+    "混合检索": VectorStoreQueryMode.HYBRID,
+}
+
+INVERTED_RETRIEVAL_MODE_MAP = {
+    VectorStoreQueryMode.DEFAULT: "向量检索",
+    VectorStoreQueryMode.TEXT_SEARCH: "关键字检索",
+    VectorStoreQueryMode.HYBRID: "混合检索",
+}
+
+RERANKER_TYPE_MAP = {
+    "无重排序": PostProcessorType.no_reranker,
+    "基于模型的重排序": PostProcessorType.reranker_model,
+}
+
+INVERTED_RERANKER_TYPE_MAP = {
+    PostProcessorType.no_reranker: "无重排序",
+    PostProcessorType.reranker_model: "基于模型的重排序",
+}
+
 
 def recursive_dict():
     return defaultdict(recursive_dict)
@@ -245,18 +267,13 @@ class ViewModel(BaseModel):
         view_model.need_image = config.retriever.search_image
         view_model.vector_weight = config.retriever.hybrid_fusion_weights[0]
         view_model.keyword_weight = config.retriever.hybrid_fusion_weights[1]
-        if config.retriever.vector_store_query_mode == VectorStoreQueryMode.DEFAULT:
-            view_model.retrieval_mode = "向量检索"
-        elif config.retriever.vector_store_query_mode == VectorStoreQueryMode.HYBRID:
-            view_model.retrieval_mode = "混合检索"
-        else:
-            view_model.retrieval_mode = "关键字检索"
+        view_model.retrieval_mode = INVERTED_RETRIEVAL_MODE_MAP.get(
+            config.retriever.vector_store_query_mode, VectorStoreQueryMode.DEFAULT
+        )
 
-        if config.postprocessor.reranker_type.value == PostProcessorType.reranker_model:
-            view_model.reranker_type = "基于模型的重排序"
-        else:
-            view_model.reranker_type = "无重排序"
-
+        view_model.reranker_type = INVERTED_RERANKER_TYPE_MAP.get(
+            config.postprocessor.reranker_type, PostProcessorType.no_reranker
+        )
         if isinstance(config.postprocessor, SimilarityPostProcessorConfig):
             view_model.similarity_threshold = config.postprocessor.similarity_threshold
         else:
@@ -428,20 +445,17 @@ class ViewModel(BaseModel):
         config["retriever"]["keyword_weight"] = self.keyword_weight
 
         config["retriever"]["search_image"] = self.need_image
-        if self.retrieval_mode == "混合检索":
-            config["retriever"]["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
+        config["retriever"]["vector_store_query_mode"] = RETRIEVAL_MODE_MAP.get(
+            self.retrieval_mode, "向量检索"
+        )
+        if (
+            config["retriever"]["vector_store_query_mode"]
+            == VectorStoreQueryMode.HYBRID
+        ):
             config["retriever"]["hybrid_fusion_weights"] = [
                 self.vector_weight,
                 self.keyword_weight,
             ]
-        elif self.retrieval_mode == "向量检索":
-            config["retriever"][
-                "vector_store_query_mode"
-            ] = VectorStoreQueryMode.DEFAULT
-        elif self.retrieval_mode == "关键字检索":
-            config["retriever"][
-                "vector_store_query_mode"
-            ] = VectorStoreQueryMode.TEXT_SEARCH
 
         if self.analysis_type == "nl2pandas":
             config["data_analysis"]["type"] = "pandas"
@@ -492,13 +506,11 @@ class ViewModel(BaseModel):
         # config["data_analysis"]["llm"]["model"] = self.da_llm_model_name
         # config["data_analysis"]["llm"]["max_tokens"] = self.da_llm_max_tokens
 
-        if self.reranker_type == "基于模型的重排序":
-            config["postprocessor"]["reranker_type"] = PostProcessorType.reranker_model
-        else:
-            config["postprocessor"]["reranker_type"] = PostProcessorType.no_reranker
-
+        config["postprocessor"]["reranker_type"] = RERANKER_TYPE_MAP.get(
+            self.reranker_type
+        )
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        if self.reranker_type == "无重排序":
+        if config["postprocessor"]["reranker_type"] == PostProcessorType.no_reranker:
             config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         else:
             config["postprocessor"][

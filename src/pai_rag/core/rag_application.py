@@ -148,11 +148,10 @@ class PaiApp:
             retrieval_request.knowledgebase_id
         )
         vector_index = resolve_vector_index(knowledgebase=knowledgebase)
-        _retrieval_settings = (
-            retrieval_request.retrieval_settings
-            if retrieval_request.retrieval_settings
-            else knowledgebase.retrieval_settings
-        )
+        _retrieval_settings = {
+            **knowledgebase.retrieval_settings,
+            **retrieval_request.retrieval_settings,
+        }
         logger.info(
             f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
         )
