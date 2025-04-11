@@ -148,6 +148,8 @@ class PaiPandasExcelReader(BaseReader):
             ]
 
         if self._concat_rows:
+            logger.info(f"Parsed workbook {workbook_file} into single document.")
+
             return [
                 Document(
                     text=(self._row_joiner).join(text_list), metadata=extra_info or {}
@@ -158,4 +160,6 @@ class PaiPandasExcelReader(BaseReader):
             for i, text in enumerate(text_list):
                 extra_info["row_number"] = i + 1
                 docs.append(Document(text=text, metadata=extra_info))
+
+            logger.info(f"Parsed workbook {workbook_file} into {len(docs)} documents.")
             return docs
