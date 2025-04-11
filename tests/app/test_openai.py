@@ -373,6 +373,7 @@ async def test_rag_chat():
                     }
                 ],
                 "stream": True,
+                "chat_knowledgebase": True,
                 "return_reference": True,
             },
         )
@@ -388,7 +389,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citations", [])
 
     assert len(answer) > 0
-    assert len(citations) == 0
+    assert len(citations) == 5
 
     # 相关问题
     async with AsyncClient(
@@ -405,6 +406,7 @@ async def test_rag_chat():
                     }
                 ],
                 "stream": True,
+                "chat_knowledgebase": True,
                 "return_reference": True,
             },
         )
@@ -437,6 +439,7 @@ async def test_rag_chat():
                     }
                 ],
                 "stream": True,
+                "chat_knowledgebase": True,
                 "return_reference": True,
                 "index_name": "test_index",  # change to test_index
             },
@@ -467,6 +470,7 @@ async def test_rag_chat():
                     {"role": "user", "content": "What did the author do growing up?"}
                 ],
                 "stream": True,
+                "chat_knowledgebase": True,
                 "return_reference": True,
                 "index_name": "test_index",  # change to test_index
             },
