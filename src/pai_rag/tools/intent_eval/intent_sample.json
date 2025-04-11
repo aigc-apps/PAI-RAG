@@ -160,7 +160,8 @@
     {
       "query": "经济新闻",
       "intent": {
-        "intent_name": "chat_news"
+        "intent_name": "list_news",
+        "news_topics": ["财经"]
       }
     },
     {
@@ -182,6 +183,12 @@
       }
     },
     {
+      "query": "介绍一下你自己",
+      "intent": {
+        "intent_name": "chat_llm"
+      }
+    },
+    {
       "query": "今天黄金金价多少了",
       "intent": {
         "intent_name": "search_web"
@@ -191,6 +198,24 @@
       "query": "你是谁",
       "intent": {
         "intent_name": "chat_llm"
+      }
+    },
+    {
+      "query": "深小闻，你是谁",
+      "intent": {
+        "intent_name": "chat_news_llm"
+      }
+    },
+    {
+      "query": "你的功能是什么",
+      "intent": {
+        "intent_name": "chat_llm"
+      }
+    },
+    {
+      "query": "深小闻，你的功能是什么",
+      "intent": {
+        "intent_name": "chat_news_llm"
       }
     },
     {
