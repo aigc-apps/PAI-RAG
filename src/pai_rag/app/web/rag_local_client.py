@@ -781,7 +781,7 @@ class RagLocalClient:
                 msg=f"delete index {index_name} failed. {e}",
             )
 
-    async def knowledgebase_retrieval_test(
+    async def aknowledgebase_retrieval(
         self,
         knowledgebase_id: str,
         query: str,

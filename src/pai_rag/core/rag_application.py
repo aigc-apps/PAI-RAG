@@ -140,7 +140,7 @@ class PaiApp:
 
         return RetrievalResponse(docs=docs)
 
-    async def aknowledgebase_retrieve(
+    async def aknowledgebase_retrieval(
         self, retrieval_request: RetrievalRequest
     ) -> NewRetrievalResponse:
         query_bundle = QueryBundle(retrieval_request.query)
@@ -154,7 +154,7 @@ class PaiApp:
             else knowledgebase.retrieval_settings
         )
         logger.info(
-            f"aknowledgebase_retrieve ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
+            f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
         )
         query_engine = resolve_query_engine_from_retrieval_request(
             self.config,

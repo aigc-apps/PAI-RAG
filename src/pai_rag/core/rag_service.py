@@ -169,7 +169,7 @@ class RagService:
         self, retrieval_request: RetrievalRequest
     ) -> NewRetrievalResponse:
         try:
-            return await self.app.aknowledgebase_retrieve(retrieval_request)
+            return await self.app.aknowledgebase_retrieval(retrieval_request)
         except Exception as ex:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Query RAG failed: {ex}")

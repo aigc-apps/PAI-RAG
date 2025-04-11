@@ -334,7 +334,7 @@ async def delete_file_from_knowledgebase(name: str, file_name: str):
 
 
 @router_v1.post("/retrieval")
-async def knowledgebase_retrieval_test(retrieval_request: RetrievalRequest):
+async def aknowledgebase_retrieval(retrieval_request: RetrievalRequest):
     response = await rag_service.aknowledgebase_retrieval(retrieval_request)
     return response
 

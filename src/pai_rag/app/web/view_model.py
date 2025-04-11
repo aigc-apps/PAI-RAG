@@ -45,6 +45,25 @@ INVERTED_QUERY_TYPE_MAP = {
     "rag": "对话 (知识库)",
 }
 
+# new version of query_type
+QUERY_TYPES_MAP = {
+    "大模型": "chat_llm",
+    "联网搜索": "search_web",
+    "查询知识库": "chat_knowledgebase",
+    "查询数据库": "chat_db",
+    "agent": "chat_agent",
+    "新闻工具": "chat_news",
+}
+
+INVERTED_QUERY_TYPES_MAP = {
+    "chat_llm": "大模型",
+    "search_web": "联网搜索",
+    "chat_knowledgebase": "查询知识库",
+    "chat_db": "查询数据库",
+    "chat_agent": "agent",
+    "chat_news": "新闻工具",
+}
+
 
 def recursive_dict():
     return defaultdict(recursive_dict)
@@ -204,7 +223,9 @@ class ViewModel(BaseModel):
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "对话 (知识库)"
         )  # deprecated
-        view_model.query_types = [qt for qt in config.system.query_types]
+        view_model.query_types = [
+            INVERTED_QUERY_TYPES_MAP.get(qt, "大模型") for qt in config.system.query_types
+        ]
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -377,7 +398,9 @@ class ViewModel(BaseModel):
         config["system"]["query_type"] = QUERY_TYPE_MAP.get(
             self.query_type, "rag"
         )  # deprecated
-        config["system"]["query_types"] = [qt for qt in self.query_types]
+        config["system"]["query_types"] = [
+            QUERY_TYPES_MAP.get(qt, "chat_llm") for qt in self.query_types
+        ]
 
         config["chat"]["model_id"] = self.chat_model_id
         config["query_rewrite"]["model_id"] = self.query_rewrite_model_id

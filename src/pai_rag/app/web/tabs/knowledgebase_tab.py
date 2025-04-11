@@ -36,7 +36,7 @@ async def retrieval_test_respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        response_gen = rag_client.knowledgebase_retrieval_test(
+        response_gen = rag_client.aknowledgebase_retrieval(
             knowledgebase_id=index_name,
             query=question,
             retrieval_settings={
