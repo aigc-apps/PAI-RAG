@@ -48,7 +48,16 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
-
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
+    SimilarityPostProcessorConfig,
+    RerankModelPostProcessorConfig,
+    DEFAULT_SIMILARITY_THRESHOLD,
+    DEFAULT_RERANK_SIMILARITY_THRESHOLD,
+    DEFAULT_RERANK_MODEL,
+    DEFAULT_RERANK_TOP_N,
+)
 
 cls_cache = {}
 
@@ -170,7 +179,9 @@ def resolve_task_executor(
     )
 
     node_parser = resolve(
-        cls=PaiNodeParser, parser_config=config.node_parser, caption_tool=caption_tool
+        cls=PaiNodeParser,
+        parser_config=knowledgebase.node_parser_config,
+        caption_tool=caption_tool,
     )
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
@@ -182,6 +193,9 @@ def resolve_task_executor(
         enable_local_keyword_index=True,
     )
 
+    logger.debug(
+        f"create FileTaskExecutor with params [node_parser]: {node_parser}, [embed_model]: {embed_model}, [vector_index]: {vector_index}, [data_reader]: {data_reader}"
+    )
     return resolve(
         cls=FileTaskExecutor,
         node_parser=node_parser,
@@ -341,6 +355,182 @@ def resolve_query_engine(
     return query_engine
 
 
+def resolve_query_engine_from_retrieval_request(
+    config: RagConfig,
+    vector_index: PaiVectorStoreIndex,
+    retrieval_settings: dict = None,
+    model_id: str = None,
+) -> PaiRetrieverQueryEngine:
+    retrieval_mode = retrieval_settings.get(
+        "retrieval_mode", config.retriever.vector_store_query_mode
+    )
+    if isinstance(retrieval_mode, str):
+        retrieval_mode = VectorStoreQueryMode(retrieval_mode)
+    hybrid_fusion_weights = [
+        retrieval_settings.get(
+            "vector_weight", config.retriever.hybrid_fusion_weights[0]
+        ),
+        retrieval_settings.get(
+            "keyword_weight", config.retriever.hybrid_fusion_weights[1]
+        ),
+    ]
+
+    retriever = vector_index.as_retriever(
+        vector_store_query_mode=retrieval_mode,
+        similarity_top_k=retrieval_settings.get(
+            "similarity_top_k", config.retriever.similarity_top_k
+        ),
+        hybrid_fusion_weights=hybrid_fusion_weights,
+        image_similarity_top_k=config.retriever.image_similarity_top_k,  # not support yet
+        search_image=config.retriever.search_image,  # not support yet
+    )
+
+    synthesizer = resolve_synthesizer(config, model_id)
+
+    _reranker_type = retrieval_settings.get(
+        "reranker_type", config.postprocessor.reranker_type
+    )
+
+    if isinstance(_reranker_type, str):
+        _reranker_type = PostProcessorType(_reranker_type)
+
+    if _reranker_type == PostProcessorType.no_reranker:
+        _postprocessor_config = SimilarityPostProcessorConfig(
+            reranker_type=PostProcessorType.no_reranker,
+            similarity_threshold=retrieval_settings.get(
+                "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
+            ),
+        )
+    elif _reranker_type == PostProcessorType.reranker_model:
+        _postprocessor_config = RerankModelPostProcessorConfig(
+            reranker_type=PostProcessorType.reranker_model,
+            reranker_model=retrieval_settings.get(
+                "reranker_model", DEFAULT_RERANK_MODEL
+            ),
+            top_n=retrieval_settings.get(
+                "reranker_similarity_top_k", DEFAULT_RERANK_TOP_N
+            ),
+            similarity_threshold=retrieval_settings.get(
+                "reranker_similarity_threshold", DEFAULT_RERANK_SIMILARITY_THRESHOLD
+            ),
+        )
+
+    postprocessor = resolve(
+        cls=PaiPostProcessor, postprocessor_config=_postprocessor_config
+    )
+
+    query_engine = resolve(
+        cls=PaiRetrieverQueryEngine,
+        retriever=retriever,
+        response_synthesizer=synthesizer,
+        node_postprocessors=[postprocessor],
+        callback_manager=Settings.callback_manager,
+    )
+
+    return query_engine
+
+
+def resolve_query_engine_from_knowledgebase(
+    config: RagConfig,
+    vector_index: PaiVectorStoreIndex,
+    knowledgebase: KnowledgeBase,
+    model_id: str = None,
+) -> PaiRetrieverQueryEngine:
+    retrieval_settings = knowledgebase.retrieval_settings
+    if retrieval_settings is not None:
+        retrieval_mode = retrieval_settings.get(
+            "retrieval_mode", config.retriever.vector_store_query_mode
+        )
+        if isinstance(retrieval_mode, str):
+            retrieval_mode = VectorStoreQueryMode(retrieval_mode)
+        hybrid_fusion_weights = [
+            retrieval_settings.get(
+                "vector_weight", config.retriever.hybrid_fusion_weights[0]
+            ),
+            retrieval_settings.get(
+                "keyword_weight", config.retriever.hybrid_fusion_weights[1]
+            ),
+        ]
+
+        retriever = vector_index.as_retriever(
+            vector_store_query_mode=retrieval_mode,
+            similarity_top_k=retrieval_settings.get(
+                "similarity_top_k", config.retriever.similarity_top_k
+            ),
+            hybrid_fusion_weights=hybrid_fusion_weights,
+            image_similarity_top_k=config.retriever.image_similarity_top_k,  # not support yet
+            search_image=config.retriever.search_image,  # not support yet
+        )
+
+        _reranker_type = retrieval_settings.get(
+            "reranker_type", config.postprocessor.reranker_type
+        )
+
+        if isinstance(_reranker_type, str):
+            _reranker_type = PostProcessorType(_reranker_type)
+        if _reranker_type == PostProcessorType.no_reranker:
+            _postprocessor_config = SimilarityPostProcessorConfig(
+                reranker_type=PostProcessorType.no_reranker,
+                similarity_threshold=retrieval_settings.get(
+                    "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
+                ),
+            )
+        elif _reranker_type == PostProcessorType.reranker_model:
+            _postprocessor_config = RerankModelPostProcessorConfig(
+                reranker_type=PostProcessorType.reranker_model,
+                reranker_model=retrieval_settings.get(
+                    "reranker_model", DEFAULT_RERANK_MODEL
+                ),
+                top_n=retrieval_settings.get(
+                    "reranker_similarity_top_k", DEFAULT_RERANK_TOP_N
+                ),
+                similarity_threshold=retrieval_settings.get(
+                    "reranker_similarity_threshold", DEFAULT_RERANK_SIMILARITY_THRESHOLD
+                ),
+            )
+
+        postprocessor = resolve(
+            cls=PaiPostProcessor, postprocessor_config=_postprocessor_config
+        )
+    else:
+        retriever = vector_index.as_retriever(
+            vector_store_query_mode=config.retriever.vector_store_query_mode,
+            similarity_top_k=config.retriever.similarity_top_k,
+            image_similarity_top_k=config.retriever.image_similarity_top_k,
+            search_image=config.retriever.search_image,
+            hybrid_fusion_weights=config.retriever.hybrid_fusion_weights,
+        )
+        postprocessor = resolve(
+            cls=PaiPostProcessor, postprocessor_config=config.postprocessor
+        )
+
+    qa_prompt_templates = knowledgebase.qa_prompt_templates
+    if qa_prompt_templates is not None:
+        llm = resolve_chat_llm(config, model_id)
+        multimodal_llm = None
+        multimodal_llm = resolve_multimodal_llm(config)
+
+        synthesizer = resolve(
+            cls=PaiSynthesizer,
+            llm=llm,
+            multimodal_llm=multimodal_llm,
+            system_role_template=qa_prompt_templates["system_prompt_template"],
+            custom_prompt_template=qa_prompt_templates["task_prompt_template"],
+        )
+    else:
+        synthesizer = resolve_synthesizer(config, model_id)
+
+    query_engine = resolve(
+        cls=PaiRetrieverQueryEngine,
+        retriever=retriever,
+        response_synthesizer=synthesizer,
+        node_postprocessors=[postprocessor],
+        callback_manager=Settings.callback_manager,
+    )
+
+    return query_engine
+
+
 def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine:
     synthesizer = resolve_synthesizer(config, model_id)
     searcher = None
@@ -352,6 +542,7 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
             synthesizer=synthesizer,
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
+            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
     elif (
         isinstance(config.search, QuarkSearchConfig)
@@ -365,6 +556,7 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
             host=config.search.host,
             synthesizer=synthesizer,
             search_count=config.search.search_count,
+            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
     elif (
         isinstance(config.search, AliyunSearchConfig)
@@ -378,6 +570,7 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
             endpoint=config.search.endpoint,
             synthesizer=synthesizer,
             search_count=config.search.search_count,
+            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
     elif isinstance(config.search, GoogleSearchConfig) and config.search.serpapi_key:
         searcher = resolve(
@@ -386,6 +579,7 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
             synthesizer=synthesizer,
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
+            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
 
     return searcher

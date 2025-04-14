@@ -13,6 +13,7 @@ from pai_rag.core.rag_module import (
     resolve_news_tool,
     resolve_data_analysis_query,
     resolve_vector_index,
+    resolve_query_engine_from_knowledgebase,
 )
 from pai_rag.core.utils.chat_utils import (
     SseVersion,
@@ -57,11 +58,11 @@ from llama_index.core.chat_engine.types import (
 
 from loguru import logger
 
-from pai_rag.utils.prompt_template import (
-    DEFALT_LLM_CHAT_PROMPT_TEMPL,
-)
 from pai_rag.utils.time_utils import get_prompt_current_time_str
-
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_ANSWER_TEMPLATE,
+    CURRENT_TIME_PROMPT,
+)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -132,6 +133,9 @@ class ChatFlow:
             llm_kwargs["max_tokens"] = chat_request.max_tokens
 
         query_transform = resolve_openai_query_transform(config)
+        logger.debug(
+            f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
+        )
         if query_transform is not None and len(potential_intents) > 1:
             query_bundle = await query_transform.arun(
                 chat_messages=chat_request.messages,
@@ -142,7 +146,9 @@ class ChatFlow:
             query_bundle.model = chat_request.model
             return query_bundle
         else:
-            logger.info("No query transform found, using default intent.")
+            logger.info(
+                f"No query transform found, using default intent. {potential_intents[-1].value}"
+            )
             return PaiQueryBundle(
                 query_str=chat_request.messages[-1].content,
                 original_query_str=chat_request.messages[-1].content,
@@ -159,6 +165,7 @@ class ChatFlow:
         chat_request: ChatCompletionRequest,
         config: RagConfig,
     ) -> AsyncGenerator[str, None]:
+        logger.debug(f"Streaming chat request: {chat_request}")
         start_time = time.time()
         chat_id = chat_id_generator()
         response_wrapper = await self._achat_internal(
@@ -421,9 +428,20 @@ class ChatFlow:
         knowledgebase: KnowledgeBase,
     ) -> ChatResponseWrapper:
         vector_index = resolve_vector_index(knowledgebase)
-        query_engine = resolve_query_engine(
-            config, vector_index=vector_index, model_id=query_bundle.model
-        )
+        if (
+            knowledgebase.retrieval_settings is not None
+            or knowledgebase.qa_prompt_templates is not None
+        ):
+            query_engine = resolve_query_engine_from_knowledgebase(
+                config,
+                vector_index=vector_index,
+                model_id=query_bundle.model,
+                knowledgebase=knowledgebase,
+            )
+        else:
+            query_engine = resolve_query_engine(
+                config, vector_index=vector_index, model_id=query_bundle.model
+            )
         query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_KNOWLEDGEBASE
         response = await query_engine.aquery(query_bundle)
         return response
@@ -481,11 +499,16 @@ class ChatFlow:
             messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
 
         # prompt_message
-        cur_date = get_prompt_current_time_str()
         messages.append(
             ChatMessage(
                 role=MessageRole.USER,
-                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(cur_date=cur_date),
+                content="{}\n{}\n{}".format(
+                    config.synthesizer.custom_prompt_template,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=get_prompt_current_time_str()
+                    ),
+                    DEFAULT_ANSWER_TEMPLATE,
+                ),
             )
         )
         messages.extend(query_bundle.messages)
