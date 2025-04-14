@@ -165,6 +165,39 @@
       }
     },
     {
+      "query": "今天有什么金融新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "有什么国防新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["军事"]
+      }
+    },
+    {
+      "query": "全球新闻",
+      "intent": {
+        "intent_name": "list_news"
+      }
+    },
+    {
+      "query": "有什么国外的新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      }
+    },
+    {
+      "query": "外国有什么新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      }
+    },
+    {
       "query": "深小闻，雷军的新闻",
       "intent": {
         "intent_name": "chat_news"
@@ -246,6 +279,18 @@
       "query": "俄乌战争的最新动态",
       "intent": {
         "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "今天有什么足球新闻？",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "电竞的新闻",
+      "intent": {
+        "intent_name": "chat_news"
       }
     }
   ]

@@ -276,6 +276,62 @@
       "score": 1.0
     },
     {
+      "query": "今天有什么金融新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "有什么国防新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["军事"]
+      },
+      "intent_output": {
+        "intent_name": "list_news",
+        "news_topics": ["军事"]
+      },
+      "score": 1.0
+    },
+    {
+      "query": "全球新闻",
+      "intent": {
+        "intent_name": "list_news"
+      },
+      "intent_output": {
+        "intent_name": "list_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "有什么国外的新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "intent_output": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "score": 1.0
+    },
+    {
+      "query": "外国有什么新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "intent_output": {
+        "intent_name": "list_news",
+        "news_topics": ["国际"]
+      },
+      "score": 1.0
+    },
+    {
       "query": "深小闻，雷军的新闻",
       "intent": {
         "intent_name": "chat_news"
@@ -412,6 +468,26 @@
       },
       "intent_output": {
         "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "今天有什么足球新闻？",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "电竞的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
       },
       "score": 1
     }
