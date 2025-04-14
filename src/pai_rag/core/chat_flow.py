@@ -105,23 +105,34 @@ class ChatFlow:
         # 默认RAG
         potential_intents = [ChatToolType.CHAT_LLM]
 
-        if config.system.default_web_search or chat_request.search_web:
-            potential_intents.append(ChatToolType.SEARCH_WEB)
-            # 打开Web search的时候有可能会同时使用新闻
-            if chat_request.chat_news:
-                potential_intents.append(ChatToolType.CHAT_NEWS)
-        elif chat_request.chat_knowledgebase:
-            potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
-        elif chat_request.chat_agent:
-            potential_intents.append(ChatToolType.CHAT_AGENT)
-        elif chat_request.chat_db:
-            potential_intents.append(ChatToolType.CHAT_DB)
-        elif chat_request.chat_llm:
-            pass
-        elif chat_request.chat_news:
-            potential_intents.append(ChatToolType.CHAT_NEWS)
-        else:
-            potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
+        tool_switches = {
+            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase,
+            ChatToolType.SEARCH_WEB: chat_request.search_web,
+            ChatToolType.CHAT_DB: chat_request.chat_db,
+            ChatToolType.CHAT_AGENT: chat_request.chat_agent,
+            ChatToolType.CHAT_NEWS: chat_request.chat_news,
+        }
+        enabled_tools = [k for k, v in tool_switches.items() if v]
+        potential_intents.extend(enabled_tools)
+        logger.debug(f"Enabled tool candidates: {potential_intents}.")
+
+        # if config.system.default_web_search or chat_request.search_web:
+        #     potential_intents.append(ChatToolType.SEARCH_WEB)
+        #     # 打开Web search的时候有可能会同时使用新闻
+        #     if chat_request.chat_news:
+        #         potential_intents.append(ChatToolType.CHAT_NEWS)
+        # elif chat_request.chat_knowledgebase:
+        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
+        # elif chat_request.chat_agent:
+        #     potential_intents.append(ChatToolType.CHAT_AGENT)
+        # elif chat_request.chat_db:
+        #     potential_intents.append(ChatToolType.CHAT_DB)
+        # elif chat_request.chat_llm:
+        #     pass
+        # elif chat_request.chat_news:
+        #     potential_intents.append(ChatToolType.CHAT_NEWS)
+        # else:
+        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
 
         llm_kwargs = {}
         if chat_request.temperature is not None:
