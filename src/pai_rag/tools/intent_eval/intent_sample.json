@@ -292,6 +292,40 @@
       "intent": {
         "intent_name": "chat_news"
       }
+    },
+    {
+      "query": "有什么民生新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["社会"]
+      }
+    },
+    {
+      "query": "关于度假的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "关于军队的新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["军事"]
+      }
+    },
+    {
+      "query": "时事新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["时政"]
+      }
+    },
+    {
+      "query": "政治新闻",
+      "intent": {
+        "intent_name": "list_news",
+        "news_topics": ["时政"]
+      }
     }
   ]
 }
