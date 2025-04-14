@@ -8,7 +8,7 @@
   },
   "samples": [
     {
-      "query": "深小闻，有什么新闻",
+      "query": "新闻小助手，有什么新闻",
       "intent": {
         "intent_name": "list_news"
       },
@@ -18,7 +18,7 @@
       "score": 1
     },
     {
-      "query": "深小闻，有什么国际新闻",
+      "query": "新闻小助手，有什么国际新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["国际"]
@@ -30,7 +30,7 @@
       "score": 1.0
     },
     {
-      "query": "深小闻，有什么科技新闻",
+      "query": "新闻小助手，有什么科技新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["科技"]
@@ -66,7 +66,7 @@
       "score": 1.0
     },
     {
-      "query": "深小闻，有什么社会新闻",
+      "query": "新闻小助手，有什么社会新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["社会"]
@@ -126,7 +126,7 @@
       "score": 1.0
     },
     {
-      "query": "深小闻，教育有什么新闻",
+      "query": "新闻小助手，教育有什么新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["教育"]
@@ -332,7 +332,7 @@
       "score": 1.0
     },
     {
-      "query": "深小闻，雷军的新闻",
+      "query": "新闻小助手，雷军的新闻",
       "intent": {
         "intent_name": "chat_news"
       },
@@ -342,7 +342,7 @@
       "score": 1
     },
     {
-      "query": "打开深小闻",
+      "query": "打开新闻小助手",
       "intent": {
         "intent_name": "list_news"
       },
@@ -352,7 +352,7 @@
       "score": 1
     },
     {
-      "query": "介绍一下深小闻",
+      "query": "介绍一下新闻小助手",
       "intent": {
         "intent_name": "chat_news_llm"
       },
@@ -392,7 +392,7 @@
       "score": 1
     },
     {
-      "query": "深小闻，你是谁",
+      "query": "新闻小助手，你是谁",
       "intent": {
         "intent_name": "chat_news_llm"
       },
@@ -412,7 +412,7 @@
       "score": 1
     },
     {
-      "query": "深小闻，你的功能是什么",
+      "query": "新闻小助手，你的功能是什么",
       "intent": {
         "intent_name": "chat_news_llm"
       },
