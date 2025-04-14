@@ -225,6 +225,7 @@ class ViewModel(BaseModel):
     # chat_news_answer_len: int = 200
     chat_news_pmt: str = None
     domain_list: str = None
+    news_role: str = None
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -404,6 +405,7 @@ class ViewModel(BaseModel):
         # view_model.chat_news_answer_len = config.news_extension.chat_news_answer_len
         view_model.chat_news_pmt = config.news_extension.chat_news_prompt_str
         view_model.domain_list = ",".join(config.news_extension.domain_list)
+        view_model.news_role = config.news_extension.news_role
 
         return view_model
 
@@ -584,6 +586,7 @@ class ViewModel(BaseModel):
         # config["news_extension"]["chat_news_answer_len"] = self.chat_news_answer_len
         config["news_extension"]["chat_news_prompt_str"] = self.chat_news_pmt
         config["news_extension"]["domain_list"] = self.domain_list.split(",")
+        config["news_extension"]["news_role"] = self.news_role
 
         return _transform_to_dict(config)
 
@@ -894,6 +897,7 @@ class ViewModel(BaseModel):
         # settings["chat_news_answer_len"] = {"value": self.chat_news_answer_len}
         settings["chat_news_pmt"] = {"value": self.chat_news_pmt}
         settings["domain_list"] = {"value": self.domain_list}
+        settings["news_role"] = {"value": self.news_role}
 
         # print("view model settings:", settings)
 

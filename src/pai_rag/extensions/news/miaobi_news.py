@@ -153,7 +153,9 @@ class MiaobiNewsTool:
         self.list_topics_prompt_template = PromptTemplate(
             template=config.list_topics_prompt_str
         )
-        self.chat_news_prompt_template = config.chat_news_prompt_str
+        self.chat_news_prompt_template = config.chat_news_prompt_str.replace(
+            "{news_role}", config.news_role
+        )
         logger.info(
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
@@ -216,6 +218,7 @@ class MiaobiNewsTool:
                 f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
             )
             content = self.list_topics_prompt_template.format(
+                news_role=self.config.news_role,
                 news_list_str=_make_context(hot_topics),
                 query_str=query_str,
                 topics_str="、".join(news_topics),
@@ -280,6 +283,7 @@ class MiaobiNewsTool:
                     ChatMessage(
                         role="user",
                         content=self.list_topics_prompt_template.format(
+                            news_role=self.config.news_role,
                             news_list_str=_make_context(hot_topics),
                             query_str=query_str,
                             topics_str="、".join(news_topics),
@@ -493,7 +497,8 @@ class MiaobiNewsTool:
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
             default_news_role_response = DEFAULT_NEWS_ROLE.format(
-                domain_list="/".join(self.config.domain_list)
+                domain_list="/".join(self.config.domain_list),
+                news_role=self.config.news_role,
             )
             text_parts = default_news_role_response.split("\n")
 

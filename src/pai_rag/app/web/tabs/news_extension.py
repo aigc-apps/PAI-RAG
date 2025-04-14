@@ -23,8 +23,8 @@ def is_valid_comma_separated_string(s):
     return bool(re.match(pattern, s))
 
 
-list_news_pmt_required_variables = ["topics_str", "news_list_str"]
-chat_news_pmt_required_variables = ["content", "prompt", "answerLength"]
+list_news_pmt_required_variables = ["news_role", "topics_str", "news_list_str"]
+chat_news_pmt_required_variables = ["news_role", "content", "prompt", "answerLength"]
 
 
 def save_news_extension_config(input_elements: List[Any]):
@@ -102,6 +102,12 @@ def create_news_extension_tab():
             with gr.Row(elem_id="news_prompts"):
                 with gr.Column():
                     _ = gr.Markdown(value="### **查询全局热门新闻**")
+                    news_role = gr.Textbox(
+                        label="新闻角色",
+                        value="新闻",
+                        elem_id="news_role",
+                        interactive=True,
+                    )
                     top_news_count = gr.Number(
                         label="全部新闻数量限制",
                         value=10,
@@ -151,6 +157,7 @@ def create_news_extension_tab():
         bailian_workspaceid,
         bailian_ak,
         bailian_sk,
+        news_role,
         top_news_count,
         domain_list,
         list_news_pmt,

@@ -295,7 +295,8 @@ def resolve_openai_query_transform(
         agent_tool_prompt_str=config.query_rewrite.agent_tool_prompt_str,
         db_tool_prompt_str=config.query_rewrite.db_tool_prompt_str,
         news_tool_prompt_str=config.query_rewrite.news_tool_prompt_str.format(
-            domain_list=config.news_extension.domain_list
+            domain_list=config.news_extension.domain_list,
+            news_role=config.news_extension.news_role,
         ),
         news_valid_domain_list=config.news_extension.domain_list,
     )
