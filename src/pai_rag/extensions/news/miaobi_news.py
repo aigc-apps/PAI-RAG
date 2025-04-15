@@ -1,8 +1,14 @@
 import traceback
 from typing import Dict, List
-
+from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
-from pai_rag.extensions.news.news_config import MiaobiNewsConfig
+from pai_rag.extensions.news.news_config import (
+    MiaobiNewsConfig,
+    DEFAULT_NEWS_ROLE,
+    DEFAULT_NEWS_ERROR_MESSAGE,
+    DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+    DEFAULT_LIST_NEWS_END_RESPONSE,
+)
 
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -22,9 +28,6 @@ from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
-
-
-DEFAULT_NEWS_ERROR_MESSAGE = "抱歉，查询新闻发生错误，请稍后重试。"
 
 
 def _create_client(
@@ -124,8 +127,11 @@ def _transform_messages(messages: List[ChatMessage]):
 
 
 def _make_context(topics):
-    return "\n\n".join(
-        [f"标题: {topic['title']}\n摘要: {topic['summary']}" for topic in topics]
+    return "\n".join(
+        [
+            f"【新闻 {i+1}】. {topic['title']}\n{topic['summary']}\n"
+            for i, topic in enumerate(topics)
+        ]
     )
 
 
@@ -133,21 +139,8 @@ class NewsChatParameter(BaseModel):
     workspaceId: str
     messages: List[Dict[str, str]] = []
     prompt: str = None
-
-
-DEFAULT_PROMPT_TEMPLATE = """
-你是一个专业的新闻播报员，负责整理每天的热点资讯列表并广播给车机端的用户。
-
-# 【人设风格】
-风格亲切、自然但不失专业性的新闻女主播
-
-# 【热点新闻列表】
-{hot_topics_str}
-
-# 【输出格式】
-- 请根据上下文信息，不要使用其他信息，参考【人设风格】，结构条理化的播放热点资讯。
-- 注意每条新闻播报不要超过100个字。
-"""
+    modelCustomPromptTemplate: str = None
+    # answerLength: int = 200 # temporarily inactive
 
 
 class MiaobiNewsTool:
@@ -156,15 +149,25 @@ class MiaobiNewsTool:
         self.config = config
         self.chat_client = create_light_app_client(config)
         self.miaobi_client = create_aimiaobi_client(config)
+        # self.chat_news_answer_len = config.chat_news_answer_len
+        self.list_topics_prompt_template = PromptTemplate(
+            template=config.list_topics_prompt_str
+        )
+        self.chat_news_prompt_template = config.chat_news_prompt_str.replace(
+            "{news_role}", config.news_role
+        )
         logger.info(
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def _alist_hot_topics(self):
+    async def _alist_hot_topics(self, news_topics):
         request = aimiaobi_models.GetHotTopicBroadcastRequest(
             workspace_id=self.config.workspace_id,
             size=self.config.top_news_count,
             current=1,
+            step_for_news_broadcast_content_config=aimiaobi_models.GetHotTopicBroadcastRequestStepForNewsBroadcastContentConfig(
+                categories=news_topics
+            ),
         )
 
         broadcast_response = await self.miaobi_client.get_hot_topic_broadcast_async(
@@ -177,20 +180,25 @@ class MiaobiNewsTool:
         for topic in broadcast_response.body.data.data:
             hot_topics.append(
                 {
-                    "title": topic.news[0].title,
+                    "title": topic.hot_topic,
                     "url": topic.news[0].url,
-                    "summary": topic.news[0].summary,
+                    "summary": topic.text_summary,
                     "category": topic.category,
+                    "hot_value": topic.hot_value,
                 }
             )
-
-        return hot_topics
+        sorted_hot_topics = sorted(
+            hot_topics, key=lambda x: x["hot_value"], reverse=True
+        )
+        return sorted_hot_topics
 
     async def alist_topics(
         self,
+        query_str: str,
+        news_topics: List[str] = [],
     ) -> ChatResponseWrapper:
         try:
-            hot_topics = await self._alist_hot_topics()
+            hot_topics = await self._alist_hot_topics(news_topics=news_topics)
         except Exception as ex:
             logger.error(
                 f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
@@ -206,12 +214,20 @@ class MiaobiNewsTool:
             return ChatResponseWrapper(response=response)
 
         try:
+            logger.debug(
+                f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
+            )
+            content = self.list_topics_prompt_template.format(
+                news_role=self.config.news_role,
+                news_list_str=_make_context(hot_topics),
+                query_str=query_str,
+                topics_str="、".join(news_topics),
+                conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
+            )
             messages = [
                 ChatMessage(
                     role="user",
-                    content=DEFAULT_PROMPT_TEMPLATE.format(
-                        hot_topics_str=_make_context(hot_topics)
-                    ),
+                    content=content,
                 )
             ]
 
@@ -226,6 +242,8 @@ class MiaobiNewsTool:
 
     async def astream_list_topics(
         self,
+        query_str: str,
+        news_topics: List[str] = [],
     ) -> ChatResponseWrapper:
         try:
 
@@ -236,12 +254,14 @@ class MiaobiNewsTool:
                         content="",
                     ),
                     delta="",
-                    intent=ChatIntentType.LIST_NEWS,
-                    additional_kwargs={"intent": ChatIntentType.LIST_NEWS},
+                    additional_kwargs={
+                        "intent": ChatIntentType.LIST_NEWS,
+                        "news_topics": news_topics,
+                    },
                 )
 
                 try:
-                    hot_topics = await self._alist_hot_topics()
+                    hot_topics = await self._alist_hot_topics(news_topics=news_topics)
                 except Exception as ex:
                     logger.error(
                         f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
@@ -256,11 +276,18 @@ class MiaobiNewsTool:
                     )
                     return
 
+                logger.debug(
+                    f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
+                )
                 messages = [
                     ChatMessage(
                         role="user",
-                        content=DEFAULT_PROMPT_TEMPLATE.format(
-                            hot_topics_str=_make_context(hot_topics)
+                        content=self.list_topics_prompt_template.format(
+                            news_role=self.config.news_role,
+                            news_list_str=_make_context(hot_topics),
+                            query_str=query_str,
+                            topics_str="、".join(news_topics),
+                            conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
                         ),
                     )
                 ]
@@ -323,6 +350,8 @@ class MiaobiNewsTool:
             messages=transformed_messages,
             workspaceId=self.config.workspace_id,
             prompt=prompt,
+            # answerLength=self.chat_news_answer_len,
+            modelCustomPromptTemplate=self.chat_news_prompt_template,
         ).model_dump()
 
         async def gen() -> ChatResponseAsyncGen:
@@ -335,13 +364,16 @@ class MiaobiNewsTool:
                 delta="",
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
-
+            logger.info(f"Chat news with param {param}.")
+            use_web_search = False
             async for item in await self.chat_client.do_sse_query(param):
                 try:
                     data = json.loads(item.get("event").data)
                     logger.info(data)
 
                     event = data.get("header").get("event")
+                    if event == "task-hot-topic-chat-internet-search-start":
+                        use_web_search = True
                     if event != "task-finished":
                         additional_kwargs = {}
 
@@ -361,27 +393,12 @@ class MiaobiNewsTool:
                         if search_query:
                             additional_kwargs["search_query"] = search_query
 
-                        hot_topics = (
-                            data.get("payload").get("output").get("hotTopicSummaries")
-                        )
-                        if hot_topics:
-                            news_articles = []
-                            for topic in hot_topics:
-                                news_articles.append(
-                                    {
-                                        "title": topic["news"][0]["title"],
-                                        "url": topic["news"][0]["url"],
-                                        "summary": topic["textSummary"],
-                                    }
-                                )
-                            additional_kwargs["news_articles"] = news_articles
-
                         text = data.get("payload").get("output").get("text")
                         if text:
                             response = ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content=text[len(origin_text) :],
+                                    content=origin_text,
                                 ),
                                 delta=text[len(origin_text) :],
                                 additional_kwargs=additional_kwargs,
@@ -400,7 +417,23 @@ class MiaobiNewsTool:
                                 additional_kwargs=additional_kwargs,
                             )
                             yield empty_response
-
+                    elif origin_text == "":
+                        text = data.get("payload").get("output").get("text")
+                        err_code = data.get("header").get("errorCode")
+                        logger.info(
+                            f"News chat task-finished with err_code: {err_code}"
+                        )
+                        if text:
+                            response = ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=origin_text,
+                                ),
+                                delta=text[len(origin_text) :],
+                                additional_kwargs=additional_kwargs,
+                            )
+                            origin_text = text
+                            yield response
                 except Exception as ex:
                     logger.warning(
                         f"Error when decoding Miaobi outputs {ex}, data: {item}"
@@ -414,5 +447,70 @@ class MiaobiNewsTool:
                         additional_kwargs={},
                     )
                     continue
+
+            if use_web_search:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role="assistant",
+                        content=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                    ),
+                    delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                )
+
+        return ChatResponseWrapper(response=gen())
+
+    async def achat_llm(
+        self,
+        query_str: str,
+    ):
+        stream_response_wrapper = await self.astream_chat_llm(query_str)
+        message_content = ""
+        additional_kwargs = {}
+        async for response in stream_response_wrapper.response:
+            message_content += response.delta
+            additional_kwargs.update(response.additional_kwargs)
+
+        return ChatResponseWrapper(
+            response=ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=message_content,
+                ),
+                additional_kwargs=additional_kwargs,
+                source_nodes=stream_response_wrapper.source_nodes,
+            )
+        )
+
+    async def astream_chat_llm(
+        self,
+        query_str: str,
+    ) -> ChatResponseWrapper:
+        logger.info(f"Chat news only llm with query {query_str}")
+
+        async def gen() -> ChatResponseAsyncGen:
+            yield ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content="",
+                ),
+                delta="",
+                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
+            )
+            default_news_role_response = DEFAULT_NEWS_ROLE.format(
+                domain_list="/".join(self.config.domain_list),
+                news_role=self.config.news_role,
+            )
+            text_parts = default_news_role_response.split("\n")
+
+            # 逐个 yield 返回
+            for part in text_parts:
+                if part.strip():
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role="assistant",
+                            content=part,
+                        ),
+                        delta=part,
+                    )
 
         return ChatResponseWrapper(response=gen())

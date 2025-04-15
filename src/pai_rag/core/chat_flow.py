@@ -13,6 +13,7 @@ from pai_rag.core.rag_module import (
     resolve_news_tool,
     resolve_data_analysis_query,
     resolve_vector_index,
+    resolve_query_engine_from_knowledgebase,
 )
 from pai_rag.core.utils.chat_utils import (
     SseVersion,
@@ -57,9 +58,11 @@ from llama_index.core.chat_engine.types import (
 
 from loguru import logger
 
-from pai_rag.utils.prompt_template import DEFALT_LLM_CHAT_PROMPT_TEMPL
 from pai_rag.utils.time_utils import get_prompt_current_time_str
-
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_ANSWER_TEMPLATE,
+    CURRENT_TIME_PROMPT,
+)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -116,24 +119,6 @@ class ChatFlow:
         potential_intents.extend(enabled_tools)
         logger.debug(f"Enabled tool candidates: {potential_intents}.")
 
-        # if config.system.default_web_search or chat_request.search_web:
-        #     potential_intents.append(ChatToolType.SEARCH_WEB)
-        #     # 打开Web search的时候有可能会同时使用新闻
-        #     if chat_request.chat_news:
-        #         potential_intents.append(ChatToolType.CHAT_NEWS)
-        # elif chat_request.chat_knowledgebase:
-        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
-        # elif chat_request.chat_agent:
-        #     potential_intents.append(ChatToolType.CHAT_AGENT)
-        # elif chat_request.chat_db:
-        #     potential_intents.append(ChatToolType.CHAT_DB)
-        # elif chat_request.chat_llm:
-        #     pass
-        # elif chat_request.chat_news:
-        #     potential_intents.append(ChatToolType.CHAT_NEWS)
-        # else:
-        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
-
         llm_kwargs = {}
         if chat_request.temperature is not None:
             llm_kwargs["temperature"] = chat_request.temperature
@@ -141,6 +126,9 @@ class ChatFlow:
             llm_kwargs["max_tokens"] = chat_request.max_tokens
 
         query_transform = resolve_openai_query_transform(config)
+        logger.debug(
+            f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
+        )
         if query_transform is not None and len(potential_intents) > 1:
             query_bundle = await query_transform.arun(
                 chat_messages=chat_request.messages,
@@ -151,9 +139,12 @@ class ChatFlow:
             query_bundle.model = chat_request.model
             return query_bundle
         else:
-            logger.info("No query transform found, using default intent.")
+            logger.info(
+                f"No query transform found, using default intent. {potential_intents[-1].value}"
+            )
             return PaiQueryBundle(
                 query_str=chat_request.messages[-1].content,
+                original_query_str=chat_request.messages[-1].content,
                 messages=chat_request.messages,
                 intent=potential_intents[-1].value,
                 stream=chat_request.stream,
@@ -167,6 +158,7 @@ class ChatFlow:
         chat_request: ChatCompletionRequest,
         config: RagConfig,
     ) -> AsyncGenerator[str, None]:
+        logger.debug(f"Streaming chat request: {chat_request}")
         start_time = time.time()
         chat_id = chat_id_generator()
         response_wrapper = await self._achat_internal(
@@ -309,10 +301,13 @@ class ChatFlow:
             logger.info(f"Guadrail check passed: {query_bundle.query_str}.")
 
         # 意图分发
+        logger.info(f"Routing query {query_bundle.query_str} to {query_bundle.intent}")
         if query_bundle.intent == ChatIntentType.CHAT_LLM:
             response_wrapper = await self.achat_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS:
             response_wrapper = await self.achat_news(query_bundle, config=config)
+        elif query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
+            response_wrapper = await self.achat_news_llm(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.LIST_NEWS:
             response_wrapper = await self.alist_news(query_bundle, config=config)
         elif query_bundle.intent == ChatIntentType.CHAT_AGENT:
@@ -362,9 +357,13 @@ class ChatFlow:
     ):
         news_tool = resolve_news_tool(config)
         if not query_bundle.stream:
-            response_wrapper = await news_tool.alist_topics()
+            response_wrapper = await news_tool.alist_topics(
+                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
+            )
         else:
-            response_wrapper = await news_tool.astream_list_topics()
+            response_wrapper = await news_tool.astream_list_topics(
+                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
+            )
         return response_wrapper
 
     async def achat_news(
@@ -372,12 +371,30 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config, model_id=query_bundle.model)
+        news_tool = resolve_news_tool(config)
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
         else:
             response_wrapper = await news_tool.astream_chat(
                 prompt=query_bundle.query_str
+            )
+
+        return response_wrapper
+
+    async def achat_news_llm(
+        self,
+        query_bundle: PaiQueryBundle,
+        config: RagConfig,
+    ):
+        news_tool = resolve_news_tool(config)
+
+        if not query_bundle.stream:
+            response_wrapper = await news_tool.achat_llm(
+                query_str=query_bundle.query_str
+            )
+        else:
+            response_wrapper = await news_tool.astream_chat_llm(
+                query_str=query_bundle.query_str
             )
 
         return response_wrapper
@@ -388,6 +405,7 @@ class ChatFlow:
         config: RagConfig,
     ):
         search_engine = resolve_searcher(config, model_id=query_bundle.model)
+        query_bundle.llm_kwargs["intent"] = ChatIntentType.SEARCH_WEB
         if not search_engine:
             raise ValueError(
                 "Web search config is not valid. Please check your search api configuration."
@@ -403,9 +421,21 @@ class ChatFlow:
         knowledgebase: KnowledgeBase,
     ) -> ChatResponseWrapper:
         vector_index = resolve_vector_index(knowledgebase)
-        query_engine = resolve_query_engine(
-            config, vector_index=vector_index, model_id=query_bundle.model
-        )
+        if (
+            knowledgebase.retrieval_settings is not None
+            or knowledgebase.qa_prompt_templates is not None
+        ):
+            query_engine = resolve_query_engine_from_knowledgebase(
+                config,
+                vector_index=vector_index,
+                model_id=query_bundle.model,
+                knowledgebase=knowledgebase,
+            )
+        else:
+            query_engine = resolve_query_engine(
+                config, vector_index=vector_index, model_id=query_bundle.model
+            )
+        query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_KNOWLEDGEBASE
         response = await query_engine.aquery(query_bundle)
         return response
 
@@ -465,13 +495,18 @@ class ChatFlow:
         messages.append(
             ChatMessage(
                 role=MessageRole.USER,
-                content=DEFALT_LLM_CHAT_PROMPT_TEMPL.format(
-                    cur_date=get_prompt_current_time_str()
+                content="{}\n{}\n{}".format(
+                    config.synthesizer.custom_prompt_template,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=get_prompt_current_time_str()
+                    ),
+                    DEFAULT_ANSWER_TEMPLATE,
                 ),
             )
         )
         messages.extend(query_bundle.messages)
         if query_bundle.stream:
+            query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_LLM
             response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
         else:

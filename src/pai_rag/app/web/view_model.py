@@ -31,7 +31,7 @@ from pai_rag.integrations.search.search_config import (
 )
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
 
-
+# deprecated
 QUERY_TYPE_MAP = {
     "对话 (大模型)": "llm",
     "检索测试": "retrieval",
@@ -43,6 +43,47 @@ INVERTED_QUERY_TYPE_MAP = {
     "retrieval": "检索测试",
     "websearch": "对话 (网络搜索)",
     "rag": "对话 (知识库)",
+}
+
+# new version of query_type
+QUERY_TYPES_MAP = {
+    "大模型": "chat_llm",
+    "联网搜索": "search_web",
+    "查询知识库": "chat_knowledgebase",
+    "查询数据库": "chat_db",
+    "agent": "chat_agent",
+    "新闻工具": "chat_news",
+}
+
+INVERTED_QUERY_TYPES_MAP = {
+    "chat_llm": "大模型",
+    "search_web": "联网搜索",
+    "chat_knowledgebase": "查询知识库",
+    "chat_db": "查询数据库",
+    "chat_agent": "agent",
+    "chat_news": "新闻工具",
+}
+
+RETRIEVAL_MODE_MAP = {
+    "向量检索": VectorStoreQueryMode.DEFAULT,
+    "关键字检索": VectorStoreQueryMode.TEXT_SEARCH,
+    "混合检索": VectorStoreQueryMode.HYBRID,
+}
+
+INVERTED_RETRIEVAL_MODE_MAP = {
+    VectorStoreQueryMode.DEFAULT: "向量检索",
+    VectorStoreQueryMode.TEXT_SEARCH: "关键字检索",
+    VectorStoreQueryMode.HYBRID: "混合检索",
+}
+
+RERANKER_TYPE_MAP = {
+    "无重排序": PostProcessorType.no_reranker,
+    "基于模型的重排序": PostProcessorType.reranker_model,
+}
+
+INVERTED_RERANKER_TYPE_MAP = {
+    PostProcessorType.no_reranker: "无重排序",
+    PostProcessorType.reranker_model: "基于模型的重排序",
 }
 
 
@@ -73,8 +114,6 @@ class ViewModel(BaseModel):
 
     # node_parser
     parser_type: str = "Sentence"
-    chunk_size: int = 500
-    chunk_overlap: int = 20
     enable_multimodal: bool = False
 
     # reader
@@ -92,11 +131,11 @@ class ViewModel(BaseModel):
     query_rewrite_n: int = 1
 
     # websearch
-    default_web_search: bool = False
     search_type: str = "bing"
     search_api_key: str = None
     search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
+    search_qa_prompt_template: str = ""
 
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_access_key_id: str = None
@@ -139,7 +178,8 @@ class ViewModel(BaseModel):
     reranker_similarity_threshold: float = 0
     reranker_similarity_top_k: int = 3
 
-    query_type: str = "对话 (知识库)"
+    query_type: str = "对话 (知识库)"  # deprecated
+    query_types: List = ["大模型"]
 
     enable_query_transform: bool = True
     rewrite_base_prompt: str = None
@@ -174,6 +214,18 @@ class ViewModel(BaseModel):
     # llms
     llms: List[PaiBaseLlmConfig] = None
 
+    # news_extension
+    news_extension_model_id: str = "default"
+    bailian_workspaceid: str = None
+    bailian_ak: str = None
+    bailian_sk: str = None
+    top_news_count: int = 10
+    list_news_pmt: str = None
+    # chat_news_answer_len: int = 200
+    chat_news_pmt: str = None
+    domain_list: str = None
+    news_role: str = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -184,15 +236,16 @@ class ViewModel(BaseModel):
     def from_app_config(config: RagConfig):
         view_model = ViewModel()
 
-        view_model.default_web_search = config.system.default_web_search
-
         view_model.llms = config.llms
 
         view_model.chat_model_id = config.chat.model_id or "default"
 
         view_model.query_type = INVERTED_QUERY_TYPE_MAP.get(
             config.system.query_type, "对话 (知识库)"
-        )
+        )  # deprecated
+        view_model.query_types = [
+            INVERTED_QUERY_TYPES_MAP.get(qt, "大模型") for qt in config.system.query_types
+        ]
 
         view_model.use_oss = (
             config.oss_store.bucket is not None and config.oss_store.bucket != ""
@@ -203,8 +256,6 @@ class ViewModel(BaseModel):
         view_model.oss_bucket = config.oss_store.bucket
 
         view_model.parser_type = config.node_parser.type
-        view_model.chunk_overlap = config.node_parser.chunk_overlap
-        view_model.chunk_size = config.node_parser.chunk_size
 
         view_model.enable_mandatory_ocr = config.data_reader.enable_mandatory_ocr
         view_model.number_workers = config.data_reader.number_workers
@@ -214,18 +265,13 @@ class ViewModel(BaseModel):
         view_model.need_image = config.retriever.search_image
         view_model.vector_weight = config.retriever.hybrid_fusion_weights[0]
         view_model.keyword_weight = config.retriever.hybrid_fusion_weights[1]
-        if config.retriever.vector_store_query_mode == VectorStoreQueryMode.DEFAULT:
-            view_model.retrieval_mode = "向量检索"
-        elif config.retriever.vector_store_query_mode == VectorStoreQueryMode.HYBRID:
-            view_model.retrieval_mode = "混合检索"
-        else:
-            view_model.retrieval_mode = "关键字检索"
+        view_model.retrieval_mode = INVERTED_RETRIEVAL_MODE_MAP.get(
+            config.retriever.vector_store_query_mode, VectorStoreQueryMode.DEFAULT
+        )
 
-        if config.postprocessor.reranker_type.value == PostProcessorType.reranker_model:
-            view_model.reranker_type = "基于模型的重排序"
-        else:
-            view_model.reranker_type = "无重排序"
-
+        view_model.reranker_type = INVERTED_RERANKER_TYPE_MAP.get(
+            config.postprocessor.reranker_type, PostProcessorType.no_reranker
+        )
         if isinstance(config.postprocessor, SimilarityPostProcessorConfig):
             view_model.similarity_threshold = config.postprocessor.similarity_threshold
         else:
@@ -283,7 +329,7 @@ class ViewModel(BaseModel):
             )
             view_model.search_lang = config.search.search_lang
             view_model.search_count = config.search.search_count
-
+        view_model.search_qa_prompt_template = config.search.search_qa_prompt_template
         view_model.data_analysis_model_id = config.data_analysis.model_id or "default"
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
@@ -346,14 +392,29 @@ class ViewModel(BaseModel):
             view_model.guardrail_endpoint = config.guardrail.endpoint
             view_model.guardrail_region = config.guardrail.region
 
+        # news_extension
+        view_model.news_extension_model_id = config.news_extension.model_id or "default"
+        view_model.bailian_workspaceid = config.news_extension.workspace_id
+        view_model.bailian_ak = config.news_extension.access_key_id
+        view_model.bailian_sk = config.news_extension.access_key_secret
+        view_model.top_news_count = config.news_extension.top_news_count
+        view_model.list_news_pmt = config.news_extension.list_topics_prompt_str
+        # view_model.chat_news_answer_len = config.news_extension.chat_news_answer_len
+        view_model.chat_news_pmt = config.news_extension.chat_news_prompt_str
+        view_model.domain_list = ",".join(config.news_extension.domain_list)
+        view_model.news_role = config.news_extension.news_role
+
         return view_model
 
     def to_app_config(self):
         config = recursive_dict()
 
-        config["system"]["default_web_search"] = self.default_web_search
-
-        config["system"]["query_type"] = QUERY_TYPE_MAP.get(self.query_type, "rag")
+        config["system"]["query_type"] = QUERY_TYPE_MAP.get(
+            self.query_type, "rag"
+        )  # deprecated
+        config["system"]["query_types"] = [
+            QUERY_TYPES_MAP.get(qt, "chat_llm") for qt in self.query_types
+        ]
 
         config["chat"]["model_id"] = self.chat_model_id
         config["query_rewrite"]["model_id"] = self.query_rewrite_model_id
@@ -371,8 +432,6 @@ class ViewModel(BaseModel):
         config["oss_store"]["bucket"] = self.oss_bucket
 
         config["node_parser"]["type"] = self.parser_type
-        config["node_parser"]["chunk_size"] = int(self.chunk_size)
-        config["node_parser"]["chunk_overlap"] = int(self.chunk_overlap)
 
         config["data_reader"]["enable_mandatory_ocr"] = self.enable_mandatory_ocr
         config["data_reader"]["number_workers"] = int(self.number_workers)
@@ -383,20 +442,17 @@ class ViewModel(BaseModel):
         config["retriever"]["keyword_weight"] = self.keyword_weight
 
         config["retriever"]["search_image"] = self.need_image
-        if self.retrieval_mode == "混合检索":
-            config["retriever"]["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
+        config["retriever"]["vector_store_query_mode"] = RETRIEVAL_MODE_MAP.get(
+            self.retrieval_mode, "向量检索"
+        )
+        if (
+            config["retriever"]["vector_store_query_mode"]
+            == VectorStoreQueryMode.HYBRID
+        ):
             config["retriever"]["hybrid_fusion_weights"] = [
                 self.vector_weight,
                 self.keyword_weight,
             ]
-        elif self.retrieval_mode == "向量检索":
-            config["retriever"][
-                "vector_store_query_mode"
-            ] = VectorStoreQueryMode.DEFAULT
-        elif self.retrieval_mode == "关键字检索":
-            config["retriever"][
-                "vector_store_query_mode"
-            ] = VectorStoreQueryMode.TEXT_SEARCH
 
         if self.analysis_type == "nl2pandas":
             config["data_analysis"]["type"] = "pandas"
@@ -447,13 +503,11 @@ class ViewModel(BaseModel):
         # config["data_analysis"]["llm"]["model"] = self.da_llm_model_name
         # config["data_analysis"]["llm"]["max_tokens"] = self.da_llm_max_tokens
 
-        if self.reranker_type == "基于模型的重排序":
-            config["postprocessor"]["reranker_type"] = PostProcessorType.reranker_model
-        else:
-            config["postprocessor"]["reranker_type"] = PostProcessorType.no_reranker
-
+        config["postprocessor"]["reranker_type"] = RERANKER_TYPE_MAP.get(
+            self.reranker_type
+        )
         config["postprocessor"]["reranker_model"] = self.reranker_model
-        if self.reranker_type == "无重排序":
+        if config["postprocessor"]["reranker_type"] == PostProcessorType.no_reranker:
             config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
         else:
             config["postprocessor"][
@@ -501,6 +555,7 @@ class ViewModel(BaseModel):
             config["search"]["access_key_id"] = self.aliyun_access_key_id
             config["search"]["access_key_secret"] = self.aliyun_access_key_secret
             config["search"]["search_count"] = self.search_count
+        config["search"]["search_qa_prompt_template"] = self.search_qa_prompt_template
 
         config["guardrail"]["region"] = self.guardrail_region
         config["guardrail"]["endpoint"] = self.guardrail_endpoint
@@ -515,6 +570,18 @@ class ViewModel(BaseModel):
         config["agent"]["api_definition"] = self.agent_api_definition
 
         config["llms"] = self.llms
+
+        # news_extension
+        config["news_extension"]["workspace_id"] = self.bailian_workspaceid
+        config["news_extension"]["access_key_id"] = self.bailian_ak
+        config["news_extension"]["access_key_secret"] = self.bailian_sk
+        config["news_extension"]["model_id"] = self.news_extension_model_id
+        config["news_extension"]["top_news_count"] = self.top_news_count
+        config["news_extension"]["list_topics_prompt_str"] = self.list_news_pmt
+        # config["news_extension"]["chat_news_answer_len"] = self.chat_news_answer_len
+        config["news_extension"]["chat_news_prompt_str"] = self.chat_news_pmt
+        config["news_extension"]["domain_list"] = self.domain_list.split(",")
+        config["news_extension"]["news_role"] = self.news_role
 
         return _transform_to_dict(config)
 
@@ -634,8 +701,6 @@ class ViewModel(BaseModel):
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
 
-        settings["chunk_size"] = {"value": self.chunk_size}
-        settings["chunk_overlap"] = {"value": self.chunk_overlap}
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_mandatory_ocr"] = {"value": self.enable_mandatory_ocr}
         settings["number_workers"] = {"value": self.number_workers}
@@ -657,6 +722,9 @@ class ViewModel(BaseModel):
         }
         settings["query_type"] = {
             "value": self.query_type,
+        }  # deprecated
+        settings["query_types"] = {
+            "value": self.query_types,
         }
         settings["similarity_threshold"] = {"value": self.similarity_threshold}
         settings["reranker_similarity_threshold"] = {
@@ -681,6 +749,10 @@ class ViewModel(BaseModel):
 
         # search
         settings["search_type"] = {"value": self.search_type}
+        settings["search_qa_prompt_template"] = {
+            "value": self.search_qa_prompt_template,
+            "visible": True,
+        }
         if self.search_type == "bing":
             settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
             settings["search_lang"] = {"value": self.search_lang, "visible": True}
@@ -786,8 +858,6 @@ class ViewModel(BaseModel):
             "value": self.agent_function_definition
         }
 
-        settings["default_web_search"] = {"value": self.default_web_search}
-
         settings["intent_description"] = {"value": self.intent_description}
 
         settings["enable_guardrail"] = {"value": self.enable_guardrail}
@@ -804,6 +874,23 @@ class ViewModel(BaseModel):
             if not self.llms and len(self.llms) == 0
             else model_choices[0],
         }
+
+        # news_extension
+        settings["news_extension_model_id"] = {
+            "choices": [
+                llm.model_id if llm.model_id else llm.model for llm in self.llms
+            ],
+            "value": self.news_extension_model_id,
+        }
+        settings["bailian_workspaceid"] = {"value": self.bailian_workspaceid}
+        settings["bailian_ak"] = {"value": self.bailian_ak}
+        settings["bailian_sk"] = {"value": self.bailian_sk}
+        settings["top_news_count"] = {"value": self.top_news_count}
+        settings["list_news_pmt"] = {"value": self.list_news_pmt}
+        # settings["chat_news_answer_len"] = {"value": self.chat_news_answer_len}
+        settings["chat_news_pmt"] = {"value": self.chat_news_pmt}
+        settings["domain_list"] = {"value": self.domain_list}
+        settings["news_role"] = {"value": self.news_role}
 
         # print("view model settings:", settings)
 

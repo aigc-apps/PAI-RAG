@@ -10,12 +10,16 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_loader,
     resolve_query_engine,
     resolve_vector_index,
+    resolve_query_engine_from_retrieval_request,
 )
 
 from pai_rag.app.api.models import (
     RagQuery,
     ContextDoc,
     RetrievalResponse,
+    RetrievalRequest,
+    DocRecord,
+    NewRetrievalResponse,
 )
 from llama_index.core.schema import QueryBundle
 from llama_index.core.schema import ImageNode
@@ -54,7 +58,7 @@ class PaiApp:
     async def aquery(
         self,
         query: RagQuery,
-        chat_type: RagChatType = RagChatType.RAG,
+        chat_type: RagChatType,
         sse_version: SseVersion = SseVersion.V1,
     ):
         session_id = query.session_id or chat_id_generator()
@@ -69,26 +73,21 @@ class PaiApp:
                 chat_history=query.chat_history,
                 chat_store=chat_store,
             )
+        if chat_type is None:
+            chat_knowledgebase = query.chat_knowledgebase
+            search_web = query.search_web
+            chat_agent = query.chat_agent
+            chat_db = query.chat_db
+            chat_llm = query.chat_llm
+        else:
+            if query.with_intent:
+                chat_type = RagChatType.Agent
 
-        chat_knowledgebase = False
-        search_web = False
-        chat_agent = False
-        chat_db = False
-        chat_llm = False
-
-        if query.with_intent:
-            chat_type = RagChatType.Agent
-
-        if chat_type == RagChatType.RAG:
-            chat_knowledgebase = True
-        elif chat_type == RagChatType.WEB:
-            search_web = True
-        elif chat_type == RagChatType.LLM:
-            chat_llm = True
-        elif chat_type == RagChatType.NL2SQL:
-            chat_db = True
-        elif chat_type == RagChatType.Agent:
-            chat_agent = True
+            chat_knowledgebase = chat_type == RagChatType.RAG
+            search_web = chat_type == RagChatType.WEB
+            chat_llm = chat_type == RagChatType.LLM
+            chat_db = chat_type == RagChatType.NL2SQL
+            chat_agent = chat_type == RagChatType.Agent
 
         chat_request = ChatCompletionRequest(
             messages=messages,
@@ -140,6 +139,40 @@ class PaiApp:
         ]
 
         return RetrievalResponse(docs=docs)
+
+    async def aknowledgebase_retrieval(
+        self, retrieval_request: RetrievalRequest
+    ) -> NewRetrievalResponse:
+        query_bundle = QueryBundle(retrieval_request.query)
+        knowledgebase = knowledgebase_manager.get_knowledgebase(
+            retrieval_request.knowledgebase_id
+        )
+        vector_index = resolve_vector_index(knowledgebase=knowledgebase)
+        _retrieval_settings = {
+            **knowledgebase.retrieval_settings,
+            **retrieval_request.retrieval_settings,
+        }
+        logger.info(
+            f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
+        )
+        query_engine = resolve_query_engine_from_retrieval_request(
+            self.config,
+            vector_index=vector_index,
+            retrieval_settings=_retrieval_settings,
+        )
+        node_results = await query_engine.aretrieve(query_bundle)
+
+        records = [
+            DocRecord(
+                content=score_node.node.get_content(),
+                score=score_node.score,
+                title=score_node.node.metadata.get("file_name", "null"),
+                metadata=score_node.node.metadata,
+            )
+            for score_node in node_results
+        ]
+
+        return NewRetrievalResponse(records=records)
 
     async def aload_db_info(self):
         db_info_loader = resolve_data_analysis_loader(self.config)
