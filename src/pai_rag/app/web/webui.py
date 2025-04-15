@@ -197,5 +197,5 @@ def configure_webapp(app: FastAPI) -> gr.Blocks:
     # 添加中间件
     app.middleware("http")(postprocess_middleware)
     home = make_homepage()
-    gr.mount_gradio_app(app, home, path="/")
+    gr.mount_gradio_app(app, home, path="")
     return

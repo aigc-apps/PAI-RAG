@@ -37,6 +37,7 @@
       "chat_llm": false,  # 是否仅使用llm聊天
       "chat_agent": false,  # 是否使用agent
       "chat_db": false,  # 是否查询数据库
+      "return_reference": false,  # 是否返回参考
       "index_name": "default",  # 索引名称，RAG场景使用，不传使用默认索引
   }
   ```
@@ -738,7 +739,7 @@ chat()
 - curl 请求示例：
 
   ```bash
-  curl -X 'DELETE' http://localhost:8680/api/v1/knowledgebases/my_milvus/files -H 'Authorization: EAS_TOKEN'
+  curl -X 'GET' http://localhost:8680/api/v1/knowledgebases/my_milvus/files -H 'Authorization: EAS_TOKEN'
   ```
 
 - 返回示例：
@@ -1230,7 +1231,7 @@ chat()
 - curl 请求示例：
 
   ```bash
-  curl -X 'POST' '{EAS_SERVICE_URL}/api/v1/query/llm' -H 'Authorization: EAS_TOKEN' -d '{ "messages": [
+  curl -X 'POST' '{EAS_SERVICE_URL}/api/v1/query/search' -H 'Authorization: EAS_TOKEN' -d '{ "messages": [
         {"role": "user","content": "你好"},
         {"role": "assistant","content": "你好，有什么能帮到您？"},
         {"role": "user", "content": "浙江省会是哪里"}
