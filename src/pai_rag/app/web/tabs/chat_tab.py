@@ -163,12 +163,6 @@ def create_chat_tab() -> Dict[str, Any]:
                 visible=True,
                 value=False,
             )
-            default_web_search = gr.Checkbox(
-                label="默认网络搜索",
-                info="使用OpenAI调用时默认开启网络搜索",
-                elem_id="default_web_search",
-                value=False,
-            )
             llm_temperature = gr.Slider(
                 minimum=0,
                 maximum=1,
@@ -325,7 +319,8 @@ def create_chat_tab() -> Dict[str, Any]:
             with gr.Row():
                 with gr.Column(variant="panel"):
                     query_types = gr.CheckboxGroup(
-                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
+                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具"],
+                        # ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
                         elem_id="query_types",
                     )
@@ -339,7 +334,6 @@ def create_chat_tab() -> Dict[str, Any]:
         chat_args = (
             {
                 chat_model_id,
-                default_web_search,
                 question,
                 query_types,
                 chatbot,
@@ -379,18 +373,9 @@ def create_chat_tab() -> Dict[str, Any]:
 
         clearBtn.click(clear_history, [chatbot], [chatbot, cur_tokens])
         return {
-            default_web_search.elem_id: default_web_search,
             chat_index.elem_id: chat_index,
             need_image.elem_id: need_image,
             chat_model_id.elem_id: chat_model_id,
-            # search_lang.elem_id: search_lang,
-            # search_api_key.elem_id: search_api_key,
-            # serpapi_key.elem_id: serpapi_key,
-            # search_count.elem_id: search_count,
-            # search_type.elem_id: search_type,
-            # aliyun_endpoint.elem_id: aliyun_endpoint,
-            # aliyun_access_key_id.elem_id: aliyun_access_key_id,
-            # aliyun_access_key_secret.elem_id: aliyun_access_key_secret,
             llm_temperature.elem_id: llm_temperature,
             query_types.elem_id: query_types,
         }

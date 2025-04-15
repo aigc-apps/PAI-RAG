@@ -8,7 +8,12 @@ import pai_rag.app.web.event_listeners as ev_listeners
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from pai_rag.app.web.tabs.history_tab import create_upload_history
 from pai_rag.app.web.tabs.chat_tab import reset_textbox, clear_history
-from pai_rag.app.web.view_model import RETRIEVAL_MODE_MAP, RERANKER_TYPE_MAP
+from pai_rag.app.web.view_model import (
+    RETRIEVAL_MODE_MAP,
+    INVERTED_RETRIEVAL_MODE_MAP,
+    RERANKER_TYPE_MAP,
+    INVERTED_RERANKER_TYPE_MAP,
+)
 from loguru import logger
 import json
 import datetime
@@ -134,7 +139,41 @@ def show_retrieval_config(retrieval_test_chat_index):
         "knowledgebase_id": retrieval_test_chat_index,
         "retrieval_settings": retrieval_settings,
     }
-    return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
+
+    if retrieval_settings != {}:
+        return [
+            json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False),
+            gr.update(
+                value=INVERTED_RETRIEVAL_MODE_MAP.get(
+                    retrieval_settings["retrieval_mode"]
+                )
+            ),
+            gr.update(
+                value=INVERTED_RERANKER_TYPE_MAP.get(
+                    retrieval_settings["reranker_type"]
+                )
+            ),
+            gr.update(value=retrieval_settings["vector_weight"]),
+            gr.update(value=retrieval_settings["keyword_weight"]),
+            gr.update(value=retrieval_settings["similarity_top_k"]),
+            gr.update(value=retrieval_settings["similarity_threshold"]),
+            gr.update(value=retrieval_settings["reranker_similarity_threshold"]),
+            gr.update(value=retrieval_settings["reranker_model"]),
+            gr.update(value=retrieval_settings["reranker_similarity_top_k"]),
+        ]
+    else:
+        return [
+            json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+        ]
 
 
 def create_knowledgebase_settings_tab() -> Dict[str, Any]:
@@ -506,14 +545,38 @@ def create_retrieval_test_tab():
             retrieval_test_chat_index.input(
                 fn=show_retrieval_config,
                 inputs=[retrieval_test_chat_index],
-                outputs=[online_retrieval_config],
+                outputs=[
+                    online_retrieval_config,
+                    retrieval_mode,
+                    reranker_type,
+                    vector_weight,
+                    keyword_weight,
+                    similarity_top_k,
+                    # image_similarity_top_k,
+                    similarity_threshold,
+                    reranker_similarity_threshold,
+                    reranker_model,
+                    reranker_similarity_top_k,
+                ],
                 api_name="show_retrieval_config",
             )
 
             retrieval_test_chat_index.change(
                 fn=show_retrieval_config,
                 inputs=[retrieval_test_chat_index],
-                outputs=[online_retrieval_config],
+                outputs=[
+                    online_retrieval_config,
+                    retrieval_mode,
+                    reranker_type,
+                    vector_weight,
+                    keyword_weight,
+                    similarity_top_k,
+                    # image_similarity_top_k,
+                    similarity_threshold,
+                    reranker_similarity_threshold,
+                    reranker_model,
+                    reranker_similarity_top_k,
+                ],
                 api_name="show_retrieval_config",
             )
 

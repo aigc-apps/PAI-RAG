@@ -781,7 +781,6 @@ chat()
   ```json
   {
     "system": {
-      "default_web_search": false,
       "query_type": "websearch"
     },
     "data_reader": {
@@ -958,7 +957,6 @@ chat()
     -H 'Content-Type: application/json' \
     -d '{
         "system": {
-          "default_web_search": false,
           "query_type": "websearch"
         },
         "data_reader": {
