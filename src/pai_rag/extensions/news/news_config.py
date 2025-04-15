@@ -6,7 +6,7 @@ from pai_rag.integrations.llms.pai.llm_config import (
 DEFAULT_NEWS_ENDPOINT = "quanmiaolightapp.cn-beijing.aliyuncs.com"
 DEFAULT_TOP_NEWS_COUNT = 10
 DEFAULT_CHAT_NEWS_ANSWER_LEN = 200
-DEFAULT_NEWS_ROLE_SETTING = "新闻小助手"
+DEFAULT_NEWS_ROLE_SETTING = "深小闻"
 
 DEFAULT_PROMPT_TEMPLATE = """
 # 【任务描述】你是{news_role}，是一个车机新闻播报小助手。你会根据下面给出的新闻材料，按顺序有条理的播报所有新闻。

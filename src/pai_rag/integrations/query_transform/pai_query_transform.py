@@ -152,7 +152,8 @@ class OpenAICompatibleQueryTransform:
             intent = ChatIntentType.CHAT_NEWS
 
         if intent in [ChatIntentType.CHAT_NEWS, ChatIntentType.LIST_NEWS]:
-            pass
+            if not check_keywords_in_string(query_str, "新闻"):
+                intent = ChatIntentType.SEARCH_WEB
 
         return PaiQueryBundle(
             intent=intent,

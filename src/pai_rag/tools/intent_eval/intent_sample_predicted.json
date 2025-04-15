@@ -8,7 +8,7 @@
   },
   "samples": [
     {
-      "query": "新闻小助手，有什么新闻",
+      "query": "深小闻，有什么新闻",
       "intent": {
         "intent_name": "list_news"
       },
@@ -18,7 +18,7 @@
       "score": 1
     },
     {
-      "query": "新闻小助手，有什么国际新闻",
+      "query": "深小闻，有什么国际新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["国际"]
@@ -30,7 +30,7 @@
       "score": 1.0
     },
     {
-      "query": "新闻小助手，有什么科技新闻",
+      "query": "深小闻，有什么科技新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["科技"]
@@ -66,7 +66,7 @@
       "score": 1.0
     },
     {
-      "query": "新闻小助手，有什么社会新闻",
+      "query": "深小闻，有什么社会新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["社会"]
@@ -126,7 +126,7 @@
       "score": 1.0
     },
     {
-      "query": "新闻小助手，教育有什么新闻",
+      "query": "深小闻，教育有什么新闻",
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["教育"]
@@ -140,14 +140,12 @@
     {
       "query": "娱乐圈最近又发生了哪些热点事件",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["娱乐"]
+        "intent_name": "search_web"
       },
       "intent_output": {
-        "intent_name": "list_news",
-        "news_topics": ["娱乐"]
+        "intent_name": "search_web"
       },
-      "score": 1.0
+      "score": 1
     },
     {
       "query": "教育圈的最新新闻",
@@ -332,7 +330,7 @@
       "score": 1.0
     },
     {
-      "query": "新闻小助手，雷军的新闻",
+      "query": "深小闻，雷军的新闻",
       "intent": {
         "intent_name": "chat_news"
       },
@@ -342,7 +340,7 @@
       "score": 1
     },
     {
-      "query": "打开新闻小助手",
+      "query": "打开深小闻",
       "intent": {
         "intent_name": "list_news"
       },
@@ -352,7 +350,7 @@
       "score": 1
     },
     {
-      "query": "介绍一下新闻小助手",
+      "query": "介绍一下深小闻",
       "intent": {
         "intent_name": "chat_news_llm"
       },
@@ -392,7 +390,7 @@
       "score": 1
     },
     {
-      "query": "新闻小助手，你是谁",
+      "query": "深小闻，你是谁",
       "intent": {
         "intent_name": "chat_news_llm"
       },
@@ -412,7 +410,7 @@
       "score": 1
     },
     {
-      "query": "新闻小助手，你的功能是什么",
+      "query": "深小闻，你的功能是什么",
       "intent": {
         "intent_name": "chat_news_llm"
       },
@@ -548,6 +546,46 @@
         "news_topics": ["时政"]
       },
       "score": 1.0
+    },
+    {
+      "query": "最近有什么好看的电视剧",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近有什么好看的电影",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近有什么好玩的游戏",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近有什么热门的电影",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
     }
   ],
   "average_score": 1.0
