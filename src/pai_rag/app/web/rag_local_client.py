@@ -276,7 +276,16 @@ class RagLocalClient:
                 result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
             else:
                 for i, doc in enumerate(response.docs):
-                    html_content = markdown.markdown(doc.text)
+                    if (
+                        doc.metadata.get("file_name", None)
+                        and os.path.splitext(doc.metadata.get("file_name"))[1] == ".faq"
+                    ):
+                        doc_text = f"""问题: {doc.text}
+                                       答案: {doc.metadata.get("faq_answer")}
+                                    """
+                    else:
+                        doc_text = doc.text
+                    html_content = markdown.markdown(doc_text)
                     file_url = doc.metadata.get("file_url", None)
                     if doc.image_url:
                         media_url = doc.image_url

@@ -10,6 +10,7 @@ from llama_index.core.types import RESPONSE_TEXT_TYPE
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.multi_modal_llms import MultiModalLLM
 import llama_index.core.instrumentation as instrument
+import os
 from llama_index.core.schema import (
     NodeWithScore,
     QueryBundle,
@@ -44,6 +45,7 @@ from pai_rag.utils.time_utils import get_prompt_current_time_str
 dispatcher = instrument.get_dispatcher(__name__)
 
 QueryTextType = QueryType
+FAQ_THRESHOLD = 0.8
 
 """
 PaiSynthesizer:
@@ -62,6 +64,8 @@ class PaiSynthesizer(BaseSynthesizer):
         custom_prompt_template: Optional[str] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
         streaming: bool = False,
+        faq_llm_response: bool = False,
+        faq_mode: bool = True,
     ) -> None:
         super().__init__(
             llm=llm,
@@ -74,6 +78,8 @@ class PaiSynthesizer(BaseSynthesizer):
             system_role_str=system_role_template,
             prompt_template_str=custom_prompt_template,
         )
+        self.faq_llm_response = faq_llm_response
+        self.faq_mode = faq_mode
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
@@ -229,10 +235,10 @@ class PaiSynthesizer(BaseSynthesizer):
         context_str = ""
         for i, node in enumerate(nodes):
             context_str += f"""
-材料 {i+1}:
-{node.node.get_content()}
+                        材料 {i+1}:
+                        {node.node.get_content()} {node.node.metadata.get("faq_answer","")}
 
-                """
+                        """
         return context_str
 
     async def aget_response(
@@ -246,6 +252,23 @@ class PaiSynthesizer(BaseSynthesizer):
         prompt_template_str: str = None,
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
+        faq_mode = self.faq_mode
+        faq_llm_response = self.faq_llm_response
+        if nodes and nodes[0].score < FAQ_THRESHOLD:
+            faq_mode = False
+        else:
+            for i, node in enumerate(nodes):
+                if (
+                    not node.node.metadata.get("file_name", None)
+                    or os.path.splitext(node.node.metadata.get("file_name"))[1]
+                    != ".faq"
+                ):
+                    faq_mode = False
+                    break
+
+        if nodes and faq_mode and not faq_llm_response:
+            return nodes[0].node.metadata.get("faq_answer", "")
+
         context_str = self._contruct_context_str(nodes)
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:

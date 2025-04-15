@@ -13,6 +13,7 @@ from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
 from pai_rag.integrations.readers.pai_docx_reader import PaiDocxReader
 from pai_rag.integrations.readers.pai_pptx_reader import PaiPptxReader
 from pai_rag.integrations.readers.pai_markdown_reader import PaiMarkdownReader
+from pai_rag.integrations.readers.pai_faq_reader import PaiFAQReader
 from llama_index.core.readers.file.base import default_file_metadata_func
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
@@ -62,6 +63,7 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
             format_sheet_data_to_json=reader_config.format_sheet_data_to_json,
             sheet_column_filters=reader_config.sheet_column_filters,
         ),
+        ".faq": PaiFAQReader(),
         ".xlsx": PaiExcelReader(oss_cache=oss_store),
         ".xls": PaiExcelReader(oss_cache=oss_store),
         ".jsonl": PaiJsonLReader(),

@@ -56,7 +56,7 @@ class PaiFAQReader(BaseReader):
                 if encoding is not None and "GB" in encoding.upper():
                     self._pandas_config["encoding"] = "GB18030"
                 try:
-                    df = pd.read_csv(f, **self._pandas_config)
+                    df = pd.read_csv(f, sep="\t", **self._pandas_config)
                 except UnicodeDecodeError:
                     logger.info(
                         f"Error: The file {file} encoding could not be decoded."
@@ -70,7 +70,7 @@ class PaiFAQReader(BaseReader):
                 if encoding is not None and "GB" in encoding.upper():
                     self._pandas_config["encoding"] = "GB18030"
                 try:
-                    df = pd.read_csv(file, **self._pandas_config)
+                    df = pd.read_csv(file, sep="\t", **self._pandas_config)
                 except UnicodeDecodeError:
                     logger.info(
                         f"Error: The file {file} encoding could not be decoded."

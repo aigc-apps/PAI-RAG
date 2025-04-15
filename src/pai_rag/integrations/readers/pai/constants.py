@@ -6,6 +6,7 @@ ACCEPTABLE_DOC_TYPES = set(
         ".docx",
         ".pdf",
         ".pptx",
+        ".faq",
         ".md",
         ".xls",
         ".jsonl",
