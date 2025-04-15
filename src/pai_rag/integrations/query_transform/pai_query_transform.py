@@ -134,9 +134,6 @@ class OpenAICompatibleQueryTransform:
         news_topics = query_json.get("news_topics", [])
 
         # 过滤掉无关话题 并且 进行严格的落域字符串匹配
-        # filtered_news_topics = [
-        #     topic for topic in news_topics if topic in set(self._news_valid_domain_list)
-        # ]
         filtered_news_topics = []
         for topic in news_topics:
             if topic in set(self._news_valid_domain_list) and check_keywords_in_string(
@@ -153,6 +150,9 @@ class OpenAICompatibleQueryTransform:
             and intent == ChatIntentType.LIST_NEWS
         ):
             intent = ChatIntentType.CHAT_NEWS
+
+        if intent in [ChatIntentType.CHAT_NEWS, ChatIntentType.LIST_NEWS]:
+            pass
 
         return PaiQueryBundle(
             intent=intent,
