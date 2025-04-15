@@ -119,24 +119,6 @@ class ChatFlow:
         potential_intents.extend(enabled_tools)
         logger.debug(f"Enabled tool candidates: {potential_intents}.")
 
-        # if config.system.default_web_search or chat_request.search_web:
-        #     potential_intents.append(ChatToolType.SEARCH_WEB)
-        #     # 打开Web search的时候有可能会同时使用新闻
-        #     if chat_request.chat_news:
-        #         potential_intents.append(ChatToolType.CHAT_NEWS)
-        # elif chat_request.chat_knowledgebase:
-        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
-        # elif chat_request.chat_agent:
-        #     potential_intents.append(ChatToolType.CHAT_AGENT)
-        # elif chat_request.chat_db:
-        #     potential_intents.append(ChatToolType.CHAT_DB)
-        # elif chat_request.chat_llm:
-        #     pass
-        # elif chat_request.chat_news:
-        #     potential_intents.append(ChatToolType.CHAT_NEWS)
-        # else:
-        #     potential_intents.append(ChatToolType.CHAT_KNOWLEDGEBASE)
-
         llm_kwargs = {}
         if chat_request.temperature is not None:
             llm_kwargs["temperature"] = chat_request.temperature
