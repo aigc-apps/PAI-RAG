@@ -6,9 +6,9 @@ import pai_rag.app.web.event_listeners as ev_listeners
 
 def create_vector_db_panel() -> Dict[str, Any]:
     components = []
-    with gr.Column():
+    with gr.Row():
         with gr.Column():
-            # _ = gr.Markdown(value="**Index - Vector Store**")
+            _ = gr.Markdown(value="**向量数据库配置**")
             vectordb_type = gr.Radio(
                 [
                     "hologres",

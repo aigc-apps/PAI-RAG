@@ -11,7 +11,10 @@ from alibabacloud_iqs20241111.client import Client
 
 from pai_rag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
 from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
-from pai_rag.integrations.search.search_config import DEFAULT_ALIYUN_SEARCH_ENDPOINT
+from pai_rag.integrations.search.search_config import (
+    DEFAULT_ALIYUN_SEARCH_ENDPOINT,
+    DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
+)
 import time
 
 DEFAULT_LANG = "zh-CN"
@@ -28,6 +31,7 @@ class AliyunSearchTool(BaseQueryEngine):
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
         time_range: str = DEFAULT_TIMERANGE,
+        search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
     ):
         config = open_api_models.Config(
             access_key_id=access_key_id,
@@ -42,6 +46,7 @@ class AliyunSearchTool(BaseQueryEngine):
         self.Client = Client(config)
         self.time_range = time_range
         self.html_reader = ParallelBeautifulSoupWebReader()
+        self.search_qa_prompt_template = search_qa_prompt_template
 
     async def _search_aliyun_single_page(self, query: str, page: int = 1):
         request = models.GenericSearchRequest(
@@ -114,8 +119,8 @@ class AliyunSearchTool(BaseQueryEngine):
         return await self.synthesizer.asynthesize(
             query=query,
             nodes=nodes,
-            system_role_str=query.system_role,
-            prompt_template_str=" " if query.system_role else None,
+            system_role_str=" ",
+            prompt_template_str=self.search_qa_prompt_template,
             **query.llm_kwargs,
         )
 
