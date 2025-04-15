@@ -319,7 +319,8 @@ def create_chat_tab() -> Dict[str, Any]:
             with gr.Row():
                 with gr.Column(variant="panel"):
                     query_types = gr.CheckboxGroup(
-                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
+                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具"],
+                        # ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
                         elem_id="query_types",
                     )

@@ -328,7 +328,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                 lines=10,
                                 interactive=True,
                             )
-                        with gr.Tab(label="工具调用"):
+                        with gr.Tab(label="工具调用", visible=False):
                             rewrite_agent_prompt = gr.Textbox(
                                 label="工具调用",
                                 value="",
