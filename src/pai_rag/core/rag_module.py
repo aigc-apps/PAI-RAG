@@ -48,6 +48,7 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
+from pai_rag.extensions.mcp.mcp_client import MultiServerMCPClient
 
 
 cls_cache = {}
@@ -118,6 +119,21 @@ def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
         return guardrail
 
     return None
+
+
+async def resolve_mcp_client(config: RagConfig) -> MultiServerMCPClient:
+    mcp_server_configs = config.mcp_servers
+    connections = {}
+    for mcp_server_config in mcp_server_configs:
+        connection = {
+            "transport": mcp_server_config.transport or "sse",
+            "url": mcp_server_config.url,
+        }
+        connections[mcp_server_config.name] = connection
+
+    mcp_client = resolve(cls=MultiServerMCPClient, connections=connections)
+    mcp_client = await mcp_client.__aenter__()
+    return mcp_client
 
 
 def resolve_chat_store(config: RagConfig) -> PaiChatStore:

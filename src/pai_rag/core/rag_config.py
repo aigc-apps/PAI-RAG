@@ -8,6 +8,7 @@ from pai_rag.core.models.config import (
     RetrieverConfig,
     SynthesizerConfig,
     ChatConfig,
+    McpServerConfig,
 )
 from pai_rag.extensions.news.news_config import MiaobiNewsConfig
 from pai_rag.integrations.agent.pai.pai_agent import AgentConfig
@@ -183,3 +184,5 @@ class RagConfig(BaseModel):
     guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()
 
     news_extension: MiaobiNewsConfig = MiaobiNewsConfig()
+
+    mcp_servers: List[McpServerConfig]

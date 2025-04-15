@@ -90,3 +90,9 @@ class SynthesizerConfig(BaseModel):
     use_multimodal_llm: bool = False
     system_role_template: str = DEFAULT_SYSTEM_ROLE_TEMPLATE
     custom_prompt_template: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE
+
+
+class McpServerConfig(BaseModel):
+    name: str
+    url: str
+    transport: str | None = "sse"

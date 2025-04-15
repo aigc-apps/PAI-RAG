@@ -50,6 +50,8 @@ source = "openai_compatible"
 # vision_support = false
 [[rag.llms]]
 
+[[rag.mcp_servers]]
+
 [rag.multimodal_embedding]
 source = "cnclip"
 
