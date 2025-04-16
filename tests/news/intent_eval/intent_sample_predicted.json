@@ -571,7 +571,7 @@
       "score": 1
     },
     {
-      "query": "关于军队的新闻",
+      "query": "海军的新闻",
       "intent": {
         "intent_name": "chat_news"
       },

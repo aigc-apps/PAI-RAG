@@ -38,6 +38,7 @@ def setup_config():
     )
     config.llm = llm_config
     config.llms[0] = config.llm
+    config.query_rewrite.model_id = "qwen2.5-32b-instruct"
     return config
 
 
