@@ -97,4 +97,3 @@ class McpServerConfig(BaseModel):
     name: str
     url: str
     transport: str | None = "sse"
-
