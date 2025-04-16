@@ -1,6 +1,6 @@
 {
   "request_settings": {
-    "model": "default",
+    "model": "Qwen2.5-32b-Instruct",
     "stream": false,
     "chat_news": true,
     "search_web": true,
@@ -548,6 +548,86 @@
         "news_topics": ["时政"]
       },
       "score": 1.0
+    },
+    {
+      "query": "最近好看的电影",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近有什么好玩的游戏",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近的电视剧",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近的欧冠比赛",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "新闻小助手，最近好看的电影",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "新闻小助手，最近有什么好玩的游戏",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "新闻小助手，最近的电视剧",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "新闻小助手，最近的欧冠比赛",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
     }
   ],
   "average_score": 1.0

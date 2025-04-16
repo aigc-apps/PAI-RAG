@@ -188,6 +188,7 @@ class ViewModel(BaseModel):
     rewrite_agent_prompt: str = None
     rewrite_search_prompt: str = None
     rewrite_db_prompt: str = None
+    rewrite_news_prompt: str = None
 
     synthesizer_type: str = None
     system_role_template: str = None
@@ -292,6 +293,8 @@ class ViewModel(BaseModel):
         view_model.rewrite_search_prompt = (
             config.query_rewrite.websearch_tool_prompt_str
         )
+        view_model.rewrite_news_prompt = config.query_rewrite.news_tool_prompt_str
+
         view_model.rewrite_db_prompt = config.query_rewrite.db_tool_prompt_str
 
         view_model.query_rewrite_model_id = config.query_rewrite.model_id or "default"
@@ -527,6 +530,7 @@ class ViewModel(BaseModel):
         config["query_rewrite"][
             "websearch_tool_prompt_str"
         ] = self.rewrite_search_prompt
+        config["query_rewrite"]["news_tool_prompt_str"] = self.rewrite_news_prompt
         config["query_rewrite"]["db_tool_prompt_str"] = self.rewrite_db_prompt
 
         config["query_rewrite"]["enabled"] = self.enable_query_transform
@@ -682,6 +686,7 @@ class ViewModel(BaseModel):
         }
         settings["rewrite_llm_prompt"] = {"value": self.rewrite_llm_prompt}
         settings["rewrite_search_prompt"] = {"value": self.rewrite_search_prompt}
+        settings["rewrite_news_prompt"] = {"value": self.rewrite_news_prompt}
 
         settings["use_oss"] = {"value": self.use_oss}
         settings["use_oss_col"] = {"visible": self.use_oss}
