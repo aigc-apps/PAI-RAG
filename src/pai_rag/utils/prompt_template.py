@@ -178,6 +178,11 @@ AGENT_REWRITE_PROMPT_ZH = """
 - 根据对话内容，判断是否需要调用外部工具来完成对话内容，如果需要调用外部工具，你会生成意图chat_agent，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_agent" }
 """
 
+MCP_REWRITE_PROMPT_ZH = """
+## MCP工具调用
+- 根据对话内容，判断是否需要调用MCP工具来完成对话内容，如果需要调用MCP工具，你会生成意图chat_mcp，改写之后的意图和查询格式为 JSON 对象：{ "intent": "chat_mcp" }
+- MCP工具的主要功能包含：地点查询以及和导航相关
+"""
 
 CHAT_LLM_REWRITE_PROMPT_ZH = """
 ## LLM对话工具

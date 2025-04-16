@@ -52,6 +52,7 @@ async def respond(input_elements: List[Any]):
     chat_agent = True if "agent" in query_types else False
     chat_db = True if "查询数据库" in query_types else False
     chat_news = True if "新闻工具" in query_types else False
+    chat_mcp = True if "MCP" in query_types else False
 
     try:
         response_gen = rag_client.query(
@@ -68,6 +69,7 @@ async def respond(input_elements: List[Any]):
             chat_agent=chat_agent,
             chat_llm=chat_llm,
             chat_news=chat_news,
+            chat_mcp=chat_mcp,
         )
 
         is_thinking = False
@@ -319,7 +321,7 @@ def create_chat_tab() -> Dict[str, Any]:
             with gr.Row():
                 with gr.Column(variant="panel"):
                     query_types = gr.CheckboxGroup(
-                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具"],
+                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具", "MCP"],
                         # ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
                         elem_id="query_types",

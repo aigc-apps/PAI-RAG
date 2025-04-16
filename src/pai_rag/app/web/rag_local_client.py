@@ -194,6 +194,7 @@ class RagLocalClient:
         chat_agent: bool = False,
         chat_db: bool = False,
         chat_news: bool = False,
+        chat_mcp: bool = False,
     ):
         query = ChatCompletionRequest(
             model=chat_model_id,
@@ -209,6 +210,7 @@ class RagLocalClient:
             chat_agent=chat_agent,
             chat_db=chat_db,
             chat_news=chat_news,
+            chat_mcp=chat_mcp,
         )
 
         try:

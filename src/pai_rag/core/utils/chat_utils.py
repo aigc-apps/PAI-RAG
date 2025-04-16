@@ -25,6 +25,7 @@ from llama_index.core.schema import ImageNode
 from openai.types.chat.chat_completion import Choice
 import openai.types.chat.chat_completion_chunk as chat_completion_chunk
 import json
+from llama_index.core.agent.workflow import ToolCallResult, ToolCall, AgentStream
 
 from loguru import logger
 
@@ -378,3 +379,58 @@ async def make_legacy_sse_chunk_async(
         last_chunk, default=lambda x: x.dict(), ensure_ascii=False
     )
     yield _event_chunk_wrapper(last_chunk_data, sse_version)
+
+
+def async_stream_response_to_chat_response(response_gen) -> ChatResponseAsyncGen:
+    """Convert a stream completion response to a stream chat response."""
+
+    async def gen() -> ChatResponseAsyncGen:
+        async for event in response_gen.stream_events():
+            if type(event) == ToolCall:
+                print(f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}")
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}",
+                        additional_kwargs={"tool_name": event.tool_name},
+                    ),
+                    delta=f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}",
+                    raw=f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}",
+                )
+            elif type(event) == ToolCallResult:
+                print(f"Tool {event.tool_name} returned {event.tool_output}")
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"Tool {event.tool_name} returned {event.tool_output}",
+                        additional_kwargs={
+                            "tool_name": event.tool_name,
+                            "tool_output": event.tool_output,
+                        },
+                    ),
+                    delta=f"Tool {event.tool_name} returned {event.tool_output}",
+                    raw=f"Tool {event.tool_name} returned {event.tool_output}",
+                )
+            elif type(event) == AgentStream and event.delta:
+                print(f"delta: {event.delta}")
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=event.response,
+                    ),
+                    delta=event.delta,
+                    raw=event.delta,
+                )
+
+    return gen()
+
+
+async def astream_agent_chat(agent, query) -> ChatResponseAsyncGen:
+    handler = agent.run(query)
+    return async_stream_response_to_chat_response(handler)
+
+
+async def aagent_chat(agent, query):
+    handler = agent.run(query)
+    response = await handler
+    return response

@@ -215,7 +215,7 @@ def merge_consecutive_messages(
         else:
             merged_messages.append(ChatMessage(role=current_role, content=current_text))
             current_role = message.role
-            current_text = message.content
+            current_text = message.content or ""
 
     merged_messages.append(ChatMessage(role=current_role, content=current_text))
 
