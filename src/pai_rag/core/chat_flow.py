@@ -445,7 +445,6 @@ class ChatFlow:
         config: RagConfig,
     ) -> ChatResponseWrapper:
         agent = resolve_agent(config, model_id=query_bundle.model)
-
         if query_bundle.stream:
 
             async def agent_gen():

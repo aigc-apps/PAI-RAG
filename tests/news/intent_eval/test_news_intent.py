@@ -81,7 +81,7 @@ def test_intent_detection(setup_config, chat_flow, test_data):
         )
         if sample["intent_output"]["intent_name"] != sample["intent"]["intent_name"]:
             logger.warning(
-                f'Intent mismatch! expected: {sample["intent"]}, output: {sample["intent_output"]}'
+                f'Intent mismatch! Query: {sample["query"]} expected: {sample["intent"]}, output: {sample["intent_output"]}'
             )
         scores += sample["score"]
 

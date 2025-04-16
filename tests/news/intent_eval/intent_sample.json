@@ -8,6 +8,54 @@
   },
   "samples": [
     {
+      "query": "今天有什么趣事",
+      "intent": {
+        "intent_name": "list_news"
+      }
+    },
+    {
+      "query": "深蓝汽车有什么新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "蔚来汽车有什么新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "最近有什么AI新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "有没有俄乌战争的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "今天有什么足球新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "今天有什么NBA新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "阿里巴巴股价",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
       "query": "新闻小助手，有什么新闻",
       "intent": {
         "intent_name": "list_news"
@@ -309,8 +357,7 @@
     {
       "query": "关于军队的新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["军事"]
+        "intent_name": "chat_news"
       }
     },
     {

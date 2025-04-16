@@ -139,6 +139,7 @@ class NewsChatParameter(BaseModel):
     workspaceId: str
     messages: List[Dict[str, str]] = []
     prompt: str = None
+    modelId: str = "qwen-max-latest"
     modelCustomPromptTemplate: str = None
     # answerLength: int = 200 # temporarily inactive
 
@@ -350,6 +351,7 @@ class MiaobiNewsTool:
             messages=transformed_messages,
             workspaceId=self.config.workspace_id,
             prompt=prompt,
+            modelId=self.config.chat_news_model_id,
             # answerLength=self.chat_news_answer_len,
             modelCustomPromptTemplate=self.chat_news_prompt_template,
         ).model_dump()
@@ -370,13 +372,12 @@ class MiaobiNewsTool:
                 try:
                     data = json.loads(item.get("event").data)
                     logger.info(data)
+                    additional_kwargs = {}
 
                     event = data.get("header").get("event")
                     if event == "task-hot-topic-chat-internet-search-start":
                         use_web_search = True
-                    if event != "task-finished":
-                        additional_kwargs = {}
-
+                    if event != "task-finished" and event != "task-failed":
                         usage = data.get("payload").get("usage")
                         if usage:
                             additional_kwargs.update(
@@ -418,7 +419,9 @@ class MiaobiNewsTool:
                             )
                             yield empty_response
                     elif origin_text == "":
-                        text = data.get("payload").get("output").get("text")
+                        text = data.get("payload").get("output").get(
+                            "text"
+                        ) or data.get("header").get("errorMessage")
                         err_code = data.get("header").get("errorCode")
                         logger.info(
                             f"News chat task-finished with err_code: {err_code}"

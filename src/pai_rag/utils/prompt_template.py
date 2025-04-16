@@ -108,7 +108,7 @@ NEWS_REWRITE_PROMPT_ZH = """
 1. 意图：list_news
    适用场景：
     - 用户查询全局热门新闻，如“新闻热点”“有什么新闻”。
-    - 用户查询特定领域的新闻，且该领域在指定领域列表 {domain_list} 中。（“时事”和“政治”属于“时政”领域）
+    - 用户想要了解某话题领域的新闻，且该领域在指定领域列表 {domain_list} 中。（“时事”和“政治”属于“时政”领域）
     - 用户提及“{news_role}”但未涉及具体查询（如“打开{news_role}”“切换到{news_role}”）。
    示例：
     - 输入：“今天有什么新闻？”
@@ -139,6 +139,8 @@ NEWS_REWRITE_PROMPT_ZH = """
       输出：{{ "intent": "chat_news", "query": "陈奕迅的新闻" }}
     - 输入：“美国最近的新闻”
       输出：{{ "intent": "chat_news", "query": "美国最近的新闻" }}
+    - 输入：“深蓝汽车有什么新闻”
+      输出：{{ "intent": "chat_news", "query": "深蓝汽车的新闻" }}
     - 输入：“医疗新闻”
       输出：{{ "intent": "chat_news", "query": "医疗新闻" }}
       理由： “医疗”不在指定列表 {domain_list} 中。

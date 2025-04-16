@@ -8,6 +8,86 @@
   },
   "samples": [
     {
+      "query": "今天有什么趣事",
+      "intent": {
+        "intent_name": "list_news"
+      },
+      "intent_output": {
+        "intent_name": "list_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "深蓝汽车有什么新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "蔚来汽车有什么新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "最近有什么AI新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "有没有俄乌战争的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "今天有什么足球新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "今天有什么NBA新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      },
+      "intent_output": {
+        "intent_name": "chat_news"
+      },
+      "score": 1
+    },
+    {
+      "query": "阿里巴巴股价",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
       "query": "新闻小助手，有什么新闻",
       "intent": {
         "intent_name": "list_news"
@@ -493,11 +573,10 @@
     {
       "query": "关于军队的新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["军事"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
