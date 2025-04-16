@@ -222,7 +222,7 @@ class ViewModel(BaseModel):
     bailian_sk: str = None
     top_news_count: int = 10
     list_news_pmt: str = None
-    # chat_news_answer_len: int = 200
+    chat_news_model_id: str = "qwen-max-latest"
     chat_news_pmt: str = None
     domain_list: str = None
     news_role: str = None
@@ -397,6 +397,7 @@ class ViewModel(BaseModel):
 
         # news_extension
         view_model.news_extension_model_id = config.news_extension.model_id or "default"
+        view_model.chat_news_model_id = config.news_extension.chat_news_model_id
         view_model.bailian_workspaceid = config.news_extension.workspace_id
         view_model.bailian_ak = config.news_extension.access_key_id
         view_model.bailian_sk = config.news_extension.access_key_secret
@@ -582,7 +583,7 @@ class ViewModel(BaseModel):
         config["news_extension"]["model_id"] = self.news_extension_model_id
         config["news_extension"]["top_news_count"] = self.top_news_count
         config["news_extension"]["list_topics_prompt_str"] = self.list_news_pmt
-        # config["news_extension"]["chat_news_answer_len"] = self.chat_news_answer_len
+        config["news_extension"]["chat_news_model_id"] = self.chat_news_model_id
         config["news_extension"]["chat_news_prompt_str"] = self.chat_news_pmt
         config["news_extension"]["domain_list"] = self.domain_list.split(",")
         config["news_extension"]["news_role"] = self.news_role
@@ -892,11 +893,10 @@ class ViewModel(BaseModel):
         settings["bailian_sk"] = {"value": self.bailian_sk}
         settings["top_news_count"] = {"value": self.top_news_count}
         settings["list_news_pmt"] = {"value": self.list_news_pmt}
-        # settings["chat_news_answer_len"] = {"value": self.chat_news_answer_len}
+        settings["chat_news_model_id"] = {"value": self.chat_news_model_id}
         settings["chat_news_pmt"] = {"value": self.chat_news_pmt}
         settings["domain_list"] = {"value": self.domain_list}
         settings["news_role"] = {"value": self.news_role}
-
         # print("view model settings:", settings)
 
         return settings

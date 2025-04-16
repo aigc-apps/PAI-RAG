@@ -24,7 +24,7 @@ def is_valid_comma_separated_string(s):
 
 
 list_news_pmt_required_variables = ["news_role", "topics_str", "news_list_str"]
-chat_news_pmt_required_variables = ["news_role", "content", "prompt", "answerLength"]
+chat_news_pmt_required_variables = ["news_role", "content", "prompt"]
 
 
 def save_news_extension_config(input_elements: List[Any]):
@@ -76,9 +76,15 @@ def create_news_extension_tab():
                 news_extension_model_id = gr.Dropdown(
                     choices=model_choices,
                     value=news_extension_model_name,
-                    label="\N{bookmark} 新闻Agent模型ID",
+                    label="\N{bookmark} 新闻摘要模型ID",
                     elem_id="news_extension_model_id",
                     interactive=True,
+                )
+                chat_news_model_id = gr.Textbox(
+                    label="\N{bookmark} 新闻QA模型名称",
+                    elem_id="chat_news_model_id",
+                    interactive=True,
+                    value="qwen-max-latest",
                 )
                 bailian_workspaceid = gr.Textbox(
                     label="阿里云百炼工作空间ID",
@@ -161,7 +167,7 @@ def create_news_extension_tab():
         top_news_count,
         domain_list,
         list_news_pmt,
-        # chat_news_answer_len,
+        chat_news_model_id,
         chat_news_pmt,
         save_news_extension_btn,
     ]
