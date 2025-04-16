@@ -293,7 +293,6 @@ class ViewModel(BaseModel):
         view_model.rewrite_search_prompt = (
             config.query_rewrite.websearch_tool_prompt_str
         )
-        print("===", config.query_rewrite)
         view_model.rewrite_news_prompt = config.query_rewrite.news_tool_prompt_str
 
         view_model.rewrite_db_prompt = config.query_rewrite.db_tool_prompt_str
