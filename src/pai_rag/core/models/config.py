@@ -94,6 +94,6 @@ class SynthesizerConfig(BaseModel):
 
 
 class McpServerConfig(BaseModel):
-    name: str
-    url: str
+    name: str | None = None
+    url: str | None = None
     transport: str | None = "sse"
