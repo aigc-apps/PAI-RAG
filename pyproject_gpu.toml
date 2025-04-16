@@ -106,6 +106,7 @@ serpapi = "^0.1.5"
 watchfiles = "^1.0.4"
 alibabacloud-aimiaobi20230801 = "^1.21.0"
 alibabacloud-tea-openapi-sse = "^1.0.2"
+mcp = {extras = ["cli"], version = "^1.6.0"}
 
 [tool.poetry.scripts]
 load_data = "pai_rag.tools.load_data_tool:run"

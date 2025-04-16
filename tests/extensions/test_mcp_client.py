@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 import os
 from openai import OpenAI
+import json
 
 from pai_rag.core.models.config import McpServerConfig
 
@@ -24,12 +25,6 @@ llm = OpenAI(
 BASE_DIR = Path(__file__).parent.parent.parent
 
 
-pytestmark = pytest.mark.skipif(
-    os.getenv("SKIP_GPU_TESTS", "false") == "true",
-    reason="Need to execute in a CUDA environment.",
-)
-
-
 config_instance = McpServerConfig(
     name="amaps",
     url="https://mcp-server-amap-jitptfyoyw.cn-hangzhou.fcapp.run/sse",
@@ -40,8 +35,8 @@ config_instance = McpServerConfig(
 mcp_servers_connections = [config_instance]
 
 
-@pytest.fixture(scope="module", autouse=True)
-async def process_query() -> str:
+@pytest.mark.asyncio
+async def test_mcp_client() -> str:
     messages = [{"role": "user", "content": "杭州东到西湖怎么走"}]
     connections = {}
     for mcp_server_config in mcp_servers_connections:
@@ -59,4 +54,38 @@ async def process_query() -> str:
     )
 
     assert response.choices[0].finish_reason == "tool_calls"
+    final_text = []
+    choice = response.choices[0]
+    while choice.finish_reason != "stop":
+        choice = response.choices[0]
+        messages.append(choice.message.model_dump())
+        if choice.finish_reason == "tool_calls":
+            for tool in choice.message.tool_calls:
+                tool_name = tool.function.name
+                tool_args = json.loads(tool.function.arguments)
+                server_name = mcp_client.tools_to_server_name[tool_name]
+                session = mcp_client.sessions[server_name]
+                assert tool_name in [
+                    tool["function"]["name"] for tool in available_tools
+                ]
+                # 还原原始tool_name名称
+                tool_name = tool_name.split("[pai_rag]")[1]
+                result = await session.call_tool(tool_name, tool_args)
+                print(f"\n\n[Calling tool {tool_name} with args {tool_args}]\n\n")
+                final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": result.content[0].text,
+                        "tool_call_id": tool.id,
+                    }
+                )
+            response = llm.chat.completions.create(
+                model="qwen-max", messages=messages, tools=available_tools, stream=False
+            )
+            choice = response.choices[0]
+            final_text.append(choice.message.content)
+        else:
+            final_text.append(choice.message.content)
+
     await mcp_client.__aexit__(None, None, None)
