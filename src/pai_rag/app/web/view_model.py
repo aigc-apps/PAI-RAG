@@ -18,6 +18,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
 from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
+from pai_rag.core.models.config import McpServerConfig
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     SimilarityPostProcessorConfig,
 )
@@ -226,6 +227,9 @@ class ViewModel(BaseModel):
     domain_list: str = None
     news_role: str = None
 
+    # mcp_servers
+    mcp_servers: List[McpServerConfig] = None
+
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
         for key, value in update_paras.items():
@@ -237,6 +241,8 @@ class ViewModel(BaseModel):
         view_model = ViewModel()
 
         view_model.llms = config.llms
+
+        view_model.mcp_servers = config.mcp_servers
 
         view_model.chat_model_id = config.chat.model_id or "default"
 
@@ -570,6 +576,7 @@ class ViewModel(BaseModel):
         config["agent"]["api_definition"] = self.agent_api_definition
 
         config["llms"] = self.llms
+        config["mcp_servers"] = self.mcp_servers
 
         # news_extension
         config["news_extension"]["workspace_id"] = self.bailian_workspaceid
@@ -868,11 +875,18 @@ class ViewModel(BaseModel):
         model_choices = [
             llm.model_id if llm.model_id else llm.model for llm in self.llms
         ]
+        mcp_server_choices = [
+            mcp_server.name for mcp_server in self.mcp_servers if mcp_server.name
+        ]
         settings["llm_model"] = {
             "choices": model_choices + ["NEW"],
             "value": "NEW"
             if not self.llms and len(self.llms) == 0
             else model_choices[0],
+        }
+        settings["mcp_servers"] = {
+            "choices": ["NEW"] + mcp_server_choices,
+            "value": "NEW",
         }
 
         # news_extension
