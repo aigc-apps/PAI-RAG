@@ -20,11 +20,14 @@ from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.chat_flow import ChatFlow
 from pai_rag.app.api.models import ChatCompletionRequest
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pai_rag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
 
 
 # 定义测试文件路径
 _BASE_DIR = Path(__file__).parent.parent
-DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
+DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
+    _BASE_DIR, "../../src/pai_rag/config/settings.toml"
+)
 TEST_FILE = os.path.join(_BASE_DIR, "intent_eval/intent_sample.json")
 
 
@@ -39,6 +42,7 @@ def setup_config():
     config.llm = llm_config
     config.llms[0] = config.llm
     config.query_rewrite.model_id = "qwen2.5-32b-instruct"
+    config.news_extension.domain_list = list(DEFAULT_NEWS_DOMAIN_MAP.keys())
     return config
 
 

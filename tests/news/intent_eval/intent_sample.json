@@ -355,6 +355,18 @@
       }
     },
     {
+      "query": "重庆有哪些新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "延安的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
       "query": "海军的新闻",
       "intent": {
         "intent_name": "chat_news"
@@ -393,6 +405,48 @@
       }
     },
     {
+      "query": "有什么电视剧",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "有哪些电影",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "有哪些电视剧",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "电影推荐",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "电视剧推荐",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "现在经济怎么样？",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "有什么电影",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
       "query": "最近的欧冠比赛",
       "intent": {
         "intent_name": "search_web"
@@ -420,6 +474,18 @@
       "query": "新闻小助手，最近的欧冠比赛",
       "intent": {
         "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "1+1等于几",
+      "intent": {
+        "intent_name": "chat_llm"
+      }
+    },
+    {
+      "query": "你是谁",
+      "intent": {
+        "intent_name": "chat_llm"
       }
     }
   ]
