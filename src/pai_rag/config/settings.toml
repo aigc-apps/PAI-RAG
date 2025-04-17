@@ -56,6 +56,9 @@ source = "cnclip"
 [rag.multimodal_llm]
 source = "openai_compatible"
 
+[rag.news_extension]
+news_role = "深小闻"
+
 [rag.node_enhancement]
 tree_depth = 3
 max_clusters = 52

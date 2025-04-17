@@ -1,6 +1,6 @@
 {
   "request_settings": {
-    "model": "default",
+    "model": "Qwen2.5-32b-Instruct",
     "stream": false,
     "chat_news": true,
     "search_web": true,
@@ -325,6 +325,54 @@
       "intent": {
         "intent_name": "list_news",
         "news_topics": ["时政"]
+      }
+    },
+    {
+      "query": "最近好看的电影",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "最近有什么好玩的游戏",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "最近的电视剧",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "最近的欧冠比赛",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "新闻小助手，最近好看的电影",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "新闻小助手，最近有什么好玩的游戏",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "新闻小助手，最近的电视剧",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "新闻小助手，最近的欧冠比赛",
+      "intent": {
+        "intent_name": "chat_news"
       }
     }
   ]
