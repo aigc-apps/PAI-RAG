@@ -185,4 +185,4 @@ class RagConfig(BaseModel):
 
     news_extension: MiaobiNewsConfig = MiaobiNewsConfig()
 
-    mcp_servers: List[McpServerConfig]
+    mcp_servers: List[McpServerConfig] = Field(default_factory=list)

@@ -7,6 +7,9 @@ from pai_rag.app.web.rag_local_client import rag_client
 from pai_rag.app.web.tabs.settings_tab import (
     create_setting_tab,
 )
+from pai_rag.app.web.tabs.mcp_servers_tab import (
+    create_mcp_servers_tab,
+)
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.tabs.history_tab import (
@@ -136,6 +139,10 @@ def make_homepage():
                 with gr.Blocks():
                     news_elements = create_news_extension_tab()
                     elem_manager.add_elems(news_elements)
+            with gr.Tab("MCP Server"):
+                with gr.Blocks():
+                    mcp_servers_elements = create_mcp_servers_tab()
+                    elem_manager.add_elems(mcp_servers_elements)
 
         index_selector_elements = [
             knowledgebase_elements["vector_index"],
