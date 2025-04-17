@@ -20,8 +20,10 @@ from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreC
 from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
+from pai_rag.core.models.config import McpServerConfig
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+import pandas as pd
 from loguru import logger
 
 
@@ -206,6 +208,141 @@ def delete_llm(selected_model):
     ] + ["NEW"]
     return [
         gr.update(choices=new_choices, value=new_choices[0]),
+        gr.update(visible=False),
+        gr.update(visible=False),
+    ]
+
+
+def update_mcp_servers(mcp_server_name):
+    rag_config = rag_client.get_config()
+    is_new = mcp_server_name == "NEW"
+
+    mcp_server_config = next(
+        (
+            mcp_server
+            for mcp_server in rag_config.mcp_servers
+            if mcp_server.name == mcp_server_name
+        ),
+        None,
+    )
+
+    initial_values = {
+        "name": mcp_server_config.name if mcp_server_config and not is_new else "",
+        "url": mcp_server_config.url if mcp_server_config else "",
+        "transport": mcp_server_config.transport if mcp_server_config else "",
+        "activated": mcp_server_config.activated if mcp_server_config else "",
+    }
+
+    # Update UI components based on the configuration
+    return [
+        gr.update(visible=True),
+        gr.update(value="保存MCP Server" if is_new else "更新MCP Server"),
+        gr.update(visible=not is_new),
+        gr.update(value=initial_values["name"]),
+        gr.update(value=initial_values["url"]),
+        gr.update(value=initial_values["transport"]),
+        gr.update(value=initial_values["activated"]),
+    ]
+
+
+def save_new_mcp_server(
+    selected_mcp_server, server_name, server_url, server_transport, active_status
+):
+    rag_config = rag_client.get_config()
+    if not all([server_name, server_url, server_transport]):
+        raise gr.Error("please fill in all fields")
+
+    is_new = selected_mcp_server == "NEW"
+
+    if is_new:
+        mcp_server_index, existing_mcp_server = next(
+            (
+                (index, mcp_server)
+                for index, mcp_server in enumerate(rag_config.mcp_servers)
+                if mcp_server.name == server_name
+            ),
+            (-1, None),
+        )
+    else:
+        mcp_server_index, existing_mcp_server = next(
+            (
+                (index, mcp_server)
+                for index, mcp_server in enumerate(rag_config.mcp_servers)
+                if mcp_server.name == selected_mcp_server
+            ),
+            (-1, None),
+        )
+
+    if existing_mcp_server:
+        existing_mcp_server.name = server_name
+        existing_mcp_server.url = server_url
+        existing_mcp_server.transport = server_transport
+        existing_mcp_server.activated = active_status
+        rag_config.mcp_servers[mcp_server_index] = existing_mcp_server
+
+    else:
+        new_llm_config = {
+            "name": server_name,
+            "url": server_url,
+            "transport": server_transport,
+            "activated": active_status,
+        }
+        new_mcp_server = McpServerConfig(**new_llm_config)
+
+        rag_config.mcp_servers.append(new_mcp_server)
+
+    update_dict = {}
+    update_dict["mcp_servers"] = rag_config.mcp_servers
+    rag_client.patch_config(update_dict)
+    new_choices = ["NEW"] + [
+        mcp_server.name for mcp_server in rag_config.mcp_servers if mcp_server.name
+    ]
+    mcp_servers_data = [
+        {
+            "是否激活": "yes" if mcp_server.activated else "no",
+            "MCP Server名称": mcp_server.name,
+            "MCP Server URL": mcp_server.url,
+            "MCP Server Transport": mcp_server.transport,
+        }
+        for mcp_server in rag_config.mcp_servers
+    ]
+    mcp_servers_data = pd.DataFrame(mcp_servers_data)
+    return [
+        gr.update(choices=new_choices, value=server_name),
+        gr.update(value=mcp_servers_data),
+        gr.update(value="更新MCP Server"),
+        gr.update(visible=True),
+    ]
+
+
+def delete_mcp_server(server_name):
+    rag_config = rag_client.get_config()
+    # Find the LLM configuration by model_id
+    rag_config.mcp_servers = [
+        mcp_server
+        for mcp_server in rag_config.mcp_servers
+        if mcp_server.name != server_name
+    ]
+
+    update_dict = {}
+    update_dict["mcp_servers"] = rag_config.mcp_servers
+    rag_client.patch_config(update_dict)
+    new_choices = ["NEW"] + [
+        mcp_server.name for mcp_server in rag_config.mcp_servers if mcp_server.name
+    ]
+    mcp_servers_data = [
+        {
+            "是否激活": "yes" if mcp_server.activated else "no",
+            "MCP Server名称": mcp_server.name,
+            "MCP Server URL": mcp_server.url,
+            "MCP Server Transport": mcp_server.transport,
+        }
+        for mcp_server in rag_config.mcp_servers
+    ]
+    mcp_servers_data = pd.DataFrame(mcp_servers_data)
+    return [
+        gr.update(choices=new_choices, value="NEW"),
+        gr.update(value=mcp_servers_data),
         gr.update(visible=False),
         gr.update(visible=False),
     ]

@@ -7,6 +7,7 @@ import os
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.utils.oss_utils import check_and_set_oss_auth
 from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
+from pai_rag.core.models.config import McpServerConfig
 
 # store config file generated from ui.
 GENERATED_CONFIG_FILE_NAME = "localdata/settings.snapshot.toml"
@@ -61,6 +62,9 @@ class RagConfigManager:
 
     def get_value(self) -> RagConfig:
         self.config.rag["llms"] = [item for item in self.config.rag["llms"] if item]
+        self.config.rag["mcp_servers"] = [
+            item for item in self.config.rag["mcp_servers"] if item
+        ]
         rag_config = RagConfig.model_validate(self.config.rag)
         rag_config_copy = rag_config
         # 兼容之前的配置
@@ -95,6 +99,12 @@ class RagConfigManager:
                 llm.model_dump()
                 for llm in data["RAG"]["llms"]
                 if isinstance(llm, PaiBaseLlmConfig)
+            ]
+        if data["RAG"]["mcp_servers"]:
+            data["RAG"]["mcp_servers"] = [
+                mcp_server.model_dump()
+                for mcp_server in data["RAG"]["mcp_servers"]
+                if isinstance(mcp_server, McpServerConfig)
             ]
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())
