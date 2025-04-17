@@ -42,11 +42,6 @@ async def retrieval_test_respond(input_elements: List[Any]):
         yield chatbot
 
     try:
-        print(
-            'QUERY_TYPE_MAP.get(update_dict["retrieval_mode"])',
-            RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
-            update_dict["retrieval_mode"],
-        )
         response_gen = rag_client.aknowledgebase_retrieval(
             knowledgebase_id=index_name,
             query=question,

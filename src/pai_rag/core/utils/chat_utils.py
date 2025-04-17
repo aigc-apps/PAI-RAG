@@ -465,7 +465,6 @@ def async_stream_response_to_chat_response(response_gen) -> ChatResponseAsyncGen
     async def gen() -> ChatResponseAsyncGen:
         async for event in response_gen.stream_events():
             if type(event) == ToolCall:
-                print(f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}")
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
@@ -506,7 +505,6 @@ def async_stream_response_to_chat_response(response_gen) -> ChatResponseAsyncGen
                     },
                 )
             elif type(event) == ToolCallResult:
-                print(f"Tool {event.tool_name} returned {event.tool_output}")
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.TOOL,

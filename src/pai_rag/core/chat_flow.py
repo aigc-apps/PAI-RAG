@@ -134,7 +134,6 @@ class ChatFlow:
         logger.debug(
             f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
         )
-        print("chat_request.messages", chat_request.messages)
         if query_transform is not None and len(potential_intents) > 1:
             query_bundle = await query_transform.arun(
                 chat_messages=chat_request.messages,
