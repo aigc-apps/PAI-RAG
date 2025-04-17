@@ -208,15 +208,29 @@ def merge_consecutive_messages(
 
     current_role = messages[0].role
     current_text = ""
+    current_additional_kwargs = {}
 
     for message in messages:
         if message.role == current_role:
-            current_text += message.content
+            current_text += message.content or ""
         else:
-            merged_messages.append(ChatMessage(role=current_role, content=current_text))
+            merged_messages.append(
+                ChatMessage(
+                    role=current_role,
+                    content=current_text,
+                    additional_kwargs=current_additional_kwargs,
+                )
+            )
             current_role = message.role
-            current_text = message.content
+            current_text = message.content or ""
+            current_additional_kwargs = message.additional_kwargs
 
-    merged_messages.append(ChatMessage(role=current_role, content=current_text))
+    merged_messages.append(
+        ChatMessage(
+            role=current_role,
+            content=current_text,
+            additional_kwargs=current_additional_kwargs,
+        )
+    )
 
     return merged_messages

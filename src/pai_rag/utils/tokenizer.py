@@ -3,6 +3,9 @@ from nltk.corpus import stopwords
 from typing import List
 from pai_rag.utils.trie import TrieTree
 import string
+import nltk
+
+nltk.download("stopwords")
 
 CHINESE_PUNKTUATION = "＂＃＄％＆＇（）＊＋，－／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､\u3000、〃〈〉《》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏﹑﹔·．！？｡。"
 

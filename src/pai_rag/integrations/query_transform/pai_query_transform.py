@@ -13,6 +13,7 @@ from pai_rag.utils.prompt_template import (
     NEWS_REWRITE_PROMPT_ZH,
     AGENT_REWRITE_PROMPT_ZH,
     REWRITE_PROMPT_ROLE_ZH,
+    MCP_REWRITE_PROMPT_ZH,
 )
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatToolType, ChatIntentType, PaiQueryBundle
@@ -63,6 +64,7 @@ class OpenAICompatibleQueryTransform:
         db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH,
         news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH,
         news_valid_domain_list: List[str] = DEFAULT_NEWS_DOMAIN_LIST,
+        mcp_tool_prompt_str: str = MCP_REWRITE_PROMPT_ZH,
     ):
         super().__init__()
 
@@ -77,6 +79,7 @@ class OpenAICompatibleQueryTransform:
             ChatToolType.SEARCH_WEB: websearch_tool_prompt_str,
             ChatToolType.CHAT_NEWS: news_tool_prompt_str,
             ChatToolType.CHAT_AGENT: agent_tool_prompt_str,
+            ChatToolType.CHAT_MCP: mcp_tool_prompt_str,
         }
 
     def get_prompt(self, query_str: str, chat_history: str, potential_intents):

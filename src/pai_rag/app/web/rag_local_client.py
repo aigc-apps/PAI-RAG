@@ -34,6 +34,7 @@ from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DB_HISTORY_PATH,
     DEFAULT_DB_HISTORY_NAME,
 )
+from openai.types.chat import ChatCompletion
 
 
 class RagApiError(Exception):
@@ -65,6 +66,7 @@ class RagLocalClient:
         text = response["delta"]
         docs = response.get("docs", []) or []
         is_finished = response.get("is_finished", True)
+        tool_calls = response.get("tool_calls", []) or []
 
         referenced_docs = ""
         if is_finished:
@@ -143,6 +145,7 @@ class RagLocalClient:
             formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
 
         response["delta"] = formatted_answer
+        response["non_stream_tool_calls"] = tool_calls
 
         return dotdict(response)
 
@@ -150,6 +153,7 @@ class RagLocalClient:
         text = response["delta"]
         docs = response.get("docs", []) or []
         is_finished = response.get("is_finished", True)
+        tool_calls = response.get("", {}) or {}
 
         referenced_docs = ""
         if is_finished:
@@ -176,7 +180,8 @@ class RagLocalClient:
             formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
 
         response["delta"] = formatted_answer
-
+        if tool_calls:
+            response["tool_calls"] = tool_calls
         return dotdict(response)
 
     async def query(
@@ -194,6 +199,7 @@ class RagLocalClient:
         chat_agent: bool = False,
         chat_db: bool = False,
         chat_news: bool = False,
+        chat_mcp: bool = False,
     ):
         query = ChatCompletionRequest(
             model=chat_model_id,
@@ -209,6 +215,7 @@ class RagLocalClient:
             chat_agent=chat_agent,
             chat_db=chat_db,
             chat_news=chat_news,
+            chat_mcp=chat_mcp,
         )
 
         try:
@@ -222,17 +229,35 @@ class RagLocalClient:
                     "docs": response.docs,
                 }
                 yield self._format_rag_response(result)
+            elif isinstance(response, ChatCompletion):
+                result = {
+                    "delta": response.choices[0].message.content,
+                    "docs": response.citations,
+                    "tool_calls": response.tool_calls,
+                }
+                yield self._format_rag_response(result)
             else:
                 async for r in response:
                     if r.startswith("data: "):
                         chunk = json.loads(r[6:])
-                        result = {
-                            "delta": chunk["choices"][0]["delta"]["content"],
-                            "docs": chunk.get("citation_details", []),
-                            "is_finished": chunk["choices"][0]["finish_reason"]
-                            == "stop",
-                        }
-                        if chat_knowledgebase or search_web:
+                        if chunk["choices"][0]["delta"].get("tool_calls", ""):
+                            result = {
+                                "delta": chunk["choices"][0]["delta"]["content"],
+                                "tool_calls": chunk["choices"][0]["delta"][
+                                    "tool_calls"
+                                ][0],
+                                "docs": chunk.get("citation_details", []),
+                                "is_finished": chunk["choices"][0]["finish_reason"]
+                                == "stop",
+                            }
+                        else:
+                            result = {
+                                "delta": chunk["choices"][0]["delta"]["content"],
+                                "docs": chunk.get("citation_details", []),
+                                "is_finished": chunk["choices"][0]["finish_reason"]
+                                == "stop",
+                            }
+                        if chat_knowledgebase or search_web or chat_mcp:
                             yield self._format_rag_response_v1_chat_completions(result)
                         else:
                             yield self._format_rag_response(result)

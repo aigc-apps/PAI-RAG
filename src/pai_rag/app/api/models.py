@@ -78,6 +78,7 @@ class ChatCompletionRequest(BaseModel):
     chat_agent: Optional[bool] = False  # 使用agent
     chat_db: Optional[bool] = False  # 查询数据库
     chat_news: Optional[bool] = False  # 使用新闻工具
+    chat_mcp: Optional[bool] = False  # 使用MCP
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
@@ -90,6 +91,7 @@ class ChatToolType(str, Enum):
     CHAT_DB = "chat_db"
     CHAT_AGENT = "chat_agent"
     CHAT_LLM = "chat_llm"
+    CHAT_MCP = "chat_mcp"
 
 
 class ChatIntentType(str, Enum):
@@ -101,6 +103,7 @@ class ChatIntentType(str, Enum):
     CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
     CHAT_AGENT = "chat_agent"  # chat agent
     CHAT_DB = "chat_db"  # chat sql
+    CHAT_MCP = "chat_mcp"  # chat mcp
 
 
 @dataclass

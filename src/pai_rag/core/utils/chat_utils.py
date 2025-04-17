@@ -25,8 +25,10 @@ from llama_index.core.schema import ImageNode
 from openai.types.chat.chat_completion import Choice
 import openai.types.chat.chat_completion_chunk as chat_completion_chunk
 import json
+from llama_index.core.agent.workflow import ToolCallResult, ToolCall, AgentStream
 
 from loguru import logger
+from pai_rag.app.api.models import PaiQueryBundle
 
 
 def chat_id_generator() -> str:
@@ -201,24 +203,101 @@ async def make_completion_chunk_response(
                 is_first_chunk = False
 
             full_content += chat_response.delta
-            chunk = ChatCompletionChunk(
-                id=chat_id,
-                created=created_ts,
-                model=model,
-                choices=[
-                    chat_completion_chunk.Choice(
-                        index=chunk_id,
-                        delta=chat_completion_chunk.ChoiceDelta(
-                            role=MessageRole.ASSISTANT.value,
-                            content=chat_response.delta,
-                        ),
-                        finish_reason=None,
-                    )
-                ],
-                usage=chunk_token_usage,
-                object="chat.completion.chunk",
-                **chat_response.additional_kwargs,
-            )
+            if (
+                chat_response.message.role == "assistant"
+                and chat_response.additional_kwargs.get("tool_id", None)
+            ):
+                chunk = ChatCompletionChunk(
+                    id=chat_id,
+                    created=created_ts,
+                    model=model,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=chunk_id,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.ASSISTANT.value,
+                                content=chat_response.delta,
+                                tool_calls=[
+                                    chat_completion_chunk.ChoiceDeltaToolCall(
+                                        index=0,
+                                        id=chat_response.additional_kwargs.get(
+                                            "tool_id"
+                                        ),
+                                        function=chat_completion_chunk.ChoiceDeltaToolCallFunction(
+                                            arguments=json.dumps(
+                                                chat_response.additional_kwargs.get(
+                                                    "tool_kwargs"
+                                                )
+                                            ),
+                                            name=chat_response.additional_kwargs.get(
+                                                "tool_name"
+                                            ),
+                                        ),
+                                        type="function",
+                                    )
+                                ],
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    usage=chunk_token_usage,
+                    object="chat.completion.chunk",
+                    **chat_response.additional_kwargs,
+                )
+            elif chat_response.message.role == "tool":
+                chunk = ChatCompletionChunk(
+                    id=chat_id,
+                    created=created_ts,
+                    model=model,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=chunk_id,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.TOOL.value,
+                                content=chat_response.delta,
+                                tool_calls=[
+                                    chat_completion_chunk.ChoiceDeltaToolCall(
+                                        index=0,
+                                        function=chat_completion_chunk.ChoiceDeltaToolCallFunction(
+                                            arguments=json.dumps(
+                                                chat_response.additional_kwargs.get(
+                                                    "tool_kwargs"
+                                                )
+                                            ),
+                                            name=chat_response.additional_kwargs.get(
+                                                "tool_name"
+                                            ),
+                                        ),
+                                        type="function",
+                                    )
+                                ],
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    usage=chunk_token_usage,
+                    object="chat.completion.chunk",
+                    **chat_response.additional_kwargs,
+                )
+            else:
+                chunk = ChatCompletionChunk(
+                    id=chat_id,
+                    created=created_ts,
+                    model=model,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=chunk_id,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.ASSISTANT.value,
+                                content=chat_response.delta,
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    usage=chunk_token_usage,
+                    object="chat.completion.chunk",
+                    **chat_response.additional_kwargs,
+                )
             chunk_id += 1
             yield _make_json_chunk(data=chunk.model_dump(mode="json"))
 
@@ -378,3 +457,115 @@ async def make_legacy_sse_chunk_async(
         last_chunk, default=lambda x: x.dict(), ensure_ascii=False
     )
     yield _event_chunk_wrapper(last_chunk_data, sse_version)
+
+
+def async_stream_response_to_chat_response(response_gen) -> ChatResponseAsyncGen:
+    """Convert a stream completion response to a stream chat response."""
+
+    async def gen() -> ChatResponseAsyncGen:
+        async for event in response_gen.stream_events():
+            if type(event) == ToolCall:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"<tool_call> Calling tool {event.tool_name} with kwargs {event.tool_kwargs} </tool_call>",
+                    ),
+                    delta="<tool_call>",
+                    raw="<tool_call>",
+                    additional_kwargs={
+                        "tool_id": event.tool_id,
+                        "tool_name": event.tool_name,
+                        "tool_kwargs": event.tool_kwargs,
+                    },
+                )
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"<tool_call> Calling tool {event.tool_name} with kwargs {event.tool_kwargs} </tool_call>",
+                    ),
+                    delta=f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}",
+                    raw=f"Calling tool {event.tool_name} with kwargs {event.tool_kwargs}",
+                    additional_kwargs={
+                        "tool_id": event.tool_id,
+                        "tool_name": event.tool_name,
+                        "tool_kwargs": event.tool_kwargs,
+                    },
+                )
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"<tool_call> Calling tool {event.tool_name} with kwargs {event.tool_kwargs} </tool_call>",
+                    ),
+                    delta="</tool_call>",
+                    raw="</tool_call>",
+                    additional_kwargs={
+                        "tool_id": event.tool_id,
+                        "tool_name": event.tool_name,
+                        "tool_kwargs": event.tool_kwargs,
+                    },
+                )
+            elif type(event) == ToolCallResult:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.TOOL,
+                        content=f"<tool_call_results> Tool {event.tool_name} returned {event.tool_output} </tool_call_results>",
+                    ),
+                    delta="<tool_call_results>",
+                    raw="<tool_call_results>",
+                    additional_kwargs={
+                        "tool_name": event.tool_name,
+                        "tool_output": event.tool_output,
+                    },
+                )
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.TOOL,
+                        content=f"<tool_call_results> Tool {event.tool_name} returned {event.tool_output} </tool_call_results>",
+                    ),
+                    delta=f"Tool {event.tool_name} returned {event.tool_output}",
+                    raw=f"Tool {event.tool_name} returned {event.tool_output}",
+                    additional_kwargs={
+                        "tool_name": event.tool_name,
+                        "tool_output": event.tool_output,
+                    },
+                )
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.TOOL,
+                        content=f"<tool_call_results> Tool {event.tool_name} returned {event.tool_output} </tool_call_results>",
+                    ),
+                    delta="</tool_call_results>",
+                    raw="</tool_call_results>",
+                    additional_kwargs={
+                        "tool_name": event.tool_name,
+                        "tool_output": event.tool_output,
+                    },
+                )
+            elif type(event) == AgentStream and event.delta:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=event.response,
+                    ),
+                    delta=event.delta,
+                    raw=event.delta,
+                )
+
+    return gen()
+
+
+async def astream_agent_chat(
+    agent, query_bundle: PaiQueryBundle
+) -> ChatResponseAsyncGen:
+    handler = agent.run(
+        user_msg=query_bundle.query_str, chat_history=query_bundle.messages
+    )
+    return async_stream_response_to_chat_response(handler)
+
+
+async def aagent_chat(agent, query_bundle: PaiQueryBundle):
+    handler = agent.run(
+        user_msg=query_bundle.query_str, chat_history=query_bundle.messages
+    )
+    response = await handler
+    return response

@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 import gradio as gr
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from loguru import logger
+import json
 
 
 def clear_history(chatbot):
@@ -52,6 +53,7 @@ async def respond(input_elements: List[Any]):
     chat_agent = True if "agent" in query_types else False
     chat_db = True if "查询数据库" in query_types else False
     chat_news = True if "新闻工具" in query_types else False
+    chat_mcp = True if "MCP" in query_types else False
 
     try:
         response_gen = rag_client.query(
@@ -68,19 +70,15 @@ async def respond(input_elements: List[Any]):
             chat_agent=chat_agent,
             chat_llm=chat_llm,
             chat_news=chat_news,
+            chat_mcp=chat_mcp,
         )
 
-        is_thinking = False
         async for resp in response_gen:
             if resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
-                chatbot[-1]["metadata"]["log"] = ""
-                is_thinking = True
-
             elif resp.delta == "</think>":
                 chatbot[-1]["metadata"]["title"] = "thought"
                 chatbot[-1]["metadata"]["status"] = "done"
-                is_thinking = False
                 chatbot.append(
                     {
                         "content": "",
@@ -88,12 +86,63 @@ async def respond(input_elements: List[Any]):
                         "metadata": {"status": "pending"},
                     }
                 )
-
+            elif resp.delta == "<tool_call>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Used tool {resp.tool_calls['function']['name']}."
+            elif resp.delta == "</tool_call>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Used tool {resp.tool_calls['function']['name']}."
+                chatbot[-1]["metadata"]["status"] = "done"
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+            elif resp.delta == "<tool_call_results>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Get results from tool {resp.tool_calls['function']['name']}."
+            elif resp.delta == "</tool_call_results>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Get results from tool {resp.tool_calls['function']['name']}."
+                chatbot[-1]["metadata"]["status"] = "done"
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+            elif resp.non_stream_tool_calls is not None:
+                for tool_call in resp.tool_calls:
+                    chatbot.append(
+                        {
+                            "content": json.dumps(tool_call.tool_kwargs),
+                            "role": "assistant",
+                            "metadata": {
+                                "title": f"🛠️ Used tool {tool_call.tool_name}.",
+                                "status": "done",
+                            },
+                        }
+                    )
+                    chatbot.append(
+                        {
+                            "content": tool_call.tool_output.content,
+                            "role": "assistant",
+                            "metadata": {
+                                "title": f"🛠️ Get results from tool {tool_call.tool_name}.",
+                                "status": "done",
+                            },
+                        }
+                    )
+                chatbot.append({"content": resp.delta, "role": "assistant"})
             else:
-                if is_thinking:
-                    chatbot[-1]["metadata"]["log"] += resp.delta
-                else:
-                    chatbot[-1]["content"] += resp.delta
+                chatbot[-1]["content"] += resp.delta
             yield chatbot
 
     except RagApiError as api_error:
@@ -319,7 +368,7 @@ def create_chat_tab() -> Dict[str, Any]:
             with gr.Row():
                 with gr.Column(variant="panel"):
                     query_types = gr.CheckboxGroup(
-                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具"],
+                        ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具", "MCP"],
                         # ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
                         elem_id="query_types",

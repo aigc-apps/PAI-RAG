@@ -24,6 +24,8 @@ from pai_rag.core.utils.chat_utils import (
     make_legacy_response,
     response_gen_from_text,
     response_from_text,
+    astream_agent_chat,
+    aagent_chat,
 )
 
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
@@ -63,6 +65,8 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
+from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
+from llama_index.core.agent.workflow import FunctionAgent
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -81,7 +85,7 @@ def remove_think_from_messages(messages: List[ChatMessage]):
     for message in messages:
         if message.content is not None:
             message.content = re.sub(
-                r"<think>.*?</think>\n*",
+                r"<think>.*?</think>\n*|<tool_call_results>.*?</tool_call_results>\n*",
                 "",
                 message.content,
                 flags=re.DOTALL,
@@ -114,6 +118,7 @@ class ChatFlow:
             ChatToolType.CHAT_DB: chat_request.chat_db,
             ChatToolType.CHAT_AGENT: chat_request.chat_agent,
             ChatToolType.CHAT_NEWS: chat_request.chat_news,
+            ChatToolType.CHAT_MCP: chat_request.chat_mcp,
         }
         enabled_tools = [k for k, v in tool_switches.items() if v]
         potential_intents.extend(enabled_tools)
@@ -323,6 +328,8 @@ class ChatFlow:
             response_wrapper = await self.achat_knowledgebase(
                 query_bundle, config=config, knowledgebase=knowledgebase
             )
+        elif query_bundle.intent == ChatIntentType.CHAT_MCP:
+            response_wrapper = await self.achat_mcp(query_bundle, config=config)
         else:
             logger.warning(f"Unknown intent: {query_bundle.intent}")
             response_wrapper = await self.achat_llm(query_bundle, config=config)
@@ -512,3 +519,39 @@ class ChatFlow:
         else:
             response = await llm.achat(messages, **query_bundle.llm_kwargs)
             return ChatResponseWrapper(response=response)
+
+    async def achat_mcp(
+        self,
+        query_bundle: PaiQueryBundle,
+        config: RagConfig,
+    ) -> ChatResponseWrapper:
+        SYSTEM_PROMPT = """\
+        You are an AI assistant for Tool Calling.
+
+        Before you help a user, you need to work with tools to interact
+        """
+        llm = resolve_chat_llm(config, model_id=query_bundle.model)
+        mcp_client = BasicMCPClient(
+            "https://mcp-server-amap-jitptfyoyw.cn-hangzhou.fcapp.run/sse"
+        )
+        mcp_tool = McpToolSpec(client=mcp_client)
+        tools = await mcp_tool.to_tool_list_async()
+
+        agent = FunctionAgent(
+            name="Agent",
+            description="An agent that can work with GaoDe map.",
+            tools=tools,
+            llm=llm,
+            system_prompt=SYSTEM_PROMPT,
+        )
+        if query_bundle.stream:
+            response = await astream_agent_chat(agent, query_bundle)
+            return ChatResponseWrapper(response=response)
+        else:
+            response = await aagent_chat(agent, query_bundle)
+            return ChatResponseWrapper(
+                response=ChatResponse(
+                    message=response.response,
+                    additional_kwargs={"tool_calls": response.tool_calls},
+                )
+            )
