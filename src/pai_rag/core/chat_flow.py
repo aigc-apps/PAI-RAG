@@ -85,7 +85,7 @@ def remove_think_from_messages(messages: List[ChatMessage]):
     for message in messages:
         if message.content is not None:
             message.content = re.sub(
-                r"<think>.*?</think>\n*",
+                r"<think>.*?</think>\n*|<tool_call_results>.*?</tool_call_results>\n*",
                 "",
                 message.content,
                 flags=re.DOTALL,
@@ -134,6 +134,7 @@ class ChatFlow:
         logger.debug(
             f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
         )
+        print("chat_request.messages", chat_request.messages)
         if query_transform is not None and len(potential_intents) > 1:
             query_bundle = await query_transform.arun(
                 chat_messages=chat_request.messages,
@@ -536,6 +537,7 @@ class ChatFlow:
         )
         mcp_tool = McpToolSpec(client=mcp_client)
         tools = await mcp_tool.to_tool_list_async()
+
         agent = FunctionAgent(
             name="Agent",
             description="An agent that can work with GaoDe map.",
@@ -544,10 +546,10 @@ class ChatFlow:
             system_prompt=SYSTEM_PROMPT,
         )
         if query_bundle.stream:
-            response = await astream_agent_chat(agent, query_bundle.query_str)
+            response = await astream_agent_chat(agent, query_bundle)
             return ChatResponseWrapper(response=response)
         else:
-            response = await aagent_chat(agent, query_bundle.query_str)
+            response = await aagent_chat(agent, query_bundle)
             return ChatResponseWrapper(
                 response=ChatResponse(
                     message=response.response,

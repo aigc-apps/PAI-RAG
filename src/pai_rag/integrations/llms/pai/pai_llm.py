@@ -289,12 +289,12 @@ class PaiLlm(OpenAILike):
                 completion_response, intent
             )
 
-        filterd_messages = [
-            message
-            for message in messages
-            if message.content or message.additional_kwargs
-        ]
+        # filterd_messages = [
+        #     message
+        #     for message in messages
+        #     if message.content or message.additional_kwargs
+        # ]
 
         return await self.async_chat_response_to_chat_response_with_think(
-            filterd_messages, **kwargs
+            messages, **kwargs
         )

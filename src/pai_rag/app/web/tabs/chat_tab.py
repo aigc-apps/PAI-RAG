@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 import gradio as gr
 from pai_rag.app.web.rag_local_client import RagApiError, rag_client
 from loguru import logger
+import json
 
 
 def clear_history(chatbot):
@@ -72,17 +73,12 @@ async def respond(input_elements: List[Any]):
             chat_mcp=chat_mcp,
         )
 
-        is_thinking = False
         async for resp in response_gen:
             if resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
-                chatbot[-1]["metadata"]["log"] = ""
-                is_thinking = True
-
             elif resp.delta == "</think>":
                 chatbot[-1]["metadata"]["title"] = "thought"
                 chatbot[-1]["metadata"]["status"] = "done"
-                is_thinking = False
                 chatbot.append(
                     {
                         "content": "",
@@ -90,12 +86,63 @@ async def respond(input_elements: List[Any]):
                         "metadata": {"status": "pending"},
                     }
                 )
-
+            elif resp.delta == "<tool_call>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Used tool {resp.tool_calls['function']['name']}."
+            elif resp.delta == "</tool_call>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Used tool {resp.tool_calls['function']['name']}."
+                chatbot[-1]["metadata"]["status"] = "done"
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+            elif resp.delta == "<tool_call_results>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Get results from tool {resp.tool_calls['function']['name']}."
+            elif resp.delta == "</tool_call_results>":
+                chatbot[-1]["metadata"][
+                    "title"
+                ] = f"🛠️ Get results from tool {resp.tool_calls['function']['name']}."
+                chatbot[-1]["metadata"]["status"] = "done"
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "pending"},
+                    }
+                )
+            elif resp.non_stream_tool_calls is not None:
+                for tool_call in resp.tool_calls:
+                    chatbot.append(
+                        {
+                            "content": json.dumps(tool_call.tool_kwargs),
+                            "role": "assistant",
+                            "metadata": {
+                                "title": f"🛠️ Used tool {tool_call.tool_name}.",
+                                "status": "done",
+                            },
+                        }
+                    )
+                    chatbot.append(
+                        {
+                            "content": tool_call.tool_output.content,
+                            "role": "assistant",
+                            "metadata": {
+                                "title": f"🛠️ Get results from tool {tool_call.tool_name}.",
+                                "status": "done",
+                            },
+                        }
+                    )
+                chatbot.append({"content": resp.delta, "role": "assistant"})
             else:
-                if is_thinking:
-                    chatbot[-1]["metadata"]["log"] += resp.delta
-                else:
-                    chatbot[-1]["content"] += resp.delta
+                chatbot[-1]["content"] += resp.delta
             yield chatbot
 
     except RagApiError as api_error:
