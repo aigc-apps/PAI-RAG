@@ -281,13 +281,13 @@ def save_new_mcp_server(
         rag_config.mcp_servers[mcp_server_index] = existing_mcp_server
 
     else:
-        new_llm_config = {
+        new_mcp_config = {
             "name": server_name,
             "url": server_url,
             "transport": server_transport,
             "activated": active_status,
         }
-        new_mcp_server = McpServerConfig(**new_llm_config)
+        new_mcp_server = McpServerConfig(**new_mcp_config)
 
         rag_config.mcp_servers.append(new_mcp_server)
 
@@ -303,6 +303,7 @@ def save_new_mcp_server(
             "MCP Server名称": mcp_server.name,
             "MCP Server URL": mcp_server.url,
             "MCP Server Transport": mcp_server.transport,
+            "MCP Server Description": mcp_server.description,
         }
         for mcp_server in rag_config.mcp_servers
     ]
@@ -336,6 +337,7 @@ def delete_mcp_server(server_name):
             "MCP Server名称": mcp_server.name,
             "MCP Server URL": mcp_server.url,
             "MCP Server Transport": mcp_server.transport,
+            "MCP Server Description": mcp_server.description,
         }
         for mcp_server in rag_config.mcp_servers
     ]
@@ -525,3 +527,19 @@ def save_query_transform_cfg(input_elements: List[Any]):
         )
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def list_mcp_servers():
+    rag_config = rag_client.get_config()
+    mcp_servers_data = [
+        {
+            "是否激活": "yes" if mcp_server.activated else "no",
+            "MCP Server名称": mcp_server.name,
+            "MCP Server URL": mcp_server.url,
+            "MCP Server Transport": mcp_server.transport,
+            "MCP Server Description": mcp_server.description,
+        }
+        for mcp_server in rag_config.mcp_servers
+    ]
+    mcp_servers_data = pd.DataFrame(mcp_servers_data)
+    return gr.update(value=mcp_servers_data)

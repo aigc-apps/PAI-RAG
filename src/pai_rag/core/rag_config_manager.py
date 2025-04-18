@@ -100,12 +100,15 @@ class RagConfigManager:
                 for llm in data["RAG"]["llms"]
                 if isinstance(llm, PaiBaseLlmConfig)
             ]
-        if data["RAG"]["mcp_servers"]:
-            data["RAG"]["mcp_servers"] = [
-                mcp_server.model_dump()
-                for mcp_server in data["RAG"]["mcp_servers"]
-                if isinstance(mcp_server, McpServerConfig)
-            ]
+        if data["RAG"]["mcp_servers"] and len(data["RAG"]["mcp_servers"]) > 0:
+            _mcp_servers = data["RAG"]["mcp_servers"].copy()
+            data["RAG"]["mcp_servers"] = []
+            for mcp_server in _mcp_servers:
+                if isinstance(mcp_server, McpServerConfig):
+                    data["RAG"]["mcp_servers"].append(mcp_server.model_dump())
+                else:
+                    data["RAG"]["mcp_servers"].append(mcp_server)
+
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())
         return self.get_config_mtime()

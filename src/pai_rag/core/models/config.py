@@ -98,3 +98,5 @@ class McpServerConfig(BaseModel):
     url: str | None = None
     transport: str | None = "sse"
     activated: bool = False
+    description: str | None = None
+    model_config = ConfigDict(coerce_numbers_to_str=True)
