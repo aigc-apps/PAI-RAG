@@ -229,6 +229,7 @@ class ViewModel(BaseModel):
 
     # mcp_servers
     mcp_servers: List[McpServerConfig] = None
+    mcp_servers_display: List[Dict[str, Any]] = []
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -243,6 +244,19 @@ class ViewModel(BaseModel):
         view_model.llms = config.llms
 
         view_model.mcp_servers = config.mcp_servers
+        mcp_servers_data = [
+            {
+                "是否激活": "yes" if mcp_server.activated else "no",
+                "MCP Server名称": mcp_server.name,
+                "MCP Server URL": mcp_server.url,
+                "MCP Server Transport": mcp_server.transport,
+                "MCP Server Description": mcp_server.description,
+            }
+            for mcp_server in config.mcp_servers
+        ]
+        mcp_servers_data = pd.DataFrame(mcp_servers_data)
+
+        view_model.mcp_servers_display = mcp_servers_data
 
         view_model.chat_model_id = config.chat.model_id or "default"
 
@@ -888,6 +902,7 @@ class ViewModel(BaseModel):
             "choices": ["NEW"] + mcp_server_choices,
             "value": "NEW",
         }
+        settings["mcp_servers_display"] = {"value": self.mcp_servers_display}
 
         # news_extension
         settings["news_extension_model_id"] = {

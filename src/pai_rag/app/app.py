@@ -9,6 +9,7 @@ from pai_rag.app.api.service import configure_app
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.knowledgebase.rag_job_manager import job_manager
+from pai_rag.extensions.mcp.mcp_daemon import mcp_damon
 from pai_rag.core.service_daemon import startup_event
 from loguru import logger
 
@@ -20,6 +21,8 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
+    mcp_daemon_thread = threading.Thread(target=mcp_damon.generate_mcp_desc, daemon=True)
+    mcp_daemon_thread.start()
 
     asyncio.create_task(startup_event())
     yield

@@ -88,12 +88,19 @@ def create_mcp_servers_tab():
         with gr.Column(scale=4):
             _ = gr.Markdown(value="## \N{WHITE MEDIUM STAR} **MCP Server**")
             with gr.Row():
+                update_mcp_info = gr.Button(
+                    value="刷新MCP服务状态",
+                    elem_id="update_mcp_info",
+                    variant="primary",
+                )
+            with gr.Row():
                 mcp_servers_data = [
                     {
                         "是否激活": "yes" if mcp_server.activated else "no",
                         "MCP Server名称": mcp_server.name,
                         "MCP Server URL": mcp_server.url,
                         "MCP Server Transport": mcp_server.transport,
+                        "MCP Server Description": mcp_server.description,
                     }
                     for mcp_server in rag_config.mcp_servers
                 ]
@@ -108,6 +115,7 @@ def create_mcp_servers_tab():
                         "MCP Server名称",
                         "MCP Server URL",
                         "MCP Server Transport",
+                        "MCP Server Description",
                     ],
                     value=mcp_servers_data,
                 )
@@ -134,25 +142,11 @@ def create_mcp_servers_tab():
                     delete_btn,
                 ],
             )
+            update_mcp_info.click(
+                fn=ev_listeners.list_mcp_servers,
+                outputs=mcp_servers_display,
+            )
 
-    components = [mcp_servers]
+    components = [mcp_servers, mcp_servers_display]
     elems = components_to_dict(components)
     return elems
-
-
-def list_mcp_servers(mcp_servers):
-    # mcp_servers_title = pd.DataFrame(columns=["是否激活", "MCP Server名称", "MCP Server URL", "MCP Server Transport"])
-    rag_config = rag_client.get_config()
-    mcp_servers_data = [
-        {
-            "是否激活": "yes" if mcp_server.activated else "no",
-            "MCP Server名称": mcp_server.name,
-            "MCP Server URL": mcp_server.url,
-            "MCP Server Transport": mcp_server.transport,
-        }
-        for mcp_server in rag_config.mcp_servers
-    ]
-    mcp_servers_data = pd.DataFrame(mcp_servers_data)
-    return [
-        gr.update(value=mcp_servers_data),
-    ]
