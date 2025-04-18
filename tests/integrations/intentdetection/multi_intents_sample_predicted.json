@@ -1,0 +1,243 @@
+{
+  "request_settings": {
+    "model": "default",
+    "stream": false,
+    "chat_knowledgebase": true,
+    "search_web": true,
+    "chat_db": true,
+    "temperature": 0.1
+  },
+  "samples": [
+    {
+      "query": "昨天黄金的价格",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "明天的天气如何",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "美国总统是谁",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "现在的美国总统是谁",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "阿里巴巴昨天的美股股价",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "俄乌战争的最新动态",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "今天有哪些新闻热点",
+      "intent": {
+        "intent_name": "search_web"
+      },
+      "intent_output": {
+        "intent_name": "search_web"
+      },
+      "score": 1
+    },
+    {
+      "query": "数据库中有多少只猫",
+      "intent": {
+        "intent_name": "chat_db"
+      },
+      "intent_output": {
+        "intent_name": "chat_db"
+      },
+      "score": 1
+    },
+    {
+      "query": "数据库中养猫的学生有多少",
+      "intent": {
+        "intent_name": "chat_db"
+      },
+      "intent_output": {
+        "intent_name": "chat_db"
+      },
+      "score": 1
+    },
+    {
+      "query": "数据库中猫和狗相差多少",
+      "intent": {
+        "intent_name": "chat_db"
+      },
+      "intent_output": {
+        "intent_name": "chat_db"
+      },
+      "score": 1
+    },
+    {
+      "query": "数据库中有多少导师",
+      "intent": {
+        "intent_name": "chat_db"
+      },
+      "intent_output": {
+        "intent_name": "chat_db"
+      },
+      "score": 1
+    },
+    {
+      "query": "What can I do when the format conversion component reports an error?",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "格式转换组件报错时应该如何处理",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "当数据展示页面显示blob时，可能的原因是什么",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "x13-auto-arima 组件报错时有哪些注意事项",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "为什么实验会生成空模型？如何解决这个问题",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "如何在 Machine Learning Studio 平台上预览存储在 OSS 中的 CSV 和 JSON 文件",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "What was the author's first experience with programming, and how did it influence his later work",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "Why did the author decide to switch from AI research to Lisp programming, and what challenges did he face during this transition",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "在创建Viaweb之后，作者为何决定涉足艺术领域，并最终又如何回归到技术与创业之中",
+      "intent": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "intent_output": {
+        "intent_name": "chat_knowledgebase"
+      },
+      "score": 1
+    },
+    {
+      "query": "你好",
+      "intent": {
+        "intent_name": "chat_llm"
+      },
+      "intent_output": {
+        "intent_name": "chat_llm"
+      },
+      "score": 1
+    },
+    {
+      "query": "你有什么功能",
+      "intent": {
+        "intent_name": "chat_llm"
+      },
+      "intent_output": {
+        "intent_name": "chat_llm"
+      },
+      "score": 1
+    },
+    {
+      "query": "你是谁",
+      "intent": {
+        "intent_name": "chat_llm"
+      },
+      "intent_output": {
+        "intent_name": "chat_llm"
+      },
+      "score": 1
+    }
+  ],
+  "average_score": 1.0
+}

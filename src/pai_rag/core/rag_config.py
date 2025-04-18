@@ -71,8 +71,8 @@ def validate_case_insensitive(value: Dict) -> Dict:
 
 
 class SystemConfig(BaseModel):
-    default_web_search: bool = False
     query_type: str | None = "rag"
+    query_types: List | None = ["chat_llm"]
 
 
 class RagConfig(BaseModel):
@@ -106,7 +106,7 @@ class RagConfig(BaseModel):
         BeforeValidator(lambda x: [validate_case_insensitive(item) for item in x]),
     ]
 
-    chat: ChatConfig()
+    chat: ChatConfig = ChatConfig()
 
     # llm
     llm: Annotated[

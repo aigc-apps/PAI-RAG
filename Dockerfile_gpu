@@ -15,7 +15,6 @@ RUN mv pyproject_gpu.toml pyproject.toml \
     && mv magic-pdf.gpu.template.json magic-pdf.template.json
 
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
-RUN poetry run aliyun-bootstrap -a install
 
 FROM python:3.11-slim AS prod
 

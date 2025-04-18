@@ -7,7 +7,10 @@ from pai_rag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReade
 import time
 from loguru import logger
 
-from pai_rag.integrations.search.search_config import DEFAULT_SEARCH_COUNT
+from pai_rag.integrations.search.search_config import (
+    DEFAULT_SEARCH_COUNT,
+    DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
+)
 import serpapi
 
 DEFAULT_LANG = "zh-CN"
@@ -20,6 +23,7 @@ class GoogleSearchTool(BaseQueryEngine):
         synthesizer: BaseSynthesizer = None,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
+        search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
     ):
         self.api_key = api_key
         self.synthesizer = synthesizer
@@ -28,6 +32,7 @@ class GoogleSearchTool(BaseQueryEngine):
         self.search_lang = search_lang
 
         self.html_reader = ParallelBeautifulSoupWebReader()
+        self.search_qa_prompt_template = search_qa_prompt_template
 
     async def _asearch(
         self,
@@ -113,8 +118,8 @@ class GoogleSearchTool(BaseQueryEngine):
         return await self.synthesizer.asynthesize(
             query=query,
             nodes=nodes,
-            system_role_str=query.system_role,
-            prompt_template_str=" " if query.system_role else None,
+            system_role_str=" ",
+            prompt_template_str=self.search_qa_prompt_template,
             **query.llm_kwargs,
         )
 

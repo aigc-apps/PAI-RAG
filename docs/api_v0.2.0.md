@@ -727,7 +727,6 @@ chat()
   ```json
   {
     "system": {
-      "default_web_search": false,
       "query_type": "websearch"
     },
     "data_reader": {
@@ -904,7 +903,6 @@ chat()
     -H 'Content-Type: application/json' \
     -d '{
         "system": {
-          "default_web_search": false,
           "query_type": "websearch"
         },
         "data_reader": {
@@ -1042,7 +1040,7 @@ chat()
 - curl 请求示例：
 
   ```bash
-  curl -X 'POST' '{EAS_SERVICE_URL}/api/v1/query/llm' -H 'Authorization: EAS_TOKEN' -d '{ "messages": [
+  curl -X 'POST' '{EAS_SERVICE_URL}/api/v1/query/search' -H 'Authorization: EAS_TOKEN' -d '{ "messages": [
         {"role": "user","content": "你好"},
         {"role": "assistant","content": "你好，有什么能帮到您？"},
         {"role": "user", "content": "浙江省会是哪里"}

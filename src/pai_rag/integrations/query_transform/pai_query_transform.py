@@ -1,6 +1,10 @@
 from typing import List, Optional, Sequence
 from llama_index.core.llms.utils import LLMType
 from llama_index.core.base.llms.types import ChatMessage
+from pai_rag.extensions.news.news_config import (
+    DEFAULT_NEWS_DOMAIN_LIST,
+    DEFAULT_NEWS_DOMAIN_MAP,
+)
 from pai_rag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
@@ -42,6 +46,11 @@ def messages_to_history_str(
     return "\n".join(string_messages)
 
 
+def check_keywords_in_string(string, keywords):
+    # 使用 any() 函数检查是否有任何一个关键字出现在字符串中
+    return any(keyword in string for keyword in keywords)
+
+
 class OpenAICompatibleQueryTransform:
     def __init__(
         self,
@@ -53,11 +62,13 @@ class OpenAICompatibleQueryTransform:
         agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH,
         db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH,
         news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH,
+        news_valid_domain_list: List[str] = DEFAULT_NEWS_DOMAIN_LIST,
     ):
         super().__init__()
 
         self._llm = llm
         self._base_transform_prompt = PromptTemplate(template=base_transform_prompt)
+        self._news_valid_domain_list = news_valid_domain_list
 
         self._tool_prompts = {
             ChatToolType.CHAT_LLM: llm_tool_prompt_str,
@@ -120,11 +131,35 @@ class OpenAICompatibleQueryTransform:
         query_json = parse_json_from_code_block_str(transformed_query_str)
         intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
         query = query_json.get("query", query_str)
+        news_topics = query_json.get("news_topics", [])
+
+        # 过滤掉无关话题 并且 进行严格的落域字符串匹配
+        # filtered_news_topics = [
+        #     topic for topic in news_topics if topic in set(self._news_valid_domain_list)
+        # ]
+        filtered_news_topics = []
+        for topic in news_topics:
+            if topic in set(self._news_valid_domain_list) and check_keywords_in_string(
+                query_str, DEFAULT_NEWS_DOMAIN_MAP[topic]
+            ):
+                logger.debug(f"Valid news topic [{topic}]")
+                filtered_news_topics.append(topic)
+            else:
+                logger.debug(f"Invalid news topic [{topic}]")
+        logger.debug(f"Filtered news topics [{filtered_news_topics}]")
+        if (
+            len(news_topics) > 0
+            and len(filtered_news_topics) == 0
+            and intent == ChatIntentType.LIST_NEWS
+        ):
+            intent = ChatIntentType.CHAT_NEWS
 
         return PaiQueryBundle(
             intent=intent,
             messages=chat_messages,
             query_str=query,
+            original_query_str=query_str,
+            news_topics=filtered_news_topics,
             custom_embedding_strs=[transformed_query_str],
             chat_messages_str=chat_history_str,
             completion_tokens=chat_response.additional_kwargs.get(
