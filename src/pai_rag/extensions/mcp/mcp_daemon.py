@@ -83,4 +83,4 @@ class MCPDaemon:
                             continue
 
 
-mcp_damon = MCPDaemon()
+mcp_daemon = MCPDaemon()
