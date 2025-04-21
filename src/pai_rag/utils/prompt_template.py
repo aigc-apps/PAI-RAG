@@ -180,9 +180,10 @@ AGENT_REWRITE_PROMPT_ZH = """
 
 MCP_REWRITE_PROMPT_ZH = """
 ## MCP工具调用
-- 根据对话内容，判断是否需要调用MCP工具来完成对话内容，如果需要调用MCP工具，结合上下文信息对用户查询进行改写生成新查询和生成意图chat_mcp，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_mcp", "query": "new query"}}
-- MCP工具的主要功能包含：
-{multi_mcp_descriptions}
+- 根据对话内容，判断是否需要调用给定的MCP工具来完成对话内容，如果需要调用MCP工具，结合上下文信息对用户查询进行改写生成新查询和生成意图chat_mcp，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_mcp", "query": "new query"}}
+- 你可以使用的MCP工具功能列表如下：
+  {multi_mcp_descriptions}
+- 如果所需要的工具功能不在列表中，不需要生成意图chat_mcp。
 """
 
 CHAT_LLM_REWRITE_PROMPT_ZH = """

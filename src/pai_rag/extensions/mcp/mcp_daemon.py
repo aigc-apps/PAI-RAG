@@ -10,6 +10,8 @@ from pai_rag.core.rag_service import rag_service
 from loguru import logger
 import threading
 import traceback
+from llama_index.tools.mcp import BasicMCPClient
+from pai_rag.extensions.mcp.mcp_base import McpToolSpec
 
 
 class MCPDaemon:
@@ -57,10 +59,24 @@ class MCPDaemon:
                                 logger.debug(
                                     f"MCP Server: {mcp_server.name} 没有描述信息, 将自动生成..."
                                 )
+                                mcp_client = BasicMCPClient(mcp_server.url)
+                                mcp_tool = McpToolSpec(
+                                    mcp_server_name=mcp_server.name, client=mcp_client
+                                )
+                                tools = mcp_tool.to_tool_list()
+                                tools_descriptions = [
+                                    tool.metadata.description for tool in tools
+                                ]
+                                tools_description_all = ""
+                                for i, description in enumerate(
+                                    tools_descriptions, start=1
+                                ):
+                                    tools_description_all += f"工具{i}. {description}\n"
+
                                 messages = [
                                     ChatMessage(
                                         role=MessageRole.USER,
-                                        content=f"您是一位帮助生成MCP服务器描述的助手。MCP服务器的名称为：{mcp_server.name}。请为该MCP服务器生成一个描述。描述的字数应少于100字。描述应该用中文书写。描述应该使用Markdown格式。描述的格式应如下所示：# MCP服务器描述\n\n## MCP服务器名称：{mcp_server.name} ##描述：",
+                                        content=f"你是一位帮助生成工具描述的助手。已知有以下功能的工具: \n {tools_description_all}。 \n 请用简洁清楚的语言来重新组织，用1-2句话来生成这些工具的概括性功能描述。 #描述：",
                                     )
                                 ]
                                 try:

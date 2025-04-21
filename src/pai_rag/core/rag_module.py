@@ -298,6 +298,12 @@ def resolve_openai_query_transform(
         return None
     llm = resolve_query_rewrite_llm(config, model_id)
 
+    multi_mcp_descriptions = ""
+    index = 1
+    for mcp in config.mcp_servers:
+        if mcp.activated:
+            multi_mcp_descriptions += f"工具{index}: {mcp.description}\n"
+            index += 1
     openai_query_transform = resolve(
         OpenAICompatibleQueryTransform,
         llm=llm,
@@ -313,9 +319,7 @@ def resolve_openai_query_transform(
         ),
         news_valid_domain_list=config.news_extension.domain_list,
         mcp_tool_prompt_str=config.query_rewrite.mcp_tool_prompt_str.format(
-            multi_mcp_descriptions="\n".join(
-                mcp.description for mcp in config.mcp_servers
-            )
+            multi_mcp_descriptions=multi_mcp_descriptions
         ),
     )
     return openai_query_transform

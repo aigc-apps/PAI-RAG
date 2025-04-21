@@ -189,6 +189,7 @@ class ViewModel(BaseModel):
     rewrite_agent_prompt: str = None
     rewrite_search_prompt: str = None
     rewrite_db_prompt: str = None
+    rewrite_mcp_prompt: str = None
 
     synthesizer_type: str = None
     system_role_template: str = None
@@ -313,6 +314,7 @@ class ViewModel(BaseModel):
             config.query_rewrite.websearch_tool_prompt_str
         )
         view_model.rewrite_db_prompt = config.query_rewrite.db_tool_prompt_str
+        view_model.rewrite_mcp_prompt = config.query_rewrite.mcp_tool_prompt_str
 
         view_model.query_rewrite_model_id = config.query_rewrite.model_id or "default"
 
@@ -548,6 +550,7 @@ class ViewModel(BaseModel):
             "websearch_tool_prompt_str"
         ] = self.rewrite_search_prompt
         config["query_rewrite"]["db_tool_prompt_str"] = self.rewrite_db_prompt
+        config["query_rewrite"]["mcp_tool_prompt_str"] = self.rewrite_mcp_prompt
 
         config["query_rewrite"]["enabled"] = self.enable_query_transform
         # config["synthesizer"]["multimodal_qa_template"] = self.multimodal_qa_template
@@ -698,6 +701,7 @@ class ViewModel(BaseModel):
         settings["rewrite_base_prompt"] = {"value": self.rewrite_base_prompt}
         settings["rewrite_agent_prompt"] = {"value": self.rewrite_agent_prompt}
         settings["rewrite_db_prompt"] = {"value": self.rewrite_db_prompt}
+        settings["rewrite_mcp_prompt"] = {"value": self.rewrite_mcp_prompt}
         settings["rewrite_knowledgebase_prompt"] = {
             "value": self.rewrite_knowledgebase_prompt
         }

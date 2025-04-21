@@ -344,6 +344,14 @@ def create_setting_tab() -> Dict[str, Any]:
                                 lines=10,
                                 interactive=True,
                             )
+                        with gr.Tab(label="MCP工具调用"):
+                            rewrite_mcp_prompt = gr.Textbox(
+                                label="MCP工具调用",
+                                value="",
+                                elem_id="rewrite_mcp_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
                 with gr.Row():
                     with gr.Column():
                         save_query_transform_btn = gr.Button(
@@ -364,6 +372,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         rewrite_agent_prompt,
                         rewrite_search_prompt,
                         rewrite_db_prompt,
+                        rewrite_mcp_prompt,
                         save_query_transform_btn,
                     ]
                     save_query_transform_btn.click(
@@ -394,6 +403,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     rewrite_agent_prompt,
                     rewrite_search_prompt,
                     rewrite_db_prompt,
+                    rewrite_mcp_prompt,
                     save_query_transform_btn,
                 ]
             )
