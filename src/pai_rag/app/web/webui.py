@@ -2,16 +2,19 @@ from fastapi import FastAPI
 import gradio as gr
 from pai_rag.app.web import event_listeners
 from pai_rag.app.web.index_utils import index_to_components_settings
-from pai_rag.app.web.tabs.agent_tab import create_agent_tab
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.rag_local_client import rag_client
-from pai_rag.app.web.tabs.settings_tab import create_setting_tab
+from pai_rag.app.web.tabs.settings_tab import (
+    create_setting_tab,
+)
 from pai_rag.app.web.tabs.chat_tab import create_chat_tab
 from pai_rag.app.web.tabs.data_analysis_tab import create_data_analysis_tab
 from pai_rag.app.web.tabs.history_tab import (
-    create_upload_history,
     refresh_upload_history,
 )
+from pai_rag.app.web.tabs.news_extension import create_news_extension_tab
+from pai_rag.app.web.tabs.knowledgebase_tab import create_knowledgebase_tab
+from pai_rag.app.web.tabs.search_web_tab import create_search_web_tab
 from pai_rag.app.web.index_utils import index_related_component_keys
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
@@ -36,6 +39,7 @@ def resume_ui():
         name=DEFAULT_KNOWLEDGEBASE_NAME,
         vector_store_config=rag_config.index.vector_store,
         embedding_config=rag_config.embedding,
+        node_parser_config=rag_config.node_parser,
     )
     component_settings.update(
         index_to_components_settings(
@@ -91,6 +95,8 @@ def change_vector_index_button(index_name):
             gr.update(),
             gr.update(),
             gr.update(),
+            gr.update(),
+            gr.update(),
         ]
     index_map = get_index_map()
     index_list = list(index_map.knowledgebases.keys())
@@ -98,6 +104,8 @@ def change_vector_index_button(index_name):
         gr.update(choices=index_list + ["NEW"], value=index_name),
         gr.update(choices=index_list, value=index_name),
         gr.update(choices=index_list, value=index_name),
+        gr.update(choices=index_list),
+        gr.update(choices=index_list, value=index_list[0]),
     ]
 
 
@@ -105,51 +113,60 @@ def make_homepage():
     with gr.Blocks(css=DEFAULT_CSS_STYPE) as homepage:
         # generate components
         gr.Markdown(value=WELCOME_MESSAGE)
-        with gr.Tab("\N{rocket} 系统设置"):
-            setting_elements = create_setting_tab()
-            elem_manager.add_elems(setting_elements)
-        # with gr.Tab("\N{whale} Upload"):
-        #     upload_elements = create_upload_tab()
-        #     elem_manager.add_elems(upload_elements)
         with gr.Tab("\N{fire} 对话"):
             chat_elements = create_chat_tab()
             elem_manager.add_elems(chat_elements)
-        with gr.Tab("\N{rocket} 智能体"):
-            agent_elements = create_agent_tab()
-            elem_manager.add_elems(agent_elements)
-        with gr.Tab("\N{bar chart} 数据分析"):
-            analysis_elements = create_data_analysis_tab()
-            elem_manager.add_elems(analysis_elements)
-        with gr.Tab("\N{rocket} 知识库"):
-            with gr.Tab("文件管理"):
+        with gr.Tab("\N{bookmark} 知识库"):
+            knowledgebase_elements = create_knowledgebase_tab()
+            elem_manager.add_elems(knowledgebase_elements)
+        with gr.Tab("\N{rocket} 系统设置"):
+            setting_elements = create_setting_tab()
+            elem_manager.add_elems(setting_elements)
+        with gr.Tab("\N{WHITE MEDIUM STAR} 应用"):
+            with gr.Tab("联网搜索"):
+                search_web_elements = create_search_web_tab()
+                elem_manager.add_elems(search_web_elements)
+            with gr.Tab("数据分析"):
+                analysis_elements = create_data_analysis_tab()
+                elem_manager.add_elems(analysis_elements)
+            # with gr.Tab("工具调用"):
+            #     tools_elements = create_agent_tab()
+            #     elem_manager.add_elems(tools_elements)
+            with gr.Tab("新闻智能体"):
                 with gr.Blocks():
-                    html = '<iframe src="./filebrowser" width="100%" height="1000" title="FileBrowser"></iframe>'
-                    gr.HTML(html)
-            with gr.Tab("上传历史"):
-                history_elements = create_upload_history()
-                elem_manager.add_elems(history_elements)
+                    news_elements = create_news_extension_tab()
+                    elem_manager.add_elems(news_elements)
 
         index_selector_elements = [
-            setting_elements["vector_index"],
+            knowledgebase_elements["vector_index"],
             # upload_elements["upload_index"],
             chat_elements["chat_index"],
-            history_elements["history_index"],
+            knowledgebase_elements["history_index"],
+            knowledgebase_elements["retrieval_test_chat_index"],
+            knowledgebase_elements["knowledgebase_qa_prompt_index"],
         ]
         index_related_components = [
-            setting_elements[key] for key in index_related_component_keys
+            knowledgebase_elements[key] for key in index_related_component_keys
         ]
 
-        setting_elements["vector_index"].change(
+        knowledgebase_elements["vector_index"].change(
             event_listeners.change_vector_index,
-            inputs=setting_elements["vector_index"],
+            inputs=knowledgebase_elements["vector_index"],
             outputs=index_related_components
-            + [chat_elements["chat_index"], history_elements["history_index"]],
+            + [
+                chat_elements["chat_index"],
+                knowledgebase_elements["history_index"],
+                knowledgebase_elements["retrieval_test_chat_index"],
+                knowledgebase_elements["knowledgebase_qa_prompt_index"],
+                knowledgebase_elements["delete_index_button"],
+            ],
         )
-        history_elements["history_index"].input(
+        knowledgebase_elements["history_index"].input(
             change_vector_index_button,
-            inputs=history_elements["history_index"],
+            inputs=knowledgebase_elements["history_index"],
             outputs=index_selector_elements,
         )
+
         chat_elements["chat_index"].input(
             change_vector_index_button,
             inputs=chat_elements["chat_index"],
@@ -161,7 +178,7 @@ def make_homepage():
             inputs=setting_elements["llm_model"],
             outputs=[
                 chat_elements["chat_model_id"],
-                chat_elements["query_rewrite_model_id"],
+                setting_elements["query_rewrite_model_id"],
                 analysis_elements["data_analysis_model_id"],
             ],
         )

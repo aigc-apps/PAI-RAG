@@ -10,7 +10,7 @@ from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pai_rag.core.rag_service import rag_service
 from pai_rag.core.rag_module import resolve
-from pai_rag.app.api.models import RagQuery
+from pai_rag.app.api.models import RagQuery, RetrievalRequest
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
@@ -331,6 +331,12 @@ async def delete_file_from_knowledgebase(name: str, file_name: str):
         return {"message": f"File '{file_name}' have been successfully removed."}
     except Exception as e:
         raise ServiceError(f"Error deleting file '{file_name}': {str(e)}")
+
+
+@router_v1.post("/retrieval")
+async def aknowledgebase_retrieval(retrieval_request: RetrievalRequest):
+    response = await rag_service.aknowledgebase_retrieval(retrieval_request)
+    return response
 
 
 @router_v1.post("/upload_datasheet")
