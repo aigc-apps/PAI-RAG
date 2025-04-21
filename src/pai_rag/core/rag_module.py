@@ -49,7 +49,7 @@ from pai_rag.integrations.search.search_config import (
     GoogleSearchConfig,
 )
 
-from llama_index.tools.mcp import BasicMCPClient
+from pai_rag.extensions.mcp.mcp_client import PaiBasicMCPClient
 
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
@@ -144,12 +144,18 @@ def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     return None
 
 
-async def resolve_mcp_clients(config: RagConfig) -> List[BasicMCPClient]:
+async def resolve_mcp_clients(config: RagConfig) -> List[PaiBasicMCPClient]:
     mcp_clients = []
     mcp_server_configs = config.mcp_servers
     for mcp_server_config in mcp_server_configs:
         if mcp_server_config.activated:
-            mcp_client = BasicMCPClient(mcp_server_config.url)
+            if mcp_server_config.auth_token:
+                mcp_client = PaiBasicMCPClient(
+                    command_or_url=mcp_server_config.url,
+                    headers={"Authorization": "Bearer " + mcp_server_config.auth_token},
+                )
+            else:
+                mcp_client = PaiBasicMCPClient(command_or_url=mcp_server_config.url)
             mcp_clients.append((mcp_server_config.name, mcp_client))
     return mcp_clients
 

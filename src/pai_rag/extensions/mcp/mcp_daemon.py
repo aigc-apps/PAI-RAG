@@ -10,7 +10,7 @@ from pai_rag.core.rag_service import rag_service
 from loguru import logger
 import threading
 import traceback
-from llama_index.tools.mcp import BasicMCPClient
+from pai_rag.extensions.mcp.mcp_client import PaiBasicMCPClient
 from pai_rag.extensions.mcp.mcp_base import McpToolSpec
 
 
@@ -59,7 +59,18 @@ class MCPDaemon:
                                 logger.debug(
                                     f"MCP Server: {mcp_server.name} 没有描述信息, 将自动生成..."
                                 )
-                                mcp_client = BasicMCPClient(mcp_server.url)
+                                if mcp_server.auth_token:
+                                    mcp_client = PaiBasicMCPClient(
+                                        command_or_url=mcp_server.url,
+                                        headers={
+                                            "Authorization": "Bearer "
+                                            + mcp_server.auth_token
+                                        },
+                                    )
+                                else:
+                                    mcp_client = PaiBasicMCPClient(
+                                        command_or_url=mcp_server.url
+                                    )
                                 mcp_tool = McpToolSpec(
                                     mcp_server_name=mcp_server.name, client=mcp_client
                                 )
