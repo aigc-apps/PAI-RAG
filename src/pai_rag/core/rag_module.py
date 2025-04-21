@@ -317,6 +317,11 @@ def resolve_openai_query_transform(
             news_role=config.news_extension.news_role,
         ),
         news_valid_domain_list=config.news_extension.domain_list,
+        mcp_tool_prompt_str=config.query_rewrite.mcp_tool_prompt_str.format(
+            multi_mcp_descriptions="\n".join(
+                mcp.description for mcp in config.mcp_servers
+            )
+        ),
     )
     return openai_query_transform
 

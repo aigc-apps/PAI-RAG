@@ -525,11 +525,11 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
     ) -> ChatResponseWrapper:
-        SYSTEM_PROMPT = """\
-        You are an AI assistant for Tool Calling.
+        multi_mcp_descriptions = "\n".join(
+            [f"{mcp.name}: {mcp.description}" for mcp in config.mcp_servers]
+        )
+        SYSTEM_PROMPT = f"你是一个支持工具调用(Tool Calling)的AI助手，通过调用工具帮助用户解决问题。\n支持的工具的主要功能包含：\n {multi_mcp_descriptions}"
 
-        Before you help a user, you need to work with tools to interact
-        """
         llm = resolve_chat_llm(config, model_id=query_bundle.model)
         mcp_client = BasicMCPClient(
             "https://mcp-server-amap-jitptfyoyw.cn-hangzhou.fcapp.run/sse"
