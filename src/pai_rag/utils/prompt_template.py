@@ -99,6 +99,12 @@ WEBSEARCH_REWRITE_PROMPT_ZH = """
   - 极少更新信息但会随着时间变化信息（如政治信息、时效性事实信息、知识查询等）：请使用最新数据，如现在或者最新一天，并提供相关的时间信息。如今天为2025年1月1日,搜索`阿里巴巴总部在哪`改写为`现在阿里巴巴总部在哪`。
 - 不随时间变化的查询，避免随意添加时间信息，确保回答专注于查询的主要内容。
 - 生成的意图和查询格式为 JSON 对象：{ "intent": "search_web", "query": "new query" }
+
+### 示例：
+    - 输入：“有哪些好看的电影”
+      输出：{ "intent": "search_web", "query": "推荐好看的电影" }
+    - 输入：“阿里巴巴股价”
+      输出：{ "intent": "search_web", "query": "最新的阿里巴巴股价" }
 """
 
 
@@ -108,7 +114,7 @@ NEWS_REWRITE_PROMPT_ZH = """
 1. 意图：list_news
    适用场景：
     - 用户查询全局热门新闻，如“新闻热点”“有什么新闻”。
-    - 用户查询特定领域的新闻，且该领域在指定领域列表 {domain_list} 中。（“时事”和“政治”属于“时政”领域）
+    - 用户想要了解某话题领域的新闻，且该领域在指定领域列表 {domain_list} 中。（“时事”和“政治”属于“时政”领域）
     - 用户提及“{news_role}”但未涉及具体查询（如“打开{news_role}”“切换到{news_role}”）。
    示例：
     - 输入：“今天有什么新闻？”
@@ -117,10 +123,12 @@ NEWS_REWRITE_PROMPT_ZH = """
       输出：{{ "intent": "list_news", "news_topics": ["科技"] }}
     - 输入：“打开{news_role}”
       输出：{{ "intent": "list_news" }}
-    - 输入：“{news_role}，有什么国际新闻”
+    - 输入：“经济的新闻”
+      输出：{{ "intent": "list_news", "news_topics": ["财经"] }}
+    - 输入：“{news_role}，有哪些国际新闻”
       输出：{{ "intent": "list_news", "news_topics": ["国际"] }}
       理由：“国际”在指定领域列表 {domain_list} 中。
-    - 输入：“汽车圈有哪些新闻”
+    - 输入：“汽车圈有什么新闻”
       输出：{{ "intent": "list_news", "news_topics": ["汽车"] }}
       理由：“汽车”在指定领域列表 {domain_list} 中。
     - 输入：“娱乐圈热点事件”
@@ -130,18 +138,16 @@ NEWS_REWRITE_PROMPT_ZH = """
 2. 意图：chat_news
    适用场景：
     - 用户查询具体某个人的新闻（如“陈奕迅的新闻”）。
-    - 用户查询具体某个事件的新闻，且必须指明是新闻查询（如“最新关税的新闻”）。
-    - 用户查询特定地区/国家的新闻（如“地区A的新闻”）。
+    - 用户查询具体的新闻，且必须指明是新闻查询（如“最新关税的新闻”）。
     - 用户查询不在指定列表 {domain_list} 中的领域新闻。
-    - 用户提及“{news_role}”并涉及具体查询（如“{news_role}，有什么好看的电影”）。
     - 根据用户查询改写为更精确的查询语句。
    示例：
     - 输入：“陈奕迅的新闻”
       输出：{{ "intent": "chat_news", "query": "陈奕迅的新闻" }}
     - 输入：“美国最近的新闻”
       输出：{{ "intent": "chat_news", "query": "美国最近的新闻" }}
-    - 输入：“{news_role}，有什么好看的电影”
-      输出：{{ "intent": "chat_news", "query": "好看的电影" }}
+    - 输入：“深蓝汽车有什么新闻”
+      输出：{{ "intent": "chat_news", "query": "深蓝汽车的新闻" }}
     - 输入：“医疗新闻”
       输出：{{ "intent": "chat_news", "query": "医疗新闻" }}
       理由： “医疗”不在指定列表 {domain_list} 中。
@@ -180,10 +186,9 @@ AGENT_REWRITE_PROMPT_ZH = """
 
 MCP_REWRITE_PROMPT_ZH = """
 ## MCP工具调用
-- 根据对话内容，判断是否需要调用给定的MCP工具来完成对话内容，如果需要调用MCP工具，结合上下文信息对用户查询进行改写生成新查询和生成意图chat_mcp，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_mcp", "query": "new query"}}
-- 你可以使用的MCP工具功能列表如下：
-  {multi_mcp_descriptions}
-- 如果所需要的工具功能不在列表中，不需要生成意图chat_mcp。
+- 已知工具功能列表如下：
+{multi_mcp_descriptions}
+- 如果用户查询与上述工具提供的功能相关，请结合上下文信息对用户查询进行改写生成新查询和生成意图chat_mcp，改写之后的意图和查询格式为 JSON 对象：{{ "intent": "chat_mcp", "query": "new query"}}。
 """
 
 CHAT_LLM_REWRITE_PROMPT_ZH = """

@@ -5,8 +5,8 @@ from pai_rag.integrations.llms.pai.llm_config import (
 
 DEFAULT_NEWS_ENDPOINT = "quanmiaolightapp.cn-beijing.aliyuncs.com"
 DEFAULT_TOP_NEWS_COUNT = 10
-DEFAULT_CHAT_NEWS_ANSWER_LEN = 200
 DEFAULT_NEWS_ROLE_SETTING = "新闻小助手"
+
 
 DEFAULT_PROMPT_TEMPLATE = """
 # 【任务描述】你是{news_role}，是一个车机新闻播报小助手。你会根据下面给出的新闻材料，按顺序有条理的播报所有新闻。
@@ -76,8 +76,8 @@ class MiaobiNewsConfig(BaseModel):
     access_key_secret: str | None = None
     endpoint: str = DEFAULT_NEWS_ENDPOINT
     top_news_count: int = DEFAULT_TOP_NEWS_COUNT
-    # chat_news_answer_len: int = DEFAULT_CHAT_NEWS_ANSWER_LEN
     model_id: str | None = None
+    chat_news_model_id: str | None = "qwen-max-latest"
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
     list_topics_prompt_str: str = DEFAULT_PROMPT_TEMPLATE
     chat_news_prompt_str: str = DEFAULT_CHAT_CUSTOM_PROMPT_TEMPLATE

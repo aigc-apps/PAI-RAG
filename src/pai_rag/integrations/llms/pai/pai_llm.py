@@ -151,8 +151,9 @@ class PaiLlm(OpenAILike):
         ]
         logger.info(f"llm chat, filterd_messages: {filterd_messages}")
         _response = await self._llm.achat(filterd_messages, **kwargs)
-        if self.llm_config.is_reasoning_model and not str(_response.delta).startswith(
-            "<think>"
+        if (
+            self.llm_config.is_reasoning_model
+            and not _response.message.content.startswith("<think>")
         ):
             _response.message.content = "<think>\n" + _response.message.content
         return _response
@@ -175,6 +176,8 @@ class PaiLlm(OpenAILike):
                 )
             async for response in completion_response_gen:
                 if self.llm_config.is_reasoning_model:
+                    if start_label and not response.text:
+                        continue
                     if start_label and not response.text.startswith("<think>"):
                         start_label = False
                         yield ChatResponse(
@@ -195,6 +198,9 @@ class PaiLlm(OpenAILike):
                             delta="\n",
                             raw="\n",
                         )
+                    else:
+                        start_label = False
+
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
@@ -246,7 +252,9 @@ class PaiLlm(OpenAILike):
                     kwargs.pop("intent")
                 start_label = True
                 async for response in await self._llm.astream_chat(messages, **kwargs):
-                    if start_label and not str(response).startswith("<think>"):
+                    if start_label and not response.delta:
+                        continue
+                    if start_label and not response.delta.startswith("<think>"):
                         start_label = False
                         yield ChatResponse(
                             message=ChatMessage(
@@ -262,6 +270,9 @@ class PaiLlm(OpenAILike):
                             ),
                             delta="\n",
                         )
+                    else:
+                        start_label = False
+
                     yield response
 
             return gen()

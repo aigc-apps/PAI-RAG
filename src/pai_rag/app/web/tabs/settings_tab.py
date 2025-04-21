@@ -88,6 +88,15 @@ def create_setting_tab() -> Dict[str, Any]:
                                     container=True,  # 让复选框有背景容器
                                     scale=1,
                                 )
+                                llm_reasoning_support = gr.Checkbox(
+                                    value=rag_config.llms[0].is_reasoning_model
+                                    if rag_config.llms
+                                    else False,
+                                    label="是否支持深度思考",
+                                    elem_id="reasoning_support",
+                                    container=True,  # 让复选框有背景容器
+                                    scale=1,
+                                )
                     save_btn = gr.Button("保存模型配置", variant="primary")
 
                     llm_model.change(
@@ -101,6 +110,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_name,
                             llm_model_id,
                             llm_vision_support,
+                            llm_reasoning_support,
                         ],
                     )
 
@@ -113,6 +123,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_api_key,
                             llm_model_id,
                             llm_vision_support,
+                            llm_reasoning_support,
                         ],
                         outputs=[llm_model, delete_btn],
                     )
@@ -344,6 +355,14 @@ def create_setting_tab() -> Dict[str, Any]:
                                 lines=10,
                                 interactive=True,
                             )
+                        with gr.Tab(label="新闻查询"):
+                            rewrite_news_prompt = gr.Textbox(
+                                label="新闻查询",
+                                value="",
+                                elem_id="rewrite_news_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
                         with gr.Tab(label="MCP工具调用"):
                             rewrite_mcp_prompt = gr.Textbox(
                                 label="MCP工具调用",
@@ -373,6 +392,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         rewrite_search_prompt,
                         rewrite_db_prompt,
                         rewrite_mcp_prompt,
+                        rewrite_news_prompt,
                         save_query_transform_btn,
                     ]
                     save_query_transform_btn.click(
@@ -402,6 +422,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     rewrite_knowledgebase_prompt,
                     rewrite_agent_prompt,
                     rewrite_search_prompt,
+                    rewrite_news_prompt,
                     rewrite_db_prompt,
                     rewrite_mcp_prompt,
                     save_query_transform_btn,
