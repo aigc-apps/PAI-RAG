@@ -89,7 +89,7 @@ def create_mcp_servers_tab():
             _ = gr.Markdown(value="## \N{WHITE MEDIUM STAR} **MCP Server**")
             with gr.Row():
                 update_mcp_info = gr.Button(
-                    value="刷新MCP服务状态",
+                    value="刷新MCP服务描述",
                     elem_id="update_mcp_info",
                     variant="primary",
                 )

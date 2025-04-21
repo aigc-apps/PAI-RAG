@@ -140,6 +140,9 @@ def make_completion_response(
             response_wrapper
         )
 
+    if "tool_calls" not in chat_response.additional_kwargs:
+        chat_response.additional_kwargs["tool_calls"] = []
+
     return ChatCompletion(
         id=chat_id,
         created=int(time.time()),

@@ -145,7 +145,8 @@ class RagLocalClient:
             formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
 
         response["delta"] = formatted_answer
-        response["non_stream_tool_calls"] = tool_calls
+        if tool_calls:
+            response["non_stream_tool_calls"] = tool_calls
 
         return dotdict(response)
 

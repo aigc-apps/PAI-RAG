@@ -13,6 +13,7 @@ from pai_rag.utils.prompt_template import (
     NL2SQL_REWRITE_PROMPT_ZH,
     REWRITE_PROMPT_ROLE_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
+    MCP_REWRITE_PROMPT_ZH,
 )
 from pai_rag.utils.prompt_template import (
     DEFALT_LLM_CHAT_PROMPT_TEMPL,
@@ -36,6 +37,7 @@ class QueryRewriteConfig(BaseModel):
     agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH
     db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH
     news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH
+    mcp_tool_prompt_str: str = MCP_REWRITE_PROMPT_ZH
 
     model_id: str | None = None
     llm: OpenAICompatibleLlmConfig | None = OpenAICompatibleLlmConfig()
