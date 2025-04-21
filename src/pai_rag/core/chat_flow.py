@@ -526,7 +526,10 @@ class ChatFlow:
         config: RagConfig,
     ) -> ChatResponseWrapper:
         multi_mcp_descriptions = "\n".join(
-            [f"{mcp.name}: {mcp.description}" for mcp in config.mcp_servers]
+            [
+                f"{mcp.name}: {mcp.description}" if mcp.activated else ""
+                for mcp in config.mcp_servers
+            ]
         )
         SYSTEM_PROMPT = f"你是一个支持工具调用(Tool Calling)的AI助手，通过调用工具帮助用户解决问题。\n支持的工具的主要功能包含：\n {multi_mcp_descriptions}"
 

@@ -87,6 +87,13 @@ async def respond(input_elements: List[Any]):
                     }
                 )
             elif resp.delta == "<tool_call>":
+                chatbot.append(
+                    {
+                        "content": "",
+                        "role": "assistant",
+                        "metadata": {"status": "done"},
+                    }
+                )
                 chatbot[-1]["metadata"][
                     "title"
                 ] = f"🛠️ Used tool {resp.tool_calls['function']['name']}."
