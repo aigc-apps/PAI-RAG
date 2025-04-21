@@ -14,6 +14,7 @@ from pai_rag.core.rag_module import (
     resolve_data_analysis_query,
     resolve_vector_index,
     resolve_query_engine_from_knowledgebase,
+    resolve_mcp_clients,
 )
 from pai_rag.core.utils.chat_utils import (
     SseVersion,
@@ -65,7 +66,7 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
-from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
+from pai_rag.extensions.mcp.mcp_base import McpToolSpec
 from llama_index.core.agent.workflow import FunctionAgent
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
@@ -531,16 +532,17 @@ class ChatFlow:
         Before you help a user, you need to work with tools to interact
         """
         llm = resolve_chat_llm(config, model_id=query_bundle.model)
-        mcp_client = BasicMCPClient(
-            "https://mcp-server-amap-jitptfyoyw.cn-hangzhou.fcapp.run/sse"
-        )
-        mcp_tool = McpToolSpec(client=mcp_client)
-        tools = await mcp_tool.to_tool_list_async()
+        mcp_clients = await resolve_mcp_clients(config)
+        mcp_tools = []
+        for mcp_server_name, mcp_client in mcp_clients:
+            mcp_tool = McpToolSpec(mcp_server_name=mcp_server_name, client=mcp_client)
+            tools = await mcp_tool.to_tool_list_async()
+            mcp_tools.extend(tools)
 
         agent = FunctionAgent(
             name="Agent",
-            description="An agent that can work with GaoDe map.",
-            tools=tools,
+            description="A tool agent that can call MCP tools.",
+            tools=mcp_tools,
             llm=llm,
             system_prompt=SYSTEM_PROMPT,
         )

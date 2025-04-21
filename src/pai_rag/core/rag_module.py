@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 from loguru import logger
 from copy import deepcopy
 
@@ -49,7 +49,7 @@ from pai_rag.integrations.search.search_config import (
     GoogleSearchConfig,
 )
 
-from pai_rag.extensions.mcp.mcp_client import MultiServerMCPClient
+from llama_index.tools.mcp import BasicMCPClient
 
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.postprocessor.pai.pai_postprocessor import PostProcessorType
@@ -144,19 +144,14 @@ def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     return None
 
 
-async def resolve_mcp_client(config: RagConfig) -> MultiServerMCPClient:
+async def resolve_mcp_clients(config: RagConfig) -> List[BasicMCPClient]:
+    mcp_clients = []
     mcp_server_configs = config.mcp_servers
-    connections = {}
     for mcp_server_config in mcp_server_configs:
-        connection = {
-            "transport": mcp_server_config.transport or "sse",
-            "url": mcp_server_config.url,
-        }
-        connections[mcp_server_config.name] = connection
-
-    mcp_client = resolve(cls=MultiServerMCPClient, connections=connections)
-    mcp_client = await mcp_client.__aenter__()
-    return mcp_client
+        if mcp_server_config.activated:
+            mcp_client = BasicMCPClient(mcp_server_config.url)
+            mcp_clients.append((mcp_server_config.name, mcp_client))
+    return mcp_clients
 
 
 def resolve_chat_store(config: RagConfig) -> PaiChatStore:
