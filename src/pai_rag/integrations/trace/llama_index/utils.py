@@ -63,10 +63,10 @@ def ensure_serializable(data: BaseModel) -> BaseModel:
     Workaround for https://github.com/pydantic/pydantic/issues/7713, see https://github.com/pydantic/pydantic/issues/7713#issuecomment-2604574418
     """
     try:
-        json.dumps(data)
+        json.dumps(data, ensure_ascii=False)
     except TypeError:
         # use `vars` to coerce nested data into dictionaries
-        data_json_from_dicts = json.dumps(data, default=lambda x: vars(x))  # type: ignore
+        data_json_from_dicts = json.dumps(data, default=lambda x: vars(x), ensure_ascii=False)  # type: ignore
         data_obj = json.loads(data_json_from_dicts)
         data = type(data)(**data_obj)
     return data
@@ -93,15 +93,14 @@ def process_request(span, args, kwargs):
     if should_send_prompts():
         span.set_attribute(
             SpanAttributes.TRACELOOP_ENTITY_INPUT,
-            json.dumps({"args": args, "kwargs": kwargs}, cls=JSONEncoder),
+            json.dumps({"args": args, "kwargs": kwargs}, cls=JSONEncoder, ensure_ascii=False),
         )
 
 
 @dont_throw
 def process_response(span, res):
     if should_send_prompts():
-        print("++++output1: ", json.dumps(res, cls=JSONEncoder))
         span.set_attribute(
             SpanAttributes.TRACELOOP_ENTITY_OUTPUT,
-            json.dumps(res, cls=JSONEncoder),
+            json.dumps(res, cls=JSONEncoder, ensure_ascii=False),
         )

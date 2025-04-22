@@ -225,7 +225,6 @@ localdata/
 docker/app_data
 model_repository/
 *.tmp
-__*
 
 arms.trace*
 

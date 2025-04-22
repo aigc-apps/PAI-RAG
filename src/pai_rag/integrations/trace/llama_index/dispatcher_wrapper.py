@@ -90,10 +90,8 @@ def _set_llm_chat_response(event, span) -> None:
     if should_send_prompts():
         span.set_attribute(
             SpanAttributes.TRACELOOP_ENTITY_OUTPUT,
-            json.dumps(response, cls=JSONEncoder),
+            json.dumps(response, cls=JSONEncoder, ensure_ascii=False),
         )
-
-        print("Set output value: ", response.message.content)
 
         for idx, message in enumerate(event.messages):
             span.set_attribute(
@@ -189,10 +187,7 @@ class SpanHolder:
     _active: bool = field(init=False, default=True)
 
     def process_event(self, event: BaseEvent) -> List["SpanHolder"]:
-        #print("span holder porcess ", self.span_id, self.parent, self.otel_span.name)
-        #print(f"updating span event: {pid}->{self.span_id} {self.otel_span.name} {type(event)}")
         self.update_span_for_event(event)
-        #print(f"updated span event: {pid}->{self.span_id} {self.otel_span.name} {self.waiting_for_streaming} {type(event)}")
         if self.waiting_for_streaming and isinstance(event, STREAMING_END_EVENTS):
             self.end()
             return [self] + self.notify_parent(event)
@@ -209,12 +204,10 @@ class SpanHolder:
         return []
 
     def end(self, should_detach_context: bool = True):
-        print("end span", self.span_id)
         if not self._active:
             return
 
         self._active = False
-        print("end", self.otel_span, self.token)
         if self.otel_span:
             self.otel_span.end()
         if self.token and should_detach_context:
@@ -269,7 +262,6 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
         """Create a span."""
         # Take the class name and method name from id_ where id_ is e.g.
         # 'SentenceSplitter.split_text_metadata_aware-a2f2a780-2fa6-4682-a88e-80dc1f1ebe6a'
-        print("try to create span", id_, parent_span_id)
         matches = CLASS_ANDMETHOD_NAME_FROM_ID_REGEX.match(id_)
         class_name = matches.groups()[0]
         method_name = matches.groups()[1]
@@ -313,12 +305,11 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
 
         span.set_attribute(SpanAttributes.TRACELOOP_SPAN_KIND, kind)
         span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, span_name)
-        # print("creating span", span_name, "parent span: ", parent_span_id)
         try:
             if should_send_prompts():
                 span.set_attribute(
                     SpanAttributes.TRACELOOP_ENTITY_INPUT,
-                    json.dumps(bound_args.arguments, cls=JSONEncoder),
+                    json.dumps(bound_args.arguments, cls=JSONEncoder, ensure_ascii=False),
                 )
         except Exception:
             pass
@@ -333,7 +324,6 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
         **kwargs,
     ) -> SpanHolder:
         """Logic for preparing to drop a span."""
-        print("try to exit span: ", id_)
         span_holder = self.open_spans[id_]
         # I know it's messy, but the typing of result is messy and couldn't find a better way
         # to get a dictionary I can then use to remove keys
@@ -342,7 +332,6 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
                 result = result.response
                 
             if isinstance(result, (Generator, AsyncGenerator, StreamingResponse)):
-                print("span is streaming, will not exit")
                 # This is a streaming response, we want to wait for the streaming end event before ending the span
                 cur_holder = span_holder
                 while cur_holder:
@@ -353,8 +342,7 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
                     self.waiting_for_streaming_spans[id_] = span_holder
                 return None
 
-            serialized_output = json.dumps(result, cls=JSONEncoder)
-            print("exiting span: ", id_, serialized_output)
+            serialized_output = json.dumps(result, cls=JSONEncoder, ensure_ascii=False)
             # we need to remove some keys like source_nodes as they can be very large
             output = json.loads(serialized_output)
 
@@ -363,9 +351,8 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
             if should_send_prompts():
                 span_holder.otel_span.set_attribute(
                     SpanAttributes.TRACELOOP_ENTITY_OUTPUT,
-                    json.dumps(output, cls=JSONEncoder),
+                    json.dumps(output, cls=JSONEncoder, ensure_ascii=False),
                 )
-                print("**add output attributes..")
         except Exception as ex:
             print(f"failed: {ex}, {type(result)}")
             print(traceback.format_exc())
@@ -382,7 +369,6 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
                 self.waiting_for_streaming_spans[id_] = span_holder
             return span_holder
         else:
-            print("end span", span_holder.otel_span.name, type(result))
             should_detach_context = not isinstance(instance, Workflow)
             span_holder.end(should_detach_context)
             return span_holder
