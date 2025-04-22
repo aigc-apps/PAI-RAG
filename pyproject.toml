@@ -106,6 +106,7 @@ serpapi = "^0.1.5"
 watchfiles = "^1.0.4"
 alibabacloud-aimiaobi20230801 = "^1.21.0"
 alibabacloud-tea-openapi-sse = "^1.0.2"
+typer = "^0.15.2"
 
 [tool.poetry.scripts]
 load_data = "pai_rag.tools.load_data_tool:run"

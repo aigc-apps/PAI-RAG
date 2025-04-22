@@ -77,12 +77,12 @@ class ModelScopeDownloader:
             self.load_model(model)
         logger.info("Finished downloading basic models.")
 
-    def load_mineru_config(self, device: str = "cpu"):
-        logger.info(f"Start to loading minerU config file on {device}.")
+    def load_mineru_config(self, use_cuda: bool = False):
+        logger.info(f"Start to loading minerU config file, use_cuda: {use_cuda}.")
         source_path = (
-            "magic-pdf.template.json"
-            if device == "cpu"
-            else "magic-pdf.gpu.template.json"
+            "magic-pdf.gpu.template.json"
+            if use_cuda
+            else "magic-pdf.template.json"
         )
         destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
 
@@ -104,7 +104,7 @@ class ModelScopeDownloader:
             json.dump(data, destination_file, indent=4)
 
         logger.info(
-            f"Copy {source_path} to ~/magic-pdf.json and modify models-dir to model path on {device}."
+            f"Copy {source_path} to ~/magic-pdf.json and modify models-dir to model path."
         )
 
     def load_models(self, model=None):
