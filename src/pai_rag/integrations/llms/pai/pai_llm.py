@@ -25,6 +25,15 @@ from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
 from llama_index.core.base.llms.types import MessageRole
+import llama_index.core.instrumentation as instrument
+
+from llama_index.core.instrumentation.events.llm import (
+    LLMChatEndEvent,
+    LLMChatStartEvent,
+)
+
+dispatcher = instrument.get_dispatcher(__name__)
+
 from loguru import logger
 
 
@@ -125,6 +134,13 @@ class PaiLlm(OpenAILike):
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
+        dispatcher.event(
+            LLMChatStartEvent(
+                messages=messages,
+                additional_kwargs=kwargs,
+                model_dict={}
+            )
+        )
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -156,6 +172,14 @@ class PaiLlm(OpenAILike):
             "<think>"
         ):
             _response.message.content = "<think>\n" + _response.message.content
+
+        dispatcher.event(
+            LLMChatEndEvent(
+                messages=messages,
+                response=_response
+            )
+        )
+
         return _response
 
     def async_stream_completion_response_to_chat_response(
@@ -166,6 +190,8 @@ class PaiLlm(OpenAILike):
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
+            response_content = ""
+            additional_kwargs = {}
             async for response in completion_response_gen:
                 if self.llm_config.is_reasoning_model:
                     if start_label and not response.text.startswith("<think>"):
@@ -188,51 +214,105 @@ class PaiLlm(OpenAILike):
                             delta="\n",
                             raw="\n",
                         )
+                        response_content = "<think>\n"
+
+                response_content += response.delta
+                additional_kwargs = response.additional_kwargs
+
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
-                        content=response.text,
+                        content=response_content,
                         additional_kwargs=response.additional_kwargs,
                     ),
                     delta=response.delta,
                     raw=response.raw,
                 )
+            """
+            result_msg = ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=response_content,
+                additional_kwargs=additional_kwargs,
+            )
+            print("dispatching llm end event")
 
+            dispatcher.event(LLMChatEndEvent(
+                messages=[],
+                response=ChatResponse(
+                    message=result_msg
+                )))
+            print("dispatched llm end event")
+            """
         return gen()
 
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
-        if not self.llm_config.is_reasoning_model:
-            return await self._llm.astream_chat(messages, **kwargs)
-        else:
+        response_iter_async = await self._llm.astream_chat(messages, **kwargs)
+        
+        async def gen() -> ChatResponseAsyncGen:
+            response_content = ""
+            additional_kwargs = {}
+            start_label = True
+            async for response in response_iter_async:
+                if self.llm_config.is_reasoning_model and start_label and not response.delta.startswith("<think>"):
+                    start_label = False
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="<think>",
+                        ),
+                        delta="<think>",
+                    )
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="<think>\n",
+                        ),
+                        delta="\n",
+                    )
+                    response_content = "<think>\n"
 
-            async def gen() -> ChatResponseAsyncGen:
-                start_label = True
-                async for response in await self._llm.astream_chat(messages, **kwargs):
-                    if start_label and not str(response).startswith("<think>"):
-                        start_label = False
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content="<think>",
-                            ),
-                            delta="<think>",
-                        )
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content="<think>\n",
-                            ),
-                            delta="\n",
-                        )
-                    yield response
+                response_content += response.delta
+                additional_kwargs = response.additional_kwargs
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=response_content,
+                    ),
+                    delta = response.delta,
+                    additional_kwargs=response.additional_kwargs,
+                )
 
-            return gen()
+            result_msg = ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=response_content,
+                additional_kwargs=additional_kwargs,
+            )
+            """
+            print("dispatching llm end event")
+
+            dispatcher.event(LLMChatEndEvent(
+                messages=[],
+                response=ChatResponse(
+                    message=result_msg
+                )))
+            print("dispatched llm end event")
+            """
+        return gen()
 
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
+        """
+        dispatcher.event(
+            LLMChatStartEvent(
+                messages=messages,
+                additional_kwargs=kwargs,
+                model_dict={}
+            )
+        )
+        """
         kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -247,9 +327,10 @@ class PaiLlm(OpenAILike):
             completion_response = await self.astream_complete(
                 prompt, formatted=True, **kwargs
             )
-            return self.async_stream_completion_response_to_chat_response(
+            response_gen = self.async_stream_completion_response_to_chat_response(
                 completion_response
             )
+            return response_gen
 
         filterd_messages = [
             message
@@ -257,6 +338,7 @@ class PaiLlm(OpenAILike):
             if message.content or message.additional_kwargs
         ]
 
-        return await self.async_chat_response_to_chat_response_with_think(
+        response_gen = await self.async_chat_response_to_chat_response_with_think(
             filterd_messages, **kwargs
         )
+        return response_gen

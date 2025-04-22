@@ -44,6 +44,7 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
+from pai_rag.trace.trace_config import TraceConfig
 
 
 def validate_case_insensitive(value: Dict) -> Dict:
@@ -183,3 +184,5 @@ class RagConfig(BaseModel):
     guardrail: AliyunTextModerationPlusConfig = AliyunTextModerationPlusConfig()
 
     news_extension: MiaobiNewsConfig = MiaobiNewsConfig()
+
+    trace: TraceConfig = TraceConfig()
