@@ -321,7 +321,7 @@ chat()
 
 # 2. Management API
 
-## 2.1 加载信息
+## 2.1 加载信息/检索
 
 ### 上传知识库文件
 
@@ -403,6 +403,80 @@ chat()
     "task_id": "2c1e557733764fdb9fefa063538914da",
     "status": "completed",
     "detail": null
+  }
+  ```
+
+</details>
+
+### 知识库检索
+
+调用方式
+
+- 调用地址：{EAS_SERVICE_URL}/api/v1/query/retrieval
+- 请求方式：POST
+- 请求 HEADERS
+  - Authorization: EAS_TOKEN # Eas调用token
+  - Content-Type: application/json
+- 请求参数：
+  - question: 用户检索问题
+  - index_name: 索引名称(默认default)
+
+<details>
+<summary>调用示例</summary>
+
+- curl 请求示例：
+
+  ```bash
+    curl -X 'POST' '{EAS_SERVICE_URL}/api/vi/query/retrieval' \
+    -H 'Authorization: EAS_TOKEN' \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "question": "What can I do when the x13-auto-arima component reports an error?",
+        "index_name": "default",
+    }'
+  ```
+
+- 返回示例：
+  ```json
+  {
+    "docs": [
+      {
+        "text": "2.PAl-Studio/Designer FAQ 2.1. FAQ about algorithm components : \nCharacters that cannot be transcoded are displayed as \"blob.\" Ignore this error, because nodes in the downstream can read and process the data.\nWhat can I do when the x13-auto-arima component reports an error?\nMake sure that up to 1,200 training data samples are imported into the x13-auto-arima component.\nWhat can I do when the Doc2Vec component reports the CallExecutorToParseTaskFail error?",
+        "score": 0.83608,
+        "metadata": {
+          "file_path": "localdata/knowledgebase/default/docs/pai_document.md",
+          "file_name": "pai_document.md",
+          "file_size": 3794,
+          "creation_date": "2025-03-20",
+          "last_modified_date": "2025-03-20"
+        },
+        "image_url": null
+      },
+      {
+        "text": "2.PAl-Studio/Designer FAQ 2.1. FAQ about algorithm components : \nThis topic describes the FAQ about algorit hm components.\nWhat can I do when the format conversion component reports an error? · What can I do when \"blob\" is displayed on the data present ation page of the PAl? · what canI do when the xl3-auto-arima component reports an error? · What can Ido when the Doc2Vec component reports the CallExecutorToParseTaskFail error?\nWhat can I do when the format conversion component reports an error?",
+        "score": 0.797132,
+        "metadata": {
+          "file_path": "localdata/knowledgebase/default/docs/pai_document.md",
+          "file_name": "pai_document.md",
+          "file_size": 3794,
+          "creation_date": "2025-03-20",
+          "last_modified_date": "2025-03-20"
+        },
+        "image_url": null
+      },
+      {
+        "text": "2.PAl-Studio/Designer FAQ 2.1. FAQ about algorithm components\n2.3. Preview Oss files in Machine Learning Studio : \n2.On the details page of the Oss bucket, choose Access Cont rol $>$ Cross-Origin Resource Sharing (CORS). In the Cross-Origin Resource Sharing (CORS) section, click Conf igure.\n3.Click Create Rule. In the Create Rule panel, set the following parameters.",
+        "score": 0.714184,
+        "metadata": {
+          "file_path": "localdata/knowledgebase/default/docs/pai_document.md",
+          "file_name": "pai_document.md",
+          "file_size": 3794,
+          "creation_date": "2025-03-20",
+          "last_modified_date": "2025-03-20"
+        },
+        "image_url": null
+      }
+    ]
   }
   ```
 
