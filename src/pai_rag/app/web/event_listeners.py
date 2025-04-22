@@ -39,7 +39,7 @@ def add_index(*components):
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True),
-        gr.update(visible=False),
+        gr.update(visible=True),
     ]
 
 
@@ -57,7 +57,26 @@ def update_index(*components):
         gr.update(visible=False),
         gr.update(visible=False),
         gr.update(visible=True),
+        gr.update(visible=True),
+    ]
+
+
+def delete_index(vector_index):
+    try:
+        rag_client.delete_index(vector_index)
+        logger.info(f"Delete index {vector_index} successfully")
+    except Exception as e:
+        raise gr.Error(f"Failed to delete index: {e}")
+    index_map = get_index_map()
+    return [
+        gr.update(
+            choices=list(index_map.knowledgebases.keys()) + ["NEW"],
+            value=list(index_map.knowledgebases.keys())[0],
+        ),
         gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=True),
+        gr.update(visible=True),
     ]
 
 
@@ -339,3 +358,33 @@ def save_config(input_elements: List[Any]):
 
 def input_oss_ak_sk(input):
     return (input[:2] + "*" * (len(input) - 4) + input[-2:]) if input else input
+
+
+def save_pmt_cfg_func(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] Prompt configuration saved successfully!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def save_query_transform_cfg(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] Query transform prompt configuration saved successfully!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")

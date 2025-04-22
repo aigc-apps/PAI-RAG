@@ -64,7 +64,7 @@ class PaiAgent(AgentRunner):
     ) -> None:
         """Init params."""
         callback_manager = callback_manager or llm.callback_manager
-        step_engine = OpenAIAgentWorker.from_tools(
+        agent_worker = OpenAIAgentWorker.from_tools(
             tools=tools,
             tool_retriever=tool_retriever,
             llm=llm,
@@ -75,7 +75,7 @@ class PaiAgent(AgentRunner):
             tool_call_parser=tool_call_parser,
         )
         super().__init__(
-            step_engine,
+            agent_worker,
             memory=memory,
             llm=llm,
             callback_manager=callback_manager,

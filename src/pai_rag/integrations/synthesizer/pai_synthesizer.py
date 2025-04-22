@@ -37,7 +37,6 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_CONTEXT_ANSWER_TEMPLATE,
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
     CURRENT_TIME_PROMPT,
-    DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
 )
 from loguru import logger
 
@@ -138,10 +137,9 @@ class PaiSynthesizer:
             )
         )
         self._multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}".format(
                 self._system_role_template,
                 self._custom_prompt_template,
-                DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=get_prompt_current_time_str()
                 ),
@@ -149,10 +147,9 @@ class PaiSynthesizer:
             )
         )
         self._citation_multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n{}\n{}\n{}".format(
                 self._system_role_template,
                 self._custom_prompt_template,
-                DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                 CURRENT_TIME_PROMPT.format(
                     current_datetime=get_prompt_current_time_str()
                 ),
@@ -205,6 +202,12 @@ class PaiSynthesizer:
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
+            query_str = query.query_str
+
+            if query.chat_messages_str:
+                history_str = query.chat_messages_str
+            else:
+                history_str = ""
             if query.no_retrieval:
                 response = await self.aget_llm_only_response(
                     query_str=query_str,
@@ -218,6 +221,7 @@ class PaiSynthesizer:
             else:
                 response = await self.aget_response(
                     query_str=query_str,
+                    original_query_str=query.original_query_str,
                     nodes=nodes,
                     history_str=history_str,
                     streaming=query.stream,
@@ -257,6 +261,7 @@ class PaiSynthesizer:
     async def aget_response(
         self,
         query_str: str,
+        original_query_str: str,
         nodes: List[NodeWithScore],
         history_str: str = None,
         streaming: bool = False,
@@ -266,17 +271,15 @@ class PaiSynthesizer:
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
+        cur_date = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}".format(
                         system_role_str,
                         prompt_template_str,
-                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=get_prompt_current_time_str()
-                        ),
+                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
@@ -285,14 +288,11 @@ class PaiSynthesizer:
         else:
             prompt_template = (
                 PromptTemplate(
-                    template="{}\n{}\n{}\n{}\n{}\n{}".format(
+                    template="{}\n{}\n{}\n{}\n{}".format(
                         system_role_str,
                         prompt_template_str,
-                        DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE,
                         DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                        CURRENT_TIME_PROMPT.format(
-                            current_datetime=get_prompt_current_time_str()
-                        ),
+                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
                         DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
