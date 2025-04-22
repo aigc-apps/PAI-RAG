@@ -229,6 +229,7 @@ def update_mcp_servers(mcp_server_name):
     initial_values = {
         "name": mcp_server_config.name if mcp_server_config and not is_new else "",
         "url": mcp_server_config.url if mcp_server_config else "",
+        "auth_token": mcp_server_config.auth_token if mcp_server_config else "",
         "transport": mcp_server_config.transport if mcp_server_config else "",
         "activated": mcp_server_config.activated if mcp_server_config else "",
     }
@@ -240,13 +241,19 @@ def update_mcp_servers(mcp_server_name):
         gr.update(visible=not is_new),
         gr.update(value=initial_values["name"]),
         gr.update(value=initial_values["url"]),
+        gr.update(value=initial_values["auth_token"]),
         gr.update(value=initial_values["transport"]),
         gr.update(value=initial_values["activated"]),
     ]
 
 
 def save_new_mcp_server(
-    selected_mcp_server, server_name, server_url, server_transport, active_status
+    selected_mcp_server,
+    server_name,
+    server_url,
+    server_auth_token,
+    server_transport,
+    active_status,
 ):
     rag_config = rag_client.get_config()
     if not all([server_name, server_url, server_transport]):
@@ -276,6 +283,7 @@ def save_new_mcp_server(
     if existing_mcp_server:
         existing_mcp_server.name = server_name
         existing_mcp_server.url = server_url
+        existing_mcp_server.auth_token = server_auth_token
         existing_mcp_server.transport = server_transport
         existing_mcp_server.activated = active_status
         rag_config.mcp_servers[mcp_server_index] = existing_mcp_server
@@ -284,6 +292,7 @@ def save_new_mcp_server(
         new_mcp_config = {
             "name": server_name,
             "url": server_url,
+            "auth_token": server_auth_token,
             "transport": server_transport,
             "activated": active_status,
         }

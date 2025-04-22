@@ -98,6 +98,7 @@ class SynthesizerConfig(BaseModel):
 class McpServerConfig(BaseModel):
     name: str | None = None
     url: str | None = None
+    auth_token: str | None = None
     transport: str | None = "sse"
     activated: bool = False
     description: str | None = None

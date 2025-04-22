@@ -41,6 +41,12 @@ def create_mcp_servers_tab():
                             elem_id="mcp_server_url",
                             interactive=True,
                         )
+                        mcp_authorization_token = gr.Textbox(
+                            label="MCP 服务访问令牌(可选)",
+                            elem_id="mcp_authorization_token",
+                            type="password",
+                            interactive=True,
+                        )
                         transport_type = gr.Dropdown(
                             label="传输方式",
                             choices=["sse"],
@@ -80,6 +86,7 @@ def create_mcp_servers_tab():
                     delete_btn,
                     mcp_server_name,
                     mcp_server_url,
+                    mcp_authorization_token,
                     transport_type,
                     active_status,
                 ],
@@ -132,6 +139,7 @@ def create_mcp_servers_tab():
                     mcp_servers,
                     mcp_server_name,
                     mcp_server_url,
+                    mcp_authorization_token,
                     transport_type,
                     active_status,
                 ],
