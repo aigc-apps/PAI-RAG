@@ -44,7 +44,7 @@ from pai_rag.integrations.search.search_config import (
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
-from pai_rag.trace.trace_config import TraceConfig
+from pai_rag.integrations.trace.trace_config import TraceConfig
 
 
 def validate_case_insensitive(value: Dict) -> Dict:
