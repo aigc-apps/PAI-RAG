@@ -88,7 +88,7 @@ class McpToolSpec(BaseToolSpec):
         if self.allowed_tools:
             tools = [
                 types.Tool(
-                    name=self.mcp_server_name + "[pai_rag]" + tool.name,
+                    name=self.mcp_server_name + ":" + tool.name,
                     description=tool.description,
                     inputSchema=tool.inputSchema,
                 )
@@ -98,7 +98,7 @@ class McpToolSpec(BaseToolSpec):
         else:
             tools = [
                 types.Tool(
-                    name=self.mcp_server_name + "[pai_rag]" + tool.name,
+                    name=self.mcp_server_name + ":" + tool.name,
                     description=tool.description,
                     inputSchema=tool.inputSchema,
                 )
@@ -112,7 +112,7 @@ class McpToolSpec(BaseToolSpec):
         """
 
         async def async_tool_fn(**kwargs):
-            mcp_tool_name = tool_name.split("[pai_rag]")[1]
+            mcp_tool_name = tool_name.removeprefix(f"{self.mcp_server_name}:")
             return await self.client.call_tool(mcp_tool_name, kwargs)
 
         return async_tool_fn
