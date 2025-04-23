@@ -30,7 +30,7 @@ from llama_index.core.instrumentation.event_handlers import BaseEventHandler
 from llama_index.core.instrumentation.span_handlers import BaseSpanHandler
 from llama_index.core.workflow import Workflow
 from opentelemetry import context as context_api
-from opentelemetry.instrumentation.llamaindex.utils import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.utils import (
     JSONEncoder,
     dont_throw,
     should_send_prompts,
@@ -285,7 +285,11 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
         )
 
         if isinstance(instance, Workflow):
-            span_name = f"{instance.__class__.__name__}.{kind}" if not parent_span_id else f"{method_name}.{kind}"
+            span_name = (
+                f"{instance.__class__.__name__}.{kind}"
+                if not parent_span_id
+                else f"{method_name}.{kind}"
+            )
         else:
             span_name = f"{class_name}.{method_name}.{kind}"
 
@@ -309,7 +313,9 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
             if should_send_prompts():
                 span.set_attribute(
                     SpanAttributes.TRACELOOP_ENTITY_INPUT,
-                    json.dumps(bound_args.arguments, cls=JSONEncoder, ensure_ascii=False),
+                    json.dumps(
+                        bound_args.arguments, cls=JSONEncoder, ensure_ascii=False
+                    ),
                 )
         except Exception:
             pass
@@ -330,14 +336,14 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
         try:
             if hasattr(result, "response"):
                 result = result.response
-                
+
             if isinstance(result, (Generator, AsyncGenerator, StreamingResponse)):
                 # This is a streaming response, we want to wait for the streaming end event before ending the span
                 cur_holder = span_holder
                 while cur_holder:
                     cur_holder.waiting_for_streaming = True
                     cur_holder = cur_holder.parent
-                
+
                 with self.lock:
                     self.waiting_for_streaming_spans[id_] = span_holder
                 return None
@@ -364,7 +370,7 @@ class OpenLLMetrySpanHandler(BaseSpanHandler[SpanHolder]):
             while cur_holder:
                 cur_holder.waiting_for_streaming = True
                 cur_holder = cur_holder.parent
-            
+
             with self.lock:
                 self.waiting_for_streaming_spans[id_] = span_holder
             return span_holder

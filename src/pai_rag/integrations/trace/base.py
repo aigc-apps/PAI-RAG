@@ -1,13 +1,9 @@
-import atexit
-import logging
-import os
 import socket
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.resources import (
-    DEPLOYMENT_ENVIRONMENT,
     HOST_NAME,
     SERVICE_NAME,
     SERVICE_VERSION,
@@ -15,15 +11,17 @@ from opentelemetry.sdk.resources import (
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
     OTLPSpanExporter as GRPCExporter,
 )
-from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
 )
 
 from pai_rag.integrations.trace.trace_config import TraceConfig
-from loguru import logger
-from pai_rag.integrations.trace.llama_index import LlamaIndexInstrumentor
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex import (
+    LlamaIndexInstrumentor,
+)
 
+from loguru import logger
 
 
 def init_trace(config: TraceConfig):
@@ -44,9 +42,7 @@ def init_trace(config: TraceConfig):
     attributes[SERVICE_VERSION] = "1.1.0"
 
     resource = Resource(attributes=attributes)
-    exporter = GRPCExporter(
-        endpoint=grpc_endpoint, headers=(f"Authentication={token}")
-    )
+    exporter = GRPCExporter(endpoint=grpc_endpoint, headers=(f"Authentication={token}"))
 
     span_processor = BatchSpanProcessor(exporter)
     trace_provider = TracerProvider(

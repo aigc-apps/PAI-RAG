@@ -8,7 +8,7 @@ from opentelemetry import context as context_api
 
 from opentelemetry.instrumentation.utils import _SUPPRESS_INSTRUMENTATION_KEY
 from opentelemetry.semconv_ai import SpanAttributes, LLMRequestTypeValues
-from opentelemetry.instrumentation.llamaindex.utils import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.utils import (
     _with_tracer_wrapper,
     dont_throw,
     start_as_current_span_async,
@@ -183,7 +183,6 @@ def _handle_response(span, llm_request_type, instance, response):
             _set_span_attribute(
                 span, f"{SpanAttributes.LLM_COMPLETIONS}.0.content", response.text
             )
-
 
     return
 

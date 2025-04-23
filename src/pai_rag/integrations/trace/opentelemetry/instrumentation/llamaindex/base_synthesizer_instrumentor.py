@@ -1,9 +1,8 @@
 from importlib.metadata import version as package_version, PackageNotFoundError
 
 from wrapt import wrap_function_wrapper
-from opentelemetry.context import attach, set_value
 
-from opentelemetry.instrumentation.llamaindex.utils import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.utils import (
     _with_tracer_wrapper,
     process_request,
     process_response,
@@ -11,14 +10,15 @@ from opentelemetry.instrumentation.llamaindex.utils import (
 )
 from opentelemetry.semconv_ai import SpanAttributes, TraceloopSpanKindValues
 
-V10_MODULE_NAME = "llama_index.core.query_pipeline.query"
-V10_LEGACY_MODULE_NAME = "llama_index.legacy.query_pipeline.query"
+V9_MODULE_NAME = "llama_index.response_synthesizers"
+V10_MODULE_NAME = "llama_index.core.response_synthesizers"
+V10_LEGACY_MODULE_NAME = "llama_index.legacy.response_synthesizers.base"
 
-CLASS_NAME = "QueryPipeline"
-WORKFLOW_NAME = "llama_index_query_pipeline"
+CLASS_NAME = "BaseSynthesizer"
+TASK_NAME = "synthesize"
 
 
-class QueryPipelineInstrumentor:
+class BaseSynthesizerInstrumentor:
     def __init__(self, tracer):
         self._tracer = tracer
 
@@ -29,31 +29,27 @@ class QueryPipelineInstrumentor:
             self._instrument_module(V10_LEGACY_MODULE_NAME)
 
         except PackageNotFoundError:
-            pass  # not supported before v10
+            self._instrument_module(V9_MODULE_NAME)
 
     def _instrument_module(self, module_name):
         wrap_function_wrapper(
-            module_name, f"{CLASS_NAME}.run", run_wrapper(self._tracer)
+            module_name, f"{CLASS_NAME}.synthesize", synthesize_wrapper(self._tracer)
         )
         wrap_function_wrapper(
-            module_name, f"{CLASS_NAME}.arun", arun_wrapper(self._tracer)
+            module_name, f"{CLASS_NAME}.asynthesize", asynthesize_wrapper(self._tracer)
         )
-
-
-def set_workflow_context():
-    attach(set_value("workflow_name", WORKFLOW_NAME))
 
 
 @_with_tracer_wrapper
-def run_wrapper(tracer, wrapped, instance, args, kwargs):
-    set_workflow_context()
+def synthesize_wrapper(tracer, wrapped, instance, args, kwargs):
+    print("synthesize wrapper")
 
-    with tracer.start_as_current_span(f"{WORKFLOW_NAME}.workflow") as span:
+    with tracer.start_as_current_span(f"{TASK_NAME}.task") as span:
         span.set_attribute(
             SpanAttributes.TRACELOOP_SPAN_KIND,
-            TraceloopSpanKindValues.WORKFLOW.value,
+            TraceloopSpanKindValues.TASK.value,
         )
-        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, WORKFLOW_NAME)
+        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, TASK_NAME)
 
         process_request(span, args, kwargs)
         res = wrapped(*args, **kwargs)
@@ -62,17 +58,17 @@ def run_wrapper(tracer, wrapped, instance, args, kwargs):
 
 
 @_with_tracer_wrapper
-async def arun_wrapper(tracer, wrapped, instance, args, kwargs):
-    set_workflow_context()
+async def asynthesize_wrapper(tracer, wrapped, instance, args, kwargs):
+    print("synthesize wrapper")
 
     async with start_as_current_span_async(
-        tracer=tracer, name=f"{WORKFLOW_NAME}.workflow"
+        tracer=tracer, name=f"{TASK_NAME}.task"
     ) as span:
         span.set_attribute(
             SpanAttributes.TRACELOOP_SPAN_KIND,
-            TraceloopSpanKindValues.WORKFLOW.value,
+            TraceloopSpanKindValues.TASK.value,
         )
-        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, WORKFLOW_NAME)
+        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, TASK_NAME)
 
         process_request(span, args, kwargs)
         res = await wrapped(*args, **kwargs)

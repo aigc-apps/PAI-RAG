@@ -4,37 +4,43 @@ import logging
 from importlib.metadata import version as import_version
 from typing import Collection
 
-from opentelemetry.instrumentation.llamaindex.config import Config
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.config import (
+    Config,
+)
 from opentelemetry.trace import get_tracer
 
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
 
-from opentelemetry.instrumentation.llamaindex.base_agent_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.base_agent_instrumentor import (
     BaseAgentInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.retriever_query_engine_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.retriever_query_engine_instrumentor import (
     RetrieverQueryEngineInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.base_retriever_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.base_retriever_instrumentor import (
     BaseRetrieverInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.base_synthesizer_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.base_synthesizer_instrumentor import (
     BaseSynthesizerInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.base_tool_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.base_tool_instrumentor import (
     BaseToolInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.base_embedding_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.base_embedding_instrumentor import (
     BaseEmbeddingInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.custom_llm_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.custom_llm_instrumentor import (
     CustomLLMInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.query_pipeline_instrumentor import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.query_pipeline_instrumentor import (
     QueryPipelineInstrumentor,
 )
-from opentelemetry.instrumentation.llamaindex.version import __version__
-from opentelemetry.instrumentation.llamaindex.dispatcher_wrapper import instrument_with_dispatcher
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.version import (
+    __version__,
+)
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.dispatcher_wrapper import (
+    instrument_with_dispatcher,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ from importlib.metadata import version as package_version, PackageNotFoundError
 
 from wrapt import wrap_function_wrapper
 
-from opentelemetry.instrumentation.llamaindex.utils import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.utils import (
     _with_tracer_wrapper,
     process_request,
     process_response,

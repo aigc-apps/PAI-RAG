@@ -6,7 +6,9 @@ import traceback
 from contextlib import asynccontextmanager
 
 from opentelemetry import context as context_api
-from opentelemetry.instrumentation.llamaindex.config import Config
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.config import (
+    Config,
+)
 from opentelemetry.semconv_ai import SpanAttributes
 from pydantic import BaseModel
 
@@ -84,7 +86,7 @@ class JSONEncoder(json.JSONEncoder):
             return o.json()
         elif hasattr(o, "to_json"):
             return o.to_json()
-        
+
         return super().default(o)
 
 
@@ -93,7 +95,9 @@ def process_request(span, args, kwargs):
     if should_send_prompts():
         span.set_attribute(
             SpanAttributes.TRACELOOP_ENTITY_INPUT,
-            json.dumps({"args": args, "kwargs": kwargs}, cls=JSONEncoder, ensure_ascii=False),
+            json.dumps(
+                {"args": args, "kwargs": kwargs}, cls=JSONEncoder, ensure_ascii=False
+            ),
         )
 
 

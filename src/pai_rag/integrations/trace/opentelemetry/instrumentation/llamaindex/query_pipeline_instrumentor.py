@@ -1,8 +1,9 @@
 from importlib.metadata import version as package_version, PackageNotFoundError
 
 from wrapt import wrap_function_wrapper
+from opentelemetry.context import attach, set_value
 
-from opentelemetry.instrumentation.llamaindex.utils import (
+from pai_rag.integrations.trace.opentelemetry.instrumentation.llamaindex.utils import (
     _with_tracer_wrapper,
     process_request,
     process_response,
@@ -10,16 +11,14 @@ from opentelemetry.instrumentation.llamaindex.utils import (
 )
 from opentelemetry.semconv_ai import SpanAttributes, TraceloopSpanKindValues
 
+V10_MODULE_NAME = "llama_index.core.query_pipeline.query"
+V10_LEGACY_MODULE_NAME = "llama_index.legacy.query_pipeline.query"
 
-V9_MODULE_NAME = "llama_index.indices.base_retriever"
-V10_MODULE_NAME = "llama_index.core.indices.base_retriever"
-V10_LEGACY_MODULE_NAME = "llama_index.legacy.indices.base_retriever"
-
-CLASS_NAME = "BaseRetriever"
-TASK_NAME = "retrieve"
+CLASS_NAME = "QueryPipeline"
+WORKFLOW_NAME = "llama_index_query_pipeline"
 
 
-class BaseRetrieverInstrumentor:
+class QueryPipelineInstrumentor:
     def __init__(self, tracer):
         self._tracer = tracer
 
@@ -30,25 +29,31 @@ class BaseRetrieverInstrumentor:
             self._instrument_module(V10_LEGACY_MODULE_NAME)
 
         except PackageNotFoundError:
-            self._instrument_module(V9_MODULE_NAME)
+            pass  # not supported before v10
 
     def _instrument_module(self, module_name):
         wrap_function_wrapper(
-            module_name, f"{CLASS_NAME}.retrieve", retrieve_wrapper(self._tracer)
+            module_name, f"{CLASS_NAME}.run", run_wrapper(self._tracer)
         )
         wrap_function_wrapper(
-            module_name, f"{CLASS_NAME}.aretrieve", aretrieve_wrapper(self._tracer)
+            module_name, f"{CLASS_NAME}.arun", arun_wrapper(self._tracer)
         )
+
+
+def set_workflow_context():
+    attach(set_value("workflow_name", WORKFLOW_NAME))
 
 
 @_with_tracer_wrapper
-def retrieve_wrapper(tracer, wrapped, instance, args, kwargs):
-    with tracer.start_as_current_span(f"{TASK_NAME}.task") as span:
+def run_wrapper(tracer, wrapped, instance, args, kwargs):
+    set_workflow_context()
+
+    with tracer.start_as_current_span(f"{WORKFLOW_NAME}.workflow") as span:
         span.set_attribute(
             SpanAttributes.TRACELOOP_SPAN_KIND,
-            TraceloopSpanKindValues.TASK.value,
+            TraceloopSpanKindValues.WORKFLOW.value,
         )
-        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, TASK_NAME)
+        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, WORKFLOW_NAME)
 
         process_request(span, args, kwargs)
         res = wrapped(*args, **kwargs)
@@ -57,15 +62,17 @@ def retrieve_wrapper(tracer, wrapped, instance, args, kwargs):
 
 
 @_with_tracer_wrapper
-async def aretrieve_wrapper(tracer, wrapped, instance, args, kwargs):
+async def arun_wrapper(tracer, wrapped, instance, args, kwargs):
+    set_workflow_context()
+
     async with start_as_current_span_async(
-        tracer=tracer, name=f"{TASK_NAME}.task"
+        tracer=tracer, name=f"{WORKFLOW_NAME}.workflow"
     ) as span:
         span.set_attribute(
             SpanAttributes.TRACELOOP_SPAN_KIND,
-            TraceloopSpanKindValues.TASK.value,
+            TraceloopSpanKindValues.WORKFLOW.value,
         )
-        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, TASK_NAME)
+        span.set_attribute(SpanAttributes.TRACELOOP_ENTITY_NAME, WORKFLOW_NAME)
 
         process_request(span, args, kwargs)
         res = await wrapped(*args, **kwargs)
