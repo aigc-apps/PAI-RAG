@@ -1,12 +1,9 @@
-from typing import Any, Dict, List, Optional
-from pai_rag.ingestion.models.config.base import SplitterConfig
-from pai_rag.ingestion.models.file.event import NodeOperationType
-from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
-from llama_index.core.vector_stores.utils import (
-    metadata_dict_to_node,
-    node_to_metadata_dict,
-)
-from pai_rag.ingestion.utils.node_utils import metadata_dict_to_node_v2
+from typing import Any, Dict, List
+from llama_index.core.schema import TextNode
+from pai_rag.data_ingestion.models.config.operator import SplitterConfig
+from pai_rag.data_ingestion.models.file.event import NodeOperationType
+from pai_rag.data_ingestion.operators.base import BaseOperator
+from pai_rag.data_ingestion.utils.node_utils import metadata_dict_to_node_v2, node_to_metadata_dict_v2
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     NodeParserConfig,
     PaiNodeParser,
@@ -48,11 +45,15 @@ class Splitter(BaseOperator):
 
         splitted_nodes = self.node_parser.get_nodes_from_documents([doc])
         for node in splitted_nodes:
-            node_dict = node_to_metadata_dict(doc)
+            # 去掉文本内容为空的分块
+            if isinstance(node, TextNode) and not node.text:
+                continue
+            node_dict = node_to_metadata_dict_v2(node)
             node_dict["operation"] = row.get("operation")
             node_dict["operation_reason"] = row.get("operation_reason")
             nodes.append(node_dict)
 
+        logger.info(f"Splitted {len(splitted_nodes)} nodes from {doc.node_id}.")
         return nodes
 
     def __call__(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:

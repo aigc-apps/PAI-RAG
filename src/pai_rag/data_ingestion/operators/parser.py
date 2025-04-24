@@ -1,13 +1,10 @@
 from typing import Any, Dict, List
 from llama_index.core.schema import TextNode
-from pai_rag.ingestion.models.config.base import ParserConfig
-from pai_rag.ingestion.models.file.event import NodeOperationType
-from pai_rag.ingestion.operators.base import BaseOperator
-from llama_index.core.vector_stores.utils import (
-    metadata_dict_to_node,
-    node_to_metadata_dict,
-)
-from pai_rag.ingestion.utils.download_utils import download_models_via_lock
+from pai_rag.data_ingestion.models.config.operator import ParserConfig
+from pai_rag.data_ingestion.models.file.event import NodeOperationType
+from pai_rag.data_ingestion.operators.base import BaseOperator
+from pai_rag.data_ingestion.utils.download_utils import download_models_via_lock
+from pai_rag.data_ingestion.utils.node_utils import node_to_metadata_dict_v2
 from pai_rag.integrations.readers.pai.pai_data_reader import (
     BaseDataReaderConfig,
     PaiDataReader,
@@ -49,7 +46,7 @@ class Parser(BaseOperator):
         nodes = []
         for node_id in node_ids:
             node = TextNode(node_id=node_id)
-            node_dict = node_to_metadata_dict(node)
+            node_dict = node_to_metadata_dict_v2(node)
             node_dict["operation"] = row.get("operation")
             node_dict["operation_reason"] = row.get("operation_reason")
             nodes.append(node_dict)
@@ -66,11 +63,16 @@ class Parser(BaseOperator):
                 logger.warning(f"No data found in the input files: {input_files}")
             
             for doc in documents:
-                node_dict = node_to_metadata_dict(doc)
+                node_dict = node_to_metadata_dict_v2(doc)
                 node_dict["operation"] = row.get("operation")
                 node_dict["operation_reason"] = row.get("operation_reason")
                 nodes.append(node_dict)
-                
+        
+            logger.info(f"Parsed {len(nodes)} nodes in the input files: {input_files}")
+        
+        else:
+            logger.warning(f"No `file_path` field found in the input entries.")
+
         return nodes
 
     def __call__(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -6,6 +6,9 @@ from pai_rag.utils.download_models import ModelScopeDownloader
 
 
 def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
+    model_dir = model_dir or os.getenv(
+            "PAI_RAG_MODEL_DIR", "./model_repository"
+        )
     model_path = os.path.join(model_dir, model_name)
     lock_file_path = model_name + ".lock"
     # 创建或打开一个锁文件

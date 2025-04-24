@@ -1,3 +1,5 @@
+import traceback
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 from pydantic import BaseModel
 from typing import List, Any
 import os
@@ -19,7 +21,6 @@ class BaseDataReaderConfig(BaseModel):
     enable_mandatory_ocr: bool = False
     format_sheet_data_to_json: bool = False
     sheet_column_filters: List[str] | None = None
-    number_workers: int = 4
 
 
 def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
@@ -189,13 +190,15 @@ class PaiDataReader(BaseReader):
         oss_store: Any = None,
     ):
         self.file_readers = get_file_readers(reader_config, oss_store)
-        self.number_workers = reader_config.number_workers
         self.oss_store = oss_store
 
         logger.info(
-            f"[PaiDataReader] created with number_workers : {self.number_workers}"
+            f"[PaiDataReader] created with {reader_config}"
         )
 
+    @retry(retry=retry_if_exception_type(OSError),
+        wait=wait_fixed(2),
+        stop=stop_after_attempt(3))
     def load_data(
         self,
         file_path_or_directory=None,
@@ -228,12 +231,17 @@ class PaiDataReader(BaseReader):
             documents = directory_reader.load_data(
                 show_progress=show_progress,
             )
+            return documents
+        except OSError as e:
+            logger.warning(f"读取{input_files}错误: {e}，重试中...")
+            raise
         except Exception as e:
-            logger.error("捕获到异常: %s", e)
+            logger.error(f"解析{input_files}错误: {e}")
             if e.__cause__:
-                logger.error("原始异常: %s", e.__cause__)
+                logger.error("解析错误原因: {e.__cause__}") 
                 raise e.__cause__
-        return documents
+            else:
+                raise
 
     async def aload_data(self, *args: Any, **load_kwargs: Any) -> List[Document]:
         """Load data from the input directory."""

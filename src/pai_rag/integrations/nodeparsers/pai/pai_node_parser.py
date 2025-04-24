@@ -27,6 +27,14 @@ from loguru import logger
 
 from pai_rag.utils.image_caption_utils import ImageCaptionTool
 from pai_rag.utils.nodeid_util import compute_node_id
+from enum import Enum
+
+
+class NodeParserType(str, Enum):
+    TOKEN = "token"
+    SENTENCE = "sentence"
+    SENTENCE_WINDOW = "sentencewindow"
+    SEMANTIC = "semantic"
 
 
 class NodeParserConfig(BaseModel):

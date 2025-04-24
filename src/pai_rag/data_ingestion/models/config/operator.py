@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
-from pai_rag.utils.constants import DEFAULT_NODE_PARSER_TYPE
+from pai_rag.utils.constants import DEFAULT_NODE_PARSER_TYPE, DEFAULT_PARAGRAPH_SEP
 
 
 
@@ -23,6 +23,7 @@ class BaseOperatorConfig(BaseModel):
     num_gpus: float = 0
     memory: float = 2
 
+    batch_size: int = 10
     input_path: str
     output_path: str
     model_dir: str = None
@@ -36,7 +37,6 @@ class ParserConfig(BaseOperatorConfig):
     enable_pdf_ocr: bool = False
     concat_sheet_rows: bool = False
     recursive: bool = True
-    supported_file_extensions: List[str] = []
 
 
 class SplitterConfig(BaseOperatorConfig):
@@ -44,7 +44,7 @@ class SplitterConfig(BaseOperatorConfig):
     Config for split operator.
     """
     name: OperatorName = OperatorName.SPLITTER
-    paragraph_separator: str = None
+    paragraph_separator: str = DEFAULT_PARAGRAPH_SEP
     node_parser_type: str = DEFAULT_NODE_PARSER_TYPE
     chunk_size: int = DEFAULT_CHUNK_SIZE
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP
@@ -56,9 +56,10 @@ class EmbedderConfig(BaseOperatorConfig):
     """
     name: OperatorName = OperatorName.EMBEDDER
     model: str = "bge-m3"
-    connection_name: str = None
-    workspace_id: str = None
+    connection_name: Optional[str] = None
+    workspace_id: Optional[str] = None
     enable_sparse: bool = False
     source: str = "huggingface"
+    batch_size: int = 32
 
 

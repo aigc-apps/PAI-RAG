@@ -2,9 +2,9 @@ import argparse
 import yaml
 from loguru import logger
 from typing import List
-from pai_rag.ingestion.operators.base import OperatorName
-from pai_rag.ingestion.ray_executor import RayExecutor
-from pai_rag.ingestion.utils.compute_resource_utils import (
+from pai_rag.data_ingestion.models.config.operator import OperatorName
+from pai_rag.data_ingestion.ray_executor import RayExecutor
+from pai_rag.data_ingestion.utils.compute_resource_utils import (
     enforce_min_requirements,
 )
 

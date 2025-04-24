@@ -5,7 +5,7 @@ import math
 import time
 import os
 from typing import List, Optional
-from pai_rag.ingestion.utils.cuda_utils import is_cuda_available
+from pai_rag.data_ingestion.utils.cuda_utils import is_cuda_available
 from loguru import logger
 
 

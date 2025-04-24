@@ -1,12 +1,12 @@
 from typing import List, Optional
 
-from pai_rag.ingestion.operators.base import BaseOperator, OperatorName
-from pai_rag.ingestion.utils.formatters import convert_dict_to_node
+from pai_rag.data_ingestion.operators.base import BaseOperator
+from pai_rag.data_ingestion.models.config.operator import OperatorName
 
 import ray
 from loguru import logger
 
-from pai_rag.ingestion.utils.vectordb_utils import get_vector_store
+from pai_rag.data_ingestion.utils.vectordb_utils import get_vector_store
 
 
 @ray.remote

@@ -23,7 +23,7 @@ def try_get_int_env(key, default_value=None):
 
 # paragraph separator for splitter
 DEFAULT_NODE_PARSER_TYPE = "Token"
-DEFAULT_PARAGRAPH_SEP = "\n\n\n"
+DEFAULT_PARAGRAPH_SEP = "\n\n"
 DEFAULT_SENTENCE_CHUNK_OVERLAP = 200
 DEFAULT_SENTENCE_WINDOW_SIZE = 3
 DEFAULT_BREAKPOINT = 95

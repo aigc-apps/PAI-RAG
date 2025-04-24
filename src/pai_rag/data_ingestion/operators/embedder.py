@@ -1,14 +1,12 @@
 import os
+import traceback
 from typing import Any, Dict, List
-from pai_rag.ingestion.models.config.base import EmbedderConfig
-from pai_rag.ingestion.models.file.event import NodeOperationType
-from pai_rag.ingestion.operators.base import BaseOperator
-from pai_rag.ingestion.utils.download_utils import download_models_via_lock
-from pai_rag.ingestion.utils.node_utils import metadata_dict_to_node_v2
-from llama_index.core.vector_stores.utils import (
-    metadata_dict_to_node,
-    node_to_metadata_dict,
-)
+
+import numpy as np
+from pai_rag.data_ingestion.models.config.operator import EmbedderConfig
+from pai_rag.data_ingestion.models.file.event import NodeOperationType
+from pai_rag.data_ingestion.operators.base import BaseOperator
+from pai_rag.data_ingestion.utils.download_utils import download_models_via_lock
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import parse_embed_config
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
@@ -35,6 +33,7 @@ class Embedder(BaseOperator):
                 "source": config.source,
                 "model": config.model,
                 "enable_sparse": config.enable_sparse,
+                "embed_batch_size": config.batch_size,
             }
         )
         # Init model download list
@@ -57,28 +56,32 @@ class Embedder(BaseOperator):
             f"""Embedder [PaiEmbedding] init finished with following parameters: {config}"""
         )
 
-    def calc_embedings(self, texts: List[str]) -> Dict[str, List[float]]:
+    def calc_embedings(self, texts: List[str]):
         embeddings = self.embed_model.get_text_embedding_batch(texts)
-        return dict(zip(texts, embeddings))
+        return embeddings
 
-    def calc_sparse_embeddings(self, texts: List[str]) -> Dict[str, List[float]]:
+    def calc_sparse_embeddings(self, texts: List[str]):
         if self.embedder_cfg.enable_sparse:
             sparse_embeddings = self.sparse_embed_model.encode_documents(texts)
         else:
              sparse_embeddings = [None] * len(texts)
-        return dict(zip(texts, sparse_embeddings))
+        return sparse_embeddings
         
 
-    def __call__(self, nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        node_texts = [node["text"] for node in nodes 
-            if node.get("operation") != NodeOperationType.DELETE]
-        
-        embedding_dict = self.calc_embedings(node_texts)
-        sparse_embedding_dict = self.calc_sparse_embeddings(node_texts)
+    def __call__(self, nodes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        logger.info(f"Start embedding {len(nodes)} nodes...")
+        try:
+            node_texts = nodes.get("text", [])
+            print(nodes.keys())
+            if len(node_texts) == 0:
+                logger.warning("No nodes to embed, directly returning...")
+                return nodes
+            
+            nodes["embedding"] = self.calc_embedings(node_texts)
+            nodes["sparse_embedding"] = self.calc_sparse_embeddings(node_texts)
 
-        for node in nodes:
-            if node.get("operation") != NodeOperationType.DELETE:
-                node["embedding"] = embedding_dict.get(node["text"])
-                node["sparse_embedding"] = sparse_embedding_dict.get(node["text"])
-
-        return nodes
+            logger.info(f"Successfully calculated embeddings for {len(nodes)} nodes.")
+            return nodes
+        except Exception as e:
+            logger.error(f"Error calculating embeddings for nodes: {traceback.format_exc()}")
+            raise
