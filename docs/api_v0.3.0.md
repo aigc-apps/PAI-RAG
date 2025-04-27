@@ -788,7 +788,6 @@ chat()
       "enable_mandatory_ocr": false,
       "format_sheet_data_to_json": false,
       "sheet_column_filters": null,
-      "number_workers": 4
     },
     "node_parser": {
       "type": "Sentence",
@@ -964,7 +963,6 @@ chat()
           "enable_mandatory_ocr": false,
           "format_sheet_data_to_json": false,
           "sheet_column_filters": null,
-          "number_workers": 4
         },
         "node_parser": {
           "type": "Sentence",

@@ -119,7 +119,6 @@ class ViewModel(BaseModel):
     # reader
     reader_type: str = "SimpleDirectoryReader"
     enable_mandatory_ocr: bool = False
-    number_workers: int = 4
 
     config_file: str = None
 
@@ -259,7 +258,6 @@ class ViewModel(BaseModel):
         view_model.parser_type = config.node_parser.type
 
         view_model.enable_mandatory_ocr = config.data_reader.enable_mandatory_ocr
-        view_model.number_workers = config.data_reader.number_workers
 
         view_model.similarity_top_k = config.retriever.similarity_top_k
         view_model.image_similarity_top_k = config.retriever.image_similarity_top_k
@@ -438,7 +436,6 @@ class ViewModel(BaseModel):
         config["node_parser"]["type"] = self.parser_type
 
         config["data_reader"]["enable_mandatory_ocr"] = self.enable_mandatory_ocr
-        config["data_reader"]["number_workers"] = int(self.number_workers)
 
         config["retriever"]["similarity_top_k"] = self.similarity_top_k
         config["retriever"]["image_similarity_top_k"] = self.image_similarity_top_k
@@ -709,7 +706,6 @@ class ViewModel(BaseModel):
 
         settings["enable_multimodal"] = {"value": self.enable_multimodal}
         settings["enable_mandatory_ocr"] = {"value": self.enable_mandatory_ocr}
-        settings["number_workers"] = {"value": self.number_workers}
 
         # retrieval and rerank
         settings["retrieval_mode"] = {"value": self.retrieval_mode}
