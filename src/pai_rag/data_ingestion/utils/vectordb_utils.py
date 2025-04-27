@@ -1,6 +1,7 @@
 
 import asyncio
 import requests
+from pai_rag.integrations.embeddings.pai.pai_embedding_config import PaiBaseEmbeddingConfig
 from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
 from pai_rag.integrations.index.pai.utils.vector_store_utils import create_vector_store
 from pai_rag.integrations.index.pai.vector_store_config import (
@@ -32,26 +33,27 @@ def get_vector_store(
     knowledgebase: str,
     embed_dims: int,
 ):
-        
-        vector_store_config = get_vector_store_config(
-                    rag_endpoint=rag_endpoint, rag_key=rag_key, knowledgebase=knowledgebase
-                )
-        assert (
-            vector_store_config.type != SupportedVectorStoreType.faiss
-        ), "FAISS is not supported."
+    
+    vector_store_config = get_vector_store_config(
+        rag_endpoint=rag_endpoint, rag_key=rag_key, knowledgebase=knowledgebase
+    )
 
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    assert (
+        vector_store_config.type != SupportedVectorStoreType.faiss
+    ), "FAISS is not supported."
 
-        vector_store = create_vector_store(
-            vectordb_config=vector_store_config,
-            embed_dims=embed_dims,
-        )
+    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
-        logger.info(
-            f"""[PaiVectorStore] init finished with following parameters:
-                        config: {vector_store_config}
-                        embed_dims: {embed_dims}
-            """
-        )
+    vector_store = create_vector_store(
+        vectordb_config=vector_store_config,
+        embed_dims=embed_dims,
+    )
 
-        return vector_store
+    logger.info(
+        f"""[PaiVectorStore] init finished with following parameters:
+                    config: {vector_store_config}
+                    embed_dims: {embed_dims}
+        """
+    )
+
+    return vector_store

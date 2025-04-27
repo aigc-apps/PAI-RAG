@@ -28,7 +28,7 @@ from pai_rag.integrations.index.pai.vector_store_config import (
     VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH,
     VectorIndexRetrievalType,
 )
-from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorStore
+from llama_index.vector_stores.milvus import MilvusVectorStore
 from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
     MyElasticsearchStore,
 )
@@ -224,7 +224,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         delete_from_docstore: bool = False,
         **delete_kwargs: Any,
     ) -> None:
-        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+        if isinstance(self._vector_store, MilvusVectorStore) or isinstance(
             self._vector_store, MyElasticsearchStore
         ):
             return self._vector_index.delete_nodes(
@@ -244,7 +244,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         delete_from_docstore: bool = False,
         **delete_kwargs: Any,
     ) -> Coroutine[Any, Any, None]:
-        if isinstance(self._vector_store, MyMilvusVectorStore):
+        if isinstance(self._vector_store, MilvusVectorStore):
             await self._vector_store.adelete_nodes(
                 node_ids, delete_from_docstore, **delete_kwargs
             )
@@ -264,7 +264,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     def delete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> None:
-        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+        if isinstance(self._vector_store, MilvusVectorStore) or isinstance(
             self._vector_store, MyElasticsearchStore
         ):
             return self._vector_index.delete_ref_doc(
@@ -326,7 +326,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
     async def adelete_ref_doc(
         self, ref_doc_id: str, delete_from_docstore: bool = False, **delete_kwargs: Any
     ) -> Coroutine[Any, Any, None]:
-        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+        if isinstance(self._vector_store, MilvusVectorStore) or isinstance(
             self._vector_store, MyElasticsearchStore
         ):
             return await asyncio.to_thread(
@@ -344,7 +344,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self,
     ):
         """清空索引中的内容并删除索引"""
-        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+        if isinstance(self._vector_store, MilvusVectorStore) or isinstance(
             self._vector_store, MyElasticsearchStore
         ):
             self._vector_store.clear()
@@ -358,7 +358,7 @@ class PaiVectorStoreIndex(VectorStoreIndex):
         self,
     ):
         """清空索引中的内容并删除索引"""
-        if isinstance(self._vector_store, MyMilvusVectorStore) or isinstance(
+        if isinstance(self._vector_store, MilvusVectorStore) or isinstance(
             self._vector_store, MyElasticsearchStore
         ):
             await self._vector_store.aclear()

@@ -1,4 +1,3 @@
-import os
 import traceback
 from typing import Any, Dict, List
 
@@ -12,7 +11,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import parse_embed
 from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
-import ray
 from loguru import logger
 
 
@@ -72,7 +70,6 @@ class Embedder(BaseOperator):
         logger.info(f"Start embedding {len(nodes)} nodes...")
         try:
             node_texts = nodes.get("text", [])
-            print(nodes.keys())
             if len(node_texts) == 0:
                 logger.warning("No nodes to embed, directly returning...")
                 return nodes

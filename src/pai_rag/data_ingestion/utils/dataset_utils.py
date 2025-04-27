@@ -18,7 +18,7 @@ def get_input_files(
     if isinstance(file_path_or_directory, list):
         # file list
         input_files = [
-            f
+            str(f)
             for f in file_path_or_directory
             if os.path.isfile(f)
             and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
@@ -29,14 +29,14 @@ def get_input_files(
         # glob from directory
         directory = pathlib.Path(file_path_or_directory)
         input_files = [
-            f
+            str(f)
             for f in directory.rglob(filter_pattern)
             if os.path.isfile(f)
             and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
         ]
     elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
         # Single file
-        input_files = [pathlib.Path(file_path_or_directory)]
+        input_files = [str(file_path_or_directory)]
     else:
         raise ValueError(
             f"Invalid input path or not supported file type for '{file_path_or_directory}'."

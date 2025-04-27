@@ -8,7 +8,11 @@ from llama_index.core.schema import (
     TextNode,
     MetadataMode,
 )
-
+from pai_rag.data_ingestion.constants import (
+    DEFAULT_MD5_FIELD,
+    DEFAULT_MODIFIED_AT_FIELD,
+    DEFAULT_NODE_SOURCE_FIELD,
+)
 
 PERSIST_COLUMN_FIELDS = [
     "id",
@@ -28,6 +32,9 @@ PERSIST_COLUMN_FIELDS = [
     "operation_reason",
     "_node_content",
     "_node_type",
+    DEFAULT_MD5_FIELD,
+    DEFAULT_MODIFIED_AT_FIELD,
+    DEFAULT_NODE_SOURCE_FIELD,
 ]
 
 
@@ -47,6 +54,9 @@ def metadata_dict_to_node_v2(metadata: dict, text: Optional[str] = None) -> Base
         node = Document.from_json(node_json)
     else:
         node = TextNode.from_json(node_json)
+
+    if node.embedding is None:
+        node.embedding = metadata.get("embedding")
 
     if text is not None:
         node.set_content(text)

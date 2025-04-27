@@ -63,3 +63,13 @@ class EmbedderConfig(BaseOperatorConfig):
     batch_size: int = 32
 
 
+
+class WriterConfig(BaseOperatorConfig):
+    """
+    Config for embed operator.
+    """
+    name: OperatorName = OperatorName.WRITER
+    rag_endpoint: str
+    rag_key: str
+    knowledgebase: str
+    embed_dims: int

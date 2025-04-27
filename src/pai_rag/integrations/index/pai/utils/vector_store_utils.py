@@ -20,7 +20,7 @@ from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
     MyElasticsearchStore,
 )
 from pai_rag.integrations.vector_stores.faiss.my_faiss import MyFaissVectorStore
-from pai_rag.integrations.vector_stores.milvus.my_milvus import MyMilvusVectorStore
+from llama_index.vector_stores.milvus import MilvusVectorStore
 from pai_rag.integrations.vector_stores.analyticdb.my_analyticdb import (
     MyAnalyticDBVectorStore,
 )
@@ -184,15 +184,12 @@ def create_milvus(
 
     milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}/{milvus_config.database}"
     token = f"{milvus_config.user}:{milvus_config.password}"
-    milvus_store = MyMilvusVectorStore(
+    milvus_store = MilvusVectorStore(
         uri=milvus_url,
         token=token,
         collection_name=collection_name,
         dim=embed_dims,
-        enable_sparse=True if not is_image_store else False,
-        sparse_embedding_function=BGEM3SparseEmbeddingFunction()
-        if not is_image_store
-        else None,
+        enable_sparse=True,
         similarity_metric="cosine",
         hybrid_ranker="WeightedRanker",
         # TODO: add weighted reranker config

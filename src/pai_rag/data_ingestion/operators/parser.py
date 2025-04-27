@@ -5,11 +5,29 @@ from pai_rag.data_ingestion.models.file.event import NodeOperationType
 from pai_rag.data_ingestion.operators.base import BaseOperator
 from pai_rag.data_ingestion.utils.download_utils import download_models_via_lock
 from pai_rag.data_ingestion.utils.node_utils import node_to_metadata_dict_v2
+from pai_rag.data_ingestion.constants import (
+    DEFAULT_NODE_SOURCE_FIELD,
+    DEFAULT_MODIFIED_AT_FIELD,
+    DEFAULT_MD5_FIELD,
+)
 from pai_rag.integrations.readers.pai.pai_data_reader import (
     BaseDataReaderConfig,
     PaiDataReader,
 )
+from pai_rag.data_ingestion.utils.path_resolver import MountPathResolver, LocalPathResolver
+from pai_rag.data_ingestion.ext.langstudio.langstudio_path_resolver import LangStudioPathResolver
 from loguru import logger
+
+from pai_rag.utils.file_utils import generate_file_md5, get_modified_time
+
+
+def get_path_resolver() -> MountPathResolver:
+    try:
+        langstudio_path_resolver = LangStudioPathResolver.from_env()
+        return langstudio_path_resolver
+    except Exception as e:
+        logger.warning(f"Failed to create LangStudioPathResolver from env: {e}")
+        return LocalPathResolver()
 
 
 class Parser(BaseOperator):
@@ -37,6 +55,7 @@ class Parser(BaseOperator):
             reader_config=self.data_reader_config,
             oss_store=None,
         )
+        self.path_resolver = get_path_resolver()
         logger.info(
             f"""Parser operator init finished with following parameters: {config}"""
         )
@@ -63,6 +82,9 @@ class Parser(BaseOperator):
                 logger.warning(f"No data found in the input files: {input_files}")
             
             for doc in documents:
+                doc.metadata[DEFAULT_NODE_SOURCE_FIELD] = self.path_resolver.resolve_source_url(file_path)
+                doc.metadata[DEFAULT_MD5_FIELD] = generate_file_md5(file_path)
+                doc.metadata[DEFAULT_MODIFIED_AT_FIELD] = get_modified_time(file_path)
                 node_dict = node_to_metadata_dict_v2(doc)
                 node_dict["operation"] = row.get("operation")
                 node_dict["operation_reason"] = row.get("operation_reason")

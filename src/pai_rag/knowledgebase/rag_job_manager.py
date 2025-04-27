@@ -17,7 +17,7 @@ from pai_rag.knowledgebase.models import (
     TaskInfo,
 )
 from pai_rag.utils.constants import (
-    DEFAILT_MAX_FILE_TASK_COUNT,
+    DEFAULT_MAX_FILE_TASK_COUNT,
     DEFAULT_KNOWLEDGEBASE_PATH,
     DEFAULT_TASK_FILE,
 )
@@ -122,7 +122,7 @@ class JobManager:
         self.task_file = task_file
         self._lock = threading.Lock()
         self._job_status: JobStatus = self.load_status()
-        self._task_queue = TimeDebouncedTaskQueue(max_size=DEFAILT_MAX_FILE_TASK_COUNT)
+        self._task_queue = TimeDebouncedTaskQueue(max_size=DEFAULT_MAX_FILE_TASK_COUNT)
         self.rag_config = rag_config
 
     # 后续可以加resume机制

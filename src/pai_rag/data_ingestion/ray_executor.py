@@ -4,7 +4,7 @@ from typing import List
 import psutil
 from pai_rag.data_ingestion.datasource.filedelta_datasource import FileDeltaDatasource
 from pai_rag.data_ingestion.models.config.datasource import DataSourceConfig
-from pai_rag.data_ingestion.models.config.operator import BaseOperatorConfig, EmbedderConfig, ParserConfig, SplitterConfig
+from pai_rag.data_ingestion.models.config.operator import BaseOperatorConfig, EmbedderConfig, ParserConfig, SplitterConfig, WriterConfig
 from pai_rag.data_ingestion.operators.base import BaseOperator
 from pai_rag.data_ingestion.operators.embedder import Embedder
 from pai_rag.data_ingestion.operators.parser import Parser
@@ -57,9 +57,13 @@ class RayExecutor:
             return Splitter
         elif isinstance(op_config, EmbedderConfig):
             return Embedder
+        elif isinstance(op_config, WriterConfig):
+            return Writer
         
         raise ValueError(f"Unknown operator config: {op_config}.")
-        
+
+    def _need_batch_execution(self, op_config: BaseOperatorConfig) -> bool:
+        return isinstance(op_config, EmbedderConfig) or isinstance(op_config, WriterConfig)
 
     def run(self,
             op_configs: List[BaseOperatorConfig] = [],
@@ -70,7 +74,7 @@ class RayExecutor:
         start_time = time.time()
 
         if datasource_config is not None:
-            datasource = FileDeltaDatasource(paths=datasource_config.input_path, file_extensions=datasource_config.file_extensions)
+            datasource = FileDeltaDatasource(config=datasource_config)
             dataset = ray.data.read_datasource(datasource)
             dataset.write_json(
                 datasource_config.output_path,
@@ -83,7 +87,12 @@ class RayExecutor:
             if len(op_configs) == 0:
                 logger.info("No op_configs and datasource provided, skipping dataset process pipeline.")
                 return
-            dataset = ray.data.read_json(op_configs[0].input_path)
+            
+            input_list = get_input_files(
+                file_path_or_directory=op_configs[0].input_path,
+                filter_pattern="*.jsonl",
+            )
+            dataset = ray.data.read_json(input_list)
 
         for op_config in op_configs:
             OP_TYPE = self._resolve_op_class(op_config=op_config)
@@ -92,7 +101,9 @@ class RayExecutor:
                 memory=op_config.memory,
                 num_gpus=op_config.num_gpus,
             )
-            if isinstance(op_config, EmbedderConfig):
+            if self._need_batch_execution(op_config=op_config):
+                # Embedder需要batch执行
+                logger.info(f"Executing {op_config.name} in batch mode.")
                 dataset = dataset.map_batches(
                     OP_TYPE,
                     batch_size=op_config.batch_size,
@@ -103,6 +114,7 @@ class RayExecutor:
                     fn_constructor_kwargs={ "config": op_config }
                 )
             else:
+                logger.info(f"Executing {op_config.name} in flat_map mode.")
                 dataset = dataset.flat_map(
                     OP_TYPE,
                     num_cpus=op_config.num_cpus,
@@ -112,14 +124,17 @@ class RayExecutor:
                     fn_constructor_kwargs={ "config": op_config }
                 )
 
-            # 保存op结果
-            dataset.write_json(
-                op_config.output_path,
-                min_rows_per_file=DEFAULT_ROWS_PER_FILE,
-                try_create_dir=True,
-                filename_provider=self.filename_provider,
-                force_ascii=False,
-            )
+            # 保存op结果，保存向量库无需执行
+            if isinstance(op_config, WriterConfig):
+                dataset.materialize()
+            else:
+                dataset.write_json(
+                    op_config.output_path,
+                    min_rows_per_file=DEFAULT_ROWS_PER_FILE,
+                    try_create_dir=True,
+                    filename_provider=self.filename_provider,
+                    force_ascii=False,
+                )
 
         logger.info(f"All ops are done in {time.time() - start_time:.3f}s.")
 
