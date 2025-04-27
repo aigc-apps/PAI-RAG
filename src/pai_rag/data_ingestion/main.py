@@ -22,10 +22,12 @@ def read(
     output_path: str=typer.Option(help="The output path to the data."),
     enable_delta: bool=typer.Option(default=False, help="Whether to load file changes only.", show_default=True),
     supported_file_types_str: str=typer.Option(default="pdf,txt,csv,xlsx,xls,docx,md,html,htm", help="The supported file extensions.", show_default=True),
-    target_index: str=typer.Option(help="The path to the index manifest or the ID of the registered dataset(DataType=INDEX) in PAI."),
-    target_index_version: str=typer.Option(help="The version name of the knowledge base, used for incremental ingestion."),
-    rag_api_key: str=typer.Option(help="The RAG API key to use."),
-    rag_endpoint: str=typer.Option(help="The RAG endpoint to use."),
+    target_index: str=typer.Option(default=None, show_default=True, help="The path to the index manifest or the ID of the registered dataset(DataType=INDEX) in PAI."),
+    target_index_version: str=typer.Option(default=None, show_default=True, help="The version name of the knowledge base, used for incremental ingestion."),
+    rag_api_key: str=typer.Option(default=None, show_default=True, help="The RAG API key to use."),
+    rag_endpoint: str=typer.Option(default=None, show_default=True, help="The RAG endpoint to use."),
+    knowledgebase: str=typer.Option(default="default", show_default=True, help="The knowledge base name to use."),
+    embed_dims: str=typer.Option(default=1024, show_default=True, help="Default embedding dimensions."),
 ):
     logger.info("Read execution started.")
     data_source_config = DataSourceConfig(
@@ -37,6 +39,8 @@ def read(
         target_index_version=target_index_version,
         rag_api_key=rag_api_key,
         rag_endpoint=rag_endpoint,
+        knowledgebase=knowledgebase,
+        embed_dims=embed_dims,
     )
     ray_executor.run(op_configs=[], datasource_config=data_source_config)
     logger.info("Read execution completed.")
