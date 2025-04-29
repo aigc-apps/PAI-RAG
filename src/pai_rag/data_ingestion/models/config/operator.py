@@ -27,6 +27,7 @@ class BaseOperatorConfig(BaseModel):
     input_path: str
     output_path: str
     model_dir: str = None
+    concurrency: int = 1
 
 
 class ParserConfig(BaseOperatorConfig):

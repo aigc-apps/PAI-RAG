@@ -1,0 +1,46 @@
+# process schedule
+# a list of several pai_rag offline process operators with their arguments
+datasource:
+  enable_delta: true
+  supported_file_types_str: "pdf,txt,csv,xlsx,xls,docx,md,html,htm,jsonl"
+  rag_api_key:
+  rag_endpoint:
+  knowledgebase:
+  embed_dims: 1024
+
+operators:
+  - name: "parse"
+    num_cpus: 1
+    memory: 8
+    num_gpus: 0
+    enable_pdf_ocr: false
+    concat_sheet_rows: false
+    concurrency: 4
+
+  - name: "split"
+    node_parser_type: "Sentence"
+    chunk_size: 1000
+    chunk_overlap: 20
+    paragraph_separator: "\n\n"
+    num_cpus: 1
+    memory: 4
+    concurrency: 10
+
+
+  - name: "embed"
+    model: "bge-m3"
+    source: "huggingface"
+    batch_size: 32
+    num_cpus: 4
+    num_gpus: 1
+    memory: 10
+    concurrency: 1
+  
+  - name: "write"
+    rag_endpoint:
+    rag_api_key:
+    knowledgebase:
+    embed_dims: 1024
+    num_cpus: 1
+    memory: 2
+    batch_size: 100

@@ -94,7 +94,7 @@ class RayExecutor:
 
         for op_config in op_configs:
             OP_TYPE = self._resolve_op_class(op_config=op_config)
-            op_concurrency = compute_concurrency_count(
+            op_concurrency = op_config.concurrency or compute_concurrency_count(
                 num_cpus=op_config.num_cpus,
                 memory=op_config.memory,
                 num_gpus=op_config.num_gpus,
