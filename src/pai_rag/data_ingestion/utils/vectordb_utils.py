@@ -13,12 +13,12 @@ from loguru import logger
 
 
 def get_vector_store_config(
-    rag_endpoint: str, rag_key: str, knowledgebase: str
+    rag_endpoint: str, rag_api_key: str, knowledgebase: str
 ) -> BaseVectorStoreConfig:
     try:
         response = requests.get(
             f"{rag_endpoint}/api/v1/knowledgebases/{knowledgebase}",
-            headers={"Authorization": f"Bearer {rag_key}"},
+            headers={"Authorization": f"Bearer {rag_api_key}"},
         )
         knowledgebase: KnowledgeBase = KnowledgeBase.model_validate(response.json())
         return knowledgebase.vector_store_config
@@ -29,13 +29,13 @@ def get_vector_store_config(
 
 def get_vector_store(
     rag_endpoint: str,
-    rag_key: str,
+    rag_api_key: str,
     knowledgebase: str,
     embed_dims: int,
 ):
     
     vector_store_config = get_vector_store_config(
-        rag_endpoint=rag_endpoint, rag_key=rag_key, knowledgebase=knowledgebase
+        rag_endpoint=rag_endpoint, rag_api_key=rag_api_key, knowledgebase=knowledgebase
     )
 
     assert (

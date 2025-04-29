@@ -25,7 +25,7 @@ class Writer(BaseOperator):
 
         self.vector_store = get_vector_store(
             rag_endpoint=config.rag_endpoint,
-            rag_key=config.rag_key,
+            rag_api_key=config.rag_api_key,
             knowledgebase=config.knowledgebase,
             embed_dims=config.embed_dims,
         )
@@ -44,7 +44,7 @@ class Writer(BaseOperator):
         try:
             if len(node_ids_to_delete) > 0:
                 self.vector_store.delete_nodes(node_ids_to_delete)
-                logger.info(f"Deleted {len(node_ids_to_delete)} nodes successfully.")
+                logger.info(f"Deleted {node_ids_to_delete} nodes successfully.")
 
             if len(add_chunks) > 0:
                 add_nodes = [metadata_dict_to_node_v2(chunk) for chunk in add_chunks]

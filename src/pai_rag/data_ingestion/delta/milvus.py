@@ -29,7 +29,7 @@ def list_docs_in_milvus_collection(
         if not fetch_data:
             iterator.close()
             break
-
+        
         # scan the fetch data, get the latest modified time and the node ids
         for record in fetch_data:
             source = record[DEFAULT_NODE_SOURCE_FIELD]

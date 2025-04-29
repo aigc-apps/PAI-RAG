@@ -11,16 +11,13 @@ from pai_rag.data_ingestion.operators.parser import Parser
 from pai_rag.data_ingestion.operators.split import Splitter
 from pai_rag.data_ingestion.operators.writer import Writer
 from pai_rag.data_ingestion.utils.concurrency_utils import compute_concurrency_count
-from pai_rag.data_ingestion.utils.dataset_utils import get_input_files, get_input_files_with_es_backend
+from pai_rag.data_ingestion.utils.dataset_utils import get_input_files
 
-import sys
-import math
 import ray
 import time
 from loguru import logger
 
 from pai_rag.data_ingestion.utils.filename_utils import BlockFileNameProvider
-from pai_rag.data_ingestion.utils.vectordb_utils import get_vector_store
 
 
 DEFAULT_WORKING_DIR = "/app"
@@ -34,6 +31,7 @@ class RayExecutor:
     def __init__(self, working_dir: str = DEFAULT_WORKING_DIR):
         self.working_dir = working_dir
         # init ray
+        print("model dir: ", os.environ.get("PAI_RAG_MODEL_DIR"))
         if os.environ.get("PAI_RAG_MODEL_DIR"):
             ray_env_model_dir = os.environ["PAI_RAG_MODEL_DIR"]
         else:
@@ -48,7 +46,6 @@ class RayExecutor:
             }
         )
         self.execution_ts = time.strftime("%Y%m%d-%H%M%S")
-        self.filename_provider = BlockFileNameProvider(run_label=self.execution_ts, file_format="jsonl")
 
     def _resolve_op_class(self, op_config: BaseOperatorConfig) -> BaseOperator:
         if isinstance(op_config, ParserConfig):
@@ -74,13 +71,14 @@ class RayExecutor:
         start_time = time.time()
 
         if datasource_config is not None:
+            filename_provider = BlockFileNameProvider(run_label=f"read-{self.execution_ts}", file_format="jsonl")
             datasource = FileDeltaDatasource(config=datasource_config)
             dataset = ray.data.read_datasource(datasource)
             dataset.write_json(
                 datasource_config.output_path,
                 min_rows_per_file=DEFAULT_ROWS_PER_FILE,
                 try_create_dir=True,
-                filename_provider=self.filename_provider,
+                filename_provider=filename_provider,
                 force_ascii=False,
             )
         else:
@@ -128,11 +126,12 @@ class RayExecutor:
             if isinstance(op_config, WriterConfig):
                 dataset.materialize()
             else:
+                filename_provider = BlockFileNameProvider(run_label=f"{op_config.name.value}-{self.execution_ts}", file_format="jsonl")
                 dataset.write_json(
                     op_config.output_path,
                     min_rows_per_file=DEFAULT_ROWS_PER_FILE,
                     try_create_dir=True,
-                    filename_provider=self.filename_provider,
+                    filename_provider=filename_provider,
                     force_ascii=False,
                 )
 

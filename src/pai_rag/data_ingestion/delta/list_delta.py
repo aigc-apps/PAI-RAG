@@ -16,14 +16,14 @@ from loguru import logger
 """
 def list_files_from_rag_service(
     rag_endpoint: str,
-    rag_key: str,
+    rag_api_key: str,
     knowledgebase: str,
     embed_dims: int,
     oss_path_prefix: str,
 ):
     vector_store = get_vector_store(
         rag_endpoint=rag_endpoint,
-        rag_key=rag_key,
+        rag_api_key=rag_api_key,
         knowledgebase=knowledgebase,
         embed_dims=embed_dims,
     )

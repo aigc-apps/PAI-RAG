@@ -1,3 +1,8 @@
+import dotenv
+dotenv.load_dotenv()
+
+
+import os
 import typer
 from loguru import logger
 from pai_rag.data_ingestion.models.config.datasource import DataSourceConfig
@@ -12,7 +17,6 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import SupportedEm
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserType
 from pai_rag.utils.constants import DEFAULT_PARAGRAPH_SEP
 
-
 app = typer.Typer()
 
 
@@ -21,12 +25,12 @@ def read(
     input_path: str=typer.Option(help="The input path to the data."),
     output_path: str=typer.Option(help="The output path to the data."),
     enable_delta: bool=typer.Option(default=False, help="Whether to load file changes only.", show_default=True),
-    supported_file_types_str: str=typer.Option(default="pdf,txt,csv,xlsx,xls,docx,md,html,htm", help="The supported file extensions.", show_default=True),
+    supported_file_types_str: str=typer.Option(default="pdf,txt,csv,xlsx,xls,docx,md,html,htm,jsonl", help="The supported file extensions.", show_default=True),
     target_index: str=typer.Option(default=None, show_default=True, help="The path to the index manifest or the ID of the registered dataset(DataType=INDEX) in PAI."),
     target_index_version: str=typer.Option(default=None, show_default=True, help="The version name of the knowledge base, used for incremental ingestion."),
     rag_api_key: str=typer.Option(default=None, show_default=True, help="The RAG API key to use."),
     rag_endpoint: str=typer.Option(default=None, show_default=True, help="The RAG endpoint to use."),
-    knowledgebase: str=typer.Option(default="default", show_default=True, help="The knowledge base name to use."),
+    knowledgebase: str=typer.Option(default=None, show_default=True, help="The knowledge base name to use."),
     embed_dims: str=typer.Option(default=1024, show_default=True, help="Default embedding dimensions."),
 ):
     logger.info("Read execution started.")
@@ -37,9 +41,9 @@ def read(
         file_extensions=supported_file_types_str.split(","),
         target_index=target_index,
         target_index_version=target_index_version,
-        rag_api_key=rag_api_key,
-        rag_endpoint=rag_endpoint,
-        knowledgebase=knowledgebase,
+        rag_api_key=rag_api_key or os.environ.get("PAI_RAG_KEY"),
+        rag_endpoint=rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT"),
+        knowledgebase=knowledgebase or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default"),
         embed_dims=embed_dims,
     )
     ray_executor.run(op_configs=[], datasource_config=data_source_config)
@@ -132,21 +136,28 @@ def write(
     input_path: str=typer.Option(help="The input path to the data."),
     num_cpus: int=typer.Option(help="Cpu required for each embedding process."),
     memory: int=typer.Option(help="Memory(GB) required for each embedding process."),
-    rag_endpoint: str=typer.Option(help="Endpoint of PAI-RAG service."),
-    rag_key: str=typer.Option(help="Token of PAI-RAG service."),
-    knowledgebase: str=typer.Option(default="default", show_default=True, help="Knowledgebase name to save data."),
+    rag_endpoint: str=typer.Option(default=None, help="Endpoint of PAI-RAG service."),
+    rag_api_key: str=typer.Option(default=None, help="Token of PAI-RAG service."),
+    knowledgebase: str=typer.Option(default=None, show_default=True, help="Knowledgebase name to save data."),
     embed_dims: int=typer.Option(default=1024, show_default=True, help="Embedding dimensions."),
 ):
+    rag_endpoint = rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT")
+    rag_api_key = rag_api_key or os.environ.get("PAI_RAG_KEY")
+    knowledgebase = knowledgebase or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default")
+
+    assert rag_endpoint, "Please provide rag_endpoint to ingest into."
+    assert rag_api_key, "Please provide token of rag service."
+
     logger.info("Writer execution started.")
     writer_config = WriterConfig(
         input_path=input_path,
         output_path="dummy",
         num_cpus=num_cpus,
         memory=memory,
-        knowledgebase=knowledgebase,
         embed_dims=embed_dims,
+        rag_api_key=rag_api_key,
         rag_endpoint=rag_endpoint,
-        rag_key=rag_key,
+        knowledgebase=knowledgebase,
     )
     ray_executor.run(op_configs=[writer_config])
     logger.info("Writer execution completed.")

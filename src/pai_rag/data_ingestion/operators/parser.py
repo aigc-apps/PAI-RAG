@@ -64,10 +64,12 @@ class Parser(BaseOperator):
         node_ids = row.get("node_ids", [])
         nodes = []
         for node_id in node_ids:
-            node = TextNode(node_id=node_id)
+            node = TextNode(id_=node_id)
             node_dict = node_to_metadata_dict_v2(node)
             node_dict["operation"] = row.get("operation")
             node_dict["operation_reason"] = row.get("operation_reason")
+            node_dict["file_name"] = row.get("file_name")
+            node_dict["file_path"] = row.get("file_path")
             nodes.append(node_dict)
         
         return nodes

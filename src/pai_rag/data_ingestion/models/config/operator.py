@@ -8,10 +8,10 @@ from pai_rag.utils.constants import DEFAULT_NODE_PARSER_TYPE, DEFAULT_PARAGRAPH_
 
 
 class OperatorName(str, Enum):
-    PARSER = "parser"
-    SPLITTER = "splitter"
-    EMBEDDER = "embedder"
-    WRITER = "writer"
+    PARSER = "parse"
+    SPLITTER = "split"
+    EMBEDDER = "embed"
+    WRITER = "write"
 
 
 class BaseOperatorConfig(BaseModel):
@@ -70,6 +70,6 @@ class WriterConfig(BaseOperatorConfig):
     """
     name: OperatorName = OperatorName.WRITER
     rag_endpoint: str
-    rag_key: str
+    rag_api_key: str
     knowledgebase: str
     embed_dims: int

@@ -22,6 +22,7 @@ class FileDeltaDatasource(FileBasedDatasource):
             paths=config.input_path,
             file_extensions=config.file_extensions,
         )
+        self.config = config
         self.path_resolver = get_path_resolver()
         oss_path_prefix = self.path_resolver.resolve_source_url(config.input_path)
 
@@ -54,6 +55,7 @@ class FileDeltaDatasource(FileBasedDatasource):
             logger.error(
                 f"Please specify the information needed to compute delta."
             )
+            raise ValueError("Please specify the information needed to compute delta.")
         else:
             logger.info(f"Will not compute delta. This is a full load.")
 
@@ -75,8 +77,10 @@ class FileDeltaDatasource(FileBasedDatasource):
                 file_uri = self.path_resolver.resolve_source_url(file_path)
                 existing_file_set.add(file_uri)
                 doc_item = self.docs_in_store.get(file_uri)
+                file_mtime = os.stat(file_path).st_mtime
+
                 if doc_item:
-                    file_mtime = os.stat(file_path).st_mtime
+                    print("matched: ", file_uri, file_name, file_mtime, doc_item.modified_time)
                     if file_mtime <= doc_item.modified_time:
                         logger.debug(
                             f"Skipping {file_name} as it has not been modified since last indexing."
@@ -88,7 +92,7 @@ class FileDeltaDatasource(FileBasedDatasource):
                         )
                         file_info_list.append(
                             {
-                                "node_ids": doc_item.node_ids,
+                                "node_ids": [doc_item.node_ids],
                                 "file_name": [file_name],
                                 "file_path": [file_path],
                                 DEFAULT_NODE_SOURCE_FIELD: [file_uri],
@@ -99,6 +103,7 @@ class FileDeltaDatasource(FileBasedDatasource):
                         )
                         file_info_list.append(
                             {
+                                "node_ids": [None],
                                 "file_name": [file_name],
                                 "file_path": [file_path],
                                 DEFAULT_NODE_SOURCE_FIELD: [file_uri],
@@ -113,6 +118,7 @@ class FileDeltaDatasource(FileBasedDatasource):
                     )
                     file_info_list.append(
                         {
+                            "node_ids": [None],
                             "file_name": [file_name],
                             "file_path": [file_path],
                             DEFAULT_NODE_SOURCE_FIELD: [file_uri],
@@ -124,14 +130,15 @@ class FileDeltaDatasource(FileBasedDatasource):
 
             for file_uri in self.docs_in_store:
                 if file_uri not in existing_file_set:
+                    doc_item = self.docs_in_store[file_uri]
                     logger.info(f"File {file_uri} has been deleted. Will remove from vector store.")
                     file_info_list.append(
                         {
-                            "node_ids": doc_item.node_ids,
-                            "file_name": [file_name],
-                            "file_path": [file_path],
+                            "node_ids": [doc_item.node_ids],
+                            "file_name": [file_uri],
+                            "file_path": [file_uri],
                             DEFAULT_NODE_SOURCE_FIELD: [file_uri],
-                            DEFAULT_MODIFIED_AT_FIELD: [file_mtime],
+                            DEFAULT_MODIFIED_AT_FIELD: [-1],
                             "operation": [NodeOperationType.DELETE],
                             "operation_reason": [FileChangeType.DELETE]
                         }
@@ -139,6 +146,7 @@ class FileDeltaDatasource(FileBasedDatasource):
             
             file_results = [pyarrow_table_from_pydict(value_dict) for value_dict in file_info_list]
 
+            logger.info(f"Loaded {len(file_results)} files from {self.config.input_path}. Enable delta: {self.config.enable_delta}")
             return file_results
 
         return [ReadTask(read_files, metadata=BlockMetadata(None,None,None,None,None))]
