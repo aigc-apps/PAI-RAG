@@ -47,14 +47,18 @@ flagembedding = "^1.2.10"
 sentencepiece = "^0.2.0"
 oss2 = "^2.18.5"
 asgi-correlation-id = "^4.3.1"
-openinference-instrumentation-llama-index = "^2.2.1"
-torch = "2.2.2"
-torchvision = "0.17.2"
-transformers = "4.51.3"
+openinference-instrumentation-llama-index = "^4.0.0"
+torch = [
+  {version = "2.3.0+cpu", source = "pytorch_cpu", markers = "sys_platform != 'darwin'"},
+  {version = "2.2.2", markers = "sys_platform == 'darwin'"}
+]
+torchvision = [
+  {version = "0.18.0+cpu", source = "pytorch_cpu", markers = "sys_platform != 'darwin'"},
+  {version = "0.17.2", markers = "sys_platform == 'darwin'"}
+]
+transformers = "^4.42.4"
 openpyxl = "^3.1.2"
 llama-parse = "0.4.2"
-openinference-semantic-conventions = "^0.1.9"
-openinference-instrumentation = "^0.1.12"
 pytest-asyncio = "^0.23.7"
 pytest-cov = "^5.0.0"
 xlrd = "^2.0.1"
