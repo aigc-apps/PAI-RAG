@@ -26,6 +26,15 @@ from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
 from llama_index.core.base.llms.types import MessageRole
+import llama_index.core.instrumentation as instrument
+
+from llama_index.core.instrumentation.events.llm import (
+    LLMChatEndEvent,
+    LLMChatStartEvent,
+)
+
+dispatcher = instrument.get_dispatcher(__name__)
+
 from loguru import logger
 
 
@@ -126,6 +135,13 @@ class PaiLlm(OpenAILike):
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
+        dispatcher.event(
+            LLMChatStartEvent(
+                messages=messages,
+                additional_kwargs=kwargs,
+                model_dict={}
+            )
+        )
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -156,6 +172,14 @@ class PaiLlm(OpenAILike):
             and not _response.message.content.startswith("<think>")
         ):
             _response.message.content = "<think>\n" + _response.message.content
+
+        dispatcher.event(
+            LLMChatEndEvent(
+                messages=messages,
+                response=_response
+            )
+        )
+
         return _response
 
     def async_stream_completion_response_to_chat_response(
@@ -165,6 +189,7 @@ class PaiLlm(OpenAILike):
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
+            response_content = ""
             if intent_type is not None:
                 yield ChatResponse(
                     message=ChatMessage(
@@ -198,19 +223,20 @@ class PaiLlm(OpenAILike):
                             delta="\n",
                             raw="\n",
                         )
+                        response_content = "<think>\n"
                     else:
                         start_label = False
 
+                response_content += response.delta
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
-                        content=response.text,
+                        content=response_content,
                         additional_kwargs=response.additional_kwargs,
                     ),
                     delta=response.delta,
                     raw=response.raw,
                 )
-
         return gen()
 
     async def async_chat_response_to_chat_response_with_think(
@@ -275,11 +301,20 @@ class PaiLlm(OpenAILike):
 
                     yield response
 
-            return gen()
+        return gen()
 
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
+        """
+        dispatcher.event(
+            LLMChatStartEvent(
+                messages=messages,
+                additional_kwargs=kwargs,
+                model_dict={}
+            )
+        )
+        """
         kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -306,6 +341,7 @@ class PaiLlm(OpenAILike):
             if message.content or message.additional_kwargs
         ]
 
-        return await self.async_chat_response_to_chat_response_with_think(
+        response_gen = await self.async_chat_response_to_chat_response_with_think(
             filterd_messages, **kwargs
         )
+        return response_gen

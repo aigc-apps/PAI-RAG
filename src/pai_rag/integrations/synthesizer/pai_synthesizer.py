@@ -1,5 +1,6 @@
 from typing import Any, Generator, List, Optional, Sequence, Union, cast
 
+from llama_index.core.settings import Settings
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
 from llama_index.core.prompts.mixin import PromptDictType
@@ -20,6 +21,7 @@ from llama_index.core.base.response.schema import (
 )
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
+    SynthesizeEndEvent,
 )
 from llama_index.core.llms.llm import (
     astream_completion_response_to_tokens,
@@ -51,7 +53,7 @@ Will use Multi-modal LLM for inputs with images and LLM for pure text inputs.
 """
 
 
-class PaiSynthesizer(BaseSynthesizer):
+class PaiSynthesizer:
     def __init__(
         self,
         llm: Optional[LLM] = None,
@@ -60,19 +62,29 @@ class PaiSynthesizer(BaseSynthesizer):
         system_role_template: Optional[str] = None,
         custom_prompt_template: Optional[str] = None,
         multimodal_llm: Optional[MultiModalLLM] = None,
-        streaming: bool = False,
     ) -> None:
-        super().__init__(
-            llm=llm,
-            callback_manager=callback_manager,
-            prompt_helper=prompt_helper,
-            streaming=streaming,
-        )
+        self._llm = llm
+        self._callback_manager = callback_manager or Settings.callback_manager
+        self._prompt_helper = prompt_helper
         self._multimodal_llm = multimodal_llm
         self._update_prompts(
             system_role_str=system_role_template,
             prompt_template_str=custom_prompt_template,
         )
+
+
+    @property
+    def callback_manager(self) -> CallbackManager:
+        return self._callback_manager
+
+    @callback_manager.setter
+    def callback_manager(self, callback_manager: CallbackManager) -> None:
+        """Set callback manager."""
+        self._callback_manager = callback_manager
+        # TODO: please fix this later
+        self._callback_manager = callback_manager
+        self._llm.callback_manager = callback_manager
+
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""
@@ -177,7 +189,16 @@ class PaiSynthesizer(BaseSynthesizer):
         if isinstance(query, str):
             query = QueryBundle(query_str=query)
 
-        with self._callback_manager.event(
+        if query.original_query_str:
+            query_str = query.original_query_str + "\nassistant: "
+        else:
+            query_str = query.query_str + "\nassistant: "
+        if query.chat_messages_str:
+            history_str = query.chat_messages_str
+        else:
+            history_str = ""
+
+        with self.callback_manager.event(
             CBEventType.SYNTHESIZE,
             payload={EventPayload.QUERY_STR: query.query_str},
         ) as event:
@@ -210,11 +231,17 @@ class PaiSynthesizer(BaseSynthesizer):
                     or self._custom_prompt_template,
                     **response_kwargs,
                 )
-
+            print("+++ synthesizer returns")
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
-
             event.on_end(payload={EventPayload.RESPONSE: response})
+
+        #dispatcher.event(
+        #    SynthesizeEndEvent(
+        #        query=query,
+        #        response=response,
+        #    )
+        #)
 
         return ChatResponseWrapper(response=response, source_nodes=source_nodes)
 
