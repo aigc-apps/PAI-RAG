@@ -5,6 +5,8 @@ import threading
 from fastapi import FastAPI
 
 # setup models
+
+from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAI_RAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 from pai_rag.utils.download_models import ModelScopeDownloader
 ModelScopeDownloader().load_rag_models()
@@ -13,7 +15,6 @@ ModelScopeDownloader().load_rag_models()
 from contextlib import asynccontextmanager
 from pai_rag.utils.format_logging import format_logging
 from pai_rag.app.api.service import configure_app
-from pai_rag.utils.constants import DEFAULT_MODEL_DIR
 from pai_rag.knowledgebase.rag_job_manager import job_manager
 from pai_rag.core.service_daemon import startup_event
 from loguru import logger
