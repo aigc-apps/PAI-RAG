@@ -75,24 +75,6 @@ repos:
     rev: v3.0.3
     hooks:
       - id: prettier
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
-    hooks:
-      - id: codespell
-        additional_dependencies: [tomli]
-        exclude: |
-          poetry.lock|
-          (\/.*?\.[\w:]+)/pyproject.toml|
-          (\/.*?\.[\w:]+)/poetry.lock|
-        args:
-          [
-            "--exclude",
-            "./data/tokenization/qwen.tiktoken",
-            "--skip",
-            "*.json,*.txt",
-            "--ignore-words-list",
-            "astroid,gallary,momento,narl,ot,rouge,nin,gere",
-          ]
   - repo: https://github.com/srstevenson/nb-clean
     rev: 3.1.0
     hooks:
