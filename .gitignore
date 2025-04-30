@@ -12,7 +12,6 @@ node_modules
 
 # env files
 .env*.local
-.env
 
 # typescript
 *.tsbuildinfo
