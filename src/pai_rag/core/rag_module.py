@@ -7,7 +7,9 @@ from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.extensions.news.miaobi_news import MiaobiNewsTool
-from pai_rag.integrations.embeddings.pai.pai_embedding_config import HuggingFaceEmbeddingConfig, PaiBaseEmbeddingConfig
+from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
+    HuggingFaceEmbeddingConfig,
+)
 from pai_rag.knowledgebase.file_task_executor import FileTaskExecutor
 from pai_rag.integrations.agent.pai.pai_agent import PaiAgent
 from pai_rag.integrations.chat_store.pai.pai_chat_store import PaiChatStore
@@ -155,6 +157,7 @@ def resolve_intent_router(config: RagConfig, model_id: str = None) -> PaiIntentR
 
 def resolve_default_embedding():
     return resolve(cls=PaiEmbedding, config=HuggingFaceEmbeddingConfig())
+
 
 def resolve_task_executor(
     config: RagConfig, knowledgebase: KnowledgeBase

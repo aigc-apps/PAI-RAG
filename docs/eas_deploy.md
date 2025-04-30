@@ -6,4 +6,3 @@
 
 - `场景化部署`: 更加方便，只需要配置几个参数即可完成。可参考[场景化部署文档](https://help.aliyun.com/zh/pai/user-guide/deploy-a-rag-based-dialogue-system)。
 - `自定义部署`可以更灵活地配置服务，比如，部署GPU版本镜像，配置链路追踪服务等等。可参考[自定义部署文档](https://help.aliyun.com/zh/pai/use-cases/custom-deployment-of-rag-service#47e8104831b4f)
-

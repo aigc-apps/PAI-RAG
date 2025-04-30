@@ -72,7 +72,7 @@ def create_embedding(
             logger.info(
                 f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
             )
-        
+
         embed_model = HuggingFaceEmbedding(
             model_name=pai_model_path,
             embed_batch_size=embed_config.embed_batch_size,
