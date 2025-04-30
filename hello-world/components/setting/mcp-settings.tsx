@@ -172,24 +172,17 @@ export default function MCPConfigPage() {
                     <label className="block text-sm font-medium text-gray-500 mb-1">
                       传输协议
                     </label>
-                    <div className="relative">
-                      <select
+                    <Input
+                      placeholder="sse"
                         value={mcp.type}
                         onChange={(e) => {
-                          const updated = mcps.map((item) =>
-                            item.id === mcp.id
-                              ? { ...item, type: e.target.value }
-                              : item,
+                          const updated = mcps.map(item =>
+                            item.id === mcp.id ? { ...item, type: e.target.value } : item
                           );
                           setMCPs(updated);
                         }}
-                        className="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 appearance-none bg-white pr-8"
-                      >
-                        <option value="sse">SSE</option>
-                        <option value="stdio">Stdio</option>
-                      </select>
-                      <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
+                        className="w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    />
                   </div>
 
                   {/* 激活状态 */}
