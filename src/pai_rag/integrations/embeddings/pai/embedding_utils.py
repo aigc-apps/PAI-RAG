@@ -3,6 +3,7 @@ from llama_index.core import Settings
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from pai_rag.utils.cuda_utils import infer_cuda_device
 from pai_rag.utils.download_models import ModelScopeDownloader
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
@@ -71,11 +72,13 @@ def create_embedding(
             logger.info(
                 f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
             )
+        
         embed_model = HuggingFaceEmbedding(
             model_name=pai_model_path,
             embed_batch_size=embed_config.embed_batch_size,
             trust_remote_code=True,
             callback_manager=Settings.callback_manager,
+            device=infer_cuda_device(),
         )
 
         logger.info(
