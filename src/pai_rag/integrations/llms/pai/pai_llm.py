@@ -32,6 +32,11 @@ from llama_index.core.instrumentation.events.llm import (
     LLMChatEndEvent,
     LLMChatStartEvent,
 )
+from llama_index.core.llms.callbacks import (
+    llm_chat_callback,
+    llm_completion_callback,
+)
+
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -84,6 +89,8 @@ class PaiLlm(OpenAILike):
 
         return self._llm.complete(prompt, **kwargs)
 
+
+    @llm_chat_callback()
     def stream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseGen:
@@ -93,6 +100,7 @@ class PaiLlm(OpenAILike):
 
         return self._llm.stream_complete(prompt, **kwargs)
 
+    @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
         """Chat with the model."""
         if not self.metadata.is_chat_model:
@@ -102,6 +110,7 @@ class PaiLlm(OpenAILike):
 
         return self._llm.chat(messages, **kwargs)
 
+    @llm_chat_callback()
     def stream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseGen:
@@ -114,6 +123,7 @@ class PaiLlm(OpenAILike):
 
     # -- Async methods --
 
+    @llm_completion_callback()
     async def acomplete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponse:
@@ -123,6 +133,7 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.acomplete(prompt, **kwargs)
 
+    @llm_completion_callback()
     async def astream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseAsyncGen:
@@ -132,16 +143,10 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.astream_complete(prompt, **kwargs)
 
+    @llm_chat_callback()
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
-        dispatcher.event(
-            LLMChatStartEvent(
-                messages=messages,
-                additional_kwargs=kwargs,
-                model_dict={}
-            )
-        )
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
@@ -172,13 +177,6 @@ class PaiLlm(OpenAILike):
             and not _response.message.content.startswith("<think>")
         ):
             _response.message.content = "<think>\n" + _response.message.content
-
-        dispatcher.event(
-            LLMChatEndEvent(
-                messages=messages,
-                response=_response
-            )
-        )
 
         return _response
 
@@ -239,6 +237,7 @@ class PaiLlm(OpenAILike):
                 )
         return gen()
 
+    @llm_chat_callback()
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
@@ -303,18 +302,11 @@ class PaiLlm(OpenAILike):
 
         return gen()
 
+
+    @llm_chat_callback()
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
-        """
-        dispatcher.event(
-            LLMChatStartEvent(
-                messages=messages,
-                additional_kwargs=kwargs,
-                model_dict={}
-            )
-        )
-        """
         kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
