@@ -1,4 +1,6 @@
 import socket
+from functools import wraps
+from typing import Callable, AsyncGenerator
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -15,6 +17,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
 )
+from opentelemetry.trace import Span, use_span
 
 from pai_rag.integrations.trace.trace_config import TraceConfig
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
@@ -51,3 +54,15 @@ def init_trace(config: TraceConfig):
     instrumentor = LlamaIndexInstrumentor()
     instrumentor.instrument()
     logger.info("Init trace successfully.")
+
+
+def use_current_span(span: Span):
+    """use current span, connect to span in async call"""
+    def decorator(func: Callable[..., AsyncGenerator]):
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> AsyncGenerator:
+            with use_span(span, end_on_exit=False):
+                async for item in func(*args, **kwargs):
+                    yield item
+        return wrapper
+    return decorator
