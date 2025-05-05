@@ -27,16 +27,12 @@ from pai_rag.integrations.llms.pai.llm_config import (
 )
 from llama_index.core.base.llms.types import MessageRole
 import llama_index.core.instrumentation as instrument
-
-from llama_index.core.instrumentation.events.llm import (
-    LLMChatEndEvent,
-    LLMChatStartEvent,
-)
 from llama_index.core.llms.callbacks import (
     llm_chat_callback,
     llm_completion_callback,
 )
-
+from openinference.instrumentation.llama_index import get_current_span
+from pai_rag.integrations.trace.base import use_current_span
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -242,7 +238,7 @@ class PaiLlm(OpenAILike):
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
         if not self.llm_config.is_reasoning_model:
-
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
                     yield ChatResponse(
@@ -261,7 +257,7 @@ class PaiLlm(OpenAILike):
 
             return gen()
         else:
-
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
                     yield ChatResponse(

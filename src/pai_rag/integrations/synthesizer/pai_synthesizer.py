@@ -231,17 +231,9 @@ class PaiSynthesizer:
                     or self._custom_prompt_template,
                     **response_kwargs,
                 )
-            print("+++ synthesizer returns")
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
             event.on_end(payload={EventPayload.RESPONSE: response})
-
-        #dispatcher.event(
-        #    SynthesizeEndEvent(
-        #        query=query,
-        #        response=response,
-        #    )
-        #)
 
         return ChatResponseWrapper(response=response, source_nodes=source_nodes)
 
