@@ -5,7 +5,6 @@ import {
   tool,
   generateText,
 } from "ai";
-import { ALL_MODEL_NAMES, MODEL_NAME_PROVIDER_MAP } from "../../../constants";
 
 export const runtime = "edge";
 export const maxDuration = 30;
@@ -31,40 +30,46 @@ const SYSTEM_PROMPT = `
   - 任务工具调用完成之后，你可以停止输出，系统会把工具调用结果给你，你必须再次思考和规划，然后继续调用任务工具，如此循环，直到完美地完成用户的任务。
 `;
 
-function getProvider(modelName: ALL_MODEL_NAMES): string {
-  return MODEL_NAME_PROVIDER_MAP[modelName];
-}
+function getModelInstance(modelName: string, modelSource: string, apiKey: string) {
 
-function getModelInstance(modelName: ALL_MODEL_NAMES) {
-  const provider = MODEL_NAME_PROVIDER_MAP[modelName];
+  if (modelSource === "openai") {
+    const openaiModel = createOpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.openai.com/v1",
+      compatibility: 'strict',
+    }); // 自定义 OpenAI 封装
 
-  if (provider === "openai") {
-    return openai(modelName); // OpenAI 原生支持
-  } else if (provider === "qwen") {
+    return openaiModel(modelName);
+  } else if (modelSource === "qwen") {
     const model = createOpenAI({
-      apiKey: process.env.ALIYUN_API_KEY,
+      apiKey: apiKey,
       baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     }); // 自定义 Qwen 封装
     return model(modelName);
   }
-  throw new Error(`Unsupported model provider: ${provider}`);
+  throw new Error(`Unsupported model provider: ${modelSource}`);
 }
 
 export async function POST(req: Request) {
   const { messages, system, tools } = await req.json();
   const model_name = req.headers.get("X-Model-Name");
+  
+  const api_key = req.headers.get("X-Api-Key");
+  const model_source = req.headers.get("X-Model-Source");
   console.log("use model_name", model_name);
+  console.log("use model_source", model_source);
   let mcpServers = [];
   // 动态获取 MCP 配置（示例 URL）
   try {
     // 发起对 /api/configs 的请求
-    const response = await fetch("http://localhost:8000/api/configs");
+    const response = await fetch("http://localhost:8097/api/configs");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const configData = await response.json();
-    mcpServers = (configData || []).filter(
+    console.log("configData", configData);
+    mcpServers = (configData["mcp_config"] || []).filter(
       (item: { active: boolean }) => item.active === true,
     ); // 提取 MCP 服务列表
   } catch (fetchError) {
@@ -91,7 +96,7 @@ export async function POST(req: Request) {
     const toolSets = await Promise.all(clientPromises);
     const mergedTools = Object.assign({}, ...toolSets);
     console.log("SYSTEM_PROMPT:", SYSTEM_PROMPT);
-    const modelInstance = getModelInstance(model_name as ALL_MODEL_NAMES);
+    const modelInstance = getModelInstance(model_name as string, model_source as string, api_key as string);
     console.log("modelInstance:", modelInstance);
     const response = await streamText({
       model: modelInstance,
