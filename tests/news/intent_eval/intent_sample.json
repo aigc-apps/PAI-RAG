@@ -1,6 +1,6 @@
 {
   "request_settings": {
-    "model": "Qwen2.5-32b-Instruct",
+    "model": "Qwen3-32B",
     "stream": false,
     "chat_news": true,
     "search_web": true,
@@ -17,6 +17,42 @@
       "query": "深蓝汽车有什么新闻",
       "intent": {
         "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "深蓝汽车的新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "深蓝汽车有哪些新闻",
+      "intent": {
+        "intent_name": "chat_news"
+      }
+    },
+    {
+      "query": "深蓝汽车有什么问题",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "深蓝汽车有哪些问题",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "深蓝汽车的问题",
+      "intent": {
+        "intent_name": "search_web"
+      }
+    },
+    {
+      "query": "深蓝汽车有哪些产品",
+      "intent": {
+        "intent_name": "search_web"
       }
     },
     {
