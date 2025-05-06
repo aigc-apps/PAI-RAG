@@ -12,8 +12,10 @@ from alibabacloud_credentials.models import Config as CredentialConfig
 from alibabacloud_credentials.models import CredentialModel
 from alibabacloud_credentials.utils import auth_constant
 
-from pai_rag.data_ingestion.ext.langstudio.langstudio_constants import REGION_ID_FROM_ENV, WORKSPACE_ID_FROM_ENV
-from loguru import logger
+from pai_rag.data_ingestion.ext.langstudio.langstudio_constants import (
+    REGION_ID_FROM_ENV,
+)
+
 
 def is_reachable(endpoint: str, port: int = 80, timeout: int = 1) -> bool:
     """Check if the domain is connectable."""
@@ -105,7 +107,6 @@ def get_langstudio_client(region_id: str = None) -> LangStudioClient:
     return client
 
 
-
 def get_workspace_client(region_id: str = None) -> AIWorkSpaceClient:
     region_id = region_id or REGION_ID_FROM_ENV
     vpc_endpoint = f"aiworkspace-vpc.{region_id}.aliyuncs.com"
@@ -120,4 +121,3 @@ def get_workspace_client(region_id: str = None) -> AIWorkSpaceClient:
         )
     )
     return client
-

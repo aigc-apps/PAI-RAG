@@ -14,8 +14,13 @@ from pai_rag.integrations.readers.pai.pai_data_reader import (
     BaseDataReaderConfig,
     PaiDataReader,
 )
-from pai_rag.data_ingestion.utils.path_resolver import MountPathResolver, LocalPathResolver
-from pai_rag.data_ingestion.ext.langstudio.langstudio_path_resolver import LangStudioPathResolver
+from pai_rag.data_ingestion.utils.path_resolver import (
+    MountPathResolver,
+    LocalPathResolver,
+)
+from pai_rag.data_ingestion.ext.langstudio.langstudio_path_resolver import (
+    LangStudioPathResolver,
+)
 from loguru import logger
 
 from pai_rag.utils.file_utils import generate_file_md5, get_modified_time
@@ -42,7 +47,9 @@ class Parser(BaseOperator):
             model_dir=config.model_dir,
         )
 
-        download_models_via_lock(self.model_dir, "PDF-Extract-Kit", use_cuda=self.use_cuda())
+        download_models_via_lock(
+            self.model_dir, "PDF-Extract-Kit", use_cuda=self.use_cuda()
+        )
 
         self.data_reader_config = BaseDataReaderConfig(
             concat_csv_rows=config.concat_sheet_rows,
@@ -71,7 +78,7 @@ class Parser(BaseOperator):
             node_dict["file_name"] = row.get("file_name")
             node_dict["file_path"] = row.get("file_path")
             nodes.append(node_dict)
-        
+
         return nodes
 
     def process_add(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -82,20 +89,22 @@ class Parser(BaseOperator):
             documents = self.data_reader.load_data(file_path_or_directory=input_files)
             if len(documents) == 0:
                 logger.warning(f"No data found in the input files: {input_files}")
-            
+
             for doc in documents:
-                doc.metadata[DEFAULT_NODE_SOURCE_FIELD] = self.path_resolver.resolve_source_url(file_path)
+                doc.metadata[
+                    DEFAULT_NODE_SOURCE_FIELD
+                ] = self.path_resolver.resolve_source_url(file_path)
                 doc.metadata[DEFAULT_MD5_FIELD] = generate_file_md5(file_path)
                 doc.metadata[DEFAULT_MODIFIED_AT_FIELD] = get_modified_time(file_path)
                 node_dict = node_to_metadata_dict_v2(doc)
                 node_dict["operation"] = row.get("operation")
                 node_dict["operation_reason"] = row.get("operation_reason")
                 nodes.append(node_dict)
-        
+
             logger.info(f"Parsed {len(nodes)} nodes in the input files: {input_files}")
-        
+
         else:
-            logger.warning(f"No `file_path` field found in the input entries.")
+            logger.warning("No `file_path` field found in the input entries.")
 
         return nodes
 

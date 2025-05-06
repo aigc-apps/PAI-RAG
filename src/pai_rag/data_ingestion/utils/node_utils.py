@@ -84,6 +84,6 @@ def node_to_metadata_dict_v2(
     metadata["ref_doc_id"] = node.ref_doc_id or "None"  # for Weaviate
     metadata["id"] = node.id_
     metadata["text"] = node.get_content(metadata_mode=MetadataMode.NONE)
-    
+
     metadata_with_schema = {k: metadata.get(k) for k in PERSIST_COLUMN_FIELDS}
-    return metadata_with_schema 
+    return metadata_with_schema

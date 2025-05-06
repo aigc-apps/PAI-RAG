@@ -192,12 +192,14 @@ class PaiPandasCSVReader(BaseReader):
         extra_info = extra_info or {}
         extra_info["file_path"] = str(file)
         extra_info["file_name"] = file_name
-        
+
         if self._concat_rows:
             doc_id = compute_node_id(i=0, file_name=file_name)
             return [
                 Document(
-                    id_=doc_id, text=(self._row_joiner).join(text_list), metadata=extra_info
+                    id_=doc_id,
+                    text=(self._row_joiner).join(text_list),
+                    metadata=extra_info,
                 )
             ]
         else:
@@ -232,7 +234,9 @@ class PaiExcelReader(BaseReader):
         )
 
         logger.info(f"Start parsing {file}.")
-        docs: List[Document] = parse_workbook(file, oss_client=self.oss_cache, splitter=splitter)
+        docs: List[Document] = parse_workbook(
+            file, oss_client=self.oss_cache, splitter=splitter
+        )
         file_name = os.path.basename(file)
 
         for i, doc in enumerate(docs):

@@ -787,7 +787,7 @@ chat()
       "concat_csv_rows": false,
       "enable_mandatory_ocr": false,
       "format_sheet_data_to_json": false,
-      "sheet_column_filters": null,
+      "sheet_column_filters": null
     },
     "node_parser": {
       "type": "Sentence",

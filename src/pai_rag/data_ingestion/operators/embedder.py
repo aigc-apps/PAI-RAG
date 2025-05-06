@@ -1,9 +1,8 @@
 import traceback
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import numpy as np
 from pai_rag.data_ingestion.models.config.operator import EmbedderConfig
-from pai_rag.data_ingestion.models.file.event import NodeOperationType
 from pai_rag.data_ingestion.operators.base import BaseOperator
 from pai_rag.data_ingestion.utils.download_utils import download_models_via_lock
 from pai_rag.integrations.embeddings.pai.embedding_utils import create_embedding
@@ -62,9 +61,8 @@ class Embedder(BaseOperator):
         if self.embedder_cfg.enable_sparse:
             sparse_embeddings = self.sparse_embed_model.encode_documents(texts)
         else:
-             sparse_embeddings = [None] * len(texts)
+            sparse_embeddings = [None] * len(texts)
         return sparse_embeddings
-        
 
     def __call__(self, nodes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         logger.info(f"Start embedding {len(nodes)} nodes...")
@@ -73,12 +71,14 @@ class Embedder(BaseOperator):
             if len(node_texts) == 0:
                 logger.warning("No nodes to embed, directly returning...")
                 return nodes
-            
+
             nodes["embedding"] = self.calc_embedings(node_texts)
             nodes["sparse_embedding"] = self.calc_sparse_embeddings(node_texts)
 
             logger.info(f"Successfully calculated embeddings for {len(nodes)} nodes.")
             return nodes
-        except Exception as e:
-            logger.error(f"Error calculating embeddings for nodes: {traceback.format_exc()}")
+        except Exception:
+            logger.error(
+                f"Error calculating embeddings for nodes: {traceback.format_exc()}"
+            )
             raise

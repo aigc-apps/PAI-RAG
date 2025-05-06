@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Annotated, Dict, Union
 from enum import Enum
 
-from pai_rag.integrations.embeddings.pai.pai_embedding_config import PaiBaseEmbeddingConfig
+from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
+    PaiBaseEmbeddingConfig,
+)
 from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
 from pai_rag.utils.time_utils import get_current_time_str

@@ -23,7 +23,7 @@ def str2bool(v):
 def update_op_process(args):
     op_keys = [member.value for member in OperatorName]
     logger.info(f"Loading all operation keys: {op_keys}")
-    
+
     setattr(args, "process_config", {})
 
     with open(args.config_file) as file:

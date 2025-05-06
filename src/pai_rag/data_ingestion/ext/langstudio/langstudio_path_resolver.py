@@ -4,8 +4,13 @@ import posixpath
 from typing import List
 
 from loguru import logger
-from pai_rag.data_ingestion.ext.langstudio.langstudio_client import get_dlc_client, get_workspace_client
-from pai_rag.data_ingestion.ext.langstudio.langstudio_constants import WORKSPACE_ID_FROM_ENV
+from pai_rag.data_ingestion.ext.langstudio.langstudio_client import (
+    get_dlc_client,
+    get_workspace_client,
+)
+from pai_rag.data_ingestion.ext.langstudio.langstudio_constants import (
+    WORKSPACE_ID_FROM_ENV,
+)
 from pai_rag.data_ingestion.ext.langstudio.oss_utils import standardize_oss_uri
 from pai_rag.data_ingestion.utils.path_resolver import MountPathResolver
 from alibabacloud_pai_dlc20201203.models import GetJobRequest
@@ -16,15 +21,14 @@ import dataclasses
 
 @dataclasses.dataclass
 class DataMountConfig:
-    mount_point: str # 目标挂载路径
-    source_uri: str # 源路径
+    mount_point: str  # 目标挂载路径
+    source_uri: str  # 源路径
 
     def __post_init__(self):
         # ensure no trailing slash
         self.mount_point = self.mount_point.rstrip("/")
         self.data_source_path = self.data_source_path.rstrip("/")
         self.data_source_path = standardize_oss_uri(self.data_source_path)
-
 
 
 @classmethod
@@ -38,7 +42,6 @@ def get_mount_path_from_dataset_options(dataset_options: str) -> str:
     return mount_path
 
 
-
 class LangStudioPathResolver(MountPathResolver):
     def __init__(
         self,
@@ -48,8 +51,10 @@ class LangStudioPathResolver(MountPathResolver):
         super().__init__()
         self.workspace_id = workspace_id
         self.mount_configs = mount_configs
-        logger.info(f"LangStudioPathResolver init with workspace_id: {workspace_id} and {mount_configs}")
-        
+        logger.info(
+            f"LangStudioPathResolver init with workspace_id: {workspace_id} and {mount_configs}"
+        )
+
     @classmethod
     def from_env(cls):
         dlc_job_id = os.getenv("DLC_JOB_ID")
@@ -75,13 +80,11 @@ class LangStudioPathResolver(MountPathResolver):
                 ds.uri = dataset.uri
                 if not ds.mount_path:
                     # get the default mount path from dataset.options
-                    ds.mount_path = get_mount_path_from_dataset_options(
-                        dataset.options
-                    )
+                    ds.mount_path = get_mount_path_from_dataset_options(dataset.options)
 
             if not ds.uri.startswith("oss://"):
                 raise RuntimeError("Unsupported data source URI: {}".format(ds.uri))
-            
+
             data_mount_configs.append(
                 DataMountConfig(
                     mount_point=ds.mount_path,
@@ -93,7 +96,7 @@ class LangStudioPathResolver(MountPathResolver):
             workspace_id=workspace_id,
             data_mount_configs=data_mount_configs,
         )
-    
+
     def resolve_destination_path(self, uri: str) -> str:
         """
         Resolve the path to the local file system.
@@ -103,14 +106,11 @@ class LangStudioPathResolver(MountPathResolver):
 
         for config in self.mount_configs:
             if uri.startswith(config.source_uri):
-                relative_path = posixpath.relpath(
-                    uri, config.source_uri
-                )
+                relative_path = posixpath.relpath(uri, config.source_uri)
                 if relative_path == ".":
                     relative_path = ""
                 return os.path.join(config.mount_point, relative_path)
         raise ValueError(f"Path '{uri}' is not in any data mount point.")
-
 
     def resolve_source_url(self, path: str) -> str:
         """
@@ -121,14 +121,17 @@ class LangStudioPathResolver(MountPathResolver):
 
         if path.startswith("nas://"):
             raise RuntimeError("Not support NAS data source")
-        
+
         full_path = os.path.abspath(path)
         for mount_config in self.mount_configs:
-            if posixpath.commonpath([full_path, mount_config.mount_point]) == mount_config.mount_point:
+            if (
+                posixpath.commonpath([full_path, mount_config.mount_point])
+                == mount_config.mount_point
+            ):
                 relative_path = posixpath.relpath(full_path, mount_config.mount_point)
                 if relative_path == ".":
                     relative_path = ""
                 return posixpath.join(mount_config.source_uri, relative_path)
-        
+
         logger.warning(f"Path {path} does not match any datasource mount point")
         return path

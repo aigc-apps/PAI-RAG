@@ -3,20 +3,19 @@ from llama_index.core.schema import TextNode
 from pai_rag.data_ingestion.models.config.operator import SplitterConfig
 from pai_rag.data_ingestion.models.file.event import NodeOperationType
 from pai_rag.data_ingestion.operators.base import BaseOperator
-from pai_rag.data_ingestion.utils.node_utils import metadata_dict_to_node_v2, node_to_metadata_dict_v2
+from pai_rag.data_ingestion.utils.node_utils import (
+    metadata_dict_to_node_v2,
+    node_to_metadata_dict_v2,
+)
 from pai_rag.integrations.nodeparsers.pai.pai_node_parser import (
     NodeParserConfig,
     PaiNodeParser,
 )
-import ray
 from loguru import logger
 
 
 class Splitter(BaseOperator):
-    def __init__(
-        self,
-        config: SplitterConfig
-    ):
+    def __init__(self, config: SplitterConfig):
         super().__init__(
             name=config.name,
             num_cpus=config.num_cpus,
@@ -53,7 +52,7 @@ class Splitter(BaseOperator):
             node_dict["operation_reason"] = row.get("operation_reason")
             nodes.append(node_dict)
 
-        logger.info(f"Splitted {len(splitted_nodes)} nodes from {doc.node_id}.")
+        logger.info(f"Split {len(splitted_nodes)} nodes from {doc.node_id}.")
         return nodes
 
     def __call__(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:

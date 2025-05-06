@@ -7,14 +7,14 @@ class MountPathResolver:
         """
         Resolve the path to the local file system.
         """
-        raise NotImplemented
+        raise NotImplementedError
 
     @abstractmethod
     def resolve_source_url(self, path: str) -> str:
         """
         Resolve the path to the local file system.
         """
-        raise NotImplemented
+        raise NotImplementedError
 
 
 # 本地运行，文件路径即为uri
@@ -24,7 +24,6 @@ class LocalPathResolver(MountPathResolver):
         Resolve the path to the local file system.
         """
         return uri
-    
 
     def resolve_source_url(self, path: str) -> str:
         """

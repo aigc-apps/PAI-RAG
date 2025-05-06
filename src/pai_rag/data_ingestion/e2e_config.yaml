@@ -26,7 +26,6 @@ operators:
     memory: 4
     concurrency: 10
 
-
   - name: "embed"
     model: "bge-m3"
     source: "huggingface"
@@ -35,7 +34,7 @@ operators:
     num_gpus: 1
     memory: 10
     concurrency: 1
-  
+
   - name: "write"
     rag_endpoint:
     rag_api_key:

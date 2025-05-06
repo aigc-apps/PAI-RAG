@@ -2,6 +2,7 @@ import hashlib
 from loguru import logger
 import os
 
+
 def get_modified_time(file_path):
     state = os.stat(file_path)
     return state.st_mtime
@@ -22,7 +23,7 @@ def generate_file_md5(file_path):
             file_content_md5.update(chunk)  # Update the hash with the chunk
 
         return file_content_md5.hexdigest()
-    
+
 
 def generate_md5(file_path):
     """Generate MD5 hash of the content of the specified file."""

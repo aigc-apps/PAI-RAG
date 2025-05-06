@@ -1,4 +1,3 @@
-import traceback
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 from pydantic import BaseModel
 from typing import List, Any
@@ -192,13 +191,13 @@ class PaiDataReader(BaseReader):
         self.file_readers = get_file_readers(reader_config, oss_store)
         self.oss_store = oss_store
 
-        logger.info(
-            f"[PaiDataReader] created with {reader_config}"
-        )
+        logger.info(f"[PaiDataReader] created with {reader_config}")
 
-    @retry(retry=retry_if_exception_type(OSError),
+    @retry(
+        retry=retry_if_exception_type(OSError),
         wait=wait_fixed(2),
-        stop=stop_after_attempt(3))
+        stop=stop_after_attempt(3),
+    )
     def load_data(
         self,
         file_path_or_directory=None,
@@ -238,7 +237,7 @@ class PaiDataReader(BaseReader):
         except Exception as e:
             logger.error(f"解析{input_files}错误: {e}")
             if e.__cause__:
-                logger.error("解析错误原因: {e.__cause__}") 
+                logger.error("解析错误原因: {e.__cause__}")
                 raise e.__cause__
             else:
                 raise

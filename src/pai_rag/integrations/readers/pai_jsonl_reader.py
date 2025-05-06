@@ -34,7 +34,7 @@ class PaiJsonLReader(BaseReader):
         extra_info = extra_info or {}
         extra_info["file_path"] = str(file_path)
         extra_info["file_name"] = file_name
-        
+
         docs = []
         for i, text in enumerate(json_lines):
             doc_id = compute_node_id(i=i, file_name=file_name)

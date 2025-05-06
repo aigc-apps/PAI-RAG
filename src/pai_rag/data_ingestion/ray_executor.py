@@ -1,10 +1,15 @@
 import os
 from typing import List
 
-import psutil
 from pai_rag.data_ingestion.datasource.filedelta_datasource import FileDeltaDatasource
 from pai_rag.data_ingestion.models.config.datasource import DataSourceConfig
-from pai_rag.data_ingestion.models.config.operator import BaseOperatorConfig, EmbedderConfig, ParserConfig, SplitterConfig, WriterConfig
+from pai_rag.data_ingestion.models.config.operator import (
+    BaseOperatorConfig,
+    EmbedderConfig,
+    ParserConfig,
+    SplitterConfig,
+    WriterConfig,
+)
 from pai_rag.data_ingestion.operators.base import BaseOperator
 from pai_rag.data_ingestion.operators.embedder import Embedder
 from pai_rag.data_ingestion.operators.parser import Parser
@@ -28,6 +33,7 @@ class RayExecutor:
     """
     Executor based on Ray.
     """
+
     def __init__(self, working_dir: str = DEFAULT_WORKING_DIR):
         self.working_dir = working_dir
         # init ray
@@ -41,7 +47,7 @@ class RayExecutor:
             f"Initing Ray with working_dir: {self.working_dir}, set env: PAI_RAG_MODEL_DIR = {ray_env_model_dir}..."
         )
         ray.init(
-                runtime_env={
+            runtime_env={
                 "working_dir": self.working_dir,
             }
         )
@@ -56,22 +62,28 @@ class RayExecutor:
             return Embedder
         elif isinstance(op_config, WriterConfig):
             return Writer
-        
+
         raise ValueError(f"Unknown operator config: {op_config}.")
 
     def _need_batch_execution(self, op_config: BaseOperatorConfig) -> bool:
-        return isinstance(op_config, EmbedderConfig) or isinstance(op_config, WriterConfig)
+        return isinstance(op_config, EmbedderConfig) or isinstance(
+            op_config, WriterConfig
+        )
 
-    def run(self,
-            op_configs: List[BaseOperatorConfig] = [],
-            datasource_config: DataSourceConfig = None):
+    def run(
+        self,
+        op_configs: List[BaseOperatorConfig] = [],
+        datasource_config: DataSourceConfig = None,
+    ):
         """
         Running the dataset process pipeline.
         """
         start_time = time.time()
 
         if datasource_config is not None:
-            filename_provider = BlockFileNameProvider(run_label=f"read-{self.execution_ts}", file_format="jsonl")
+            filename_provider = BlockFileNameProvider(
+                run_label=f"read-{self.execution_ts}", file_format="jsonl"
+            )
             datasource = FileDeltaDatasource(config=datasource_config)
             dataset = ray.data.read_datasource(datasource)
             dataset.write_json(
@@ -83,9 +95,11 @@ class RayExecutor:
             )
         else:
             if len(op_configs) == 0:
-                logger.info("No op_configs and datasource provided, skipping dataset process pipeline.")
+                logger.info(
+                    "No op_configs and datasource provided, skipping dataset process pipeline."
+                )
                 return
-            
+
             input_list = get_input_files(
                 file_path_or_directory=op_configs[0].input_path,
                 filter_pattern="*.jsonl",
@@ -109,7 +123,7 @@ class RayExecutor:
                     num_gpus=op_config.num_gpus,
                     memory=op_config.memory,
                     concurrency=op_concurrency,
-                    fn_constructor_kwargs={ "config": op_config }
+                    fn_constructor_kwargs={"config": op_config},
                 )
             else:
                 logger.info(f"Executing {op_config.name} in flat_map mode.")
@@ -119,14 +133,17 @@ class RayExecutor:
                     num_gpus=op_config.num_gpus,
                     memory=op_config.memory,
                     concurrency=op_concurrency,
-                    fn_constructor_kwargs={ "config": op_config }
+                    fn_constructor_kwargs={"config": op_config},
                 )
 
             # 保存op结果，保存向量库无需执行
             if isinstance(op_config, WriterConfig):
                 dataset.materialize()
             else:
-                filename_provider = BlockFileNameProvider(run_label=f"{op_config.name.value}-{self.execution_ts}", file_format="jsonl")
+                filename_provider = BlockFileNameProvider(
+                    run_label=f"{op_config.name.value}-{self.execution_ts}",
+                    file_format="jsonl",
+                )
                 dataset.write_json(
                     op_config.output_path,
                     min_rows_per_file=DEFAULT_ROWS_PER_FILE,

@@ -1,5 +1,6 @@
 from ray.data.datasource import FilenameProvider
 
+
 class BlockFileNameProvider(FilenameProvider):
     def __init__(self, run_label: str, file_format: str):
         self._run_label = run_label

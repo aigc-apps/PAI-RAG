@@ -3,7 +3,10 @@ from pymilvus import Collection
 from pymilvus import connections as milvus_connections
 from langstudio.rag.index_manifest import IndexManifest
 
-from pai_rag.data_ingestion.constants import DEFAULT_MODIFIED_AT_FIELD, DEFAULT_NODE_SOURCE_FIELD
+from pai_rag.data_ingestion.constants import (
+    DEFAULT_MODIFIED_AT_FIELD,
+    DEFAULT_NODE_SOURCE_FIELD,
+)
 from pai_rag.data_ingestion.delta.models import DocItem
 
 
@@ -11,7 +14,6 @@ def list_docs_in_milvus_collection(
     collection: Collection,
     oss_path_prefix: str,
 ) -> Dict[str, DocItem]:
-    
     # only return the documents under the oss_path_prefix
     if oss_path_prefix:
         expr = f"{DEFAULT_NODE_SOURCE_FIELD} like '{oss_path_prefix}%'"
@@ -29,7 +31,7 @@ def list_docs_in_milvus_collection(
         if not fetch_data:
             iterator.close()
             break
-        
+
         # scan the fetch data, get the latest modified time and the node ids
         for record in fetch_data:
             source = record[DEFAULT_NODE_SOURCE_FIELD]
@@ -45,8 +47,9 @@ def list_docs_in_milvus_collection(
                     results[source].modified_time,
                 )
                 results[source].node_ids.append(record["id"])
-                
+
     return results
+
 
 def list_docs_in_milvus_from_langstudio_index_manifest(
     index_manifest: IndexManifest, oss_path_prefix: Optional[str] = None
@@ -72,6 +75,5 @@ def list_docs_in_milvus_from_langstudio_index_manifest(
     collection = Collection(index_manifest.store.collection_name)
 
     return list_docs_in_milvus_collection(
-        collection=collection,
-        oss_path_prefix=oss_path_prefix
+        collection=collection, oss_path_prefix=oss_path_prefix
     )

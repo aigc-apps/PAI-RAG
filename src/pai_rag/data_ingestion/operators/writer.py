@@ -40,7 +40,9 @@ class Writer(BaseOperator):
         add_chunks = chunks_df[chunks_df.operation == "add"].to_dict(orient="records")
         node_ids_to_delete = chunks_df[chunks_df.operation == "delete"].id.tolist()
 
-        logger.info(f"Got {len(chunks_df)} in total, {len(add_chunks)} to add and {len(node_ids_to_delete)} to delete.")
+        logger.info(
+            f"Got {len(chunks_df)} in total, {len(add_chunks)} to add and {len(node_ids_to_delete)} to delete."
+        )
         try:
             if len(node_ids_to_delete) > 0:
                 self.vector_store.delete_nodes(node_ids_to_delete)
@@ -54,6 +56,6 @@ class Writer(BaseOperator):
             logger.info(f"Finished processing {len(chunks_df)} chunks.")
             logger.info("Finished writing op.")
             return {"write_sucess": np.array([True])}
-        except Exception as e:
+        except Exception:
             logger.error(f"Error saving nodes: {traceback.format_exc()}")
             raise
