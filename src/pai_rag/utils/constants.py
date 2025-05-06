@@ -35,9 +35,7 @@ if not os.path.exists(EAS_DEFAULT_MODEL_DIR):
 else:
     DEFAULT_MODEL_DIR = EAS_DEFAULT_MODEL_DIR
 
-OSS_URL = (
-    "https://pai-rag-bj.oss-cn-beijing.aliyuncs.com/model_repository/model_config.json"
-)
+OSS_URL = "https://pai-rag-bj.oss-cn-beijing.aliyuncs.com/model_repository/model_config_1.1.0.json"
 
 DEFAULT_DATAFILE_DIR = "./data"
 

@@ -24,7 +24,7 @@ llama-index-readers-database = "^0.3.0"
 llama-index-vector-stores-faiss = "^0.3.0"
 llama-index-vector-stores-analyticdb = "^0.3.0"
 llama-index-vector-stores-elasticsearch = "^0.4.0"
-llama-index-vector-stores-milvus = "^0.8.1"
+llama-index-vector-stores-milvus = "^0.3.0"
 llama-index-agent-openai = "^0.4.1"
 llama-index-embeddings-huggingface = "^0.4.0"
 llama-index-postprocessor-flag-embedding-reranker = "^0.3.0"
@@ -49,7 +49,7 @@ asgi-correlation-id = "^4.3.1"
 openinference-instrumentation-llama-index = "^2.2.1"
 torch = "2.2.2"
 torchvision = "0.17.2"
-transformers = "4.42.4"
+transformers = "4.51.3"
 openpyxl = "^3.1.2"
 llama-parse = "0.4.2"
 openinference-semantic-conventions = "^0.1.9"
@@ -72,20 +72,7 @@ pymysql = "^1.1.1"
 milvus-lite = "^2.4.9"
 bs4 = "^0.0.2"
 httpx = "0.27.0"
-detectron2 = [
-  {markers = "sys_platform == 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cu121-cp311-cp311-linux_x86_64.whl"},
-  {markers = "sys_platform == 'win32'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.3.0cu121-cp311-cp311-win_amd64.whl"},
-  {markers = "sys_platform != 'win32' and sys_platform != 'linux' ", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/detectron2-0.6%2B864913fpt2.2.2cpu-cp311-cp311-macosx_10_9_universal2.whl"}
-]
-magic-pdf = {version = "1.0.1", extras = ["full"]}
-doclayout_yolo = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/doclayout_yolo-0.0.2-py3-none-any.whl"}
-paddlepaddle-gpu = [
-  {markers = "sys_platform == 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/paddlepaddle_gpu-3.0.0b1-cp311-cp311-linux_x86_64.whl"},
-  {markers = "sys_platform != 'linux'", url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/paddlepaddle_gpu-3.0.0b1-cp311-cp311-win_amd64.whl"}
-]
 peft = "^0.12.0"
-aliyun-bootstrap = "^1.0.2"
-docx = "^0.2.4"
 python-pptx = "^1.0.2"
 aspose-slides = "^24.10.0"
 ultralytics = "^8.3.43"
@@ -104,16 +91,10 @@ serpapi = "^0.1.5"
 watchfiles = "^1.0.4"
 alibabacloud-aimiaobi20230801 = "^1.21.0"
 alibabacloud-tea-openapi-sse = "^1.0.2"
-typer = "^0.15.2"
-ray = "^2.44.1"
-promptflow-tracing = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-tracing/dist/promptflow_tracing-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
-promptflow-core = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-core/dist/promptflow_core-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
-promptflow-devkit = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-devkit/dist/promptflow_devkit-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
-promptflow = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow/dist/promptflow-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
-langstudio = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/langstudio/dist/langstudio-0.2.0.dev8-py3-none-any.whl"}
-llama-index-vector-stores-dashvector = "^0.3.0"
-llama-index-vector-stores-hologres = "^0.3.0"
-pymilvus = "^2.5.7"
+rapidfuzz = "^3.13.0"
+magic-pdf = {extras = ["full"], version = "^1.3.10"}
+python-docx = "^1.1.2"
+ray = "^2.45.0"
 
 [tool.poetry.scripts]
 load_data = "pai_rag.tools.load_data_tool:run"

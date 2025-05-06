@@ -3,8 +3,8 @@
     "bucket-name-1": ["ak", "sk", "endpoint"],
     "bucket-name-2": ["ak", "sk", "endpoint"]
   },
-  "models-dir": "model_repository/PDF-Extract-Kit/models",
-  "layoutreader-model-dir": "model_repository/PDF-Extract-Kit/models/layoutreader",
+  "models-dir": "model_repository/PDF-Extract-Kit-1.0/models",
+  "layoutreader-model-dir": "model_repository/PDF-Extract-Kit-1.0/models/layoutreader",
   "device-mode": "cpu",
   "layout-config": {
     "model": "doclayout_yolo"
@@ -16,8 +16,19 @@
   },
   "table-config": {
     "model": "rapid_table",
+    "sub_model": "slanet_plus",
     "enable": true,
     "max_time": 400
   },
-  "config_version": "1.0.0"
+  "latex-delimiter-config": {
+    "display": {
+      "left": "$$",
+      "right": "$$"
+    },
+    "inline": {
+      "left": "$",
+      "right": "$"
+    }
+  },
+  "config_version": "1.2.1"
 }
