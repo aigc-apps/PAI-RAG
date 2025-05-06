@@ -45,7 +45,6 @@ class PaiApp:
         if self.config.trace.is_enabled():
             init_trace(self.config.trace)
 
-        self.chat_flow = ChatFlow()
         vector_index = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
         _ = resolve_query_engine(self.config, vector_index=vector_index)
 
@@ -53,10 +52,12 @@ class PaiApp:
         self.config = config
 
     async def achat(self, chat_request: ChatCompletionRequest):
-        return await self.chat_flow.achat(chat_request, self.config)
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.achat(chat_request)
 
     async def astream_chat(self, chat_request: ChatCompletionRequest):
-        return await self.chat_flow.astream_chat(chat_request, self.config)
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_chat(chat_request)
 
     async def aquery(
         self,
@@ -106,10 +107,10 @@ class PaiApp:
             temperature=query.temperature,
         )
 
-        return await self.chat_flow.aquery(
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.aquery(
             session_id=session_id,
             chat_request=chat_request,
-            config=self.config,
             chat_store=chat_store,
             sse_version=sse_version,
         )
