@@ -33,7 +33,9 @@ class Parser(BaseOP):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        download_models_via_lock(self.model_dir, "PDF-Extract-Kit", self.accelerator)
+        download_models_via_lock(
+            self.model_dir, "PDF-Extract-Kit-1.0", self.accelerator
+        )
         self.data_reader_config = BaseDataReaderConfig(
             concat_csv_rows=concat_csv_rows,
             enable_mandatory_ocr=enable_mandatory_ocr,

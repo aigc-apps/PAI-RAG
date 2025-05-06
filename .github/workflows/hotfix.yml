@@ -45,7 +45,7 @@ jobs:
           username: ${{ secrets.ACR_USER }}
           password: ${{ secrets.ACR_PUBLIC_PASSWORD }}
 
-      - name: Build and push base image
+      - name: Build and push image
         env:
           IMAGE_TAG: ${{env.VERSION_TAG}}
           SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}
@@ -59,14 +59,6 @@ jobs:
           SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-rag-data-operator
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }} -f src/pai_rag/tools/data_process/docker/Dockerfile_cpu .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
-
-      - name: Build and push GPU image
-        env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-gpu
-          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-gpu
-        run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }} -f Dockerfile_gpu .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
 
       - name: Free disk space
