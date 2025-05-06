@@ -7,7 +7,7 @@ This is a demo for agent with MCP.
 ### Backend
 ```bash
 cd hello-world-backend
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8000
 ```
 
 You can start editing the API service by modifying `main.py`.
