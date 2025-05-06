@@ -3,8 +3,8 @@
     "bucket-name-1": ["ak", "sk", "endpoint"],
     "bucket-name-2": ["ak", "sk", "endpoint"]
   },
-  "models-dir": "model_repository/PDF-Extract-Kit/models",
-  "layoutreader-model-dir": "model_repository/PDF-Extract-Kit/layoutreader",
+  "models-dir": "model_repository/PDF-Extract-Kit-1.0/models",
+  "layoutreader-model-dir": "model_repository/PDF-Extract-Kit-1.0/models/layoutreader",
   "device-mode": "cpu",
   "layout-config": {
     "model": "doclayout_yolo"

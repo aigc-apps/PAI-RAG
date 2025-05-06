@@ -92,11 +92,12 @@ class ModelScopeDownloader:
 
         if "models-dir" in data:
             data["models-dir"] = os.path.join(
-                str(self.download_directory_path), "PDF-Extract-Kit-1___0/models"
+                str(self.download_directory_path), "PDF-Extract-Kit-1.0/models"
             )
         if "layoutreader-model-dir" in data:
             data["layoutreader-model-dir"] = os.path.join(
-                str(self.download_directory_path), "layoutreader"
+                str(self.download_directory_path),
+                "PDF-Extract-Kit-1.0/models/layoutreader",
             )
 
         # 将修改后的内容写入destination_path
