@@ -11,6 +11,8 @@ from llama_index.core.instrumentation.events.rerank import (
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.schema import MetadataMode, NodeWithScore, QueryBundle
 
+from pai_rag.utils.cuda_utils import infer_cuda_device
+
 dispatcher = get_dispatcher(__name__)
 
 
@@ -53,6 +55,7 @@ class MyModelBasedReranker(BaseNodePostprocessor):
         self._model = FlagReranker(
             model,
             use_fp16=use_fp16,
+            device=infer_cuda_device(),
         )
 
     @classmethod
