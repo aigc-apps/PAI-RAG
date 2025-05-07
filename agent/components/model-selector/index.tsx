@@ -46,7 +46,9 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("http://localhost:8097/api/configs/models");
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        console.log("model-selector BACKEND_PORT", port);
+        const res = await fetch(`http://localhost:${port}/api/configs/models`);
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();
         setModelGroups(data.groups);

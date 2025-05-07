@@ -2,12 +2,14 @@ This is the [assistant-ui](https://github.com/Yonom/assistant-ui) starter projec
 
 ## Getting Started
 
-First, add your OpenAI API key to `.env.local` file:
+First, copy `.env.example` and create `.env.local` file, add your backend API port to `.env.local` file:
 
 ```
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-ALIYUN_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+BACKEND_PORT=8097
+NEXT_PUBLIC_BACKEND_PORT=8097
 ```
+
+Both variables are used to communicate with the backend API.
 
 Then, run the development server:
 

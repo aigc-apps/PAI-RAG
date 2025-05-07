@@ -25,7 +25,9 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const res = await fetch("http://localhost:8097/api/configs");
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        console.log("assistant BACKEND_PORT", port);
+        const res = await fetch(`http://localhost:${port}/api/configs`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
         if (data.llm_config?.[0]) setLlmConfig(data.llm_config[0]);

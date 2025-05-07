@@ -24,7 +24,9 @@ export default function ConfigPage() {
       const fetchConfig = async () => {
         setIsLoading(true);
         try {
-          const res = await fetch("http://localhost:8097/api/configs");
+          const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+          console.log("config-page BACKEND_PORT", port);
+          const res = await fetch(`http://localhost:${port}/api/configs`);
           if (!res.ok) throw new Error("获取配置失败");
           const data = await res.json();
           setLlmConfig(data["llm_config"]);
@@ -43,7 +45,9 @@ export default function ConfigPage() {
     const handleSave = async () => {
       // 保存逻辑（如 localStorage 或 API 请求）
       try {
-        const res = await fetch("http://localhost:8097/api/configs", {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        console.log("config-page handleSave BACKEND_PORT", port);
+        const res = await fetch(`http://localhost:${port}/api/configs`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ llm_config: llmConfig, mcp_config: mcpConfig}),

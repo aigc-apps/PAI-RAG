@@ -62,7 +62,10 @@ export async function POST(req: Request) {
   // 动态获取 MCP 配置（示例 URL）
   try {
     // 发起对 /api/configs 的请求
-    const response = await fetch("http://localhost:8097/api/configs");
+    const port = process.env.BACKEND_PORT || 8097;
+    console.log("/api/chat BACKEND_PORT", port);
+    const response = await fetch(`http://localhost:${port}/api/configs`);
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
