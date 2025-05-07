@@ -89,19 +89,19 @@ def fill_llm_tokens(model_name: str, selected_model: str):
     如果是新增model，自动根据model_name填充tokens配置
     如果是已有model，不用
     """
-    rag_config = rag_client.get_config()
-    is_new = selected_model == "NEW"
-    if is_new:
+    if selected_model == "NEW":
+        model_name_lower_case = model_name.lower()
         for attr_name in dir(DashScopeGenerationModels):
             if not attr_name.startswith("__"):
                 preserved_model_name = getattr(DashScopeGenerationModels, attr_name)
-                if model_name.lower() == preserved_model_name:
-                    meta = DASHSCOPE_MODEL_META.get(model_name.lower())
+                if model_name_lower_case == preserved_model_name:
+                    meta = DASHSCOPE_MODEL_META.get(model_name_lower_case)
                     if meta:
                         return meta["context_window"], meta["num_output"]
         return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
 
     else:
+        rag_config = rag_client.get_config()
         # Extract the relevant LLM configuration based on the selected model
         llm_config = next(
             (
@@ -140,8 +140,10 @@ def update_llms(selected_model):
         "api_key": llm_config.api_key if llm_config else "",
         "model_name": llm_config.model if llm_config and not is_new else "",
         "model_id": llm_config.model_id if llm_config else "",
-        "context_window": llm_config.context_window if llm_config else 8000,
-        "max_tokens": llm_config.max_tokens if llm_config else 4000,
+        "context_window": llm_config.context_window
+        if llm_config
+        else DEFAULT_CONTEXT_WINDOW,
+        "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
         "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
     }

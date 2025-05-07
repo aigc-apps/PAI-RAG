@@ -286,14 +286,8 @@ class PaiSynthesizer(BaseSynthesizer):
             )
 
         if prompt_template_args:
-            db_description_str = prompt_template_args.get("db_description_str", "")
-            query_code_instruction = (
-                [n.node.metadata["query_code_instruction"] for n in nodes],
-            )
             text_qa_template = prompt_template.partial_format(
-                query_str=query_str,
-                db_schema=db_description_str,
-                query_code_instruction=query_code_instruction,
+                query_str=query_str, **prompt_template_args
             )
         else:
             text_qa_template = prompt_template.partial_format(

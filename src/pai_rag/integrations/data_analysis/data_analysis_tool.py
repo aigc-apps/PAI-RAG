@@ -203,11 +203,6 @@ class DataAnalysisQuery(BaseQueryEngine):
             llm=self._llm,
             embed_model=self._embed_model,
         )
-        # self._synthesizer_deprecated = DataAnalysisSynthesizer(
-        #     llm=self._llm,
-        #     response_synthesis_prompt=PromptTemplate(analysis_config.synthesizer_prompt)
-        #     or DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
-        # )
         self._synthesizer = PaiSynthesizer(
             llm=self._llm,
             system_role_template=analysis_config.system_role_prompt,
@@ -232,34 +227,6 @@ class DataAnalysisQuery(BaseQueryEngine):
             return nodes[0], nodes[1]
         else:
             return nodes, ""
-
-    # def synthesize(
-    #     self,
-    #     query_bundle: QueryBundle,
-    #     description: str,
-    #     nodes: List[NodeWithScore],
-    #     streaming: bool = False,
-    # ) -> RESPONSE_TYPE:
-    #     return self._synthesizer.synthesize(
-    #         query=query_bundle,
-    #         description=description,
-    #         nodes=nodes,
-    #         streaming=streaming,
-    #     )
-
-    # async def asynthesize(
-    #     self,
-    #     query_bundle: QueryBundle,
-    #     description: str,
-    #     nodes: List[NodeWithScore],
-    #     streaming: bool = False,
-    # ) -> RESPONSE_TYPE:
-    #     return await self._synthesizer.asynthesize(
-    #         query=query_bundle,
-    #         description=description,
-    #         nodes=nodes,
-    #         streaming=query_bundle.stream,
-    #     )
 
     @dispatcher.span
     def _query(
@@ -298,42 +265,35 @@ class DataAnalysisQuery(BaseQueryEngine):
 
         return response
 
-    # async def aquery_deprecated(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-    #     nodes, description = await self.aretrieve(query_bundle)
-    #     response = await self._synthesizer_deprecated.asynthesize(
-    #         query=query_bundle,
-    #         description=description,
-    #         nodes=nodes,
-    #         streaming=query_bundle.stream,
-    #     )
-
-    #     return response
-
-    # async def astream_query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-    #     nodes, description = await self.aretrieve(query_bundle)
-    #     stream_response = await self._synthesizer.asynthesize(
-    #         query=query_bundle, description=description, nodes=nodes, streaming=True
-    #     )
-
-    #     return stream_response
-
     async def aquery(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
         nodes, description = await self.aretrieve(query_bundle)
+        query_code_instruction = (
+            [n.node.metadata["query_code_instruction"] for n in nodes],
+        )
         response = await self._synthesizer.asynthesize(
             query=query_bundle,
             nodes=nodes,
-            prompt_template_args={"db_description_str": description},
+            prompt_template_args={
+                "db_schema": description,
+                "query_code_instruction": query_code_instruction,
+            },
         )
 
         return response
 
     def query(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
         nodes, description = self.retrieve(query_bundle)
+        query_code_instruction = (
+            [n.node.metadata["query_code_instruction"] for n in nodes],
+        )
         response = asyncio.run(
             self._synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
-                prompt_template_args={"db_description_str": description},
+                prompt_template_args={
+                    "db_schema": description,
+                    "query_code_instruction": query_code_instruction,
+                },
             )
         )
         return response
