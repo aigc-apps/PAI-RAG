@@ -10,7 +10,7 @@ datasource:
 
 operators:
   - name: "parse"
-    num_cpus: 1
+    num_cpus: 2
     memory: 8
     num_gpus: 0
     enable_pdf_ocr: false

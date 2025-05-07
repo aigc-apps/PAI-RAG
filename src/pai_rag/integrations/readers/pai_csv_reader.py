@@ -233,7 +233,7 @@ class PaiExcelReader(BaseReader):
             chunking_tokenizer_fn=split_by_sep("\n\n"),
         )
 
-        logger.info(f"Start parsing {file}.")
+        logger.info(f"Start parsing workbook {file}.")
         docs: List[Document] = parse_workbook(
             file, oss_client=self.oss_cache, splitter=splitter
         )
@@ -246,6 +246,6 @@ class PaiExcelReader(BaseReader):
 
             if extra_info is not None:
                 doc.extra_info.update(extra_info)
-        logger.info(f"Finish parsing {file}.")
+        logger.info(f"Finish parsing workbook {file}.")
 
         return docs

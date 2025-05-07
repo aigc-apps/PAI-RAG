@@ -166,7 +166,7 @@ class PaiNodeParser(TransformComponent):
         self._doc_cnt_map = {}
 
         for doc_node in nodes:
-            logger.info(f"Start Parsing document: {doc_node.metadata['file_name']}")
+            logger.info(f"Start splitting document: {doc_node.metadata['file_name']}")
             doc_node.metadata["file_path"] = format_temp_file_path(
                 doc_node.metadata["file_path"]
             )
@@ -223,7 +223,9 @@ class PaiNodeParser(TransformComponent):
                             self._get_auto_increment_node_id(doc_key), doc_node
                         )
                         splitted_nodes.append(tmp_node)
-            logger.info(f"Finished Parsing document: {doc_node.metadata['file_name']}")
+            logger.info(
+                f"Finished splitting document: {doc_node.metadata['file_name']}"
+            )
 
         for node in splitted_nodes:
             node.excluded_embed_metadata_keys = list(

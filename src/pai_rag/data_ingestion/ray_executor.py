@@ -95,7 +95,7 @@ class RayExecutor:
             )
         else:
             if len(op_configs) == 0:
-                logger.info(
+                logger.warning(
                     "No op_configs and datasource provided, skipping dataset process pipeline."
                 )
                 return
@@ -107,6 +107,7 @@ class RayExecutor:
             dataset = ray.data.read_json(input_list)
 
         for op_config in op_configs:
+            logger.info(f"Executing {op_config.name}...")
             OP_TYPE = self._resolve_op_class(op_config=op_config)
             op_concurrency = op_config.concurrency or compute_concurrency_count(
                 num_cpus=op_config.num_cpus,
@@ -151,6 +152,7 @@ class RayExecutor:
                     filename_provider=filename_provider,
                     force_ascii=False,
                 )
+            logger.info(f"Finished executing {op_config.name}...")
 
         logger.info(f"All ops are done in {time.time() - start_time:.3f}s.")
 
