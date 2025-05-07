@@ -10,7 +10,12 @@ import re
 import markdown
 import html
 from loguru import logger
-from pai_rag.app.api.models import RagQuery, RagResponse
+from pai_rag.app.api.models import (
+    RagQuery,
+    RagResponse,
+    ChatCompletionRequest,
+    RetrievalRequest,
+)
 from pai_rag.app.web.view_model import ViewModel
 from pai_rag.app.web.ui_constants import EMPTY_KNOWLEDGEBASE_MESSAGE
 from pai_rag.core.rag_config import RagConfig
@@ -66,7 +71,7 @@ class RagLocalClient:
             content_list = []
             for i, doc in enumerate(docs):
                 metadata = doc.get("metadata", {})
-                filename = metadata.get("file_name")
+                filename = metadata.get("name")
                 sheet_name = metadata.get("sheet_name")
                 ref_table = metadata.get("query_tables")
                 invalid_flag = metadata.get("invalid_flag", 0)
@@ -141,32 +146,76 @@ class RagLocalClient:
 
         return dotdict(response)
 
+    def _format_rag_response_v1_chat_completions(self, response):
+        text = response["delta"]
+        docs = response.get("docs", []) or []
+        is_finished = response.get("is_finished", True)
+
+        referenced_docs = ""
+        if is_finished:
+            content_list = []
+            for i, doc in enumerate(docs):
+                filename = doc.get("name")
+                doc_text = doc.get("text")
+                score = doc.get("score")
+                url = doc.get("url", "")
+                if url.startswith("http"):
+                    filename = f'<a href="{url}"> {filename} </a>'
+                content = f"""
+<span class="text">
+    [{i+1}]: {filename} 分数:{score}
+    <span style='color: gray; font-size: 12px;'> ( {doc_text} ) </span>
+</span>
+<br>
+"""
+                content_list.append(content)
+            referenced_docs = "".join(content_list)
+
+        formatted_answer = text
+        if referenced_docs:
+            formatted_answer += f"\n\n**参考资料**:\n {referenced_docs}"
+
+        response["delta"] = formatted_answer
+
+        return dotdict(response)
+
     async def query(
         self,
         chat_messages: List[Dict[str, str]],
         stream: bool = False,
         citation: bool = False,
-        with_intent: bool = False,
         index_name: str = None,
-        search_web: bool = False,
         return_reference: bool = False,
         chat_model_id: str = None,
         temperature: float = 0.1,
+        chat_knowledgebase: bool = False,
+        search_web: bool = False,
+        chat_llm: bool = False,
+        chat_agent: bool = False,
+        chat_db: bool = False,
+        chat_news: bool = False,
     ):
-        query = RagQuery(
-            messages=chat_messages,
-            stream=stream,
-            citation=citation,
-            with_intent=with_intent,
-            index_name=index_name,
-            search_web=search_web,
-            return_reference=return_reference,
+        query = ChatCompletionRequest(
             model=chat_model_id,
+            messages=chat_messages,
             temperature=temperature,
+            stream=stream,
+            index_name=index_name,
+            citation=citation,
+            return_reference=return_reference,
+            chat_knowledgebase=chat_knowledgebase,
+            search_web=search_web,
+            chat_llm=chat_llm,
+            chat_agent=chat_agent,
+            chat_db=chat_db,
+            chat_news=chat_news,
         )
 
         try:
-            response = await rag_service.aquery_v1(query)
+            if stream:
+                response = await rag_service.astream_chat(query)
+            else:
+                response = await rag_service.achat(query)
             if isinstance(response, RagResponse):
                 result = {
                     "delta": response.answer,
@@ -178,11 +227,15 @@ class RagLocalClient:
                     if r.startswith("data: "):
                         chunk = json.loads(r[6:])
                         result = {
-                            "delta": chunk["delta"],
-                            "docs": chunk.get("docs"),
-                            "is_finished": chunk.get("is_finished", False),
+                            "delta": chunk["choices"][0]["delta"]["content"],
+                            "docs": chunk.get("citation_details", []),
+                            "is_finished": chunk["choices"][0]["finish_reason"]
+                            == "stop",
                         }
-                        yield self._format_rag_response(result)
+                        if chat_knowledgebase or search_web:
+                            yield self._format_rag_response_v1_chat_completions(result)
+                        else:
+                            yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
@@ -665,6 +718,68 @@ class RagLocalClient:
                 msg=f"update index {index_entry.name} failed. {e}",
             )
 
+    def update_index_retrieval_settings(
+        self,
+        knowledgebase_id: str,
+        retrieval_settings: dict = {},
+    ):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            _knowledgebase.retrieval_settings = retrieval_settings
+            knowledgebase_manager.update_knowledgebase(_knowledgebase)
+        except Exception as e:
+            logger.exception(
+                f"update retrieval_settings for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
+            )
+
+    def update_index_qa_prompt_templates(
+        self,
+        knowledgebase_id: str,
+        qa_prompt_templates: dict = {},
+    ):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            _knowledgebase.qa_prompt_templates = qa_prompt_templates
+            knowledgebase_manager.update_knowledgebase(_knowledgebase)
+        except Exception as e:
+            logger.exception(
+                f"update qa_prompt_templates for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update qa_prompt_templates for index {knowledgebase_id} failed. {e}",
+            )
+
+    def get_index_retrieval_settings(self, knowledgebase_id: str):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            return _knowledgebase.retrieval_settings
+        except Exception as e:
+            logger.exception(
+                f"update retrieval_settings for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"update retrieval_settings for index {knowledgebase_id} failed. {e}",
+            )
+
+    def get_index_qa_prompt_templates(self, knowledgebase_id: str):
+        try:
+            _knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+            return _knowledgebase.qa_prompt_templates
+        except Exception as e:
+            logger.exception(
+                f"Get qa_prompt_templates for index {knowledgebase_id} failed: {e}"
+            )
+            raise RagApiError(
+                code=500,
+                msg=f"Get qa_prompt_templates for index {knowledgebase_id} failed. {e}",
+            )
+
     def delete_index(self, index_name: str):
         try:
             knowledgebase_manager.delete_knowledgebase(name=index_name)
@@ -673,6 +788,58 @@ class RagLocalClient:
             raise RagApiError(
                 code=500,
                 msg=f"delete index {index_name} failed. {e}",
+            )
+
+    async def aknowledgebase_retrieval(
+        self,
+        knowledgebase_id: str,
+        query: str,
+        retrieval_settings: dict = {},
+    ):
+        try:
+            response = await rag_service.aknowledgebase_retrieval(
+                RetrievalRequest(
+                    query=query,
+                    knowledgebase_id=knowledgebase_id,
+                    retrieval_settings=retrieval_settings,
+                )
+            )
+            result = {}
+            formatted_text = "<tr><th>切片</th><th>分数</th><th>文本</th><th>标题</th></tr>\n"
+            if len(response.records) == 0:
+                result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=query)
+            else:
+                for i, record in enumerate(response.records):
+                    html_content = markdown.markdown(record.content)
+                    file_url = record.metadata.get("file_url", None)
+                    safe_html_content = html.escape(html_content).replace("\n", "<br>")
+                    if file_url:
+                        safe_html_content = (
+                            f"""<a href="{file_url}">{safe_html_content}</a>"""
+                        )
+                    formatted_text += '<tr style="font-size: 13px;"><td>切片 {}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n'.format(
+                        i + 1, record.score, safe_html_content, record.title
+                    )
+                formatted_text = (
+                    "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
+                )
+                result["delta"] = formatted_text
+            yield dotdict(result)
+
+        except Exception as error:
+            raise RagApiError(code=500, msg=str(error))
+
+    def get_knowledgebase_retrieval_config(self, knowledgebase_id):
+        try:
+            config = rag_service.get_config()
+            rag_config = RagConfig.model_validate(config)
+            return rag_config
+
+        except Exception as e:
+            logger.exception(f"get config failed: {e}")
+            raise RagApiError(
+                code=500,
+                msg=f"get config failed. {e}",
             )
 
 

@@ -12,6 +12,7 @@ from llama_index.core.base.llms.types import (
     CompletionResponseAsyncGen,
     CompletionResponseGen,
 )
+from pai_rag.app.api.models import ChatIntentType
 from llama_index.core.base.llms.generic_utils import (
     completion_response_to_chat_response,
     stream_completion_response_to_chat_response,
@@ -128,13 +129,11 @@ class PaiLlm(OpenAILike):
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
-        # add mandatory think for reasoning models
+        if "intent" in kwargs:
+            kwargs.pop("intent")
+
         if self.llm_config.is_reasoning_model:
-            messages.append(ChatMessage(role="assistant", content="<think>\n"))
-            logger.info(
-                f"add mandatory think for reasoning models, messages: {messages}"
-            )
-        """Chat with the model."""
+            logger.info(f"Using reasoning models, messages: {messages}")
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             logger.info(f"llm complete, prompt: {prompt}")
@@ -152,22 +151,33 @@ class PaiLlm(OpenAILike):
         ]
         logger.info(f"llm chat, filterd_messages: {filterd_messages}")
         _response = await self._llm.achat(filterd_messages, **kwargs)
-        if self.llm_config.is_reasoning_model and not str(_response.delta).startswith(
-            "<think>"
+        if (
+            self.llm_config.is_reasoning_model
+            and not _response.message.content.startswith("<think>")
         ):
             _response.message.content = "<think>\n" + _response.message.content
         return _response
 
     def async_stream_completion_response_to_chat_response(
-        self,
-        completion_response_gen: CompletionResponseAsyncGen,
+        self, completion_response_gen: CompletionResponseAsyncGen, intent_type: str
     ) -> ChatResponseAsyncGen:
         """Convert a stream completion response to a stream chat response."""
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
+            if intent_type is not None:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content="",
+                    ),
+                    delta="",
+                    additional_kwargs={"intent": intent_type},
+                )
             async for response in completion_response_gen:
                 if self.llm_config.is_reasoning_model:
+                    if start_label and not response.text:
+                        continue
                     if start_label and not response.text.startswith("<think>"):
                         start_label = False
                         yield ChatResponse(
@@ -188,6 +198,9 @@ class PaiLlm(OpenAILike):
                             delta="\n",
                             raw="\n",
                         )
+                    else:
+                        start_label = False
+
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
@@ -204,13 +217,44 @@ class PaiLlm(OpenAILike):
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
         if not self.llm_config.is_reasoning_model:
-            return await self._llm.astream_chat(messages, **kwargs)
+
+            async def gen() -> ChatResponseAsyncGen:
+                if "intent" in kwargs:
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="",
+                        ),
+                        delta="",
+                        additional_kwargs={
+                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
+                        },
+                    )
+                    kwargs.pop("intent")
+                async for response in await self._llm.astream_chat(messages, **kwargs):
+                    yield response
+
+            return gen()
         else:
 
             async def gen() -> ChatResponseAsyncGen:
+                if "intent" in kwargs:
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="",
+                        ),
+                        delta="",
+                        additional_kwargs={
+                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
+                        },
+                    )
+                    kwargs.pop("intent")
                 start_label = True
                 async for response in await self._llm.astream_chat(messages, **kwargs):
-                    if start_label and not str(response).startswith("<think>"):
+                    if start_label and not response.delta:
+                        continue
+                    if start_label and not response.delta.startswith("<think>"):
                         start_label = False
                         yield ChatResponse(
                             message=ChatMessage(
@@ -226,6 +270,9 @@ class PaiLlm(OpenAILike):
                             ),
                             delta="\n",
                         )
+                    else:
+                        start_label = False
+
                     yield response
 
             return gen()
@@ -237,18 +284,20 @@ class PaiLlm(OpenAILike):
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         messages = merge_consecutive_messages(messages)
+        logger.debug(f"Chat messages: {messages}")
         if self.llm_config.is_reasoning_model:
-            messages.append(ChatMessage(role="assistant", content="<think>\n"))
-            logger.info(
-                f"add mandatory think for reasoning models, messages: {messages}"
-            )
+            logger.info("Using reasoning models")
         if not self.metadata.is_chat_model:
+            intent = None
+            if "intent" in kwargs:
+                intent = kwargs.get("intent", ChatIntentType.CHAT_LLM)
+                kwargs.pop("intent")
             prompt = self.messages_to_prompt(messages)
             completion_response = await self.astream_complete(
                 prompt, formatted=True, **kwargs
             )
             return self.async_stream_completion_response_to_chat_response(
-                completion_response
+                completion_response, intent
             )
 
         filterd_messages = [

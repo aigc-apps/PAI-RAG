@@ -1,7 +1,7 @@
 import hashlib
 import os
 import re
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from llama_index.core.schema import BaseNode, TextNode, ImageDocument
 from llama_index.core.schema import TransformComponent
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
@@ -30,15 +30,15 @@ from pai_rag.utils.image_caption_utils import ImageCaptionTool
 
 
 class NodeParserConfig(BaseModel):
-    type: str = DEFAULT_NODE_PARSER_TYPE
-    chunk_size: int = DEFAULT_CHUNK_SIZE
-    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP
-    enable_multimodal: bool = False
-    paragraph_separator: str = DEFAULT_PARAGRAPH_SEP
-    sentence_window_size: int = DEFAULT_SENTENCE_WINDOW_SIZE
-    sentence_chunk_overlap: int = DEFAULT_SENTENCE_CHUNK_OVERLAP
-    breakpoint_percentile_threshold: float = DEFAULT_BREAKPOINT
-    buffer_size: int = DEFAULT_BUFFER_SIZE
+    type: Optional[str] = DEFAULT_NODE_PARSER_TYPE
+    chunk_size: Optional[int] = DEFAULT_CHUNK_SIZE
+    chunk_overlap: Optional[int] = DEFAULT_CHUNK_OVERLAP
+    enable_multimodal: Optional[bool] = False
+    paragraph_separator: Optional[str] = DEFAULT_PARAGRAPH_SEP
+    sentence_window_size: Optional[int] = DEFAULT_SENTENCE_WINDOW_SIZE
+    sentence_chunk_overlap: Optional[int] = DEFAULT_SENTENCE_CHUNK_OVERLAP
+    breakpoint_percentile_threshold: Optional[float] = DEFAULT_BREAKPOINT
+    buffer_size: Optional[int] = DEFAULT_BUFFER_SIZE
 
 
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl", "faq"])

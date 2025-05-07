@@ -59,13 +59,3 @@ jobs:
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
-
-      - name: Build and push GPU image
-        env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-gpu
-          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-gpu
-        run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} -f Dockerfile_gpu .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
-          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
