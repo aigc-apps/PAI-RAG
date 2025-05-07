@@ -1,9 +1,7 @@
-import os
 from typing import Optional, List, Tuple, Any
 from loguru import logger
 import asyncio
 
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.llms.llm import LLM
@@ -37,7 +35,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     MysqlAnalysisConfig,
     SqliteAnalysisConfig,
 )
-from pai_rag.utils.constants import EAS_DEFAULT_MODEL_DIR
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -54,26 +51,6 @@ def resolve(cls: Any, cls_key: str, **kwargs):
     else:
         logger.debug(f"Returning cached instance with id: {id(cls_cache[cls_key])}")
     return cls_cache[cls_key]
-
-
-def get_model_path(model_name, eas_default_dir, local_default_dir):
-    eas_path = os.path.join(eas_default_dir, model_name)
-    local_path = os.path.join(local_default_dir, model_name)
-
-    if os.path.exists(eas_path):
-        return eas_path
-    elif os.path.exists(local_path):
-        return local_path
-    else:
-        raise FileNotFoundError(f"Model file not found in {eas_path} or {local_path}")
-
-
-try:
-    model_path = get_model_path("bge-m3", EAS_DEFAULT_MODEL_DIR, "./model_repository")
-    embed_model_bge = HuggingFaceEmbedding(model_name=model_path)
-except Exception as e:
-    logger.error(f"Failed to load embed_model: {str(e)}")
-    embed_model_bge = None
 
 
 def resolve_schema_retriever(
@@ -125,7 +102,7 @@ def create_query_retriever(
     analysis_config: BaseAnalysisConfig,
     sql_database: SQLDatabase,
     llm: LLM,
-    embed_model: BaseEmbedding = embed_model_bge,
+    embed_model: BaseEmbedding,
 ):
     if isinstance(analysis_config, PandasAnalysisConfig):
         return PandasQueryRetriever.from_config(
@@ -181,7 +158,7 @@ class DataAnalysisLoader:
         self,
         analysis_config: SqlAnalysisConfig,
         sql_database: SQLDatabase,
-        embed_model: BaseEmbedding = embed_model_bge,
+        embed_model: BaseEmbedding,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:
@@ -212,7 +189,7 @@ class DataAnalysisQuery(BaseQueryEngine):
         self,
         analysis_config: BaseAnalysisConfig,
         sql_database: SQLDatabase,
-        embed_model: BaseEmbedding = embed_model_bge,
+        embed_model: BaseEmbedding,
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
     ) -> None:

@@ -10,6 +10,8 @@ from loguru import logger
 import click
 import json
 
+from pai_rag.utils.cuda_utils import infer_cuda_device
+
 
 class ModelScopeDownloader:
     def __init__(self, fetch_config: bool = False, download_directory_path: str = None):
@@ -79,24 +81,23 @@ class ModelScopeDownloader:
 
     def load_mineru_config(self, device: str = "cpu"):
         logger.info(f"Start to loading minerU config file on {device}.")
-        source_path = (
-            "magic-pdf.template.json"
-            if device == "cpu"
-            else "magic-pdf.gpu.template.json"
-        )
+        source_path = "magic-pdf.template.json"
         destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
 
         # 读取 source_path 文件的内容
         with open(source_path, "r") as source_file:
             data = json.load(source_file)  # 加载 JSON 数据
 
+        data["device-mode"] = infer_cuda_device()
+
         if "models-dir" in data:
             data["models-dir"] = os.path.join(
-                str(self.download_directory_path), "PDF-Extract-Kit/models"
+                str(self.download_directory_path), "PDF-Extract-Kit-1.0/models"
             )
         if "layoutreader-model-dir" in data:
             data["layoutreader-model-dir"] = os.path.join(
-                str(self.download_directory_path), "PDF-Extract-Kit/models/layoutreader"
+                str(self.download_directory_path),
+                "PDF-Extract-Kit-1.0/models/layoutreader",
             )
 
         # 将修改后的内容写入destination_path

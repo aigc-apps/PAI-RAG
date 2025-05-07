@@ -6,7 +6,7 @@ from typing import Any
 
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.core.rag_module import resolve_chat_llm
+from pai_rag.core.rag_module import resolve_chat_llm, resolve_default_embedding
 from pai_rag.integrations.data_analysis.data_analysis_config import SqlAnalysisConfig
 from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisConnector,
@@ -48,6 +48,7 @@ def resolve_data_analysis_loader(config: RagConfig) -> DataAnalysisLoader:
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm,
+        embed_model=resolve_default_embedding(),
     )
 
 

@@ -25,7 +25,7 @@ def download_models_via_lock(model_dir, model_name, accelerator="cpu"):
                         fetch_config=True,
                         download_directory_path=model_dir,
                     ).load_model(model=model_name)
-                    if model_name == "PDF-Extract-Kit":
+                    if model_name == "PDF-Extract-Kit-1.0":
                         ModelScopeDownloader(
                             fetch_config=True,
                             download_directory_path=model_dir,
