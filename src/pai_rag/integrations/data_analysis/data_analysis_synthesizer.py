@@ -53,6 +53,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         super().__init__(
             llm=llm,
             callback_manager=callback_manager,
+            # prompt_helper=PromptHelper(context_window=8000, num_output=1024),
             prompt_helper=prompt_helper,
             streaming=streaming,
         )
@@ -81,18 +82,20 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         query_df_output = [n.node.get_content() for n in retrieved_nodes]
         logger.info(f"db_description_str: {db_description_str}")
-        # partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
-        #     query_str=query_str,
-        #     db_schema=db_description_str,
-        #     query_code_instruction=[
-        #         n.node.metadata["query_code_instruction"] for n in retrieved_nodes
-        #     ],
-        # )
-        # truncated_df_output = self._prompt_helper.truncate(
-        #     prompt=partial_prompt_tmpl,
-        #     text_chunks=["\n".join(query_df_output)],
-        # )
-        # logger.info(f"truncated_df_output: {str(truncated_df_output)}")
+        partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
+            query_str=query_str,
+            db_schema=db_description_str,
+            query_code_instruction=[
+                n.node.metadata["query_code_instruction"] for n in retrieved_nodes
+            ],
+        )
+        truncated_df_output = self._prompt_helper.truncate(
+            prompt=partial_prompt_tmpl,
+            text_chunks=["\n".join(query_df_output)],
+        )
+        logger.info(
+            f"prompt_helper parameter: {str(self._prompt_helper)}/n truncated_df_output: {str(truncated_df_output)}"
+        )
 
         # response: RESPONSE_TEXT_TYPE
         messages = self._llm._get_messages(
@@ -102,7 +105,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
             query_code_instruction=[
                 n.node.metadata["query_code_instruction"] for n in retrieved_nodes
             ],  # sql or pandas query
-            query_output=query_df_output,  # query output
+            query_output=truncated_df_output,  # query output
             **response_kwargs,
         )
 
@@ -155,18 +158,18 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
         query_df_output = [n.node.get_content() for n in retrieved_nodes]
         logger.info(f"db_description_str: {db_description_str}")
 
-        # partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
-        #     query_str=query_str,
-        #     db_schema=db_description_str,
-        #     query_code_instruction=[
-        #         n.node.metadata["query_code_instruction"] for n in retrieved_nodes
-        #     ],
-        # )
-        # truncated_df_output = self._prompt_helper.truncate(
-        #     prompt=partial_prompt_tmpl,
-        #     text_chunks=["\n".join(query_df_output)],
-        # )
-        # logger.info(f"truncated_df_output: {truncated_df_output}")
+        partial_prompt_tmpl = self._response_synthesis_prompt.partial_format(
+            query_str=query_str,
+            db_schema=db_description_str,
+            query_code_instruction=[
+                n.node.metadata["query_code_instruction"] for n in retrieved_nodes
+            ],
+        )
+        truncated_df_output = self._prompt_helper.truncate(
+            prompt=partial_prompt_tmpl,
+            text_chunks=["\n".join(query_df_output)],
+        )
+        logger.info(f"truncated_df_output: {truncated_df_output}")
 
         response: RESPONSE_TEXT_TYPE
         if not streaming:
@@ -177,7 +180,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],  # sql or pandas query
-                query_output=query_df_output,  # query output
+                query_output=truncated_df_output,  # query output
                 **kwargs,
             )
         else:
@@ -188,7 +191,7 @@ class DataAnalysisSynthesizer(BaseSynthesizer):
                 query_code_instruction=[
                     n.node.metadata["query_code_instruction"] for n in retrieved_nodes
                 ],
-                query_output=query_df_output,
+                query_output=truncated_df_output,
                 **kwargs,
             )
 

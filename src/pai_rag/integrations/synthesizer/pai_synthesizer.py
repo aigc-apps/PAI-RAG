@@ -36,6 +36,7 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
+from pai_rag.app.web.ui_constants import SYN_GENERAL_PROMPTS
 from loguru import logger
 
 from pai_rag.utils.time_utils import get_prompt_current_time_str
@@ -166,6 +167,7 @@ class PaiSynthesizer(BaseSynthesizer):
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         system_role_str: str = None,
         prompt_template_str: str = None,
+        db_description_str: str = None,
         **response_kwargs: Any,
     ) -> ChatResponseWrapper:
         dispatcher.event(
@@ -208,6 +210,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     system_role_str=system_role_str or self._system_role_template,
                     prompt_template_str=prompt_template_str
                     or self._custom_prompt_template,
+                    db_description_str=db_description_str,
                     **response_kwargs,
                 )
 
@@ -241,23 +244,33 @@ class PaiSynthesizer(BaseSynthesizer):
         citation: bool = False,
         system_role_str: str = None,
         prompt_template_str: str = None,
+        db_description_str: str = None,
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
         cur_date = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:
-            prompt_template = (
-                PromptTemplate(
-                    template="{}\n{}\n{}\n{}".format(
+            if db_description_str:
+                prompt_template = PromptTemplate(
+                    template="{}\n{}\n{}".format(
                         system_role_str,
-                        prompt_template_str,
                         CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                        SYN_GENERAL_PROMPTS,
                     )
                 )
-                or self._multimodal_qa_template
-            )
+            else:
+                prompt_template = (
+                    PromptTemplate(
+                        template="{}\n{}\n{}\n{}".format(
+                            system_role_str,
+                            prompt_template_str,
+                            CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
+                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
+                        )
+                    )
+                    or self._multimodal_qa_template
+                )
         else:
             prompt_template = (
                 PromptTemplate(
@@ -272,17 +285,35 @@ class PaiSynthesizer(BaseSynthesizer):
                 or self._citation_multimodal_qa_template
             )
 
-        text_qa_template = prompt_template.partial_format(
-            history_str=history_str, query_str=query_str
-        )
+        if db_description_str:
+            query_code_instruction = (
+                [n.node.metadata["query_code_instruction"] for n in nodes],
+            )
+            text_qa_template = prompt_template.partial_format(
+                query_str=query_str,
+                db_schema=db_description_str,
+                query_code_instruction=query_code_instruction,
+            )
+        else:
+            text_qa_template = prompt_template.partial_format(
+                history_str=history_str, query_str=query_str
+            )
 
         response: RESPONSE_TEXT_TYPE
         logger.info(
             f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Chat History: {history_str} \n Query: {query_str}"
         )
+
+        logger.info(f"Prompt_helper parameter: {str(self._prompt_helper)}")
+        truncated_context_str = self._prompt_helper.truncate(
+            prompt=text_qa_template,
+            text_chunks=[context_str],
+        )
+        logger.info(f"Truncated_context_str: {str(truncated_context_str)}")
+
         messages = self._llm._get_messages(
             text_qa_template,
-            context_str=context_str,
+            context_str=truncated_context_str,
             **response_kwargs,
         )
 

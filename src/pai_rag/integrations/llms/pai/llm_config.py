@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
+DEFAULT_CONTEXT_WINDOW = 8000
 DEFAULT_MAX_TOKENS = 4000
 DEFAULT_MLLM_MAX_TOKENS = 2048
 
@@ -14,8 +15,20 @@ class DashScopeGenerationModels:
     QWEN_TURBO = "qwen-turbo"
     QWEN_PLUS = "qwen-plus"
     QWEN_MAX = "qwen-max"
-    QWEN_MAX_1201 = "qwen-max-1201"
-    QWEN_MAX_LONGCONTEXT = "qwen-max-longcontext"
+    QWEN_LONG = "qwen-long"
+
+    QWEN2P5_7B_INSTRUCT = "qwen2.5-7b-instruct"
+    QWEN2P5_14B_INSTRUCT = "qwen2.5-14b-instruct"
+    QWEN2P5_32B_INSTRUCT = "qwen2.5-32b-instruct"
+    QWEN2P5_72B_INSTRUCT = "qwen2.5-72b-instruct"
+
+    DEEPSEEK_R1_671B = "deepseek-r1"
+    DEEPSEEK_V3_671B = "deepseek-v3"
+    DEEPSEEK_R1_DISTILL_QWEN_7B = "deepseek-r1-distill-qwen-7b"
+    DEEPSEEK_R1_DISTILL_QWEN_14B = "deepseek-r1-distill-qwen-14b"
+    DEEPSEEK_R1_DISTILL_QWEN_32B = "deepseek-r1-distill-qwen-32b"
+    DEEPSEEK_R1_DISTILL_LLAMA_8B = "deepseek-r1-distill-llama-8b"
+    DEEPSEEK_R1_DISTILL_LLAMA_70B = "deepseek-r1-distill-llama-70b"
 
     QWEM1P5_1P8B_CHAT = "qwen1.5-1.8b-chat"
     QWEM1P5_7B_CHAT = "qwen1.5-7b-chat"
@@ -31,34 +44,94 @@ class DashScopeGenerationModels:
 
 DASHSCOPE_MODEL_META = {
     DashScopeGenerationModels.QWEN_TURBO: {
-        "context_window": 1024 * 8,
-        "num_output": 1024 * 2,
+        "context_window": 1000000,
+        "num_output": 8192,
         "is_chat_model": True,
         "is_function_calling_model": True,
     },
     DashScopeGenerationModels.QWEN_PLUS: {
-        "context_window": 1024 * 32,
-        "num_output": 1024 * 2,
+        "context_window": 131072,
+        "num_output": 8192,
         "is_chat_model": True,
         "is_function_calling_model": True,
     },
     DashScopeGenerationModels.QWEN_MAX: {
-        "context_window": 1024 * 8,
-        "num_output": 1024 * 2,
+        "context_window": 32768,
+        "num_output": 8192,
         "is_chat_model": True,
         "is_function_calling_model": True,
     },
-    DashScopeGenerationModels.QWEN_MAX_1201: {
-        "context_window": 1024 * 8,
-        "num_output": 1024 * 2,
+    DashScopeGenerationModels.QWEN_LONG: {
+        "context_window": 10000000,
+        "num_output": 8192,
         "is_chat_model": True,
         "is_function_calling_model": True,
     },
-    DashScopeGenerationModels.QWEN_MAX_LONGCONTEXT: {
-        "context_window": 1024 * 30,
-        "num_output": 1024 * 2,
+    DashScopeGenerationModels.QWEN2P5_7B_INSTRUCT: {
+        "context_window": 131072,
+        "num_output": 8192,
         "is_chat_model": True,
         "is_function_calling_model": True,
+    },
+    DashScopeGenerationModels.QWEN2P5_14B_INSTRUCT: {
+        "context_window": 131072,
+        "num_output": 8192,
+        "is_chat_model": True,
+        "is_function_calling_model": True,
+    },
+    DashScopeGenerationModels.QWEN2P5_32B_INSTRUCT: {
+        "context_window": 131072,
+        "num_output": 8192,
+        "is_chat_model": True,
+        "is_function_calling_model": True,
+    },
+    DashScopeGenerationModels.QWEN2P5_72B_INSTRUCT: {
+        "context_window": 131072,
+        "num_output": 8192,
+        "is_chat_model": True,
+        "is_function_calling_model": True,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_671B: {
+        "context_window": 65792,
+        "num_output": 8192,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_V3_671B: {
+        "context_window": 65792,
+        "num_output": 8192,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_DISTILL_QWEN_7B: {
+        "context_window": 32768,
+        "num_output": 16384,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_DISTILL_QWEN_14B: {
+        "context_window": 32768,
+        "num_output": 16384,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_DISTILL_QWEN_32B: {
+        "context_window": 32768,
+        "num_output": 16384,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_DISTILL_LLAMA_8B: {
+        "context_window": 32768,
+        "num_output": 16384,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
+    },
+    DashScopeGenerationModels.DEEPSEEK_R1_DISTILL_LLAMA_70B: {
+        "context_window": 32768,
+        "num_output": 16384,
+        "is_chat_model": True,
+        "is_function_calling_model": False,
     },
     DashScopeGenerationModels.QWEM1P5_1P8B_CHAT: {
         "context_window": 1024 * 30,
@@ -128,12 +201,14 @@ class PaiBaseLlmConfig(BaseModel):
     source: SupportedLlmType | None = None
     temperature: float = DEFAULT_TEMPERATURE
     system_prompt: str | None = None
+    context_window: int = DEFAULT_CONTEXT_WINDOW
     max_tokens: int = DEFAULT_MAX_TOKENS
     base_url: str | None = None
     api_key: str | None = None
     model: str | None = None
     vision_support: bool | None = None
     is_reasoning_model: bool | None = None
+    is_streaming_model: bool | None = None
     model_id: str | None = None
 
     model_config = ConfigDict(coerce_numbers_to_str=True, frozen=False)

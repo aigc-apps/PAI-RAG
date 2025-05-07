@@ -19,6 +19,10 @@ from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreC
 
 from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
+    DashScopeGenerationModels,
+    DASHSCOPE_MODEL_META,
+    DEFAULT_CONTEXT_WINDOW,
+    DEFAULT_MAX_TOKENS,
 )
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
@@ -80,6 +84,42 @@ def delete_index(vector_index):
     ]
 
 
+def fill_llm_tokens(model_name: str, selected_model: str):
+    """
+    如果是新增model，自动根据model_name填充tokens配置
+    如果是已有model，不用
+    """
+    rag_config = rag_client.get_config()
+    is_new = selected_model == "NEW"
+    if is_new:
+        for attr_name in dir(DashScopeGenerationModels):
+            if not attr_name.startswith("__"):
+                preserved_model_name = getattr(DashScopeGenerationModels, attr_name)
+                if model_name.lower() == preserved_model_name:
+                    meta = DASHSCOPE_MODEL_META.get(model_name.lower())
+                    if meta:
+                        return meta["context_window"], meta["num_output"]
+        return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
+
+    else:
+        # Extract the relevant LLM configuration based on the selected model
+        llm_config = next(
+            (
+                llm
+                for llm in rag_config.llms
+                if llm.model_id == selected_model
+                or (not llm.model_id and llm.model == selected_model)
+            ),
+            None,
+        )
+        if llm_config:
+            return llm_config.context_window, llm_config.max_tokens
+        else:
+            # If the selected model is not found in the LLM configurations,
+            # return the default values
+            return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
+
+
 def update_llms(selected_model):
     rag_config = rag_client.get_config()
     is_new = selected_model == "NEW"
@@ -100,6 +140,8 @@ def update_llms(selected_model):
         "api_key": llm_config.api_key if llm_config else "",
         "model_name": llm_config.model if llm_config and not is_new else "",
         "model_id": llm_config.model_id if llm_config else "",
+        "context_window": llm_config.context_window if llm_config else 8000,
+        "max_tokens": llm_config.max_tokens if llm_config else 4000,
         "vision_support": llm_config.vision_support if llm_config else False,
         "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
     }
@@ -112,6 +154,8 @@ def update_llms(selected_model):
         gr.update(value=initial_values["api_key"]),
         gr.update(value=initial_values["model_name"]),
         gr.update(value=initial_values["model_id"]),
+        gr.update(value=initial_values["context_window"]),
+        gr.update(value=initial_values["max_tokens"]),
         gr.update(value=initial_values["vision_support"]),
         gr.update(value=initial_values["is_reasoning_model"]),
     ]
@@ -123,9 +167,14 @@ def save_new_llm(
     base_url,
     api_key,
     model_id,
+    context_window,
+    max_tokens,
     vision_support,
     is_reasoning_model,
 ):
+    if context_window <= max_tokens:
+        raise ValueError("context_window should be greater than max_tokens")
+
     rag_config = rag_client.get_config()
     is_new = selected_model == "NEW"
     if not all([base_url, api_key, model_name]):
@@ -157,6 +206,8 @@ def save_new_llm(
         existing_model.api_key = api_key
         existing_model.model = model_name
         existing_model.model_id = model_id
+        existing_model.context_window = context_window
+        existing_model.max_tokens = max_tokens
         existing_model.vision_support = vision_support
         existing_model.is_reasoning_model = is_reasoning_model
         rag_config.llms[model_index] = existing_model
@@ -168,6 +219,8 @@ def save_new_llm(
             "base_url": base_url,
             "api_key": api_key,
             "model": model_name,
+            "context_window": context_window,
+            "max_tokens": max_tokens,
             "vision_support": vision_support,
             "is_reasoning_model": is_reasoning_model,
         }
