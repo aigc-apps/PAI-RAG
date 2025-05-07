@@ -28,7 +28,8 @@ For local development, please refer to the following steps:
    ```bash
    pip install poetry
    poetry install
-   poetry run aliyun-bootstrap -a install
+   pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
+   pip install protobuf==5.27.4
    ```
 
 - Common network timeout issues
@@ -48,6 +49,8 @@ For local development, please refer to the following steps:
   ```bash
   poetry lock
   poetry install
+   pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
+   pip install protobuf==5.27.4
   ```
 
 3. Download Models:

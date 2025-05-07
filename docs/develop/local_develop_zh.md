@@ -28,7 +28,8 @@
    ```bash
     pip install poetry
     poetry install
-    poetry run aliyun-bootstrap -a install
+    pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
+    pip install protobuf==5.27.4
    ```
 
    安装filebrowser
@@ -56,6 +57,9 @@
   ```bash
   poetry lock
   poetry install
+   pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
+   pip install protobuf==5.27.4
+
   ```
 
 3. 启动RAG服务
