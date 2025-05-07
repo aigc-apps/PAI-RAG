@@ -7,9 +7,4 @@ class TraceConfig(BaseModel):
     endpoint: str | None = None
 
     def is_enabled(self) -> bool:
-        return (
-            self.service_name
-            and self.token
-            and self.endpoint
-        )
-    
+        return self.service_name and self.token and self.endpoint

@@ -1,4 +1,6 @@
 from typing import Any, Sequence
+from loguru import logger
+
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr, Field
@@ -35,8 +37,6 @@ from openinference.instrumentation.llama_index import get_current_span
 from pai_rag.integrations.trace.base import use_current_span
 
 dispatcher = instrument.get_dispatcher(__name__)
-
-from loguru import logger
 
 
 class PaiLlm(OpenAILike):
@@ -84,7 +84,6 @@ class PaiLlm(OpenAILike):
             prompt = self.completion_to_prompt(prompt)
 
         return self._llm.complete(prompt, **kwargs)
-
 
     @llm_chat_callback()
     def stream_complete(
@@ -231,6 +230,7 @@ class PaiLlm(OpenAILike):
                     delta=response.delta,
                     raw=response.raw,
                 )
+
         return gen()
 
     @llm_chat_callback()
@@ -238,6 +238,7 @@ class PaiLlm(OpenAILike):
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
         if not self.llm_config.is_reasoning_model:
+
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
@@ -257,6 +258,7 @@ class PaiLlm(OpenAILike):
 
             return gen()
         else:
+
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
@@ -297,7 +299,6 @@ class PaiLlm(OpenAILike):
                     yield response
 
         return gen()
-
 
     @llm_chat_callback()
     async def astream_chat(

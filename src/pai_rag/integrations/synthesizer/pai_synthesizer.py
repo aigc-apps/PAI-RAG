@@ -4,7 +4,6 @@ from llama_index.core.settings import Settings
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
 from llama_index.core.prompts.mixin import PromptDictType
-from llama_index.core.response_synthesizers.base import BaseSynthesizer
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
@@ -21,7 +20,6 @@ from llama_index.core.base.response.schema import (
 )
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
-    SynthesizeEndEvent,
 )
 from llama_index.core.llms.llm import (
     astream_completion_response_to_tokens,
@@ -72,7 +70,6 @@ class PaiSynthesizer:
             prompt_template_str=custom_prompt_template,
         )
 
-
     @property
     def callback_manager(self) -> CallbackManager:
         return self._callback_manager
@@ -84,7 +81,6 @@ class PaiSynthesizer:
         # TODO: please fix this later
         self._callback_manager = callback_manager
         self._llm.callback_manager = callback_manager
-
 
     def _get_prompts(self) -> PromptDictType:
         """Get prompts."""

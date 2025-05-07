@@ -228,9 +228,10 @@ class RagLocalClient:
             else:
                 if isinstance(response, ChatCompletion):
                     result = {
-                            "delta": response.choices[0].message.content,
-                            "docs": response.citation_details,
-                            "is_finished": response.choices[0].finish_reason in ["stop", ""],
+                        "delta": response.choices[0].message.content,
+                        "docs": response.citation_details,
+                        "is_finished": response.choices[0].finish_reason
+                        in ["stop", ""],
                     }
                     yield self._format_rag_response_v1_chat_completions(result)
                 else:
@@ -244,7 +245,9 @@ class RagLocalClient:
                                 == "stop",
                             }
                             if chat_knowledgebase or search_web:
-                                yield self._format_rag_response_v1_chat_completions(result)
+                                yield self._format_rag_response_v1_chat_completions(
+                                    result
+                                )
                             else:
                                 yield self._format_rag_response(result)
         except Exception as e:

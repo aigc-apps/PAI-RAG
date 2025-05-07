@@ -2,7 +2,6 @@ from typing import List, Optional, Sequence, Union
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
-from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode, QueryType
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
@@ -11,7 +10,6 @@ import llama_index.core.instrumentation as instrument
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.instrumentation.events.base import BaseEvent
 from llama_index.core.instrumentation.events.query import (
-    QueryEndEvent,
     QueryStartEvent,
 )
 from llama_index.core.base.llms.types import (
@@ -38,7 +36,6 @@ class PaiQueryEndEvent(BaseEvent):
     def class_name(cls) -> str:
         """Class name."""
         return "PaiQueryEndEvent"
-
 
 
 class PaiRetrieverQueryEngine(RetrieverQueryEngine):
@@ -154,8 +151,7 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         raise NotImplementedError
-    
-    
+
     async def aquery(self, query_bundle: QueryType) -> RESPONSE_TYPE:
         dispatcher.event(QueryStartEvent(query=query_bundle))
         if isinstance(query_bundle, str):
@@ -168,7 +164,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
                 PaiQueryEndEvent(query=query_bundle, response=query_result)
             )
         return query_result
-    
 
     def synthesize(
         self,
