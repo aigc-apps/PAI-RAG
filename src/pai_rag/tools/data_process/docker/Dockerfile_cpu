@@ -9,10 +9,11 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN poetry install && rm -rf $POETRY_CACHE_DIR
-RUN poetry run aliyun-bootstrap -a install
+RUN poetry install \
+  && poetry run pip install magic-pdf[full]==1.3.10 dashvector==1.0.19 \
+  && poetry run pip install protobuf==5.27.4 \
+  && rm -rf $POETRY_CACHE_DIR
 RUN pip3 install https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-5fa6e81f-04cd-41d6-86ac-d8bffa4525e7-python-tea.zip
-RUN pip3 install ray[default]
 
 FROM python:3.11-slim AS prod
 
