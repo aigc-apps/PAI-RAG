@@ -1,4 +1,4 @@
-from typing import Any, Generator, List, Optional, Sequence, Union, cast
+from typing import Any, Generator, List, Dict, Optional, Sequence, Union, cast
 
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.indices.prompt_helper import PromptHelper
@@ -167,7 +167,7 @@ class PaiSynthesizer(BaseSynthesizer):
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         system_role_str: str = None,
         prompt_template_str: str = None,
-        db_description_str: str = None,
+        prompt_template_args: Dict[str, str] = None,
         **response_kwargs: Any,
     ) -> ChatResponseWrapper:
         dispatcher.event(
@@ -210,7 +210,7 @@ class PaiSynthesizer(BaseSynthesizer):
                     system_role_str=system_role_str or self._system_role_template,
                     prompt_template_str=prompt_template_str
                     or self._custom_prompt_template,
-                    db_description_str=db_description_str,
+                    prompt_template_args=prompt_template_args or {},
                     **response_kwargs,
                 )
 
@@ -244,14 +244,14 @@ class PaiSynthesizer(BaseSynthesizer):
         citation: bool = False,
         system_role_str: str = None,
         prompt_template_str: str = None,
-        db_description_str: str = None,
+        prompt_template_args: Dict[str, str] = None,
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
         cur_date = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:
-            if db_description_str:
+            if prompt_template_args:
                 prompt_template = PromptTemplate(
                     template="{}\n{}\n{}".format(
                         system_role_str,
@@ -285,7 +285,8 @@ class PaiSynthesizer(BaseSynthesizer):
                 or self._citation_multimodal_qa_template
             )
 
-        if db_description_str:
+        if prompt_template_args:
+            db_description_str = prompt_template_args.get("db_description_str", "")
             query_code_instruction = (
                 [n.node.metadata["query_code_instruction"] for n in nodes],
             )

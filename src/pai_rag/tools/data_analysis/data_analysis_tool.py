@@ -61,6 +61,7 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm,
+        embed_model=resolve_default_embedding(),
         callback_manager=None,
     )
 

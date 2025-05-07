@@ -322,7 +322,7 @@ class DataAnalysisQuery(BaseQueryEngine):
         response = await self._synthesizer.asynthesize(
             query=query_bundle,
             nodes=nodes,
-            db_description_str=description,
+            prompt_template_args={"db_description_str": description},
         )
 
         return response
@@ -333,7 +333,7 @@ class DataAnalysisQuery(BaseQueryEngine):
             self._synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
-                db_description_str=description,
+                prompt_template_args={"db_description_str": description},
             )
         )
         return response
