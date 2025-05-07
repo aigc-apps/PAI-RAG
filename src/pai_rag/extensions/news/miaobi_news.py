@@ -6,7 +6,6 @@ from pai_rag.extensions.news.news_config import (
     MiaobiNewsConfig,
     DEFAULT_NEWS_ROLE,
     DEFAULT_NEWS_ERROR_MESSAGE,
-    DEFAULT_WEB_SEARCH_INFO_MESSAGE,
     DEFAULT_LIST_NEWS_END_RESPONSE,
 )
 from llama_index.core.bridge.pydantic import Field
@@ -19,19 +18,12 @@ from llama_index.core.base.llms.types import (
     CompletionResponseGen,
     CompletionResponseAsyncGen,
     MessageRole,
-    LLMMetadata
+    LLMMetadata,
 )
 
-from llama_index.core.base.llms.generic_utils import (
-    completion_response_to_chat_response,
-    stream_completion_response_to_chat_response,
-)
 
 from llama_index.core.llms.llm import LLM
-from llama_index.core.llms.callbacks import (
-    llm_chat_callback,
-    llm_completion_callback
-)
+from llama_index.core.llms.callbacks import llm_chat_callback, llm_completion_callback
 
 from alibabacloud_aimiaobi20230801 import models as aimiaobi_models
 from alibabacloud_aimiaobi20230801.client import Client as AimiaobiClient
@@ -162,12 +154,12 @@ class NewsChatParameter(BaseModel):
 
 
 class MiaobiNewsTool(LLM):
-    llm: PaiLlm = Field(description='')
-    config: MiaobiNewsConfig = Field(description='')
-    chat_client: LightApp = Field(description='')
-    miaobi_client: AimiaobiClient = Field(description='')
-    list_topics_prompt_template: PromptTemplate = Field(description='')
-    chat_news_prompt_template: str = Field(description='')
+    llm: PaiLlm = Field(description="")
+    config: MiaobiNewsConfig = Field(description="")
+    chat_client: LightApp = Field(description="")
+    miaobi_client: AimiaobiClient = Field(description="")
+    list_topics_prompt_template: PromptTemplate = Field(description="")
+    chat_news_prompt_template: str = Field(description="")
 
     def __init__(self, llm: PaiLlm, config: MiaobiNewsConfig):
         chat_client = create_light_app_client(config)
@@ -181,12 +173,12 @@ class MiaobiNewsTool(LLM):
         )
 
         super().__init__(
-            llm = llm,
-            config = config,
-            chat_client = chat_client,
-            miaobi_client = miaobi_client,
-            list_topics_prompt_template = list_topics_prompt_template,
-            chat_news_prompt_template = chat_news_prompt_template
+            llm=llm,
+            config=config,
+            chat_client=chat_client,
+            miaobi_client=miaobi_client,
+            list_topics_prompt_template=list_topics_prompt_template,
+            chat_news_prompt_template=chat_news_prompt_template,
         )
 
         logger.info(
@@ -348,11 +340,9 @@ class MiaobiNewsTool(LLM):
 
     @llm_chat_callback()
     async def achat(
-        self,
-        messages: List[ChatMessage] = [],
-        **kwargs: Any
+        self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponse:
-        prompt = kwargs.get('prompt', '')
+        prompt = kwargs.get("prompt", "")
         stream_response_wrapper = await self.astream_chat(
             prompt=prompt,
             messages=messages,
@@ -363,7 +353,7 @@ class MiaobiNewsTool(LLM):
             message_content += response.delta
             additional_kwargs.update(response.additional_kwargs)
 
-        response=ChatResponse(
+        response = ChatResponse(
             message=ChatMessage(
                 role="assistant",
                 content=message_content,
@@ -375,11 +365,9 @@ class MiaobiNewsTool(LLM):
 
     @llm_chat_callback()
     async def astream_chat(
-        self,
-        messages: List[ChatMessage] = [],
-        **kwargs: Any
+        self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponseAsyncGen:
-        prompt = kwargs.get('prompt', '')
+        prompt = kwargs.get("prompt", "")
         logger.info(f"Chat news with prompt {prompt}, chat_history: {messages}")
 
         transformed_messages = _transform_messages(messages)
@@ -577,22 +565,16 @@ class MiaobiNewsTool(LLM):
     def stream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseGen:
-       raise NotImplementedError
+        raise NotImplementedError
 
     @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
-        # prompt = self._messages_to_prompt(messages)
-        # completion_response = self.complete(prompt, formatted=True, **kwargs)
-        # return completion_response_to_chat_response(completion_response)
         raise NotImplementedError
 
     @llm_chat_callback()
     def stream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseGen:
-        # prompt = self._messages_to_prompt(messages)
-        # completion_response = self.stream_complete(prompt, formatted=True, **kwargs)
-        # return stream_completion_response_to_chat_response(completion_response)
         raise NotImplementedError
 
     @llm_completion_callback()
