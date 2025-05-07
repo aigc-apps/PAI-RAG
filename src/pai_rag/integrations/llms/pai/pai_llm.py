@@ -85,7 +85,6 @@ class PaiLlm(OpenAILike):
 
         return self._llm.complete(prompt, **kwargs)
 
-    @llm_chat_callback()
     def stream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseGen:
