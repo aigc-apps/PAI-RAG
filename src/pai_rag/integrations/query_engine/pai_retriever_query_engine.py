@@ -157,7 +157,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         if isinstance(query_bundle, str):
             query_bundle = PaiQueryBundle(query_bundle)
         query_result = await self._aquery(query_bundle)
-        print("+++ query engine returns")
 
         if not query_bundle.stream:
             dispatcher.event(
