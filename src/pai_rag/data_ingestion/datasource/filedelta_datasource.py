@@ -194,7 +194,7 @@ class FileDeltaDatasource(Datasource):
         return read_tasks
 
     def supports_distributed_reads(self):
-        return False
+        return True
 
     def estimate_inmemory_data_size(self):
         return 5 * 1024 * 1024

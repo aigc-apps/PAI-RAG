@@ -87,9 +87,7 @@ class RayExecutor:
             )
 
             datasource = FileDeltaDatasource(config=datasource_config)
-            dataset = ray.data.read_datasource(
-                datasource, concurrency=1, override_num_blocks=1
-            ).materialize()
+            dataset = ray.data.read_datasource(datasource).materialize()
             Path(datasource_config.output_path).mkdir(parents=True, exist_ok=True)
             dataset.write_json(
                 datasource_config.output_path,
@@ -122,7 +120,7 @@ class RayExecutor:
             if self._need_batch_execution(op_config=op_config):
                 # Embedder需要batch执行
                 logger.info(
-                    f"Executing {op_config.name} in batch mode. concurrency: {op_concurrency}"
+                    f"Executing {op_config.name} in batch mode. Task concurrency: {op_concurrency}"
                 )
                 dataset = dataset.map_batches(
                     OP_TYPE,
@@ -135,7 +133,7 @@ class RayExecutor:
                 ).materialize()
             else:
                 logger.info(
-                    f"Executing {op_config.name} in flat_map mode. concurrency: {op_concurrency}"
+                    f"Executing {op_config.name} in flat_map mode. Task concurrency: {op_concurrency}"
                 )
                 dataset = dataset.flat_map(
                     OP_TYPE,

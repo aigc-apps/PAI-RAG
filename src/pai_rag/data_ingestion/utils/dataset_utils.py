@@ -15,6 +15,7 @@ def get_input_files(
     filter_pattern: str = None,
     supported_file_types: List[str] = ACCEPTABLE_DOC_TYPES,
 ):
+    logger.info(f"Getting input files from {file_path_or_directory}.")
     filter_pattern = filter_pattern or "*"
 
     input_files = None

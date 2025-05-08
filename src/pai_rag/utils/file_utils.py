@@ -1,5 +1,13 @@
 import hashlib
+import logging
 from loguru import logger
+from tenacity import (
+    before_sleep_log,
+    retry,
+    stop_after_attempt,
+    wait_fixed,
+    retry_if_exception_type,
+)
 import os
 
 
@@ -15,6 +23,13 @@ def generate_text_md5(text):
     return text_md5.hexdigest()
 
 
+# 读取文件的retry机制
+@retry(
+    wait=wait_fixed(1),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type(OSError),
+    before_sleep=before_sleep_log(logger, logging.INFO),
+)
 def generate_file_md5(file_path):
     with open(file_path, "rb") as file:
         file_content_md5 = hashlib.md5()  # Create an MD5 hash object
