@@ -6,6 +6,7 @@ from pai_rag.extensions.news.news_config import (
     MiaobiNewsConfig,
     DEFAULT_NEWS_ROLE,
     DEFAULT_NEWS_ERROR_MESSAGE,
+    DEFAULT_WEB_SEARCH_INFO_MESSAGE,
     DEFAULT_LIST_NEWS_END_RESPONSE,
 )
 from llama_index.core.bridge.pydantic import Field
@@ -185,7 +186,7 @@ class MiaobiNewsTool(LLM):
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def _alist_hot_topics(self, news_topics) -> list:
+    async def _alist_hot_topics(self, news_topics) -> List[Dict[str, Any]]:
         """Returns a list of dict, each dict represents a news, list is sorted in descending order of hot_value."""
         request = aimiaobi_models.GetHotTopicBroadcastRequest(
             workspace_id=self.config.workspace_id,
@@ -231,7 +232,7 @@ class MiaobiNewsTool(LLM):
             )
             response = ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content=DEFAULT_NEWS_ERROR_MESSAGE,
                 ),
                 delta=DEFAULT_NEWS_ERROR_MESSAGE,
@@ -276,7 +277,7 @@ class MiaobiNewsTool(LLM):
             async def gen() -> ChatResponseAsyncGen:
                 yield ChatResponse(
                     message=ChatMessage(
-                        role="assistant",
+                        role=MessageRole.ASSISTANT,
                         content="",
                     ),
                     delta="",
@@ -294,7 +295,7 @@ class MiaobiNewsTool(LLM):
                     )
                     yield ChatResponse(
                         message=ChatMessage(
-                            role="assistant",
+                            role=MessageRole.ASSISTANT,
                             content=DEFAULT_NEWS_ERROR_MESSAGE,
                         ),
                         delta=DEFAULT_NEWS_ERROR_MESSAGE,
@@ -319,7 +320,7 @@ class MiaobiNewsTool(LLM):
                 ]
                 yield ChatResponse(
                     message=ChatMessage(
-                        role="assistant",
+                        role=MessageRole.ASSISTANT,
                         content="",
                     ),
                     delta="",
@@ -342,24 +343,23 @@ class MiaobiNewsTool(LLM):
     async def achat(
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponse:
-        prompt = kwargs.get("prompt", "")
-        stream_response_wrapper = await self.astream_chat(
-            prompt=prompt,
+        args = {"prompt": kwargs.get("prompt", "")}
+        stream_response_gen = await self.astream_chat(
             messages=messages,
+            **args,
         )
         message_content = ""
         additional_kwargs = {}
-        async for response in stream_response_wrapper.response:
+        async for response in stream_response_gen:
             message_content += response.delta
             additional_kwargs.update(response.additional_kwargs)
 
         response = ChatResponse(
             message=ChatMessage(
-                role="assistant",
+                role=MessageRole.ASSISTANT,
                 content=message_content,
             ),
             additional_kwargs=additional_kwargs,
-            source_nodes=stream_response_wrapper.source_nodes,
         )
         return response
 
@@ -384,13 +384,14 @@ class MiaobiNewsTool(LLM):
             origin_text = ""
             yield ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content="",
                 ),
                 delta="",
                 additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
             )
             logger.info(f"Chat news with param {param}.")
+            use_web_search = False
             additional_kwargs = {}
             async for item in await self.chat_client.do_sse_query(param):
                 try:
@@ -398,6 +399,8 @@ class MiaobiNewsTool(LLM):
                     logger.info(data)
 
                     event = data.get("header").get("event")
+                    if event == "task-hot-topic-chat-internet-search-start":
+                        use_web_search = True
                     if event != "task-finished" and event != "task-failed":
                         usage = data.get("payload").get("usage")
                         if usage:
@@ -484,6 +487,16 @@ class MiaobiNewsTool(LLM):
                     )
                     continue
 
+            if use_web_search:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=f"{origin_text}\n{DEFAULT_WEB_SEARCH_INFO_MESSAGE}",
+                    ),
+                    delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                    additional_kwargs=additional_kwargs,
+                )
+
         return gen()
 
     async def achat_llm(
@@ -500,7 +513,7 @@ class MiaobiNewsTool(LLM):
         return ChatResponseWrapper(
             response=ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content=message_content,
                 ),
                 additional_kwargs=additional_kwargs,
@@ -517,7 +530,7 @@ class MiaobiNewsTool(LLM):
         async def gen() -> ChatResponseAsyncGen:
             yield ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content="",
                 ),
                 delta="",
@@ -534,7 +547,7 @@ class MiaobiNewsTool(LLM):
                 if part.strip():
                     yield ChatResponse(
                         message=ChatMessage(
-                            role="assistant",
+                            role=MessageRole.ASSISTANT,
                             content=part,
                         ),
                         delta=part,
