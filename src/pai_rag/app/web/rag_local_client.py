@@ -182,6 +182,7 @@ class RagLocalClient:
     async def query(
         self,
         chat_messages: List[Dict[str, str]],
+        is_faq_llm: bool = False,
         stream: bool = False,
         citation: bool = False,
         index_name: str = None,
@@ -198,6 +199,7 @@ class RagLocalClient:
         query = ChatCompletionRequest(
             model=chat_model_id,
             messages=chat_messages,
+            faq_llm=is_faq_llm,
             temperature=temperature,
             stream=stream,
             index_name=index_name,
@@ -222,6 +224,9 @@ class RagLocalClient:
                     "docs": response.docs,
                 }
                 yield self._format_rag_response(result)
+            elif isinstance(response, str):
+                yield response
+                return
             else:
                 async for r in response:
                     if r.startswith("data: "):
@@ -236,6 +241,8 @@ class RagLocalClient:
                             yield self._format_rag_response_v1_chat_completions(result)
                         else:
                             yield self._format_rag_response(result)
+                    else:
+                        yield r
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 

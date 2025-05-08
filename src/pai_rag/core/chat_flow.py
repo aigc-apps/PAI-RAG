@@ -321,7 +321,10 @@ class ChatFlow:
                 chat_request.index_name
             )
             response_wrapper = await self.achat_knowledgebase(
-                query_bundle, config=config, knowledgebase=knowledgebase
+                query_bundle,
+                config=config,
+                knowledgebase=knowledgebase,
+                faq_llm=chat_request.faq_llm,
             )
         else:
             logger.warning(f"Unknown intent: {query_bundle.intent}")
@@ -419,6 +422,7 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
         config: RagConfig,
         knowledgebase: KnowledgeBase,
+        faq_llm: bool = False,
     ) -> ChatResponseWrapper:
         vector_index = resolve_vector_index(knowledgebase)
         if (
@@ -430,10 +434,14 @@ class ChatFlow:
                 vector_index=vector_index,
                 model_id=query_bundle.model,
                 knowledgebase=knowledgebase,
+                faq_llm=faq_llm,
             )
         else:
             query_engine = resolve_query_engine(
-                config, vector_index=vector_index, model_id=query_bundle.model
+                config,
+                vector_index=vector_index,
+                faq_llm=faq_llm,
+                model_id=query_bundle.model,
             )
         query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_KNOWLEDGEBASE
         response = await query_engine.aquery(query_bundle)

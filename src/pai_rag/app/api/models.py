@@ -68,6 +68,7 @@ class RagResponse(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str  # 模型名称
     messages: List[ChatMessage]  # 上下文聊天
+    faq_llm: Optional[bool] = False  # 大模型处理faq输出
     stream: Optional[bool] = False  # 流式输出
     index_name: Optional[str] = None  # 索引名称
     chat_knowledgebase: Optional[bool] = False  # 查询知识库

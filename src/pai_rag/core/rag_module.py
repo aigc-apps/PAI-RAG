@@ -311,7 +311,9 @@ def resolve_openai_query_transform(
     return openai_query_transform
 
 
-def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesizer:
+def resolve_synthesizer(
+    config: RagConfig, faq_llm: bool = False, model_id: str = None
+) -> PaiSynthesizer:
     llm = resolve_chat_llm(config, model_id)
     multimodal_llm = None
     multimodal_llm = resolve_multimodal_llm(config)
@@ -322,6 +324,7 @@ def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesiz
         multimodal_llm=multimodal_llm,
         system_role_template=config.synthesizer.system_role_template,
         custom_prompt_template=config.synthesizer.custom_prompt_template,
+        faq_llm_response=faq_llm,
     )
     return synthesizer
 
@@ -338,7 +341,10 @@ def resolve_vector_index(knowledgebase: KnowledgeBase) -> PaiVectorStoreIndex:
 
 
 def resolve_query_engine(
-    config: RagConfig, vector_index: PaiVectorStoreIndex, model_id: str = None
+    config: RagConfig,
+    vector_index: PaiVectorStoreIndex,
+    faq_llm: bool = False,
+    model_id: str = None,
 ) -> PaiRetrieverQueryEngine:
     retriever = vector_index.as_retriever(
         vector_store_query_mode=config.retriever.vector_store_query_mode,
@@ -348,7 +354,7 @@ def resolve_query_engine(
         hybrid_fusion_weights=config.retriever.hybrid_fusion_weights,
     )
 
-    synthesizer = resolve_synthesizer(config, model_id)
+    synthesizer = resolve_synthesizer(config, faq_llm)
     postprocessor = resolve(
         cls=PaiPostProcessor, postprocessor_config=config.postprocessor
     )
@@ -443,6 +449,7 @@ def resolve_query_engine_from_knowledgebase(
     config: RagConfig,
     vector_index: PaiVectorStoreIndex,
     knowledgebase: KnowledgeBase,
+    faq_llm: bool = False,
     model_id: str = None,
 ) -> PaiRetrieverQueryEngine:
     retrieval_settings = knowledgebase.retrieval_settings
@@ -525,6 +532,7 @@ def resolve_query_engine_from_knowledgebase(
             multimodal_llm=multimodal_llm,
             system_role_template=qa_prompt_templates["system_prompt_template"],
             custom_prompt_template=qa_prompt_templates["task_prompt_template"],
+            faq_llm_response=faq_llm,
         )
     else:
         synthesizer = resolve_synthesizer(config, model_id)

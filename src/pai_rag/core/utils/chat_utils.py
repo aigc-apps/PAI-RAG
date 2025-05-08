@@ -128,6 +128,8 @@ def make_completion_response(
     base_token_usage: CompletionUsage,
     return_reference: bool = False,
 ):
+    if isinstance(response_wrapper.response, str):
+        return response_wrapper.response
     chat_response: ChatResponse = response_wrapper.response
     logger.info(f"Finished response: {chat_response.message.content}")
     token_usage = get_token_usage(chat_response, base_token_usage)
@@ -172,35 +174,83 @@ async def make_completion_chunk_response(
     full_content = ""
     created_ts = int(time.time())
 
-    try:
-        is_first_chunk = True
-        chunk_token_usage = None
+    if isinstance(response_wrapper.response, str):
+        yield response_wrapper.response
+        return
+    else:
+        try:
+            is_first_chunk = True
+            chunk_token_usage = None
 
-        chat_response_gen: ChatResponseAsyncGen = response_wrapper.response
-        citations, citation_details = [], []
-        if return_reference:
-            citations, citation_details = parse_citations_from_source_nodes(
-                response_wrapper
-            )
-        async for chat_response in chat_response_gen:
-            chunk_token_usage = get_token_usage(chat_response, base_token_usage)
-            if not chat_response.delta and not chat_response.additional_kwargs:
-                continue
+            chat_response_gen: ChatResponseAsyncGen = response_wrapper.response
+            citations, citation_details = [], []
+            if return_reference:
+                citations, citation_details = parse_citations_from_source_nodes(
+                    response_wrapper
+                )
+            async for chat_response in chat_response_gen:
+                chunk_token_usage = get_token_usage(chat_response, base_token_usage)
+                if not chat_response.delta and not chat_response.additional_kwargs:
+                    continue
 
-            if is_first_chunk:
-                if len(citations) > 0:
-                    chat_response.additional_kwargs["citations"] = citations
-                    chat_response.additional_kwargs[
-                        "citation_details"
-                    ] = citation_details
-                if chat_response.delta:
-                    logger.info(
-                        f"[{chat_id}] Start get first token {time.time() - start_time}"
+                if is_first_chunk:
+                    if len(citations) > 0:
+                        chat_response.additional_kwargs["citations"] = citations
+                        chat_response.additional_kwargs[
+                            "citation_details"
+                        ] = citation_details
+                    if chat_response.delta:
+                        logger.info(
+                            f"[{chat_id}] Start get first token {time.time() - start_time}"
+                        )
+
+                    is_first_chunk = False
+
+                full_content += chat_response.delta
+                chunk = ChatCompletionChunk(
+                    id=chat_id,
+                    created=created_ts,
+                    model=model,
+                    choices=[
+                        chat_completion_chunk.Choice(
+                            index=chunk_id,
+                            delta=chat_completion_chunk.ChoiceDelta(
+                                role=MessageRole.ASSISTANT.value,
+                                content=chat_response.delta,
+                            ),
+                            finish_reason=None,
+                        )
+                    ],
+                    usage=chunk_token_usage,
+                    object="chat.completion.chunk",
+                    **chat_response.additional_kwargs,
+                )
+                chunk_id += 1
+                yield _make_json_chunk(data=chunk.model_dump(mode="json"))
+
+            last_chunk = ChatCompletionChunk(
+                id=chat_id,
+                created=created_ts,
+                model=model,
+                citations=citations,
+                citation_details=citation_details,
+                choices=[
+                    chat_completion_chunk.Choice(
+                        index=chunk_id,
+                        delta=chat_completion_chunk.ChoiceDelta(
+                            role=MessageRole.ASSISTANT.value,
+                            content="",
+                        ),
+                        finish_reason="stop",
                     )
-
-                is_first_chunk = False
-
-            full_content += chat_response.delta
+                ],
+                usage=chunk_token_usage,
+                object="chat.completion.chunk",
+            )
+            yield _make_json_chunk(data=last_chunk.model_dump(mode="json"))
+            logger.info(f"Finished streaming: {full_content}")
+        except APIError as exception:
+            logger.error(f"Streaming failed: {traceback.format_exc()}")
             chunk = ChatCompletionChunk(
                 id=chat_id,
                 created=created_ts,
@@ -210,63 +260,19 @@ async def make_completion_chunk_response(
                         index=chunk_id,
                         delta=chat_completion_chunk.ChoiceDelta(
                             role=MessageRole.ASSISTANT.value,
-                            content=chat_response.delta,
+                            content=exception.message,
                         ),
-                        finish_reason=None,
+                        finish_reason="stop",
                     )
                 ],
-                usage=chunk_token_usage,
                 object="chat.completion.chunk",
-                **chat_response.additional_kwargs,
             )
-            chunk_id += 1
             yield _make_json_chunk(data=chunk.model_dump(mode="json"))
-
-        last_chunk = ChatCompletionChunk(
-            id=chat_id,
-            created=created_ts,
-            model=model,
-            citations=citations,
-            citation_details=citation_details,
-            choices=[
-                chat_completion_chunk.Choice(
-                    index=chunk_id,
-                    delta=chat_completion_chunk.ChoiceDelta(
-                        role=MessageRole.ASSISTANT.value,
-                        content="",
-                    ),
-                    finish_reason="stop",
-                )
-            ],
-            usage=chunk_token_usage,
-            object="chat.completion.chunk",
-        )
-        yield _make_json_chunk(data=last_chunk.model_dump(mode="json"))
-        logger.info(f"Finished streaming: {full_content}")
-    except APIError as exception:
-        logger.error(f"Streaming failed: {traceback.format_exc()}")
-        chunk = ChatCompletionChunk(
-            id=chat_id,
-            created=created_ts,
-            model=model,
-            choices=[
-                chat_completion_chunk.Choice(
-                    index=chunk_id,
-                    delta=chat_completion_chunk.ChoiceDelta(
-                        role=MessageRole.ASSISTANT.value,
-                        content=exception.message,
-                    ),
-                    finish_reason="stop",
-                )
-            ],
-            object="chat.completion.chunk",
-        )
-        yield _make_json_chunk(data=chunk.model_dump(mode="json"))
-    except asyncio.CancelledError:
-        logger.warning(f"Streaming cancelled: {chat_id} {full_content}")
-    except Exception as exception:
-        logger.info(f"Streaming failed: {exception}")
-        raise exception
+        except asyncio.CancelledError:
+            logger.warning(f"Streaming cancelled: {chat_id} {full_content}")
+        except Exception as exception:
+            logger.info(f"Streaming failed: {exception}")
+            raise exception
 
 
 def response_from_text(text: str):

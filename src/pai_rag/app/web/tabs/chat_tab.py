@@ -33,6 +33,7 @@ async def respond(input_elements: List[Any]):
     question = update_dict["question"]
     q_msg = {"content": question, "role": "user"}
     chatbot.append(q_msg)
+    is_faq_llm = update_dict["is_faq_llm"]
     is_streaming = update_dict["is_streaming"]
     index_name = update_dict["chat_index"]
     chat_model_id = update_dict["chat_model_id"]
@@ -56,6 +57,7 @@ async def respond(input_elements: List[Any]):
     try:
         response_gen = rag_client.query(
             chat_messages=chatbot[:-1],
+            is_faq_llm=is_faq_llm,
             stream=is_streaming,
             citation=citation,
             index_name=index_name,
@@ -69,10 +71,11 @@ async def respond(input_elements: List[Any]):
             chat_llm=chat_llm,
             chat_news=chat_news,
         )
-
         is_thinking = False
         async for resp in response_gen:
-            if resp.delta == "<think>":
+            if isinstance(resp, str):
+                chatbot[-1]["content"] += resp
+            elif resp.delta == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
                 chatbot[-1]["metadata"]["log"] = ""
                 is_thinking = True
@@ -137,6 +140,12 @@ def create_chat_tab() -> Dict[str, Any]:
             #     elem_id="query_type",
             #     value="对话 (知识库)",
             # )
+            is_faq_llm = gr.Checkbox(
+                label="大模型问答FAQ文档",
+                info="开启大模型问答FAQ文档",
+                elem_id="is_faq_llm",
+                value=False,
+            )
             is_streaming = gr.Checkbox(
                 label="流式输出",
                 info="开启流式输出",
@@ -337,6 +346,7 @@ def create_chat_tab() -> Dict[str, Any]:
                 question,
                 query_types,
                 chatbot,
+                is_faq_llm,
                 is_streaming,
                 citation,
                 need_image,
