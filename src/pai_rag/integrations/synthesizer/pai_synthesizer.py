@@ -63,7 +63,13 @@ class PaiSynthesizer:
     ) -> None:
         self._llm = llm
         self._callback_manager = callback_manager or Settings.callback_manager
-        self._prompt_helper = prompt_helper
+        self._prompt_helper = (
+            prompt_helper
+            or Settings._prompt_helper
+            or PromptHelper.from_llm_metadata(
+                self._llm.metadata,
+            )
+        )
         self._multimodal_llm = multimodal_llm
         self._update_prompts(
             system_role_str=system_role_template,
