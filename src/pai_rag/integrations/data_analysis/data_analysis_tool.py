@@ -273,6 +273,8 @@ class DataAnalysisQuery(BaseQueryEngine):
         response = await self._synthesizer.asynthesize(
             query=query_bundle,
             nodes=nodes,
+            system_role_str=self._synthesizer._system_role_template,
+            prompt_template_str=self._synthesizer._custom_prompt_template,
             prompt_template_args={
                 "db_schema": description,
                 "query_code_instruction": query_code_instruction,
@@ -290,6 +292,8 @@ class DataAnalysisQuery(BaseQueryEngine):
             self._synthesizer.asynthesize(
                 query=query_bundle,
                 nodes=nodes,
+                system_role_str=self._synthesizer._system_role_template,
+                prompt_template_str=self._synthesizer._custom_prompt_template,
                 prompt_template_args={
                     "db_schema": description,
                     "query_code_instruction": query_code_instruction,

@@ -84,12 +84,12 @@ def delete_index(vector_index):
     ]
 
 
-def fill_llm_tokens(model_name: str, selected_model: str):
+def fill_llm_tokens(model_name: str, selected_model_id: str):
     """
     如果是新增model，自动根据model_name填充tokens配置
     如果是已有model，不用
     """
-    if selected_model == "NEW":
+    if selected_model_id == "NEW":
         model_name_lower_case = model_name.lower()
         for attr_name in dir(DashScopeGenerationModels):
             if not attr_name.startswith("__"):
@@ -107,8 +107,8 @@ def fill_llm_tokens(model_name: str, selected_model: str):
             (
                 llm
                 for llm in rag_config.llms
-                if llm.model_id == selected_model
-                or (not llm.model_id and llm.model == selected_model)
+                if llm.model_id == selected_model_id
+                or (not llm.model_id and llm.model == selected_model_id)
             ),
             None,
         )
@@ -120,17 +120,17 @@ def fill_llm_tokens(model_name: str, selected_model: str):
             return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
 
 
-def update_llms(selected_model):
+def update_llms(selected_model_id):
     rag_config = rag_client.get_config()
-    is_new = selected_model == "NEW"
+    is_new = selected_model_id == "NEW"
 
     # Extract the relevant LLM configuration based on the selected model
     llm_config = next(
         (
             llm
             for llm in rag_config.llms
-            if llm.model_id == selected_model
-            or (not llm.model_id and llm.model == selected_model)
+            if llm.model_id == selected_model_id
+            or (not llm.model_id and llm.model == selected_model_id)
         ),
         None,
     )
@@ -164,7 +164,7 @@ def update_llms(selected_model):
 
 
 def save_new_llm(
-    selected_model,
+    selected_model_id,
     model_name,
     base_url,
     api_key,
@@ -178,7 +178,7 @@ def save_new_llm(
         raise ValueError("context_window should be greater than max_tokens")
 
     rag_config = rag_client.get_config()
-    is_new = selected_model == "NEW"
+    is_new = selected_model_id == "NEW"
     if not all([base_url, api_key, model_name]):
         raise gr.Error("please fill in all fields")
 
@@ -197,8 +197,8 @@ def save_new_llm(
             (
                 (index, llm)
                 for index, llm in enumerate(rag_config.llms)
-                if llm.model_id == selected_model
-                or (not llm.model_id and llm.model == selected_model)
+                if llm.model_id == selected_model_id
+                or (not llm.model_id and llm.model == selected_model_id)
             ),
             (-1, None),
         )
@@ -243,13 +243,13 @@ def save_new_llm(
     ]
 
 
-def delete_llm(selected_model):
+def delete_llm(selected_model_id):
     rag_config = rag_client.get_config()
     # Find the LLM configuration by model_id
     rag_config.llms = [
         llm
         for llm in rag_config.llms
-        if llm.model != selected_model and llm.model_id != selected_model
+        if llm.model != selected_model_id and llm.model_id != selected_model_id
     ]
 
     update_dict = {}

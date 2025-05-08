@@ -242,6 +242,7 @@ def resolve_data_analysis_loader(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
+        embed_model=resolve_default_embedding(),
         llm=llm,
     )
 

@@ -36,7 +36,6 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
-from pai_rag.app.web.ui_constants import SYN_GENERAL_PROMPTS
 from loguru import logger
 
 from pai_rag.utils.time_utils import get_prompt_current_time_str
@@ -251,26 +250,17 @@ class PaiSynthesizer(BaseSynthesizer):
         cur_date = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         if not citation:
-            if prompt_template_args:
-                prompt_template = PromptTemplate(
-                    template="{}\n{}\n{}".format(
+            prompt_template = (
+                PromptTemplate(
+                    template="{}\n{}\n{}\n{}".format(
                         system_role_str,
+                        prompt_template_str,
                         CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                        SYN_GENERAL_PROMPTS,
+                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
                     )
                 )
-            else:
-                prompt_template = (
-                    PromptTemplate(
-                        template="{}\n{}\n{}\n{}".format(
-                            system_role_str,
-                            prompt_template_str,
-                            CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                            DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                        )
-                    )
-                    or self._multimodal_qa_template
-                )
+                or self._multimodal_qa_template
+            )
         else:
             prompt_template = (
                 PromptTemplate(
@@ -285,14 +275,10 @@ class PaiSynthesizer(BaseSynthesizer):
                 or self._citation_multimodal_qa_template
             )
 
-        if prompt_template_args:
-            text_qa_template = prompt_template.partial_format(
-                query_str=query_str, **prompt_template_args
-            )
-        else:
-            text_qa_template = prompt_template.partial_format(
-                history_str=history_str, query_str=query_str
-            )
+        prompt_template_args.update(
+            {"query_str": query_str, "history_str": history_str}
+        )
+        text_qa_template = prompt_template.partial_format(**prompt_template_args)
 
         response: RESPONSE_TEXT_TYPE
         logger.info(
@@ -300,15 +286,17 @@ class PaiSynthesizer(BaseSynthesizer):
         )
 
         logger.info(f"Prompt_helper parameter: {str(self._prompt_helper)}")
-        truncated_context_str = self._prompt_helper.truncate(
+        truncated_context_list = self._prompt_helper.truncate(
             prompt=text_qa_template,
-            text_chunks=[context_str],
+            text_chunks=[
+                context_str
+            ],  # 目前主要处理context_str一个参数，可以是：rag检索结果/web搜索结果/db查询结果
         )
-        logger.info(f"Truncated_context_str: {str(truncated_context_str)}")
+        logger.info(f"Truncated_context_str: {str(truncated_context_list)}")
 
         messages = self._llm._get_messages(
             text_qa_template,
-            context_str=truncated_context_str,
+            context_str=truncated_context_list[0],
             **response_kwargs,
         )
 
