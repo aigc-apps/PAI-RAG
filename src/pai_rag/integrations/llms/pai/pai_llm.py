@@ -24,7 +24,6 @@ from pai_rag.integrations.llms.pai.llm_utils import (
     merge_consecutive_messages,
 )
 from pai_rag.integrations.llms.pai.llm_config import (
-    DASHSCOPE_MODEL_META,
     PaiBaseLlmConfig,
 )
 from llama_index.core.base.llms.types import MessageRole
@@ -63,18 +62,19 @@ class PaiLlm(OpenAILike):
 
     @property
     def metadata(self) -> LLMMetadata:
-        if self.model in DASHSCOPE_MODEL_META:
-            return LLMMetadata(
-                model_name=self.model,
-                **DASHSCOPE_MODEL_META[self.model],
-            )
-        else:
-            return LLMMetadata(
-                model_name=self.model,
-                num_output=self.llm_config.max_tokens,
-                is_chat_model=True,
-                is_function_calling_model=True,
-            )
+        # if self.model in DASHSCOPE_MODEL_META:
+        #     return LLMMetadata(
+        #         model_name=self.model,
+        #         **DASHSCOPE_MODEL_META[self.model],
+        #     )
+        # else:
+        return LLMMetadata(
+            model_name=self.model,
+            context_window=self.llm_config.context_window,
+            num_output=self.llm_config.max_tokens,
+            is_chat_model=True,
+            is_function_calling_model=True,
+        )
 
     def complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any

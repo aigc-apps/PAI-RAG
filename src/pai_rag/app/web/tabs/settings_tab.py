@@ -76,8 +76,28 @@ def create_setting_tab() -> Dict[str, Any]:
                                     interactive=True,
                                     scale=1,
                                 )
+                            # 第三行: llm token参数
+                            with gr.Row():
+                                llm_model_context_window = gr.Number(
+                                    value=rag_config.llms[0].context_window
+                                    if rag_config.llms
+                                    else 8000,
+                                    label="上下文窗口",
+                                    # placeholder="上下文窗口, e.g. 8000",
+                                    interactive=True,
+                                    scale=1,
+                                )
+                                llm_model_max_tokens = gr.Number(
+                                    value=rag_config.llms[0].max_tokens
+                                    if rag_config.llms
+                                    else 4000,
+                                    label="最大输出长度",
+                                    # placeholder="最大输出长度, e.g. 4000",
+                                    interactive=True,
+                                    scale=1,
+                                )
 
-                            # 第三行：多模态支持
+                            # 第四行：多模态支持
                             with gr.Row():
                                 llm_vision_support = gr.Checkbox(
                                     value=rag_config.llms[0].vision_support
@@ -99,6 +119,12 @@ def create_setting_tab() -> Dict[str, Any]:
                                 )
                     save_btn = gr.Button("保存模型配置", variant="primary")
 
+                    llm_model_name.change(
+                        fn=ev_listeners.fill_llm_tokens,
+                        inputs=[llm_model_name, llm_model],
+                        outputs=[llm_model_context_window, llm_model_max_tokens],
+                    )
+
                     llm_model.change(
                         fn=ev_listeners.update_llms,
                         inputs=llm_model,
@@ -109,6 +135,8 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_api_key,
                             llm_model_name,
                             llm_model_id,
+                            llm_model_context_window,
+                            llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
                         ],
@@ -122,6 +150,8 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_base_url,
                             llm_api_key,
                             llm_model_id,
+                            llm_model_context_window,
+                            llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
                         ],

@@ -1,5 +1,6 @@
 from typing import Optional, List, Tuple, Any
 from loguru import logger
+import asyncio
 
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.base.response.schema import RESPONSE_TYPE
@@ -9,15 +10,13 @@ from llama_index.core.settings import Settings
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.prompts import PromptTemplate
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.prompts.mixin import PromptMixinType
 import llama_index.core.instrumentation as instrument
 
 from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
-from pai_rag.integrations.data_analysis.data_analysis_synthesizer import (
-    DataAnalysisSynthesizer,
-)
+from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
+from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
 from pai_rag.integrations.data_analysis.text2sql.db_connector import (
     MysqlConnector,
     SqliteConnector,
@@ -35,9 +34,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqlAnalysisConfig,
     MysqlAnalysisConfig,
     SqliteAnalysisConfig,
-)
-from pai_rag.integrations.data_analysis.text2sql.utils.prompts import (
-    DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
 )
 
 dispatcher = instrument.get_dispatcher(__name__)
@@ -207,10 +203,10 @@ class DataAnalysisQuery(BaseQueryEngine):
             llm=self._llm,
             embed_model=self._embed_model,
         )
-        self._synthesizer = DataAnalysisSynthesizer(
+        self._synthesizer = PaiSynthesizer(
             llm=self._llm,
-            response_synthesis_prompt=PromptTemplate(analysis_config.synthesizer_prompt)
-            or DEFAULT_RESPONSE_SYNTHESIS_PROMPT,
+            system_role_template=analysis_config.system_role_prompt,
+            custom_prompt_template=analysis_config.synthesizer_prompt,
         )
         super().__init__(callback_manager=callback_manager or Settings.callback_manager)
 
@@ -232,59 +228,29 @@ class DataAnalysisQuery(BaseQueryEngine):
         else:
             return nodes, ""
 
-    def synthesize(
-        self,
-        query_bundle: QueryBundle,
-        description: str,
-        nodes: List[NodeWithScore],
-        streaming: bool = False,
-    ) -> RESPONSE_TYPE:
-        return self._synthesizer.synthesize(
-            query=query_bundle,
-            description=description,
-            nodes=nodes,
-            streaming=streaming,
-        )
-
-    async def asynthesize(
-        self,
-        query_bundle: QueryBundle,
-        description: str,
-        nodes: List[NodeWithScore],
-        streaming: bool = False,
-    ) -> RESPONSE_TYPE:
-        return await self._synthesizer.asynthesize(
-            query=query_bundle,
-            description=description,
-            nodes=nodes,
-            streaming=query_bundle.stream,
-        )
-
     @dispatcher.span
     def _query(
         self,
         query_bundle: QueryBundle,
-        streaming: bool = False,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
         ) as query_event:
             nodes, description = self.retrieve(query_bundle)
-            response = self._synthesizer.synthesize(
-                query=query_bundle,
-                description=description,
-                nodes=nodes,
-                streaming=streaming,
+            response = asyncio.run(
+                self._synthesizer.asynthesize(
+                    query=query_bundle,
+                    db_description_str=description,
+                    nodes=nodes,
+                )
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
         return response
 
     @dispatcher.span
-    async def _aquery(
-        self, query_bundle: QueryBundle, streaming: bool = False
-    ) -> RESPONSE_TYPE:
+    async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(
             CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
@@ -292,29 +258,46 @@ class DataAnalysisQuery(BaseQueryEngine):
             nodes, description = await self.aretrieve(query_bundle)
             response = await self._synthesizer.asynthesize(
                 query=query_bundle,
-                description=description,
+                db_description_str=description,
                 nodes=nodes,
-                streaming=query_bundle.stream,
             )
             query_event.on_end(payload={EventPayload.RESPONSE: response})
 
         return response
 
-    async def aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
+    async def aquery(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
         nodes, description = await self.aretrieve(query_bundle)
+        query_code_instruction = (
+            [n.node.metadata["query_code_instruction"] for n in nodes],
+        )
         response = await self._synthesizer.asynthesize(
             query=query_bundle,
-            description=description,
             nodes=nodes,
-            streaming=query_bundle.stream,
+            system_role_str=self._synthesizer._system_role_template,
+            prompt_template_str=self._synthesizer._custom_prompt_template,
+            prompt_template_args={
+                "db_schema": description,
+                "query_code_instruction": query_code_instruction,
+            },
         )
 
         return response
 
-    async def astream_query(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-        nodes, description = await self.aretrieve(query_bundle)
-        stream_response = await self._synthesizer.asynthesize(
-            query=query_bundle, description=description, nodes=nodes, streaming=True
+    def query(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
+        nodes, description = self.retrieve(query_bundle)
+        query_code_instruction = (
+            [n.node.metadata["query_code_instruction"] for n in nodes],
         )
-
-        return stream_response
+        response = asyncio.run(
+            self._synthesizer.asynthesize(
+                query=query_bundle,
+                nodes=nodes,
+                system_role_str=self._synthesizer._system_role_template,
+                prompt_template_str=self._synthesizer._custom_prompt_template,
+                prompt_template_args={
+                    "db_schema": description,
+                    "query_code_instruction": query_code_instruction,
+                },
+            )
+        )
+        return response

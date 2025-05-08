@@ -56,7 +56,7 @@ DEFAULT_ANSWER_TEMPLATE_EN = """**Question to Answer:**
 """
 
 
-DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"# 以下内容是基于用户发送的消息的搜索结果:
+DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"# 以下内容是基于用户发送的消息的搜索/查询结果:
 {context_str}
 # 以下内容是用户问答历史记录:
 {history_str}

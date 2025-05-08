@@ -2,7 +2,11 @@ from enum import Enum
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 
-from pai_rag.app.web.ui_constants import NL2SQL_GENERAL_PROMPTS, SYN_GENERAL_PROMPTS
+from pai_rag.app.web.ui_constants import (
+    NL2SQL_GENERAL_PROMPTS,
+    SYN_GENERAL_PROMPTS,
+    DA_SYSTEM_ROLE_PROMPT,
+)
 
 
 class DataAnalysisType(str, Enum):
@@ -21,6 +25,7 @@ class BaseAnalysisConfig(BaseModel):
     model_id: str = "default"
     nl2sql_prompt: str = NL2SQL_GENERAL_PROMPTS
     synthesizer_prompt: str = SYN_GENERAL_PROMPTS
+    system_role_prompt: str = DA_SYSTEM_ROLE_PROMPT
 
 
 class PandasAnalysisConfig(BaseAnalysisConfig):

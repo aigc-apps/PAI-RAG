@@ -507,7 +507,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         db_nl2sql_prompt = gr.Textbox(
                             label="nl2sql 提示词模板",
                             elem_id="db_nl2sql_prompt",
-                            value=NL2SQL_GENERAL_PROMPTS,
+                            value="",
                             lines=6,
                         )
 
@@ -515,7 +515,7 @@ def create_data_analysis_tab() -> Dict[str, Any]:
                         synthesizer_prompt = gr.Textbox(
                             label="合成器 提示词模板",
                             elem_id="synthesizer_prompt",
-                            value=SYN_GENERAL_PROMPTS,
+                            value="",
                             lines=6,
                         )
                     with gr.Tab("提示词模板重置"):
