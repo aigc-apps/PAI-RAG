@@ -2,6 +2,8 @@ import socket
 from functools import wraps
 from typing import Callable, AsyncGenerator
 from loguru import logger
+from pydantic.v1 import json as pydantic_v1_json
+from pydantic import json as pydantic_json
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -67,3 +69,11 @@ def use_current_span(span: Span):
         return wrapper
 
     return decorator
+
+
+# arize instrumentation uses: pydantic.v1.json.pydantic_encoder
+# but pydantic.v1.json.pydantic_encoder explicitly check v1
+# this caused llama-index obj fails pydantic/v1/json.py#L77
+# from pydantic.v1.main import BaseModel
+# if isinstance(obj, BaseModel):
+pydantic_v1_json.pydantic_encoder = pydantic_json.pydantic_encoder
