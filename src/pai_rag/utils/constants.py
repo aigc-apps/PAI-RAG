@@ -1,7 +1,6 @@
 """Set of constants of modules."""
 
 import os
-from loguru import logger
 
 
 def try_get_int_env(key, default_value=None):
@@ -57,8 +56,3 @@ DEFAULT_MAX_KNOWLEDGEBASE_COUNT = try_get_int_env(
     "DEFAULT_MAX_KNOWLEDGEBASE_COUNT", 3000
 )
 DEFAULT_MAX_FILE_TASK_COUNT = try_get_int_env("DEFAULT_MAX_FILE_TASK_COUNT", 10000)
-
-logger.info(
-    f"""knowledgebase constants: DEFAULT_MAX_KNOWLEDGEBASE_COUNT: {DEFAULT_MAX_KNOWLEDGEBASE_COUNT} DEFAULT_MAX_FILE_TASK_COUNT: {DEFAULT_MAX_FILE_TASK_COUNT}
-"""
-)

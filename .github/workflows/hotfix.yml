@@ -66,6 +66,16 @@ jobs:
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }} ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
           docker push ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
 
+      - name: Build and push ingestion image
+        env:
+          SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}-ingestion
+          TEST_IMAGE_TAG: ${{env.TIME_VERSION_TAG}}-ingestion
+        run: |
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }} -f Dockerfile_ingestion .
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }}
+          docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.SPECIFIC_IMAGE_TAG }} ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
+          docker push ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
+
       - name: Free disk space
         run: |
           docker system prune -a -f
