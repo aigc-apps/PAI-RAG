@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import List
 
 from pai_rag.data_ingestion.datasource.filedelta_datasource import FileDeltaDatasource
@@ -84,8 +85,12 @@ class RayExecutor:
             filename_provider = BlockFileNameProvider(
                 run_label=f"read-{self.execution_ts}", file_format="jsonl"
             )
+
             datasource = FileDeltaDatasource(config=datasource_config)
-            dataset = ray.data.read_datasource(datasource)
+            dataset = ray.data.read_datasource(
+                datasource, concurrency=1, override_num_blocks=1
+            ).materialize()
+            Path(datasource_config.output_path).mkdir(parents=True, exist_ok=True)
             dataset.write_json(
                 datasource_config.output_path,
                 min_rows_per_file=DEFAULT_ROWS_PER_FILE,
@@ -100,11 +105,11 @@ class RayExecutor:
                 )
                 return
 
-            input_list = get_input_files(
+            input_files_list = get_input_files(
                 file_path_or_directory=op_configs[0].input_path,
                 filter_pattern="*.jsonl",
             )
-            dataset = ray.data.read_json(input_list)
+            dataset = ray.data.read_json(input_files_list)
 
         for op_config in op_configs:
             logger.info(f"Executing {op_config.name}...")
@@ -116,7 +121,9 @@ class RayExecutor:
             )
             if self._need_batch_execution(op_config=op_config):
                 # Embedder需要batch执行
-                logger.info(f"Executing {op_config.name} in batch mode.")
+                logger.info(
+                    f"Executing {op_config.name} in batch mode. concurrency: {op_concurrency}"
+                )
                 dataset = dataset.map_batches(
                     OP_TYPE,
                     batch_size=op_config.batch_size,
@@ -125,9 +132,11 @@ class RayExecutor:
                     memory=op_config.memory,
                     concurrency=op_concurrency,
                     fn_constructor_kwargs={"config": op_config},
-                )
+                ).materialize()
             else:
-                logger.info(f"Executing {op_config.name} in flat_map mode.")
+                logger.info(
+                    f"Executing {op_config.name} in flat_map mode. concurrency: {op_concurrency}"
+                )
                 dataset = dataset.flat_map(
                     OP_TYPE,
                     num_cpus=op_config.num_cpus,
@@ -135,16 +144,16 @@ class RayExecutor:
                     memory=op_config.memory,
                     concurrency=op_concurrency,
                     fn_constructor_kwargs={"config": op_config},
-                )
+                ).materialize()
 
             # 保存op结果，保存向量库无需执行
-            if isinstance(op_config, WriterConfig):
-                dataset.materialize()
-            else:
+            if not isinstance(op_config, WriterConfig):
                 filename_provider = BlockFileNameProvider(
                     run_label=f"{op_config.name.value}-{self.execution_ts}",
                     file_format="jsonl",
                 )
+                Path(op_config.output_path).mkdir(parents=True, exist_ok=True)
+
                 dataset.write_json(
                     op_config.output_path,
                     min_rows_per_file=DEFAULT_ROWS_PER_FILE,

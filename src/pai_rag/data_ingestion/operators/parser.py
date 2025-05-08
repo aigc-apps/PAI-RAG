@@ -89,13 +89,15 @@ class Parser(BaseOperator):
             documents = self.data_reader.load_data(file_path_or_directory=input_files)
             if len(documents) == 0:
                 logger.warning(f"No data found in the input files: {input_files}")
+                return nodes
 
+            file_md5 = generate_file_md5(file_path)
+            file_mtime = get_modified_time(file_path)
+            file_uri = self.path_resolver.resolve_source_url(file_path)
             for doc in documents:
-                doc.metadata[
-                    DEFAULT_NODE_SOURCE_FIELD
-                ] = self.path_resolver.resolve_source_url(file_path)
-                doc.metadata[DEFAULT_MD5_FIELD] = generate_file_md5(file_path)
-                doc.metadata[DEFAULT_MODIFIED_AT_FIELD] = get_modified_time(file_path)
+                doc.metadata[DEFAULT_NODE_SOURCE_FIELD] = file_uri
+                doc.metadata[DEFAULT_MD5_FIELD] = file_md5
+                doc.metadata[DEFAULT_MODIFIED_AT_FIELD] = file_mtime
                 node_dict = node_to_metadata_dict_v2(doc)
                 node_dict["operation"] = row.get("operation")
                 node_dict["operation_reason"] = row.get("operation_reason")
@@ -109,6 +111,7 @@ class Parser(BaseOperator):
         return nodes
 
     def __call__(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
+        print("Parsing: ", row)
         if row.get("operation") == NodeOperationType.DELETE:
             return self.process_delete(row)
         else:

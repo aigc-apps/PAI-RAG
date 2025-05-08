@@ -13,6 +13,7 @@ from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
 def get_input_files(
     file_path_or_directory: str | List[str],
     filter_pattern: str = None,
+    supported_file_types: List[str] = ACCEPTABLE_DOC_TYPES,
 ):
     filter_pattern = filter_pattern or "*"
 
@@ -23,7 +24,7 @@ def get_input_files(
             str(f)
             for f in file_path_or_directory
             if os.path.isfile(f)
-            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            and pathlib.Path(f).suffix.lower() in supported_file_types
         ]
     elif isinstance(file_path_or_directory, str) and os.path.isdir(
         file_path_or_directory
@@ -34,9 +35,9 @@ def get_input_files(
             str(f)
             for f in directory.rglob(filter_pattern)
             if os.path.isfile(f)
-            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            and pathlib.Path(f).suffix.lower() in supported_file_types
         ]
-    elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
+    elif pathlib.Path(file_path_or_directory).suffix.lower() in supported_file_types:
         # Single file
         input_files = [str(file_path_or_directory)]
     else:
