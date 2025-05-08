@@ -46,6 +46,7 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
 )
 from llama_index.core.schema import ImageNode
+import llama_index.core.instrumentation as instrument
 
 from openai.types.completion_usage import CompletionUsage
 from openai.types.chat import (
@@ -63,6 +64,8 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -100,10 +103,12 @@ def parse_system_prompt(messages: List[ChatMessage]):
 
 
 class ChatFlow:
+    def __init__(self, config: RagConfig):
+        self.config = config
+
     async def _recognize_intent(
         self,
         chat_request: ChatCompletionRequest,
-        config: RagConfig,
     ) -> PaiQueryBundle:
         # 默认RAG
         potential_intents = [ChatToolType.CHAT_LLM]
@@ -125,7 +130,7 @@ class ChatFlow:
         if chat_request.max_tokens is not None:
             llm_kwargs["max_tokens"] = chat_request.max_tokens
 
-        query_transform = resolve_openai_query_transform(config)
+        query_transform = resolve_openai_query_transform(self.config)
         logger.debug(
             f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
         )
@@ -153,10 +158,10 @@ class ChatFlow:
                 llm_kwargs=llm_kwargs,
             )
 
+    @dispatcher.span
     async def astream_chat(
         self,
         chat_request: ChatCompletionRequest,
-        config: RagConfig,
     ) -> AsyncGenerator[str, None]:
         logger.debug(f"Streaming chat request: {chat_request}")
         start_time = time.time()
@@ -164,7 +169,6 @@ class ChatFlow:
         response_wrapper = await self._achat_internal(
             chat_id=chat_id,
             chat_request=chat_request,
-            config=config,
             start_time=start_time,
         )
         token_usage = CompletionUsage(
@@ -183,17 +187,16 @@ class ChatFlow:
             return_reference=chat_request.return_reference,
         )
 
+    @dispatcher.span
     async def achat(
         self,
         chat_request: ChatCompletionRequest,
-        config: RagConfig,
     ) -> ChatCompletion:
         start_time = time.time()
         chat_id = chat_id_generator()
         response_wrapper = await self._achat_internal(
             chat_id=chat_id,
             chat_request=chat_request,
-            config=config,
             start_time=start_time,
         )
         token_usage = CompletionUsage(
@@ -215,7 +218,6 @@ class ChatFlow:
         self,
         session_id: str,
         chat_request: ChatCompletionRequest,
-        config: RagConfig,
         chat_store: PaiChatStore,
         sse_version: SseVersion = SseVersion.V0,
     ) -> RagResponse:
@@ -223,7 +225,6 @@ class ChatFlow:
         response_wrapper = await self._achat_internal(
             chat_id=session_id,
             chat_request=chat_request,
-            config=config,
             start_time=start_time,
         )
         docs = []
@@ -266,7 +267,6 @@ class ChatFlow:
         self,
         chat_id: str,
         chat_request: ChatCompletionRequest,
-        config: RagConfig,
         start_time: float = 0.0,
     ) -> ChatResponseWrapper:
         system_prompt, messages = parse_system_prompt(chat_request.messages)
@@ -278,7 +278,7 @@ class ChatFlow:
         chat_request.messages = remove_think_from_messages(messages)
 
         # 意图识别
-        query_bundle = await self._recognize_intent(chat_request, config)
+        query_bundle = await self._recognize_intent(chat_request)
         query_bundle.system_role = system_prompt
         logger.info(
             f"[{chat_id}] Intent recognized: {query_bundle.intent}, query: {query_bundle.query_str}, elapsed time: {time.time() - start_time}s."
@@ -288,7 +288,7 @@ class ChatFlow:
         )
 
         # 安全护栏
-        guardrail = resolve_llm_guardrail(config)
+        guardrail = resolve_llm_guardrail(self.config)
         if guardrail is not None:
             check_result = await guardrail.acheck(text=query_bundle.query_str)
             if check_result.reject:
@@ -303,32 +303,31 @@ class ChatFlow:
         # 意图分发
         logger.info(f"Routing query {query_bundle.query_str} to {query_bundle.intent}")
         if query_bundle.intent == ChatIntentType.CHAT_LLM:
-            response_wrapper = await self.achat_llm(query_bundle, config=config)
+            response_wrapper = await self.achat_llm(query_bundle)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS:
-            response_wrapper = await self.achat_news(query_bundle, config=config)
+            response_wrapper = await self.achat_news(query_bundle)
         elif query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
-            response_wrapper = await self.achat_news_llm(query_bundle, config=config)
+            response_wrapper = await self.achat_news_llm(query_bundle)
         elif query_bundle.intent == ChatIntentType.LIST_NEWS:
-            response_wrapper = await self.alist_news(query_bundle, config=config)
+            response_wrapper = await self.alist_news(query_bundle)
         elif query_bundle.intent == ChatIntentType.CHAT_AGENT:
-            response_wrapper = await self.achat_agent(query_bundle, config=config)
+            response_wrapper = await self.achat_agent(query_bundle)
         elif query_bundle.intent == ChatIntentType.SEARCH_WEB:
-            response_wrapper = await self.achat_web(query_bundle, config=config)
+            response_wrapper = await self.achat_web(query_bundle)
         elif query_bundle.intent == ChatIntentType.CHAT_DB:
-            response_wrapper = await self.achat_db(query_bundle, config=config)
+            response_wrapper = await self.achat_db(query_bundle)
         elif query_bundle.intent == ChatIntentType.CHAT_KNOWLEDGEBASE:
             knowledgebase = knowledgebase_manager.get_knowledgebase(
                 chat_request.index_name
             )
             response_wrapper = await self.achat_knowledgebase(
                 query_bundle,
-                config=config,
                 knowledgebase=knowledgebase,
                 faq_llm=chat_request.faq_llm,
             )
         else:
             logger.warning(f"Unknown intent: {query_bundle.intent}")
-            response_wrapper = await self.achat_llm(query_bundle, config=config)
+            response_wrapper = await self.achat_llm(query_bundle)
 
         # 计算query_rewrite的token数量
         response_wrapper.additional_kwargs[
@@ -341,10 +340,9 @@ class ChatFlow:
     async def achat_db(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ):
         data_analysis_query_engine = resolve_data_analysis_query(
-            config, model_id=query_bundle.model
+            self.config, model_id=query_bundle.model
         )
         if not data_analysis_query_engine:
             raise ValueError(
@@ -356,9 +354,8 @@ class ChatFlow:
     async def alist_news(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config)
+        news_tool = resolve_news_tool(self.config)
         if not query_bundle.stream:
             response_wrapper = await news_tool.alist_topics(
                 query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
@@ -372,9 +369,8 @@ class ChatFlow:
     async def achat_news(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config)
+        news_tool = resolve_news_tool(self.config)
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
         else:
@@ -387,9 +383,8 @@ class ChatFlow:
     async def achat_news_llm(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ):
-        news_tool = resolve_news_tool(config)
+        news_tool = resolve_news_tool(self.config)
 
         if not query_bundle.stream:
             response_wrapper = await news_tool.achat_llm(
@@ -405,9 +400,8 @@ class ChatFlow:
     async def achat_web(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ):
-        search_engine = resolve_searcher(config, model_id=query_bundle.model)
+        search_engine = resolve_searcher(self.config, model_id=query_bundle.model)
         query_bundle.llm_kwargs["intent"] = ChatIntentType.SEARCH_WEB
         if not search_engine:
             raise ValueError(
@@ -420,7 +414,6 @@ class ChatFlow:
     async def achat_knowledgebase(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
         knowledgebase: KnowledgeBase,
         faq_llm: bool = False,
     ) -> ChatResponseWrapper:
@@ -430,7 +423,7 @@ class ChatFlow:
             or knowledgebase.qa_prompt_templates is not None
         ):
             query_engine = resolve_query_engine_from_knowledgebase(
-                config,
+                self.config,
                 vector_index=vector_index,
                 model_id=query_bundle.model,
                 knowledgebase=knowledgebase,
@@ -438,7 +431,7 @@ class ChatFlow:
             )
         else:
             query_engine = resolve_query_engine(
-                config,
+                self.config,
                 vector_index=vector_index,
                 faq_llm=faq_llm,
                 model_id=query_bundle.model,
@@ -450,9 +443,8 @@ class ChatFlow:
     async def achat_agent(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ) -> ChatResponseWrapper:
-        agent = resolve_agent(config, model_id=query_bundle.model)
+        agent = resolve_agent(self.config, model_id=query_bundle.model)
         if query_bundle.stream:
 
             async def agent_gen():
@@ -488,11 +480,10 @@ class ChatFlow:
     async def achat_llm(
         self,
         query_bundle: PaiQueryBundle,
-        config: RagConfig,
     ) -> ChatResponseWrapper:
-        llm = resolve_chat_llm(config, model_id=query_bundle.model)
+        llm = resolve_chat_llm(self.config, model_id=query_bundle.model)
         system_role = (
-            query_bundle.system_role or config.synthesizer.system_role_template
+            query_bundle.system_role or self.config.synthesizer.system_role_template
         )
         messages = []
         if system_role:
@@ -503,7 +494,7 @@ class ChatFlow:
             ChatMessage(
                 role=MessageRole.USER,
                 content="{}\n{}\n{}".format(
-                    config.synthesizer.custom_prompt_template,
+                    self.config.synthesizer.custom_prompt_template,
                     CURRENT_TIME_PROMPT.format(
                         current_datetime=get_prompt_current_time_str()
                     ),

@@ -2,24 +2,40 @@ from typing import List, Optional, Sequence, Union
 from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.base.response.schema import RESPONSE_TYPE
-from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.schema import NodeWithScore, QueryBundle, ImageNode, QueryType
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.indices.query.query_transform.base import BaseQueryTransform
 from llama_index.core.callbacks.base import CallbackManager
 import llama_index.core.instrumentation as instrument
 from llama_index.core.response_synthesizers import BaseSynthesizer
+from llama_index.core.instrumentation.events.base import BaseEvent
 from llama_index.core.instrumentation.events.query import (
-    QueryEndEvent,
     QueryStartEvent,
 )
 from llama_index.core.base.llms.types import (
     ChatResponse,
     ChatResponseAsyncGen,
 )
-from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
 
 dispatcher = instrument.get_dispatcher(__name__)
+
+
+class PaiQueryEndEvent(BaseEvent):
+    """QueryEndEvent.
+
+    Args:
+        query (QueryType): Query as a string or query bundle.
+        response (RESPONSE_TYPE): Response.
+    """
+
+    query: QueryType
+    response: ChatResponseWrapper
+
+    @classmethod
+    def class_name(cls) -> str:
+        """Class name."""
+        return "PaiQueryEndEvent"
 
 
 class PaiRetrieverQueryEngine(RetrieverQueryEngine):
@@ -95,7 +111,6 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
 
         return [n for n in text_nodes] + image_nodes
 
-    @dispatcher.span
     def _query(
         self,
         query_bundle: PaiQueryBundle,
@@ -103,72 +118,51 @@ class PaiRetrieverQueryEngine(RetrieverQueryEngine):
         prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
-        with self.callback_manager.event(
-            CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
-        ) as query_event:
-            nodes = self.retrieve(query_bundle)
-            response = self._response_synthesizer.synthesize(
-                query=query_bundle,
-                nodes=nodes,
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
-            query_event.on_end(payload={EventPayload.RESPONSE: response})
+        nodes = self.retrieve(query_bundle)
+        response = self._response_synthesizer.synthesize(
+            query=query_bundle,
+            nodes=nodes,
+            system_role_str=system_role_str,
+            prompt_template_str=prompt_template_str,
+        )
 
         return response
 
-    @dispatcher.span
     async def _aquery(
         self,
         query_bundle: PaiQueryBundle,
     ) -> RESPONSE_TYPE:
         """Answer a query."""
-        with self.callback_manager.event(
-            CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
-        ) as query_event:
-            nodes = await self.aretrieve(query_bundle)
-            response = await self._response_synthesizer.asynthesize(
-                query=query_bundle,
-                nodes=nodes,
-                system_role_str=query_bundle.system_role,
-                prompt_template_str=" " if query_bundle.system_role else None,
-                **query_bundle.llm_kwargs
-            )
-            query_event.on_end(payload={EventPayload.RESPONSE: response})
+        nodes = await self.aretrieve(query_bundle)
+        response = await self._response_synthesizer.asynthesize(
+            query=query_bundle,
+            nodes=nodes,
+            system_role_str=query_bundle.system_role,
+            prompt_template_str=" " if query_bundle.system_role else None,
+            **query_bundle.llm_kwargs
+        )
 
         return response
 
-    @dispatcher.span
     def query(
         self,
         str_or_query_bundle: QueryType,
         system_role_str: str = None,
         prompt_template_str: str = None,
     ) -> RESPONSE_TYPE:
-        dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
-        with self.callback_manager.as_trace("query"):
-            if isinstance(str_or_query_bundle, str):
-                str_or_query_bundle = QueryBundle(str_or_query_bundle)
-            query_result = self._query(
-                str_or_query_bundle,
-                system_role_str=system_role_str,
-                prompt_template_str=prompt_template_str,
-            )
-        dispatcher.event(
-            QueryEndEvent(query=str_or_query_bundle, response=query_result)
-        )
-        return query_result
+        raise NotImplementedError
 
-    @dispatcher.span
     async def aquery(self, query_bundle: QueryType) -> RESPONSE_TYPE:
-        # dispatcher.event(QueryStartEvent(query=str_or_query_bundle))
-        with self.callback_manager.as_trace("query"):
-            if isinstance(query_bundle, str):
-                query_bundle = QueryBundle(query_bundle)
-            query_result = await self._aquery(query_bundle)
-        # dispatcher.event(
-        #    QueryEndEvent(query=str_or_query_bundle, response=query_result)
-        # )
+        dispatcher.event(QueryStartEvent(query=query_bundle))
+        if isinstance(query_bundle, str):
+            query_bundle = PaiQueryBundle(query_bundle)
+        query_result = await self._aquery(query_bundle)
+        print("+++ query engine returns")
+
+        if not query_bundle.stream:
+            dispatcher.event(
+                PaiQueryEndEvent(query=query_bundle, response=query_result)
+            )
         return query_result
 
     def synthesize(
