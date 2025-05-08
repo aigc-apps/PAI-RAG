@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, AsyncGenerator, Generator
 from llama_index.core.schema import QueryBundle
 from llama_index.core.base.llms.types import ChatMessage
 from dataclasses import dataclass
@@ -125,3 +125,15 @@ class ChatResponseWrapper(BaseModel):
     response: Any
     additional_kwargs: Dict[str, Any] = {}
     source_nodes: List[NodeWithScore] = []
+
+    def model_dump_json(self, exclude=None, **kwargs) -> str:
+        if exclude is None:
+            exclude = set()
+        elif isinstance(exclude, dict):
+            exclude = {k for k, v in exclude.items() if v}
+
+        # to compatible with arize instrumentation
+        if isinstance(self.response, (Generator, AsyncGenerator)):
+            exclude.add("response")
+
+        return super().model_dump_json(exclude=exclude, **kwargs)
