@@ -88,7 +88,7 @@ alibabacloud-aimiaobi20230801 = "^1.21.0"
 alibabacloud-tea-openapi-sse = "^1.0.2"
 rapidfuzz = "^3.13.0"
 python-docx = "^1.1.2"
-ray = "^2.45.0"
+ray = {extras = ["default"], version = "^2.46.0"}
 promptflow-tracing = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-tracing/dist/promptflow_tracing-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
 promptflow-core = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-core/dist/promptflow_core-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
 promptflow-devkit = {url = "https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-devkit/dist/promptflow_devkit-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl"}
