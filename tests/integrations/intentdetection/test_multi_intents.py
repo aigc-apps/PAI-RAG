@@ -41,11 +41,6 @@ def setup_config():
 
 
 @pytest.fixture(scope="module")
-def chat_flow():
-    return ChatFlow()
-
-
-@pytest.fixture(scope="module")
 def test_data():
     # 读取测试文件
     with open(TEST_FILE, "r", encoding="utf-8") as file:
@@ -53,8 +48,8 @@ def test_data():
     return data
 
 
-def test_intent_detection(setup_config, chat_flow, test_data):
-    config = setup_config
+def test_intent_detection(setup_config, test_data):
+    chat_flow = ChatFlow(setup_config)
     request_settings = test_data["request_settings"]
     samples = test_data["samples"]
     scores = 0
@@ -70,7 +65,7 @@ def test_intent_detection(setup_config, chat_flow, test_data):
             chat_db=request_settings["chat_db"],
             temperature=request_settings["temperature"],
         )
-        query_bundle = asyncio.run(chat_flow._recognize_intent(chat_request, config))
+        query_bundle = asyncio.run(chat_flow._recognize_intent(chat_request))
         sample["intent_output"] = {}
         sample["intent_output"]["intent_name"] = query_bundle.intent
 

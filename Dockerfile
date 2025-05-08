@@ -11,7 +11,10 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN poetry install && rm -rf $POETRY_CACHE_DIR
+RUN poetry install \
+  && poetry run pip install magic-pdf[full]==1.3.10 \
+  && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
+  && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 

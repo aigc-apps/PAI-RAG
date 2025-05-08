@@ -1,4 +1,6 @@
 from typing import Any, Sequence
+from loguru import logger
+
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.core import Settings
 from llama_index.core.bridge.pydantic import PrivateAttr, Field
@@ -26,7 +28,15 @@ from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
 from llama_index.core.base.llms.types import MessageRole
-from loguru import logger
+import llama_index.core.instrumentation as instrument
+from llama_index.core.llms.callbacks import (
+    llm_chat_callback,
+    llm_completion_callback,
+)
+from openinference.instrumentation.llama_index import get_current_span
+from pai_rag.integrations.trace.base import use_current_span
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 
 class PaiLlm(OpenAILike):
@@ -84,6 +94,7 @@ class PaiLlm(OpenAILike):
 
         return self._llm.stream_complete(prompt, **kwargs)
 
+    @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
         """Chat with the model."""
         if not self.metadata.is_chat_model:
@@ -93,6 +104,7 @@ class PaiLlm(OpenAILike):
 
         return self._llm.chat(messages, **kwargs)
 
+    @llm_chat_callback()
     def stream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseGen:
@@ -105,6 +117,7 @@ class PaiLlm(OpenAILike):
 
     # -- Async methods --
 
+    @llm_completion_callback()
     async def acomplete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponse:
@@ -114,6 +127,7 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.acomplete(prompt, **kwargs)
 
+    @llm_completion_callback()
     async def astream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseAsyncGen:
@@ -123,6 +137,7 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.astream_complete(prompt, **kwargs)
 
+    @llm_chat_callback()
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
@@ -156,6 +171,7 @@ class PaiLlm(OpenAILike):
             and not _response.message.content.startswith("<think>")
         ):
             _response.message.content = "<think>\n" + _response.message.content
+
         return _response
 
     def async_stream_completion_response_to_chat_response(
@@ -165,6 +181,7 @@ class PaiLlm(OpenAILike):
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
+            response_content = ""
             if intent_type is not None:
                 yield ChatResponse(
                     message=ChatMessage(
@@ -198,13 +215,15 @@ class PaiLlm(OpenAILike):
                             delta="\n",
                             raw="\n",
                         )
+                        response_content = "<think>\n"
                     else:
                         start_label = False
 
+                response_content += response.delta
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
-                        content=response.text,
+                        content=response_content,
                         additional_kwargs=response.additional_kwargs,
                     ),
                     delta=response.delta,
@@ -213,11 +232,13 @@ class PaiLlm(OpenAILike):
 
         return gen()
 
+    @llm_chat_callback()
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
         if not self.llm_config.is_reasoning_model:
 
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
                     yield ChatResponse(
@@ -237,6 +258,7 @@ class PaiLlm(OpenAILike):
             return gen()
         else:
 
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 if "intent" in kwargs:
                     yield ChatResponse(
@@ -275,8 +297,9 @@ class PaiLlm(OpenAILike):
 
                     yield response
 
-            return gen()
+        return gen()
 
+    @llm_chat_callback()
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
@@ -306,6 +329,7 @@ class PaiLlm(OpenAILike):
             if message.content or message.additional_kwargs
         ]
 
-        return await self.async_chat_response_to_chat_response_with_think(
+        response_gen = await self.async_chat_response_to_chat_response_with_think(
             filterd_messages, **kwargs
         )
+        return response_gen

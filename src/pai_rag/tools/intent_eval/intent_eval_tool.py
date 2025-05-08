@@ -32,7 +32,7 @@ def run(
     test_file=None,
 ):
     config = RagConfigManager.from_file(config_file).get_value()
-    chat_flow = ChatFlow()
+    chat_flow = ChatFlow(config=config)
     results = []
     scores = 0
     with open(test_file, "r", encoding="utf-8") as file:
@@ -49,9 +49,7 @@ def run(
                     search_web=request_settings["search_web"],
                     temperature=request_settings["temperature"],
                 )
-                query_bundle = asyncio.run(
-                    chat_flow._recognize_intent(chat_request, config)
-                )
+                query_bundle = asyncio.run(chat_flow._recognize_intent(chat_request))
                 sample["intent_output"] = {}
                 sample["intent_output"]["intent_name"] = query_bundle.intent
 
