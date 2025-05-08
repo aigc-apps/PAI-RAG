@@ -10,6 +10,9 @@ import re
 import markdown
 import html
 from loguru import logger
+from openai.types.chat import (
+    ChatCompletion,
+)
 from pai_rag.app.api.models import (
     RagQuery,
     RagResponse,
@@ -159,7 +162,7 @@ class RagLocalClient:
                 doc_text = doc.get("text")
                 score = doc.get("score")
                 url = doc.get("url", "")
-                if url.startswith("http"):
+                if url and url.startswith("http"):
                     filename = f'<a href="{url}"> {filename} </a>'
                 content = f"""
 <span class="text">
@@ -223,19 +226,30 @@ class RagLocalClient:
                 }
                 yield self._format_rag_response(result)
             else:
-                async for r in response:
-                    if r.startswith("data: "):
-                        chunk = json.loads(r[6:])
-                        result = {
-                            "delta": chunk["choices"][0]["delta"]["content"],
-                            "docs": chunk.get("citation_details", []),
-                            "is_finished": chunk["choices"][0]["finish_reason"]
-                            == "stop",
-                        }
-                        if chat_knowledgebase or search_web:
-                            yield self._format_rag_response_v1_chat_completions(result)
-                        else:
-                            yield self._format_rag_response(result)
+                if isinstance(response, ChatCompletion):
+                    result = {
+                        "delta": response.choices[0].message.content,
+                        "docs": response.citation_details,
+                        "is_finished": response.choices[0].finish_reason
+                        in ["stop", ""],
+                    }
+                    yield self._format_rag_response_v1_chat_completions(result)
+                else:
+                    async for r in response:
+                        if r.startswith("data: "):
+                            chunk = json.loads(r[6:])
+                            result = {
+                                "delta": chunk["choices"][0]["delta"]["content"],
+                                "docs": chunk.get("citation_details", []),
+                                "is_finished": chunk["choices"][0]["finish_reason"]
+                                == "stop",
+                            }
+                            if chat_knowledgebase or search_web:
+                                yield self._format_rag_response_v1_chat_completions(
+                                    result
+                                )
+                            else:
+                                yield self._format_rag_response(result)
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
