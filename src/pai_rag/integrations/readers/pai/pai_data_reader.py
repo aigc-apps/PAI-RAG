@@ -1,4 +1,10 @@
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_fixed,
+    before_sleep_log,
+)
 from pydantic import BaseModel
 from typing import List, Any
 import os
@@ -10,6 +16,7 @@ from llama_index.core.schema import Document
 from functools import partial
 from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 from loguru import logger
+import logging
 
 
 COMMON_FILE_PATH_FODER_NAME = "__pairag__knowledgebase__"
@@ -196,7 +203,8 @@ class PaiDataReader(BaseReader):
     @retry(
         retry=retry_if_exception_type(OSError),
         wait=wait_fixed(2),
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(10),
+        before_sleep=before_sleep_log(logger, logging.INFO),
     )
     def load_data(
         self,

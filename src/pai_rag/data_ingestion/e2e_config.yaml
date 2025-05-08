@@ -15,7 +15,7 @@ operators:
     num_gpus: 0
     enable_pdf_ocr: false
     concat_sheet_rows: false
-    concurrency: 4
+    concurrency: 6
 
   - name: "split"
     node_parser_type: "Sentence"

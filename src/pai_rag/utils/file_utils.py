@@ -26,7 +26,7 @@ def generate_text_md5(text):
 # 读取文件的retry机制
 @retry(
     wait=wait_fixed(1),
-    stop=stop_after_attempt(3),
+    stop=stop_after_attempt(10),
     retry=retry_if_exception_type(OSError),
     before_sleep=before_sleep_log(logger, logging.INFO),
 )
