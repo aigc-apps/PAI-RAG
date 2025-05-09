@@ -22,8 +22,10 @@ import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+import { Brain, Search, Wrench } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
-export const Thread: FC = () => {
+export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({ onToggleChange }) => {
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border flex h-full flex-col overflow-hidden"
@@ -48,7 +50,7 @@ export const Thread: FC = () => {
 
         <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
           <ThreadScrollToBottom />
-          <Composer />
+          <Composer onToggleChange={onToggleChange} /> {/* 传递回调 */}
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
@@ -109,16 +111,46 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC = () => {
+const Composer:  FC<{ onToggleChange?: (options: string[]) => void }> = ({ onToggleChange }) => {
   return (
-    <ComposerPrimitive.Root className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in">
+    <ComposerPrimitive.Root 
+      // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
+      className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
+      >
+      {/* 第一行：输入框 */}
       <ComposerPrimitive.Input
         rows={1}
         autoFocus
         placeholder="输入您的问题..."
-        className="placeholder:text-muted-foreground max-h-40 flex-grow resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+        className="placeholder:text-muted-foreground max-h-40 w-full resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
       />
-      <ComposerAction />
+
+      {/* 第二行：按钮组 + ComposerAction */}
+      <div className="flex flex-row items-center justify-between px-2 pb-4">
+        <div >
+          <ToggleGroup type="multiple" variant="outline" className="flex gap-x-4 overflow-visible"
+            onValueChange={(value) => {
+              onToggleChange?.(value); // 传递选中状态到父组件
+            }}
+          >
+            <ToggleGroupItem value="thinking" aria-label="Toggle deep thinking" className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+              <Brain /> 深度思考
+            </ToggleGroupItem>
+            <ToggleGroupItem value="search" aria-label="Toggle web search" className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+              <Search /> 搜索
+            </ToggleGroupItem>
+            <ToggleGroupItem value="mcp" aria-label="Toggle mcp" className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+              <Wrench /> MCP
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        {/* 右侧按钮：ComposerAction */}
+        <div className="ml-auto">
+          <ComposerAction />
+        </div>
+      </div>
+      
     </ComposerPrimitive.Root>
   );
 };
@@ -156,7 +188,6 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
-
       <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
         <MessagePrimitive.Content />
       </div>

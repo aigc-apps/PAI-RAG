@@ -49,9 +49,11 @@ export const Assistant = () => {
     });
   };
 
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
+
   const runtime = useChatRuntime({
     api: "/api/chat",
-    headers: { "X-Model-Name": llmConfig.model_name || "gpt-4o" , "X-Api-Key": llmConfig.api_key || "" , "X-Model-Source": llmConfig.source || "openai" },
+    headers: { "X-Model-Name": llmConfig.model_name || "gpt-4o" , "X-Api-Key": llmConfig.api_key || "" , "X-Model-Source": llmConfig.source || "openai" ,"X-Options": selectedOptions.join(",") || ""},
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -82,7 +84,9 @@ export const Assistant = () => {
         {/* 主体区域 */}
         <div className="grid grid-cols-[200px_1fr_auto] gap-x-2 px-4 py-4 h-full overflow-hidden">
           <ThreadList />
-          <Thread />
+          <Thread onToggleChange={(options) => {
+            setSelectedOptions(options); // 更新状态
+          }}  />
           <ToolUIWrapper />
           <div
             className={`transition-all duration-300 ease-in-out overflow-hidden ${

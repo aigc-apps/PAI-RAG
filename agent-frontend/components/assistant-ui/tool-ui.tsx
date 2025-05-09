@@ -5,6 +5,9 @@ import type { FC, ReactNode } from "react";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import React, { useState, useEffect } from "react";
 import { CarIcon } from "lucide-react"; // 可以使用你喜欢的图标库
+import { ToolCallContentPartComponent } from "@assistant-ui/react";
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { Button } from "../ui/button";
 
 // type WebSearchArgs = {
 //     query: string;
@@ -294,11 +297,76 @@ export const MapsDirectionDrivingToolUI = makeAssistantToolUI<
   },
 });
 
+/* Search Web Tool UI */
+
+export type SearchWebArgs = {
+  query: string;
+};
+
+type SearchWebResult = {
+  result: {
+    text: string;
+    description: string;
+    score: string;
+  }[];
+};
+
+export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, SearchWebResult>({
+  toolName: "search_web",
+  render: ({ args, status, result }) => {
+    if (!result) {
+      return null;
+    }
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    console.log("MapsGeoToolUI 参数:", args);
+    console.log("MapsGeoToolUI 状态:", status);
+    console.log("MapsGeoToolUI 结果:", result);
+    if (status.type == "running") {
+      return (
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+          <GlobeIcon className="h-4 w-4 animate-pulse" />
+          <span>正在搜索网页...{args.query}</span>
+        </div>
+      );
+    }
+
+    return (
+              <div className="rounded-md border bg-muted p-4 space-y-3">
+                <div className="flex items-center gap-2 px-4">
+                  <CheckIcon className="size-4" />
+                  <p className="">
+                    正在搜索网页<b>{args.query}</b>
+                  </p>
+                  <div className="flex-grow" />
+                  <Button onClick={() => setIsCollapsed(!isCollapsed)}>
+                    {isCollapsed ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                  </Button>
+                </div>
+                {!isCollapsed && (
+                  <div className="flex flex-col gap-2 border-t pt-2">
+                    <div className="space-y-2 pl-6">
+                      {result?.result.map((item, index) => (
+                          <div key={index} className="text-sm">
+                              <p className="text-muted-foreground text-xs mt-0.5">
+                                  {item.text}
+                              </p>
+                          </div>
+                      ))}
+                    </div> 
+                  </div>
+                )}
+              </div>
+          );
+    
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
+      < SearchWebToolUI />
     </>
   );
 };

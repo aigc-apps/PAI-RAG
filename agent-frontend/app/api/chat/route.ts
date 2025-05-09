@@ -5,6 +5,8 @@ import {
   tool,
   generateText,
 } from "ai";
+import { get } from "http";
+import { z } from 'zod';
 
 export const runtime = "edge";
 export const maxDuration = 30;
@@ -31,7 +33,6 @@ const SYSTEM_PROMPT = `
 `;
 
 function getModelInstance(modelName: string, modelSource: string, apiKey: string) {
-
   if (modelSource === "openai") {
     const openaiModel = createOpenAI({
       apiKey: apiKey,
@@ -50,14 +51,46 @@ function getModelInstance(modelName: string, modelSource: string, apiKey: string
   throw new Error(`Unsupported model provider: ${modelSource}`);
 }
 
-export async function POST(req: Request) {
-  const { messages, system, tools } = await req.json();
-  const model_name = req.headers.get("X-Model-Name");
-  
-  const api_key = req.headers.get("X-Api-Key");
-  const model_source = req.headers.get("X-Model-Source");
-  console.log("use model_name", model_name);
-  console.log("use model_source", model_source);
+async function searchWeb(query: string) {
+  console.log('searchWeb query', query);
+  try {
+    // 发起对 /api/configs 的请求
+    const port = process.env.BACKEND_PORT || 8097;
+    const url = `http://localhost:${port}/api/searchweb`;
+    console.log('searchWeb url', url);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: query}),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const webData = await response.json();
+    return webData;
+
+  } catch (fetchError) {
+    console.error("Failed to fetch MCP server configurations:", fetchError);
+  }
+}
+
+async function getWebSearchTool() {
+  return tool({
+    description: "执行网页搜索",
+    parameters: z.object({
+      query: z.string().describe('查询语句'),
+    }),
+    execute: async ({query}) => ({
+      result: await searchWeb(query),
+    })
+  });
+}
+
+async function getMcpToolList() {
   let mcpServers = [];
   // 动态获取 MCP 配置（示例 URL）
   try {
@@ -71,13 +104,13 @@ export async function POST(req: Request) {
     }
 
     const configData = await response.json();
-    console.log("configData", configData);
     mcpServers = (configData["mcp_config"] || []).filter(
       (item: { active: boolean }) => item.active === true,
     ); // 提取 MCP 服务列表
   } catch (fetchError) {
     console.error("Failed to fetch MCP server configurations:", fetchError);
   }
+
   try {
     // 并行初始化 MCP 客户端
     const clientPromises = mcpServers.map(async (server: MCPServerConfig) => {
@@ -98,9 +131,36 @@ export async function POST(req: Request) {
     // 批量获取工具集并合并
     const toolSets = await Promise.all(clientPromises);
     const mergedTools = Object.assign({}, ...toolSets);
-    console.log("SYSTEM_PROMPT:", SYSTEM_PROMPT);
+
+    return mergedTools;
+  } catch (error) {
+    return {};
+  }
+}
+export async function POST(req: Request) {
+  const { messages, system, tools } = await req.json();
+  const model_name = req.headers.get("X-Model-Name");
+  
+  const api_key = req.headers.get("X-Api-Key");
+  const model_source = req.headers.get("X-Model-Source");
+  const options = req.headers.get("X-Options");
+  const optionsArray = options ? options.split(",") : [];
+
+  const mergedTools: Record<string, any> = {};
+  if (optionsArray.includes("search")) {
+    mergedTools["search_web"] = await getWebSearchTool();
+  }
+
+  if (optionsArray.includes("mcp")) {
+    const mcpTools = await getMcpToolList(); // 获取 MCP 工具集
+    // 合并所有工具集到 mergedTools（保留已有工具）
+    const merged = { ...mergedTools, ...mcpTools };
+    Object.assign(mergedTools, merged);
+  }
+
+  console.log("Merged Tools:", mergedTools);
+  try {
     const modelInstance = getModelInstance(model_name as string, model_source as string, api_key as string);
-    console.log("modelInstance:", modelInstance);
     const response = await streamText({
       model: modelInstance,
       messages: messages,

@@ -5,6 +5,10 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 
 from fastapi.middleware.cors import CORSMiddleware
+from search.aliyun_search_tool import AliyunSearchTool
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -45,7 +49,11 @@ class ConfigRequest(BaseModel):
     llm_config: Optional[List[LLMConfig]] = None
     mcp_config: Optional[List[MCPConfig]] = None
 
-
+class WebSearchRequest(BaseModel):
+    query: str
+    count: int = 10
+    lang: str = "zh-CN"
+    time_range: str = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 
 CONFIG_FILE = "config.json"
 
@@ -99,26 +107,6 @@ def get_models():
             for source, models in grouped.items()
         ]
     }
-    # return {
-    #     "groups": [
-    #         {
-    #         "id": "openai",
-    #         "label": "OpenAI",
-    #         "models": [
-    #             { "name": "gpt-3.5-turbo", "label": "GPT-3.5 Turbo" },
-    #             { "name": "gpt-4", "label": "GPT-4" }
-    #         ]
-    #         },
-    #         {
-    #         "id": "qwen",
-    #         "label": "Qwen",
-    #         "models": [
-    #             { "name": "qwen-max", "label": "Qwen Max" },
-    #             { "name": "qwen-plus", "label": "Qwen Plus" }
-    #         ]
-    #         }
-    #     ]
-    #     }
 @app.post("/api/configs")
 def write_configs(request: ConfigRequest):
     try:
@@ -142,3 +130,14 @@ def write_configs(request: ConfigRequest):
         return {"message": "配置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
+    
+    
+@app.post("/api/searchweb")
+async def search_web(req: WebSearchRequest):
+    try:
+        tool = AliyunSearchTool(access_key_id=os.getenv("ACCESS_KEY_ID"), access_key_secret=os.getenv("ACCESS_KEY_SECRET"))
+        res = await tool.aquery(req.query)
+
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
