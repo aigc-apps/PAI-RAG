@@ -1,7 +1,9 @@
 import os
 import threading
 import traceback
-from pai_rag.app.constants import DEFAULT_APPLICATION_CONFIG_FILE
+from pai_rag.app.constants import (
+    DEFAULT_APPLICATION_CONFIG_FILE,
+)
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_application import PaiApp, RagChatType
@@ -18,6 +20,10 @@ from typing import Dict
 from loguru import logger
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pai_rag.knowledgebase.rag_job_manager import job_manager
+
+import llama_index.core.instrumentation as instrument
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 TASK_STATUS_FILE = "__upload_task_status.tmp"
 
@@ -82,6 +88,7 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Chat failed: {ex}")
 
+    @dispatcher.span
     async def astream_chat(self, query):
         try:
             return await self.app.astream_chat(query)

@@ -369,12 +369,13 @@ class ChatFlow:
         query_bundle: PaiQueryBundle,
     ):
         news_tool = resolve_news_tool(self.config)
-        if not query_bundle.stream:
-            response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
+        args = {"prompt": query_bundle.query_str}
+        if query_bundle.stream:
+            response_gen = await news_tool.astream_chat([], **args)
+            response_wrapper = ChatResponseWrapper(response=response_gen)
         else:
-            response_wrapper = await news_tool.astream_chat(
-                prompt=query_bundle.query_str
-            )
+            response = await news_tool.achat([], **args)
+            response_wrapper = ChatResponseWrapper(response=response)
 
         return response_wrapper
 
