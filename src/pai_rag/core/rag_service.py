@@ -88,7 +88,6 @@ class RagService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Chat failed: {ex}")
 
-    @dispatcher.span
     async def astream_chat(self, query):
         try:
             return await self.app.astream_chat(query)

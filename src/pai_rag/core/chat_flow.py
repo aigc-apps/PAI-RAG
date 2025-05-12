@@ -64,7 +64,7 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
-from pai_rag.integrations.trace.llm_chat_callback import llm_chat_callback
+from pai_rag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -159,7 +159,7 @@ class ChatFlow:
                 llm_kwargs=llm_kwargs,
             )
 
-    @llm_chat_callback()
+    @pai_query_wrapper()
     async def astream_chat(
         self,
         chat_request: ChatCompletionRequest,
@@ -188,7 +188,7 @@ class ChatFlow:
             return_reference=chat_request.return_reference,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def achat(
         self,
         chat_request: ChatCompletionRequest,

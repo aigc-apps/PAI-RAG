@@ -5,35 +5,28 @@ from typing import (
     AsyncGenerator,
     Callable,
     Generator,
-    Sequence,
-    cast,
 )
+import time
 
-from llama_index.core.base.llms.types import (
-    ChatMessage,
-    ChatResponse,
-    ChatResponseAsyncGen,
-    ChatResponseGen,
-)
-from openai.types.chat import (
-    ChatCompletionChunk,
-)
-from pai_rag.app.api.models import (
-    ChatCompletionRequest,
-)
+from openai.types.chat import ChatCompletionChunk
+from pai_rag.app.api.models import ChatCompletionRequest
 from llama_index.core.callbacks import CallbackManager
 
-# dispatcher setup
-from llama_index.core.instrumentation import get_dispatcher
+from openinference.semconv.trace import SpanAttributes
 from opentelemetry.context import attach, detach
 from opentelemetry import trace
+from opentelemetry.trace.status import Status, StatusCode
 
 tracer = trace.get_tracer(__name__, tracer_provider=trace.get_tracer_provider())
 
-dispatcher = get_dispatcher(__name__)
+
+INPUT_VALUE = SpanAttributes.INPUT_VALUE
+INPUT_QUERY = "input.query"
+OUTPUT_VALUE = SpanAttributes.OUTPUT_VALUE
+GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 
 
-def llm_chat_callback() -> Callable:
+def pai_query_wrapper() -> Callable:
     def wrap(f: Callable) -> Callable:
         @contextmanager
         def wrapper_logic(_self: Any) -> Generator[CallbackManager, None, None]:
@@ -44,30 +37,38 @@ def llm_chat_callback() -> Callable:
             yield _self.callback_manager  # type: ignore
 
         async def wrapped_async_llm_chat(
-            _self: Any, request: Any, **kwargs: Any
+            _self: Any, request: ChatCompletionRequest, **kwargs: Any
         ) -> Any:
             with wrapper_logic(_self) as callback_manager, callback_manager.as_trace(
                 "chat"
             ):
-                otel_span = tracer.start_span("llm.chat")
+                otel_span = tracer.start_span(f.__qualname__)
+                end_time = 0
                 context = trace.set_span_in_context(otel_span)
                 token = attach(context)
 
-                if isinstance(request, ChatCompletionRequest):
+                if request.messages:
                     otel_span.set_attribute(
-                        "input.value", request.messages[-1].blocks[0].text
+                        INPUT_VALUE, request.messages[-1].blocks[0].text
                     )
-                    otel_span.set_attribute("input.query", str(request))
+                otel_span.set_attribute(
+                    INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
+                )
+                otel_span.set_attribute(GEN_AI_SPAN_KIND, "CHAIN")
 
                 try:
                     f_return_val = await f(_self, request, **kwargs)
                 except BaseException:
+                    otel_span.set_status(Status(StatusCode.ERROR))
                     otel_span.end()
+                    detach(token)
                     raise
+
                 if isinstance(f_return_val, AsyncGenerator):
-                    # intercept the generator and add a callback to the end
-                    async def wrapped_gen() -> ChatResponseAsyncGen:
+                    # make_completion_chunk_response
+                    async def wrapped_gen():
                         full_content = ""
+                        nonlocal end_time
                         try:
                             async for x in f_return_val:
                                 try:
@@ -75,48 +76,91 @@ def llm_chat_callback() -> Callable:
                                         x[6:]
                                     )
                                     full_content += chunk.choices[0].delta.content
+                                    if not end_time:
+                                        end_time = time.time_ns()
                                 except ValueError as e:
                                     print("Invalid JSON or data structure:", e)
-                                yield cast(ChatResponse, x)
-                                otel_span.set_attribute("output.value", full_content)
+                                yield x
+                                otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                                otel_span.set_status(Status(StatusCode.OK))
                         except BaseException:
-                            otel_span.end()
+                            otel_span.set_status(Status(StatusCode.ERROR))
                             raise
                         finally:
+                            otel_span.end(end_time=end_time or time.time_ns())
                             detach(token)
-                        otel_span.end()
 
                     return wrapped_gen()
                 else:
-                    otel_span.end()
+                    # make_completion_response
+                    otel_span.set_attribute(
+                        OUTPUT_VALUE, f_return_val.choices[0].message.content
+                    )
+                    otel_span.set_status(Status(StatusCode.OK))
+                    otel_span.end(end_time=end_time or time.time_ns())
+                    detach(token)
 
             return f_return_val
 
         def wrapped_llm_chat(
-            _self: Any, messages: Sequence[ChatMessage], **kwargs: Any
+            _self: Any, request: ChatCompletionRequest, **kwargs: Any
         ) -> Any:
             with wrapper_logic(_self) as callback_manager, callback_manager.as_trace(
                 "chat"
             ):
+                otel_span = tracer.start_span(f.__qualname__)
+                end_time = 0
+                context = trace.set_span_in_context(otel_span)
+                token = attach(context)
+
                 try:
-                    f_return_val = f(_self, messages, **kwargs)
+                    if request.messages:
+                        otel_span.set_attribute(
+                            INPUT_VALUE, request.messages[-1].blocks[0].text
+                        )
+                    otel_span.set_attribute(
+                        INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
+                    )
+                    otel_span.set_attribute(GEN_AI_SPAN_KIND, "CHAIN")
+
+                    f_return_val = f(_self, request, **kwargs)
                 except BaseException:
+                    otel_span.set_status(Status(StatusCode.ERROR))
+                    otel_span.end()
+                    detach(token)
                     raise
+
                 if isinstance(f_return_val, Generator):
-                    # intercept the generator and add a callback to the end
-                    def wrapped_gen() -> ChatResponseGen:
+                    # make_completion_chunk_response
+                    def wrapped_gen():
                         full_content = ""
+                        nonlocal end_time
                         try:
                             for x in f_return_val:
-                                yield cast(ChatResponse, x)
+                                yield x
                                 full_content += x.choices[0].delta.content
+                                if not end_time:
+                                    end_time = time.time_ns()
+                                otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                                otel_span.set_status(Status(StatusCode.OK))
                         except BaseException:
+                            otel_span.set_status(Status(StatusCode.ERROR))
                             raise
+                        finally:
+                            otel_span.end(end_time=end_time or time.time_ns())
+                            detach(token)
 
                     return wrapped_gen()
                 else:
-                    pass
-            return f_return_val
+                    # make_completion_response
+                    otel_span.set_attribute(
+                        OUTPUT_VALUE, f_return_val.choices[0].message.content
+                    )
+
+                otel_span.set_status(Status(StatusCode.OK))
+                otel_span.end(end_time=end_time or time.time_ns())
+                detach(token)
+                return f_return_val
 
         async def async_dummy_wrapper(_self: Any, *args: Any, **kwargs: Any) -> Any:
             return await f(_self, *args, **kwargs)
