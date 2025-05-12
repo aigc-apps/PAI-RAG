@@ -1,6 +1,6 @@
 {
   "request_settings": {
-    "model": "Qwen3-32B",
+    "model": "Qwen2.5-32B-Instruct",
     "stream": false,
     "chat_news": true,
     "search_web": true,

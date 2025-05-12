@@ -66,6 +66,7 @@ def test_intent_detection(setup_config, chat_flow, test_data):
     scores = 0
     results = []
 
+    mismatch_results = []
     for sample in samples:
         chat_request = ChatCompletionRequest(
             model=request_settings["model"],
@@ -88,9 +89,14 @@ def test_intent_detection(setup_config, chat_flow, test_data):
             logger.warning(
                 f'Intent mismatch! Query: {sample["query"]} expected: {sample["intent"]}, output: {sample["intent_output"]}'
             )
+            mismatch_results.append(sample)
         scores += sample["score"]
 
         results.append(sample)
+
+    logger.warning(
+        f"Mismatch results {len(mismatch_results)} in total:  {mismatch_results}"
+    )
 
     average_score = scores / len(samples)
     write_file_path = TEST_FILE.replace(".json", "_predicted.json")
