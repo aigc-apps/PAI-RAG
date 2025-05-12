@@ -48,7 +48,7 @@ class Parser(BaseOperator):
         )
 
         download_models_via_lock(
-            self.model_dir, "PDF-Extract-Kit", use_cuda=self.use_cuda()
+            self.model_dir, "PDF-Extract-Kit-1.0", use_cuda=self.use_cuda()
         )
 
         self.data_reader_config = BaseDataReaderConfig(
