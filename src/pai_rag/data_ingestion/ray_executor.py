@@ -81,36 +81,43 @@ class RayExecutor:
         """
         start_time = time.time()
 
+        # 获取delta datasource
         if datasource_config is not None:
             filename_provider = BlockFileNameProvider(
                 run_label=f"read-{self.execution_ts}", file_format="jsonl"
             )
 
             datasource = FileDeltaDatasource(config=datasource_config)
-            dataset = ray.data.read_datasource(datasource).materialize()
+            delta_dataset = ray.data.read_datasource(datasource).materialize()
             Path(datasource_config.output_path).mkdir(parents=True, exist_ok=True)
-            dataset.write_json(
+            delta_dataset.write_json(
                 datasource_config.output_path,
                 min_rows_per_file=DEFAULT_ROWS_PER_FILE,
                 try_create_dir=True,
                 filename_provider=filename_provider,
                 force_ascii=False,
             )
-        else:
-            if len(op_configs) == 0:
-                logger.warning(
-                    "No op_configs and datasource provided, skipping dataset process pipeline."
-                )
-                return
 
-            input_files_list = get_input_files(
-                file_path_or_directory=op_configs[0].input_path,
-                filter_pattern="*.jsonl",
+        if len(op_configs) == 0:
+            logger.warning(
+                "No op_configs and datasource provided, skipping dataset process pipeline."
             )
-            dataset = ray.data.read_json(input_files_list)
+            return
 
+        # 执行each op
         for op_config in op_configs:
             logger.info(f"Executing {op_config.name}...")
+
+            input_files_list = get_input_files(
+                file_path_or_directory=op_config.input_path,
+                filter_pattern="*.jsonl",
+            )
+            if len(input_files_list) == 0:
+                logger.warning(f"No input files found for {op_config.name}.")
+                return
+
+            dataset = ray.data.read_json(input_files_list)
+
             OP_TYPE = self._resolve_op_class(op_config=op_config)
             op_concurrency = op_config.concurrency or compute_concurrency_count(
                 num_cpus=op_config.num_cpus,
@@ -130,7 +137,7 @@ class RayExecutor:
                     memory=op_config.memory,
                     concurrency=op_concurrency,
                     fn_constructor_kwargs={"config": op_config},
-                ).materialize()
+                )
             else:
                 logger.info(
                     f"Executing {op_config.name} in flat_map mode. Task concurrency: {op_concurrency}"
@@ -142,23 +149,22 @@ class RayExecutor:
                     memory=op_config.memory,
                     concurrency=op_concurrency,
                     fn_constructor_kwargs={"config": op_config},
-                ).materialize()
+                )
 
             # 保存op结果，保存向量库无需执行
-            if not isinstance(op_config, WriterConfig):
-                filename_provider = BlockFileNameProvider(
-                    run_label=f"{op_config.name.value}-{self.execution_ts}",
-                    file_format="jsonl",
-                )
-                Path(op_config.output_path).mkdir(parents=True, exist_ok=True)
+            filename_provider = BlockFileNameProvider(
+                run_label=f"{op_config.name.value}-{self.execution_ts}",
+                file_format="jsonl",
+            )
+            Path(op_config.output_path).mkdir(parents=True, exist_ok=True)
 
-                dataset.write_json(
-                    op_config.output_path,
-                    min_rows_per_file=DEFAULT_ROWS_PER_FILE,
-                    try_create_dir=True,
-                    filename_provider=filename_provider,
-                    force_ascii=False,
-                )
+            dataset.write_json(
+                op_config.output_path,
+                min_rows_per_file=DEFAULT_ROWS_PER_FILE,
+                try_create_dir=True,
+                filename_provider=filename_provider,
+                force_ascii=False,
+            )
             logger.info(f"Finished executing {op_config.name}...")
 
         logger.info(f"All ops are done in {time.time() - start_time:.3f}s.")

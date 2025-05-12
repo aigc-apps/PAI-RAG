@@ -238,6 +238,7 @@ def e2e(
     parse_output_path = os.path.join(output_path, "parse")
     split_output_path = os.path.join(output_path, "split")
     embed_output_path = os.path.join(output_path, "embed")
+    write_output_path = os.path.join(output_path, "write")
 
     with open(config_file) as file_handler:
         e2e_yaml = yaml.safe_load(file_handler)
@@ -311,7 +312,7 @@ def e2e(
         write_yaml = op_yaml_map["write"]
         write_config = WriterConfig(
             input_path=embed_output_path,
-            output_path="dummy",
+            output_path=write_output_path,
             rag_endpoint=write_yaml.get("rag_endpoint")
             or os.environ.get("PAI_RAG_ENDPOINT"),
             rag_api_key=write_yaml.get("rag_api_key") or os.environ.get("PAI_RAG_KEY"),

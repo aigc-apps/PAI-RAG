@@ -111,7 +111,6 @@ class Parser(BaseOperator):
         return nodes
 
     def __call__(self, row: Dict[str, Any]) -> List[Dict[str, Any]]:
-        print("Parsing: ", row)
         if row.get("operation") == NodeOperationType.DELETE:
             return self.process_delete(row)
         else:

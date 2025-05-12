@@ -65,9 +65,10 @@ class Embedder(BaseOperator):
         return sparse_embeddings
 
     def __call__(self, nodes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        logger.info(f"Start embedding {len(nodes)} nodes...")
         try:
             node_texts = nodes.get("text", [])
+            logger.info(f"Start embedding {len(node_texts)} nodes...")
+
             if len(node_texts) == 0:
                 logger.warning("No nodes to embed, directly returning...")
                 return nodes
@@ -75,7 +76,9 @@ class Embedder(BaseOperator):
             nodes["embedding"] = self.calc_embedings(node_texts)
             nodes["sparse_embedding"] = self.calc_sparse_embeddings(node_texts)
 
-            logger.info(f"Successfully calculated embeddings for {len(nodes)} nodes.")
+            logger.info(
+                f"Successfully calculated embeddings for {len(node_texts)} nodes."
+            )
             return nodes
         except Exception:
             logger.error(

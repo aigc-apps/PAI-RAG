@@ -37,6 +37,10 @@ class Writer(BaseOperator):
         chunks_df = pd.DataFrame(row_batch)
         logger.info(f"Start saving {len(chunks_df)} nodes...")
 
+        node_id_array = chunks_df.id.to_numpy()
+        op_type_array = chunks_df.operation.to_numpy()
+        file_name_array = chunks_df.file_name.to_numpy()
+
         add_chunks = chunks_df[chunks_df.operation == "add"].to_dict(orient="records")
         node_ids_to_delete = chunks_df[chunks_df.operation == "delete"].id.tolist()
 
@@ -49,13 +53,20 @@ class Writer(BaseOperator):
                 logger.info(f"Deleted {node_ids_to_delete} nodes successfully.")
 
             if len(add_chunks) > 0:
-                add_nodes = [metadata_dict_to_node_v2(chunk) for chunk in add_chunks]
-                self.vector_store.add(add_nodes)
-                logger.info(f"Successfully saved {len(add_nodes)} nodes.")
+                nodes_to_add = []
+                for chunk in add_chunks:
+                    nodes_to_add.append(metadata_dict_to_node_v2(chunk))
+
+                self.vector_store.add(nodes_to_add)
+                logger.info(f"Successfully saved {len(nodes_to_add)} nodes.")
 
             logger.info(f"Finished processing {len(chunks_df)} chunks.")
             logger.info("Finished writing op.")
-            return {"write_sucess": np.array([True])}
+            return {
+                "id": node_id_array,
+                "operation": op_type_array,
+                "file_name": file_name_array,
+            }
         except Exception:
             logger.error(f"Error saving nodes: {traceback.format_exc()}")
             raise
