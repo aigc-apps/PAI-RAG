@@ -1,66 +1,21 @@
-import * as React from "react";
+import * as React from "react"
 
-import { cn } from "@/lib/utils";
-import { Button } from "./button";
-import { Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils"
 
-export type InputProps = React.ComponentProps<"input">;
-
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={cn(
-          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-          className,
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
-  },
-);
-Input.displayName = "Input";
-
-interface PasswordInputProps extends Omit<InputProps, "type"> {
-  /** Custom class name for the container */
-  containerClassName?: string;
-  /** Custom class name for the toggle button */
-  toggleClassName?: string;
+function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ className, containerClassName, toggleClassName, ...props }, ref) => {
-    const [showPassword, setShowPassword] = React.useState(false);
-
-    return (
-      <div className={cn("relative", containerClassName)}>
-        <Input
-          type={showPassword ? "text" : "password"}
-          className={cn("pr-10", className)}
-          ref={ref}
-          {...props}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.preventDefault();
-            setShowPassword((prev) => !prev);
-          }}
-          className="absolute right-0 top-0 flex h-full items-center justify-center px-3 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {showPassword ? (
-            <EyeOff className="size-3" />
-          ) : (
-            <Eye className="size-3" />
-          )}
-        </Button>
-      </div>
-    );
-  },
-);
-PasswordInput.displayName = "PasswordInput";
-
-export { Input, PasswordInput };
+export { Input }

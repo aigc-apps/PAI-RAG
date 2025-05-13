@@ -21,7 +21,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+// import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+import { ToolFallback } from "@/components/ui/custom-tool-fallback";
 import { Brain, Search, Wrench } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 

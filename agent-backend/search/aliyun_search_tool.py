@@ -102,7 +102,9 @@ class AliyunSearchTool:
                 score = 0.1
                 if item.get("score"):
                     score = item.get("score")
-
+                host_logo = "https://cdn.pixabay.com/photo/2020/09/17/22/52/website-5580513_1280.png"
+                if item.get("hostLogo") and item.get("hostLogo") != "":
+                    host_logo = item.get("hostLogo")
                 nodes.append(NodeWithScore(
                     text=text[:800],
                     metadata={
@@ -110,7 +112,7 @@ class AliyunSearchTool:
                         "file_url": item.get("link"),
                         "file_name": item.get("title") or item.get("htmlTitle"),
                         "host_name": item.get("hostname"),
-                        "host_logo": item.get("hostLogo"),
+                        "host_logo": host_logo,
                         "publish_time": item.get("publishTime"),
                     },
                     score=score

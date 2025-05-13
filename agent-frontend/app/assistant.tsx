@@ -5,11 +5,10 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import { ThreadList } from "@/components/assistant-ui/thread-list";
-import ConfigPage from "@/components/setting/config-page";
-import { Button } from "@/components/ui/button";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
-import { SettingsIcon, Settings2Icon } from "lucide-react";
+import { AppSidebar } from "@/components/app-sidebar"
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar"
 
 export const Assistant = () => {
   // LLM 配置状态
@@ -55,52 +54,34 @@ export const Assistant = () => {
     api: "/api/chat",
     headers: { "X-Model-Name": llmConfig.model_name || "gpt-4o" , "X-Api-Key": llmConfig.api_key || "" , "X-Model-Source": llmConfig.source || "openai" ,"X-Options": selectedOptions.join(",") || ""},
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="grid h-screen grid-rows-[1fr_8fr] overflow-hidden">
-        {/* 顶部栏 */}
-        <div className="grid grid-cols-[200px_1fr_auto] gap-x-2 px-4 py-4">
-          <p className="text-2xl font-semibold text-black tracking-tighter">
-            Agent <span className="font-extrabold text-red-600"> X </span>
-          </p>
-          <div className="flex justify-start px-40 w-full">
-          <ModelSelector
-              selectedModel={{
-                source: llmConfig.source || "",
-                model_name: llmConfig.model_name || ""
-              }}
-              onModelChange={handleModelChange}
-            />
+      <SidebarProvider defaultOpen={false}>
+        <AppSidebar />
+        <SidebarInset className="h-full h-screen !overflow-hidden">
+          <header className="flex h-12">
+          <SidebarTrigger />
+            <div className="flex justify-start px-60">
+              <ModelSelector
+                selectedModel={{
+                  source: llmConfig.source || "",
+                  model_name: llmConfig.model_name || ""
+                }}
+                onModelChange={handleModelChange}
+              />
+            </div>
+          
+          </header>
+          <div className="grid grid-cols-[200px_1fr_auto] h-[calc(100%-3rem)] !overflow-hidden">
+            <ThreadList />
+            <Thread onToggleChange={(options) => {
+                setSelectedOptions(options); // 更新状态
+              }}  />
+            <ToolUIWrapper />
           </div>
-          <div>
-            <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-              {isSidebarOpen ? <Settings2Icon /> : <SettingsIcon />}
-            </Button>
-          </div>
-        </div>
-
-        {/* 主体区域 */}
-        <div className="grid grid-cols-[200px_1fr_auto] gap-x-2 px-4 py-4 h-full overflow-hidden">
-          <ThreadList />
-          <Thread onToggleChange={(options) => {
-            setSelectedOptions(options); // 更新状态
-          }}  />
-          <ToolUIWrapper />
-          <div
-            className={`transition-all duration-300 ease-in-out overflow-hidden ${
-              isSidebarOpen ? "w-[500px]" : "w-0"
-            } h-full`}
-          >
-            {isSidebarOpen && (
-              <div className="h-full overflow-y-auto">
-                <ConfigPage />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        </SidebarInset>
+    </SidebarProvider>
     </AssistantRuntimeProvider>
   );
 };
