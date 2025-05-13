@@ -7,12 +7,13 @@ from typing import (
     Generator,
 )
 import time
+from loguru import logger
 
 from openai.types.chat import ChatCompletionChunk
 from pai_rag.app.api.models import ChatCompletionRequest
 from llama_index.core.callbacks import CallbackManager
 
-from openinference.semconv.trace import SpanAttributes
+from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from opentelemetry.context import attach, detach
 from opentelemetry import trace
 from opentelemetry.trace.status import Status, StatusCode
@@ -24,6 +25,7 @@ INPUT_VALUE = SpanAttributes.INPUT_VALUE
 INPUT_QUERY = "input.query"
 OUTPUT_VALUE = SpanAttributes.OUTPUT_VALUE
 GEN_AI_SPAN_KIND = "gen_ai.span.kind"
+CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 
 
 def pai_query_wrapper() -> Callable:
@@ -48,13 +50,14 @@ def pai_query_wrapper() -> Callable:
                 token = attach(context)
 
                 if request.messages:
+                    # set latest input as input value
                     otel_span.set_attribute(
                         INPUT_VALUE, request.messages[-1].blocks[0].text
                     )
                 otel_span.set_attribute(
                     INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
                 )
-                otel_span.set_attribute(GEN_AI_SPAN_KIND, "CHAIN")
+                otel_span.set_attribute(GEN_AI_SPAN_KIND, CHAIN)
 
                 try:
                     f_return_val = await f(_self, request, **kwargs)
@@ -72,14 +75,19 @@ def pai_query_wrapper() -> Callable:
                         try:
                             async for x in f_return_val:
                                 try:
-                                    chunk = ChatCompletionChunk.model_validate_json(
-                                        x[6:]
-                                    )
+                                    if x.startswith("data: "):
+                                        chunk = ChatCompletionChunk.model_validate_json(
+                                            x[6:]
+                                        )
+                                    else:
+                                        chunk = ChatCompletionChunk.model_validate_json(
+                                            x
+                                        )
                                     full_content += chunk.choices[0].delta.content
                                     if not end_time:
                                         end_time = time.time_ns()
                                 except ValueError as e:
-                                    print("Invalid JSON or data structure:", e)
+                                    logger.error("Invalid JSON or data structure:", e)
                                 yield x
                                 otel_span.set_attribute(OUTPUT_VALUE, full_content)
                                 otel_span.set_status(Status(StatusCode.OK))
@@ -121,7 +129,7 @@ def pai_query_wrapper() -> Callable:
                     otel_span.set_attribute(
                         INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
                     )
-                    otel_span.set_attribute(GEN_AI_SPAN_KIND, "CHAIN")
+                    otel_span.set_attribute(GEN_AI_SPAN_KIND, CHAIN)
 
                     f_return_val = f(_self, request, **kwargs)
                 except BaseException:
