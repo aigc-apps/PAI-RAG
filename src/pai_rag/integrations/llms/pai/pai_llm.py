@@ -28,10 +28,6 @@ from pai_rag.integrations.llms.pai.llm_config import (
 )
 from llama_index.core.base.llms.types import MessageRole
 import llama_index.core.instrumentation as instrument
-from llama_index.core.llms.callbacks import (
-    llm_chat_callback,
-    llm_completion_callback,
-)
 from openinference.instrumentation.llama_index import get_current_span
 from pai_rag.integrations.trace.base import use_current_span
 
@@ -94,7 +90,6 @@ class PaiLlm(OpenAILike):
 
         return self._llm.stream_complete(prompt, **kwargs)
 
-    @llm_chat_callback()
     def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
         """Chat with the model."""
         if not self.metadata.is_chat_model:
@@ -104,7 +99,6 @@ class PaiLlm(OpenAILike):
 
         return self._llm.chat(messages, **kwargs)
 
-    @llm_chat_callback()
     def stream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseGen:
@@ -117,7 +111,6 @@ class PaiLlm(OpenAILike):
 
     # -- Async methods --
 
-    @llm_completion_callback()
     async def acomplete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponse:
@@ -127,7 +120,6 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.acomplete(prompt, **kwargs)
 
-    @llm_completion_callback()
     async def astream_complete(
         self, prompt: str, formatted: bool = False, **kwargs: Any
     ) -> CompletionResponseAsyncGen:
@@ -137,7 +129,6 @@ class PaiLlm(OpenAILike):
 
         return await self._llm.astream_complete(prompt, **kwargs)
 
-    @llm_chat_callback()
     async def achat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponse:
@@ -232,7 +223,6 @@ class PaiLlm(OpenAILike):
 
         return gen()
 
-    @llm_chat_callback()
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
@@ -299,7 +289,6 @@ class PaiLlm(OpenAILike):
 
         return gen()
 
-    @llm_chat_callback()
     async def astream_chat(
         self, messages: Sequence[ChatMessage], **kwargs: Any
     ) -> ChatResponseAsyncGen:
