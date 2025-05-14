@@ -21,7 +21,10 @@ from llama_index.core.base.llms.types import (
     MessageRole,
     LLMMetadata,
 )
+from llama_index.core.base.response.schema import Response
+from llama_index.core.instrumentation.events.query import QueryEndEvent
 
+from llama_index.core.instrumentation.span import active_span_id
 
 from llama_index.core.llms.llm import LLM
 from llama_index.core.llms.callbacks import llm_chat_callback, llm_completion_callback
@@ -38,6 +41,9 @@ from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+import llama_index.core.instrumentation as instrument
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 
 def _create_client(
@@ -267,12 +273,14 @@ class MiaobiNewsTool(LLM):
             )
             raise ex
 
+    @dispatcher.span
     async def astream_list_topics(
-        self,
-        query_str: str,
-        news_topics: List[str] = [],
-    ) -> ChatResponseWrapper:
+        self, messages: List[ChatMessage] = [], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
         try:
+            query_str = kwargs.get("query_str", "")
+            news_topics = kwargs.get("news_topics", [])
+            span_id = active_span_id.get()
 
             async def gen() -> ChatResponseAsyncGen:
                 yield ChatResponse(
@@ -327,12 +335,20 @@ class MiaobiNewsTool(LLM):
                     additional_kwargs={"news_articles": hot_topics},
                 )
 
+                # store hot topics in span output
+                dispatcher.event(
+                    QueryEndEvent(
+                        response=Response(response=str(hot_topics), source_nodes=[]),
+                        query="",
+                        span_id=span_id,
+                    )
+                )
                 async for response in await self.llm.astream_chat(
                     messages=messages,
                 ):
                     yield response
 
-            return ChatResponseWrapper(response=gen())
+            return gen()
         except Exception as e:
             logger.error(
                 f"Error while getting hot topics: {e}, {traceback.format_exc()}"
@@ -368,7 +384,7 @@ class MiaobiNewsTool(LLM):
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponseAsyncGen:
         prompt = kwargs.get("prompt", "")
-        logger.info(f"Chat news with prompt {prompt}, chat_history: {messages}")
+        logger.info(f"astream_chat with prompt {prompt}, chat_history: {messages}")
 
         transformed_messages = _transform_messages(messages)
         param = NewsChatParameter(
