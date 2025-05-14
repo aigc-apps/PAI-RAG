@@ -46,7 +46,6 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
 )
 from llama_index.core.schema import ImageNode
-import llama_index.core.instrumentation as instrument
 
 from openai.types.completion_usage import CompletionUsage
 from openai.types.chat import (
@@ -64,8 +63,7 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
-
-dispatcher = instrument.get_dispatcher(__name__)
+from pai_rag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -158,7 +156,7 @@ class ChatFlow:
                 llm_kwargs=llm_kwargs,
             )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def astream_chat(
         self,
         chat_request: ChatCompletionRequest,
@@ -187,7 +185,7 @@ class ChatFlow:
             return_reference=chat_request.return_reference,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def achat(
         self,
         chat_request: ChatCompletionRequest,
