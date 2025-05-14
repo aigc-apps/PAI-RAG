@@ -228,7 +228,6 @@ class DataAnalysisQuery(BaseQueryEngine):
         else:
             return nodes, ""
 
-    @dispatcher.span
     def _query(
         self,
         query_bundle: QueryBundle,
@@ -249,7 +248,6 @@ class DataAnalysisQuery(BaseQueryEngine):
 
         return response
 
-    @dispatcher.span
     async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
         """Answer a query."""
         with self.callback_manager.event(

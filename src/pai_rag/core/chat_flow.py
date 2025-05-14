@@ -64,6 +64,9 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     CURRENT_TIME_PROMPT,
 )
 from pai_rag.integrations.trace.pai_query_wrapper import pai_query_wrapper
+import llama_index.core.instrumentation as instrument
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -104,6 +107,7 @@ class ChatFlow:
     def __init__(self, config: RagConfig):
         self.config = config
 
+    @dispatcher.span
     async def _recognize_intent(
         self,
         chat_request: ChatCompletionRequest,
@@ -333,6 +337,7 @@ class ChatFlow:
         response_wrapper.additional_kwargs["total_tokens"] = query_bundle.total_tokens
         return response_wrapper
 
+    @dispatcher.span
     async def achat_db(
         self,
         query_bundle: PaiQueryBundle,
@@ -347,6 +352,7 @@ class ChatFlow:
 
         return await data_analysis_query_engine.aquery(query_bundle)
 
+    @dispatcher.span
     async def alist_news(
         self,
         query_bundle: PaiQueryBundle,
@@ -365,6 +371,7 @@ class ChatFlow:
             response_wrapper = ChatResponseWrapper(response=response_gen)
         return response_wrapper
 
+    @dispatcher.span
     async def achat_news(
         self,
         query_bundle: PaiQueryBundle,
@@ -380,6 +387,7 @@ class ChatFlow:
 
         return response_wrapper
 
+    @dispatcher.span
     async def achat_news_llm(
         self,
         query_bundle: PaiQueryBundle,
@@ -397,6 +405,7 @@ class ChatFlow:
 
         return response_wrapper
 
+    @dispatcher.span
     async def achat_web(
         self,
         query_bundle: PaiQueryBundle,
@@ -411,6 +420,7 @@ class ChatFlow:
             query_bundle,
         )
 
+    @dispatcher.span
     async def achat_knowledgebase(
         self,
         query_bundle: PaiQueryBundle,
@@ -435,6 +445,7 @@ class ChatFlow:
         response = await query_engine.aquery(query_bundle)
         return response
 
+    @dispatcher.span
     async def achat_agent(
         self,
         query_bundle: PaiQueryBundle,
@@ -472,6 +483,7 @@ class ChatFlow:
                 )
             )
 
+    @dispatcher.span
     async def achat_llm(
         self,
         query_bundle: PaiQueryBundle,

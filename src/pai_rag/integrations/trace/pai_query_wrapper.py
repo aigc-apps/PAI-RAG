@@ -27,6 +27,9 @@ OUTPUT_VALUE = SpanAttributes.OUTPUT_VALUE
 GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 
+STATUS_OK = Status(StatusCode.OK)
+STATUS_ERROR = Status(StatusCode.ERROR)
+
 
 def pai_query_wrapper() -> Callable:
     def wrap(f: Callable) -> Callable:
@@ -62,7 +65,7 @@ def pai_query_wrapper() -> Callable:
                 try:
                     f_return_val = await f(_self, request, **kwargs)
                 except BaseException:
-                    otel_span.set_status(Status(StatusCode.ERROR))
+                    otel_span.set_status(STATUS_ERROR)
                     otel_span.end()
                     detach(token)
                     raise
@@ -89,10 +92,15 @@ def pai_query_wrapper() -> Callable:
                                 except ValueError as e:
                                     logger.error("Invalid JSON or data structure:", e)
                                 yield x
-                                otel_span.set_attribute(OUTPUT_VALUE, full_content)
-                                otel_span.set_status(Status(StatusCode.OK))
+
+                            otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                            # error response content, e.g., content_filer exception message
+                            if full_content.startswith("Error code: "):
+                                otel_span.set_status(STATUS_ERROR)
+                            else:
+                                otel_span.set_status(STATUS_OK)
                         except BaseException:
-                            otel_span.set_status(Status(StatusCode.ERROR))
+                            otel_span.set_status(STATUS_ERROR)
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
@@ -104,7 +112,7 @@ def pai_query_wrapper() -> Callable:
                     otel_span.set_attribute(
                         OUTPUT_VALUE, f_return_val.choices[0].message.content
                     )
-                    otel_span.set_status(Status(StatusCode.OK))
+                    otel_span.set_status(STATUS_OK)
                     otel_span.end(end_time=end_time or time.time_ns())
                     detach(token)
 
@@ -133,7 +141,7 @@ def pai_query_wrapper() -> Callable:
 
                     f_return_val = f(_self, request, **kwargs)
                 except BaseException:
-                    otel_span.set_status(Status(StatusCode.ERROR))
+                    otel_span.set_status(STATUS_ERROR)
                     otel_span.end()
                     detach(token)
                     raise
@@ -149,10 +157,15 @@ def pai_query_wrapper() -> Callable:
                                 full_content += x.choices[0].delta.content
                                 if not end_time:
                                     end_time = time.time_ns()
-                                otel_span.set_attribute(OUTPUT_VALUE, full_content)
-                                otel_span.set_status(Status(StatusCode.OK))
+
+                            otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                            # error response content, e.g., content_filer exception message
+                            if full_content.startswith("Error code: "):
+                                otel_span.set_status(STATUS_ERROR)
+                            else:
+                                otel_span.set_status(STATUS_OK)
                         except BaseException:
-                            otel_span.set_status(Status(StatusCode.ERROR))
+                            otel_span.set_status(STATUS_ERROR)
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
@@ -165,7 +178,7 @@ def pai_query_wrapper() -> Callable:
                         OUTPUT_VALUE, f_return_val.choices[0].message.content
                     )
 
-                otel_span.set_status(Status(StatusCode.OK))
+                otel_span.set_status(STATUS_OK)
                 otel_span.end(end_time=end_time or time.time_ns())
                 detach(token)
                 return f_return_val
