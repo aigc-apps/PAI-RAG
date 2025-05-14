@@ -12,20 +12,31 @@ from opentelemetry.sdk.resources import (
     SERVICE_NAME,
     SERVICE_VERSION,
 )
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-    OTLPSpanExporter as GRPCExporter,
-)
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
 )
 from opentelemetry.trace import Span, use_span
 
+from pai_rag.integrations.trace.reloadable_exporter import ReloadableOTLPSpanExporter
 from pai_rag.integrations.trace.trace_config import TraceConfig
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
 
+# trace_provider为singleton, 不支持覆盖，故修改trace配置时，默认覆盖exporter和resource
+# 这样如果用户填错密码，还可以成功刷新
+trace_config: TraceConfig = None
+exporter: ReloadableOTLPSpanExporter = None
+resource: Resource = None
+trace_provider: TracerProvider = None
+
+
 def init_trace(config: TraceConfig):
+    global trace_config
+    if config == trace_config:
+        logger.info("Trace config not changed.")
+        return
+
     grpc_endpoint = config.endpoint
     token = config.token
     service_name = config.service_name
@@ -42,18 +53,36 @@ def init_trace(config: TraceConfig):
     # ToDo: change to adaptive versioning
     attributes[SERVICE_VERSION] = "1.1.0"
 
-    resource = Resource(attributes=attributes)
-    exporter = GRPCExporter(endpoint=grpc_endpoint, headers=(f"Authentication={token}"))
+    global resource
+    if resource is None:
+        resource = Resource(attributes=attributes)
+    else:
+        resource._attributes = attributes
 
-    span_processor = BatchSpanProcessor(exporter)
-    trace_provider = TracerProvider(
-        resource=resource, active_span_processor=span_processor
-    )
-    trace.set_tracer_provider(trace_provider)
+    global exporter
+    if exporter is None:
+        exporter = ReloadableOTLPSpanExporter(
+            endpoint=grpc_endpoint, headers=(f"Authentication={token}")
+        )
+    else:
+        exporter.reload(endpoint=grpc_endpoint, headers=(f"Authentication={token}"))
 
-    instrumentor = LlamaIndexInstrumentor()
-    instrumentor.instrument()
-    logger.info("Init trace successfully.")
+    global trace_provider
+    if trace_provider is None:
+        span_processor = BatchSpanProcessor(exporter)
+        trace_provider = TracerProvider(
+            resource=resource, active_span_processor=span_processor
+        )
+
+        trace.set_tracer_provider(trace_provider)
+
+        instrumentor = LlamaIndexInstrumentor()
+        instrumentor.instrument()
+        logger.info("Init trace successfully.")
+    else:
+        logger.info("Reload trace successfully.")
+
+    trace_config = config
 
 
 def use_current_span(span: Span):

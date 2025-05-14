@@ -443,3 +443,18 @@ def save_query_transform_cfg(input_elements: List[Any]):
         )
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def save_trace_cfg(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] 成功保存OpenTelemetry配置信息!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")

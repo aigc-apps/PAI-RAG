@@ -222,6 +222,9 @@ class ViewModel(BaseModel):
     chat_news_pmt: str = None
     domain_list: str = None
     news_role: str = None
+    trace_app_name: str = None
+    telemetry_endpoint: str = None
+    telemetry_token: str = None
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -399,6 +402,10 @@ class ViewModel(BaseModel):
         view_model.domain_list = ",".join(config.news_extension.domain_list)
         view_model.news_role = config.news_extension.news_role
 
+        view_model.trace_app_name = config.trace.service_name
+        view_model.telemetry_endpoint = config.trace.endpoint
+        view_model.telemetry_token = config.trace.token
+
         return view_model
 
     def to_app_config(self):
@@ -573,6 +580,10 @@ class ViewModel(BaseModel):
         config["news_extension"]["chat_news_prompt_str"] = self.chat_news_pmt
         config["news_extension"]["domain_list"] = self.domain_list.split(",")
         config["news_extension"]["news_role"] = self.news_role
+
+        config["trace"]["service_name"] = self.trace_app_name
+        config["trace"]["endpoint"] = self.telemetry_endpoint
+        config["trace"]["token"] = self.telemetry_token
 
         return _transform_to_dict(config)
 
@@ -871,5 +882,9 @@ class ViewModel(BaseModel):
         settings["domain_list"] = {"value": self.domain_list}
         settings["news_role"] = {"value": self.news_role}
         # print("view model settings:", settings)
+
+        settings["trace_app_name"] = {"value": self.trace_app_name}
+        settings["telemetry_endpoint"] = {"value": self.telemetry_endpoint}
+        settings["telemetry_token"] = {"value": self.telemetry_token}
 
         return settings

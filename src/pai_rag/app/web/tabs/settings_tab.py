@@ -448,6 +448,46 @@ def create_setting_tab() -> Dict[str, Any]:
                     save_query_transform_btn,
                 ]
             )
+        with gr.Tab("OpenTelemetry链路追踪"):
+            trace_app_name = gr.Textbox(
+                label="应用名称(EAS服务名称)",
+                value="",
+                elem_id="trace_app_name",
+                interactive=True,
+            )
+            telemetry_endpoint = gr.Textbox(
+                label="OpenTelemetry接入点(Endpoint)",
+                value="",
+                elem_id="telemetry_endpoint",
+                interactive=True,
+            )
+            telemetry_token = gr.Textbox(
+                label="OpenTelemetry鉴权Token",
+                value="",
+                elem_id="telemetry_token",
+                interactive=True,
+                type="password",
+            )
+            save_trace_btn = gr.Button(
+                value="保存OpenTelemetry信息",
+                elem_id="save_trace_btn",
+                variant="primary",
+            )
+
+            save_trace_state = gr.Textbox(label="保存操作: ", container=False, visible=True)
+            trace_components = [
+                trace_app_name,
+                telemetry_endpoint,
+                telemetry_token,
+            ]
+            save_trace_btn.click(
+                fn=ev_listeners.save_trace_cfg,
+                inputs=set(trace_components),
+                outputs=[save_trace_state],
+                api_name="save_query_transform_cfg",
+            )
+            components.extend(trace_components)
+
     elems = components_to_dict(components)
     # elems.update(vector_db_components)
     elems.update({use_oss_col.elem_id: use_oss_col})
