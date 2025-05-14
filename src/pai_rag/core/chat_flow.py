@@ -357,9 +357,12 @@ class ChatFlow:
                 query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
             )
         else:
-            response_wrapper = await news_tool.astream_list_topics(
-                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
-            )
+            args = {
+                "query_str": query_bundle.query_str,
+                "news_topics": query_bundle.news_topics,
+            }
+            response_gen = await news_tool.astream_list_topics([], **args)
+            response_wrapper = ChatResponseWrapper(response=response_gen)
         return response_wrapper
 
     async def achat_news(
