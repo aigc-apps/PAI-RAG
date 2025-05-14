@@ -225,6 +225,7 @@ class MiaobiNewsTool(LLM):
         )
         return sorted_hot_topics
 
+    @dispatcher.span
     async def alist_topics(
         self,
         query_str: str,
@@ -263,7 +264,15 @@ class MiaobiNewsTool(LLM):
                     content=content,
                 )
             ]
-
+            # store hot topics in span output
+            span_id = active_span_id.get()
+            dispatcher.event(
+                QueryEndEvent(
+                    response=Response(response=str(hot_topics), source_nodes=[]),
+                    query="",
+                    span_id=span_id,
+                )
+            )
             response = await self.llm.achat(messages)
             response.additional_kwargs["news_articles"] = hot_topics
             return ChatResponseWrapper(response=response)
