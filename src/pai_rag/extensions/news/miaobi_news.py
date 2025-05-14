@@ -37,6 +37,8 @@ from alibabacloud_tea_openapi_sse import models as open_api_models
 from alibabacloud_tea_util_sse import models as open_api_util_models
 import json
 
+from openinference.instrumentation.llama_index import get_current_span
+from pai_rag.integrations.trace.base import use_current_span
 from pydantic import BaseModel
 from loguru import logger
 
@@ -291,6 +293,10 @@ class MiaobiNewsTool(LLM):
             news_topics = kwargs.get("news_topics", [])
             span_id = active_span_id.get()
 
+            # use use_current_span decorator to keep miaobinews span
+            # as the parent of the self.llm's span,
+            # when self.llm.astream_chat executes in this gen()
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 yield ChatResponse(
                     message=ChatMessage(
