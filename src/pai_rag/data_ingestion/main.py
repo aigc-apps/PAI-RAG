@@ -15,7 +15,8 @@ from pai_rag.data_ingestion.models.config.operator import (
     EmbedderConfig,
     ParserConfig,
     SplitterConfig,
-    WriterConfig,
+    SinkConfig,
+    OperatorName,
 )
 from pai_rag.data_ingestion.ray_executor import ray_executor
 from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
@@ -31,7 +32,7 @@ DEFAULT_E2E_CONFIG_FILE = Path(__file__).parent / "e2e_config.yaml"
 
 
 @app.command()
-def read(
+def data_source(
     input_path: str = typer.Option(help="The input path to the data."),
     output_path: str = typer.Option(help="The output path to the data."),
     enable_delta: bool = typer.Option(
@@ -68,7 +69,7 @@ def read(
     logger.info("Read execution started.")
     data_source_config = DataSourceConfig(
         input_path=input_path,
-        output_path=output_path,
+        output_path=os.path.join(output_path, OperatorName.DATA_SOURCE.value),
         enable_delta=enable_delta,
         file_extensions=parse_file_extensions(supported_file_types_str),
         target_index=target_index,
@@ -87,10 +88,14 @@ def read(
 def parse(
     input_path: str = typer.Option(help="The input path to the data."),
     output_path: str = typer.Option(help="The output path to the data."),
-    num_cpus: int = typer.Option(help="Cpu required for each parse process."),
-    memory: int = typer.Option(help="Memory(GB) required for each parse process."),
+    num_cpus: int = typer.Option(
+        default=1, show_default=True, help="Cpu required for each parse process."
+    ),
+    memory: int = typer.Option(
+        default=8, show_default=True, help="Memory(GB) required for each parse process."
+    ),
     num_gpus: int = typer.Option(
-        default=0, help="Gpu required for each parse process."
+        default=0, show_default=True, help="Gpu required for each parse process."
     ),
     enable_pdf_ocr: bool = typer.Option(
         default=False, help="Whether to enable OCR for pdf files."
@@ -98,16 +103,20 @@ def parse(
     concat_sheet_rows: bool = typer.Option(
         default=False, help="Whether to concat sheet rows."
     ),
+    concurrency: int = typer.Option(
+        default=1, show_default=True, help="Concurrency of sink op."
+    ),
 ):
     logger.info("Parser execution started.")
     parser_config = ParserConfig(
-        input_path=input_path,
-        output_path=output_path,
+        input_path=os.path.join(input_path, OperatorName.DATA_SOURCE.value),
+        output_path=os.path.join(output_path, OperatorName.PARSER.value),
         num_cpus=num_cpus,
         memory=memory,
         num_gpus=num_gpus,
         enable_pdf_ocr=enable_pdf_ocr,
         concat_sheet_rows=concat_sheet_rows,
+        concurrency=concurrency,
     )
     ray_executor.run(op_configs=[parser_config])
     logger.info("Parser execution completed.")
@@ -117,32 +126,43 @@ def parse(
 def split(
     input_path: str = typer.Option(help="The input path to the data."),
     output_path: str = typer.Option(help="The output path to the data."),
-    num_cpus: int = typer.Option(help="Cpu required for each split process."),
-    memory: int = typer.Option(help="Memory(GB) required for each parse process."),
+    num_cpus: int = typer.Option(
+        default=1, show_default=True, help="Cpu required for each split process."
+    ),
+    memory: int = typer.Option(
+        default=1, show_default=True, help="Memory(GB) required for each parse process."
+    ),
     paragraph_separator: str = typer.Option(
-        default=DEFAULT_PARAGRAPH_SEP, help="Separator between paragraphs."
+        default=DEFAULT_PARAGRAPH_SEP,
+        show_default=True,
+        help="Separator between paragraphs.",
     ),
     chunk_size: int = typer.Option(
-        default=DEFAULT_CHUNK_SIZE, help="Chunk size for each chunk."
+        default=DEFAULT_CHUNK_SIZE, show_default=True, help="Chunk size for each chunk."
     ),
     node_parser_type: NodeParserType = typer.Option(
-        default=NodeParserType.TOKEN, show_choices=True, help="Node parser type."
+        default=NodeParserType.SENTENCE, show_choices=True, help="Node parser type."
     ),
     chunk_overlap: int = typer.Option(
         default=DEFAULT_CHUNK_OVERLAP,
+        show_default=True,
         help="The token overlap of each chunk when splitting.",
+    ),
+    concurrency: int = typer.Option(
+        default=1, show_default=True, help="Concurrency of sink op."
     ),
 ):
     logger.info("Splitter execution started.")
     splitter_config = SplitterConfig(
-        input_path=input_path,
-        output_path=output_path,
+        input_path=os.path.join(input_path, OperatorName.PARSER.value),
+        output_path=os.path.join(output_path, OperatorName.SPLITTER.value),
         num_cpus=num_cpus,
         memory=memory,
         paragraph_separator=paragraph_separator,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         node_parser_type=node_parser_type,
+        concurrency=concurrency,
     )
     ray_executor.run(op_configs=[splitter_config])
     logger.info("Splitter execution completed.")
@@ -152,28 +172,46 @@ def split(
 def embed(
     input_path: str = typer.Option(help="The input path to the data."),
     output_path: str = typer.Option(help="The output path to the data."),
-    num_cpus: int = typer.Option(help="Cpu required for each embedding process."),
-    memory: int = typer.Option(help="Memory(GB) required for each embedding process."),
-    num_gpus: int = typer.Option(
-        default=0, help="Gpu required for each embedding process."
+    num_cpus: float = typer.Option(
+        default=1, show_default=True, help="Cpu required for each embedding process."
+    ),
+    memory: int = typer.Option(
+        default=8,
+        show_default=True,
+        help="Memory(GB) required for each embedding process.",
+    ),
+    num_gpus: float = typer.Option(
+        default=0, show_default=True, help="Gpu required for each embedding process."
     ),
     batch_size: int = typer.Option(
         default=32, help="batch size for embedding process."
     ),
     source: SupportedEmbedType = typer.Option(
-        help="The source of the embedding type.", show_choices=True
+        default="huggingface",
+        show_default=True,
+        help="The source of the embedding type.",
+        show_choices=True,
     ),
-    model: str = typer.Option(default="bge-m3", help="Embedding model name."),
-    connection_name: str = typer.Option(default=None, help="Langstudio connection."),
-    workspace_id: str = typer.Option(default=None, help="PAI workspace id."),
+    model: str = typer.Option(
+        default="bge-m3", show_default=True, help="Embedding model name."
+    ),
+    connection_name: str = typer.Option(
+        default=None, show_default=True, help="Langstudio connection."
+    ),
+    workspace_id: str = typer.Option(
+        default=None, show_default=True, help="PAI workspace id."
+    ),
     enable_sparse: bool = typer.Option(
-        default=False, help="Whether to enable sparse embedding."
+        default=False, show_default=True, help="Whether to enable sparse embedding."
+    ),
+    concurrency: int = typer.Option(
+        default=1, show_default=True, help="Concurrency of sink op."
     ),
 ):
     logger.info("Embedder execution started.")
     embedder_config = EmbedderConfig(
-        input_path=input_path,
-        output_path=output_path,
+        input_path=os.path.join(input_path, OperatorName.SPLITTER.value),
+        output_path=os.path.join(output_path, OperatorName.EMBEDDER.value),
         num_cpus=num_cpus,
         memory=memory,
         num_gpus=num_gpus,
@@ -183,23 +221,35 @@ def embed(
         connection_name=connection_name,
         workspace_id=workspace_id,
         batch_size=batch_size,
+        concurrency=concurrency,
     )
     ray_executor.run(op_configs=[embedder_config])
     logger.info("Embedder execution completed.")
 
 
 @app.command()
-def write(
+def data_sink(
     input_path: str = typer.Option(help="The input path to the data."),
-    num_cpus: int = typer.Option(help="Cpu required for each embedding process."),
-    memory: int = typer.Option(help="Memory(GB) required for each embedding process."),
+    output_path: str = typer.Option(help="The output path to the data."),
+    num_cpus: int = typer.Option(
+        default=1, show_default=True, help="Cpu required for each embedding process."
+    ),
+    memory: int = typer.Option(
+        default=2,
+        show_default=True,
+        help="Memory(GB) required for each embedding process.",
+    ),
     rag_endpoint: str = typer.Option(default=None, help="Endpoint of PAI-RAG service."),
     rag_api_key: str = typer.Option(default=None, help="Token of PAI-RAG service."),
+    batch_size: int = typer.Option(default=300, help="batch size for write process."),
     knowledgebase: str = typer.Option(
         default=None, show_default=True, help="Knowledgebase name to save data."
     ),
     embed_dims: int = typer.Option(
         default=1024, show_default=True, help="Embedding dimensions."
+    ),
+    concurrency: int = typer.Option(
+        default=1, show_default=True, help="Concurrency of sink op."
     ),
 ):
     rag_endpoint = rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT")
@@ -209,19 +259,21 @@ def write(
     assert rag_endpoint, "Please provide rag_endpoint to ingest into."
     assert rag_api_key, "Please provide token of rag service."
 
-    logger.info("Writer execution started.")
-    writer_config = WriterConfig(
-        input_path=input_path,
-        output_path="dummy",
+    logger.info("Write data_sink execution started.")
+    sink_config = SinkConfig(
+        input_path=os.path.join(input_path, OperatorName.EMBEDDER.value),
+        output_path=os.path.join(output_path, OperatorName.DATA_SINK.value),
         num_cpus=num_cpus,
         memory=memory,
         embed_dims=embed_dims,
         rag_api_key=rag_api_key,
         rag_endpoint=rag_endpoint,
         knowledgebase=knowledgebase,
+        concurrency=concurrency,
+        batch_size=batch_size,
     )
-    ray_executor.run(op_configs=[writer_config])
-    logger.info("Writer execution completed.")
+    ray_executor.run(op_configs=[sink_config])
+    logger.info("Write data_sink execution completed.")
 
 
 @app.command()
@@ -234,15 +286,23 @@ def e2e(
         help="The path to the config file.",
     ),
 ):
-    read_output_path = os.path.join(output_path, "read")
-    parse_output_path = os.path.join(output_path, "parse")
-    split_output_path = os.path.join(output_path, "split")
-    embed_output_path = os.path.join(output_path, "embed")
-    write_output_path = os.path.join(output_path, "write")
+    read_output_path = os.path.join(output_path, OperatorName.DATA_SOURCE.value)
+    parse_output_path = os.path.join(output_path, OperatorName.PARSER.value)
+    split_output_path = os.path.join(output_path, OperatorName.SPLITTER.value)
+    embed_output_path = os.path.join(output_path, OperatorName.EMBEDDER.value)
+    write_output_path = os.path.join(output_path, OperatorName.DATA_SINK.value)
 
     with open(config_file) as file_handler:
         e2e_yaml = yaml.safe_load(file_handler)
-        datasource_yaml = e2e_yaml["datasource"]
+        operators_yaml = e2e_yaml["operators"]
+        op_yaml_map = {}
+        for op_yaml in operators_yaml:
+            op_yaml_map[op_yaml["name"]] = op_yaml
+
+        assert (
+            "data_source" in op_yaml_map
+        ), "data_source op is required for e2e pipeline."
+        datasource_yaml = op_yaml_map["data_source"]
 
         supported_file_types_str = datasource_yaml.get(
             "supported_file_types_str", DEFAULT_FILE_EXTENSIONS_STR
@@ -263,11 +323,7 @@ def e2e(
             embed_dims=datasource_yaml.get("embed_dims", 1024),
         )
 
-        operators_yaml = e2e_yaml["operators"]
-        op_yaml_map = {}
-        for op_yaml in operators_yaml:
-            op_yaml_map[op_yaml["name"]] = op_yaml
-
+        assert "parse" in op_yaml_map, "parse op is required for e2e pipeline."
         parse_yaml = op_yaml_map["parse"]
         parse_config = ParserConfig(
             input_path=read_output_path,
@@ -280,6 +336,7 @@ def e2e(
             concurrency=parse_yaml.get("concurrency", 1),
         )
 
+        assert "split" in op_yaml_map, "split op is required for e2e pipeline."
         split_yaml = op_yaml_map["split"]
         split_config = SplitterConfig(
             input_path=parse_output_path,
@@ -296,6 +353,7 @@ def e2e(
             concurrency=split_yaml.get("concurrency", 1),
         )
 
+        assert "embed" in op_yaml_map, "embed op is required for e2e pipeline."
         embed_yaml = op_yaml_map["embed"]
         embed_config = EmbedderConfig(
             input_path=split_output_path,
@@ -309,27 +367,28 @@ def e2e(
             memory=12,
         )
 
-        write_yaml = op_yaml_map["write"]
-        write_config = WriterConfig(
+        assert "data_sink" in op_yaml_map, "data_sink op is required for e2e pipeline."
+        sink_yaml = op_yaml_map["data_sink"]
+        sink_config = SinkConfig(
             input_path=embed_output_path,
             output_path=write_output_path,
-            rag_endpoint=write_yaml.get("rag_endpoint")
+            rag_endpoint=sink_yaml.get("rag_endpoint")
             or os.environ.get("PAI_RAG_ENDPOINT"),
-            rag_api_key=write_yaml.get("rag_api_key") or os.environ.get("PAI_RAG_KEY"),
-            knowledgebase=write_yaml.get("knowledgebase")
+            rag_api_key=sink_yaml.get("rag_api_key") or os.environ.get("PAI_RAG_KEY"),
+            knowledgebase=sink_yaml.get("knowledgebase")
             or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default"),
-            embed_dims=write_yaml.get("embed_dims", 1024),
-            concurrency=write_yaml.get("concurrency", 1),
-            num_cpus=write_yaml.get("num_cpus", 1),
-            num_gpus=write_yaml.get("num_gpus", 0),
-            memory=write_yaml.get("memory", "4GB"),
-            batch_size=write_yaml.get("batch_size", 100),
+            embed_dims=sink_yaml.get("embed_dims", 1024),
+            concurrency=sink_yaml.get("concurrency", 1),
+            num_cpus=sink_yaml.get("num_cpus", 1),
+            num_gpus=sink_yaml.get("num_gpus", 0),
+            memory=sink_yaml.get("memory", "4GB"),
+            batch_size=sink_yaml.get("batch_size", 100),
         )
 
         logger.info("Starting e2e execution...")
         ray_executor.run(
             datasource_config=datasource_config,
-            op_configs=[parse_config, split_config, embed_config, write_config],
+            op_configs=[parse_config, split_config, embed_config, sink_config],
         )
         logger.info("Finished e2e execution...")
 

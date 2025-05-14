@@ -7,10 +7,11 @@ from pai_rag.utils.constants import DEFAULT_NODE_PARSER_TYPE, DEFAULT_PARAGRAPH_
 
 
 class OperatorName(str, Enum):
+    DATA_SOURCE = "data_source"
     PARSER = "parse"
     SPLITTER = "split"
     EMBEDDER = "embed"
-    WRITER = "write"
+    DATA_SINK = "data_sink"
 
 
 class BaseOperatorConfig(BaseModel):
@@ -67,12 +68,12 @@ class EmbedderConfig(BaseOperatorConfig):
     batch_size: int = 32
 
 
-class WriterConfig(BaseOperatorConfig):
+class SinkConfig(BaseOperatorConfig):
     """
     Config for embed operator.
     """
 
-    name: OperatorName = OperatorName.WRITER
+    name: OperatorName = OperatorName.DATA_SINK
     rag_endpoint: str
     rag_api_key: str
     knowledgebase: str

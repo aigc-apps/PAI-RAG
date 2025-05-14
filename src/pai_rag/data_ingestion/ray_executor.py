@@ -9,13 +9,13 @@ from pai_rag.data_ingestion.models.config.operator import (
     EmbedderConfig,
     ParserConfig,
     SplitterConfig,
-    WriterConfig,
+    SinkConfig,
 )
 from pai_rag.data_ingestion.operators.base import BaseOperator
 from pai_rag.data_ingestion.operators.embedder import Embedder
 from pai_rag.data_ingestion.operators.parser import Parser
 from pai_rag.data_ingestion.operators.split import Splitter
-from pai_rag.data_ingestion.operators.writer import Writer
+from pai_rag.data_ingestion.operators.sink import Sinker
 from pai_rag.data_ingestion.utils.concurrency_utils import compute_concurrency_count
 from pai_rag.data_ingestion.utils.dataset_utils import get_input_files
 
@@ -24,6 +24,7 @@ import time
 from loguru import logger
 
 from pai_rag.data_ingestion.utils.filename_utils import BlockFileNameProvider
+from pai_rag.data_ingestion.utils.path_utils import clear_folder
 
 
 DEFAULT_WORKING_DIR = "/app"
@@ -61,14 +62,14 @@ class RayExecutor:
             return Splitter
         elif isinstance(op_config, EmbedderConfig):
             return Embedder
-        elif isinstance(op_config, WriterConfig):
-            return Writer
+        elif isinstance(op_config, SinkConfig):
+            return Sinker
 
         raise ValueError(f"Unknown operator config: {op_config}.")
 
     def _need_batch_execution(self, op_config: BaseOperatorConfig) -> bool:
         return isinstance(op_config, EmbedderConfig) or isinstance(
-            op_config, WriterConfig
+            op_config, SinkConfig
         )
 
     def run(
@@ -83,13 +84,15 @@ class RayExecutor:
 
         # 获取delta datasource
         if datasource_config is not None:
+            clear_folder(datasource_config.output_path)
+            Path(datasource_config.output_path).mkdir(parents=True, exist_ok=True)
+
             filename_provider = BlockFileNameProvider(
                 run_label=f"read-{self.execution_ts}", file_format="jsonl"
             )
 
             datasource = FileDeltaDatasource(config=datasource_config)
             delta_dataset = ray.data.read_datasource(datasource).materialize()
-            Path(datasource_config.output_path).mkdir(parents=True, exist_ok=True)
             delta_dataset.write_json(
                 datasource_config.output_path,
                 min_rows_per_file=DEFAULT_ROWS_PER_FILE,
@@ -97,16 +100,15 @@ class RayExecutor:
                 filename_provider=filename_provider,
                 force_ascii=False,
             )
-
-        if len(op_configs) == 0:
-            logger.warning(
-                "No op_configs and datasource provided, skipping dataset process pipeline."
-            )
+        elif len(op_configs) == 0:
+            logger.warning("No op_configs provided, skipping dataset process pipeline.")
             return
 
         # 执行each op
         for op_config in op_configs:
             logger.info(f"Executing {op_config.name}...")
+            clear_folder(op_config.output_path)
+            Path(op_config.output_path).mkdir(parents=True, exist_ok=True)
 
             input_files_list = get_input_files(
                 file_path_or_directory=op_config.input_path,
@@ -156,7 +158,6 @@ class RayExecutor:
                 run_label=f"{op_config.name.value}-{self.execution_ts}",
                 file_format="jsonl",
             )
-            Path(op_config.output_path).mkdir(parents=True, exist_ok=True)
 
             dataset.write_json(
                 op_config.output_path,

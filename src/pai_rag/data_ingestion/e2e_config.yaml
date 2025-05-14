@@ -1,14 +1,15 @@
 # process schedule
 # a list of several pai_rag offline process operators with their arguments
-datasource:
-  enable_delta: true
-  supported_file_types_str: "pdf,txt,csv,xlsx,xls,docx,md,html,htm,jsonl"
-  rag_api_key:
-  rag_endpoint:
-  knowledgebase:
-  embed_dims: 1024
 
 operators:
+  - name: "data_source"
+    enable_delta: true
+    supported_file_types_str: "pdf,txt,csv,xlsx,xls,docx,md,html,htm,jsonl"
+    rag_api_key:
+    rag_endpoint:
+    knowledgebase:
+    embed_dims: 1024
+
   - name: "parse"
     num_cpus: 2
     memory: 8
@@ -35,7 +36,7 @@ operators:
     memory: 10
     concurrency: 1
 
-  - name: "write"
+  - name: "data_sink"
     rag_endpoint:
     rag_api_key:
     knowledgebase:

@@ -4,18 +4,18 @@ import numpy as np
 import pandas as pd
 
 from pai_rag.data_ingestion.operators.base import BaseOperator
-from pai_rag.data_ingestion.models.config.operator import WriterConfig
+from pai_rag.data_ingestion.models.config.operator import SinkConfig
 from pai_rag.data_ingestion.utils.vectordb_utils import get_vector_store
 from pai_rag.data_ingestion.utils.node_utils import metadata_dict_to_node_v2
 from loguru import logger
 
 
-class Writer(BaseOperator):
+class Sinker(BaseOperator):
     def __init__(
         self,
-        config: WriterConfig,
+        config: SinkConfig,
     ):
-        logger.info(f"Writer init started with {config}.")
+        logger.info(f"Sinker init started with {config}.")
         super().__init__(
             name=config.name,
             num_cpus=config.num_cpus,
@@ -30,10 +30,10 @@ class Writer(BaseOperator):
             embed_dims=config.embed_dims,
         )
 
-        logger.info(f"Writer init successfully with {config}.")
+        logger.info(f"Sinker init successfully with {config}.")
 
     def __call__(self, row_batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        logger.info("Start writing op.")
+        logger.info("Start data_sink op.")
         chunks_df = pd.DataFrame(row_batch)
         logger.info(f"Start saving {len(chunks_df)} nodes...")
 
@@ -61,7 +61,7 @@ class Writer(BaseOperator):
                 logger.info(f"Successfully saved {len(nodes_to_add)} nodes.")
 
             logger.info(f"Finished processing {len(chunks_df)} chunks.")
-            logger.info("Finished writing op.")
+            logger.info("Finished data_sink op.")
             return {
                 "id": node_id_array,
                 "operation": op_type_array,

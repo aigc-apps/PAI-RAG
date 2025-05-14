@@ -42,14 +42,17 @@ def get_input_files(
         # Single file
         input_files = [str(file_path_or_directory)]
     else:
+        if not os.path.exists(file_path_or_directory):
+            raise ValueError(f"Input path '{file_path_or_directory}' does not exist.")
         raise ValueError(
             f"Invalid input path or not supported file type for '{file_path_or_directory}'."
         )
 
     if not input_files:
-        raise ValueError(
+        logger.warning(
             f"No file found at path '{file_path_or_directory}' with pattern '{filter_pattern}'."
         )
+        return []
 
     logger.info(
         f"Found {len(input_files)} files at path '{file_path_or_directory}' with pattern '{filter_pattern}'. Samples: {input_files[:5]}"
