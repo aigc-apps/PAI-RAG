@@ -565,7 +565,7 @@ class MiaobiNewsTool(LLM):
         query_str: str,
     ) -> ChatResponseWrapper:
         span_id = active_span_id.get()
-        logger.info(f"Chat news only llm with query {query_str}, span:{span_id}")
+        logger.info(f"Chat news only llm with query {query_str}")
         news_role_text = ""
         lines = self._get_news_role_texts()
         for line in lines:
