@@ -50,6 +50,8 @@ class PaiApp:
 
     def refresh(self, config: RagConfig):
         self.config = config
+        if self.config.trace.is_enabled():
+            init_trace(self.config.trace)
 
     async def achat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
