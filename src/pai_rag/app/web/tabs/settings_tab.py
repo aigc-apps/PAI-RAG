@@ -453,13 +453,18 @@ def create_setting_tab() -> Dict[str, Any]:
                 label="应用名称(EAS服务名称)",
                 value="",
                 elem_id="trace_app_name",
+                placeholder="YOUR_EAS_SERVICE_NAME",
                 interactive=True,
             )
+            _ = gr.Markdown(
+                value="注意: 需要开通阿里云可观测链路OpenTelemetry版。\n点击[开通文档](https://help.aliyun.com/zh/arms/tracing-analysis/get-started-with-tracing-analysis?spm=a2c4g.11186623.0.i4)查看如何开通和获取GRPC接入点信息。",
+            )
             telemetry_endpoint = gr.Textbox(
-                label="OpenTelemetry接入点(Endpoint)",
+                label="OpenTelemetry GRPC接入点Endpoint",
                 value="",
                 elem_id="telemetry_endpoint",
                 interactive=True,
+                placeholder="http://tracing-analysis-dc-hz.aliyuncs.com:8090",
             )
             telemetry_token = gr.Textbox(
                 label="OpenTelemetry鉴权Token",

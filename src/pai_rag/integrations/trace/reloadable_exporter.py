@@ -13,7 +13,6 @@
 
 """OTLP Span Exporter"""
 
-import logging
 from os import environ
 from typing import Dict, Optional, Tuple, Union
 from typing import Sequence as TypingSequence
@@ -56,9 +55,6 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_EXPORTER_OTLP_HEADERS,
 )
 from opentelemetry.util.re import parse_env_headers
-
-
-logger = logging.getLogger(__name__)
 
 
 # pylint: disable=no-member
