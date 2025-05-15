@@ -18,7 +18,7 @@ export const Assistant = () => {
     source: "",
     model_name: "",
     api_key: "",
-    max_context: 0
+    max_context: 0,
   });
 
   // 页面加载时拉取 LLM 配置
@@ -40,18 +40,27 @@ export const Assistant = () => {
   }, []);
 
   // 模型选择回调
-  const handleModelChange = async (source: string, model_name: string, api_key: string) => {
+  const handleModelChange = async (
+    source: string,
+    model_name: string,
+    api_key: string,
+  ) => {
     setLlmConfig({
       ...llmConfig,
       source,
       model_name,
-      api_key
+      api_key,
     });
   };
 
   const runtime = useChatRuntime({
-    api: "/api/chat",
-    headers: { "X-Model-Name": llmConfig.model_name || "gpt-4o" , "X-Api-Key": llmConfig.api_key || "" , "X-Model-Source": llmConfig.source || "openai" },
+    // api: "/api/chat",
+    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
+    headers: {
+      "X-Model-Name": llmConfig.model_name || "gpt-4o",
+      "X-Api-Key": llmConfig.api_key || "",
+      "X-Model-Source": llmConfig.source || "openai",
+    },
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -64,10 +73,10 @@ export const Assistant = () => {
             Agent <span className="font-extrabold text-red-600"> X </span>
           </p>
           <div className="flex justify-start px-40 w-full">
-          <ModelSelector
+            <ModelSelector
               selectedModel={{
                 source: llmConfig.source || "",
-                model_name: llmConfig.model_name || ""
+                model_name: llmConfig.model_name || "",
               }}
               onModelChange={handleModelChange}
             />

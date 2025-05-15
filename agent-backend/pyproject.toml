@@ -1,0 +1,20 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "agent-backend"
+version = "1.0.0"
+description = "Open source Agent framework built on Aliyun PAI"
+authors = []
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.11.0,<3.12"
+fastapi = "0.115.2"
+uvicorn = "^0.29.0"
+tenacity = "9.1.2"
+openai = "^1.78.1"
+mcp = "^1.8.1"
+pre-commit = "^4.2.0"
