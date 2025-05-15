@@ -457,10 +457,10 @@ def create_setting_tab() -> Dict[str, Any]:
                 interactive=True,
             )
             _ = gr.Markdown(
-                value="注意: 需要开通阿里云可观测链路OpenTelemetry版。\n点击[开通文档](https://help.aliyun.com/zh/arms/tracing-analysis/get-started-with-tracing-analysis?spm=a2c4g.11186623.0.i4)查看如何开通和获取GRPC接入点信息。",
+                value="注意: 需要开通阿里云可观测链路OpenTelemetry版。\n点击[开通文档](https://help.aliyun.com/zh/arms/tracing-analysis/get-started-with-tracing-analysis?spm=a2c4g.11186623.0.i4)查看如何开通和获取接入点信息(gRPC endpoint)。",
             )
             telemetry_endpoint = gr.Textbox(
-                label="OpenTelemetry GRPC接入点Endpoint",
+                label="OpenTelemetry 接入点 gRPC Endpoint",
                 value="",
                 elem_id="telemetry_endpoint",
                 interactive=True,
