@@ -530,59 +530,64 @@ class MiaobiNewsTool(LLM):
 
         return gen()
 
+    def _get_news_role_texts(self) -> List[str]:
+        default_news_role_response = DEFAULT_NEWS_ROLE.format(
+            domain_list="/".join(self.config.domain_list),
+            news_role=self.config.news_role,
+        )
+        lines = []
+        for line in default_news_role_response.split("\n"):
+            if line.strip():
+                lines.append(line)
+        return lines
+
+    @dispatcher.span
     async def achat_llm(
         self,
         query_str: str,
-    ):
-        stream_response_wrapper = await self.astream_chat_llm(query_str)
-        message_content = ""
-        additional_kwargs = {}
-        async for response in stream_response_wrapper.response:
-            message_content += response.delta
-            additional_kwargs.update(response.additional_kwargs)
+    ) -> ChatResponseWrapper:
+        news_role_text = ""
+        for line in self._get_news_role_texts():
+            news_role_text += line
 
         return ChatResponseWrapper(
             response=ChatResponse(
                 message=ChatMessage(
                     role=MessageRole.ASSISTANT,
-                    content=message_content,
+                    content=news_role_text,
                 ),
-                additional_kwargs=additional_kwargs,
-                source_nodes=stream_response_wrapper.source_nodes,
             )
         )
 
+    @dispatcher.span
     async def astream_chat_llm(
         self,
         query_str: str,
     ) -> ChatResponseWrapper:
-        logger.info(f"Chat news only llm with query {query_str}")
+        span_id = active_span_id.get()
+        logger.info(f"Chat news only llm with query {query_str}, span:{span_id}")
+        news_role_text = ""
+        lines = self._get_news_role_texts()
+        for line in lines:
+            news_role_text += line
+        # store role text in span output
+        dispatcher.event(
+            QueryEndEvent(
+                response=Response(response=news_role_text, source_nodes=[]),
+                query="",
+                span_id=span_id,
+            )
+        )
 
         async def gen() -> ChatResponseAsyncGen:
-            yield ChatResponse(
-                message=ChatMessage(
-                    role=MessageRole.ASSISTANT,
-                    content="",
-                ),
-                delta="",
-                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
-            )
-            default_news_role_response = DEFAULT_NEWS_ROLE.format(
-                domain_list="/".join(self.config.domain_list),
-                news_role=self.config.news_role,
-            )
-            text_parts = default_news_role_response.split("\n")
-
-            # 逐个 yield 返回
-            for part in text_parts:
-                if part.strip():
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=part,
-                        ),
-                        delta=part,
-                    )
+            for line in lines:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=line,
+                    ),
+                    delta=line,
+                )
 
         return ChatResponseWrapper(response=gen())
 
