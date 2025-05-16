@@ -2,7 +2,7 @@ import os
 import time
 import fcntl
 from loguru import logger
-from pai_rag.utils.download_models import ModelScopeDownloader
+from pai_rag.utils.download_models import ModelScopeDownloader, init_mineru_config
 
 
 def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
@@ -26,12 +26,11 @@ def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
                         fetch_config=True,
                         download_directory_path=model_dir,
                     ).load_model(model=model_name)
-                    if model_name == "PDF-Extract-Kit-1.0":
-                        ModelScopeDownloader(
-                            fetch_config=True,
-                            download_directory_path=model_dir,
-                        ).load_mineru_config()
-                    logger.info(f"进程 {os.getpid()} 下载模型完成，use_cuda: {use_cuda}。")
+
+                if model_name == "PDF-Extract-Kit-1.0":
+                    init_mineru_config(model_path=model_dir)
+
+                logger.info(f"进程 {os.getpid()} 下载模型完成，use_cuda: {use_cuda}。")
 
                 # 释放锁并结束循环
                 fcntl.flock(lock_file, fcntl.LOCK_UN)

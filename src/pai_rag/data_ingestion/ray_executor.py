@@ -28,7 +28,7 @@ from pai_rag.data_ingestion.utils.path_utils import clear_folder
 
 
 DEFAULT_WORKING_DIR = "/app"
-DEFAULT_ROWS_PER_FILE = 10000
+DEFAULT_ROWS_PER_FILE = 1000
 
 
 class RayExecutor:

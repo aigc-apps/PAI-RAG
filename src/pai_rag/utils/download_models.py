@@ -13,6 +13,34 @@ import json
 from pai_rag.utils.cuda_utils import infer_cuda_device
 
 
+def init_mineru_config(model_path: str = DEFAULT_MODEL_DIR):
+    logger.info("Start to loading minerU config file.")
+    source_path = "magic-pdf.template.json"
+    destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
+
+    # 读取 source_path 文件的内容
+    with open(source_path, "r") as source_file:
+        data = json.load(source_file)  # 加载 JSON 数据
+
+    data["device-mode"] = infer_cuda_device()
+
+    if "models-dir" in data:
+        data["models-dir"] = os.path.join(str(model_path), "PDF-Extract-Kit-1.0/models")
+    if "layoutreader-model-dir" in data:
+        data["layoutreader-model-dir"] = os.path.join(
+            str(model_path),
+            "PDF-Extract-Kit-1.0/models/layoutreader",
+        )
+
+    # 将修改后的内容写入destination_path
+    with open(destination_path, "w") as destination_file:
+        json.dump(data, destination_file, indent=4)
+
+    logger.info(
+        f"Copy {source_path} to ~/magic-pdf.json and modify models-dir to model path."
+    )
+
+
 class ModelScopeDownloader:
     def __init__(self, fetch_config: bool = False, download_directory_path: str = None):
         self.download_directory_path = Path(
@@ -67,7 +95,7 @@ class ModelScopeDownloader:
         if not skip_download_models and DEFAULT_MODEL_DIR != EAS_DEFAULT_MODEL_DIR:
             logger.info("Not in EAS-like environment, start downloading models.")
             self.load_basic_models()
-        self.load_mineru_config()
+        init_mineru_config(model_path=self.download_directory_path)
 
     def load_basic_models(self):
         logger.info("Start to download basic models.")
@@ -78,35 +106,6 @@ class ModelScopeDownloader:
         for model in self.model_info["basic_models"].keys():
             self.load_model(model)
         logger.info("Finished downloading basic models.")
-
-    def load_mineru_config(self):
-        logger.info("Start to loading minerU config file.")
-        source_path = "magic-pdf.template.json"
-        destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
-
-        # 读取 source_path 文件的内容
-        with open(source_path, "r") as source_file:
-            data = json.load(source_file)  # 加载 JSON 数据
-
-        data["device-mode"] = infer_cuda_device()
-
-        if "models-dir" in data:
-            data["models-dir"] = os.path.join(
-                str(self.download_directory_path), "PDF-Extract-Kit-1.0/models"
-            )
-        if "layoutreader-model-dir" in data:
-            data["layoutreader-model-dir"] = os.path.join(
-                str(self.download_directory_path),
-                "PDF-Extract-Kit-1.0/models/layoutreader",
-            )
-
-        # 将修改后的内容写入destination_path
-        with open(destination_path, "w") as destination_file:
-            json.dump(data, destination_file, indent=4)
-
-        logger.info(
-            f"Copy {source_path} to ~/magic-pdf.json and modify models-dir to model path."
-        )
 
     def load_models(self, model=None):
         if model is None:
@@ -131,4 +130,3 @@ class ModelScopeDownloader:
 def load_models(model_name):
     download_models = ModelScopeDownloader(fetch_config=True)
     download_models.load_models(model=model_name)
-    download_models.load_mineru_config()
