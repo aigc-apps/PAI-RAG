@@ -182,10 +182,9 @@ async def add_llm(req: LLMConfigRequest):
         # 检查是否已经存在相同的配置
         is_existing = False
         for existing_config in current_data["llm_config"]:
-            if (
-                existing_config["source"] == req.llm_config.source
-                and existing_config["model_name"] == req.llm_config.model_name
-            ):
+            if existing_config["id"] == req.llm_config.id:
+                existing_config["source"] = req.llm_config.source
+                existing_config["model_name"] = req.llm_config.model_name
                 existing_config["api_key"] = req.llm_config.api_key
                 existing_config["max_context"] = req.llm_config.max_context
                 is_existing = True

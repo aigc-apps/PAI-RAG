@@ -1,18 +1,16 @@
 "use client";
-import { Calendar, Home, Inbox, Search, Settings, Bot, Wrench } from "lucide-react";
+import { Search, Settings, Bot, Wrench } from "lucide-react";
 import React from "react";
-import { useState } from "react";
-import Link from "next/link";
 import {
     Sidebar,
     SidebarContent,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
     SidebarHeader,
+    SidebarRail,
+    SidebarFooter,
+    SidebarMenuSub,
 } from "@/components/ui/sidebar";
 import {
     Avatar,
@@ -20,37 +18,11 @@ import {
   } from "@/components/ui/avatar"
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
-
-// Menu items.
-const items = [
-    {
-        title: "Home",
-        url: "#",
-        icon: Home,
-    },
-    {
-        title: "Inbox",
-        url: "#",
-        icon: Inbox,
-    },
-    {
-        title: "Calendar",
-        url: "#",
-        icon: Calendar,
-    },
-    {
-        title: "Search",
-        url: "#",
-        icon: Search,
-    },
-    {
-        title: "Settings",
-        url: "#",
-        icon: Settings,
-    },
-]
-
-export function AppSidebar() {
+import { ThreadList } from "@/components/assistant-ui/thread-list";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { ChevronUp, MessageCircle, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+export function AppSidebar({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) {
     const router = useRouter();
     const pathname = usePathname();
     return (
@@ -62,49 +34,57 @@ export function AppSidebar() {
                     </Avatar>
                     <span className="text-lg font-medium">Agent Workspace</span>
                 </div>
-                
             </SidebarHeader>
             <SidebarContent>
-                <SidebarGroup>
-                    <SidebarGroupLabel>系统设置</SidebarGroupLabel>
-                    <SidebarGroupContent className="gap-4">
-                        <SidebarMenu className="gap-4">
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild onClick={() => router.push('/')} isActive={pathname === '/'} >
-                                    <Link href="/">
-                                        <Home />
-                                        <span>对话</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild onClick={() => router.push('/config/llm')} isActive={pathname === '/config/llm'}>
-                                    <Link href="/config/llm">
-                                        <Bot />
-                                        <span>LLM配置</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild onClick={() => router.push('/config/mcp')} isActive={pathname === '/config/mcp'}>
-                                    <Link href="/config/mcp">
-                                        <Wrench />
-                                        <span>MCP配置</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                            <SidebarMenuItem>
-                                <SidebarMenuButton asChild onClick={() => router.push('/config/search')} isActive={pathname === '/config/search'}>
-                                    <Link href="/config/search">
-                                        <Search />
-                                        <span>搜索配置</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                <SidebarMenu>
+                    <Collapsible defaultOpen className="group/collapsible">
+                        <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                            <SidebarMenuButton onClick={() => setActiveTab("/")} >
+                                <MessageCircle />
+                                <span>对话</span>
+                                <ChevronDown className="ml-auto"/>
+                            </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <SidebarMenuSub onClick={() => setActiveTab("/")} >
+                                <ThreadList />
+                            </SidebarMenuSub>
+                            {/* <ThreadList /> */}
+                        </CollapsibleContent>
+                        </SidebarMenuItem>
+                    </Collapsible>
+                </SidebarMenu>
             </SidebarContent>
+            <SidebarRail />
+            <SidebarFooter>
+                <SidebarMenu className="gap-4">
+                    <SidebarMenuItem>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                            <SidebarMenuButton>
+                                <Settings /> Settings
+                                <ChevronUp className="ml-auto" />
+                            </SidebarMenuButton>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                side="top"
+                                className="w-50"
+                            >
+                            <DropdownMenuItem onClick={() => setActiveTab("/config/llm")}>
+                                <Bot /> <span>LLM</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActiveTab("/config/mcp")}>
+                                <Wrench /> <span>MCP</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActiveTab("/config/search")}>
+                                <Search /> <span>搜索</span>
+                            </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarFooter>
         </Sidebar>
     )
 }

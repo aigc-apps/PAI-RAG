@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import * as Toast from "@radix-ui/react-toast"
 import { EyeIcon, EyeOffIcon } from "lucide-react"; // 示例图标库
 
-export default function Config() {
+export default function SearchConfig() {
     const [aliyunAK, setAliyunAK] = useState(""); // AccessKey ID
     const [aliyunSK, setAliyunSK] = useState(""); // AccessKey Secret
     const [isLoading, setIsLoading] = useState(false); // 加载状态

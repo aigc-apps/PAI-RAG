@@ -70,7 +70,7 @@ class LLMConfig {
   }
 }
 
-export default function Config() {
+export default function LlmConfig() {
   const [isOpen, setIsOpen] = useState(false); // 控制 AddLlmDialog 显示
   const [isEditOpen, setIsEditOpen] = useState(false); // 控制 EditLlmDialog 显示
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null);

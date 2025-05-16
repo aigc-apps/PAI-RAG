@@ -71,7 +71,7 @@ class MCPConfig {
   }
 }
 
-export default function Config() {
+export default function McpConfig() {
   const [isOpen, setIsOpen] = useState(false); // 控制 AddMcpDialog 显示
   const [isEditOpen, setIsEditOpen] = useState(false); // 控制 EditMcpDialog 显示
   const [editingConfig, setEditingConfig] = useState<MCPConfig | null>(null);

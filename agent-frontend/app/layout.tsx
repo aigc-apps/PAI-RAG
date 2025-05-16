@@ -1,8 +1,6 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import * as Toast from "@radix-ui/react-toast";
 
 import "./globals.css";
@@ -22,22 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* 将 SidebarProvider 提升到布局层级 */}
-        <SidebarProvider defaultOpen={true}>
-          <AppSidebar /> {/* 侧边栏全局固定 */}
-          <SidebarInset className="h-screen overflow-hidden">
-            <header className="flex h-12 border-b">
-              <SidebarTrigger />
-              <div className="flex justify-start px-4 items-center">
-                {/* 全局 Header 内容 */}
-                <span className="text-sm font-medium">Assistant UI</span>
-              </div>
-            </header>
-            <main className="h-[calc(100%-3rem)] overflow-auto">
-              <Toast.Provider>{children}</Toast.Provider>
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
+         <Toast.Provider>{children}</Toast.Provider>
       </body>
     </html>
   );
