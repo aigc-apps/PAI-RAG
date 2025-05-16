@@ -1,6 +1,6 @@
 import json
 from typing import Any, Dict, List, Union
-from utils.utils import resolve_binary
+from llama_index.core.utils import resolve_binary
 
 
 def to_openai_message_dict(

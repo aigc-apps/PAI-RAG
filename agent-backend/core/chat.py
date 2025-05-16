@@ -4,8 +4,9 @@ from openai import AsyncOpenAI
 import json
 import datetime
 from utils.messages import convert_to_openai_messages
-from tools.mcp.mcp_base import McpToolSpec
+from tools.mcp.mcp_base import McpToolUtils
 from tools.mcp.mcp_client import resolve_mcp_clients
+from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 
@@ -60,7 +61,7 @@ async def generate_stream(model, model_name, messages, mcp_tools):
         openai_tools.append(tool.metadata.to_openai_tool())
         tools_name_to_fn[tool.metadata.name] = tool
 
-    max_steps = 10  # 防止无限循环的最大步骤数
+    max_steps = 5  # 防止无限循环的最大步骤数
     step_count = 0
     while step_count < max_steps:
         response = await gen_stream_response(model, model_name, messages, openai_tools)
@@ -94,7 +95,10 @@ async def generate_stream(model, model_name, messages, mcp_tools):
 
                 if choice.finish_reason == "tool_calls":
                     for tool_call in draft_tool_calls:
-                        args = json.loads(tool_call["arguments"])
+                        if tool_call and tool_call["arguments"].strip():
+                            args = json.loads(tool_call["arguments"])
+                        else:
+                            args = {}
                         try:
                             result = await tools_name_to_fn[tool_call["name"]].acall(
                                 **args
@@ -102,7 +106,7 @@ async def generate_stream(model, model_name, messages, mcp_tools):
                             tool_result = result.content
 
                             # 返回工具调用和结果（标记9和a）
-                            yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": json.loads(tool_call["arguments"])})}\n'
+                            yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args})}\n'
                             yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result})}\n'
 
                             # 将工具调用和结果加入消息历史,供模型继续推理
@@ -131,7 +135,7 @@ async def generate_stream(model, model_name, messages, mcp_tools):
                             )
 
                         except Exception as e:
-                            print(f"工具调用异常: {str(e)}")
+                            logger.error(f"工具调用异常: {str(e)}")
                             error_message = {
                                 "finishReason": "工具调用发生未知错误，请检查输入或重试"
                             }
@@ -171,7 +175,7 @@ async def handle_chat(request: Request):
         mcp_clients = await resolve_mcp_clients()
         mcp_tools = []
         for mcp_server_name, mcp_client in mcp_clients:
-            mcp_tool = McpToolSpec(mcp_server_name=mcp_server_name, client=mcp_client)
+            mcp_tool = McpToolUtils(mcp_server_name=mcp_server_name, client=mcp_client)
             tools = await mcp_tool.to_tool_list_async()
             mcp_tools.extend(tools)
         # 返回流式响应
@@ -182,5 +186,5 @@ async def handle_chat(request: Request):
         )
 
     except Exception as e:
-        print("Error in /api/chat:", e)
+        logger.error("Error in /api/chat:", e)
         return Response(content="Internal Server Error", status_code=500)
