@@ -78,6 +78,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
     max_steps = 5  # 防止无限循环的最大步骤数
     step_count = 0
     while step_count < max_steps:
+        stop_flag = False
         response = await gen_stream_response(model, model_name, messages, openai_tools)
         draft_tool_calls = []
         draft_tool_calls_index = -1
@@ -85,8 +86,10 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
             for choice in chunk.choices:
                 # 模型生成已结束
                 if choice.finish_reason == "stop":
+                    stop_flag = True
+                    yield "0:{text}\n".format(text=json.dumps(choice.delta.content))
                     yield 'd:{"finishReason":"stop"}\n'
-                    return
+                    break
                 # 调用工具,收集工具参数
                 elif choice.delta.tool_calls:
                     for tool_call in choice.delta.tool_calls:
@@ -174,6 +177,8 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                     prompt=prompt_tokens,
                     completion=completion_tokens,
                 )
+        if stop_flag:
+            break
         step_count += 1
 
 
