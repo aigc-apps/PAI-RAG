@@ -3,13 +3,11 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from loguru import logger
 from pydantic import BaseModel
-
+from utils.constants import BACKEND_PORT
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
-from utils.constants import BACKEND_PORT
 from typing import List, Optional
 import httpx
-import os
 
 
 # MCP 客户端配置
@@ -30,6 +28,7 @@ class BasicMCPClient:
 
     def __init__(
         self,
+        name: str,
         command_or_url: str,
         args: list[str] = [],
         env: dict[str, str] = {},
@@ -37,6 +36,7 @@ class BasicMCPClient:
         timeout: float = 5,
         sse_read_timeout: float = 60 * 5,
     ):
+        self.name = name
         self.command_or_url = command_or_url
         self.args = args or []
         self.env = env or {}
@@ -77,7 +77,7 @@ class BasicMCPClient:
 async def fetch_mcp_servers():
     mcp_servers = []
     try:
-        port = os.getenv("BACKEND_PORT", BACKEND_PORT)
+        port = BACKEND_PORT
         logger.info(f"/api/chat BACKEND_PORT {port}")
 
         async with httpx.AsyncClient() as client:
@@ -92,7 +92,8 @@ async def fetch_mcp_servers():
                 if item.get("active")
             ]
     except httpx.HTTPError as fetch_error:
-        logger.error("Failed to fetch MCP server configurations:", fetch_error)
+        logger.exception("Failed to fetch MCP server configurations")
+        raise fetch_error
 
     return mcp_servers
 
@@ -102,12 +103,15 @@ async def resolve_mcp_clients() -> List[BasicMCPClient]:
     mcp_server_configs = await fetch_mcp_servers()
     for mcp_server_config in mcp_server_configs:
         if mcp_server_config.active:
+            mcp_headers = {}
             if mcp_server_config.auth_token:
-                mcp_client = BasicMCPClient(
-                    command_or_url=mcp_server_config.url,
-                    headers={"Authorization": "Bearer " + mcp_server_config.auth_token},
-                )
-            else:
-                mcp_client = BasicMCPClient(command_or_url=mcp_server_config.url)
-            mcp_clients.append((mcp_server_config.name, mcp_client))
+                mcp_headers = {
+                    "Authorization": "Bearer " + mcp_server_config.auth_token
+                }
+            mcp_client = BasicMCPClient(
+                name=mcp_server_config.name,
+                command_or_url=mcp_server_config.url,
+                headers=mcp_headers,
+            )
+            mcp_clients.append(mcp_client)
     return mcp_clients

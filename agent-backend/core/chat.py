@@ -2,30 +2,22 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 import json
-import datetime
 from utils.messages import convert_to_openai_messages
-from tools.mcp.mcp_base import McpToolUtils
 from tools.mcp.mcp_client import resolve_mcp_clients
+from utils.prompts import SYSTEM_PROMPT
+from utils.time_utils import get_prompt_current_time_str
+from llama_index.tools.mcp.base import McpToolSpec
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
+from openai.types.chat import (
+    ChatCompletionToolMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionMessage,
+    ChatCompletionMessageToolCall,
+)
 
 
 app = FastAPI()
-
-# 系统时间
-today = datetime.datetime.now().strftime("%Y-%m-%d")
-
-# 系统提示
-SYSTEM_PROMPT = f"""
-当前系统时间：{today}
-
-1. 你是一个 agent，请持续调用工具直至完美完成用户的任务，停止调用工具后，系统会自动交还控制权给用户。
-2. 请善加利用你的工具收集相关信息，绝对不要猜测或编造答案。
-3. 在每次调用任务工具之前，
-  - 你必须**首先思考和规划**：针对用户的任务进行详细思考，并给出你对拆解后任务的规划，同时需要对之前工具调用的结果进行深入反思并继续规划（如有）。
-  - 思考完成之后不需要等待工具返回，你可以继续调用其他任务工具，你一次可以调用多个任务工具。
-  - 任务工具调用完成之后，你可以停止输出，系统会把工具调用结果给你，你必须再次思考和规划，然后继续调用任务工具，如此循环，直到完美地完成用户的任务或者达到循环的最大步骤数。
-"""
 
 
 def get_model_instance(model_name: str, model_source: str, api_key: str):
@@ -53,14 +45,36 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
     )
 
 
-# 流式生成文本
-async def generate_stream(model, model_name, messages, mcp_tools):
+async def process_mcp_tools():
+    """
+    process_mcp_tools will get the tools from MCP Client (only need to implement ClientSession) and convert them to LlamaIndex's FunctionTool objects and transformed tool name to tool Dict.
+    Args:
+    Returns:
+        openai_tools: List[Dict]
+        tools_name_to_fn: Dict[str, FunctionTool]
+
+    """
+    # TODO: 不用每个request都list_tools
+    mcp_clients = await resolve_mcp_clients()
     openai_tools = []
     tools_name_to_fn = {}
-    for tool in mcp_tools:
-        openai_tools.append(tool.metadata.to_openai_tool())
-        tools_name_to_fn[tool.metadata.name] = tool
+    for mcp_client in mcp_clients:
+        mcp_tool = McpToolSpec(client=mcp_client)
+        mcp_server_name = mcp_client.name
+        tools = await mcp_tool.to_tool_list_async()
+        for tool in tools:
+            # transform tool name to server_name:tool_name
+            tool_name = mcp_server_name + ":" + tool.metadata.name
+            tools_name_to_fn[tool_name] = tool
+            tool_metadata = tool.metadata
+            tool_metadata.name = tool_name
+            openai_tools.append(tool_metadata.to_openai_tool())
 
+    return openai_tools, tools_name_to_fn
+
+
+# 流式生成文本
+async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
     max_steps = 5  # 防止无限循环的最大步骤数
     step_count = 0
     while step_count < max_steps:
@@ -69,8 +83,11 @@ async def generate_stream(model, model_name, messages, mcp_tools):
         draft_tool_calls_index = -1
         async for chunk in response:
             for choice in chunk.choices:
+                # 模型生成已结束
                 if choice.finish_reason == "stop":
-                    continue
+                    yield 'd:{"finishReason":"stop"}\n'
+                    return
+                # 调用工具,收集工具参数
                 elif choice.delta.tool_calls:
                     for tool_call in choice.delta.tool_calls:
                         id = tool_call.id
@@ -87,12 +104,15 @@ async def generate_stream(model, model_name, messages, mcp_tools):
                             draft_tool_calls[draft_tool_calls_index][
                                 "arguments"
                             ] += arguments
+                # 普通内容
                 elif choice.delta.content:
                     yield "0:{text}\n".format(text=json.dumps(choice.delta.content))
                     messages.append(
-                        {"role": "assistant", "content": choice.delta.content}
+                        ChatCompletionMessage(
+                            role="assistant", content=choice.delta.content
+                        )
                     )  # 更新历史
-
+                # 根据参数调用工具
                 if choice.finish_reason == "tool_calls":
                     for tool_call in draft_tool_calls:
                         if tool_call and tool_call["arguments"].strip():
@@ -111,27 +131,28 @@ async def generate_stream(model, model_name, messages, mcp_tools):
 
                             # 将工具调用和结果加入消息历史,供模型继续推理
                             messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": "",
-                                    "tool_calls": [
-                                        {
-                                            "id": tool_call["id"],
-                                            "type": "function",
-                                            "function": {
+                                ChatCompletionMessage(
+                                    role="assistant",
+                                    content="",
+                                    tool_calls=[
+                                        ChatCompletionMessageToolCall(
+                                            id=tool_call["id"],
+                                            type="function",
+                                            function={
                                                 "name": tool_call["name"],
                                                 "arguments": tool_call["arguments"],
                                             },
-                                        }
+                                        )
                                     ],
-                                }
+                                )
                             )
+
                             messages.append(
-                                {
-                                    "role": "tool",
-                                    "content": tool_result,
-                                    "tool_call_id": tool_call["id"],
-                                }
+                                ChatCompletionToolMessageParam(
+                                    role="tool",
+                                    content=tool_result,
+                                    tool_call_id=tool_call["id"],
+                                )
                             )
 
                         except Exception as e:
@@ -139,7 +160,9 @@ async def generate_stream(model, model_name, messages, mcp_tools):
                             error_message = {
                                 "finishReason": "工具调用发生未知错误，请检查输入或重试"
                             }
-                            yield "d:{text}\n".format(text=json.dumps(error_message))
+                            yield "d:{text}\n".format(
+                                text=json.dumps(error_message, ensure_ascii=False)
+                            )
 
             if chunk.choices == []:
                 usage = chunk.usage
@@ -159,9 +182,13 @@ async def handle_chat(request: Request):
         # 解析请求体
         data = await request.json()
         messages = data.get("messages", [])
-        system = data.get("system", SYSTEM_PROMPT)
+        system_prompt = SYSTEM_PROMPT.format(
+            current_datetime=get_prompt_current_time_str()
+        )
+        system = data.get("system", system_prompt)
 
         # 从 headers 中获取模型参数
+        # TODO: 模型参数不应该除了name，不应该由前端传入
         model_name = request.headers.get("X-Model-Name")
         api_key = request.headers.get("X-Api-Key")
         model_source = request.headers.get("X-Model-Source")
@@ -169,22 +196,20 @@ async def handle_chat(request: Request):
         model = get_model_instance(model_name, model_source, api_key)
 
         # 构建openai_messages
-        full_messages = [{"role": "system", "content": system}] + messages
+        full_messages = [
+            ChatCompletionSystemMessageParam(role="system", content=system)
+        ] + messages
         full_messages = convert_to_openai_messages(full_messages)
-
-        mcp_clients = await resolve_mcp_clients()
-        mcp_tools = []
-        for mcp_server_name, mcp_client in mcp_clients:
-            mcp_tool = McpToolUtils(mcp_server_name=mcp_server_name, client=mcp_client)
-            tools = await mcp_tool.to_tool_list_async()
-            mcp_tools.extend(tools)
+        openai_tools, tools_name_to_fn = await process_mcp_tools()
         # 返回流式响应
         return StreamingResponse(
-            generate_stream(model, model_name, full_messages, mcp_tools),
+            generate_stream(
+                model, model_name, full_messages, openai_tools, tools_name_to_fn
+            ),
             media_type="text/event-stream",
             headers={"x-vercel-ai-data-stream": "v1"},
         )
 
     except Exception as e:
-        logger.error("Error in /api/chat:", e)
+        logger.exception(f"Error in /api/chat: {str(e)}")
         return Response(content="Internal Server Error", status_code=500)
