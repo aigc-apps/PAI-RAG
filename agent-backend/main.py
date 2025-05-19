@@ -2,7 +2,8 @@ import os
 import json
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from core.chat import handle_chat
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,6 +35,7 @@ class MCPConfig(BaseModel):
     type: str
     active: bool
 
+
 class LLMConfig(BaseModel):
     id: int
     source: str
@@ -41,20 +43,17 @@ class LLMConfig(BaseModel):
     api_key: str
     max_context: int
 
+
 class ConfigRequest(BaseModel):
     llm_config: Optional[List[LLMConfig]] = None
     mcp_config: Optional[List[MCPConfig]] = None
-
 
 
 CONFIG_FILE = "config.json"
 
 # 自动创建默认配置文件
 if not os.path.exists(CONFIG_FILE):
-    default_config = {
-        "llm_config":  [],
-        "mcp_config": []
-    }
+    default_config = {"llm_config": [], "mcp_config": []}
     with open(CONFIG_FILE, "w") as f:
         json.dump(default_config, f, indent=2)
 
@@ -67,14 +66,15 @@ def read_configs():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取配置失败: {str(e)}")
 
+
 @app.get("/api/configs/models", response_model=dict)
 def get_models():
     try:
         with open(CONFIG_FILE, "r") as f:
-            data =  json.load(f)
+            data = json.load(f)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取配置失败: {str(e)}")
-    
+
     grouped = {}
 
     # 处理 llm_config
@@ -88,14 +88,10 @@ def get_models():
             grouped[source] = []
 
         grouped[source].append({"name": model_name, "api_key": config.get("api_key")})
-        
+
     return {
         "groups": [
-            {
-                "id": source.lower(),
-                "label": source,
-                "models": models
-            }
+            {"id": source.lower(), "label": source, "models": models}
             for source, models in grouped.items()
         ]
     }
@@ -119,6 +115,8 @@ def get_models():
     #         }
     #     ]
     #     }
+
+
 @app.post("/api/configs")
 def write_configs(request: ConfigRequest):
     try:
@@ -131,9 +129,13 @@ def write_configs(request: ConfigRequest):
 
         # 合并新配置
         if request.llm_config is not None:
-            current_data["llm_config"] = [config.dict() for config in request.llm_config]
+            current_data["llm_config"] = [
+                config.dict() for config in request.llm_config
+            ]
         if request.mcp_config is not None:
-            current_data["mcp_config"] = [config.dict() for config in request.mcp_config]
+            current_data["mcp_config"] = [
+                config.dict() for config in request.mcp_config
+            ]
 
         # 写回文件
         with open(CONFIG_FILE, "w") as f:
@@ -142,3 +144,8 @@ def write_configs(request: ConfigRequest):
         return {"message": "配置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
+
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    return await handle_chat(request)
