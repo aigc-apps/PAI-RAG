@@ -2,7 +2,8 @@ import os
 import json
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from core.chat import handle_chat
 
 from fastapi.middleware.cors import CORSMiddleware
 from search.aliyun_search_tool import AliyunSearchTool
@@ -58,6 +59,7 @@ class MCPConfigRequest(BaseModel):
 class SearchConfigRequest(BaseModel):
     aliyun_ak: str = None
     aliyun_sk: str = None
+
 
 
 class ConfigRequest(BaseModel):
@@ -151,6 +153,7 @@ def write_configs(request: ConfigRequest):
                             current_data["llm_config"].append(config)
 
                 current_data["llm_config"].extend(llm_configs)
+
         if request.mcp_config is not None:
             current_data["mcp_config"] = [
                 config.dict() for config in request.mcp_config
@@ -168,12 +171,7 @@ def write_configs(request: ConfigRequest):
 @app.post("/api/add_llm")
 async def add_llm(req: LLMConfigRequest):
     try:
-        # 读取现有配置（如果存在）
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                current_data = json.load(f)
-        except FileNotFoundError:
-            current_data = {}
+        current_data = {}
 
         # 处理 LLM 配置（追加模式）
         if "llm_config" not in current_data:
@@ -340,15 +338,6 @@ def update_search_config(request: SearchConfigRequest):
         raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
 
 
-@app.post("/api/searchweb")
-async def search_web(req: WebSearchRequest):
-    try:
-        tool = AliyunSearchTool(
-            access_key_id=os.getenv("ACCESS_KEY_ID"),
-            access_key_secret=os.getenv("ACCESS_KEY_SECRET"),
-        )
-        res = await tool.aquery(req.query)
-
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
+@app.post("/api/chat")
+async def chat(request: Request):
+    return await handle_chat(request)

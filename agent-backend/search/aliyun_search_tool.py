@@ -7,6 +7,9 @@ from alibabacloud_iqs20241111.client import Client
 from search.web_reader import ParallelBeautifulSoupWebReader
 import json
 import time
+import os
+from dotenv import load_dotenv
+
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
 DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
@@ -132,4 +135,31 @@ class AliyunSearchTool:
             f"[WebSearch]-Aliyun: Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
         )
 
-        return [node.to_dict() for node in nodes]
+        return {"result": [node.to_dict() for node in nodes]}
+
+from llama_index.core.tools import FunctionTool
+async def aget_aliyun_search_result(query: str):
+    """Get aliyun search tool"""
+    load_dotenv()
+    search_client = AliyunSearchTool(
+        access_key_id=os.getenv("ACCESS_KEY_ID"),
+        access_key_secret=os.getenv("ACCESS_KEY_SECRET"),
+    )
+    res = await search_client.aquery(query)
+    return json.dumps(res, ensure_ascii=False)
+
+async def aget_aliyun_search_tool():
+    search_tool = FunctionTool.from_defaults(
+        async_fn=aget_aliyun_search_result,
+        name="search_web",
+        description="从阿里云搜索引擎中搜索给定查询的最新内容。"
+    )
+    openai_tools = []
+    tools_name_to_fn = {}
+    tool_name = "search_web"
+    tools_name_to_fn[tool_name] = search_tool
+    tool_metadata = search_tool.metadata
+    tool_metadata.name = tool_name
+    openai_tools.append(tool_metadata.to_openai_tool())
+
+    return openai_tools, tools_name_to_fn

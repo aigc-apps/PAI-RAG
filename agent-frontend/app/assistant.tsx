@@ -20,7 +20,7 @@ export const Assistant = () => {
     source: "",
     model_name: "",
     api_key: "",
-    max_context: 0
+    max_context: 0,
   });
 
   // 页面加载时拉取 LLM 配置
@@ -42,20 +42,30 @@ export const Assistant = () => {
   }, []);
 
   // 模型选择回调
-  const handleModelChange = async (source: string, model_name: string, api_key: string) => {
+  const handleModelChange = async (
+    source: string,
+    model_name: string,
+    api_key: string,
+  ) => {
     setLlmConfig({
       ...llmConfig,
       source,
       model_name,
-      api_key
+      api_key,
     });
   };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
 
   const runtime = useChatRuntime({
-    api: "/api/chat",
-    headers: { "X-Model-Name": llmConfig.model_name || "gpt-4o" , "X-Api-Key": llmConfig.api_key || "" , "X-Model-Source": llmConfig.source || "openai" ,"X-Options": selectedOptions.join(",") || ""},
+    // api: "/api/chat",
+    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
+    headers: {
+      "X-Model-Name": llmConfig.model_name || "gpt-4o",
+      "X-Api-Key": llmConfig.api_key || "",
+      "X-Model-Source": llmConfig.source || "openai",
+      "X-Options": selectedOptions.join(",") || "",
+    },
   });
 
   const [activeTab, setActiveTab] = useState("/"); // 提升状态到父组件

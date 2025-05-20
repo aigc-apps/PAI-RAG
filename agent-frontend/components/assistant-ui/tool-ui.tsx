@@ -285,9 +285,9 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, SearchWebResul
     if (!result) {
       return null;
     }
-    console.log("MapsGeoToolUI 参数:", args);
-    console.log("MapsGeoToolUI 状态:", status);
-    console.log("MapsGeoToolUI 结果:", result);
+    console.log("SearchWebToolUI 参数:", args);
+    console.log("SearchWebToolUI 状态:", status);
+    console.log("SearchWebToolUI 结果:", result);
     if (status.type == "running") {
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
