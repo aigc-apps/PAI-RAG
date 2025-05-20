@@ -1,5 +1,5 @@
 import os
-
+from dotenv import load_dotenv
 
 def get_int_env(key, default_value=None):
     """
@@ -14,5 +14,5 @@ def get_int_env(key, default_value=None):
             return default_value
     return default_value
 
-
+load_dotenv()
 BACKEND_PORT = get_int_env("BACKEND_PORT", 8029)

@@ -1,56 +1,20 @@
 "use client";
 import { GlobeIcon } from "@radix-ui/react-icons";
-import { z } from "zod";
-import type { FC, ReactNode } from "react";
+import type { FC } from "react";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import React, { useState, useEffect } from "react";
 import { CarIcon } from "lucide-react"; // 可以使用你喜欢的图标库
+import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 
-// type WebSearchArgs = {
-//     query: string;
-// };
-
-// type WebSearchResult = {
-//     searchResults: {
-//         title: string;
-//         description: string;
-//         url: string;
-//     }[];
-// };
-
-// const WebSearchToolUI = makeAssistantToolUI<WebSearchArgs, WebSearchResult>({
-//     toolName: "web_search",
-//     render: ({ args, status, result }) => {
-//         return (
-//             <div className="rounded-md border bg-muted p-4 space-y-3">
-//                 <div className="flex items-center gap-2 text-sm font-medium">
-//                     <GlobeIcon className="h-4 w-4" />
-//                     <span>
-//                         Searching the web for:{" "}
-//                         <span className="font-semibold text-blue-600">{args.query}</span>
-//                     </span>
-//                 </div>
-//                 <div className="space-y-2 pl-6">
-//                     {result?.searchResults.map((item, index) => (
-//                         <div key={index} className="text-sm">
-//                             <a
-//                                 href={item.url}
-//                                 target="_blank"
-//                                 rel="noopener noreferrer"
-//                                 className="text-blue-700 hover:underline font-medium"
-//                             >
-//                                 {item.title}
-//                             </a>
-//                             <p className="text-muted-foreground text-xs mt-0.5">
-//                                 {item.description}
-//                             </p>
-//                         </div>
-//                     ))}
-//                 </div>
-//             </div>
-//         );
-//     },
-// });
 
 export type MapsGeoArgs = {
   address: string;
@@ -294,11 +258,106 @@ export const MapsDirectionDrivingToolUI = makeAssistantToolUI<
   },
 });
 
+/* Search Web Tool UI */
+
+export type SearchWebArgs = {
+  query: string;
+};
+
+type SearchWebResult = {
+  result: {
+    text: string;
+    metadata: {
+      "source": string;
+      "file_url": string;
+      "file_name": string;
+      "host_name": string;
+      "host_logo": string;
+      "publish_time": string;
+    };
+    score: string;
+  }[];
+};
+
+export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, SearchWebResult>({
+  toolName: "search_web",
+  render: ({ args, status, result }) => {
+    if (!result) {
+      return null;
+    }
+    console.log("SearchWebToolUI 参数:", args);
+    console.log("SearchWebToolUI 状态:", status);
+    console.log("SearchWebToolUI 结果:", result);
+    if (status.type == "running") {
+      return (
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+          <GlobeIcon className="h-4 w-4 animate-pulse" />
+          <span>正在搜索网页...{args.query}</span>
+        </div>
+      );
+    }
+    return (
+            <div className="rounded-md p-1">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="link" className="flex items-center gap-2 px-4 text-blue-800" > <Search className="size-4" /> 完成网页搜索: {args.query} (点击查看结果) </Button>
+                </SheetTrigger>
+                <SheetContent side="right">
+                  <SheetHeader>
+                    <SheetTitle>网页搜索结果 · {result?.result.length}</SheetTitle>
+                    <SheetDescription>
+                      {args.query}
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                    <div className="pl-6 pr-2">
+                      {result?.result.map((item, index) => (
+                        <div 
+                          key={index} 
+                          className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
+                        >
+                          <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
+                            {/* Logo与标题行 */}
+                            <div className="flex items-center gap-1">
+                              <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                                <img 
+                                  src={item.metadata["host_logo"]} 
+                                  alt={item.metadata["host_name"]} 
+                                  className="w-5 h-5 object-cover rounded-sm"
+                                />
+                              </div>
+                              
+                              {/* 标题链接 */}
+                              <a 
+                                href={item.metadata["file_url"]} 
+                                className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
+                              >
+                                {item.metadata["file_name"]}
+                              </a>
+                            </div>
+
+                            {/* 内容区域 */}
+                            <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
+                              {item.text}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div> 
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          );
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
+      < SearchWebToolUI />
     </>
   );
 };

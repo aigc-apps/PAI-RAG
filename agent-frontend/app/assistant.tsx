@@ -4,12 +4,14 @@ import React, { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
-import { ThreadList } from "@/components/assistant-ui/thread-list";
-import ConfigPage from "@/components/setting/config-page";
-import { Button } from "@/components/ui/button";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
-import { SettingsIcon, Settings2Icon } from "lucide-react";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import LlmConfig from "./config/llm/page";
+import McpConfig from "./config/mcp/page";
+import SearchConfig from "./config/search/page";
+
 
 export const Assistant = () => {
   // LLM 配置状态
@@ -53,59 +55,70 @@ export const Assistant = () => {
     });
   };
 
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
+
   const runtime = useChatRuntime({
-    // api: "/api/chat",
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
     headers: {
       "X-Model-Name": llmConfig.model_name || "gpt-4o",
       "X-Api-Key": llmConfig.api_key || "",
       "X-Model-Source": llmConfig.source || "openai",
+      "X-Options": selectedOptions.join(",") || "",
     },
   });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  const [activeTab, setActiveTab] = useState("/"); // 提升状态到父组件
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="grid h-screen grid-rows-[1fr_8fr] overflow-hidden">
-        {/* 顶部栏 */}
-        <div className="grid grid-cols-[200px_1fr_auto] gap-x-2 px-4 py-4">
-          <p className="text-2xl font-semibold text-black tracking-tighter">
-            Agent <span className="font-extrabold text-red-600"> X </span>
-          </p>
-          <div className="flex justify-start px-40 w-full">
-            <ModelSelector
-              selectedModel={{
-                source: llmConfig.source || "",
-                model_name: llmConfig.model_name || "",
-              }}
-              onModelChange={handleModelChange}
-            />
-          </div>
-          <div>
-            <Button onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-              {isSidebarOpen ? <Settings2Icon /> : <SettingsIcon />}
-            </Button>
-          </div>
-        </div>
-
-        {/* 主体区域 */}
-        <div className="grid grid-cols-[200px_1fr_auto] gap-x-2 px-4 py-4 h-full overflow-hidden">
-          <ThreadList />
-          <Thread />
-          <ToolUIWrapper />
-          <div
-            className={`transition-all duration-300 ease-in-out overflow-hidden ${
-              isSidebarOpen ? "w-[500px]" : "w-0"
-            } h-full`}
-          >
-            {isSidebarOpen && (
-              <div className="h-full overflow-y-auto">
-                <ConfigPage />
+      <SidebarProvider defaultOpen={true}>
+        <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} /> 
+        <SidebarInset className="h-screen overflow-hidden">
+            {activeTab === "/" && 
+              <div className="flex flex-col h-full">
+                  <header className="flex h-12 border-b">
+                  <SidebarTrigger />
+                  <div className="flex justify-start px-20 border-none">
+                    <ModelSelector
+                      selectedModel={{
+                        source: llmConfig.source || "",
+                        model_name: llmConfig.model_name || ""
+                      }}
+                      onModelChange={handleModelChange}
+                    />
+                  </div>
+                </header>
+                <Thread onToggleChange={(options) => {
+                    setSelectedOptions(options); // 更新状态
+                  }}  />
+                <ToolUIWrapper />
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+            }
+            {activeTab === "/config/llm" && 
+              <div className="flex flex-col h-full">
+                <header className="flex h-12 border-b">
+                  <SidebarTrigger />
+                </header>
+                <LlmConfig />
+              </div>
+            }
+            {activeTab === "/config/mcp" && 
+              <div className="flex flex-col h-full">
+                <header className="flex h-12 border-b">
+                  <SidebarTrigger />
+                </header>
+                <McpConfig />
+              </div>
+            }
+            {activeTab === "/config/search" && 
+              <div className="flex flex-col h-full">
+                <header className="flex h-12 border-b">
+                  <SidebarTrigger />
+                </header>
+                <SearchConfig />
+              </div>
+            }
+        </SidebarInset>
+      </SidebarProvider>
     </AssistantRuntimeProvider>
   );
 };

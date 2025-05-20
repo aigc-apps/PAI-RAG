@@ -25,7 +25,7 @@ const ThreadListNew: FC = () => {
         variant="ghost"
       >
         <PlusIcon />
-        New Thread
+        新建对话
       </Button>
     </ThreadListPrimitive.New>
   );
@@ -49,7 +49,7 @@ const ThreadListItem: FC = () => {
 const ThreadListItemTitle: FC = () => {
   return (
     <p className="text-sm">
-      <ThreadListItemPrimitive.Title fallback="New Chat" />
+      <ThreadListItemPrimitive.Title fallback="会话任务" />
     </p>
   );
 };
