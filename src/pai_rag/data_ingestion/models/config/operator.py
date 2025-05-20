@@ -74,7 +74,7 @@ class SinkConfig(BaseOperatorConfig):
     """
 
     name: OperatorName = OperatorName.DATA_SINK
-    rag_endpoint: str
-    rag_api_key: str
-    knowledgebase: str
-    embed_dims: int
+    pai_rag_endpoint: str
+    pai_rag_token: str
+    pai_rag_knowledgebase: str
+    pai_rag_embed_dims: int

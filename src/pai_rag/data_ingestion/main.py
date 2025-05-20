@@ -53,16 +53,16 @@ def data_source(
         show_default=True,
         help="The version name of the knowledge base, used for incremental ingestion.",
     ),
-    rag_api_key: str = typer.Option(
-        default=None, show_default=True, help="The RAG API key to use."
+    pai_rag_token: str = typer.Option(
+        default=None, show_default=True, help="The PAI-RAG API key to use."
     ),
-    rag_endpoint: str = typer.Option(
-        default=None, show_default=True, help="The RAG endpoint to use."
+    pai_rag_endpoint: str = typer.Option(
+        default=None, show_default=True, help="The PAI-RAG endpoint to use."
     ),
-    knowledgebase: str = typer.Option(
-        default=None, show_default=True, help="The knowledge base name to use."
+    pai_rag_knowledgebase: str = typer.Option(
+        default=None, show_default=True, help="The knowledgebase name to use."
     ),
-    embed_dims: str = typer.Option(
+    pai_rag_embed_dims: str = typer.Option(
         default=1024, show_default=True, help="Default embedding dimensions."
     ),
 ):
@@ -74,11 +74,11 @@ def data_source(
         file_extensions=parse_file_extensions(supported_file_types_str),
         target_index=target_index,
         target_index_version=target_index_version,
-        rag_api_key=rag_api_key or os.environ.get("PAI_RAG_KEY"),
-        rag_endpoint=rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT"),
-        knowledgebase=knowledgebase
+        pai_rag_token=pai_rag_token or os.environ.get("PAI_RAG_TOKEN"),
+        pai_rag_endpoint=pai_rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT"),
+        pai_rag_knowledgebase=pai_rag_knowledgebase
         or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default"),
-        embed_dims=embed_dims,
+        pai_rag_embed_dims=pai_rag_embed_dims,
     )
     ray_executor.run(op_configs=[], datasource_config=data_source_config)
     logger.info("Read execution completed.")
@@ -239,25 +239,29 @@ def data_sink(
         show_default=True,
         help="Memory(GB) required for each embedding process.",
     ),
-    rag_endpoint: str = typer.Option(default=None, help="Endpoint of PAI-RAG service."),
-    rag_api_key: str = typer.Option(default=None, help="Token of PAI-RAG service."),
+    pai_rag_endpoint: str = typer.Option(
+        default=None, help="Endpoint of PAI-RAG service."
+    ),
+    pai_rag_token: str = typer.Option(default=None, help="Token of PAI-RAG service."),
     batch_size: int = typer.Option(default=300, help="batch size for write process."),
-    knowledgebase: str = typer.Option(
+    pai_rag_knowledgebase: str = typer.Option(
         default=None, show_default=True, help="Knowledgebase name to save data."
     ),
-    embed_dims: int = typer.Option(
+    pai_rag_embed_dims: int = typer.Option(
         default=1024, show_default=True, help="Embedding dimensions."
     ),
     concurrency: int = typer.Option(
         default=1, show_default=True, help="Concurrency of sink op."
     ),
 ):
-    rag_endpoint = rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT")
-    rag_api_key = rag_api_key or os.environ.get("PAI_RAG_KEY")
-    knowledgebase = knowledgebase or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default")
+    pai_rag_endpoint = pai_rag_endpoint or os.environ.get("PAI_RAG_ENDPOINT")
+    pai_rag_token = pai_rag_token or os.environ.get("PAI_RAG_TOKEN")
+    pai_rag_knowledgebase = pai_rag_knowledgebase or os.environ.get(
+        "PAI_RAG_KNOWLEDGEBASE", "default"
+    )
 
-    assert rag_endpoint, "Please provide rag_endpoint to ingest into."
-    assert rag_api_key, "Please provide token of rag service."
+    assert pai_rag_endpoint, "Please provide pai_rag_endpoint to ingest into."
+    assert pai_rag_token, "Please provide pai_rag_token to ingest into."
 
     logger.info("Write data_sink execution started.")
     sink_config = SinkConfig(
@@ -265,10 +269,10 @@ def data_sink(
         output_path=os.path.join(output_path, OperatorName.DATA_SINK.value),
         num_cpus=num_cpus,
         memory=memory,
-        embed_dims=embed_dims,
-        rag_api_key=rag_api_key,
-        rag_endpoint=rag_endpoint,
-        knowledgebase=knowledgebase,
+        pai_rag_embed_dims=pai_rag_embed_dims,
+        pai_rag_token=pai_rag_token,
+        pai_rag_endpoint=pai_rag_endpoint,
+        pai_rag_knowledgebase=pai_rag_knowledgebase,
         concurrency=concurrency,
         batch_size=batch_size,
     )
@@ -314,13 +318,13 @@ def e2e(
             file_extensions=parse_file_extensions(supported_file_types_str),
             target_index=datasource_yaml.get("target_index"),
             target_index_version=datasource_yaml.get("target_index_version"),
-            rag_endpoint=datasource_yaml.get("rag_endpoint")
+            pai_rag_endpoint=datasource_yaml.get("pai_rag_endpoint")
             or os.environ.get("PAI_RAG_ENDPOINT"),
-            rag_api_key=datasource_yaml.get("rag_api_key")
-            or os.environ.get("PAI_RAG_KEY"),
-            knowledgebase=datasource_yaml.get("knowledgebase")
+            pai_rag_token=datasource_yaml.get("pai_rag_token")
+            or os.environ.get("PAI_RAG_TOKEN"),
+            pai_rag_knowledgebase=datasource_yaml.get("pai_rag_knowledgebase")
             or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default"),
-            embed_dims=datasource_yaml.get("embed_dims", 1024),
+            pai_rag_embed_dims=datasource_yaml.get("pai_rag_embed_dims", 1024),
         )
 
         assert "parse" in op_yaml_map, "parse op is required for e2e pipeline."
@@ -372,12 +376,13 @@ def e2e(
         sink_config = SinkConfig(
             input_path=embed_output_path,
             output_path=write_output_path,
-            rag_endpoint=sink_yaml.get("rag_endpoint")
+            pai_rag_endpoint=sink_yaml.get("pai_rag_endpoint")
             or os.environ.get("PAI_RAG_ENDPOINT"),
-            rag_api_key=sink_yaml.get("rag_api_key") or os.environ.get("PAI_RAG_KEY"),
-            knowledgebase=sink_yaml.get("knowledgebase")
+            pai_rag_token=sink_yaml.get("pai_rag_token")
+            or os.environ.get("PAI_RAG_TOKEN"),
+            pai_rag_knowledgebase=sink_yaml.get("pai_rag_knowledgebase")
             or os.environ.get("PAI_RAG_KNOWLEDGEBASE", "default"),
-            embed_dims=sink_yaml.get("embed_dims", 1024),
+            pai_rag_embed_dims=sink_yaml.get("pai_rag_embed_dims", 1024),
             concurrency=sink_yaml.get("concurrency", 1),
             num_cpus=sink_yaml.get("num_cpus", 1),
             num_gpus=sink_yaml.get("num_gpus", 0),

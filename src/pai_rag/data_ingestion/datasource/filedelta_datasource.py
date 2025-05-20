@@ -52,22 +52,22 @@ class FileDeltaDatasource(Datasource):
             )
         elif (
             config.enable_delta
-            and config.rag_api_key
-            and config.rag_endpoint
-            and config.knowledgebase
+            and config.pai_rag_endpoint
+            and config.pai_rag_token
+            and config.pai_rag_knowledgebase
         ):
             logger.info(
                 f"""Reading existing docs from vector store using PAI-RAG index.
-                rag_endpoint: {config.rag_endpoint}
-                knowledgebase: {config.knowledgebase}
-                embed_dims: {config.embed_dims}
+                rag_endpoint: {config.pai_rag_endpoint}
+                knowledgebase: {config.pai_rag_knowledgebase}
+                embed_dims: {config.pai_rag_embed_dims}
             """
             )
             self.docs_in_store = list_files_from_rag_service(
-                rag_api_key=config.rag_api_key,
-                rag_endpoint=config.rag_endpoint,
-                knowledgebase=config.knowledgebase,
-                embed_dims=config.embed_dims,
+                rag_api_key=config.pai_rag_token,
+                rag_endpoint=config.pai_rag_endpoint,
+                knowledgebase=config.pai_rag_knowledgebase,
+                embed_dims=config.pai_rag_embed_dims,
                 oss_path_prefix=oss_path_prefix,
             )
         elif config.enable_delta:

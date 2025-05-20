@@ -5,10 +5,10 @@ operators:
   - name: "data_source"
     enable_delta: true
     supported_file_types_str: "pdf,txt,csv,xlsx,xls,docx,md,html,htm,jsonl"
-    rag_api_key:
-    rag_endpoint:
-    knowledgebase:
-    embed_dims: 1024
+    pai_rag_token:
+    pai_rag_endpoint:
+    pai_rag_knowledgebase:
+    pai_rag_embed_dims: 1024
 
   - name: "parse"
     num_cpus: 2
@@ -20,7 +20,7 @@ operators:
 
   - name: "split"
     node_parser_type: "Sentence"
-    chunk_size: 1000
+    chunk_size: 1024
     chunk_overlap: 20
     paragraph_separator: "\n\n"
     num_cpus: 1
@@ -37,10 +37,10 @@ operators:
     concurrency: 1
 
   - name: "data_sink"
-    rag_endpoint:
-    rag_api_key:
-    knowledgebase:
-    embed_dims: 1024
+    pai_rag_token:
+    pai_rag_endpoint:
+    pai_rag_knowledgebase:
+    pai_rag_embed_dims: 1024
     num_cpus: 1
     memory: 2
     batch_size: 500

@@ -13,7 +13,7 @@ class DataSourceConfig(BaseModel):
     target_index_version: Optional[str] = None
 
     # connect to rag service
-    rag_api_key: Optional[str] = None
-    rag_endpoint: Optional[str] = None
-    knowledgebase: Optional[str] = "default"
-    embed_dims: Optional[int] = 1024
+    pai_rag_token: Optional[str] = None
+    pai_rag_endpoint: Optional[str] = None
+    pai_rag_knowledgebase: Optional[str] = "default"
+    pai_rag_embed_dims: Optional[int] = 1024

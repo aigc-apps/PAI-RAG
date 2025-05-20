@@ -24,10 +24,10 @@ class Sinker(BaseOperator):
         )
 
         self.vector_store = get_vector_store(
-            rag_endpoint=config.rag_endpoint,
-            rag_api_key=config.rag_api_key,
-            knowledgebase=config.knowledgebase,
-            embed_dims=config.embed_dims,
+            rag_endpoint=config.pai_rag_endpoint,
+            rag_api_key=config.pai_rag_token,
+            knowledgebase=config.pai_rag_knowledgebase,
+            embed_dims=config.pai_rag_embed_dims,
         )
 
         logger.info(f"Sinker init successfully with {config}.")

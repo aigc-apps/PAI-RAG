@@ -30,12 +30,11 @@ def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
                 if model_name == "PDF-Extract-Kit-1.0":
                     init_mineru_config(model_path=model_dir)
 
-                logger.info(f"进程 {os.getpid()} 下载模型完成，use_cuda: {use_cuda}。")
-
                 # 释放锁并结束循环
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
+                logger.info(f"进程 {os.getpid()} 下载模型完成，use_cuda: {use_cuda}。")
                 break
 
-            except IOError:
-                logger.info(f"进程 {os.getpid()} 等待锁中...")
+            except IOError as ex:
+                logger.info(f"进程 {os.getpid()} 等待锁中... {ex}")
                 time.sleep(1)  # 等待后重试

@@ -4,7 +4,7 @@ set -e
 
 # 修改为你需要的目录
 INPUT_PATH="/testdata/testdata/small_txt"
-OUTPUT_PATH="/testdata/testdata/output/small0513"
+OUTPUT_PATH="/testdata/testdata/output/small0520"
 
 
 # 获取脚本所在的目录

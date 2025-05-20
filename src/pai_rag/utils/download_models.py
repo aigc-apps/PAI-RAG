@@ -14,8 +14,11 @@ from pai_rag.utils.cuda_utils import infer_cuda_device
 
 
 def init_mineru_config(model_path: str = DEFAULT_MODEL_DIR):
-    logger.info("Start to loading minerU config file.")
-    source_path = "magic-pdf.template.json"
+    # 获取配置文件目录
+    current_dir_path = Path(__file__).parent.parent.parent.parent
+    source_path = os.path.join(current_dir_path, "magic-pdf.template.json")
+
+    logger.info(f"Start to loading minerU config file from {source_path}.")
     destination_path = os.path.expanduser("~/magic-pdf.json")  # 目标路径
 
     # 读取 source_path 文件的内容

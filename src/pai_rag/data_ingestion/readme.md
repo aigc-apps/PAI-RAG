@@ -47,7 +47,7 @@ python src/pai_rag/data_ingestion/main.py write --input-path $OUTPUT_PATH/embed 
 ```shell
 export OUTPUT_PATH=/testdata/output0505
 export PAI_RAG_ENDPOINT=
-export PAI_RAG_KEY=
+export PAI_RAG_TOKEN=
 
 python src/pai_rag/data_ingestion/main.py e2e --input-path xx --output-path $OUTPUT_PATH
 ```
