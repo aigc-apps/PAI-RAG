@@ -58,7 +58,6 @@ export const Assistant = () => {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
 
   const runtime = useChatRuntime({
-    // api: "/api/chat",
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
     headers: {
       "X-Model-Name": llmConfig.model_name || "gpt-4o",

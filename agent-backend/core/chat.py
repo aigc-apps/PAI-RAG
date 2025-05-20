@@ -133,13 +133,13 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             )
 
                             tool_result = result.content
-                            if tool_call["name"] == "search_web":
-                                tool_result = json.loads(tool_result)
-                            
 
                             # 返回工具调用和结果（标记9和a）
                             yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
-                            yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
+                            if tool_call["name"] == "search_web":
+                                yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
+                            else:
+                                yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
 
                             # 将工具调用和结果加入消息历史,供模型继续推理
                             messages.append(

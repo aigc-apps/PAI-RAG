@@ -6,25 +6,16 @@ from fastapi import FastAPI, HTTPException, Request
 from core.chat import handle_chat
 
 from fastapi.middleware.cors import CORSMiddleware
-from search.aliyun_search_tool import AliyunSearchTool
 from dotenv import load_dotenv, set_key, find_dotenv
 
 load_dotenv()
 
 app = FastAPI()
 
-
-origins = [
-    "*"
-    # "http://localhost:3000",  # 前端开发服务器地址
-    # "http://127.0.0.1:3000",
-    # # 添加其他需要允许的域名
-]
-
 # 添加中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],  # 允许所有的HTTP方法
     allow_headers=["*"],  # 允许所有请求头
@@ -121,9 +112,8 @@ def get_models():
         ]
     }
 
-
-@app.post("/api/configs")
-def write_configs(request: ConfigRequest):
+@app.post("/api/add_llm")
+async def add_llm(req: LLMConfigRequest):
     try:
         # 读取现有配置（如果存在）
         try:
@@ -131,47 +121,6 @@ def write_configs(request: ConfigRequest):
                 current_data = json.load(f)
         except FileNotFoundError:
             current_data = {}
-
-        # 处理 LLM 配置（追加模式）
-        if request.llm_config is not None:
-            llm_configs = [config.dict() for config in request.llm_config]
-            if "llm_config" not in current_data:
-                current_data["llm_config"] = llm_configs
-            else:
-                for config in llm_configs:
-                    # 检查是否已经存在相同的配置
-                    for existing_config in current_data["llm_config"]:
-                        # 更新现有配置
-                        if (
-                            existing_config["source"] == config["source"]
-                            and existing_config["model_name"] == config["model_name"]
-                        ):
-                            existing_config.update(config)
-
-                            break
-                        else:
-                            current_data["llm_config"].append(config)
-
-                current_data["llm_config"].extend(llm_configs)
-
-        if request.mcp_config is not None:
-            current_data["mcp_config"] = [
-                config.dict() for config in request.mcp_config
-            ]
-
-        # 写回文件
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(current_data, f, indent=2)
-
-        return {"message": "配置已更新"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
-
-
-@app.post("/api/add_llm")
-async def add_llm(req: LLMConfigRequest):
-    try:
-        current_data = {}
 
         # 处理 LLM 配置（追加模式）
         if "llm_config" not in current_data:
@@ -336,7 +285,6 @@ def update_search_config(request: SearchConfigRequest):
         return {"message": "配置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
-
 
 @app.post("/api/chat")
 async def chat(request: Request):

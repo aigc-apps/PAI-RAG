@@ -64,7 +64,7 @@ def to_openai_message_dict(
                     )
                 message_dict = ChatCompletionToolMessageParam(
                     role=role,
-                    content=elem["result"],
+                    content=str(elem["result"]),
                     tool_call_id=call_id,
                 )
                 return message_dict
@@ -73,7 +73,7 @@ def to_openai_message_dict(
             message_dict = ChatCompletionSystemMessageParam(role=role, content=content)
         else:
             message_dict = ChatCompletionAssistantMessageParam(
-                role=role, content=content
+                role=role, content=str(content)
             )
 
         return message_dict
