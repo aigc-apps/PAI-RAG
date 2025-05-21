@@ -5,6 +5,7 @@ from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 from search.web_reader import ParallelBeautifulSoupWebReader
+from llama_index.core.tools import FunctionTool
 import json
 import time
 import os
@@ -31,13 +32,16 @@ DEFAULT_SEARCH_COUNT = 10
 DEFAULT_LANG = "zh-CN"
 DEFAULT_TIMERANGE = "OneMonth"  # OneMonth, OneWeek, OneDay, OneYear, NoLimit
 
+
 class NodeWithScore:
     def __init__(self, text, score, metadata):
         self.text = text
         self.score = score
         self.metadata = metadata
+
     def to_dict(self):
-        return {'text': self.text, 'metadata': self.metadata, 'score': self.score}
+        return {"text": self.text, "metadata": self.metadata, "score": self.score}
+
 
 class AliyunSearchTool:
     def __init__(
@@ -108,18 +112,20 @@ class AliyunSearchTool:
                 host_logo = "https://cdn.pixabay.com/photo/2020/09/17/22/52/website-5580513_1280.png"
                 if item.get("hostLogo") and item.get("hostLogo") != "":
                     host_logo = item.get("hostLogo")
-                nodes.append(NodeWithScore(
-                    text=text[:800],
-                    metadata={
-                        "source": "web_search",
-                        "file_url": item.get("link"),
-                        "file_name": item.get("title") or item.get("htmlTitle"),
-                        "host_name": item.get("hostname"),
-                        "host_logo": host_logo,
-                        "publish_time": item.get("publishTime"),
-                    },
-                    score=score
-                ))
+                nodes.append(
+                    NodeWithScore(
+                        text=text[:800],
+                        metadata={
+                            "source": "web_search",
+                            "file_url": item.get("link"),
+                            "file_name": item.get("title") or item.get("htmlTitle"),
+                            "host_name": item.get("hostname"),
+                            "host_logo": host_logo,
+                            "publish_time": item.get("publishTime"),
+                        },
+                        score=score,
+                    )
+                )
                 if len(nodes) >= self.search_count:
                     break
         return nodes
@@ -137,7 +143,7 @@ class AliyunSearchTool:
 
         return {"result": [node.to_dict() for node in nodes]}
 
-from llama_index.core.tools import FunctionTool
+
 async def aget_aliyun_search_result(query: str):
     """Get aliyun search tool"""
     load_dotenv()
@@ -148,11 +154,12 @@ async def aget_aliyun_search_result(query: str):
     res = await search_client.aquery(query)
     return json.dumps(res, ensure_ascii=False)
 
+
 async def aget_aliyun_search_tool():
     search_tool = FunctionTool.from_defaults(
         async_fn=aget_aliyun_search_result,
         name="search_web",
-        description="从阿里云搜索引擎中搜索给定查询的最新内容。"
+        description="从阿里云搜索引擎中搜索给定查询的最新内容。",
     )
     openai_tools = []
     tools_name_to_fn = {}
