@@ -24,7 +24,7 @@ app.add_middleware(
 
 # 数据模型
 class MCPConfig(BaseModel):
-    id: int
+    id: str
     name: str
     url: str
     type: str
@@ -32,7 +32,7 @@ class MCPConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    id: int
+    id: str
     source: str = None
     model_name: str = None
     api_key: str = None
@@ -73,6 +73,11 @@ if not os.path.exists(CONFIG_FILE):
         json.dump(default_config, f, indent=2)
 
 
+if not os.path.exists(".env"):
+    with open(".env", "w") as f:
+        f.write("")
+
+
 @app.get("/api/configs", response_model=dict)
 def read_configs():
     try:
@@ -102,7 +107,7 @@ def get_models():
         if source not in grouped:
             grouped[source] = []
 
-        grouped[source].append({"name": model_name, "api_key": config.get("api_key")})
+        grouped[source].append({"name": model_name, "id": config.get("id")})
 
     return {
         "groups": [
@@ -149,7 +154,7 @@ async def add_llm(req: LLMConfigRequest):
 
 
 @app.delete("/api/delete_llm/{llm_id}")
-async def delete_llm(llm_id: int):
+async def delete_llm(llm_id: str):
     try:
         # 读取现有配置
         try:
@@ -221,7 +226,7 @@ async def add_mcp(req: MCPConfigRequest):
 
 
 @app.delete("/api/delete_mcp/{mcp_id}")
-async def delete_mcp(mcp_id: int):
+async def delete_mcp(mcp_id: str):
     try:
         # 读取现有配置
         try:
