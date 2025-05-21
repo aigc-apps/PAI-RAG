@@ -178,6 +178,7 @@ export default function McpConfig() {
     try {
       const newMCP = {
         ...addFormData,
+        id: uuidv4(),
       };
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
