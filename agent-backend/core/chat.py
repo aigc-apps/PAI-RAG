@@ -71,8 +71,8 @@ async def process_mcp_tools():
         mcp_server_name = mcp_client.name
         tools = await mcp_tool.to_tool_list_async()
         for tool in tools:
-            # transform tool name to server_name-tool_name
-            tool_name = mcp_server_name + "-" + tool.metadata.name
+            # transform tool name to server_name--tool_name
+            tool_name = mcp_server_name + "--" + tool.metadata.name
             tools_name_to_fn[tool_name] = tool
             tool_metadata = tool.metadata
             tool_metadata.name = tool_name
@@ -95,9 +95,10 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                 # 模型生成已结束
                 if choice.finish_reason == "stop":
                     stop_flag = True
-                    yield "0:{text}\n".format(
-                        text=json.dumps(choice.delta.content, ensure_ascii=False)
-                    )
+                    if choice.delta.content:
+                        yield "0:{text}\n".format(
+                            text=json.dumps(choice.delta.content, ensure_ascii=False)
+                        )
                     yield 'd:{"finishReason":"stop"}\n'
                     break
                 # 调用工具,收集工具参数
