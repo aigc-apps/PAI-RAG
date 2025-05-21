@@ -37,13 +37,20 @@ def get_model_instance(model_name: str, model_source: str, api_key: str):
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
 async def gen_stream_response(model, model_name, messages, openai_tools):
     logger.info(f"messages {messages}")
-    return await model.create(
-        model=model_name,
-        messages=messages,
-        stream=True,
-        tools=openai_tools,
-        tool_choice="auto",
-    )
+    if openai_tools:
+        return await model.create(
+            model=model_name,
+            messages=messages,
+            stream=True,
+            tools=openai_tools,
+            tool_choice="auto",
+        )
+    else:
+        return await model.create(
+            model=model_name,
+            messages=messages,
+            stream=True,
+        )
 
 
 async def process_mcp_tools():
@@ -64,8 +71,8 @@ async def process_mcp_tools():
         mcp_server_name = mcp_client.name
         tools = await mcp_tool.to_tool_list_async()
         for tool in tools:
-            # transform tool name to server_name:tool_name
-            tool_name = mcp_server_name + ":" + tool.metadata.name
+            # transform tool name to server_name--tool_name
+            tool_name = mcp_server_name + "--" + tool.metadata.name
             tools_name_to_fn[tool_name] = tool
             tool_metadata = tool.metadata
             tool_metadata.name = tool_name
@@ -88,7 +95,10 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                 # 模型生成已结束
                 if choice.finish_reason == "stop":
                     stop_flag = True
-                    yield "0:{text}\n".format(text=json.dumps(choice.delta.content, ensure_ascii=False))
+                    if choice.delta.content:
+                        yield "0:{text}\n".format(
+                            text=json.dumps(choice.delta.content, ensure_ascii=False)
+                        )
                     yield 'd:{"finishReason":"stop"}\n'
                     break
                 # 调用工具,收集工具参数
@@ -110,8 +120,13 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             ] += arguments
                 # 普通内容
                 elif choice.delta.content:
-                    yield "0:{text}\n".format(text=json.dumps(choice.delta.content, ensure_ascii=False))
-                    if isinstance(messages[-1], ChatCompletionMessage) and messages[-1].role == "assistant":
+                    yield "0:{text}\n".format(
+                        text=json.dumps(choice.delta.content, ensure_ascii=False)
+                    )
+                    if (
+                        isinstance(messages[-1], ChatCompletionMessage)
+                        and messages[-1].role == "assistant"
+                    ):
                         messages[-1].content += str(choice.delta.content)
                     else:
                         messages.append(
@@ -119,7 +134,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                 role="assistant", content=str(choice.delta.content)
                             )
                         )  # 更新历史
-                    
+
                 # 根据参数调用工具
                 if choice.finish_reason == "tool_calls":
                     for tool_call in draft_tool_calls:
@@ -206,19 +221,25 @@ async def handle_chat(request: Request):
         model_name = request.headers.get("X-Model-Name")
         api_key = request.headers.get("X-Api-Key")
         model_source = request.headers.get("X-Model-Source")
-        x_options = request.headers.get("X-Options").split(",") if request.headers.get("X-Options") else []
-        
+        x_options = (
+            request.headers.get("X-Options").split(",")
+            if request.headers.get("X-Options")
+            else []
+        )
+
         openai_tools = []
         tools_name_to_fn = {}
         if "search" in x_options:
-            search_openai_tools, search_tools_name_to_fn = await aget_aliyun_search_tool()
+            search_openai_tools, search_tools_name_to_fn = (
+                await aget_aliyun_search_tool()
+            )
             openai_tools.extend(search_openai_tools)
             tools_name_to_fn.update(search_tools_name_to_fn)
         if "mcp" in x_options:
             mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools()
             openai_tools.extend(mcp_openai_tools)
             tools_name_to_fn.update(mcp_tools_name_to_fn)
-            
+
         logger.info(f"[Tool] openai_tools: {openai_tools}")
         logger.info(f"[Tool] tools_name_to_fn: {tools_name_to_fn}")
         model = get_model_instance(model_name, model_source, api_key)

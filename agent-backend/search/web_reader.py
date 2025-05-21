@@ -9,7 +9,6 @@ from urllib.parse import urljoin
 import httpx
 
 
-
 def _substack_reader(soup: Any, **kwargs) -> Tuple[str, Dict[str, Any]]:
     """Extract text from Substack blog post."""
     extra_info = {
@@ -136,7 +135,10 @@ async def fetch_url(url):
     Asynchronous function to fetch a URL.
     """
     timeout = httpx.Timeout(
-        connect=5.0, read=5.0, write=5.0, pool=6.0  # 连接超时  # 读取超时  # 写入超时  # 连接池超时
+        connect=5.0,
+        read=5.0,
+        write=5.0,
+        pool=6.0,  # 连接超时  # 读取超时  # 写入超时  # 连接池超时
     )
     async with httpx.AsyncClient(timeout=timeout) as client:
         try:
@@ -154,6 +156,7 @@ def fetch_multiple(urls):
     tasks = [fetch_url(url) for url in urls]
     results = asyncio.run(asyncio.gather(*tasks))
     return results
+
 
 class Document:
     """A class representing a document."""

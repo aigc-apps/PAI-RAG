@@ -52,7 +52,6 @@ class SearchConfigRequest(BaseModel):
     aliyun_sk: str = None
 
 
-
 class ConfigRequest(BaseModel):
     llm_config: Optional[List[LLMConfig]] = None
     mcp_config: Optional[List[MCPConfig]] = None
@@ -111,6 +110,7 @@ def get_models():
             for source, models in grouped.items()
         ]
     }
+
 
 @app.post("/api/add_llm")
 async def add_llm(req: LLMConfigRequest):
@@ -285,6 +285,7 @@ def update_search_config(request: SearchConfigRequest):
         return {"message": "配置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
+
 
 @app.post("/api/chat")
 async def chat(request: Request):
