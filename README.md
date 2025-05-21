@@ -5,6 +5,7 @@ This is a demo for agent with MCP.
 ## Getting Started
 
 ### Backend
+
 ```bash
 cd agent-backend
 uvicorn main:app --reload --port 8097
@@ -12,8 +13,8 @@ uvicorn main:app --reload --port 8097
 
 You can start editing the API service by modifying `main.py`.
 
-
 ### Frontend
+
 ```bash
 cd agent
 npm install

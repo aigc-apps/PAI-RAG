@@ -5,7 +5,7 @@ import { makeAssistantToolUI } from "@assistant-ui/react";
 import React, { useState, useEffect } from "react";
 import { CarIcon } from "lucide-react"; // 可以使用你喜欢的图标库
 import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -13,8 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
-
+} from "@/components/ui/sheet";
 
 export type MapsGeoArgs = {
   address: string;
@@ -268,18 +267,21 @@ type SearchWebResult = {
   result: {
     text: string;
     metadata: {
-      "source": string;
-      "file_url": string;
-      "file_name": string;
-      "host_name": string;
-      "host_logo": string;
-      "publish_time": string;
+      source: string;
+      file_url: string;
+      file_name: string;
+      host_name: string;
+      host_logo: string;
+      publish_time: string;
     };
     score: string;
   }[];
 };
 
-export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, SearchWebResult>({
+export const SearchWebToolUI = makeAssistantToolUI<
+  SearchWebArgs,
+  SearchWebResult
+>({
   toolName: "search_web",
   render: ({ args, status, result }) => {
     if (!result) {
@@ -297,58 +299,63 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, SearchWebResul
       );
     }
     return (
-            <div className="rounded-md p-1">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="link" className="flex items-center gap-2 px-4 text-blue-800" > <Search className="size-4" /> 完成网页搜索: {args.query} (点击查看结果) </Button>
-                </SheetTrigger>
-                <SheetContent side="right">
-                  <SheetHeader>
-                    <SheetTitle>网页搜索结果 · {result?.result.length}</SheetTitle>
-                    <SheetDescription>
-                      {args.query}
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                    <div className="pl-6 pr-2">
-                      {result?.result.map((item, index) => (
-                        <div 
-                          key={index} 
-                          className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
-                        >
-                          <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
-                            {/* Logo与标题行 */}
-                            <div className="flex items-center gap-1">
-                              <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
-                                <img 
-                                  src={item.metadata["host_logo"]} 
-                                  alt={item.metadata["host_name"]} 
-                                  className="w-5 h-5 object-cover rounded-sm"
-                                />
-                              </div>
-                              
-                              {/* 标题链接 */}
-                              <a 
-                                href={item.metadata["file_url"]} 
-                                className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
-                              >
-                                {item.metadata["file_name"]}
-                              </a>
-                            </div>
-
-                            {/* 内容区域 */}
-                            <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
-                              {item.text}
-                            </p>
-                          </div>
+      <div className="rounded-md p-1">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="link"
+              className="flex items-center gap-2 px-4 text-blue-800"
+            >
+              {" "}
+              <Search className="size-4" /> 完成网页搜索: {args.query}{" "}
+              (点击查看结果){" "}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right">
+            <SheetHeader>
+              <SheetTitle>网页搜索结果 · {result?.result.length}</SheetTitle>
+              <SheetDescription>{args.query}</SheetDescription>
+            </SheetHeader>
+            <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+              <div className="pl-6 pr-2">
+                {result?.result.map((item, index) => (
+                  <div
+                    key={index}
+                    className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
+                  >
+                    <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
+                      {/* Logo与标题行 */}
+                      <div className="flex items-center gap-1">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                          <img
+                            src={item.metadata["host_logo"]}
+                            alt={item.metadata["host_name"]}
+                            className="w-5 h-5 object-cover rounded-sm"
+                          />
                         </div>
-                      ))}
-                    </div> 
+
+                        {/* 标题链接 */}
+                        <a
+                          href={item.metadata["file_url"]}
+                          className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
+                        >
+                          {item.metadata["file_name"]}
+                        </a>
+                      </div>
+
+                      {/* 内容区域 */}
+                      <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
+                        {item.text}
+                      </p>
+                    </div>
                   </div>
-                </SheetContent>
-              </Sheet>
+                ))}
+              </div>
             </div>
-          );
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
   },
 });
 
@@ -357,7 +364,7 @@ const ToolUIWrapper: FC = () => {
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
-      < SearchWebToolUI />
+      <SearchWebToolUI />
     </>
   );
 };

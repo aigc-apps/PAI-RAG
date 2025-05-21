@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import React, {useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import {
   TrashIcon,
   SettingsIcon,
   Edit,
-  EyeIcon, 
-  EyeOffIcon
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import * as Toast from "@radix-ui/react-toast"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import * as Toast from "@radix-ui/react-toast";
 import {
   Table,
   TableBody,
@@ -28,11 +28,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Checkbox } from "@/components/ui/checkbox"
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { v4 as uuidv4 } from "uuid";
 
 export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
-  const maskApiKey = (apiKey: string, prefixLength = 4, suffixLength = 3): string => {
+  const maskApiKey = (
+    apiKey: string,
+    prefixLength = 4,
+    suffixLength = 3,
+  ): string => {
     if (apiKey.length <= prefixLength + suffixLength) return apiKey; // 如果长度不够，直接返回原值
     return `${apiKey.slice(0, prefixLength)}*****${apiKey.slice(-suffixLength)}`;
   };
@@ -49,20 +54,30 @@ export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
         onClick={toggleShow}
         className="text-sm text-blue-500 hover:text-blue-700"
       >
-        {showFull ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+        {showFull ? (
+          <EyeOffIcon className="w-4 h-4" />
+        ) : (
+          <EyeIcon className="w-4 h-4" />
+        )}
       </button>
     </div>
   );
 };
 
 class MCPConfig {
-  id: number;
+  id: string;
   name: string;
   url: string;
   type: string;
   active: boolean;
 
-  constructor(id: number, name: string, url: string, type: string, active: boolean) {
+  constructor(
+    id: string,
+    name: string,
+    url: string,
+    type: string,
+    active: boolean,
+  ) {
     this.id = id;
     this.name = name;
     this.url = url;
@@ -84,25 +99,27 @@ export default function McpConfig() {
     description: "",
     variant: "default" as "default" | "destructive",
   });
-  
+
   const [addFormData, setAddFormData] = useState({
-    id: Date.now(),
+    id: uuidv4(),
     name: "未命名服务器",
     url: "",
     type: "sse",
-    active: false
+    active: false,
   });
 
-  const [mcpconfigs, setMcpConfigs] = useState(Array<{
-        id: number;
-        name: string;
-        url: string;
-        type: string;
-        active: boolean;
-  }>); // 存储 MCP 配置
+  const [mcpconfigs, setMcpConfigs] = useState(
+    Array<{
+      id: string;
+      name: string;
+      url: string;
+      type: string;
+      active: boolean;
+    }>,
+  ); // 存储 MCP 配置
   const [mcploading, setMcpLoading] = useState(true); // 加载状态
   const [mcperror, setMcpError] = useState(""); // 错误信息
-  
+
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
@@ -128,13 +145,13 @@ export default function McpConfig() {
   };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    const key = id.replace(/^mcp_/, '');
+    const key = id.replace(/^mcp_/, "");
     setAddFormData((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    const key = id.replace(/^edit_mcp_/, '');
+    const key = id.replace(/^edit_mcp_/, "");
     setEditingConfig((prev) => {
       if (!prev) return prev;
       return {
@@ -147,30 +164,29 @@ export default function McpConfig() {
   const handleEditInputChangeCheckbox = (isChecked: boolean, id?: string) => {
     if (!id || !editingConfig) return;
 
-    const key = id.replace(/^edit_mcp_/, '');
+    const key = id.replace(/^edit_mcp_/, "");
     setEditingConfig((prev) => {
-        if (!prev) return prev;
-        return {
+      if (!prev) return prev;
+      return {
         ...prev,
         [key]: isChecked,
-        };
+      };
     });
+  };
 
-  }
-  
   const addMCP = async () => {
     try {
       const newMCP = {
         ...addFormData,
       };
-  
+
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/add_mcp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcp_config: newMCP }) // 包装为数组
+        body: JSON.stringify({ mcp_config: newMCP }), // 包装为数组
       });
-  
+
       if (!res.ok) throw new Error("添加 MCP 配置失败");
       setToastState({
         open: true,
@@ -196,14 +212,14 @@ export default function McpConfig() {
   const updatedMCP = async () => {
     try {
       if (!editingConfig) return;
-  
+
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/add_mcp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcp_config: editingConfig }) // 包装为数组
+        body: JSON.stringify({ mcp_config: editingConfig }), // 包装为数组
       });
-  
+
       if (!res.ok) throw new Error("修改 MCP 配置失败");
       setToastState({
         open: true,
@@ -212,11 +228,11 @@ export default function McpConfig() {
         variant: "default",
       });
       setIsEditOpen(false); // 关闭 EditDialog
-      console.log("updateMCP", editingConfig)
+      console.log("updateMCP", editingConfig);
       setMcpConfigs((prev) =>
         prev.map((config) =>
-          config.id === editingConfig.id ? editingConfig : config
-        )
+          config.id === editingConfig.id ? editingConfig : config,
+        ),
       );
     } catch (err: any) {
       setError(err || "修改失败，请重试"); // 显示错误信息
@@ -229,8 +245,8 @@ export default function McpConfig() {
     } finally {
       setIsEditLoading(false);
     }
-  }
-  const removeMCP = async (id: number) => {
+  };
+  const removeMCP = async (id: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/delete_mcp/${id}`, {
@@ -239,11 +255,11 @@ export default function McpConfig() {
           "Content-Type": "application/json",
         },
       });
-  
+
       if (!res.ok) {
         throw new Error("删除失败，请检查网络或配置");
       }
-  
+
       // 显示成功提示（可选）
       setToastState({
         open: true,
@@ -265,10 +281,10 @@ export default function McpConfig() {
     }
   };
 
-  return <div id="mcp">
+  return (
+    <div id="mcp">
       <div className={`transition-colors rounded-lg overflow-hidden`}>
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          
           {mcploading ? (
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
@@ -293,24 +309,30 @@ export default function McpConfig() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {mcpconfigs.map((config) => (
+                  {mcpconfigs.map((config) => (
                     <TableRow key={config.id}>
                       <TableCell>{config.id} </TableCell>
                       <TableCell>{config.name} </TableCell>
                       <TableCell>{config.url} </TableCell>
                       <TableCell> {config.type} </TableCell>
-                      <TableCell> 
+                      <TableCell>
                         <Checkbox id="terms" checked={config.active} />
                       </TableCell>
                       <TableCell>
                         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                           <DialogTrigger asChild>
-                            <button className="text-black-500 hover:text-black-700 px-1 py-1" onClick={() => handleEditClick(config)}>
+                            <button
+                              className="text-black-500 hover:text-black-700 px-1 py-1"
+                              onClick={() => handleEditClick(config)}
+                            >
                               <Edit className="w-4 h-4" />
                             </button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[425px]">
-                            {error && <div className="text-red-500 mb-4">{error}</div>} {/* 显示错误信息 */}
+                            {error && (
+                              <div className="text-red-500 mb-4">{error}</div>
+                            )}{" "}
+                            {/* 显示错误信息 */}
                             <DialogHeader>
                               <DialogTitle>编辑MCP配置</DialogTitle>
                               <DialogDescription>
@@ -319,59 +341,100 @@ export default function McpConfig() {
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_mcp_id" className="text-right">
-                                    MCP ID
+                                <Label
+                                  htmlFor="edit_mcp_id"
+                                  className="text-right"
+                                >
+                                  MCP ID
                                 </Label>
-                                <Input id="edit_mcp_id" defaultValue={editingConfig?.id || "null"} disabled
-                                  className="col-span-3" />
+                                <Input
+                                  id="edit_mcp_id"
+                                  defaultValue={editingConfig?.id || "null"}
+                                  disabled
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_mcp_name" className="text-right">
-                                    MCP 名称
+                                <Label
+                                  htmlFor="edit_mcp_name"
+                                  className="text-right"
+                                >
+                                  MCP 名称
                                 </Label>
-                                <Input id="edit_mcp_name" defaultValue={editingConfig?.name || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_mcp_name"
+                                  defaultValue={editingConfig?.name || "null"}
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_mcp_url" className="text-right">
-                                    MCP 链接
+                                <Label
+                                  htmlFor="edit_mcp_url"
+                                  className="text-right"
+                                >
+                                  MCP 链接
                                 </Label>
-                                <Input id="edit_mcp_url" defaultValue={editingConfig?.url || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_mcp_url"
+                                  defaultValue={editingConfig?.url || "null"}
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_mcp_type" className="text-right">
+                                <Label
+                                  htmlFor="edit_mcp_type"
+                                  className="text-right"
+                                >
                                   API Key
                                 </Label>
-                                <Input id="edit_mcp_type" defaultValue={editingConfig?.type || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_mcp_type"
+                                  defaultValue={editingConfig?.type || "null"}
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_mcp_active" className="text-right">
+                                <Label
+                                  htmlFor="edit_mcp_active"
+                                  className="text-right"
+                                >
                                   是否激活
                                 </Label>
-                                <Checkbox id="edit_mcp_active" checked={editingConfig?.active || false} 
-                                    onCheckedChange={(checkedState) => {
-                                        // 将 CheckedState 转换为 boolean
-                                        const isChecked = checkedState === true;
-                                        handleEditInputChangeCheckbox(isChecked, "edit_mcp_active");
-                                    }} 
-                                    className="col-span-3"/>
+                                <Checkbox
+                                  id="edit_mcp_active"
+                                  checked={editingConfig?.active || false}
+                                  onCheckedChange={(checkedState) => {
+                                    // 将 CheckedState 转换为 boolean
+                                    const isChecked = checkedState === true;
+                                    handleEditInputChangeCheckbox(
+                                      isChecked,
+                                      "edit_mcp_active",
+                                    );
+                                  }}
+                                  className="col-span-3"
+                                />
                               </div>
                             </div>
                             <DialogFooter>
-                              <Button onClick={updatedMCP} type="submit" disabled={isEditLoading}>
+                              <Button
+                                onClick={updatedMCP}
+                                type="submit"
+                                disabled={isEditLoading}
+                              >
                                 {isEditLoading ? "提交中..." : "修改"}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
-                        
+
                         <button
-                            onClick={() => removeMCP(config.id)}
-                            className="text-red-500 hover:text-red-700 px-4 py-1"
+                          onClick={() => removeMCP(config.id)}
+                          className="text-red-500 hover:text-red-700 px-4 py-1"
                         >
-                            <TrashIcon className="w-4 h-4" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </TableCell>
                     </TableRow>
@@ -381,17 +444,16 @@ export default function McpConfig() {
             </div>
           )}
           <SettingsIcon className="w-10 h-6 text-gray-400 mb-4" />
-          <p className="text-gray-500 mt-1">
-            点击下方按钮添加新的 MCP
-          </p>
+          <p className="text-gray-500 mt-1">点击下方按钮添加新的 MCP</p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button className="mt-4 px-4 py-2 text-white rounded-lg transition-colors">
-              添加MCP
+                添加MCP
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              {error && <div className="text-red-500 mb-4">{error}</div>} {/* 显示错误信息 */}
+              {error && <div className="text-red-500 mb-4">{error}</div>}{" "}
+              {/* 显示错误信息 */}
               <DialogHeader>
                 <DialogTitle>添加MCP</DialogTitle>
                 <DialogDescription>
@@ -403,22 +465,34 @@ export default function McpConfig() {
                   <Label htmlFor="mcp_name" className="text-right">
                     MCP 名称
                   </Label>
-                  <Input id="mcp_name" placeholder="mcp_name"
-                    onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="mcp_name"
+                    placeholder="mcp_name"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_url" className="text-right">
                     MCP 链接
                   </Label>
-                  <Input id="mcp_url" placeholder="mcp_url"
-                    onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="mcp_url"
+                    placeholder="mcp_url"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_type" className="text-right">
                     MCP 类型
                   </Label>
-                  <Input id="mcp_type" placeholder="mcp_type"
-                     onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="mcp_type"
+                    placeholder="mcp_type"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -430,15 +504,24 @@ export default function McpConfig() {
           </Dialog>
           <Toast.Root
             open={toastState.open}
-            onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
+            onOpenChange={(open) =>
+              setToastState((prev) => ({ ...prev, open }))
+            }
             className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
               toastState.variant === "destructive"
                 ? "border-red-500 bg-red-50 text-red-900"
                 : "border-gray-200 bg-white text-gray-900"
             }`}
           >
-            <Toast.Description className="pl-4 text-sm font-medium">{toastState.description}</Toast.Description>
-            <Toast.Action altText="关闭" onClick={() => setToastState((prev) => ({ ...prev, open: false }))}>
+            <Toast.Description className="pl-4 text-sm font-medium">
+              {toastState.description}
+            </Toast.Description>
+            <Toast.Action
+              altText="关闭"
+              onClick={() =>
+                setToastState((prev) => ({ ...prev, open: false }))
+              }
+            >
               ×
             </Toast.Action>
           </Toast.Root>
@@ -447,5 +530,6 @@ export default function McpConfig() {
           <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
         </div>
       </div>
-  </div>;
+    </div>
+  );
 }

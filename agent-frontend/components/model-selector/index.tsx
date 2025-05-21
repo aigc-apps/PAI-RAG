@@ -14,8 +14,8 @@ import { useEffect, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 
 interface ModelConfigurationParams {
+  id: string;
   name: string;
-  api_key: string;
 }
 
 interface ModelGroup {
@@ -29,7 +29,7 @@ interface ModelSelectorProps {
     source: string;
     model_name: string;
   };
-  onModelChange: (source: string, model_name: string, api_key:string) => void;
+  onModelChange: (id: string, source: string, model_name: string) => void;
 }
 
 export default function ModelSelector({
@@ -66,7 +66,6 @@ export default function ModelSelector({
     }
   }, [open]);
 
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className="min-w-[180px] w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 h-9 px-3 py-2 text-sm focus:ring-1 focus:ring-ring">
@@ -81,18 +80,26 @@ export default function ModelSelector({
         <Command>
           <CommandList>
             {loading ? (
-              <div className="p-4 text-center text-sm text-gray-500">加载中...</div>
+              <div className="p-4 text-center text-sm text-gray-500">
+                加载中...
+              </div>
             ) : error ? (
-              <div className="p-4 text-center text-sm text-red-500">{error}</div>
+              <div className="p-4 text-center text-sm text-red-500">
+                {error}
+              </div>
             ) : (
               modelGroups.map((group) => (
-                <CommandGroup key={group.id} heading={group.label} className="w-full">
+                <CommandGroup
+                  key={group.id}
+                  heading={group.label}
+                  className="w-full"
+                >
                   {group.models.map((model) => (
                     <CommandItem
                       key={model.name}
                       value={model.name}
                       onSelect={() => {
-                        onModelChange(group.id, model.name, model.api_key); // 更新 source 和 model_name
+                        onModelChange(model.id, group.id, model.name);
                         setOpen(false);
                       }}
                       className="flex items-center"

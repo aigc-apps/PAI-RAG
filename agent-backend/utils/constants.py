@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+
 def get_int_env(key, default_value=None):
     """
     Retrieves an integer from an environment variable.
@@ -14,5 +15,6 @@ def get_int_env(key, default_value=None):
             return default_value
     return default_value
 
-load_dotenv()
+
+load_dotenv(".env")
 BACKEND_PORT = get_int_env("BACKEND_PORT", 8029)

@@ -12,7 +12,7 @@ import httpx
 
 # MCP 客户端配置
 class MCPServerConfig(BaseModel):
-    id: int
+    id: str
     name: str
     url: str
     auth_token: Optional[str] = None

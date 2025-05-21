@@ -24,9 +24,11 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 // import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { ToolFallback } from "@/components/ui/custom-tool-fallback";
 import { Brain, Search, Wrench } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({ onToggleChange }) => {
+export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
+  onToggleChange,
+}) => {
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border flex h-full flex-col overflow-hidden"
@@ -112,12 +114,14 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer:  FC<{ onToggleChange?: (options: string[]) => void }> = ({ onToggleChange }) => {
+const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
+  onToggleChange,
+}) => {
   return (
-    <ComposerPrimitive.Root 
+    <ComposerPrimitive.Root
       // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
       className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
-      >
+    >
       {/* 第一行：输入框 */}
       <ComposerPrimitive.Input
         rows={1}
@@ -128,19 +132,34 @@ const Composer:  FC<{ onToggleChange?: (options: string[]) => void }> = ({ onTog
 
       {/* 第二行：按钮组 + ComposerAction */}
       <div className="flex flex-row items-center justify-between px-2 pb-4">
-        <div >
-          <ToggleGroup type="multiple" variant="outline" className="flex gap-x-4 overflow-visible"
+        <div>
+          <ToggleGroup
+            type="multiple"
+            variant="outline"
+            className="flex gap-x-4 overflow-visible"
             onValueChange={(value) => {
               onToggleChange?.(value); // 传递选中状态到父组件
             }}
           >
-            <ToggleGroupItem value="thinking" aria-label="Toggle deep thinking" className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+            <ToggleGroupItem
+              value="thinking"
+              aria-label="Toggle deep thinking"
+              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
               <Brain /> 深度思考
             </ToggleGroupItem>
-            <ToggleGroupItem value="search" aria-label="Toggle web search" className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+            <ToggleGroupItem
+              value="search"
+              aria-label="Toggle web search"
+              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
               <Search /> 搜索
             </ToggleGroupItem>
-            <ToggleGroupItem value="mcp" aria-label="Toggle mcp" className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white">
+            <ToggleGroupItem
+              value="mcp"
+              aria-label="Toggle mcp"
+              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
               <Wrench /> MCP
             </ToggleGroupItem>
           </ToggleGroup>
@@ -151,7 +170,6 @@ const Composer:  FC<{ onToggleChange?: (options: string[]) => void }> = ({ onTog
           <ComposerAction />
         </div>
       </div>
-      
     </ComposerPrimitive.Root>
   );
 };

@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import React, {useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import {
   TrashIcon,
   SettingsIcon,
   Edit,
-  EyeIcon, 
-  EyeOffIcon
+  EyeIcon,
+  EyeOffIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import * as Toast from "@radix-ui/react-toast"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import * as Toast from "@radix-ui/react-toast";
 import {
   Table,
   TableBody,
@@ -28,10 +28,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
+import { v4 as uuidv4 } from "uuid";
 
 export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
-  const maskApiKey = (apiKey: string, prefixLength = 4, suffixLength = 3): string => {
+  const maskApiKey = (
+    apiKey: string,
+    prefixLength = 4,
+    suffixLength = 3,
+  ): string => {
     if (apiKey.length <= prefixLength + suffixLength) return apiKey; // 如果长度不够，直接返回原值
     return `${apiKey.slice(0, prefixLength)}*****${apiKey.slice(-suffixLength)}`;
   };
@@ -48,20 +53,30 @@ export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
         onClick={toggleShow}
         className="text-sm text-black-500 hover:text-black-700"
       >
-        {showFull ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+        {showFull ? (
+          <EyeOffIcon className="w-4 h-4" />
+        ) : (
+          <EyeIcon className="w-4 h-4" />
+        )}
       </button>
     </div>
   );
 };
 
 class LLMConfig {
-  id: number;
+  id: string;
   source: string;
   model_name: string;
   api_key: string;
   max_context: number;
 
-  constructor(id: number, source: string, model_name: string, api_key: string, max_context: number) {
+  constructor(
+    id: string,
+    source: string,
+    model_name: string,
+    api_key: string,
+    max_context: number,
+  ) {
     this.id = id;
     this.source = source;
     this.model_name = model_name;
@@ -83,31 +98,33 @@ export default function LlmConfig() {
     description: "",
     variant: "default" as "default" | "destructive",
   });
-  
+
   const [addFormData, setAddFormData] = useState({
-    id: Date.now(),
+    id: uuidv4(),
     model_name: "qwen-max",
     source: "qwen",
-    api_key: "sk-xxxxxx"
+    api_key: "sk-xxxxxx",
   });
 
   const [editFormData, setEditFormData] = useState({
-    id: Date.now(),
+    id: uuidv4(),
     model_name: "qwen-max",
     source: "qwen",
-    api_key: "sk-xxxxxx"
+    api_key: "sk-xxxxxx",
   });
 
-  const [llmconfigs, setLlmConfigs] = useState(Array<{
-      id: number;
+  const [llmconfigs, setLlmConfigs] = useState(
+    Array<{
+      id: string;
       source: string;
       model_name: string;
       api_key: string;
       max_context: number;
-  }>); // 存储 LLM 配置
+    }>,
+  ); // 存储 LLM 配置
   const [llmloading, setLlmLoading] = useState(true); // 加载状态
   const [llmerror, setLlmError] = useState(""); // 错误信息
-  
+
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
@@ -138,8 +155,8 @@ export default function LlmConfig() {
 
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    console.log("formData:", id , value)
-    const key = id.replace(/^edit_/, '');
+    console.log("formData:", id, value);
+    const key = id.replace(/^edit_/, "");
     setEditFormData((prev) => ({ ...prev, [key]: value }));
     console.log("更新后的 formData:", { ...editFormData, [key]: value });
     setEditingConfig((prev) => {
@@ -150,21 +167,22 @@ export default function LlmConfig() {
       };
     });
   };
-  
+
   const addLLM = async () => {
     try {
       const newLLM = {
         ...addFormData,
-        max_context: 0 // 默认值
+        max_context: 0,
+        id: uuidv4(),
       };
-  
+
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/add_llm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llm_config: newLLM }) // 包装为数组
+        body: JSON.stringify({ llm_config: newLLM }), // 包装为数组
       });
-  
+
       if (!res.ok) throw new Error("添加 LLM 配置失败");
       setToastState({
         open: true,
@@ -190,14 +208,14 @@ export default function LlmConfig() {
   const updatedLLM = async () => {
     try {
       if (!editingConfig) return;
-  
+
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/add_llm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llm_config: editingConfig }) // 包装为数组
+        body: JSON.stringify({ llm_config: editingConfig }), // 包装为数组
       });
-  
+
       if (!res.ok) throw new Error("修改 LLM 配置失败");
       setToastState({
         open: true,
@@ -206,11 +224,11 @@ export default function LlmConfig() {
         variant: "default",
       });
       setIsEditOpen(false); // 关闭 EditDialog
-      console.log("updateLLM", editingConfig)
+      console.log("updateLLM", editingConfig);
       setLlmConfigs((prev) =>
         prev.map((config) =>
-          config.id === editingConfig.id ? editingConfig : config
-        )
+          config.id === editingConfig.id ? editingConfig : config,
+        ),
       );
     } catch (err: any) {
       setError(err || "修改失败，请重试"); // 显示错误信息
@@ -223,8 +241,8 @@ export default function LlmConfig() {
     } finally {
       setIsEditLoading(false);
     }
-  }
-  const removeLLM = async (id: number) => {
+  };
+  const removeLLM = async (id: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(`http://localhost:${port}/api/delete_llm/${id}`, {
@@ -233,11 +251,11 @@ export default function LlmConfig() {
           "Content-Type": "application/json",
         },
       });
-  
+
       if (!res.ok) {
         throw new Error("删除失败，请检查网络或配置");
       }
-  
+
       // 显示成功提示（可选）
       setToastState({
         open: true,
@@ -259,10 +277,10 @@ export default function LlmConfig() {
     }
   };
 
-  return <div id="llm">
+  return (
+    <div id="llm">
       <div className={`transition-colors rounded-lg overflow-hidden`}>
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          
           {llmloading ? (
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
@@ -286,21 +304,30 @@ export default function LlmConfig() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {llmconfigs.map((config) => (
+                  {llmconfigs.map((config) => (
                     <TableRow key={config.id}>
                       <TableCell>{config.id} </TableCell>
                       <TableCell>{config.model_name} </TableCell>
                       <TableCell>{config.source} </TableCell>
-                      <TableCell> <MaskedApiKey apiKey={config.api_key} /> </TableCell>
+                      <TableCell>
+                        {" "}
+                        <MaskedApiKey apiKey={config.api_key} />{" "}
+                      </TableCell>
                       <TableCell>
                         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                           <DialogTrigger asChild>
-                            <button className="text-black-500 hover:text-black-700 px-1 py-1" onClick={() => handleEditClick(config)}>
+                            <button
+                              className="text-black-500 hover:text-black-700 px-1 py-1"
+                              onClick={() => handleEditClick(config)}
+                            >
                               <Edit className="w-4 h-4" />
                             </button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[425px]">
-                            {error && <div className="text-red-500 mb-4">{error}</div>} {/* 显示错误信息 */}
+                            {error && (
+                              <div className="text-red-500 mb-4">{error}</div>
+                            )}{" "}
+                            {/* 显示错误信息 */}
                             <DialogHeader>
                               <DialogTitle>编辑模型配置</DialogTitle>
                               <DialogDescription>
@@ -312,44 +339,77 @@ export default function LlmConfig() {
                                 <Label htmlFor="edit_id" className="text-right">
                                   模型ID
                                 </Label>
-                                <Input id="edit_id" defaultValue={editingConfig?.id || "null"} disabled
-                                  className="col-span-3" />
+                                <Input
+                                  id="edit_id"
+                                  defaultValue={editingConfig?.id || "null"}
+                                  disabled
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_model_name" className="text-right">
+                                <Label
+                                  htmlFor="edit_model_name"
+                                  className="text-right"
+                                >
                                   模型名称
                                 </Label>
-                                <Input id="edit_model_name" defaultValue={editingConfig?.model_name || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_model_name"
+                                  defaultValue={
+                                    editingConfig?.model_name || "null"
+                                  }
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_source" className="text-right">
+                                <Label
+                                  htmlFor="edit_source"
+                                  className="text-right"
+                                >
                                   模型来源
                                 </Label>
-                                <Input id="edit_source" defaultValue={editingConfig?.source || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_source"
+                                  defaultValue={editingConfig?.source || "null"}
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="edit_api_key" className="text-right">
+                                <Label
+                                  htmlFor="edit_api_key"
+                                  className="text-right"
+                                >
                                   API Key
                                 </Label>
-                                <Input id="edit_api_key" defaultValue={editingConfig?.api_key || "null"}
-                                  onChange={handleEditInputChange} className="col-span-3" />
+                                <Input
+                                  id="edit_api_key"
+                                  defaultValue={
+                                    editingConfig?.api_key || "null"
+                                  }
+                                  onChange={handleEditInputChange}
+                                  className="col-span-3"
+                                />
                               </div>
                             </div>
                             <DialogFooter>
-                              <Button onClick={updatedLLM} type="submit" disabled={isEditLoading}>
+                              <Button
+                                onClick={updatedLLM}
+                                type="submit"
+                                disabled={isEditLoading}
+                              >
                                 {isEditLoading ? "提交中..." : "修改"}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
-                        
+
                         <button
-                            onClick={() => removeLLM(config.id)}
-                            className="text-red-500 hover:text-red-700 px-4 py-1"
+                          onClick={() => removeLLM(config.id)}
+                          className="text-red-500 hover:text-red-700 px-4 py-1"
                         >
-                            <TrashIcon className="w-4 h-4" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </TableCell>
                     </TableRow>
@@ -359,17 +419,16 @@ export default function LlmConfig() {
             </div>
           )}
           <SettingsIcon className="w-10 h-6 text-gray-400 mb-4" />
-          <p className="text-gray-500 mt-1">
-            点击下方按钮添加新的 LLM
-          </p>
+          <p className="text-gray-500 mt-1">点击下方按钮添加新的 LLM</p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button className="mt-4 px-4 py-2 text-white rounded-lg transition-colors">
-              添加LLM
+                添加LLM
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              {error && <div className="text-red-500 mb-4">{error}</div>} {/* 显示错误信息 */}
+              {error && <div className="text-red-500 mb-4">{error}</div>}{" "}
+              {/* 显示错误信息 */}
               <DialogHeader>
                 <DialogTitle>添加大模型</DialogTitle>
                 <DialogDescription>
@@ -381,22 +440,34 @@ export default function LlmConfig() {
                   <Label htmlFor="model_name" className="text-right">
                     模型名称
                   </Label>
-                  <Input id="model_name" placeholder="model_name"
-                    onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="model_name"
+                    placeholder="model_name"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="source" className="text-right">
                     模型来源
                   </Label>
-                  <Input id="source" placeholder="source"
-                    onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="source"
+                    placeholder="source"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="api_key" className="text-right">
                     API Key
                   </Label>
-                  <Input id="api_key" placeholder="api_key"
-                     onChange={handleInputChange} className="col-span-3" />
+                  <Input
+                    id="api_key"
+                    placeholder="api_key"
+                    onChange={handleInputChange}
+                    className="col-span-3"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -408,15 +479,24 @@ export default function LlmConfig() {
           </Dialog>
           <Toast.Root
             open={toastState.open}
-            onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
+            onOpenChange={(open) =>
+              setToastState((prev) => ({ ...prev, open }))
+            }
             className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
               toastState.variant === "destructive"
                 ? "border-red-500 bg-red-50 text-red-900"
                 : "border-gray-200 bg-white text-gray-900"
             }`}
           >
-            <Toast.Description className="pl-4 text-sm font-medium">{toastState.description}</Toast.Description>
-            <Toast.Action altText="关闭" onClick={() => setToastState((prev) => ({ ...prev, open: false }))}>
+            <Toast.Description className="pl-4 text-sm font-medium">
+              {toastState.description}
+            </Toast.Description>
+            <Toast.Action
+              altText="关闭"
+              onClick={() =>
+                setToastState((prev) => ({ ...prev, open: false }))
+              }
+            >
               ×
             </Toast.Action>
           </Toast.Root>
@@ -425,5 +505,6 @@ export default function LlmConfig() {
           <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
         </div>
       </div>
-  </div>;
+    </div>
+  );
 }

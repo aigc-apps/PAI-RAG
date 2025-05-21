@@ -16,22 +16,35 @@ from openai.types.chat import (
     ChatCompletionMessageToolCall,
 )
 from search.aliyun_search_tool import aget_aliyun_search_tool
+from utils.models import fetch_llm
 
 app = FastAPI()
 
 
-def get_model_instance(model_name: str, model_source: str, api_key: str):
-    if model_source == "openai":
-        return AsyncOpenAI(
-            api_key=api_key, base_url="https://api.openai.com/v1"
-        ).chat.completions
-    elif model_source == "qwen":
-        return AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        ).chat.completions
+async def get_model_instance(model_id: str):
+    model = await fetch_llm(model_id)
+    if model:
+        model_source = model.get("source", "unknown")
+        model_name = model.get("model_name", "unknown")
+        if model_source == "openai":
+            return (
+                model_name,
+                AsyncOpenAI(
+                    api_key=model["api_key"], base_url="https://api.openai.com/v1"
+                ).chat.completions,
+            )
+        elif model_source == "qwen":
+            return (
+                model_name,
+                AsyncOpenAI(
+                    api_key=model["api_key"],
+                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                ).chat.completions,
+            )
+        else:
+            raise ValueError(f"Unsupported model provider: {model_source}")
     else:
-        raise ValueError(f"Unsupported model provider: {model_source}")
+        raise ValueError(f"Model id {model_id} not exists.")
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
@@ -88,7 +101,9 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                 # 模型生成已结束
                 if choice.finish_reason == "stop":
                     stop_flag = True
-                    yield "0:{text}\n".format(text=json.dumps(choice.delta.content, ensure_ascii=False))
+                    yield "0:{text}\n".format(
+                        text=json.dumps(choice.delta.content, ensure_ascii=False)
+                    )
                     yield 'd:{"finishReason":"stop"}\n'
                     break
                 # 调用工具,收集工具参数
@@ -110,8 +125,13 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             ] += arguments
                 # 普通内容
                 elif choice.delta.content:
-                    yield "0:{text}\n".format(text=json.dumps(choice.delta.content, ensure_ascii=False))
-                    if isinstance(messages[-1], ChatCompletionMessage) and messages[-1].role == "assistant":
+                    yield "0:{text}\n".format(
+                        text=json.dumps(choice.delta.content, ensure_ascii=False)
+                    )
+                    if (
+                        isinstance(messages[-1], ChatCompletionMessage)
+                        and messages[-1].role == "assistant"
+                    ):
                         messages[-1].content += str(choice.delta.content)
                     else:
                         messages.append(
@@ -119,7 +139,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                 role="assistant", content=str(choice.delta.content)
                             )
                         )  # 更新历史
-                    
+
                 # 根据参数调用工具
                 if choice.finish_reason == "tool_calls":
                     for tool_call in draft_tool_calls:
@@ -202,26 +222,30 @@ async def handle_chat(request: Request):
         system = data.get("system", system_prompt)
 
         # 从 headers 中获取模型参数
-        # TODO: 模型参数不应该除了name，不应该由前端传入
-        model_name = request.headers.get("X-Model-Name")
-        api_key = request.headers.get("X-Api-Key")
-        model_source = request.headers.get("X-Model-Source")
-        x_options = request.headers.get("X-Options").split(",") if request.headers.get("X-Options") else []
-        
+        model_id = request.headers.get("X-Model-Id")
+        x_options = (
+            request.headers.get("X-Options").split(",")
+            if request.headers.get("X-Options")
+            else []
+        )
+
         openai_tools = []
         tools_name_to_fn = {}
         if "search" in x_options:
-            search_openai_tools, search_tools_name_to_fn = await aget_aliyun_search_tool()
+            search_openai_tools, search_tools_name_to_fn = (
+                await aget_aliyun_search_tool()
+            )
             openai_tools.extend(search_openai_tools)
             tools_name_to_fn.update(search_tools_name_to_fn)
         if "mcp" in x_options:
             mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools()
             openai_tools.extend(mcp_openai_tools)
             tools_name_to_fn.update(mcp_tools_name_to_fn)
-            
+
         logger.info(f"[Tool] openai_tools: {openai_tools}")
         logger.info(f"[Tool] tools_name_to_fn: {tools_name_to_fn}")
-        model = get_model_instance(model_name, model_source, api_key)
+        model_name, model = await get_model_instance(model_id)
+        logger.info(f"[Model] model_name: {model_name}")
 
         # 构建openai_messages
         full_messages = [

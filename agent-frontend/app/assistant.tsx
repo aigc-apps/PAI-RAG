@@ -6,21 +6,22 @@ import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import LlmConfig from "./config/llm/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
 
-
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
-    id: Date.now(),
+    id: "",
     source: "",
     model_name: "",
-    api_key: "",
-    max_context: 0,
   });
 
   // 页面加载时拉取 LLM 配置
@@ -43,15 +44,15 @@ export const Assistant = () => {
 
   // 模型选择回调
   const handleModelChange = async (
+    id: string,
     source: string,
     model_name: string,
-    api_key: string,
   ) => {
     setLlmConfig({
       ...llmConfig,
+      id,
       source,
       model_name,
-      api_key,
     });
   };
 
@@ -60,9 +61,7 @@ export const Assistant = () => {
   const runtime = useChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
     headers: {
-      "X-Model-Name": llmConfig.model_name || "gpt-4o",
-      "X-Api-Key": llmConfig.api_key || "",
-      "X-Model-Source": llmConfig.source || "openai",
+      "X-Model-Id": llmConfig.id || "",
       "X-Options": selectedOptions.join(",") || "",
     },
   });
@@ -71,52 +70,54 @@ export const Assistant = () => {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <SidebarProvider defaultOpen={true}>
-        <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} /> 
+        <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         <SidebarInset className="h-screen overflow-hidden">
-            {activeTab === "/" && 
-              <div className="flex flex-col h-full">
-                  <header className="flex h-12 border-b">
-                  <SidebarTrigger />
-                  <div className="flex justify-start px-20 border-none">
-                    <ModelSelector
-                      selectedModel={{
-                        source: llmConfig.source || "",
-                        model_name: llmConfig.model_name || ""
-                      }}
-                      onModelChange={handleModelChange}
-                    />
-                  </div>
-                </header>
-                <Thread onToggleChange={(options) => {
-                    setSelectedOptions(options); // 更新状态
-                  }}  />
-                <ToolUIWrapper />
-              </div>
-            }
-            {activeTab === "/config/llm" && 
-              <div className="flex flex-col h-full">
-                <header className="flex h-12 border-b">
-                  <SidebarTrigger />
-                </header>
-                <LlmConfig />
-              </div>
-            }
-            {activeTab === "/config/mcp" && 
-              <div className="flex flex-col h-full">
-                <header className="flex h-12 border-b">
-                  <SidebarTrigger />
-                </header>
-                <McpConfig />
-              </div>
-            }
-            {activeTab === "/config/search" && 
-              <div className="flex flex-col h-full">
-                <header className="flex h-12 border-b">
-                  <SidebarTrigger />
-                </header>
-                <SearchConfig />
-              </div>
-            }
+          {activeTab === "/" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+                <div className="flex justify-start px-20 border-none">
+                  <ModelSelector
+                    selectedModel={{
+                      source: llmConfig.source || "",
+                      model_name: llmConfig.model_name || "",
+                    }}
+                    onModelChange={handleModelChange}
+                  />
+                </div>
+              </header>
+              <Thread
+                onToggleChange={(options) => {
+                  setSelectedOptions(options); // 更新状态
+                }}
+              />
+              <ToolUIWrapper />
+            </div>
+          )}
+          {activeTab === "/config/llm" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <LlmConfig />
+            </div>
+          )}
+          {activeTab === "/config/mcp" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <McpConfig />
+            </div>
+          )}
+          {activeTab === "/config/search" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <SearchConfig />
+            </div>
+          )}
         </SidebarInset>
       </SidebarProvider>
     </AssistantRuntimeProvider>
