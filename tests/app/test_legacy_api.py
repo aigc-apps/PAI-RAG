@@ -91,6 +91,7 @@ def setup_app():
                     "similarity_threshold": 0.7,
                 },
                 "retriever": {"retrieval_mode": "default"},
+                "query_rewrite": {"enabled": "true"},
             },
         )
         assert response.status_code == 200

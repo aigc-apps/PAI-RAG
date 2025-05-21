@@ -19,6 +19,10 @@ from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreC
 
 from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
+    DashScopeGenerationModels,
+    DASHSCOPE_MODEL_META,
+    DEFAULT_CONTEXT_WINDOW,
+    DEFAULT_MAX_TOKENS,
 )
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
@@ -80,17 +84,53 @@ def delete_index(vector_index):
     ]
 
 
-def update_llms(selected_model):
+def fill_llm_tokens(model_name: str, selected_model_id: str):
+    """
+    如果是新增model，自动根据model_name填充tokens配置
+    如果是已有model，不用
+    """
+    if selected_model_id == "NEW":
+        model_name_lower_case = model_name.lower()
+        for attr_name in dir(DashScopeGenerationModels):
+            if not attr_name.startswith("__"):
+                preserved_model_name = getattr(DashScopeGenerationModels, attr_name)
+                if model_name_lower_case == preserved_model_name:
+                    meta = DASHSCOPE_MODEL_META.get(model_name_lower_case)
+                    if meta:
+                        return meta["context_window"], meta["num_output"]
+        return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
+
+    else:
+        rag_config = rag_client.get_config()
+        # Extract the relevant LLM configuration based on the selected model
+        llm_config = next(
+            (
+                llm
+                for llm in rag_config.llms
+                if llm.model_id == selected_model_id
+                or (not llm.model_id and llm.model == selected_model_id)
+            ),
+            None,
+        )
+        if llm_config:
+            return llm_config.context_window, llm_config.max_tokens
+        else:
+            # If the selected model is not found in the LLM configurations,
+            # return the default values
+            return DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
+
+
+def update_llms(selected_model_id):
     rag_config = rag_client.get_config()
-    is_new = selected_model == "NEW"
+    is_new = selected_model_id == "NEW"
 
     # Extract the relevant LLM configuration based on the selected model
     llm_config = next(
         (
             llm
             for llm in rag_config.llms
-            if llm.model_id == selected_model
-            or (not llm.model_id and llm.model == selected_model)
+            if llm.model_id == selected_model_id
+            or (not llm.model_id and llm.model == selected_model_id)
         ),
         None,
     )
@@ -100,6 +140,10 @@ def update_llms(selected_model):
         "api_key": llm_config.api_key if llm_config else "",
         "model_name": llm_config.model if llm_config and not is_new else "",
         "model_id": llm_config.model_id if llm_config else "",
+        "context_window": llm_config.context_window
+        if llm_config
+        else DEFAULT_CONTEXT_WINDOW,
+        "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
         "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
     }
@@ -112,22 +156,29 @@ def update_llms(selected_model):
         gr.update(value=initial_values["api_key"]),
         gr.update(value=initial_values["model_name"]),
         gr.update(value=initial_values["model_id"]),
+        gr.update(value=initial_values["context_window"]),
+        gr.update(value=initial_values["max_tokens"]),
         gr.update(value=initial_values["vision_support"]),
         gr.update(value=initial_values["is_reasoning_model"]),
     ]
 
 
 def save_new_llm(
-    selected_model,
+    selected_model_id,
     model_name,
     base_url,
     api_key,
     model_id,
+    context_window,
+    max_tokens,
     vision_support,
     is_reasoning_model,
 ):
+    if context_window <= max_tokens:
+        raise ValueError("context_window should be greater than max_tokens")
+
     rag_config = rag_client.get_config()
-    is_new = selected_model == "NEW"
+    is_new = selected_model_id == "NEW"
     if not all([base_url, api_key, model_name]):
         raise gr.Error("please fill in all fields")
 
@@ -146,8 +197,8 @@ def save_new_llm(
             (
                 (index, llm)
                 for index, llm in enumerate(rag_config.llms)
-                if llm.model_id == selected_model
-                or (not llm.model_id and llm.model == selected_model)
+                if llm.model_id == selected_model_id
+                or (not llm.model_id and llm.model == selected_model_id)
             ),
             (-1, None),
         )
@@ -157,6 +208,8 @@ def save_new_llm(
         existing_model.api_key = api_key
         existing_model.model = model_name
         existing_model.model_id = model_id
+        existing_model.context_window = context_window
+        existing_model.max_tokens = max_tokens
         existing_model.vision_support = vision_support
         existing_model.is_reasoning_model = is_reasoning_model
         rag_config.llms[model_index] = existing_model
@@ -168,6 +221,8 @@ def save_new_llm(
             "base_url": base_url,
             "api_key": api_key,
             "model": model_name,
+            "context_window": context_window,
+            "max_tokens": max_tokens,
             "vision_support": vision_support,
             "is_reasoning_model": is_reasoning_model,
         }
@@ -188,13 +243,13 @@ def save_new_llm(
     ]
 
 
-def delete_llm(selected_model):
+def delete_llm(selected_model_id):
     rag_config = rag_client.get_config()
     # Find the LLM configuration by model_id
     rag_config.llms = [
         llm
         for llm in rag_config.llms
-        if llm.model != selected_model and llm.model_id != selected_model
+        if llm.model != selected_model_id and llm.model_id != selected_model_id
     ]
 
     update_dict = {}
@@ -384,6 +439,21 @@ def save_query_transform_cfg(input_elements: List[Any]):
 
         return gr.update(
             value=f"[{datetime.datetime.now()}] Query transform prompt configuration saved successfully!",
+            visible=True,
+        )
+    except RagApiError as api_error:
+        raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
+
+
+def save_trace_cfg(input_elements: List[Any]):
+    try:
+        update_dict = {}
+        for element, value in input_elements.items():
+            update_dict[element.elem_id] = value
+        rag_client.patch_config(update_dict)
+
+        return gr.update(
+            value=f"[{datetime.datetime.now()}] 成功保存OpenTelemetry配置信息!",
             visible=True,
         )
     except RagApiError as api_error:

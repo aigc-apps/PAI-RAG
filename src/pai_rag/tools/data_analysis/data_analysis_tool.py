@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from llama_index.core.schema import QueryBundle
 
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.rag_config import RagConfig
@@ -14,6 +13,7 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
+from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")
@@ -61,6 +61,7 @@ def resolve_data_analysis_query(config: RagConfig) -> DataAnalysisQuery:
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm,
+        embed_model=resolve_default_embedding(),
         callback_manager=None,
     )
 
@@ -108,16 +109,9 @@ def run(
 
     da_query_engine = resolve_data_analysis_query(config)
 
-    if not stream:
-        query_bundle = QueryBundle(query_str=question)
-        response = da_query_engine.query(query_bundle)
-        print("**Answer**: ", response.response)
-    else:
-        query_bundle = QueryBundle(query_str=question)
-        response = da_query_engine.query(query_bundle)
-        print("**Answer**: ", end="")
-        for chunk in response.response_gen:
-            print(chunk, end="")
+    query_bundle = PaiQueryBundle(query_str=question, stream=stream)
+    response: ChatResponseWrapper = da_query_engine.query(query_bundle)
+    print("**Answer**: ", response.response)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from typing import Any, Generator, List, Optional, Sequence, Union, cast
+from typing import Any, Generator, List, Dict, Optional, Sequence, Union, cast
 
 from llama_index.core.settings import Settings
 from llama_index.core.callbacks.base import CallbackManager
@@ -63,7 +63,13 @@ class PaiSynthesizer:
     ) -> None:
         self._llm = llm
         self._callback_manager = callback_manager or Settings.callback_manager
-        self._prompt_helper = prompt_helper
+        self._prompt_helper = (
+            prompt_helper
+            or Settings._prompt_helper
+            or PromptHelper.from_llm_metadata(
+                self._llm.metadata,
+            )
+        )
         self._multimodal_llm = multimodal_llm
         self._update_prompts(
             system_role_str=system_role_template,
@@ -174,6 +180,7 @@ class PaiSynthesizer:
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         system_role_str: str = None,
         prompt_template_str: str = None,
+        prompt_template_args: Dict[str, str] = None,
         **response_kwargs: Any,
     ) -> ChatResponseWrapper:
         dispatcher.event(
@@ -225,6 +232,7 @@ class PaiSynthesizer:
                     system_role_str=system_role_str or self._system_role_template,
                     prompt_template_str=prompt_template_str
                     or self._custom_prompt_template,
+                    prompt_template_args=prompt_template_args or {},
                     **response_kwargs,
                 )
             additional_source_nodes = additional_source_nodes or []
@@ -256,6 +264,7 @@ class PaiSynthesizer:
         citation: bool = False,
         system_role_str: str = None,
         prompt_template_str: str = None,
+        prompt_template_args: Dict[str, str] = None,
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
@@ -287,17 +296,28 @@ class PaiSynthesizer:
                 or self._citation_multimodal_qa_template
             )
 
-        text_qa_template = prompt_template.partial_format(
-            history_str=history_str, query_str=query_str
+        prompt_template_args.update(
+            {"query_str": query_str, "history_str": history_str}
         )
+        text_qa_template = prompt_template.partial_format(**prompt_template_args)
 
         response: RESPONSE_TEXT_TYPE
         logger.info(
             f"Synthsize using LLM with contexts. \n Prompt: {text_qa_template} \n Chat History: {history_str} \n Query: {query_str}"
         )
+
+        logger.info(f"Prompt_helper parameter: {str(self._prompt_helper)}")
+        truncated_context_list = self._prompt_helper.truncate(
+            prompt=text_qa_template,
+            text_chunks=[
+                context_str
+            ],  # 目前主要处理context_str一个参数，可以是：rag检索结果/web搜索结果/db查询结果
+        )
+        logger.info(f"Truncated_context_str: {str(truncated_context_list)}")
+
         messages = self._llm._get_messages(
             text_qa_template,
-            context_str=context_str,
+            context_str=truncated_context_list[0],
             **response_kwargs,
         )
 

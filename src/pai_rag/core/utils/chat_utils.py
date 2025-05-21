@@ -201,6 +201,21 @@ async def make_completion_chunk_response(
                 is_first_chunk = False
 
             full_content += chat_response.delta
+            if "prompt_tokens" not in chat_response.additional_kwargs:
+                chat_response.additional_kwargs[
+                    "prompt_tokens"
+                ] = chunk_token_usage.prompt_tokens
+
+            if "completion_tokens" not in chat_response.additional_kwargs:
+                chat_response.additional_kwargs[
+                    "completion_tokens"
+                ] = chunk_token_usage.completion_tokens
+
+            if "total_tokens" not in chat_response.additional_kwargs:
+                chat_response.additional_kwargs[
+                    "total_tokens"
+                ] = chunk_token_usage.total_tokens
+
             chunk = ChatCompletionChunk(
                 id=chat_id,
                 created=created_ts,

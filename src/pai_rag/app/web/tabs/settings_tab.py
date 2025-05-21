@@ -76,8 +76,28 @@ def create_setting_tab() -> Dict[str, Any]:
                                     interactive=True,
                                     scale=1,
                                 )
+                            # 第三行: llm token参数
+                            with gr.Row():
+                                llm_model_context_window = gr.Number(
+                                    value=rag_config.llms[0].context_window
+                                    if rag_config.llms
+                                    else 8000,
+                                    label="上下文窗口",
+                                    # placeholder="上下文窗口, e.g. 8000",
+                                    interactive=True,
+                                    scale=1,
+                                )
+                                llm_model_max_tokens = gr.Number(
+                                    value=rag_config.llms[0].max_tokens
+                                    if rag_config.llms
+                                    else 4000,
+                                    label="最大输出长度",
+                                    # placeholder="最大输出长度, e.g. 4000",
+                                    interactive=True,
+                                    scale=1,
+                                )
 
-                            # 第三行：多模态支持
+                            # 第四行：多模态支持
                             with gr.Row():
                                 llm_vision_support = gr.Checkbox(
                                     value=rag_config.llms[0].vision_support
@@ -99,6 +119,12 @@ def create_setting_tab() -> Dict[str, Any]:
                                 )
                     save_btn = gr.Button("保存模型配置", variant="primary")
 
+                    llm_model_name.change(
+                        fn=ev_listeners.fill_llm_tokens,
+                        inputs=[llm_model_name, llm_model],
+                        outputs=[llm_model_context_window, llm_model_max_tokens],
+                    )
+
                     llm_model.change(
                         fn=ev_listeners.update_llms,
                         inputs=llm_model,
@@ -109,6 +135,8 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_api_key,
                             llm_model_name,
                             llm_model_id,
+                            llm_model_context_window,
+                            llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
                         ],
@@ -122,6 +150,8 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_base_url,
                             llm_api_key,
                             llm_model_id,
+                            llm_model_context_window,
+                            llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
                         ],
@@ -418,6 +448,51 @@ def create_setting_tab() -> Dict[str, Any]:
                     save_query_transform_btn,
                 ]
             )
+        with gr.Tab("OpenTelemetry链路追踪"):
+            trace_app_name = gr.Textbox(
+                label="应用名称(EAS服务名称)",
+                value="",
+                elem_id="trace_app_name",
+                placeholder="YOUR_EAS_SERVICE_NAME",
+                interactive=True,
+            )
+            _ = gr.Markdown(
+                value="注意: 需要开通阿里云可观测链路OpenTelemetry版。\n点击[开通文档](https://help.aliyun.com/zh/arms/tracing-analysis/get-started-with-tracing-analysis?spm=a2c4g.11186623.0.i4)查看如何开通和获取接入点信息(gRPC endpoint)。",
+            )
+            telemetry_endpoint = gr.Textbox(
+                label="OpenTelemetry 接入点 gRPC Endpoint",
+                value="",
+                elem_id="telemetry_endpoint",
+                interactive=True,
+                placeholder="http://tracing-analysis-dc-hz.aliyuncs.com:8090",
+            )
+            telemetry_token = gr.Textbox(
+                label="OpenTelemetry鉴权Token",
+                value="",
+                elem_id="telemetry_token",
+                interactive=True,
+                type="password",
+            )
+            save_trace_btn = gr.Button(
+                value="保存OpenTelemetry信息",
+                elem_id="save_trace_btn",
+                variant="primary",
+            )
+
+            save_trace_state = gr.Textbox(label="保存操作: ", container=False, visible=True)
+            trace_components = [
+                trace_app_name,
+                telemetry_endpoint,
+                telemetry_token,
+            ]
+            save_trace_btn.click(
+                fn=ev_listeners.save_trace_cfg,
+                inputs=set(trace_components),
+                outputs=[save_trace_state],
+                api_name="save_query_transform_cfg",
+            )
+            components.extend(trace_components)
+
     elems = components_to_dict(components)
     # elems.update(vector_db_components)
     elems.update({use_oss_col.elem_id: use_oss_col})

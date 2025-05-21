@@ -46,7 +46,6 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
 )
 from llama_index.core.schema import ImageNode
-import llama_index.core.instrumentation as instrument
 
 from openai.types.completion_usage import CompletionUsage
 from openai.types.chat import (
@@ -64,6 +63,8 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_ANSWER_TEMPLATE,
     CURRENT_TIME_PROMPT,
 )
+from pai_rag.integrations.trace.pai_query_wrapper import pai_query_wrapper
+import llama_index.core.instrumentation as instrument
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -106,6 +107,7 @@ class ChatFlow:
     def __init__(self, config: RagConfig):
         self.config = config
 
+    @dispatcher.span
     async def _recognize_intent(
         self,
         chat_request: ChatCompletionRequest,
@@ -158,7 +160,7 @@ class ChatFlow:
                 llm_kwargs=llm_kwargs,
             )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def astream_chat(
         self,
         chat_request: ChatCompletionRequest,
@@ -187,7 +189,7 @@ class ChatFlow:
             return_reference=chat_request.return_reference,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def achat(
         self,
         chat_request: ChatCompletionRequest,
@@ -335,6 +337,7 @@ class ChatFlow:
         response_wrapper.additional_kwargs["total_tokens"] = query_bundle.total_tokens
         return response_wrapper
 
+    @dispatcher.span
     async def achat_db(
         self,
         query_bundle: PaiQueryBundle,
@@ -349,6 +352,7 @@ class ChatFlow:
 
         return await data_analysis_query_engine.aquery(query_bundle)
 
+    @dispatcher.span
     async def alist_news(
         self,
         query_bundle: PaiQueryBundle,
@@ -359,25 +363,31 @@ class ChatFlow:
                 query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
             )
         else:
-            response_wrapper = await news_tool.astream_list_topics(
-                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
-            )
+            args = {
+                "query_str": query_bundle.query_str,
+                "news_topics": query_bundle.news_topics,
+            }
+            response_gen = await news_tool.astream_list_topics([], **args)
+            response_wrapper = ChatResponseWrapper(response=response_gen)
         return response_wrapper
 
+    @dispatcher.span
     async def achat_news(
         self,
         query_bundle: PaiQueryBundle,
     ):
         news_tool = resolve_news_tool(self.config)
-        if not query_bundle.stream:
-            response_wrapper = await news_tool.achat(prompt=query_bundle.query_str)
+        args = {"prompt": query_bundle.query_str}
+        if query_bundle.stream:
+            response_gen = await news_tool.astream_chat([], **args)
+            response_wrapper = ChatResponseWrapper(response=response_gen)
         else:
-            response_wrapper = await news_tool.astream_chat(
-                prompt=query_bundle.query_str
-            )
+            response = await news_tool.achat([], **args)
+            response_wrapper = ChatResponseWrapper(response=response)
 
         return response_wrapper
 
+    @dispatcher.span
     async def achat_news_llm(
         self,
         query_bundle: PaiQueryBundle,
@@ -395,6 +405,7 @@ class ChatFlow:
 
         return response_wrapper
 
+    @dispatcher.span
     async def achat_web(
         self,
         query_bundle: PaiQueryBundle,
@@ -409,6 +420,7 @@ class ChatFlow:
             query_bundle,
         )
 
+    @dispatcher.span
     async def achat_knowledgebase(
         self,
         query_bundle: PaiQueryBundle,
@@ -433,6 +445,7 @@ class ChatFlow:
         response = await query_engine.aquery(query_bundle)
         return response
 
+    @dispatcher.span
     async def achat_agent(
         self,
         query_bundle: PaiQueryBundle,
@@ -470,6 +483,7 @@ class ChatFlow:
                 )
             )
 
+    @dispatcher.span
     async def achat_llm(
         self,
         query_bundle: PaiQueryBundle,

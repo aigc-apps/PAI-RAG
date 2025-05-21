@@ -156,7 +156,7 @@ def resolve_intent_router(config: RagConfig, model_id: str = None) -> PaiIntentR
 
 
 def resolve_default_embedding():
-    return resolve(cls=PaiEmbedding, config=HuggingFaceEmbeddingConfig())
+    return resolve(cls=PaiEmbedding, embed_config=HuggingFaceEmbeddingConfig())
 
 
 def resolve_task_executor(
@@ -242,6 +242,7 @@ def resolve_data_analysis_loader(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
+        embed_model=resolve_default_embedding(),
         llm=llm,
     )
 

@@ -1,5 +1,5 @@
 import traceback
-from typing import Dict, List
+from typing import Dict, List, Any, Sequence
 from llama_index.core.prompts import PromptTemplate
 from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
 from pai_rag.extensions.news.news_config import (
@@ -9,13 +9,26 @@ from pai_rag.extensions.news.news_config import (
     DEFAULT_WEB_SEARCH_INFO_MESSAGE,
     DEFAULT_LIST_NEWS_END_RESPONSE,
 )
-
+from llama_index.core.bridge.pydantic import Field
 from llama_index.core.base.llms.types import (
     ChatMessage,
     ChatResponseAsyncGen,
     ChatResponse,
+    ChatResponseGen,
+    CompletionResponse,
+    CompletionResponseGen,
+    CompletionResponseAsyncGen,
     MessageRole,
+    LLMMetadata,
 )
+from llama_index.core.base.response.schema import Response
+from llama_index.core.instrumentation.events.query import QueryEndEvent
+
+from llama_index.core.instrumentation.span import active_span_id
+
+from llama_index.core.llms.llm import LLM
+from llama_index.core.llms.callbacks import llm_chat_callback, llm_completion_callback
+
 from alibabacloud_aimiaobi20230801 import models as aimiaobi_models
 from alibabacloud_aimiaobi20230801.client import Client as AimiaobiClient
 from alibabacloud_tea_openapi.models import Config
@@ -24,10 +37,15 @@ from alibabacloud_tea_openapi_sse import models as open_api_models
 from alibabacloud_tea_util_sse import models as open_api_util_models
 import json
 
+from openinference.instrumentation.llama_index import get_current_span
+from pai_rag.integrations.trace.base import use_current_span
 from pydantic import BaseModel
 from loguru import logger
 
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
+import llama_index.core.instrumentation as instrument
+
+dispatcher = instrument.get_dispatcher(__name__)
 
 
 def _create_client(
@@ -144,24 +162,40 @@ class NewsChatParameter(BaseModel):
     # answerLength: int = 200 # temporarily inactive
 
 
-class MiaobiNewsTool:
+class MiaobiNewsTool(LLM):
+    llm: PaiLlm = Field(description="")
+    config: MiaobiNewsConfig = Field(description="")
+    chat_client: LightApp = Field(description="")
+    miaobi_client: AimiaobiClient = Field(description="")
+    list_topics_prompt_template: PromptTemplate = Field(description="")
+    chat_news_prompt_template: str = Field(description="")
+
     def __init__(self, llm: PaiLlm, config: MiaobiNewsConfig):
-        self.llm = llm
-        self.config = config
-        self.chat_client = create_light_app_client(config)
-        self.miaobi_client = create_aimiaobi_client(config)
+        chat_client = create_light_app_client(config)
+        miaobi_client = create_aimiaobi_client(config)
         # self.chat_news_answer_len = config.chat_news_answer_len
-        self.list_topics_prompt_template = PromptTemplate(
+        list_topics_prompt_template = PromptTemplate(
             template=config.list_topics_prompt_str
         )
-        self.chat_news_prompt_template = config.chat_news_prompt_str.replace(
+        chat_news_prompt_template = config.chat_news_prompt_str.replace(
             "{news_role}", config.news_role
         )
+
+        super().__init__(
+            llm=llm,
+            config=config,
+            chat_client=chat_client,
+            miaobi_client=miaobi_client,
+            list_topics_prompt_template=list_topics_prompt_template,
+            chat_news_prompt_template=chat_news_prompt_template,
+        )
+
         logger.info(
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def _alist_hot_topics(self, news_topics):
+    async def _alist_hot_topics(self, news_topics) -> List[Dict[str, Any]]:
+        """Returns a list of dict, each dict represents a news, list is sorted in descending order of hot_value."""
         request = aimiaobi_models.GetHotTopicBroadcastRequest(
             workspace_id=self.config.workspace_id,
             size=self.config.top_news_count,
@@ -193,6 +227,7 @@ class MiaobiNewsTool:
         )
         return sorted_hot_topics
 
+    @dispatcher.span
     async def alist_topics(
         self,
         query_str: str,
@@ -206,7 +241,7 @@ class MiaobiNewsTool:
             )
             response = ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content=DEFAULT_NEWS_ERROR_MESSAGE,
                 ),
                 delta=DEFAULT_NEWS_ERROR_MESSAGE,
@@ -231,7 +266,15 @@ class MiaobiNewsTool:
                     content=content,
                 )
             ]
-
+            # store hot topics in span output
+            span_id = active_span_id.get()
+            dispatcher.event(
+                QueryEndEvent(
+                    response=Response(response=str(hot_topics), source_nodes=[]),
+                    query="",
+                    span_id=span_id,
+                )
+            )
             response = await self.llm.achat(messages)
             response.additional_kwargs["news_articles"] = hot_topics
             return ChatResponseWrapper(response=response)
@@ -241,17 +284,23 @@ class MiaobiNewsTool:
             )
             raise ex
 
+    @dispatcher.span
     async def astream_list_topics(
-        self,
-        query_str: str,
-        news_topics: List[str] = [],
-    ) -> ChatResponseWrapper:
+        self, messages: List[ChatMessage] = [], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
         try:
+            query_str = kwargs.get("query_str", "")
+            news_topics = kwargs.get("news_topics", [])
+            span_id = active_span_id.get()
 
+            # use use_current_span decorator to keep miaobinews span
+            # as the parent of the self.llm's span,
+            # when self.llm.astream_chat executes in this gen()
+            @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 yield ChatResponse(
                     message=ChatMessage(
-                        role="assistant",
+                        role=MessageRole.ASSISTANT,
                         content="",
                     ),
                     delta="",
@@ -269,7 +318,7 @@ class MiaobiNewsTool:
                     )
                     yield ChatResponse(
                         message=ChatMessage(
-                            role="assistant",
+                            role=MessageRole.ASSISTANT,
                             content=DEFAULT_NEWS_ERROR_MESSAGE,
                         ),
                         delta=DEFAULT_NEWS_ERROR_MESSAGE,
@@ -294,57 +343,63 @@ class MiaobiNewsTool:
                 ]
                 yield ChatResponse(
                     message=ChatMessage(
-                        role="assistant",
+                        role=MessageRole.ASSISTANT,
                         content="",
                     ),
                     delta="",
                     additional_kwargs={"news_articles": hot_topics},
                 )
 
+                # store hot topics in span output
+                dispatcher.event(
+                    QueryEndEvent(
+                        response=Response(response=str(hot_topics), source_nodes=[]),
+                        query="",
+                        span_id=span_id,
+                    )
+                )
                 async for response in await self.llm.astream_chat(
                     messages=messages,
                 ):
                     yield response
 
-            return ChatResponseWrapper(response=gen())
+            return gen()
         except Exception as e:
             logger.error(
                 f"Error while getting hot topics: {e}, {traceback.format_exc()}"
             )
             raise e
 
+    @llm_chat_callback()
     async def achat(
-        self,
-        prompt: str,
-        messages: List[ChatMessage] = [],
-    ):
-        stream_response_wrapper = await self.astream_chat(
-            prompt=prompt,
+        self, messages: List[ChatMessage] = [], **kwargs: Any
+    ) -> ChatResponse:
+        args = {"prompt": kwargs.get("prompt", "")}
+        stream_response_gen = await self.astream_chat(
             messages=messages,
+            **args,
         )
         message_content = ""
         additional_kwargs = {}
-        async for response in stream_response_wrapper.response:
+        async for response in stream_response_gen:
             message_content += response.delta
             additional_kwargs.update(response.additional_kwargs)
 
-        return ChatResponseWrapper(
-            response=ChatResponse(
-                message=ChatMessage(
-                    role="assistant",
-                    content=message_content,
-                ),
-                additional_kwargs=additional_kwargs,
-                source_nodes=stream_response_wrapper.source_nodes,
-            )
+        response = ChatResponse(
+            message=ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=message_content,
+            ),
+            additional_kwargs=additional_kwargs,
         )
+        return response
 
+    @llm_chat_callback()
     async def astream_chat(
-        self,
-        prompt: str,
-        messages: List[ChatMessage] = [],
-    ) -> ChatResponseWrapper:
-        logger.info(f"Chat news with prompt {prompt}, chat_history: {messages}")
+        self, messages: List[ChatMessage] = [], **kwargs: Any
+    ) -> ChatResponseAsyncGen:
+        prompt = kwargs.get("prompt", "")
+        logger.info(f"astream_chat with prompt {prompt}, chat_history: {messages}")
 
         transformed_messages = _transform_messages(messages)
         param = NewsChatParameter(
@@ -360,7 +415,7 @@ class MiaobiNewsTool:
             origin_text = ""
             yield ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
+                    role=MessageRole.ASSISTANT,
                     content="",
                 ),
                 delta="",
@@ -368,11 +423,11 @@ class MiaobiNewsTool:
             )
             logger.info(f"Chat news with param {param}.")
             use_web_search = False
+            additional_kwargs = {}
             async for item in await self.chat_client.do_sse_query(param):
                 try:
                     data = json.loads(item.get("event").data)
                     logger.info(data)
-                    additional_kwargs = {}
 
                     event = data.get("header").get("event")
                     if event == "task-hot-topic-chat-internet-search-start":
@@ -419,6 +474,7 @@ class MiaobiNewsTool:
                             )
                             yield empty_response
                     elif origin_text == "":
+                        # (task finished or task failed) and no origin_text
                         text = data.get("payload").get("output").get(
                             "text"
                         ) or data.get("header").get("errorMessage")
@@ -437,6 +493,17 @@ class MiaobiNewsTool:
                             )
                             origin_text = text
                             yield response
+                    else:
+                        # (task finished or task failed) with origin_text
+                        response = ChatResponse(
+                            message=ChatMessage(
+                                role=MessageRole.ASSISTANT,
+                                content=origin_text,
+                            ),
+                            delta="",
+                            additional_kwargs=additional_kwargs,
+                        )
+                        yield response
                 except Exception as ex:
                     logger.warning(
                         f"Error when decoding Miaobi outputs {ex}, data: {item}"
@@ -454,66 +521,119 @@ class MiaobiNewsTool:
             if use_web_search:
                 yield ChatResponse(
                     message=ChatMessage(
-                        role="assistant",
-                        content=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                        role=MessageRole.ASSISTANT,
+                        content=f"{origin_text}\n{DEFAULT_WEB_SEARCH_INFO_MESSAGE}",
                     ),
                     delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
+                    additional_kwargs=additional_kwargs,
                 )
 
-        return ChatResponseWrapper(response=gen())
+        return gen()
 
+    def _get_news_role_texts(self) -> List[str]:
+        default_news_role_response = DEFAULT_NEWS_ROLE.format(
+            domain_list="/".join(self.config.domain_list),
+            news_role=self.config.news_role,
+        )
+        lines = []
+        for line in default_news_role_response.split("\n"):
+            if line.strip():
+                lines.append(line)
+        return lines
+
+    @dispatcher.span
     async def achat_llm(
         self,
         query_str: str,
-    ):
-        stream_response_wrapper = await self.astream_chat_llm(query_str)
-        message_content = ""
-        additional_kwargs = {}
-        async for response in stream_response_wrapper.response:
-            message_content += response.delta
-            additional_kwargs.update(response.additional_kwargs)
+    ) -> ChatResponseWrapper:
+        news_role_text = ""
+        for line in self._get_news_role_texts():
+            news_role_text += line
 
         return ChatResponseWrapper(
             response=ChatResponse(
                 message=ChatMessage(
-                    role="assistant",
-                    content=message_content,
+                    role=MessageRole.ASSISTANT,
+                    content=news_role_text,
                 ),
-                additional_kwargs=additional_kwargs,
-                source_nodes=stream_response_wrapper.source_nodes,
             )
         )
 
+    @dispatcher.span
     async def astream_chat_llm(
         self,
         query_str: str,
     ) -> ChatResponseWrapper:
+        span_id = active_span_id.get()
         logger.info(f"Chat news only llm with query {query_str}")
+        news_role_text = ""
+        lines = self._get_news_role_texts()
+        for line in lines:
+            news_role_text += line
+        # store role text in span output
+        dispatcher.event(
+            QueryEndEvent(
+                response=Response(response=news_role_text, source_nodes=[]),
+                query="",
+                span_id=span_id,
+            )
+        )
 
         async def gen() -> ChatResponseAsyncGen:
-            yield ChatResponse(
-                message=ChatMessage(
-                    role="assistant",
-                    content="",
-                ),
-                delta="",
-                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
-            )
-            default_news_role_response = DEFAULT_NEWS_ROLE.format(
-                domain_list="/".join(self.config.domain_list),
-                news_role=self.config.news_role,
-            )
-            text_parts = default_news_role_response.split("\n")
-
-            # 逐个 yield 返回
-            for part in text_parts:
-                if part.strip():
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role="assistant",
-                            content=part,
-                        ),
-                        delta=part,
-                    )
+            for line in lines:
+                yield ChatResponse(
+                    message=ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=line,
+                    ),
+                    delta=line,
+                )
 
         return ChatResponseWrapper(response=gen())
+
+    @classmethod
+    def class_name(cls) -> str:
+        """Get class name."""
+        return "MiaobiNewsTool"
+
+    @property
+    def metadata(self) -> LLMMetadata:
+        return LLMMetadata(
+            num_output=self.config.top_news_count,
+            is_chat_model=True,
+            model_name=self.config.chat_news_model_id,
+        )
+
+    @llm_completion_callback()
+    def complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        raise NotImplementedError
+
+    @llm_completion_callback()
+    def stream_complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponseGen:
+        raise NotImplementedError
+
+    @llm_chat_callback()
+    def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        raise NotImplementedError
+
+    @llm_chat_callback()
+    def stream_chat(
+        self, messages: Sequence[ChatMessage], **kwargs: Any
+    ) -> ChatResponseGen:
+        raise NotImplementedError
+
+    @llm_completion_callback()
+    async def acomplete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponse:
+        raise NotImplementedError
+
+    @llm_completion_callback()
+    async def astream_complete(
+        self, prompt: str, formatted: bool = False, **kwargs: Any
+    ) -> CompletionResponseAsyncGen:
+        raise NotImplementedError

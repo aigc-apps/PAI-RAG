@@ -1,7 +1,9 @@
 import os
 import threading
 import traceback
-from pai_rag.app.constants import DEFAULT_APPLICATION_CONFIG_FILE
+from pai_rag.app.constants import (
+    DEFAULT_APPLICATION_CONFIG_FILE,
+)
 from pai_rag.core.models.errors import UserInputError
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.core.rag_application import PaiApp, RagChatType
