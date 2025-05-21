@@ -8,6 +8,8 @@ This is a demo for agent with MCP.
 
 ```bash
 cd agent-backend
+pip install poetry
+poetry install
 uvicorn main:app --reload --port 8097
 ```
 
@@ -16,7 +18,7 @@ You can start editing the API service by modifying `main.py`.
 ### Frontend
 
 ```bash
-cd agent
+cd agent-frontend
 npm install
 npm run dev
 ```

@@ -52,7 +52,7 @@ def to_openai_message_dict(
                         type="function",
                         function={
                             "name": elem["toolName"],
-                            "arguments": json.dumps(elem["args"]),
+                            "arguments": json.dumps(elem["args"], ensure_ascii=False),
                         },
                     )
                 )
@@ -68,22 +68,26 @@ def to_openai_message_dict(
                     tool_call_id=call_id,
                 )
                 return message_dict
-    elif isinstance(content, str):
+    elif isinstance(content, str) or isinstance(content, Dict):
         if role == "system":
             message_dict = ChatCompletionSystemMessageParam(role=role, content=content)
         else:
             message_dict = ChatCompletionAssistantMessageParam(
-                role=role, content=str(content)
+                role=role, content=json.dumps(content, ensure_ascii=False)
             )
 
         return message_dict
 
     if tool_calls:
         message_dict = ChatCompletionAssistantMessageParam(
-            role=role, content=contents, tool_calls=tool_calls
+            role=role,
+            content=json.dumps(content, ensure_ascii=False),
+            tool_calls=tool_calls,
         )
     else:
-        message_dict = ChatCompletionAssistantMessageParam(role=role, content=contents)
+        message_dict = ChatCompletionAssistantMessageParam(
+            role=role, content=json.dumps(content, ensure_ascii=False)
+        )
 
     return message_dict
 

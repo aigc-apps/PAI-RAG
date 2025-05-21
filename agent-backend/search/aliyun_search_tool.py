@@ -5,11 +5,11 @@ from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 from search.web_reader import ParallelBeautifulSoupWebReader
+from llama_index.core.tools import FunctionTool
 import json
 import time
 import os
 from dotenv import load_dotenv
-from llama_index.core.tools import FunctionTool
 
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
