@@ -37,13 +37,20 @@ def get_model_instance(model_name: str, model_source: str, api_key: str):
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
 async def gen_stream_response(model, model_name, messages, openai_tools):
     logger.info(f"messages {messages}")
-    return await model.create(
-        model=model_name,
-        messages=messages,
-        stream=True,
-        tools=openai_tools,
-        tool_choice="auto",
-    )
+    if openai_tools:
+        return await model.create(
+            model=model_name,
+            messages=messages,
+            stream=True,
+            tools=openai_tools,
+            tool_choice="auto",
+        )
+    else:
+        return await model.create(
+            model=model_name,
+            messages=messages,
+            stream=True,
+        )
 
 
 async def process_mcp_tools():
