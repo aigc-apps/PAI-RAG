@@ -5,8 +5,8 @@ import asyncio
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
-from pai_rag.integrations.index.pai.vector_store_config import (
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.vector_store_config import (
     ElasticSearchVectorStoreConfig,
 )
 

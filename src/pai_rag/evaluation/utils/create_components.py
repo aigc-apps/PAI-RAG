@@ -17,7 +17,7 @@ from pai_rag.evaluation.evaluator.base_evaluator import BaseEvaluator
 from pai_rag.evaluation.evaluator.pai_evaluator import PaiEvaluator
 from pai_rag.evaluation.dataset.crag.crag_jsonl_reader import CragJsonLReader
 from pai_rag.evaluation.dataset.crag.crag_data_loader import CragDataLoader
-from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
+from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
 from pai_rag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 from pai_rag.evaluation.dataset.state_manager import StateManager
 

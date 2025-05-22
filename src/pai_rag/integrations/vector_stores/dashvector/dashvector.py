@@ -26,7 +26,7 @@ from llama_index.core.vector_stores.utils import (
 )
 from loguru import logger
 
-from pai_rag.integrations.index.pai.utils.sparse_embed_function import (
+from pai_rag.knowledgebase.index.pai.utils.sparse_embed_function import (
     BaseSparseEmbeddingFunction,
     get_default_sparse_embedding_function,
 )

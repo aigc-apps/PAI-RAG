@@ -6,7 +6,7 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.schema import TextNode
 from llama_index.core.schema import QueryBundle
 
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pai_rag.integrations.data_analysis.text2sql.db_info_index import (
     SchemaIndex,
     HistoryIndex,

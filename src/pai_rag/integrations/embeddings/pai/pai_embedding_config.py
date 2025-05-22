@@ -11,8 +11,6 @@ class SupportedEmbedType(str, Enum):
     dashscope = "dashscope"
     openai = "openai"
     huggingface = "huggingface"
-    cnclip = "cnclip"  # Chinese CLIP
-    langstudio = "langstudio"
 
 
 class PaiBaseEmbeddingConfig(BaseModel):
@@ -49,19 +47,6 @@ class OpenAIEmbeddingConfig(PaiBaseEmbeddingConfig):
 class HuggingFaceEmbeddingConfig(PaiBaseEmbeddingConfig):
     source: Literal[SupportedEmbedType.huggingface] = SupportedEmbedType.huggingface
     model: str | None = DEFAULT_HF_EMBED_MODEL
-
-
-class CnClipEmbeddingConfig(PaiBaseEmbeddingConfig):
-    source: Literal[SupportedEmbedType.cnclip] = SupportedEmbedType.cnclip
-    model: str | None = "ViT-L-14"
-
-
-class LangStudioEmbeddingConfig(PaiBaseEmbeddingConfig):
-    source: Literal[SupportedEmbedType.langstudio] = SupportedEmbedType.langstudio
-    region_id: str | None = "cn-hangzhou"  # use default
-    connection_name: str | None = None
-    workspace_id: str | None = None
-    model: str | None = None
 
 
 SupporttedEmbeddingClsMap = {

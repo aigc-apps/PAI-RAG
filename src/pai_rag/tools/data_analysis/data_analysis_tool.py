@@ -13,7 +13,7 @@ from pai_rag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisLoader,
     DataAnalysisQuery,
 )
-from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
+from pai_rag.chat.models import ChatResponseWrapper, PaiQueryBundle
 
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(_BASE_DIR, "config/settings.toml")

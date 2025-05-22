@@ -10,7 +10,7 @@ import time
 from loguru import logger
 
 from openai.types.chat import ChatCompletionChunk
-from pai_rag.app.api.models import ChatCompletionRequest
+from pai_rag.chat.models import ChatCompletionRequest
 from llama_index.core.callbacks import CallbackManager
 
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues

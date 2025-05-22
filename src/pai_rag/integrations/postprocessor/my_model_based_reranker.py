@@ -55,7 +55,7 @@ class MyModelBasedReranker(BaseNodePostprocessor):
         self._model = FlagReranker(
             model,
             use_fp16=use_fp16,
-            device=infer_cuda_device(),
+            devices=infer_cuda_device(),
         )
 
     @classmethod

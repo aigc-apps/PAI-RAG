@@ -28,7 +28,7 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.constants import (
     DEFAULT_DB_DESCRIPTION_PATH,
     DEFAULT_DB_HISTORY_PATH,
 )
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBQuery:

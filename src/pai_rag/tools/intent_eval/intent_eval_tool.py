@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.chat_flow import ChatFlow
-from pai_rag.app.api.models import ChatCompletionRequest
+from pai_rag.chat.models import ChatCompletionRequest
 from llama_index.core.base.llms.types import ChatMessage
 import asyncio
 import json

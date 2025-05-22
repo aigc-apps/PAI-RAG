@@ -1,60 +1,16 @@
-import time
 from pydantic import BaseModel, Field, model_validator
 from typing import Annotated, Dict, Union
-from enum import Enum
 
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
 )
-from pai_rag.integrations.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.knowledgebase.index.pai.vector_store_config import BaseVectorStoreConfig
+from pai_rag.file.nodeparsers.pai.pai_node_parser import NodeParserConfig
+from pai_rag.integrations.synthesizer.prompt_templates import (
+    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
+    DEFAULT_SYSTEM_ROLE_TEMPLATE,
+)
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
-from pai_rag.utils.time_utils import get_current_time_str
-
-
-class FileOperationType(int, Enum):
-    ADD = 1
-    UPDATE = 2
-    DELETE = 3
-
-
-class FileChange(BaseModel):
-    task_id: str
-    file_name: str
-    file_hash: str
-    operation: FileOperationType
-    knowledgebase: str
-
-
-class FileProcessStatus(str, Enum):
-    PENDING = "pending"
-    Parsing = "parsing"
-    Chunking = "chunking"
-    Embedding = "embedding"
-    Persisting = "persisting"
-    Done = "done"
-    Failed = "failed"
-
-
-class FileItem(FileChange):
-    status: FileProcessStatus
-    last_modified_time: str = Field(default_factory=lambda: get_current_time_str())
-    timestamp: float = Field(default_factory=lambda: time.time())
-    failed_reason: str | None = None
-
-
-class FileProcessResult(BaseModel):
-    status: FileProcessStatus
-    message: str | None = None
-
-
-class TaskInfo(BaseModel):
-    knowledgebase: str
-    task_map: Dict[str, FileItem] = {}
-    last_modified_time: str = Field(default_factory=lambda: get_current_time_str())
-
-
-class JobStatus(BaseModel):
-    task_statuses: Dict[str, TaskInfo] = {}
 
 
 class KnowledgeBase(BaseModel):
@@ -67,9 +23,15 @@ class KnowledgeBase(BaseModel):
     vector_store_config: Annotated[
         Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
     ]
+    node_parser_config: NodeParserConfig = Field(default_factory=NodeParserConfig)
     embedding_config: Annotated[
         Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
     ]
+    retrieval_settings: Dict = Field(default_factory=dict)
+    qa_prompt_templates: Dict = {
+        "system_prompt_template": DEFAULT_SYSTEM_ROLE_TEMPLATE,
+        "task_prompt_template": DEFAULT_CUSTOM_PROMPT_TEMPLATE,
+    }
 
     @model_validator(mode="before")
     def preprocess(cls, values: Dict) -> Dict:

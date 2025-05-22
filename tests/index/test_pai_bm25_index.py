@@ -1,4 +1,4 @@
-from pai_rag.integrations.index.pai.local.local_bm25_index import LocalBm25IndexStore
+from pai_rag.knowledgebase.index.pai.local.local_bm25_index import LocalBm25IndexStore
 from llama_index.core.schema import TextNode
 
 texts = [

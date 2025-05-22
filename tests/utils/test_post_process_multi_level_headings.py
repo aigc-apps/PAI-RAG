@@ -14,7 +14,7 @@ def test_post_process_multi_level_headings():
         ("title_4", 7),
         ("title_5", 14),
     ]
-    from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+    from pai_rag.file.readers.pai_pdf_reader import PaiPDFReader
 
     pdf_process = PaiPDFReader()
     new_title_list = pdf_process.post_process_multi_level_headings(title_list, 0, 0)

@@ -12,8 +12,8 @@ BASE_DIR = Path(__file__).parent.parent.parent
 def test_jsonl_reader():
     from pai_rag.core.rag_config_manager import RagConfigManager
     from pai_rag.core.rag_module import resolve
-    from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-    from pai_rag.integrations.readers.pai_jsonl_reader import PaiJsonLReader
+    from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
+    from pai_rag.file.readers.pai_jsonl_reader import PaiJsonLReader
 
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfigManager.from_file(config_file).get_value()

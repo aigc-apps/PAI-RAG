@@ -5,7 +5,6 @@ from loguru import logger
 import os
 
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.utils.oss_utils import check_and_set_oss_auth
 from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
 
 # store config file generated from ui.
@@ -73,19 +72,11 @@ class RagConfigManager:
                 }
             )
             rag_config.llms.append(updated_llm)
-        if rag_config.multimodal_llm.is_validate() and (
-            not rag_config_copy.llms or len(rag_config_copy.llms) == 0
-        ):
-            updated_vllm = rag_config.multimodal_llm.copy(
-                update={"vision_support": True, "is_reasoning_model": False}
-            )
-            rag_config.llms.append(updated_vllm)
         return rag_config
 
     def update(self, new_value: Dynaconf):
         if self.config.get("rag", None):
             self.config.rag.update(new_value, merge=True)
-            check_and_set_oss_auth(self.config.rag)
 
     def persist(self):
         """Save configuration to file."""

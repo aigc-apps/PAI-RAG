@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 
-from pai_rag.app.web.ui_constants import (
+from pai_rag.web.ui_constants import (
     NL2SQL_GENERAL_PROMPTS,
     SYN_GENERAL_PROMPTS,
     DA_SYSTEM_ROLE_PROMPT,

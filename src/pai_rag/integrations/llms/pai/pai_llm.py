@@ -14,7 +14,7 @@ from llama_index.core.base.llms.types import (
     CompletionResponseAsyncGen,
     CompletionResponseGen,
 )
-from pai_rag.app.api.models import ChatIntentType
+from pai_rag.chat.models import ChatIntentType
 from llama_index.core.base.llms.generic_utils import (
     completion_response_to_chat_response,
     stream_completion_response_to_chat_response,

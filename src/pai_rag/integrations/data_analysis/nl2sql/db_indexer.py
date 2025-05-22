@@ -20,7 +20,7 @@ from pai_rag.integrations.data_analysis.nl2sql.db_utils.nl2sql_utils import (
     get_target_info,
     create_minhash,
 )
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBIndexer:

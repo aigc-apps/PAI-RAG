@@ -15,7 +15,7 @@ from pai_rag.utils.prompt_template import (
     REWRITE_PROMPT_ROLE_ZH,
 )
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.app.api.models import ChatToolType, ChatIntentType, PaiQueryBundle
+from pai_rag.chat.models import ChatToolType, ChatIntentType, PaiQueryBundle
 from pai_rag.utils.json_parser import parse_json_from_code_block_str
 from loguru import logger
 import re

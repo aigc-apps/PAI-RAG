@@ -86,8 +86,6 @@ repos:
           (\/.*?\.[\w:]+)/poetry.lock|
         args:
           [
-            "--exclude",
-            "./data/tokenization/qwen.tiktoken",
             "--skip",
             "*.json,*.txt",
             "--ignore-words-list",

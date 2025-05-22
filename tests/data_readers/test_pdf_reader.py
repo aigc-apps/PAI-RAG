@@ -14,8 +14,8 @@ pytestmark = pytest.mark.skipif(
 def test_pai_pdf_reader():
     from pai_rag.core.rag_config_manager import RagConfigManager
     from pai_rag.core.rag_module import resolve
-    from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-    from pai_rag.integrations.readers.pai_pdf_reader import PaiPDFReader
+    from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
+    from pai_rag.file.readers.pai_pdf_reader import PaiPDFReader
     from pai_rag.utils.download_models import ModelScopeDownloader
 
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")

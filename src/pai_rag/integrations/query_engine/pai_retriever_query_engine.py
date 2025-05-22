@@ -16,7 +16,7 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
     ChatResponseAsyncGen,
 )
-from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
+from pai_rag.chat.models import ChatResponseWrapper, PaiQueryBundle
 
 dispatcher = instrument.get_dispatcher(__name__)
 

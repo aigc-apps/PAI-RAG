@@ -16,7 +16,7 @@ import llama_index.core.instrumentation as instrument
 
 from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
-from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
+from pai_rag.chat.models import ChatResponseWrapper, PaiQueryBundle
 from pai_rag.integrations.data_analysis.text2sql.db_connector import (
     MysqlConnector,
     SqliteConnector,

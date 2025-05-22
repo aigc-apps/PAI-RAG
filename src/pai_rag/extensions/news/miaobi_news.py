@@ -1,7 +1,7 @@
 import traceback
 from typing import Dict, List, Any, Sequence
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.app.api.models import ChatIntentType, ChatResponseWrapper
+from pai_rag.chat.models import ChatIntentType, ChatResponseWrapper
 from pai_rag.extensions.news.news_config import (
     MiaobiNewsConfig,
     DEFAULT_NEWS_ROLE,

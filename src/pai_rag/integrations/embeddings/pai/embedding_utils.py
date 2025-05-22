@@ -10,10 +10,7 @@ from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     DashScopeEmbeddingConfig,
     OpenAIEmbeddingConfig,
     HuggingFaceEmbeddingConfig,
-    CnClipEmbeddingConfig,
-    LangStudioEmbeddingConfig,
 )
-from pai_rag.integrations.embeddings.clip.cnclip_embedding import CnClipEmbedding
 from loguru import logger
 
 
@@ -84,44 +81,6 @@ def create_embedding(
         logger.info(
             f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {pai_rag_model_dir} with {embed_config.embed_batch_size} batch size."
         )
-
-    elif isinstance(embed_config, CnClipEmbeddingConfig):
-        pai_rag_model_dir = pai_rag_model_dir or os.getenv(
-            "PAI_RAG_MODEL_DIR", "./model_repository"
-        )
-        pai_model_path = os.path.join(
-            pai_rag_model_dir, "chinese-clip-vit-large-patch14"
-        )
-        if not os.path.exists(pai_model_path):
-            logger.info(
-                f"Embedding model {embed_config.model} not found in {pai_rag_model_dir}, try download it."
-            )
-            download_models = ModelScopeDownloader(
-                fetch_config=True, download_directory_path=pai_rag_model_dir
-            )
-            download_models.load_model(model="chinese-clip-vit-large-patch14")
-            logger.info(
-                f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
-            )
-        embed_model = CnClipEmbedding(
-            model_name=embed_config.model,
-            embed_batch_size=embed_config.embed_batch_size,
-            callback_manager=Settings.callback_manager,
-            model_path=pai_model_path,
-        )
-        logger.info(
-            f"Initialized CnClip embedding model {embed_config.model} with {embed_config.embed_batch_size} batch size."
-        )
-    elif isinstance(embed_config, LangStudioEmbeddingConfig):
-        from pai_rag.integrations.embeddings.pai.langstudio_utils import (
-            convert_langstudio_embed_config,
-        )
-
-        converted_embed_config = convert_langstudio_embed_config(embed_config)
-        logger.info(
-            f"Initialized LangStudio embedding model with {converted_embed_config}."
-        )
-        return create_embedding(converted_embed_config, pai_rag_model_dir)
     else:
         raise ValueError(f"Unknown Embedding source: {embed_config}")
 

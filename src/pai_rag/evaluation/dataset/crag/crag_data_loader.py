@@ -1,7 +1,7 @@
 from typing import Any
 from llama_index.core.indices import VectorStoreIndex
 from llama_index.core.ingestion import IngestionPipeline
-from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
+from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
 from loguru import logger
 
 

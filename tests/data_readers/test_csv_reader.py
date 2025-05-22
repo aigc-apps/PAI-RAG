@@ -15,8 +15,8 @@ pytestmark = pytest.mark.skipif(
 def test_csv_reader():
     from pai_rag.core.rag_config_manager import RagConfigManager
     from pai_rag.core.rag_module import resolve
-    from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-    from pai_rag.integrations.readers.pai_csv_reader import PaiCSVReader
+    from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
+    from pai_rag.file.readers.pai_csv_reader import PaiCSVReader
 
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfigManager.from_file(config_file).get_value()
@@ -39,8 +39,8 @@ def test_csv_reader():
 def test_pandas_csv_reader():
     from pai_rag.core.rag_config_manager import RagConfigManager
     from pai_rag.core.rag_module import resolve
-    from pai_rag.integrations.readers.pai.pai_data_reader import PaiDataReader
-    from pai_rag.integrations.readers.pai_csv_reader import PaiPandasCSVReader
+    from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader
+    from pai_rag.file.readers.pai_csv_reader import PaiPandasCSVReader
 
     config_file = os.path.join(BASE_DIR, "src/pai_rag/config/settings.toml")
     config = RagConfigManager.from_file(config_file).get_value()

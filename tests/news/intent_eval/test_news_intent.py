@@ -18,7 +18,7 @@ if (
 
 from pai_rag.core.rag_config_manager import RagConfigManager
 from pai_rag.core.chat_flow import ChatFlow
-from pai_rag.app.api.models import ChatCompletionRequest
+from pai_rag.chat.models import ChatCompletionRequest
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
 

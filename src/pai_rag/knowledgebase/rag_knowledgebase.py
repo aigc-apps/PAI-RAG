@@ -3,26 +3,30 @@ import json
 import re
 import shutil
 import threading
-from typing import Annotated, Tuple, Union, Dict, List
-from loguru import logger
+from typing import Tuple, Dict, List
 from pydantic import BaseModel, Field, model_validator
 from pai_rag.core.models.state import FileServiceState
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
-    PaiBaseEmbeddingConfig,
+    HuggingFaceEmbeddingConfig,
 )
-from pai_rag.integrations.index.pai.vector_store_config import (
-    BaseVectorStoreConfig,
+from pai_rag.knowledgebase.index.pai.vector_store_config import (
     DEFAULT_LOCAL_STORAGE_PATH_OLD,
     DEFAULT_LOCAL_STORAGE_PATH,
+    FaissVectorStoreConfig,
 )
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import NodeParserConfig
+
+# TODO: 移除knowlegebase对file的依赖
+from pai_rag.file.nodeparsers.pai.pai_node_parser import NodeParserConfig
+from pai_rag.knowledgebase.models import KnowledgeBase
 from pai_rag.knowledgebase.rag_knowledgebase_helper import RagKnowledgeBaseHelper
 from pai_rag.utils.file_utils import generate_md5
-from pai_rag.utils.index_utils import (
+from pai_rag.knowledgebase.utils.knowledgebase_utils import (
     delete_dir,
     delete_knowledgebase_dir,
     delete_default_knowledgebase_dir,
 )
+from loguru import logger
+
 
 from pai_rag.utils.constants import (
     DEFAULT_KNOWLEDGEBASE_NAME,
@@ -33,37 +37,6 @@ from pai_rag.utils.constants import (
     DEFAULT_DOC_STORE_NAME,
 )
 from pai_rag.utils.time_utils import get_current_time_str
-from pai_rag.integrations.synthesizer.prompt_templates import (
-    DEFAULT_SYSTEM_ROLE_TEMPLATE,
-    DEFAULT_CUSTOM_PROMPT_TEMPLATE,
-)
-
-
-class KnowledgeBase(BaseModel):
-    name: str = Field(
-        default=DEFAULT_KNOWLEDGEBASE_NAME,
-        description="Knowledgebase name.",
-        pattern=r"^[0-9a-zA-Z_-]{3, 20}$",
-    )
-
-    vector_store_config: Annotated[
-        Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
-    ]
-    node_parser_config: NodeParserConfig = Field(default_factory=NodeParserConfig)
-    embedding_config: Annotated[
-        Union[PaiBaseEmbeddingConfig.get_subclasses()], Field(discriminator="source")
-    ]
-    retrieval_settings: Dict = Field(default_factory=dict)
-    qa_prompt_templates: Dict = {
-        "system_prompt_template": DEFAULT_SYSTEM_ROLE_TEMPLATE,
-        "task_prompt_template": DEFAULT_CUSTOM_PROMPT_TEMPLATE,
-    }
-
-    @model_validator(mode="before")
-    def preprocess(cls, values: Dict) -> Dict:
-        if "index_name" in values:
-            values["name"] = values["index_name"]
-        return values
 
 
 class KnowledgeDoc(BaseModel):
@@ -120,9 +93,9 @@ class KnowledgeBaseManager:
     def create_default_knowledgebase(self, rag_config):
         default_knowledge_base = KnowledgeBase(
             name=DEFAULT_KNOWLEDGEBASE_NAME,
-            vector_store_config=rag_config.index.vector_store,
-            embedding_config=rag_config.embedding,
-            node_parser_config=rag_config.node_parser,
+            vector_store_config=FaissVectorStoreConfig(),
+            embedding_config=HuggingFaceEmbeddingConfig(),
+            node_parser_config=NodeParserConfig(),
         )
         RagKnowledgeBaseHelper.create_new_knowledgebase_dir(DEFAULT_KNOWLEDGEBASE_NAME)
         self._knowledgebase_map.knowledgebases[
@@ -185,10 +158,9 @@ class KnowledgeBaseManager:
                     new_knowledgebase_name
                 ] = new_knowledgebase
         else:
-            rag_config.index.vector_store.persist_path = DEFAULT_LOCAL_STORAGE_PATH
             self.move_old_index_persist_path(
                 DEFAULT_LOCAL_STORAGE_PATH_OLD,
-                rag_config.index.vector_store.persist_path,
+                DEFAULT_LOCAL_STORAGE_PATH,
             )
 
     @classmethod

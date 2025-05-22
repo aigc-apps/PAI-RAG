@@ -4,13 +4,13 @@ import subprocess
 import traceback
 
 from watchfiles import awatch
-from pai_rag.core.rag_service import rag_service
+from pai_rag.core.chat_service import chat_service
 from pai_rag.core.rag_environment import service_environment
 from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager
-from pai_rag.knowledgebase.rag_job_manager import job_manager, FileChange
+from pai_rag.data_pipeline.job.rag_job_manager import job_manager, FileChange
 from loguru import logger
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
-from pai_rag.app.web.filebrowser.constants import DEFAULT_FILE_BROWER_PORT
+from pai_rag.web.filebrowser.constants import DEFAULT_FILE_BROWSER_PORT
 
 # Check every 30 seconds.
 CHECK_INTERVAL = 30
@@ -22,7 +22,7 @@ async def periodic_check_config():
     try:
         while True:
             knowledgebase_manager.check_updates()
-            rag_service.check_updates()
+            chat_service.check_updates()
             await asyncio.sleep(CHECK_INTERVAL)
     except Exception:
         logger.error(f"Error in periodic_check_config: {traceback.format_exc()}")
@@ -34,7 +34,7 @@ async def host_filebrowser_in_background():
     if service_environment.SHOULD_START_WEB:
         logger.debug("Starting up filebrowser in background.")
         process = subprocess.Popen(
-            f"rm -rf /tmp/filebrowser.db && /bin/filebrowser -b /filebrowser --address 0.0.0.0 -p {DEFAULT_FILE_BROWER_PORT} -r {DEFAULT_KNOWLEDGEBASE_PATH} --noauth -d /tmp/filebrowser.db",
+            f"rm -rf /tmp/filebrowser.db && /bin/filebrowser -b /filebrowser --address 0.0.0.0 -p {DEFAULT_FILE_BROWSER_PORT} -r {DEFAULT_KNOWLEDGEBASE_PATH} --noauth -d /tmp/filebrowser.db",
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

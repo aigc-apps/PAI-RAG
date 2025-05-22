@@ -1,0 +1,379 @@
+import hashlib
+import faiss
+import os
+import json
+import tablestore
+from llama_index.core.vector_stores.simple import DEFAULT_VECTOR_STORE, NAMESPACE_SEP
+from llama_index.core.vector_stores.types import DEFAULT_PERSIST_FNAME
+from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
+from pai_rag.knowledgebase.index.pai.utils.sparse_embed_function import (
+    BGEM3SparseEmbeddingFunction,
+)
+from pai_rag.integrations.vector_stores.tablestore.tablestore import (
+    TablestoreVectorStore,
+)
+from pai_rag.integrations.vector_stores.dashvector.dashvector import (
+    DashVectorVectorStore,
+)
+from pai_rag.integrations.vector_stores.hologres.hologres import HologresVectorStore
+from pai_rag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
+    MyElasticsearchStore,
+)
+from pai_rag.integrations.vector_stores.faiss.my_faiss import MyFaissVectorStore
+from llama_index.vector_stores.milvus import MilvusVectorStore
+from pai_rag.integrations.vector_stores.postgresql.postgresql import PGVectorStore
+from pai_rag.knowledgebase.index.pai.vector_store_config import (
+    BaseVectorStoreConfig,
+    PostgreSQLVectorStoreConfig,
+    FaissVectorStoreConfig,
+    MilvusVectorStoreConfig,
+    ElasticSearchVectorStoreConfig,
+    OpenSearchVectorStoreConfig,
+    HologresVectorStoreConfig,
+    TablestoreVectorStoreConfig,
+    DashVectorVectorStoreConfig,
+)
+
+
+DEFAULT_PERSIST_IMAGE_NAMESPACE = "image"
+
+
+def create_vector_store(
+    vectordb_config: BaseVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+    persist_path: str = None,
+):
+    if isinstance(vectordb_config, FaissVectorStoreConfig):
+        return create_faiss(
+            embed_dims=embed_dims,
+            is_image_store=is_image_store,
+            persist_path=persist_path,
+        )
+    elif isinstance(vectordb_config, MilvusVectorStoreConfig):
+        create_vector_store_func = create_milvus
+    elif isinstance(vectordb_config, HologresVectorStoreConfig):
+        create_vector_store_func = create_hologres
+    elif isinstance(vectordb_config, ElasticSearchVectorStoreConfig):
+        create_vector_store_func = create_elasticsearch
+    elif isinstance(vectordb_config, PostgreSQLVectorStoreConfig):
+        create_vector_store_func = create_postgresql
+    elif isinstance(vectordb_config, OpenSearchVectorStoreConfig):
+        create_vector_store_func = create_opensearch
+    elif isinstance(vectordb_config, TablestoreVectorStoreConfig):
+        create_vector_store_func = create_tablestore
+    elif isinstance(vectordb_config, DashVectorVectorStoreConfig):
+        create_vector_store_func = create_dashvector
+    else:
+        raise ValueError(f"Unknown vector store config {vectordb_config}.")
+
+    return create_vector_store_func(
+        vectordb_config,
+        embed_dims=embed_dims,
+        is_image_store=is_image_store,
+    )
+
+
+def create_faiss(
+    embed_dims: int,
+    is_image_store: bool = False,
+    persist_path: str = None,
+):
+    if is_image_store:
+        faiss_vector_index_path = os.path.join(
+            persist_path,
+            f"{DEFAULT_PERSIST_IMAGE_NAMESPACE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
+        )
+    else:
+        faiss_vector_index_path = os.path.join(
+            persist_path,
+            f"{DEFAULT_VECTOR_STORE}{NAMESPACE_SEP}{DEFAULT_PERSIST_FNAME}",
+        )
+
+    if os.path.exists(faiss_vector_index_path):
+        faiss_store = MyFaissVectorStore.from_persist_path(faiss_vector_index_path)
+    else:
+        faiss_index = faiss.IndexFlatIP(embed_dims)
+        faiss_store = MyFaissVectorStore(faiss_index=faiss_index)
+    return faiss_store
+
+
+def create_hologres(
+    hologres_config: HologresVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    table_name = hologres_config.table_name
+    if is_image_store:
+        table_name = f"{table_name}__image"
+    hologres = HologresVectorStore.from_param(
+        host=hologres_config.host,
+        port=hologres_config.port,
+        user=hologres_config.user,
+        password=hologres_config.password,
+        database=hologres_config.database,
+        table_name=table_name,
+        embedding_dimension=embed_dims,
+        pre_delete_table=hologres_config.pre_delete_table,
+    )
+
+    return hologres
+
+
+def create_elasticsearch(
+    es_config: ElasticSearchVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    index_name = es_config.es_index
+    if is_image_store:
+        index_name = f"{index_name}__image"
+
+    es_store = MyElasticsearchStore(
+        index_name=index_name,
+        es_url=es_config.es_url,
+        es_user=es_config.es_user,
+        es_password=es_config.es_password,
+        embedding_dimension=embed_dims,
+        retrieval_strategy=AsyncDenseVectorStrategy(
+            hybrid=True, rrf={"window_size": 50}
+        ),
+    )
+
+    return es_store
+
+
+def create_milvus(
+    milvus_config: MilvusVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    collection_name = milvus_config.collection_name
+    if is_image_store:
+        collection_name = f"{collection_name}__image"
+
+    milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}/{milvus_config.database}"
+    token = f"{milvus_config.user}:{milvus_config.password}"
+    milvus_store = MilvusVectorStore(
+        uri=milvus_url,
+        token=token,
+        collection_name=collection_name,
+        dim=embed_dims,
+        enable_sparse=True,
+        similarity_metric="cosine",
+        hybrid_ranker="WeightedRanker",
+        # TODO: add weighted reranker config
+        hybrid_ranker_params={"weights": milvus_config.reranker_weights},
+    )
+
+    return milvus_store
+
+
+def create_dashvector(
+    dashvector_config: DashVectorVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    collection_name = dashvector_config.collection_name
+    if collection_name == "":
+        collection_name = "pai_rag"
+
+    if is_image_store:
+        collection_name = f"{collection_name}__image"
+
+    partition_name = dashvector_config.partition_name
+    if partition_name == "":
+        partition_name = None
+
+    enable_sparse = not is_image_store
+
+    dashvector_store = DashVectorVectorStore(
+        endpoint=dashvector_config.endpoint,
+        api_key=dashvector_config.api_key,
+        collection_name=collection_name,
+        partition_name=partition_name,
+        dim=embed_dims,
+        enable_sparse=enable_sparse,
+        sparse_embedding_function=(
+            BGEM3SparseEmbeddingFunction() if enable_sparse else None
+        ),
+    )
+
+    return dashvector_store
+
+
+def create_opensearch(
+    opensearch_config: OpenSearchVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    from llama_index.vector_stores.alibabacloud_opensearch import (
+        AlibabaCloudOpenSearchStore,
+        AlibabaCloudOpenSearchConfig,
+    )
+
+    table_name = opensearch_config.table_name
+    if is_image_store:
+        table_name = f"{table_name}_image"  # opensearch does not support __ in naming
+
+    if is_image_store:
+        output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
+    else:
+        output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
+
+    db_config = AlibabaCloudOpenSearchConfig(
+        endpoint=opensearch_config.endpoint,
+        instance_id=opensearch_config.instance_id,
+        username=opensearch_config.username,
+        password=opensearch_config.password,
+        table_name=table_name,
+        # OpenSearch constructor has bug in dealing with output fields
+        field_mapping=dict(zip(output_fields, output_fields)),
+    )
+
+    opensearch_store = AlibabaCloudOpenSearchStore(config=db_config)
+    return opensearch_store
+
+
+def create_tablestore(
+    tablestore_config: TablestoreVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    table_name = tablestore_config.table_name
+    if is_image_store:
+        table_name = f"{table_name}__image"
+
+    tablestore_store = TablestoreVectorStore(
+        endpoint=tablestore_config.endpoint,
+        instance_name=tablestore_config.instance_name,
+        access_key_id=tablestore_config.access_key_id,
+        access_key_secret=tablestore_config.access_key_secret,
+        table_name=table_name,
+        index_name="pai_rag_vector_store_ots_index_v1",
+        vector_dimension=embed_dims,
+        # metadata mapping is used to filter non-vector fields.
+        metadata_mappings=[
+            tablestore.FieldSchema(
+                "file_name",
+                tablestore.FieldType.KEYWORD,
+                index=True,
+                enable_sort_and_agg=True,
+            ),
+            tablestore.FieldSchema(
+                "file_type",
+                tablestore.FieldType.KEYWORD,
+                index=True,
+                enable_sort_and_agg=True,
+            ),
+            tablestore.FieldSchema(
+                "file_size",
+                tablestore.FieldType.LONG,
+                index=True,
+                enable_sort_and_agg=True,
+            ),
+            tablestore.FieldSchema(
+                "file_path",
+                tablestore.FieldType.TEXT,
+                index=True,
+                enable_sort_and_agg=False,
+            ),
+            tablestore.FieldSchema(
+                "image_url",
+                tablestore.FieldType.TEXT,
+                index=True,
+                enable_sort_and_agg=False,
+            ),
+            tablestore.FieldSchema(
+                "creation_date",
+                tablestore.FieldType.DATE,
+                index=True,
+                enable_sort_and_agg=True,
+                date_formats=[
+                    "yyyy-MM-dd",
+                    "yyyy-MM-dd HH:mm",
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                ],
+            ),
+            tablestore.FieldSchema(
+                "last_modified_date",
+                tablestore.FieldType.DATE,
+                index=True,
+                enable_sort_and_agg=True,
+                date_formats=[
+                    "yyyy-MM-dd",
+                    "yyyy-MM-dd HH:mm",
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                ],
+            ),
+        ],
+    )
+    tablestore_store.create_table_if_not_exist()
+    tablestore_store.create_search_index_if_not_exist()
+    return tablestore_store
+
+
+def create_postgresql(
+    pg_config: PostgreSQLVectorStoreConfig,
+    embed_dims: int,
+    is_image_store: bool = False,
+):
+    table_name = pg_config.table_name
+    if is_image_store:
+        table_name = f"{table_name}__image"
+
+    pg = PGVectorStore.from_params(
+        host=pg_config.host,
+        port=pg_config.port,
+        database=pg_config.database,
+        table_name=table_name,
+        user=pg_config.username,
+        password=pg_config.password,
+        embed_dim=embed_dims,
+        hybrid_search=True,
+        text_search_config="jiebacfg",
+    )
+    return pg
+
+
+# change persist path to sub folders in the persist_path to separate different vector index
+def resolve_store_path(store_config: BaseVectorStoreConfig, ndims: int = 1536):
+    if isinstance(store_config, FaissVectorStoreConfig):
+        raw_text = {"type": "faiss"}
+    elif isinstance(store_config, HologresVectorStoreConfig):
+        json_data = {
+            "host": store_config.host,
+            "port": store_config.port,
+            "database": store_config.database,
+            "table_name": store_config.table_name,
+        }
+        raw_text = json.dumps(json_data)
+    elif isinstance(store_config, OpenSearchVectorStoreConfig):
+        json_data = {
+            "endpoint": store_config.endpoint,
+            "instance_id": store_config.instance_id,
+            "table_name": store_config.table_name,
+        }
+        raw_text = json.dumps(json_data)
+    else:
+        raw_text = repr(store_config)
+
+    encoded_raw_text = f"{raw_text}_{ndims}".encode()
+    hash = hashlib.sha256(encoded_raw_text).hexdigest()
+    return os.path.join(store_config.persist_path, hash)

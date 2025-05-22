@@ -1,4 +1,4 @@
-from typing import Any, Generator, List, Dict, Optional, Sequence, Union, cast
+from typing import Any, List, Dict, Optional, Sequence, Union
 
 from llama_index.core.settings import Settings
 from llama_index.core.callbacks.base import CallbackManager
@@ -7,7 +7,6 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
-from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.multi_modal_llms import MultiModalLLM
 import llama_index.core.instrumentation as instrument
 from llama_index.core.schema import (
@@ -21,14 +20,10 @@ from llama_index.core.base.response.schema import (
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
 )
-from llama_index.core.llms.llm import (
-    astream_completion_response_to_tokens,
-)
 from llama_index.core.base.llms.types import ChatResponse, ChatResponseAsyncGen
 from llama_index.core.prompts import PromptTemplate
-from pai_rag.app.api.models import ChatResponseWrapper, PaiQueryBundle
+from pai_rag.chat.models import ChatResponseWrapper, PaiQueryBundle
 from pai_rag.integrations.synthesizer.prompt_templates import (
-    DEFAULT_EMPTY_RESPONSE_GEN,
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
     DEFAULT_ANSWER_TEMPLATE,
@@ -377,56 +372,6 @@ class PaiSynthesizer:
             )
 
         return response
-
-    async def _aget_multi_modal_response(
-        self,
-        query_str: str,
-        text_chunks: Sequence[str],
-        image_url_list: Sequence[str] = None,
-        streaming: bool = False,
-        citation: bool = False,
-        **response_kwargs: Any,
-    ) -> RESPONSE_TEXT_TYPE:
-        image_documents = load_image_urls(image_url_list)
-
-        context_str = (
-            "\n".join([f"材料 {i+1}:\n{text}\n" for i, text in enumerate(text_chunks)])
-            + "\n"
-        )
-        context_str += "\n".join(
-            [f"图片 {i+1}:\n{url}\n" for i, url in enumerate(image_url_list)]
-        )
-
-        if not citation:
-            fmt_prompt = self._multimodal_qa_template.format(
-                context_str=context_str, query_str=query_str
-            )
-        else:
-            fmt_prompt = self._citation_multimodal_qa_template.format(
-                context_str=context_str, query_str=query_str
-            )
-
-        logger.info(
-            f"Synthsize using Multi-modal LLM with fmt_prompt {fmt_prompt}. citation: {citation}"
-        )
-        if streaming:
-            completion_response_gen = await self._multimodal_llm.astream_complete(
-                prompt=fmt_prompt,
-                image_documents=image_documents,
-                **response_kwargs,
-            )
-            stream_tokens = await astream_completion_response_to_tokens(
-                completion_response_gen
-            )
-            return cast(Generator, stream_tokens)
-        else:
-            llm_response = await self._multimodal_llm.acomplete(
-                prompt=fmt_prompt,
-                image_documents=image_documents,
-                **response_kwargs,
-            )
-            response = llm_response.text or DEFAULT_EMPTY_RESPONSE_GEN
-            return response
 
     def get_response(self, query_str, text_chunks, **response_kwargs):
         raise NotImplementedError

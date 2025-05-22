@@ -1,6 +1,6 @@
 import json
 from llama_index.core.schema import ImageNode
-from pai_rag.app.api.models import ChatResponseWrapper
+from pai_rag.chat.models import ChatResponseWrapper
 
 
 def get_citations_from_node(

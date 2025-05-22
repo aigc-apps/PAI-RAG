@@ -19,7 +19,7 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
     MysqlAnalysisConfig,
 )
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBLoader:

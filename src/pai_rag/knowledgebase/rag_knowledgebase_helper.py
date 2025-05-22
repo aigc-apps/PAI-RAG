@@ -1,9 +1,9 @@
 import os
 import json
 from typing import Dict, Any
-from pai_rag.integrations.nodeparsers.pai.pai_node_parser import DOC_TYPES_CONVERT_TO_MD
-from pai_rag.integrations.readers.pai.constants import ACCEPTABLE_DOC_TYPES
-from pai_rag.utils.index_utils import (
+from pai_rag.file.nodeparsers.pai.pai_node_parser import DOC_TYPES_CONVERT_TO_MD
+from pai_rag.file.readers.pai.constants import ACCEPTABLE_DOC_TYPES
+from pai_rag.knowledgebase.utils.knowledgebase_utils import (
     write_markdown_to_parse_dir,
     copy_original_files_to_parse_dir,
 )

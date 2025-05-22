@@ -17,7 +17,7 @@ from pai_rag.evaluation.dataset.rag_qca_dataset_refactor import (
     QcapDataset,
 )
 from pai_rag.evaluation.dataset.state_manager import StateManager, DatasetState
-from pai_rag.app.api.models import PaiQueryBundle
+from pai_rag.chat.models import PaiQueryBundle
 from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
     PaiRetrieverQueryEngine,
 )

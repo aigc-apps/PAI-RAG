@@ -11,8 +11,8 @@ from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     HISTORY_STORAGE_PATH,
     VALUE_STORAGE_PATH,
 )
-from pai_rag.integrations.index.pai.vector_store_config import FaissVectorStoreConfig
-from pai_rag.integrations.index.pai.pai_vector_index import PaiVectorStoreIndex
+from pai_rag.knowledgebase.index.pai.vector_store_config import FaissVectorStoreConfig
+from pai_rag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 
 
 class DBInfoIndex(ABC):
