@@ -40,6 +40,10 @@ packages/*/generated
 # turbo
 .turbo
 
+/localdata
+/model_repository
+.coverage
+
 # python
 __pycache__
 
