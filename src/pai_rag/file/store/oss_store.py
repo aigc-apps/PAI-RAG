@@ -51,7 +51,7 @@ class PaiOssStore:
             headers = dict()
 
         if path_prefix:
-            key = path_prefix + key
+            key = os.path.join(path_prefix, key)
         key += file_ext
 
         if not self.exists(key):

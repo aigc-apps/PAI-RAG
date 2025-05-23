@@ -15,9 +15,10 @@ from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
 from functools import partial
 from pai_rag.file.readers.pai.constants import ACCEPTABLE_DOC_TYPES
-from pai_rag.file.store.oss_store import PaiOssStore
 import logging
 from loguru import logger
+
+from pai_rag.file.store.pai_image_store import PaiImageStore
 
 
 class BaseDataReaderConfig(BaseModel):
@@ -27,7 +28,9 @@ class BaseDataReaderConfig(BaseModel):
     sheet_column_filters: List[str] | None = None
 
 
-def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any = None):
+def get_file_readers(
+    reader_config: BaseDataReaderConfig = None, image_store: PaiImageStore = None
+):
     from pai_rag.file.readers.pai.file_readers.pai_excel_reader import (
         PaiPandasExcelReader,
     )
@@ -45,27 +48,27 @@ def get_file_readers(reader_config: BaseDataReaderConfig = None, oss_store: Any 
     )
 
     reader_config = reader_config or BaseDataReaderConfig()
-    image_reader = PaiImageReader(oss_cache=oss_store)
+    image_reader = PaiImageReader(image_store=image_store)
 
     file_readers = {
         ".html": PaiHtmlReader(
-            oss_cache=oss_store,  # Storing html images
+            image_store=image_store,  # Storing html images
         ),
         ".htm": PaiHtmlReader(
-            oss_cache=oss_store,  # Storing html images
+            image_store=image_store,  # Storing html images
         ),
         ".docx": PaiDocxReader(
-            oss_cache=oss_store,  # Storing docx images
+            image_store=image_store,  # Storing docx images
         ),
         ".pdf": PaiPDFReader(
             enable_mandatory_ocr=reader_config.enable_mandatory_ocr,
-            oss_cache=oss_store,  # Storing pdf images
+            image_store=image_store,  # Storing pdf images
         ),
         ".pptx": PaiPptxReader(
-            oss_cache=oss_store,  # Storing pptx images
+            image_store=image_store,  # Storing pptx images
         ),
         ".md": PaiMarkdownReader(
-            oss_cache=oss_store,  # Storing markdown images
+            image_store=image_store,  # Storing markdown images
         ),
         ".csv": PaiPandasCSVReader(
             concat_rows=reader_config.concat_csv_rows,
@@ -141,10 +144,10 @@ class PaiDataReader(BaseReader):
     def __init__(
         self,
         reader_config: BaseDataReaderConfig,
-        oss_store: PaiOssStore = None,
+        image_store: PaiImageStore = None,
     ):
-        self.file_readers = get_file_readers(reader_config, oss_store)
-        self.oss_store = oss_store
+        self.file_readers = get_file_readers(reader_config, image_store)
+        self.image_store = image_store
 
         logger.info(f"[PaiDataReader] created with {reader_config}")
 
@@ -158,8 +161,6 @@ class PaiDataReader(BaseReader):
         self,
         file_path_or_directory=None,
         filter_pattern: str = None,
-        from_oss: bool = False,
-        oss_path: str = None,
         show_progress: bool = False,
     ) -> List[Document]:
         input_files = get_input_files(

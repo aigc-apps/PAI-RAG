@@ -1,12 +1,5 @@
-from PIL import Image
-from io import BytesIO
-from PIL.PngImagePlugin import PngImageFile
-from typing import Any, List, Optional
+from typing import List, Optional
 from llama_index.core.bridge.pydantic import Field, BaseModel
-import math
-from loguru import logger
-
-IMAGE_MAX_PIXELS = 512 * 512
 
 
 class PaiTable(BaseModel):
@@ -51,48 +44,6 @@ class PaiTable(BaseModel):
             [row[col] for row in self.data]
             for col in range(data_col_start_index, self.get_col_numbers())
         ]
-
-
-def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -> str:
-    try:
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-        if image.width <= 50 or image.height <= 50:
-            logger.warning(f"Skipping small image {image}")
-            return None
-
-        current_pixels = image.width * image.height
-
-        # 检查像素总数是否超过限制
-        if current_pixels > IMAGE_MAX_PIXELS:
-            # 计算缩放比例以适应最大像素数
-            scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
-            new_width = int(image.width * scale)
-            new_height = int(image.height * scale)
-
-            # 调整图片大小
-            image = image.resize((new_width, new_height), Image.LANCZOS)
-
-        image_stream = BytesIO()
-        image.save(image_stream, format="jpeg")
-
-        image_stream.seek(0)
-        data = image_stream.getvalue()
-
-        image_url = oss_cache.put_object_if_not_exists(
-            data=data,
-            file_ext=".jpeg",
-            headers={
-                "x-oss-object-acl": "public-read"
-            },  # set public read to make image accessible
-            path_prefix=f"pairag/doc_images/{doc_name.strip()}/",
-        )
-        logger.info(
-            f"Cropped image {image_url} with width={image.width}, height={image.height}."
-        )
-        return image_url
-    except Exception as e:
-        logger.warning(f"无法打开图片 '{image}': {e}")
 
 
 def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:

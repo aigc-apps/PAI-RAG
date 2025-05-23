@@ -60,7 +60,7 @@ class Parser(BaseOperator):
 
         self.data_reader = PaiDataReader(
             reader_config=self.data_reader_config,
-            oss_store=None,
+            image_store=None,
         )
         self.path_resolver = get_path_resolver()
         logger.info(

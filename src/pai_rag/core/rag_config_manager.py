@@ -5,7 +5,10 @@ from loguru import logger
 import os
 
 from pai_rag.core.rag_config import RagConfig
-from pai_rag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
+from pai_rag.integrations.llms.pai.llm_config import (
+    OpenAICompatibleLlmConfig,
+    PaiBaseLlmConfig,
+)
 
 # store config file generated from ui.
 GENERATED_CONFIG_FILE_NAME = "localdata/settings.snapshot.toml"
@@ -48,8 +51,6 @@ class RagConfigManager:
             config["rag"]["index"]["vector_store"]["type"] = config["rag"]["index"][
                 "vector_store"
             ]["type"].lower()
-            if "api_key" in config["rag"]["llm"]:
-                config["rag"]["llm"]["api_key"] = str(config["rag"]["llm"]["api_key"])
 
             return cls(config)
             # `envvar_prefix` = export envvars with `export PAIRAG_FOO=bar`.
@@ -61,17 +62,9 @@ class RagConfigManager:
     def get_value(self) -> RagConfig:
         self.config.rag["llms"] = [item for item in self.config.rag["llms"] if item]
         rag_config = RagConfig.model_validate(self.config.rag)
-        rag_config_copy = rag_config
+        if len(rag_config.llms) == 0:
+            rag_config.llms = [OpenAICompatibleLlmConfig()]
         # 兼容之前的配置
-        if not rag_config_copy.llms or len(rag_config_copy.llms) == 0:
-            updated_llm = rag_config.llm.copy(
-                update={
-                    "vision_support": False,
-                    "model_id": "default",
-                    "is_reasoning_model": False,
-                }
-            )
-            rag_config.llms.append(updated_llm)
         return rag_config
 
     def update(self, new_value: Dynaconf):

@@ -2,11 +2,11 @@
 
 """
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
+from pai_rag.file.readers.pai.utils.image_utils import image_from_bytes
 from pai_rag.file.readers.pai.utils.markdown_utils import (
-    transform_local_to_oss,
     convert_table_to_markdown,
     is_horizontal_table,
     PaiTable,
@@ -14,10 +14,10 @@ from pai_rag.file.readers.pai.utils.markdown_utils import (
 from docx import Document as DocxDocument
 import re
 import os
-from PIL import Image
 import time
-from io import BytesIO
 from loguru import logger
+
+from pai_rag.file.store.pai_image_store import PaiImageStore
 
 
 IMAGE_MAX_PIXELS = 512 * 512
@@ -32,21 +32,9 @@ class PaiDocxReader(BaseReader):
 
     def __init__(
         self,
-        oss_cache: Any = None,
+        image_store: PaiImageStore = None,
     ) -> None:
-        self._oss_cache = oss_cache
-
-    def _transform_local_to_oss(
-        self, image_blob: bytes, image_filename: str, doc_name: str
-    ):
-        # 暂时不处理Windows图元文件
-        if image_filename.lower().endswith(".emf") or image_filename.lower().endswith(
-            ".wmf"
-        ):
-            logger.warning(f"Skip processing EMF or WMF image: {image_filename}")
-            return None
-        image = Image.open(BytesIO(image_blob))
-        return transform_local_to_oss(self._oss_cache, image, doc_name)
+        self.image_store = image_store
 
     def _convert_paragraph(self, paragraph):
         text = paragraph.text.strip()
@@ -141,15 +129,14 @@ class PaiDocxReader(BaseReader):
                     if not image_id:
                         continue
                     image_part = paragraph.part.rels.get(image_id, None)
-                    if image_id and hasattr(image_part, "blob") and self._oss_cache:
+                    if image_id and hasattr(image_part, "blob") and self.image_store:
                         image_blob = image_part.blob
                         image_filename = os.path.basename(image_part.partname)
-                        image_url = self._transform_local_to_oss(
-                            image_blob, image_filename, doc_name
-                        )
+                        image = image_from_bytes(image_blob, image_filename, doc_name)
+                        image_url = self.image_store.upload_image(image, doc_name)
                         if image_url:
                             time_tag = int(time.time())
-                            alt_text = f"pai_rag_image_{time_tag}_"
+                            alt_text = f"pai_oss_image_{time_tag}_"
                             image_content = f"![{alt_text}]({image_url})"
                             paragraph_content.append(image_content)
 
@@ -205,7 +192,7 @@ class PaiDocxReader(BaseReader):
                                             )
                                             if image_url:
                                                 time_tag = int(time.time())
-                                                alt_text = f"pai_rag_image_{time_tag}_"
+                                                alt_text = f"pai_oss_image_{time_tag}_"
                                                 image_content = (
                                                     f"![{alt_text}]({image_url})"
                                                 )

@@ -3,11 +3,9 @@
 """
 import html2text
 from bs4 import BeautifulSoup
-import requests
-from typing import Dict, List, Optional, Union, Any
-from io import BytesIO
+from typing import Dict, List, Optional, Union
+from pai_rag.file.readers.pai.utils.image_utils import image_from_url
 from pai_rag.file.readers.pai.utils.markdown_utils import (
-    transform_local_to_oss,
     convert_table_to_markdown,
     PaiTable,
 )
@@ -15,10 +13,11 @@ from pathlib import Path
 import re
 import time
 import os
-from PIL import Image
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from loguru import logger
+
+from pai_rag.file.store.pai_image_store import PaiImageStore
 
 
 IMAGE_URL_PATTERN = (
@@ -30,14 +29,14 @@ class PaiHtmlReader(BaseReader):
     """Read html files including texts, tables, images.
 
     Args:
-        oss_cache :  oss_cache
+        image_store :  image_store
     """
 
     def __init__(
         self,
-        oss_cache: Any = None,
+        image_store: PaiImageStore = None,
     ) -> None:
-        self._oss_cache = oss_cache
+        self.image_store = image_store
 
     def _extract_tables(self, html):
         soup = BeautifulSoup(html, "html.parser")
@@ -144,24 +143,19 @@ class PaiHtmlReader(BaseReader):
         table, total_cols = self._convert_table_to_pai_table(table)
         return convert_table_to_markdown(table, total_cols)
 
-    def _transform_local_to_oss(self, html_name: str, image_url: str):
-        response = requests.get(image_url)
-        response.raise_for_status()  # 检查请求是否成功
-
-        # 将二进制数据转换为图像对象
-        image = Image.open(BytesIO(response.content))
-        return transform_local_to_oss(self._oss_cache, image, html_name)
-
     def _replace_image_paths(self, html_name: str, content: str):
         image_pattern = IMAGE_URL_PATTERN
         matches = re.findall(image_pattern, content)
         for alt_text, image_url, image_type in matches:
-            if self._oss_cache:
+            if self.image_store:
                 time_tag = int(time.time())
-                oss_url = self._transform_local_to_oss(html_name, image_url)
-                updated_alt_text = f"pai_rag_image_{time_tag}_{alt_text}"
+                image = image_from_url(image_url=image_url)
+                oss_image_url = self.image_store.upload_image(image, html_name)
+
+                updated_alt_text = f"pai_oss_image_{time_tag}_{alt_text}"
                 content = content.replace(
-                    f"![{alt_text}]({image_url})", f"![{updated_alt_text}]({oss_url})"
+                    f"![{alt_text}]({image_url})",
+                    f"![{updated_alt_text}]({oss_image_url})",
                 )
             else:
                 content = content.replace(f"![{alt_text}]({image_url})", "")

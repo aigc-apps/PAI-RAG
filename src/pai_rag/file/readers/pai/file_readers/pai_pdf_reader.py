@@ -1,16 +1,12 @@
 """Read PDF files."""
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
-from pai_rag.file.readers.pai.utils.markdown_utils import (
-    transform_local_to_oss,
-)
 from operator import itemgetter
 import tempfile
-from PIL import Image
 import os
 import traceback
 import re
@@ -24,6 +20,9 @@ from magic_pdf.config.ocr_content_type import BlockType, ContentType
 from magic_pdf.libs.commons import join_path
 from urllib.parse import urlparse
 
+from pai_rag.file.readers.pai.utils.image_utils import image_from_url
+from pai_rag.file.store.pai_image_store import PaiImageStore
+
 
 DEFAULT_HEADING_DIFF_THRESHOLD = 2
 
@@ -33,23 +32,19 @@ class PaiPDFReader(BaseReader):
 
     Args:
         enable_mandatory_ocr (bool):  whether to use ocr to files
-        oss_cache: oss_cache
+        image_store: PaiImageStore
     """
 
     def __init__(
         self,
         enable_mandatory_ocr: bool = False,
-        oss_cache: Any = None,
+        image_store: PaiImageStore = None,
     ) -> None:
         self.enable_mandatory_ocr = enable_mandatory_ocr
-        self._oss_cache = oss_cache
+        self.image_store = image_store
         logger.info(
             f"PaiPdfReader created with enable_mandatory_ocr : {self.enable_mandatory_ocr}"
         )
-
-    def _transform_local_to_oss(self, pdf_name: str, local_url: str):
-        image = Image.open(local_url)
-        return transform_local_to_oss(self._oss_cache, image, pdf_name)
 
     def is_url(self, url: str) -> bool:
         """判断是否为 URL"""
@@ -138,8 +133,9 @@ class PaiPDFReader(BaseReader):
                                         image_path = join_path(
                                             img_buket_path, span["image_path"]
                                         )
-                                        oss_url = self._transform_local_to_oss(
-                                            pdf_name, image_path
+                                        image = image_from_url(image_path)
+                                        oss_url = self.image_store.upload_image(
+                                            image, pdf_name
                                         )
                                         if oss_url:
                                             para_text += f"\n![]({oss_url})  \n"
@@ -166,11 +162,9 @@ class PaiPDFReader(BaseReader):
                                     if span.get("image_path", "") and not self.is_url(
                                         span.get("image_path", "")
                                     ):
-                                        image_path = join_path(
-                                            img_buket_path, span["image_path"]
-                                        )
-                                        oss_url = self._transform_local_to_oss(
-                                            pdf_name, image_path
+                                        image = image_from_url(image_path)
+                                        oss_url = self.image_store.upload_image(
+                                            image, pdf_name
                                         )
                                         if oss_url:
                                             para_text += f"\n![]({oss_url})  \n"

@@ -41,14 +41,13 @@ def configure(app: FastAPI):
     from pai_rag.api.middleware import add_middlewares
     from pai_rag.web.webui import configure_webapp
 
+    app.include_router(router_v1, prefix="/api/v1", tags=["api_v1"])
+    app.include_router(router_openai, prefix="/v1", tags=["chat_completions"])
+
     chat_service.initialize()
     add_middlewares(app)
     add_exception_handler(app)
     configure_webapp(app)
-
-    app.include_router(router_openai, prefix="/v1", tags=["openai_compatible"])
-    app.include_router(router_v1, prefix="/api/v1", tags=["api_v1"])
-
 
 
 app = FastAPI(lifespan=lifespan)

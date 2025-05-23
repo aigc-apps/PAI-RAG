@@ -11,6 +11,9 @@ import os
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document, ImageDocument
 
+from pai_rag.file.readers.pai.utils.image_utils import image_from_url
+from pai_rag.file.store.pai_image_store import PaiImageStore
+
 
 class PaiImageReader(BaseReader):
     """Image parser.
@@ -20,10 +23,10 @@ class PaiImageReader(BaseReader):
 
     """
 
-    def __init__(self, oss_cache: Any, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, image_store: PaiImageStore, *args: Any, **kwargs: Any) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
-        self._oss_cache = oss_cache
+        self.image_store = image_store
 
     def load_data(
         self,
@@ -31,27 +34,21 @@ class PaiImageReader(BaseReader):
         extra_info: Optional[Dict] = None,
         fs: Optional[AbstractFileSystem] = None,
     ) -> List[Document]:
-        if self._oss_cache is None:
+        if self.image_store is None:
             raise Exception(
                 f"Oss config must be provided for image processing for file {file_path}."
             )
 
-        file_ext = os.path.splitext(file_path)[1]
-        with open(file_path, "rb") as file:
-            data = file.read()
-            image_url = self._oss_cache.put_object_if_not_exists(
-                data=data,
-                file_ext=file_ext,
-                headers={
-                    "x-oss-object-acl": "public-read"
-                },  # set public read to make image accessible
-                path_prefix="pairag/images/",
-            )
+        file_name = os.path.basename(file_path)
+        image_url = self.image_store.upload_image(
+            image_from_url(file_path), doc_name="image_docs"
+        )
+        if extra_info is None:
+            extra_info = {}
+        extra_info["file_path"] = str(file_path)
+        extra_info["file_name"] = file_name
+        extra_info["image_url"] = image_url
+        image_doc = ImageDocument(image_url=image_url, extra_info=extra_info)
 
-            extra_info["file_path"] = str(file_path)
-            extra_info["file_name"] = os.path.basename(file_path)
-            extra_info["image_url"] = image_url
-            image_doc = ImageDocument(image_url=image_url, extra_info=extra_info)
-            docs = [image_doc]
-            # docs = self.load_image_urls([image_url], extra_info=extra_info)
+        docs = [image_doc]
         return docs

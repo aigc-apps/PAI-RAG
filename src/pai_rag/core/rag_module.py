@@ -8,6 +8,7 @@ from llama_index.core.query_engine import BaseQueryEngine
 
 from pai_rag.core.rag_config import RagConfig
 from pai_rag.extensions.news.miaobi_news import MiaobiNewsTool
+from pai_rag.file.store.pai_image_store import PaiImageStore
 from pai_rag.integrations.embeddings.pai.pai_embedding_config import (
     HuggingFaceEmbeddingConfig,
 )
@@ -158,12 +159,16 @@ def resolve_default_embedding():
 def resolve_task_executor(
     config: RagConfig, knowledgebase: KnowledgeBase
 ) -> FileTaskExecutor:
-    oss_store = None
+    image_store = None
     if config.oss_store.bucket:
         oss_store = resolve(
             cls=PaiOssStore,
             bucket_name=config.oss_store.bucket,
             endpoint=config.oss_store.endpoint,
+        )
+        image_store = resolve(
+            cls=PaiImageStore,
+            oss_store=oss_store,
         )
 
     multimodal_llm = resolve_multimodal_llm(config)
@@ -178,7 +183,7 @@ def resolve_task_executor(
     data_reader = resolve(
         cls=PaiDataReader,
         reader_config=BaseDataReaderConfig(),
-        oss_store=oss_store,
+        image_store=image_store,
     )
 
     node_parser = resolve(
@@ -258,15 +263,6 @@ def resolve_da_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
 def resolve_data_analysis_query(
     config: RagConfig, model_id: str = None
 ) -> DataAnalysisQuery:
-    # llm_da_config = {
-    #     "source": config.llm.source,
-    #     "model": config.llm.model,
-    #     "api_key": config.llm.api_key,
-    #     "max_tokens": 1024,
-    #     "model_id": config.llm.model_id,
-    # }
-    # llm_da = resolve(cls=PaiLlm, llm_config=parse_llm_config(llm_da_config))
-    # llm_da = resolve_da_llm(config, model_id)
     llm_da = resolve_chat_llm(config, model_id)
     sql_database = resolve_data_analysis_connector(config).connect()
 

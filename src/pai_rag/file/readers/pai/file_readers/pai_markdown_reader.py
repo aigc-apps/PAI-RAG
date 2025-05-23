@@ -2,15 +2,16 @@
 
 """
 from pathlib import Path
-from PIL import Image
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union
 import re
 import os
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-from pai_rag.file.readers.pai.utils.markdown_utils import transform_local_to_oss
+from pai_rag.file.readers.pai.utils.image_utils import image_from_url
 
 from loguru import logger
+
+from pai_rag.file.store.pai_image_store import PaiImageStore
 
 REGEX_H1 = "===+"
 REGEX_H2 = "---+"
@@ -28,9 +29,9 @@ HTML_IMAGE_PATTERN = re.compile(
 class PaiMarkdownReader(BaseReader):
     def __init__(
         self,
-        oss_cache: Any = None,
+        image_store: PaiImageStore = None,
     ) -> None:
-        self._oss_cache = oss_cache
+        self.image_store = image_store
 
     def replace_image_paths(self, markdown_name: str, content: str):
         markdown_image_matches = MARKDOWN_IMAGE_PATTERN.finditer(content)
@@ -39,8 +40,9 @@ class PaiMarkdownReader(BaseReader):
             full_match = match.group(0)  # 整个匹配
             local_url = match.group(1)  # 捕获的URL
 
-            if self._oss_cache:
-                oss_url = self._transform_local_to_oss(markdown_name, local_url)
+            if self.image_store:
+                image = image_from_url(local_url)
+                oss_url = self.image_store.upload_image(image, markdown_name)
                 if oss_url:
                     content = content.replace(local_url, oss_url)
                 else:
@@ -51,8 +53,9 @@ class PaiMarkdownReader(BaseReader):
             full_match = match.group(0)  # 整个匹配
             local_url = match.group(1)  # 捕获的URL
 
-            if self._oss_cache:
-                oss_url = self._transform_local_to_oss(markdown_name, local_url)
+            if self.image_store:
+                image = image_from_url(local_url)
+                oss_url = self.image_store.upload_image(image, markdown_name)
                 if oss_url:
                     content = content.replace(local_url, oss_url)
                 else:
@@ -61,14 +64,6 @@ class PaiMarkdownReader(BaseReader):
                 content = content.replace(full_match, "")
 
         return content
-
-    def _transform_local_to_oss(self, markdown_name: str, local_url: str):
-        try:
-            image = Image.open(local_url)
-            return transform_local_to_oss(self._oss_cache, image, markdown_name)
-        except Exception as e:
-            logger.error(f"read markdown local image failed: {e}")
-            return None
 
     def parse_markdown(self, markdown_path):
         markdown_name = os.path.basename(markdown_path).split(".")[0]
