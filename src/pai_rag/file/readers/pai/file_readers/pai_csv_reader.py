@@ -11,12 +11,8 @@ from fsspec import AbstractFileSystem
 import pandas as pd
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-
-
 import chardet
 import os
-
-from pai_rag.utils.nodeid_util import compute_node_id
 
 
 class PaiPandasCSVReader(BaseReader):
@@ -103,10 +99,8 @@ class PaiPandasCSVReader(BaseReader):
         extra_info["file_name"] = file_name
 
         if self._concat_rows:
-            doc_id = compute_node_id(i=0, file_name=file_name)
             return [
                 Document(
-                    id_=doc_id,
                     text=(self._row_joiner).join(text_list),
                     metadata=extra_info,
                 )
@@ -114,7 +108,6 @@ class PaiPandasCSVReader(BaseReader):
         else:
             docs = []
             for i, text in enumerate(text_list):
-                doc_id = compute_node_id(i=i, file_name=file_name)
                 extra_info["row_number"] = i + 1
-                docs.append(Document(id_=doc_id, text=text, metadata=extra_info))
+                docs.append(Document(text=text, metadata=extra_info))
             return docs

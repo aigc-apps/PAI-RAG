@@ -17,7 +17,7 @@ from llama_index.core.node_parser import (
 from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from pydantic import BaseModel
 from pai_rag.file.nodeparsers.pai.pai_markdown_parser import MarkdownNodeParser
-from pai_rag.utils.constants import (
+from pai_rag.file.nodeparsers.pai.constants import (
     DEFAULT_NODE_PARSER_TYPE,
     DEFAULT_PARAGRAPH_SEP,
     DEFAULT_SENTENCE_CHUNK_OVERLAP,
@@ -27,8 +27,7 @@ from pai_rag.utils.constants import (
 )
 from loguru import logger
 
-from pai_rag.utils.image_caption_utils import ImageCaptionTool
-from pai_rag.utils.nodeid_util import compute_node_id
+from pai_rag.file.nodeparsers.pai.image_caption_tool import ImageCaptionTool
 from enum import Enum
 
 
@@ -80,12 +79,6 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
 
 def rand_node_id_hash(i: int, doc: BaseNode) -> str:
     return str(uuid.uuid4())
-
-
-def node_id_hash(i: int, doc: BaseNode) -> str:
-    return compute_node_id(
-        i=i, file_name=doc.metadata.get("file_name", "DUMMY_FILE_NAME")
-    )
 
 
 def get_data_parser(parser_config: NodeParserConfig) -> NodeParser:

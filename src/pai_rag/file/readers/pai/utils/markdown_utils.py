@@ -95,21 +95,6 @@ def transform_local_to_oss(oss_cache: Any, image: PngImageFile, doc_name: str) -
         logger.warning(f"无法打开图片 '{image}': {e}")
 
 
-def _table_to_markdown(self, table, doc_name):
-    markdown = []
-    total_cols = max(len(row.cells) for row in table.rows)
-
-    header_row = table.rows[0]
-    headers = self._parse_row(header_row, doc_name, total_cols)
-    markdown.append("| " + " | ".join(headers) + " |")
-    markdown.append("| " + " | ".join(["---"] * total_cols) + " |")
-
-    for row in table.rows[1:]:
-        row_cells = self._parse_row(row, doc_name, total_cols)
-        markdown.append("| " + " | ".join(row_cells) + " |")
-    return "\n".join(markdown)
-
-
 def convert_table_to_markdown(table: PaiTable, total_cols: int) -> str:
     markdown = []
     if len(table.get_column_headers()) > 0:

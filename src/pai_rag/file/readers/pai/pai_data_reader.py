@@ -15,10 +15,9 @@ from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
 from functools import partial
 from pai_rag.file.readers.pai.constants import ACCEPTABLE_DOC_TYPES
-from loguru import logger
-import logging
-
 from pai_rag.file.store.oss_store import PaiOssStore
+import logging
+from loguru import logger
 
 
 class BaseDataReaderConfig(BaseModel):

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Union, Any
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
-from pai_rag.utils.markdown_utils import (
+from pai_rag.file.readers.pai.utils.markdown_utils import (
     transform_local_to_oss,
 )
 from operator import itemgetter

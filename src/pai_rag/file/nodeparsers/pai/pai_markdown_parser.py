@@ -76,8 +76,8 @@ class StructuredNodeParser(BaseModel):
         return "\n".join([h.content for h in section_headers])
 
     # 找到前文中最后一个段落（最长300个字）
-    def _get_context(self, pre_content):
-        content = re.sub(r"<图片>.*?</图片\n*", "", pre_content, flags=re.DOTALL)
+    def _get_context(self, context_str):
+        content = re.sub(r"<图片>.*?</图片\n*", "", context_str, flags=re.DOTALL)
         result = content[-300:]
         return result
 
@@ -87,7 +87,7 @@ class StructuredNodeParser(BaseModel):
         doc_node,
         ref_doc,
         nodes_list,
-        pre_content=None,
+        context_str=None,
     ) -> str:
         if (
             node.category == "image"
@@ -96,7 +96,7 @@ class StructuredNodeParser(BaseModel):
             and node.content != "None"
         ):
             image_url = self.normalize_url(node.content)
-            image_text = self.image_caption_tool.extract_url(image_url, pre_content)
+            image_text = self.image_caption_tool.extract_url(image_url, context_str)
             """
             relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
             new_node = TextNode(
@@ -121,7 +121,7 @@ class StructuredNodeParser(BaseModel):
                 doc_node,
                 ref_doc,
                 nodes_list,
-                pre_content=self._get_context(pre_content=node.content),
+                context_str=self._get_context(context_str=node.content),
             )
             if i == 0:
                 node.content += child_content

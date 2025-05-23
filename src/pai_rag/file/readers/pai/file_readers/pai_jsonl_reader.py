@@ -11,8 +11,6 @@ from fsspec import AbstractFileSystem
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
 
-from pai_rag.utils.nodeid_util import compute_node_id
-
 
 class PaiJsonLReader(BaseReader):
     """JsonL reader."""
@@ -37,7 +35,6 @@ class PaiJsonLReader(BaseReader):
 
         docs = []
         for i, text in enumerate(json_lines):
-            doc_id = compute_node_id(i=i, file_name=file_name)
             extra_info["row_number"] = i + 1
-            docs.append(Document(id_=doc_id, text=text, metadata=extra_info))
+            docs.append(Document(text=text, metadata=extra_info))
         return docs

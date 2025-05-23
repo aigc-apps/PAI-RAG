@@ -41,7 +41,7 @@ from pai_rag.integrations.search.google_search import GoogleSearchTool
 from pai_rag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
 from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
 from pai_rag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
-from pai_rag.utils.image_caption_utils import ImageCaptionTool
+from pai_rag.file.nodeparsers.pai.image_caption_tool import ImageCaptionTool
 from pai_rag.integrations.search.search_config import (
     BingSearchConfig,
     QuarkSearchConfig,

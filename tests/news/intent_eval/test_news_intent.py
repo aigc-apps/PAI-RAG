@@ -7,17 +7,14 @@ from llama_index.core.base.llms.types import ChatMessage
 import asyncio
 
 
-if (
-    "DASHSCOPE_API_KEY" not in os.environ
-    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
+if "DASHSCOPE_API_KEY" not in os.environ:
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
 from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.chat_flow import ChatFlow
+from pai_rag.chat.chat_flow import ChatFlow
 from pai_rag.chat.models import ChatCompletionRequest
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP

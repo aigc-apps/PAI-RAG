@@ -106,7 +106,11 @@ class PaiOssStore:
         return oss_prefix
 
     def download_oss_file_to_local(
-        self, oss_path: str, local_path: str, need_set_public: bool = False
+        self,
+        oss_path: str,
+        local_path: str,
+        need_set_public: bool = False,
+        file_types: set[str] = ACCEPTABLE_DOC_TYPES,
     ):
         files = []
         prefix = self.parse_oss_prefix(oss_path)
@@ -117,7 +121,7 @@ class PaiOssStore:
         for oss_obj in object_list:
             if (
                 not oss_obj.key.endswith("/")
-                and pathlib.Path(oss_obj.key).suffix.lower() in ACCEPTABLE_DOC_TYPES
+                and pathlib.Path(oss_obj.key).suffix.lower() in file_types
             ):  # 不是目录
                 logger.info(f"Downloading oss object: {oss_obj.key}")
                 if need_set_public:

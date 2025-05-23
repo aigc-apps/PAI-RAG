@@ -8,7 +8,7 @@ import re
 import os
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.schema import Document
-from pai_rag.utils.markdown_utils import transform_local_to_oss
+from pai_rag.file.readers.pai.utils.markdown_utils import transform_local_to_oss
 
 from loguru import logger
 

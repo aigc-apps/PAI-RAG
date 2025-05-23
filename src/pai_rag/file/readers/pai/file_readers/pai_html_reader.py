@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 import requests
 from typing import Dict, List, Optional, Union, Any
 from io import BytesIO
-from pai_rag.utils.markdown_utils import (
+from pai_rag.file.readers.pai.utils.markdown_utils import (
     transform_local_to_oss,
     convert_table_to_markdown,
     PaiTable,

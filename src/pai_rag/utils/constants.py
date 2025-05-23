@@ -20,14 +20,6 @@ def try_get_int_env(key, default_value=None):
         return None
 
 
-# paragraph separator for splitter
-DEFAULT_NODE_PARSER_TYPE = "Token"
-DEFAULT_PARAGRAPH_SEP = "\n\n"
-DEFAULT_SENTENCE_CHUNK_OVERLAP = 200
-DEFAULT_SENTENCE_WINDOW_SIZE = 3
-DEFAULT_BREAKPOINT = 95
-DEFAULT_BUFFER_SIZE = 1
-
 EAS_DEFAULT_MODEL_DIR = "/huggingface/pai_rag_model_repository_01"
 if not os.path.exists(EAS_DEFAULT_MODEL_DIR):
     DEFAULT_MODEL_DIR = "./model_repository"

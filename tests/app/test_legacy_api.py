@@ -6,21 +6,12 @@ from httpx import ASGITransport, AsyncClient
 from fastapi.testclient import TestClient
 import time
 from dotenv import load_dotenv
+from pai_rag.app.app import app
 
 
 # 加载 .env 文件
 load_dotenv()
 
-if (
-    "DASHSCOPE_API_KEY" not in os.environ
-    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-) or (os.getenv("BING_SEARCH_KEY", "abc") == "abc"):
-    pytest.skip(
-        allow_module_level=True,
-        reason='Environment variable "DASHSCOPE_API_KEY" not set.',
-    )
-
-from pai_rag.app.app import app
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"

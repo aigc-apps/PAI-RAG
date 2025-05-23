@@ -1,11 +1,6 @@
-import pytest
-import os
+from pai_rag.file.readers.pai.file_readers.pai_pdf_reader import PaiPDFReader
 
 
-@pytest.mark.skipif(
-    os.getenv("SKIP_GPU_TESTS", "false") == "true",
-    reason="Need to execute in a CUDA environment.",
-)
 def test_post_process_multi_level_headings():
     title_list = [
         ("title_1", 6),
@@ -14,7 +9,6 @@ def test_post_process_multi_level_headings():
         ("title_4", 7),
         ("title_5", 14),
     ]
-    from pai_rag.file.readers.pai_pdf_reader import PaiPDFReader
 
     pdf_process = PaiPDFReader()
     new_title_list = pdf_process.post_process_multi_level_headings(title_list, 0, 0)
