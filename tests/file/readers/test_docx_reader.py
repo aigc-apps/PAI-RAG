@@ -1,9 +1,9 @@
-from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader, BaseDataReaderConfig
+from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader, DataReaderConfig
 from pai_rag.file.readers.pai.file_readers.pai_docx_reader import PaiDocxReader
 
 
 def test_pai_docx_reader():
-    reader_config = BaseDataReaderConfig()
+    reader_config = DataReaderConfig()
     directory_reader = PaiDataReader(reader_config=reader_config)
     input_dir = "tests/testdata/data/docx_data"
 

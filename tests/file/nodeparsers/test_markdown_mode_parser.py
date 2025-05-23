@@ -7,11 +7,11 @@ def test_markdown_parser():
     )
     from pai_rag.file.readers.pai.pai_data_reader import (
         PaiDataReader,
-        BaseDataReaderConfig,
+        DataReaderConfig,
     )
     from pai_rag.utils.download_models import ModelScopeDownloader
 
-    reader_config = BaseDataReaderConfig()
+    reader_config = DataReaderConfig()
     directory_reader = PaiDataReader(reader_config=reader_config)
 
     input_dir = "tests/testdata/data/md_data"

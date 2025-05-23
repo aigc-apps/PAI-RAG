@@ -1,3 +1,4 @@
+from pathlib import Path
 from PIL import Image
 from io import BytesIO
 from loguru import logger
@@ -5,9 +6,10 @@ import requests
 from urllib.parse import urlparse
 
 
-def is_remote_url(url_or_path: str) -> bool:
-    result = urlparse(url_or_path)
-    return result.scheme in ("http", "https", "ftp", "s3", "gs")
+def is_remote_url(url_or_path: str | Path) -> bool:
+    result = urlparse(str(url_or_path))
+    is_remote = result.scheme in ("http", "https", "ftp", "s3", "gs")
+    return is_remote
 
 
 def image_from_bytes(

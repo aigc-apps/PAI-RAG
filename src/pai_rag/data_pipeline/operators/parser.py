@@ -11,7 +11,7 @@ from pai_rag.data_pipeline.constants import (
     DEFAULT_MD5_FIELD,
 )
 from pai_rag.file.readers.pai.pai_data_reader import (
-    BaseDataReaderConfig,
+    DataReaderConfig,
     PaiDataReader,
 )
 from pai_rag.data_pipeline.utils.path_resolver import (
@@ -51,7 +51,7 @@ class Parser(BaseOperator):
             self.model_dir, "PDF-Extract-Kit-1.0", use_cuda=self.use_cuda()
         )
 
-        self.data_reader_config = BaseDataReaderConfig(
+        self.data_reader_config = DataReaderConfig(
             concat_csv_rows=config.concat_sheet_rows,
             enable_mandatory_ocr=config.enable_pdf_ocr,
             format_sheet_data_to_json=False,

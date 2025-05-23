@@ -17,8 +17,7 @@ context_prompt_str = """
 
 caption_prompt_str = """
 # 任务
-1. 请提取图片里的文字信息。
-2. 请参考图片的上下文材料，使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。
+请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。
 
 """
 
@@ -76,7 +75,7 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text="请提取下面图片里的文字信息，并为下面的图片生成详细的描述和标签信息:"),
+                    TextBlock(text="请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"),
                     ImageBlock(path=local_image_path),
                 ],
             ),
@@ -99,7 +98,7 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text="请提取下面图片里的文字信息，并为下面的图片生成详细的描述和标签信息:"),
+                    TextBlock(text="请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"),
                     ImageBlock(path=local_image_path),
                 ],
             ),

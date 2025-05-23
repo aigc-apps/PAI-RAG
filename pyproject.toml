@@ -100,6 +100,7 @@ numpy = "1.26.4"
 loguru = "^0.7.3"
 llama-index-vector-stores-tablestore = "^0.2.2"
 llama-index-vector-stores-dashvector = "^0.3.0"
+llama-index-multi-modal-llms-dashscope = "^0.3.0"
 
 [tool.poetry.scripts]
 load_data = "pai_rag.tools.load_data_tool:run"

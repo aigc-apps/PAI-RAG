@@ -21,7 +21,7 @@ from loguru import logger
 from pai_rag.file.store.pai_image_store import PaiImageStore
 
 
-class BaseDataReaderConfig(BaseModel):
+class DataReaderConfig(BaseModel):
     concat_csv_rows: bool = False
     enable_mandatory_ocr: bool = False
     format_sheet_data_to_json: bool = False
@@ -29,7 +29,7 @@ class BaseDataReaderConfig(BaseModel):
 
 
 def get_file_readers(
-    reader_config: BaseDataReaderConfig = None, image_store: PaiImageStore = None
+    reader_config: DataReaderConfig = None, image_store: PaiImageStore = None
 ):
     from pai_rag.file.readers.pai.file_readers.pai_excel_reader import (
         PaiPandasExcelReader,
@@ -47,7 +47,7 @@ def get_file_readers(
         PaiMarkdownReader,
     )
 
-    reader_config = reader_config or BaseDataReaderConfig()
+    reader_config = reader_config or DataReaderConfig()
     image_reader = PaiImageReader(image_store=image_store)
 
     file_readers = {
@@ -96,6 +96,7 @@ def get_file_readers(
 
 def get_input_files(
     file_path_or_directory: str | List[str],
+    supported_file_types: List[str],
     filter_pattern: str = None,
 ):
     filter_pattern = filter_pattern or "*"
@@ -107,7 +108,7 @@ def get_input_files(
             f
             for f in file_path_or_directory
             if os.path.isfile(f)
-            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            and pathlib.Path(f).suffix.lower() in supported_file_types
         ]
     elif isinstance(file_path_or_directory, str) and os.path.isdir(
         file_path_or_directory
@@ -118,9 +119,9 @@ def get_input_files(
             f
             for f in directory.rglob(filter_pattern)
             if os.path.isfile(f)
-            and pathlib.Path(f).suffix.lower() in ACCEPTABLE_DOC_TYPES
+            and pathlib.Path(f).suffix.lower() in supported_file_types
         ]
-    elif pathlib.Path(file_path_or_directory).suffix.lower() in ACCEPTABLE_DOC_TYPES:
+    elif pathlib.Path(file_path_or_directory).suffix.lower() in supported_file_types:
         # Single file
         input_files = [pathlib.Path(file_path_or_directory)]
     else:
@@ -143,7 +144,7 @@ def get_file_metadata(x, file_metadata_map):
 class PaiDataReader(BaseReader):
     def __init__(
         self,
-        reader_config: BaseDataReaderConfig,
+        reader_config: DataReaderConfig,
         image_store: PaiImageStore = None,
     ):
         self.file_readers = get_file_readers(reader_config, image_store)
@@ -161,11 +162,13 @@ class PaiDataReader(BaseReader):
         self,
         file_path_or_directory=None,
         filter_pattern: str = None,
+        supported_file_types: List[str] = ACCEPTABLE_DOC_TYPES,
         show_progress: bool = False,
     ) -> List[Document]:
         input_files = get_input_files(
             file_path_or_directory=file_path_or_directory,
             filter_pattern=filter_pattern,
+            supported_file_types=supported_file_types,
         )
         file_metadata_map = {
             str(file): default_file_metadata_func(file_path=str(file))
@@ -195,7 +198,7 @@ class PaiDataReader(BaseReader):
         except Exception as e:
             logger.error(f"解析{input_files}错误: {e}")
             if e.__cause__:
-                logger.error("解析错误原因: {e.__cause__}")
+                logger.error(f"解析错误原因: {e.__cause__}")
                 raise e.__cause__
             else:
                 raise

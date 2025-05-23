@@ -1,9 +1,9 @@
-from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader, BaseDataReaderConfig
+from pai_rag.file.readers.pai.pai_data_reader import PaiDataReader, DataReaderConfig
 from pai_rag.file.readers.pai.file_readers.pai_html_reader import PaiHtmlReader
 
 
 def test_pai_html_reader():
-    directory_reader = PaiDataReader(reader_config=BaseDataReaderConfig())
+    directory_reader = PaiDataReader(reader_config=DataReaderConfig())
     input_dir = "tests/testdata/data/html_data"
 
     directory_reader.file_readers[".html"] = PaiHtmlReader()

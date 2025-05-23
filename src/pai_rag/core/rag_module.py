@@ -34,7 +34,7 @@ from pai_rag.integrations.query_transform.pai_query_transform import (
 )
 from pai_rag.knowledgebase.index.pai.vector_store_config import FaissVectorStoreConfig
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
-from pai_rag.file.readers.pai.pai_data_reader import BaseDataReaderConfig, PaiDataReader
+from pai_rag.file.readers.pai.pai_data_reader import DataReaderConfig, PaiDataReader
 from pai_rag.integrations.search.bing_search import BingSearchTool
 from pai_rag.integrations.search.quark_search import QuarkSearchTool
 from pai_rag.integrations.search.aliyun_search import AliyunSearchTool
@@ -182,7 +182,7 @@ def resolve_task_executor(
 
     data_reader = resolve(
         cls=PaiDataReader,
-        reader_config=BaseDataReaderConfig(),
+        reader_config=DataReaderConfig(),
         image_store=image_store,
     )
 

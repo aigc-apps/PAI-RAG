@@ -32,8 +32,7 @@ def setup_config():
     llm_config = OpenAICompatibleLlmConfig(
         model="qwen2.5-32b-instruct", api_key=os.getenv("DASHSCOPE_API_KEY")
     )
-    config.llm = llm_config
-    config.llms[0] = config.llm
+    config.llms[0] = llm_config
     return config
 
 

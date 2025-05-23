@@ -27,7 +27,7 @@ class PaiDocxReader(BaseReader):
     """Read docx files including texts, tables, images.
 
     Args:
-        oss_cache : oss_cache
+        image_store : PaiImageStore
     """
 
     def __init__(
@@ -132,7 +132,7 @@ class PaiDocxReader(BaseReader):
                     if image_id and hasattr(image_part, "blob") and self.image_store:
                         image_blob = image_part.blob
                         image_filename = os.path.basename(image_part.partname)
-                        image = image_from_bytes(image_blob, image_filename, doc_name)
+                        image = image_from_bytes(image_blob, image_filename)
                         image_url = self.image_store.upload_image(image, doc_name)
                         if image_url:
                             time_tag = int(time.time())
@@ -178,7 +178,7 @@ class PaiDocxReader(BaseReader):
                                     embed_id = blip.get(
                                         "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
                                     )
-                                    if embed_id and self._oss_cache:
+                                    if embed_id and self.image_store:
                                         image_part = document.part.related_parts.get(
                                             embed_id
                                         )
@@ -187,8 +187,11 @@ class PaiDocxReader(BaseReader):
                                             image_filename = os.path.basename(
                                                 image_part.partname
                                             )
-                                            image_url = self._transform_local_to_oss(
-                                                image_blob, image_filename, doc_name
+                                            image = image_from_bytes(
+                                                image_blob, image_filename
+                                            )
+                                            image_url = self.image_store.upload_image(
+                                                image, doc_name
                                             )
                                             if image_url:
                                                 time_tag = int(time.time())

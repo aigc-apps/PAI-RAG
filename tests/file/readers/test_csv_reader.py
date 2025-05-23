@@ -1,9 +1,9 @@
-from pai_rag.file.readers.pai.pai_data_reader import BaseDataReaderConfig, PaiDataReader
+from pai_rag.file.readers.pai.pai_data_reader import DataReaderConfig, PaiDataReader
 from pai_rag.file.readers.pai.file_readers.pai_csv_reader import PaiPandasCSVReader
 
 
 def test_pandas_csv_reader():
-    directory_reader = PaiDataReader(reader_config=BaseDataReaderConfig())
+    directory_reader = PaiDataReader(reader_config=DataReaderConfig())
     input_dir = "tests/testdata/data/csv_data"
     directory_reader.file_readers[".csv"] = PaiPandasCSVReader(
         concat_rows=False,

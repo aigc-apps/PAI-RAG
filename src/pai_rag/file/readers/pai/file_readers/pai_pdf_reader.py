@@ -126,7 +126,10 @@ class PaiPDFReader(BaseReader):
                     if block["type"] == BlockType.ImageBody:
                         for line in block["lines"]:
                             for span in line["spans"]:
-                                if span["type"] == ContentType.Image:
+                                if (
+                                    span["type"] == ContentType.Image
+                                    and self.image_store
+                                ):
                                     if span.get("image_path", "") and not self.is_url(
                                         span.get("image_path", "")
                                     ):
@@ -159,10 +162,12 @@ class PaiPDFReader(BaseReader):
                                         para_text += f"\n\n$\n {span['latex']}\n$\n\n"
                                     elif span.get("html", ""):
                                         para_text += f"\n\n{span['html']}\n\n"
-                                    if span.get("image_path", "") and not self.is_url(
+                                    if (
                                         span.get("image_path", "")
+                                        and not self.is_url(span.get("image_path", ""))
+                                        and self.image_store
                                     ):
-                                        image = image_from_url(image_path)
+                                        image = image_from_url(span.get("image_path"))
                                         oss_url = self.image_store.upload_image(
                                             image, pdf_name
                                         )

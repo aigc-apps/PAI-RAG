@@ -1,13 +1,13 @@
 def test_pandas_excel_reader():
     from pai_rag.file.readers.pai.pai_data_reader import (
         PaiDataReader,
-        BaseDataReaderConfig,
+        DataReaderConfig,
     )
     from pai_rag.file.readers.pai.file_readers.pai_excel_reader import (
         PaiPandasExcelReader,
     )
 
-    reader_config = BaseDataReaderConfig()
+    reader_config = DataReaderConfig()
     directory_reader = PaiDataReader(reader_config=reader_config)
     input_dir = "tests/testdata/data/excel_data"
     directory_reader.file_readers[".xlsx"] = PaiPandasExcelReader(
