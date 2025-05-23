@@ -237,6 +237,7 @@ class JobManager:
             asyncio.set_event_loop(new_loop)
 
         work_iter_count = 0
+        sleep_iter_count = 0
         while True:
             if self.rag_config is None:
                 logger.debug("任务队列准备中...")
@@ -245,9 +246,12 @@ class JobManager:
                 continue
             file_item: FileItem = self._task_queue.get()
             if file_item is None:
-                logger.debug("后台任务队列为空。sleeping...")
+                if sleep_iter_count == 120:
+                    logger.debug("后台文件处理队列为空。sleeping...")
+                    sleep_iter_count = 0
                 work_iter_count = 0
                 time.sleep(5)  # 后续还是要做成异步？
+                sleep_iter_count += 1
                 continue
 
             try:

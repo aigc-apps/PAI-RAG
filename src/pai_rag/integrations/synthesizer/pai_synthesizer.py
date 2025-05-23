@@ -7,7 +7,6 @@ from llama_index.core.prompts.mixin import PromptDictType
 from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.llms import LLM
 from llama_index.core.types import RESPONSE_TEXT_TYPE
-from llama_index.core.multi_modal_llms import MultiModalLLM
 import llama_index.core.instrumentation as instrument
 from llama_index.core.schema import (
     NodeWithScore,
@@ -54,7 +53,6 @@ class PaiSynthesizer:
         prompt_helper: Optional[PromptHelper] = None,
         system_role_template: Optional[str] = None,
         custom_prompt_template: Optional[str] = None,
-        multimodal_llm: Optional[MultiModalLLM] = None,
     ) -> None:
         self._llm = llm
         self._callback_manager = callback_manager or Settings.callback_manager
@@ -65,7 +63,6 @@ class PaiSynthesizer:
                 self._llm.metadata,
             )
         )
-        self._multimodal_llm = multimodal_llm
         self._update_prompts(
             system_role_str=system_role_template,
             prompt_template_str=custom_prompt_template,

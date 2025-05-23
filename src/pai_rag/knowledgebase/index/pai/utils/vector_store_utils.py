@@ -163,7 +163,7 @@ def create_milvus(
         similarity_metric="cosine",
         hybrid_ranker="WeightedRanker",
         # TODO: add weighted reranker config
-        hybrid_ranker_params={"weights": milvus_config.reranker_weights},
+        hybrid_ranker_params={"weights": [0.5, 0.5]},
     )
 
     return milvus_store

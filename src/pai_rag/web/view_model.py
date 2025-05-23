@@ -18,9 +18,6 @@ from pai_rag.integrations.data_analysis.data_analysis_config import (
 from pai_rag.integrations.llms.pai.llm_config import (
     PaiBaseLlmConfig,
 )
-from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
-    SimilarityPostProcessorConfig,
-)
 from pai_rag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
     DEFAULT_SEARCH_COUNT,
@@ -147,15 +144,6 @@ class ViewModel(BaseModel):
     db_nl2sql_prompt: str = None
     synthesizer_prompt: str = None
 
-    # postprocessor
-    reranker_type: str = "无重排序"  # 无重排序 / 基于模型的重排序
-    reranker_model: str = "bge-reranker-base"  # bge-reranker-base / bge-reranker-large
-    keyword_weight: float = 0.3
-    vector_weight: float = 0.7
-    similarity_threshold: float = 0.5
-    reranker_similarity_threshold: float = 0
-    reranker_similarity_top_k: int = 3
-
     query_type: str = "对话 (知识库)"  # deprecated
     query_types: List = ["大模型"]
 
@@ -227,18 +215,6 @@ class ViewModel(BaseModel):
         view_model.oss_sk = config.oss_store.sk
         view_model.oss_endpoint = config.oss_store.endpoint
         view_model.oss_bucket = config.oss_store.bucket
-
-        view_model.reranker_type = INVERTED_RERANKER_TYPE_MAP.get(
-            config.postprocessor.reranker_type, PostProcessorType.no_reranker
-        )
-        if isinstance(config.postprocessor, SimilarityPostProcessorConfig):
-            view_model.similarity_threshold = config.postprocessor.similarity_threshold
-        else:
-            view_model.reranker_model = config.postprocessor.reranker_model
-            view_model.reranker_similarity_top_k = config.postprocessor.top_n
-            view_model.reranker_similarity_threshold = (
-                config.postprocessor.similarity_threshold
-            )
 
         view_model.enable_query_transform = config.query_rewrite.enabled
         view_model.rewrite_base_prompt = config.query_rewrite.base_prompt_template_str
@@ -381,18 +357,6 @@ class ViewModel(BaseModel):
         config["oss_store"]["endpoint"] = self.oss_endpoint
         config["oss_store"]["bucket"] = self.oss_bucket
 
-        config["retriever"]["vector_weight"] = self.vector_weight
-        config["retriever"]["keyword_weight"] = self.keyword_weight
-
-        if (
-            config["retriever"]["vector_store_query_mode"]
-            == VectorStoreQueryMode.HYBRID
-        ):
-            config["retriever"]["hybrid_fusion_weights"] = [
-                self.vector_weight,
-                self.keyword_weight,
-            ]
-
         if self.analysis_type == "nl2pandas":
             config["data_analysis"]["type"] = "pandas"
             config["data_analysis"]["file_path"] = self.analysis_file_path
@@ -436,18 +400,6 @@ class ViewModel(BaseModel):
                 )
             else:
                 config["data_analysis"]["descriptions"] = {}
-
-        config["postprocessor"]["reranker_type"] = RERANKER_TYPE_MAP.get(
-            self.reranker_type
-        )
-        config["postprocessor"]["reranker_model"] = self.reranker_model
-        if config["postprocessor"]["reranker_type"] == PostProcessorType.no_reranker:
-            config["postprocessor"]["similarity_threshold"] = self.similarity_threshold
-        else:
-            config["postprocessor"][
-                "similarity_threshold"
-            ] = self.reranker_similarity_threshold
-            config["postprocessor"]["top_n"] = self.reranker_similarity_top_k
 
         config["synthesizer"]["custom_prompt_template"] = self.custom_prompt_template
         config["synthesizer"]["system_role_template"] = self.system_role_template
@@ -633,23 +585,12 @@ class ViewModel(BaseModel):
         }
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
-
-        settings["reranker_type"] = {"value": self.reranker_type}
-        settings["reranker_model"] = {"value": self.reranker_model}
         settings["query_type"] = {
             "value": self.query_type,
         }  # deprecated
         settings["query_types"] = {
             "value": self.query_types,
         }
-        settings["similarity_threshold"] = {"value": self.similarity_threshold}
-        settings["reranker_similarity_threshold"] = {
-            "value": self.reranker_similarity_threshold
-        }
-        settings["reranker_similarity_top_k"] = {
-            "value": self.reranker_similarity_top_k
-        }
-        settings["model_reranker_col"] = {"visible": self.reranker_type == "基于模型的重排序"}
 
         settings["enable_query_transform"] = {
             "value": self.enable_query_transform,

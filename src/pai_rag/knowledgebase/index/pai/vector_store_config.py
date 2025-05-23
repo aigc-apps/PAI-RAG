@@ -1,4 +1,4 @@
-from typing import Annotated, List, Literal, Union
+from typing import Annotated, Literal, Union
 from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 
@@ -91,7 +91,6 @@ class MilvusVectorStoreConfig(BaseVectorStoreConfig):
     password: str
     database: str
     collection_name: str
-    reranker_weights: List[float] = [0.5, 0.5]
 
 
 class OpenSearchVectorStoreConfig(BaseVectorStoreConfig):

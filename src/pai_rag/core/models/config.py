@@ -1,6 +1,4 @@
-from typing import List
 from pydantic import BaseModel, ConfigDict
-from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 from pai_rag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
@@ -17,9 +15,6 @@ from pai_rag.utils.prompt_template import (
 from pai_rag.utils.prompt_template import (
     DEFALT_LLM_CHAT_PROMPT_TEMPL,
 )
-
-DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT = 0.7
-DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT = 0.3
 
 
 class ChatConfig(BaseModel):
@@ -74,17 +69,6 @@ class OssStoreConfig(BaseModel):
     ak: str | None = None
     sk: str | None = None
     model_config = ConfigDict(coerce_numbers_to_str=True)
-
-
-class RetrieverConfig(BaseModel):
-    vector_store_query_mode: VectorStoreQueryMode = VectorStoreQueryMode.DEFAULT
-    similarity_top_k: int = 5
-    image_similarity_top_k: int = 2
-    search_image: bool = False
-    hybrid_fusion_weights: List[float] = [
-        DEFAULT_WEIGHTED_RANK_VECTOR_WEIGHT,
-        DEFAULT_WEIGHTED_RANK_KEYWORD_WEIGHT,
-    ]
 
 
 class SynthesizerConfig(BaseModel):

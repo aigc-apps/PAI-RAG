@@ -1,8 +1,6 @@
-import asyncio
 import json
 import shutil
 from typing import Any, Dict, List
-import uuid
 import pandas as pd
 import os
 import re
@@ -23,7 +21,6 @@ from pai_rag.knowledgebase.rag_knowledgebase import knowledgebase_manager, Knowl
 from pai_rag.data_pipeline.job.rag_job_manager import job_manager
 from pai_rag.core.chat_service import chat_service
 from datetime import datetime
-from starlette.concurrency import run_in_threadpool
 
 from pai_rag.integrations.data_analysis.text2sql.utils.constants import (
     DEFAULT_DESCRIPTION_FOLDER_PATH,
@@ -237,112 +234,8 @@ class RagLocalClient:
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 
-    async def query_vector(
-        self, chat_messages: List[Dict[str, str]], text: str, index_name: str = None
-    ):
-        try:
-            response = await chat_service.aquery_retrieval(
-                question=text,
-                knowledgebase=index_name,
-            )
-
-            result = {}
-            formatted_text = "<tr><th>切片</th><th>分数</th><th>文本</th></tr>\n"
-            if len(response.docs) == 0:
-                result["delta"] = EMPTY_KNOWLEDGEBASE_MESSAGE.format(query_str=text)
-            else:
-                for i, doc in enumerate(response.docs):
-                    html_content = markdown.markdown(doc.text)
-                    file_url = doc.metadata.get("file_url", None)
-                    if doc.image_url:
-                        media_url = doc.image_url
-                    else:
-                        media_url = doc.metadata.get("image_info_list", None)
-                    if media_url and isinstance(media_url, list):
-                        media_url = "<br>".join(
-                            [
-                                f'<img src="{url.get("image_url", None)}" alt="Image {j + 1}"/>'
-                                for j, url in enumerate(media_url)
-                            ]
-                        )
-                    elif media_url:
-                        media_url = f"""<img src="{media_url}"/>"""
-                    safe_html_content = html.escape(html_content).replace("\n", "<br>")
-                    if file_url:
-                        safe_html_content = (
-                            f"""<a href="{file_url}">{safe_html_content}</a>"""
-                        )
-                    formatted_text += '<tr style="font-size: 13px;"><td>切片 {}</td><td>{}</td><td>{}</td></tr>\n'.format(
-                        i + 1, doc.score, safe_html_content
-                    )
-                formatted_text = (
-                    "<table>\n<tbody>\n" + formatted_text + "</tbody>\n</table>"
-                )
-                result["delta"] = formatted_text
-            yield dotdict(result)
-
-        except Exception as error:
-            raise RagApiError(code=500, msg=str(error))
-
     def get_upload_history(self, knowledgebase_name):
         return job_manager.get_job_history(name=knowledgebase_name)
-
-    def handle_task_result(self, task, task_id):
-        try:
-            # 尝试获取任务的结果，以捕捉异常
-            while True:
-                status, _ = chat_service.get_task_status(task_id=task_id)
-                if status in ["completed", "failed"]:
-                    break
-        except Exception as e:
-            logger.error(f"Upload job {task_id} failed: {e}")
-
-    async def async_add_knowledge_file(
-        self,
-        oss_path: str = None,
-        input_files: str = None,
-        enable_raptor: bool = False,
-        enable_multimodal: bool = False,
-        index_name: str = None,
-    ):
-        task_id = uuid.uuid4().hex
-        logger.info(
-            f"[Upload] Submitting upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}"
-        )
-
-        if oss_path:
-            upload_job = asyncio.create_task(
-                run_in_threadpool(
-                    chat_service.add_knowledge,
-                    task_id=task_id,
-                    filter_pattern=None,
-                    oss_path=oss_path,
-                    from_oss=True,
-                    index_name=index_name,
-                    enable_raptor=enable_raptor,
-                    enable_multimodal=enable_multimodal,
-                )
-            )
-        else:
-            upload_job = asyncio.create_task(
-                run_in_threadpool(
-                    chat_service.add_knowledge,
-                    task_id=task_id,
-                    input_files=input_files,
-                    filter_pattern=None,
-                    index_name=index_name,
-                    oss_path=None,
-                    enable_raptor=enable_raptor,
-                    enable_multimodal=enable_multimodal,
-                )
-            )
-        # 为任务添加回调，以处理可能的异常
-        upload_job.add_done_callback(lambda t: self.handle_task_result(t, task_id))
-        logger.info(
-            f"[Upload] Submitted upload data task_id: {task_id} index_name: {index_name} enable_multimodal: {enable_multimodal}, input_files: {input_files}"
-        )
-
-        return
 
     def add_datasheet(
         self,

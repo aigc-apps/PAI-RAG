@@ -31,6 +31,7 @@ from pai_rag.integrations.query_engine.pai_retriever_query_engine import (
 from pai_rag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
+from pai_rag.knowledgebase.index.pai.vector_store_config import FaissVectorStoreConfig
 from pai_rag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pai_rag.file.readers.pai.pai_data_reader import BaseDataReaderConfig, PaiDataReader
 from pai_rag.integrations.search.bing_search import BingSearchTool
@@ -57,12 +58,14 @@ from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
     DEFAULT_RERANK_MODEL,
     DEFAULT_RERANK_TOP_N,
 )
+from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 
 cls_cache = {}
 
 
 def resolve_by_thread(cls: Any, thread: int, **kwargs):
-    cls_kwargs = {"thread": thread}.update(kwargs)
+    cls_kwargs = {"thread": thread}
+    cls_kwargs.update(kwargs)
     cls_key = cls_kwargs.__repr__()
     if cls_key not in cls_cache:
         cls_cache[cls_key] = cls(**kwargs)
@@ -186,12 +189,19 @@ def resolve_task_executor(
 
     embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
 
-    vector_index = resolve_by_thread(
-        cls=PaiVectorStoreIndex,
-        vector_store_config=knowledgebase.vector_store_config,
-        embed_model=embed_model,
-        thread=threading.current_thread().ident,
-    )
+    if isinstance(knowledgebase.vector_store_config, FaissVectorStoreConfig):
+        vector_index = resolve(
+            cls=PaiVectorStoreIndex,
+            vector_store_config=knowledgebase.vector_store_config,
+            embed_model=embed_model,
+        )
+    else:
+        vector_index = resolve_by_thread(
+            cls=PaiVectorStoreIndex,
+            vector_store_config=knowledgebase.vector_store_config,
+            embed_model=embed_model,
+            thread=threading.current_thread().ident,
+        )
 
     logger.debug(
         f"create FileTaskExecutor with params [node_parser]: {node_parser}, [embed_model]: {embed_model}, [vector_index]: {vector_index}, [data_reader]: {data_reader}"
@@ -297,13 +307,10 @@ def resolve_openai_query_transform(
 
 def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesizer:
     llm = resolve_chat_llm(config, model_id)
-    multimodal_llm = None
-    multimodal_llm = resolve_multimodal_llm(config)
 
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
-        multimodal_llm=multimodal_llm,
         system_role_template=config.synthesizer.system_role_template,
         custom_prompt_template=config.synthesizer.custom_prompt_template,
     )
@@ -312,12 +319,19 @@ def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesiz
 
 def resolve_vector_index(knowledgebase: KnowledgeBase) -> PaiVectorStoreIndex:
     embed_model = resolve(cls=PaiEmbedding, embed_config=knowledgebase.embedding_config)
-    vector_index = resolve_by_thread(
-        cls=PaiVectorStoreIndex,
-        vector_store_config=knowledgebase.vector_store_config,
-        embed_model=embed_model,
-        thread=threading.current_thread().ident,
-    )
+    if isinstance(knowledgebase.vector_store_config, FaissVectorStoreConfig):
+        vector_index = resolve(
+            cls=PaiVectorStoreIndex,
+            vector_store_config=knowledgebase.vector_store_config,
+            embed_model=embed_model,
+        )
+    else:
+        vector_index = resolve_by_thread(
+            cls=PaiVectorStoreIndex,
+            vector_store_config=knowledgebase.vector_store_config,
+            embed_model=embed_model,
+            thread=threading.current_thread().ident,
+        )
 
     return vector_index
 
@@ -346,7 +360,7 @@ def resolve_query_engine(
 def resolve_query_engine_from_retrieval_request(
     config: RagConfig,
     vector_index: PaiVectorStoreIndex,
-    retrieval_settings: dict = None,
+    retrieval_settings: dict = {},
     model_id: str = None,
 ) -> PaiRetrieverQueryEngine:
     retrieval_mode = retrieval_settings.get(
@@ -368,6 +382,9 @@ def resolve_query_engine_from_retrieval_request(
 
     retriever = vector_index.as_retriever(
         vector_store_query_mode=retrieval_mode,
+        similarity_top_k=retrieval_settings.get(
+            "similarity_top_k", DEFAULT_SIMILARITY_TOP_K
+        ),
     )
 
     synthesizer = resolve_synthesizer(config, model_id)
@@ -474,13 +491,10 @@ def resolve_query_engine_from_knowledgebase(
     qa_prompt_templates = knowledgebase.qa_prompt_templates
     if qa_prompt_templates is not None:
         llm = resolve_chat_llm(config, model_id)
-        multimodal_llm = None
-        multimodal_llm = resolve_multimodal_llm(config)
 
         synthesizer = resolve(
             cls=PaiSynthesizer,
             llm=llm,
-            multimodal_llm=multimodal_llm,
             system_role_template=qa_prompt_templates["system_prompt_template"],
             custom_prompt_template=qa_prompt_templates["task_prompt_template"],
         )

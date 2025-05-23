@@ -54,8 +54,6 @@ async def retrieval_test_respond(input_elements: List[Any]):
                 "retrieval_mode": RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
                 "similarity_top_k": update_dict["similarity_top_k"],
                 # "image_similarity_top_k": update_dict["image_similarity_top_k"], # not supported yet
-                "vector_weight": update_dict["vector_weight"],
-                "keyword_weight": update_dict["keyword_weight"],
                 "reranker_type": RERANKER_TYPE_MAP.get(update_dict["reranker_type"]),
                 "similarity_threshold": update_dict["similarity_threshold"],
                 "reranker_similarity_threshold": update_dict[
@@ -87,8 +85,6 @@ def save_retrieval_config(input_elements: List[Any]):
     retrieval_settings = {
         "retrieval_mode": RETRIEVAL_MODE_MAP.get(update_dict["retrieval_mode"]),
         "similarity_top_k": update_dict["similarity_top_k"],
-        "vector_weight": update_dict["vector_weight"],
-        "keyword_weight": update_dict["keyword_weight"],
         "reranker_type": RERANKER_TYPE_MAP.get(update_dict["reranker_type"]),
         "similarity_threshold": update_dict["similarity_threshold"],
         "reranker_similarity_threshold": update_dict["reranker_similarity_threshold"],
@@ -140,40 +136,20 @@ def show_retrieval_config(retrieval_test_chat_index):
         "retrieval_settings": retrieval_settings,
     }
 
-    if retrieval_settings != {}:
-        return [
-            json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False),
-            gr.update(
-                value=INVERTED_RETRIEVAL_MODE_MAP.get(
-                    retrieval_settings["retrieval_mode"]
-                )
-            ),
-            gr.update(
-                value=INVERTED_RERANKER_TYPE_MAP.get(
-                    retrieval_settings["reranker_type"]
-                )
-            ),
-            gr.update(value=retrieval_settings["vector_weight"]),
-            gr.update(value=retrieval_settings["keyword_weight"]),
-            gr.update(value=retrieval_settings["similarity_top_k"]),
-            gr.update(value=retrieval_settings["similarity_threshold"]),
-            gr.update(value=retrieval_settings["reranker_similarity_threshold"]),
-            gr.update(value=retrieval_settings["reranker_model"]),
-            gr.update(value=retrieval_settings["reranker_similarity_top_k"]),
-        ]
-    else:
-        return [
-            json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-            gr.update(),
-        ]
+    return [
+        json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False),
+        gr.update(
+            value=INVERTED_RETRIEVAL_MODE_MAP.get(retrieval_settings["retrieval_mode"])
+        ),
+        gr.update(
+            value=INVERTED_RERANKER_TYPE_MAP.get(retrieval_settings["reranker_type"])
+        ),
+        gr.update(value=retrieval_settings["similarity_top_k"]),
+        gr.update(value=retrieval_settings["similarity_threshold"]),
+        gr.update(value=retrieval_settings["reranker_similarity_threshold"]),
+        gr.update(value=retrieval_settings["reranker_model"]),
+        gr.update(value=retrieval_settings["reranker_similarity_top_k"]),
+    ]
 
 
 def create_knowledgebase_settings_tab() -> Dict[str, Any]:
@@ -353,24 +329,6 @@ def create_retrieval_test_tab():
                     elem_id="retrieval_mode",
                 )
 
-                vector_weight = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    value=0.7,
-                    elem_id="vector_weight",
-                    label="向量检索权重",
-                    visible=(retrieval_mode == "混合检索"),
-                )
-                keyword_weight = gr.Slider(
-                    minimum=0,
-                    maximum=1,
-                    value=float(1 - vector_weight.value),
-                    elem_id="keyword_weight",
-                    label="关键字检索权重",
-                    interactive=False,
-                    visible=(retrieval_mode == "混合检索"),
-                )
-
                 similarity_top_k = gr.Slider(
                     minimum=0,
                     maximum=100,
@@ -444,12 +402,6 @@ def create_retrieval_test_tab():
             def change_weight(change_weight):
                 return round(float(1 - change_weight), 2)
 
-            vector_weight.input(
-                fn=change_weight,
-                inputs=vector_weight,
-                outputs=[keyword_weight],
-            )
-
             def change_reranker_type(reranker_type):
                 if reranker_type == "无重排序":
                     return {
@@ -464,37 +416,16 @@ def create_retrieval_test_tab():
                         model_reranker_col: gr.update(visible=False),
                     }
 
-            def change_retrieval_mode(retrieval_mode):
-                if retrieval_mode == "混合检索":
-                    return {
-                        vector_weight: gr.update(visible=True),
-                        keyword_weight: gr.update(visible=True),
-                    }
-                else:
-                    return {
-                        vector_weight: gr.update(visible=False),
-                        keyword_weight: gr.update(visible=False),
-                    }
-
             reranker_type.input(
                 fn=change_reranker_type,
                 inputs=reranker_type,
                 outputs=[model_reranker_col],
             )
 
-            retrieval_mode.input(
-                fn=change_retrieval_mode,
-                inputs=retrieval_mode,
-                outputs=[vector_weight, keyword_weight],
-            )
-
             db_retrieval_elements = [
                 retrieval_mode,
                 reranker_type,
-                vector_weight,
-                keyword_weight,
                 similarity_top_k,
-                # image_similarity_top_k,
                 similarity_threshold,
                 reranker_similarity_threshold,
                 reranker_model,
@@ -526,8 +457,6 @@ def create_retrieval_test_tab():
             retrieval_chat_elements = {
                 retrieval_mode,
                 reranker_type,
-                vector_weight,
-                keyword_weight,
                 similarity_top_k,
                 # image_similarity_top_k,
                 similarity_threshold,
@@ -542,17 +471,14 @@ def create_retrieval_test_tab():
 
             components.extend([retrieval_test_chat_index, chatbot, question])
 
-            retrieval_test_chat_index.input(
+            retrieval_test_chat_index.change(
                 fn=show_retrieval_config,
                 inputs=[retrieval_test_chat_index],
                 outputs=[
                     online_retrieval_config,
                     retrieval_mode,
                     reranker_type,
-                    vector_weight,
-                    keyword_weight,
                     similarity_top_k,
-                    # image_similarity_top_k,
                     similarity_threshold,
                     reranker_similarity_threshold,
                     reranker_model,
@@ -568,10 +494,7 @@ def create_retrieval_test_tab():
                     online_retrieval_config,
                     retrieval_mode,
                     reranker_type,
-                    vector_weight,
-                    keyword_weight,
                     similarity_top_k,
-                    # image_similarity_top_k,
                     similarity_threshold,
                     reranker_similarity_threshold,
                     reranker_model,

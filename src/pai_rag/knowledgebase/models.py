@@ -12,6 +12,14 @@ from pai_rag.integrations.synthesizer.prompt_templates import (
 )
 from pai_rag.utils.constants import DEFAULT_KNOWLEDGEBASE_NAME
 
+from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
+from pai_rag.integrations.postprocessor.pai.pai_postprocessor import (
+    DEFAULT_RERANK_MODEL,
+    DEFAULT_RERANK_SIMILARITY_THRESHOLD,
+    DEFAULT_RERANK_TOP_N,
+    DEFAULT_SIMILARITY_THRESHOLD,
+)
+
 
 class KnowledgeBase(BaseModel):
     name: str = Field(
@@ -38,3 +46,17 @@ class KnowledgeBase(BaseModel):
         if "index_name" in values:
             values["name"] = values["index_name"]
         return values
+
+    def model_post_init(self, context):
+        # 修改retrieval_settings的key
+        default_retrieval_settings = {
+            "retrieval_mode": "default",
+            "similarity_top_k": DEFAULT_SIMILARITY_TOP_K,
+            "reranker_type": "no-reranker",
+            "reranker_model": DEFAULT_RERANK_MODEL,
+            "similarity_threshold": DEFAULT_SIMILARITY_THRESHOLD,
+            "reranker_similarity_threshold": DEFAULT_RERANK_SIMILARITY_THRESHOLD,
+            "reranker_similarity_top_k": DEFAULT_RERANK_TOP_N,
+        }
+        default_retrieval_settings.update(self.retrieval_settings)
+        self.retrieval_settings = default_retrieval_settings
