@@ -76,6 +76,8 @@ def pai_query_wrapper() -> Callable:
                         full_content = ""
                         nonlocal end_time
                         try:
+                            ctx = trace.set_span_in_context(otel_span)
+                            t = attach(ctx)
                             async for x in f_return_val:
                                 try:
                                     if x.startswith("data: "):
@@ -104,7 +106,7 @@ def pai_query_wrapper() -> Callable:
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
-                            detach(token)
+                            detach(t)
 
                     return wrapped_gen()
                 else:
@@ -152,6 +154,8 @@ def pai_query_wrapper() -> Callable:
                         full_content = ""
                         nonlocal end_time
                         try:
+                            ctx = trace.set_span_in_context(otel_span)
+                            t = attach(ctx)
                             for x in f_return_val:
                                 yield x
                                 full_content += x.choices[0].delta.content
@@ -169,7 +173,7 @@ def pai_query_wrapper() -> Callable:
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
-                            detach(token)
+                            detach(t)
 
                     return wrapped_gen()
                 else:
