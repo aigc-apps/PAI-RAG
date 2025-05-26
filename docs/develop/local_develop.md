@@ -84,20 +84,3 @@ For local development, please refer to the following steps:
    ```
 
    You can open http://localhost:8680/ to configure the RAG service and upload local data.
-
-5. [Optional] Local load_data tool
-
-   Apart from upload files from web ui, you can load data into knowledge base using `load_data` script
-
-   ```bash
-   load_data -c src/pairag/config/settings.yaml -d data_path -p pattern
-   ```
-
-   path examples:
-
-   ```
-   a. load_data -d test/example
-   b. load_data -d test/example_data/pai_document.pdf
-   c. load_data -d test/example_data -p *.pdf
-
-   ```
