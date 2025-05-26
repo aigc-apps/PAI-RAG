@@ -9,7 +9,7 @@ import os
 import json
 from loguru import logger
 
-DEFAULT_MODEL_DIR = os.environ.get("PAIRAG_MODEL_REPOSITORY", "./model_repository")
+DEFAULT_MODEL_DIR = os.environ.get("PAIRAG_MODEL_DIR", "./model_repository")
 
 modelscope_id_map = {
     "PDF-Extract-Kit-1.0": "Ceceliachenen/PDF-Extract-Kit-1.0",

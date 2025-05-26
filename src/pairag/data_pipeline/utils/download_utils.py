@@ -2,11 +2,11 @@ import os
 import time
 import fcntl
 from loguru import logger
-from pairag.utils.download_models import ModelScopeDownloader, init_mineru_config
+from pairag.utils.download_models import ModelScopeDownloader
 
 
 def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
-    model_dir = model_dir or os.getenv("pairag_MODEL_DIR", "./model_repository")
+    model_dir = model_dir or os.getenv("PAIRAG_MODEL_DIR", "./model_repository")
     model_path = os.path.join(model_dir, model_name)
     lock_file_path = model_name + ".lock"
     # 创建或打开一个锁文件
@@ -26,9 +26,6 @@ def download_models_via_lock(model_dir, model_name, use_cuda: bool = False):
                         fetch_config=True,
                         download_directory_path=model_dir,
                     ).load_model(model=model_name)
-
-                if model_name == "PDF-Extract-Kit-1.0":
-                    init_mineru_config(model_path=model_dir)
 
                 # 释放锁并结束循环
                 fcntl.flock(lock_file, fcntl.LOCK_UN)

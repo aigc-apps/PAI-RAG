@@ -39,14 +39,14 @@ class RayExecutor:
     def __init__(self, working_dir: str = DEFAULT_WORKING_DIR):
         self.working_dir = working_dir
         # init ray
-        print("model dir: ", os.environ.get("pairag_MODEL_DIR"))
-        if os.environ.get("pairag_MODEL_DIR"):
-            ray_env_model_dir = os.environ["pairag_MODEL_DIR"]
+        print("model dir: ", os.environ.get("PAIRAG_MODEL_DIR"))
+        if os.environ.get("PAIRAG_MODEL_DIR"):
+            ray_env_model_dir = os.environ["PAIRAG_MODEL_DIR"]
         else:
             ray_env_model_dir = os.path.join(self.working_dir, "model_repository")
-            os.environ["pairag_MODEL_DIR"] = ray_env_model_dir
+            os.environ["PAIRAG_MODEL_DIR"] = ray_env_model_dir
         logger.info(
-            f"Initing Ray with working_dir: {self.working_dir}, set env: pairag_MODEL_DIR = {ray_env_model_dir}..."
+            f"Initing Ray with working_dir: {self.working_dir}, set env: PAIRAG_MODEL_DIR = {ray_env_model_dir}..."
         )
         ray.init(
             runtime_env={

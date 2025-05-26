@@ -23,11 +23,11 @@ class BGEM3SparseEmbeddingFunction(BaseSparseEmbeddingFunction):
         try:
             from FlagEmbedding import BGEM3FlagModel
 
-            pairag_model_dir = os.getenv("pairag_MODEL_DIR", DEFAULT_MODEL_DIR)
+            model_dir = os.getenv("PAIRAG_MODEL_DIR", DEFAULT_MODEL_DIR)
 
             self.model = BGEM3FlagModel(
                 model_name_or_path=os.path.join(
-                    model_name_or_path or pairag_model_dir, MODEL_NAME
+                    model_name_or_path or model_dir, MODEL_NAME
                 ),
                 use_fp16=False,
             )

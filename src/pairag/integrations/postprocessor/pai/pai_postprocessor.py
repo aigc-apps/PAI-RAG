@@ -46,7 +46,7 @@ class RerankModelPostProcessorConfig(BasePostProcessorConfig):
 def create_postprocessors(config: BasePostProcessorConfig):
     postprocessors = []
     if isinstance(config, RerankModelPostProcessorConfig):
-        pai_model_dir = os.getenv("pairag_MODEL_DIR", "./model_repository")
+        pai_model_dir = os.getenv("PAIRAG_MODEL_DIR", "./model_repository")
         model = os.path.join(pai_model_dir, config.reranker_model)
         postprocessors.append(
             MyModelBasedReranker(

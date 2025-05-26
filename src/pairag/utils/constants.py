@@ -20,7 +20,7 @@ def try_get_int_env(key, default_value=None):
         return None
 
 
-EAS_DEFAULT_MODEL_DIR = "/huggingface/pairag_model_repository_01"
+EAS_DEFAULT_MODEL_DIR = "/huggingface/pai_rag_model_repository_01"
 if not os.path.exists(EAS_DEFAULT_MODEL_DIR):
     DEFAULT_MODEL_DIR = "./model_repository"
 else:

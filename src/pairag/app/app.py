@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from pairag.api.middleware import add_middlewares
 from pairag.utils.constants import DEFAULT_MODEL_DIR
-os.environ["pairag_MODEL_DIR"] = DEFAULT_MODEL_DIR
+os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 from pairag.utils.download_models import ModelScopeDownloader
 ModelScopeDownloader().load_rag_models()
 

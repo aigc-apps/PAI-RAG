@@ -14,9 +14,7 @@ from pairag.integrations.embeddings.pai.pai_embedding_config import (
 from loguru import logger
 
 
-def create_embedding(
-    embed_config: PaiBaseEmbeddingConfig, pairag_model_dir: str = None
-):
+def create_embedding(embed_config: PaiBaseEmbeddingConfig, model_dir: str = None):
     if isinstance(embed_config, OpenAIEmbeddingConfig):
         if embed_config.model is not None:
             embed_model = OpenAIEmbedding(
@@ -54,16 +52,14 @@ def create_embedding(
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."
         )
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
-        pairag_model_dir = pairag_model_dir or os.getenv(
-            "pairag_MODEL_DIR", "./model_repository"
-        )
-        pai_model_path = os.path.join(pairag_model_dir, embed_config.model)
+        model_dir = model_dir or os.getenv("PAIRAG_MODEL_DIR", "./model_repository")
+        pai_model_path = os.path.join(model_dir, embed_config.model)
         if not os.path.exists(pai_model_path):
             logger.info(
-                f"Embedding model {embed_config.model} not found in {pairag_model_dir}, try download it."
+                f"Embedding model {embed_config.model} not found in {model_dir}, try download it."
             )
             download_models = ModelScopeDownloader(
-                fetch_config=True, download_directory_path=pairag_model_dir
+                fetch_config=True, download_directory_path=model_dir
             )
             download_models.load_model(model=embed_config.model)
             logger.info(
@@ -79,7 +75,7 @@ def create_embedding(
         )
 
         logger.info(
-            f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {pairag_model_dir} with {embed_config.embed_batch_size} batch size."
+            f"Initialized HuggingFace embedding model {embed_config.model} from model_dir_path {model_dir} with {embed_config.embed_batch_size} batch size."
         )
     else:
         raise ValueError(f"Unknown Embedding source: {embed_config}")
