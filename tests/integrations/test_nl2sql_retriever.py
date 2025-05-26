@@ -9,7 +9,7 @@ from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 from llama_index.core import SQLDatabase
 
-from pai_rag.integrations.data_analysis.nl2sql_retriever import (
+from pairag.integrations.data_analysis.nl2sql_retriever import (
     MyNLSQLRetriever,
     MySQLRetriever,
     DEFAULT_TEXT_TO_SQL_TMPL,
@@ -38,7 +38,7 @@ def db_connection():
         table_descriptions = os.getenv("descriptions")
     else:
         dialect = "sqlite"
-        path = "./tests/testdata/data/db_data"
+        path = "./tests/testdata/db_data"
         database = "pets.db"
         desired_tables = []
         table_descriptions = {}

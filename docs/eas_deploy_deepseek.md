@@ -98,7 +98,7 @@ EAS服务支持部署如下的模型列表和最低配置。
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-ui",
       "port": 8002,
-      "script": "pai_rag ui"
+      "script": "pairag ui"
     },
     {
       "env": [
@@ -109,18 +109,18 @@ EAS服务支持部署如下的模型列表和最低配置。
       ],
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1",
       "port": 8001,
-      "script": "pai_rag serve"
+      "script": "pairag serve"
     }
   ],
   "labels": {
-    "PAI_RAG_VERSION": "0.1_custom"
+    "pairag_VERSION": "0.1_custom"
   },
   "metadata": {
     "cpu": 16,
     "enable_webservice": true,
     "instance": 1,
     "memory": 32000,
-    "name": "pai_rag_123"
+    "name": "pairag_123"
   }
 }
 ```
@@ -242,7 +242,7 @@ Answer: 服务配置信息默认存在本地，服务重启会丢失。如果挂
     {
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-ui",
       "port": 8002,
-      "script": "pai_rag ui"
+      "script": "pairag ui"
     },
     {
       "env": [
@@ -253,11 +253,11 @@ Answer: 服务配置信息默认存在本地，服务重启会丢失。如果挂
       ],
       "image": "eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.1-gpu",
       "port": 8001,
-      "script": "pai_rag serve"
+      "script": "pairag serve"
     }
   ],
   "labels": {
-    "PAI_RAG_VERSION": "0.1_custom"
+    "pairag_VERSION": "0.1_custom"
   },
   "metadata": {
     "cpu": 16,
@@ -265,7 +265,7 @@ Answer: 服务配置信息默认存在本地，服务重启会丢失。如果挂
     "gpu": 1,
     "instance": 1,
     "memory": 60000,
-    "name": "pai_rag_test_gpu"
+    "name": "pairag_test_gpu"
   }
 }
 ```

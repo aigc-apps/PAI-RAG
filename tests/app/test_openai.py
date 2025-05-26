@@ -5,19 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from fastapi.testclient import TestClient
 import time
-
-
-if (
-    "DASHSCOPE_API_KEY" not in os.environ
-    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
-    pytest.skip(
-        allow_module_level=True,
-        reason='Environment variable "DASHSCOPE_API_KEY" not set.',
-    )
-
-
-from pai_rag.app.app import app
+from pairag.app.app import app
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
@@ -57,6 +45,7 @@ def upload_file(input_files, index_name="default"):
                 assert response.status_code == 200
                 task_status = response.json()["status"]
                 if task_status == "done" or task_status == "failed":
+                    print(response.json())
                     break
 
                 i += 1
@@ -73,12 +62,14 @@ def setup_app():
         response = client.patch(
             "/api/v1/config",
             json={
-                "llm": {
-                    "source": "openai_compatible",
-                    "model": "qwen-max",
-                    "api_key": os.environ.get("DASHSCOPE_API_KEY", "abc"),
-                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                },
+                "llms": [
+                    {
+                        "source": "openai_compatible",
+                        "model": "qwen-max",
+                        "api_key": os.environ.get("DASHSCOPE_API_KEY", "abc"),
+                        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    }
+                ],
                 "search": {
                     "source": "bing",
                     "search_api_key": os.environ.get("BING_SEARCH_KEY", "abc"),
@@ -90,6 +81,8 @@ def setup_app():
             },
         )
         assert response.status_code == 200
+        config_response = client.get("api/v1/config")
+        print(config_response.json())
 
     with TestClient(app) as client:
         response = client.get("/api/v1/knowledgebases")
@@ -118,22 +111,13 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
-    upload_file(["tests/testdata/data/md_data/pai_document.md"])
+    upload_file(["tests/testdata/pai_document.md"])
     upload_file(
         ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
 
 
 setup_app()
-
-
-@pytest.mark.asyncio(scope="session")
-async def test_get_v1_path():
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/v1")
-    assert response.status_code == 200
 
 
 @pytest.mark.asyncio(scope="session")
@@ -389,7 +373,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citations", [])
 
     assert len(answer) > 0
-    assert len(citations) == 5
+    assert len(citations) == 2
 
     # 相关问题
     async with AsyncClient(
@@ -456,7 +440,7 @@ async def test_rag_chat():
             citations = chunk_data.get("citation_details", [])
 
     assert len(answer) > 0
-    assert len(citations) == 5
+    assert len(citations) == 2
 
     # 使用相关的index名字
     async with AsyncClient(

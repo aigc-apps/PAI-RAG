@@ -1,0 +1,554 @@
+import os
+from typing import List
+import gradio as gr
+
+from pairag.web.ui_constants import (
+    DEFAULT_EMBED_SIZE,
+    EMBEDDING_DIM_DICT,
+    EMBEDDING_MODEL_DEPRECATED,
+    EMBEDDING_MODEL_LIST,
+    EMBEDDING_TYPE_DICT,
+)
+from pairag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+from pairag.knowledgebase.rag_knowledgebase import KnowledgeBase
+from pairag.knowledgebase.index.pai.vector_store_config import (
+    DEFAULT_LOCAL_STORAGE_PATH,
+    AnalyticDBVectorStoreConfig,
+    ElasticSearchVectorStoreConfig,
+    FaissVectorStoreConfig,
+    HologresVectorStoreConfig,
+    MilvusVectorStoreConfig,
+    OpenSearchVectorStoreConfig,
+    PostgreSQLVectorStoreConfig,
+    TablestoreVectorStoreConfig,
+    DashVectorVectorStoreConfig,
+)
+from pairag.file.nodeparsers.pai.pai_node_parser import NodeParserConfig
+
+index_related_component_keys = [
+    "vector_index",
+    "new_index_name",
+    "add_index_button",
+    "update_index_button",
+    "delete_index_button",
+    "embed_source",
+    "embed_model",
+    "embed_dim",
+    "embed_type",
+    "embed_batch_size",
+    "embed_api_key",
+    "vectordb_type",
+    "faiss_path",
+    "adb_ak",
+    "adb_sk",
+    "adb_account",
+    "adb_region_id",
+    "adb_instance_id",
+    "adb_namespace",
+    "adb_collection",
+    "adb_account_password",
+    "es_url",
+    "es_user",
+    "es_password",
+    "es_index",
+    "milvus_host",
+    "milvus_port",
+    "milvus_collection_name",
+    "milvus_user",
+    "milvus_database",
+    "milvus_password",
+    "opensearch_endpoint",
+    "opensearch_instance_id",
+    "opensearch_username",
+    "opensearch_password",
+    "opensearch_table_name",
+    "hologres_host",
+    "hologres_port",
+    "hologres_database",
+    "hologres_user",
+    "hologres_password",
+    "hologres_table",
+    "hologres_pre_delete",
+    "postgresql_host",
+    "postgresql_port",
+    "postgresql_database",
+    "postgresql_username",
+    "postgresql_password",
+    "postgresql_table_name",
+    "tablestore_endpoint",
+    "tablestore_instance_name",
+    "tablestore_access_key_id",
+    "tablestore_access_key_secret",
+    "tablestore_table_name",
+    "dashvector_endpoint",
+    "dashvector_api_key",
+    "dashvector_collection_name",
+    "dashvector_partition_name",
+    "chunk_size",
+    "chunk_overlap",
+]
+
+
+def index_to_components_settings(
+    index_entry: KnowledgeBase, index_list: List[str], is_new_index: bool = False
+):
+    if is_new_index:
+        index_component_settings = [
+            {"value": "NEW", "choices": index_list + ["NEW"]},
+            {
+                "placeholder": index_entry.name,
+                "value": index_entry.name,
+                "visible": True,
+            },
+            {"visible": True},
+            {"visible": False},
+            {"visible": False},
+        ]
+    else:
+        index_component_settings = [
+            {"value": index_entry.name, "choices": index_list + ["NEW"]},
+            {"placeholder": "", "value": "", "visible": False},
+            {"visible": False},
+            {"visible": True},
+            {"visible": False},
+        ]
+
+    embed_source = index_entry.embedding_config.source.value
+    embed_model = index_entry.embedding_config.model
+    if (embed_model in EMBEDDING_MODEL_DEPRECATED) or os.getenv(
+        "USE_DEPRECATED_EMBEDDING_MODEL", "False"
+    ):
+        embed_model_setting = {
+            "value": embed_model,
+            "choices": EMBEDDING_MODEL_LIST + EMBEDDING_MODEL_DEPRECATED,
+            "visible": embed_source == "huggingface",
+        }
+    else:
+        embed_model_setting = {
+            "value": embed_model,
+            "choices": EMBEDDING_MODEL_LIST + EMBEDDING_MODEL_DEPRECATED,
+            "visible": embed_source == "huggingface",
+        }
+
+    embed_dim_setting = {
+        "value": EMBEDDING_DIM_DICT.get(embed_model, DEFAULT_EMBED_SIZE)
+        if embed_source == "huggingface"
+        else DEFAULT_EMBED_SIZE
+    }
+    embed_type_setting = {
+        "value": EMBEDDING_TYPE_DICT.get(embed_model, "Default")
+        if embed_source == "huggingface"
+        else "Default",
+        "visible": True if embed_source == "huggingface" else False,
+    }
+    embed_batch_size_setting = {"value": index_entry.embedding_config.embed_batch_size}
+    if index_entry.embedding_config.source.value == "huggingface":
+        embed_api_key_setting = {"value": "", "visible": False}
+    else:
+        embed_api_key_setting = {
+            "value": index_entry.embedding_config.api_key
+            or os.getenv("DASHSCOPE_API_KEY"),
+            "visible": True,
+        }
+
+    embed_component_settings = [
+        {"value": embed_source},
+        embed_model_setting,
+        embed_dim_setting,
+        embed_type_setting,
+        embed_batch_size_setting,
+        embed_api_key_setting,
+    ]
+
+    vector_store_config = index_entry.vector_store_config
+
+    vector_component_settings = [{"value": vector_store_config.type.value}]
+
+    if isinstance(vector_store_config, FaissVectorStoreConfig):
+        vector_component_settings.append({"value": vector_store_config.persist_path})
+    else:
+        vector_component_settings.append({"value": DEFAULT_LOCAL_STORAGE_PATH})
+
+    if isinstance(vector_store_config, AnalyticDBVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.ak},
+                {"value": vector_store_config.sk},
+                {"value": vector_store_config.account},
+                {"value": vector_store_config.region_id},
+                {"value": vector_store_config.instance_id},
+                {"value": vector_store_config.namespace},
+                {"value": vector_store_config.collection},
+                {"value": vector_store_config.account_password},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": "cn-hangzhou"},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, ElasticSearchVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.es_url},
+                {"value": vector_store_config.es_user},
+                {"value": vector_store_config.es_password},
+                {"value": vector_store_config.es_index},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, MilvusVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.host},
+                {"value": vector_store_config.port},
+                {"value": vector_store_config.collection_name},
+                {"value": vector_store_config.user},
+                {"value": vector_store_config.database},
+                {"value": vector_store_config.password},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, OpenSearchVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.endpoint},
+                {"value": vector_store_config.instance_id},
+                {"value": vector_store_config.username},
+                {"value": vector_store_config.password},
+                {"value": vector_store_config.table_name},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, HologresVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.host},
+                {"value": vector_store_config.port},
+                {"value": vector_store_config.database},
+                {"value": vector_store_config.user},
+                {"value": vector_store_config.password},
+                {"value": vector_store_config.table_name},
+                {"value": vector_store_config.pre_delete_table},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, PostgreSQLVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.host},
+                {"value": vector_store_config.port},
+                {"value": vector_store_config.database},
+                {"value": vector_store_config.username},
+                {"value": vector_store_config.password},
+                {"value": vector_store_config.table_name},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, TablestoreVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.endpoint},
+                {"value": vector_store_config.instance_name},
+                {"value": vector_store_config.access_key_id},
+                {"value": vector_store_config.access_key_secret},
+                {"value": vector_store_config.table_name},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    if isinstance(vector_store_config, DashVectorVectorStoreConfig):
+        vector_component_settings.extend(
+            [
+                {"value": vector_store_config.endpoint},
+                {"value": vector_store_config.api_key},
+                {"value": vector_store_config.collection_name},
+                {"value": vector_store_config.partition_name},
+            ]
+        )
+    else:
+        vector_component_settings.extend(
+            [
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+                {"value": ""},
+            ]
+        )
+
+    node_parser_component_settings = [
+        {"value": index_entry.node_parser_config.chunk_size},
+        {"value": index_entry.node_parser_config.chunk_overlap},
+    ]
+    component_settings = [
+        *index_component_settings,
+        *embed_component_settings,
+        *vector_component_settings,
+        *node_parser_component_settings,
+    ]
+    settings = dict(zip(index_related_component_keys, component_settings))
+    return settings
+
+
+def index_to_components(
+    index_entry: KnowledgeBase, index_list: List[str], is_new_index: bool = False
+):
+    component_settings = index_to_components_settings(
+        index_entry, index_list, is_new_index
+    )
+    return [gr.update(**setting) for setting in component_settings.values()] + [
+        gr.update(choices=index_list, value=index_entry.name),
+        gr.update(choices=index_list, value=index_entry.name),
+        gr.update(choices=index_list, value=index_entry.name),
+        gr.update(choices=index_list, value=index_entry.name),
+        gr.update(visible=False if is_new_index else True),
+    ]
+
+
+def components_to_index(
+    vector_index,
+    new_index_name,
+    embed_source,
+    embed_model,
+    embed_batch_size,
+    embed_api_key,
+    vectordb_type,
+    hologres_host,
+    hologres_port,
+    hologres_user,
+    hologres_password,
+    hologres_database,
+    hologres_table,
+    hologres_pre_delete,
+    faiss_path,
+    opensearch_endpoint,
+    opensearch_username,
+    opensearch_password,
+    opensearch_instance_id,
+    opensearch_table_name,
+    postgresql_host,
+    postgresql_port,
+    postgresql_database,
+    postgresql_username,
+    postgresql_password,
+    postgresql_table_name,
+    adb_ak,
+    adb_sk,
+    adb_region_id,
+    adb_instance_id,
+    adb_account,
+    adb_account_password,
+    adb_namespace,
+    adb_collection,
+    es_index,
+    es_url,
+    es_user,
+    es_password,
+    milvus_host,
+    milvus_port,
+    milvus_user,
+    milvus_password,
+    milvus_database,
+    milvus_collection_name,
+    tablestore_endpoint,
+    tablestore_instance_name,
+    tablestore_access_key_id,
+    tablestore_access_key_secret,
+    tablestore_table_name,
+    dashvector_endpoint,
+    dashvector_api_key,
+    dashvector_collection_name,
+    dashvector_partition_name,
+    chunk_size,
+    chunk_overlap,
+    **kwargs,
+) -> KnowledgeBase:
+    if vector_index is None or vector_index.lower() == "new":
+        index_name = new_index_name
+    else:
+        index_name = vector_index
+
+    node_parser_config = NodeParserConfig(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    ).model_dump()
+
+    embedding = {
+        "source": embed_source,
+        "model": embed_model,
+        "embed_batch_size": int(embed_batch_size),
+    }
+    if embed_source != "huggingface":
+        embedding["api_key"] = embed_api_key
+
+    if vectordb_type.lower() == "hologres":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "host": hologres_host,
+            "port": hologres_port,
+            "user": hologres_user,
+            "password": hologres_password,
+            "database": hologres_database,
+            "table_name": hologres_table,
+            "pre_delete_table": hologres_pre_delete,
+        }
+    elif vectordb_type.lower() == "faiss":
+        faiss_persist_path = os.path.join(
+            DEFAULT_KNOWLEDGEBASE_PATH, index_name, ".index", ".faiss"
+        )
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "persist_path": faiss_persist_path,
+        }
+    elif vectordb_type.lower() == "analyticdb":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "ak": adb_ak,
+            "sk": adb_sk,
+            "region_id": adb_region_id,
+            "instance_id": adb_instance_id,
+            "account": adb_account,
+            "account_password": adb_account_password,
+            "namespace": adb_namespace,
+            "collection": adb_collection,
+        }
+
+    elif vectordb_type.lower() == "elasticsearch":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "es_url": es_url,
+            "es_user": es_user,
+            "es_password": es_password,
+            "es_index": es_index,
+        }
+
+    elif vectordb_type.lower() == "milvus":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "host": milvus_host,
+            "port": milvus_port,
+            "user": milvus_user,
+            "password": milvus_password,
+            "database": milvus_database,
+            "collection_name": milvus_collection_name,
+        }
+
+    elif vectordb_type.lower() == "opensearch":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "endpoint": opensearch_endpoint,
+            "instance_id": opensearch_instance_id,
+            "username": opensearch_username,
+            "password": opensearch_password,
+            "table_name": opensearch_table_name,
+        }
+
+    elif vectordb_type.lower() == "postgresql":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "host": postgresql_host,
+            "port": postgresql_port,
+            "database": postgresql_database,
+            "table_name": postgresql_table_name,
+            "username": postgresql_username,
+            "password": postgresql_password,
+        }
+    elif vectordb_type.lower() == "tablestore":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "endpoint": tablestore_endpoint,
+            "instance_name": tablestore_instance_name,
+            "access_key_id": tablestore_access_key_id,
+            "access_key_secret": tablestore_access_key_secret,
+            "table_name": tablestore_table_name,
+        }
+    elif vectordb_type.lower() == "dashvector":
+        vector_store = {
+            "type": vectordb_type.lower(),
+            "endpoint": dashvector_endpoint,
+            "api_key": dashvector_api_key,
+            "collection_name": dashvector_collection_name,
+            "partition_name": dashvector_partition_name,
+        }
+    else:
+        raise ValueError(f"Unknown vector db type: {vectordb_type}")
+
+    index_entry = KnowledgeBase.model_validate(
+        {
+            "name": index_name,
+            "vector_store_config": vector_store,
+            "embedding_config": embedding,
+            "node_parser_config": node_parser_config,
+        }
+    )
+    return index_entry

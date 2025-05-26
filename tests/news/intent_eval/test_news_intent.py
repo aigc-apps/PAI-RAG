@@ -7,26 +7,23 @@ from llama_index.core.base.llms.types import ChatMessage
 import asyncio
 
 
-if (
-    "DASHSCOPE_API_KEY" not in os.environ
-    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
+if "DASHSCOPE_API_KEY" not in os.environ:
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
-from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.chat_flow import ChatFlow
-from pai_rag.app.api.models import ChatCompletionRequest
-from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
-from pai_rag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
+from pairag.core.rag_config_manager import RagConfigManager
+from pairag.chat.chat_flow import ChatFlow
+from pairag.chat.models import ChatCompletionRequest
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pairag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
 
 
 # 定义测试文件路径
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
-    _BASE_DIR, "../../src/pai_rag/config/settings.toml"
+    _BASE_DIR, "../../src/pairag/config/settings.toml"
 )
 TEST_FILE = os.path.join(_BASE_DIR, "intent_eval/intent_sample.json")
 
@@ -39,8 +36,7 @@ def setup_config():
     llm_config = OpenAICompatibleLlmConfig(
         model="qwen2.5-32b-instruct", api_key=os.getenv("DASHSCOPE_API_KEY")
     )
-    config.llm = llm_config
-    config.llms[0] = config.llm
+    config.llms[0] = llm_config
     config.query_rewrite.model_id = "qwen2.5-32b-instruct"
     config.news_extension.domain_list = list(DEFAULT_NEWS_DOMAIN_MAP.keys())
     return config

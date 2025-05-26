@@ -6,19 +6,16 @@ from llama_index.core.base.llms.types import ChatMessage
 import asyncio
 
 
-if (
-    "DASHSCOPE_API_KEY" not in os.environ
-    or os.getenv("SKIP_GPU_TESTS", "false") == "true"
-):
+if "DASHSCOPE_API_KEY" not in os.environ:
     pytest.skip(
         allow_module_level=True,
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
-from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.core.chat_flow import ChatFlow
-from pai_rag.app.api.models import ChatCompletionRequest
-from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pairag.core.rag_config_manager import RagConfigManager
+from pairag.chat.chat_flow import ChatFlow
+from pairag.chat.models import ChatCompletionRequest
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 
 
 # 定义测试文件路径
@@ -35,8 +32,7 @@ def setup_config():
     llm_config = OpenAICompatibleLlmConfig(
         model="qwen2.5-32b-instruct", api_key=os.getenv("DASHSCOPE_API_KEY")
     )
-    config.llm = llm_config
-    config.llms[0] = config.llm
+    config.llms[0] = llm_config
     return config
 
 

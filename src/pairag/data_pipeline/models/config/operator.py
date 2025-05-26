@@ -1,0 +1,83 @@
+from enum import Enum
+from typing import Optional
+from pydantic import BaseModel
+from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
+
+from pairag.file.nodeparsers.pai.constants import (
+    DEFAULT_NODE_PARSER_TYPE,
+    DEFAULT_PARAGRAPH_SEP,
+)
+
+
+class OperatorName(str, Enum):
+    DATA_SOURCE = "data_source"
+    PARSER = "parse"
+    SPLITTER = "split"
+    EMBEDDER = "embed"
+    DATA_SINK = "data_sink"
+
+
+class BaseOperatorConfig(BaseModel):
+    """
+    Base class for operator configs.
+    """
+
+    name: OperatorName
+    num_cpus: float = 1
+    num_gpus: float = 0
+    memory: float = 2
+
+    batch_size: int = 10
+    input_path: str
+    output_path: str
+    model_dir: str = None
+    concurrency: int = 1
+
+
+class ParserConfig(BaseOperatorConfig):
+    """
+    Config for parse operator.
+    """
+
+    name: OperatorName = OperatorName.PARSER
+    enable_pdf_ocr: bool = False
+    concat_sheet_rows: bool = False
+    recursive: bool = True
+
+
+class SplitterConfig(BaseOperatorConfig):
+    """
+    Config for split operator.
+    """
+
+    name: OperatorName = OperatorName.SPLITTER
+    paragraph_separator: str = DEFAULT_PARAGRAPH_SEP
+    node_parser_type: str = DEFAULT_NODE_PARSER_TYPE
+    chunk_size: int = DEFAULT_CHUNK_SIZE
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP
+
+
+class EmbedderConfig(BaseOperatorConfig):
+    """
+    Config for embed operator.
+    """
+
+    name: OperatorName = OperatorName.EMBEDDER
+    model: str = "bge-m3"
+    connection_name: Optional[str] = None
+    workspace_id: Optional[str] = None
+    enable_sparse: bool = False
+    source: str = "huggingface"
+    batch_size: int = 32
+
+
+class SinkConfig(BaseOperatorConfig):
+    """
+    Config for embed operator.
+    """
+
+    name: OperatorName = OperatorName.DATA_SINK
+    pairag_endpoint: str
+    pairag_token: str
+    pairag_knowledgebase: str
+    pairag_embed_dims: int

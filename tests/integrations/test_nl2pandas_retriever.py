@@ -6,7 +6,7 @@ from llama_index.llms.dashscope import DashScope
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 
-from pai_rag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
+from pairag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
 
 
 dashscope_key = os.environ.get("DASHSCOPE_API_KEY")
@@ -20,7 +20,7 @@ Settings.embed_model = embed_model
     os.getenv("DASHSCOPE_API_KEY") is None, reason="no llm api key provided"
 )
 def test_pandas_query_retriever():
-    file_path = "./tests/testdata/data/csv_data/titanic_train.csv"
+    file_path = "./tests/testdata/csv_data/titanic_train.csv"
     df = pd.read_csv(file_path)
     data_analysis_retriever = PandasQueryRetriever(df)
     query = "What is the correlation between survival and age?"

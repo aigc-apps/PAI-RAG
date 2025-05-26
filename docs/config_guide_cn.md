@@ -1,6 +1,6 @@
 # 参数配置说明
 
-这篇说明主要指导如何在 src/pai_rag/config/settings.toml 中配置您的 RAG 参数，以上路径在下文中简称 settings.toml
+这篇说明主要指导如何在 src/pairag/config/settings.toml 中配置您的 RAG 参数，以上路径在下文中简称 settings.toml
 
 ## rag.data_reader
 
@@ -35,7 +35,7 @@ LlamaParseDirectoryReader是SimpleDirectoryReader中集成LlamaParse的PDF加载
 
 source = [HuggingFace, OpenAI, DashScope]
 
-目前, pai_rag 支持以上三种 embedding 源.
+目前, pairag 支持以上三种 embedding 源.
 
 如果 source = "HuggingFace", 您需要进一步指定 model 和 embed_batch_size。默认的模型名称和批处理大小分别为 bge-m3 和 10。
 
@@ -61,7 +61,7 @@ embed_batch_size = 10
 
 source = [PaiEas, OpenAI, DashScope]
 
-目前, pai_rag 支持以上三类大语言模型.
+目前, pairag 支持以上三类大语言模型.
 
 如果 source = "PaiEas", 需要指定参数如下:
 
@@ -75,7 +75,7 @@ source = [PaiEas, OpenAI, DashScope]
     model = ""
     temperature = ""
 
-**_temperature_** 是一个范围从 0 到 1 的参数。设置较高值可以让模型更具创造性，而较低值可以使模型更准确和事实导向。在 pai_rag 中，其默认值为 0.1。
+**_temperature_** 是一个范围从 0 到 1 的参数。设置较高值可以让模型更具创造性，而较低值可以使模型更准确和事实导向。在 pairag 中，其默认值为 0.1。
 
 如果 source = "DashScope", 可选模型包括 qwen-turbo, qwen-max, qwen-plus, qwen-max-1201, qwen-max-longcontext。参数设置如下：
 
@@ -89,7 +89,7 @@ source = [PaiEas, OpenAI, DashScope]
 
 vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablestore, DashVector]
 
-目前, pai_rag 支持多种方式创建和存储索引。
+目前, pairag 支持多种方式创建和存储索引。
 
 如果 vector_store.type = "FAISS", 直接在[rag.index]中指定一个持久化路径：
 
@@ -164,7 +164,7 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablest
     instance_name = ""
     access_key_id = ""
     access_key_secret = ""
-    table_name = "pai_rag"
+    table_name = "pairag"
 
 如果 vector_store.type = "DashVector", 需要提供如下信息：
 
@@ -178,7 +178,7 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablest
     collection_name = "" # optional
     partition_name = "" # optional
 
-其中，endpoint 和 api_key 需要手动开通并创建 DashVector Cluster 后获取，参考 [文档](https://help.aliyun.com/document_detail/2631966.html)。对于 collection_name和 partition_name，如果留空则使用默认配置（collection: "pai_rag", partition: "default"）。如果指定的collection和partition不存在，则会自动创建，可在DashVector控制台中进行管理。
+其中，endpoint 和 api_key 需要手动开通并创建 DashVector Cluster 后获取，参考 [文档](https://help.aliyun.com/document_detail/2631966.html)。对于 collection_name和 partition_name，如果留空则使用默认配置（collection: "pairag", partition: "default"）。如果指定的collection和partition不存在，则会自动创建，可在DashVector控制台中进行管理。
 
 该设置也可在网页中配置。
 
@@ -186,7 +186,7 @@ vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablest
 
 type = [Token, Sentence, SentenceWindow, Semantic]
 
-目前, pai_rag 支持四种 node_parser.
+目前, pairag 支持四种 node_parser.
 
 如果 type = "Token", 会尝试根据原始标记（token）数量将其分割为一致的块大小，配置如下：
 
@@ -249,7 +249,7 @@ retrieval_mode 和 similarity_top_k 可在网页中设置。
 
 rerank_model = [no-reranker, bge-reranker-base, bge-reranker-large, llm-reranker]
 
-目前, pai_rag 支持三种重排模型, 其中 llm-reranker 使用 llm 自身能力进行重排，其它两种为专门训练的小模型。
+目前, pairag 支持三种重排模型, 其中 llm-reranker 使用 llm 自身能力进行重排，其它两种为专门训练的小模型。
 
 如果无需使用reranker，配置如下:
 
@@ -266,7 +266,7 @@ rerank_model = [no-reranker, bge-reranker-base, bge-reranker-large, llm-reranker
 
 type = [Refine, Compact, TreeSummarize, SimpleSummarize]
 
-目前, pai_rag 支持四种合成器.
+目前, pairag 支持四种合成器.
 
 `Refine`: 通过逐个处理每个检索到的文本块来创建和完善答案。这会为每个节点/检索到的块单独调用llm。
 `Compat`: 类似于 Refine，但是会预先将文本块连接在一起，从而减少llm的调用次数。
@@ -320,4 +320,4 @@ type = [calculator, googlewebsearch]
 
     type = "calculator"
 
-可在`src/pai_rag/modules/tool/`中自定义工具。
+可在`src/pairag/modules/tool/`中自定义工具。

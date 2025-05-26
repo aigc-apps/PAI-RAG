@@ -28,8 +28,8 @@ For local development, please refer to the following steps:
    ```bash
    pip install poetry
    poetry install
-   pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
-   pip install protobuf==5.27.4
+   pip install magic-pdf[full]==1.3.10
+   pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
    ```
 
 - Common network timeout issues
@@ -49,8 +49,8 @@ For local development, please refer to the following steps:
   ```bash
   poetry lock
   poetry install
-   pip install magic-pdf[full]==1.3.10 dashvector==1.0.19
-   pip install protobuf==5.27.4
+  pip install magic-pdf[full]==1.3.10
+  pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
   ```
 
 3. Download Models:
@@ -76,7 +76,7 @@ For local development, please refer to the following steps:
    # Support port (default 8680), worker_num (default 1)
    # Download [bge-m3, pdf-extract] by default, you can skip it by setting --skip-download-models.
    # you can use tool "load_model" to download other models including [bge-m3, pdf-extract, SGPT-125M-weightedmean-nli-bitfit, bge-large-zh-v1.5, bge-reranker-base, bge-reranker-large, paraphrase-multilingual-MiniLM-L12-v2, qwen_1.8b, text2vec-large-chinese]
-   pai_rag serve [-w worker_num] [-p PORT]
+   pairag serve [-w worker_num] [-p PORT]
    ```
 
    ```bash
@@ -84,20 +84,3 @@ For local development, please refer to the following steps:
    ```
 
    You can open http://localhost:8680/ to configure the RAG service and upload local data.
-
-5. [Optional] Local load_data tool
-
-   Apart from upload files from web ui, you can load data into knowledge base using `load_data` script
-
-   ```bash
-   load_data -c src/pai_rag/config/settings.yaml -d data_path -p pattern
-   ```
-
-   path examples:
-
-   ```
-   a. load_data -d test/example
-   b. load_data -d test/example_data/pai_document.pdf
-   c. load_data -d test/example_data -p *.pdf
-
-   ```

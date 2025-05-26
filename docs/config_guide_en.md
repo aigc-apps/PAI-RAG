@@ -1,6 +1,6 @@
 # Parameter Configuration Instruction
 
-This guidance primarily walks you through configuring your RAG parameters in **_src/pai_rag/config/settings.toml_**, which is referred to as settings.toml hereafter.
+This guidance primarily walks you through configuring your RAG parameters in **_src/pairag/config/settings.toml_**, which is referred to as settings.toml hereafter.
 
 ## rag.data_reader
 
@@ -35,7 +35,7 @@ This setting is not available in webui.
 
 source = [HuggingFace, OpenAI, DashScope]
 
-Currently, pai_rag supports three embedding sources.
+Currently, pairag supports three embedding sources.
 
 If source = "HuggingFace", you need to further specify model_modelname and embed_batch_size. The default model name and batch size are bge-m3 and 10, respectively.
 
@@ -62,7 +62,7 @@ This setting is also available in webui.
 
 source = [PaiEas, OpenAI, DashScope]
 
-Currently, pai_rag supports three llm sources.
+Currently, pairag supports three llm sources.
 
 If source = "PaiEas", you need to specify the following parameters:
 
@@ -76,7 +76,7 @@ If source = "OpenAI", gpt-3.5-turbo and gpt-4-turbo are available in webui, also
     model = ""
     temperature = ""
 
-It is noted that **_temperature_** is a parameter ranging from 0 to 1. A high temperature lets the model more creative while a low temperature makes the model more accurate and factual. Its default value in pai_rag is 0.1.
+It is noted that **_temperature_** is a parameter ranging from 0 to 1. A high temperature lets the model more creative while a low temperature makes the model more accurate and factual. Its default value in pairag is 0.1.
 
 If source = "DashScope", the candidates include qwen-turbo, qwen-max, qwen-plus, qwen-max-1201, qwen-max-longcontext. Parameters can be specified as below:
 
@@ -90,7 +90,7 @@ This setting is also available in webui.
 
 vector_store.type = [FAISS, Hologres, ElasticSearch, AnalyticDB, Milvus, Tablestore, DashVector]
 
-Currently, pai_rag provides a variety of approaches for creating & storing indices.
+Currently, pairag provides a variety of approaches for creating & storing indices.
 
 If vector_store.type = "FAISS", you can specify a local persist_path as below:
 
@@ -165,7 +165,7 @@ If vector_store.type = "Tablestore", you need to provide the following informati
     instance_name = ""
     access_key_id = ""
     access_key_secret = ""
-    table_name = "pai_rag"
+    table_name = "pairag"
 
 If vector_store.type = "DashVector", you need to provide the following information:
 
@@ -180,7 +180,7 @@ If vector_store.type = "DashVector", you need to provide the following informati
     collection_name = ""  # optional
     partition_name = "" # optional
 
-In which, the endpoint and api_key need to be manually activated and obtained after creating a DashVector Cluster, refer to the [documentation](https://help.aliyun.com/document_detail/2631966.html). For collection_name and partition_name, if left blank, default configurations will be used (collection: "pai_rag", partition: "default"). If the specified collection and partition do not exist, they will be automatically created and can be managed in the DashVector console.
+In which, the endpoint and api_key need to be manually activated and obtained after creating a DashVector Cluster, refer to the [documentation](https://help.aliyun.com/document_detail/2631966.html). For collection_name and partition_name, if left blank, default configurations will be used (collection: "pairag", partition: "default"). If the specified collection and partition do not exist, they will be automatically created and can be managed in the DashVector console.
 
 This setting is also available in webui.
 
@@ -188,7 +188,7 @@ This setting is also available in webui.
 
 type = [Token, Sentence, SentenceWindow, Semantic]
 
-Currently, pai_rag supports four node_parsers.
+Currently, pairag supports four node_parsers.
 
 If type = "Token", it attempts to split to a consistent chunk size according to raw token counts. You can refer to the following configuration:
 
@@ -254,7 +254,7 @@ The retrieval mode as well as the similarity top k can also be set in webui.
 
 rerank_model = [no-reranker, bge-reranker-base, bge-reranker-large, llm-reranker]
 
-Currently, pai_rag supports three rerank models, among which llm-reranker uses the llm itself.
+Currently, pairag supports three rerank models, among which llm-reranker uses the llm itself.
 
 If you do not need a reranker, simply set as follows:
 
@@ -271,7 +271,7 @@ This setting is also available in webui.
 
 type = [Refine, Compact, TreeSummarize, SimpleSummarize]
 
-Currently, pai_rag supports four synthesizers.
+Currently, pairag supports four synthesizers.
 
 `Refine`: create and refine an answer by sequentially going through each retrieved text chunk. This makes a separate LLM call per Node/retrieved chunk.
 `Compat`: similar to refine but compact (concatenate) the chunks beforehand, resulting in less LLM calls.
@@ -309,7 +309,7 @@ type = [react]
 
 A ReACT agent is a technique that combines the reasoning of LLMs with actionable steps to create a more sophisticated system.
 
-Currently, pai_rag supports the react type with googlesearch and calculator tools with add, subtract, multiply and divide functions. This setting is not available in webui.
+Currently, pairag supports the react type with googlesearch and calculator tools with add, subtract, multiply and divide functions. This setting is not available in webui.
 
 ## rag.tool
 
@@ -325,4 +325,4 @@ If type = "calculator", no more parameters need to be specified:
 
     type = "calculator"
 
-You can define more customized tools in `src/pai_rag/modules/tool/`.
+You can define more customized tools in `src/pairag/modules/tool/`.

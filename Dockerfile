@@ -5,15 +5,14 @@ RUN pip3 install poetry
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache \
-    PYTHON_AGENT_PATH="https://arms-apm-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/aliyun-python-agent/dev/1.2.0-llama-index-support-0.10.43%2B/aliyun-python-agent.tar.gz"
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 
 WORKDIR /app
 COPY . .
 
 RUN poetry install \
-  && poetry run pip install magic-pdf[full]==1.3.10 dashvector==1.0.19 \
-  && poetry run pip install protobuf==5.27.4 \
+  && poetry run pip install magic-pdf[full]==1.3.10 \
+  && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
   && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
@@ -23,11 +22,8 @@ RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localti
 RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential
 
 ENV VIRTUAL_ENV=/app/.venv \
-    PATH="/app/.venv/bin:$PATH" \
-    ENABLE_FASTAPI=false \
-    ENABLE_REQUESTS=false \
-    ENABLE_AIOHTTPCLIENT=false \
-    ENABLE_HTTPX=false
+    PATH="/app/.venv/bin:$PATH"
+
 
 ADD https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/sdwebui/filebrowser /bin/filebrowser
 RUN chmod u+x /bin/filebrowser

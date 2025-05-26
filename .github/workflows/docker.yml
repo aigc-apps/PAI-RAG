@@ -55,12 +55,12 @@ jobs:
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
           docker push ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
 
-      - name: Build and push base data process image
+      - name: Build and push ingestion image
         env:
-          IMAGE_TAG: ${{env.VERSION_TAG}}-rag-data-operator
-          TEST_IMAGE_TAG: ${{env.TIME_VERSION_TAG}}-rag-data-operator
+          IMAGE_TAG: ${{env.VERSION_TAG}}-ingestion
+          TEST_IMAGE_TAG: ${{env.TIME_VERSION_TAG}}-ingestion
         run: |
-          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f src/pai_rag/tools/data_process/docker/Dockerfile_cpu .
+          docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG -f Dockerfile_ingestion .
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:$IMAGE_TAG ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG
           docker push ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$TEST_IMAGE_TAG

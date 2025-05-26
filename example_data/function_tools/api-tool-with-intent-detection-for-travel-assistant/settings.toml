@@ -1,7 +1,7 @@
 dynaconf_merge = true
 
 [rag]
-name = "pai_rag"
+name = "pairag"
 version = "0.1.1"
 
 [rag.agent]

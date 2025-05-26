@@ -1,6 +1,6 @@
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
-from pai_rag.integrations.llms.pai.pai_llm import PaiLlm
-from pai_rag.integrations.llms.pai.llm_config import DashScopeLlmConfig
+from pairag.integrations.llms.pai.pai_llm import PaiLlm
+from pairag.integrations.llms.pai.llm_config import DashScopeLlmConfig
 import pytest
 
 

@@ -1,0 +1,34 @@
+FROM rayproject/ray:2.46.0.0e19ea-py311-cu124
+
+RUN pip3 install poetry
+
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    HOME_DIR=/home/ray
+
+WORKDIR /app
+COPY . .
+
+RUN poetry install
+RUN  poetry run pip install magic-pdf[full]==1.3.10 \
+  && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
+  && rm -rf $POETRY_CACHE_DIR
+
+RUN sudo rm -rf /etc/localtime && sudo ln -s /usr/share/zoneinfo/Asia/Harbin /etc/localtime
+RUN sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential
+
+# setup paddleocr dependencies
+RUN sudo mkdir -p $HOME_DIR/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
+ && sudo curl https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar -o $HOME_DIR/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer/ch_PP-OCRv4_det_infer.tar \
+ && sudo tar xvf $HOME_DIR/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer/ch_PP-OCRv4_det_infer.tar -C $HOME_DIR/.paddleocr/whl/det/ch/
+
+RUN sudo mkdir -p $HOME_DIR/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer \
+ && sudo curl https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar -o $HOME_DIR/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer/ch_PP-OCRv4_rec_infer.tar \
+ && sudo tar xvf $HOME_DIR/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer/ch_PP-OCRv4_rec_infer.tar -C $HOME_DIR/.paddleocr/whl/rec/ch/
+
+RUN sudo mkdir -p $HOME_DIR/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
+ && sudo curl https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar -o $HOME_DIR/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar \
+ && sudo tar xvf $HOME_DIR/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar -C $HOME_DIR/.paddleocr/whl/cls/
+
+CMD ["./scripts/load_data.sh", "--help"]
