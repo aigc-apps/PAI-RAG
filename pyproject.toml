@@ -30,7 +30,7 @@ llama-index-embeddings-huggingface = "^0.4.0"
 llama-index-postprocessor-flag-embedding-reranker = "^0.3.0"
 llama-index-storage-chat-store-redis = "^0.4.0"
 llama-index-tools-google = "^0.3.0"
-llama-index-multi-modal-llms-openai = "^0.4.2"
+llama-index-multi-modal-llms-openai = "^0.5.0"
 llama-index-vector-stores-alibabacloud-opensearch = "^0.3.0"
 llama-index-llms-paieas = "^0.3.0"
 gradio = "^5.13.0"
@@ -78,6 +78,7 @@ llama-index-vector-stores-dashvector = "^0.3.0"
 llama-index-multi-modal-llms-dashscope = "^0.3.0"
 jieba = "^0.42.1"
 opentelemetry-sdk = "^1.33.1"
+pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.0-py3-none-any.whl"}
 
 [tool.poetry.scripts]
 load_model = "pairag.utils.download_models:load_models"
