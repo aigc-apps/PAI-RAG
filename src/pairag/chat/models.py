@@ -43,7 +43,6 @@ class ChatCompletionRequest(BaseModel):
     index_name: Optional[str] = None  # 索引名称
     chat_knowledgebase: Optional[bool] = False  # 查询知识库
     search_web: Optional[bool] = False  # 搜索网络
-    citation: Optional[bool] = False  # 生成引用
     return_reference: Optional[bool] = False  # 返回参考
     chat_llm: Optional[bool] = False  # llm聊天
     chat_agent: Optional[bool] = False  # 使用agent
@@ -80,8 +79,6 @@ class PaiQueryBundle(QueryBundle):
     messages: Optional[List[ChatMessage]] = None
     stream: bool = False
     intent: ChatIntentType = ChatIntentType.CHAT_KNOWLEDGEBASE
-    no_retrieval: bool = False
-    citation: bool = False
     original_query_str: str = None
     chat_messages_str: str = None
     completion_tokens: int = 0

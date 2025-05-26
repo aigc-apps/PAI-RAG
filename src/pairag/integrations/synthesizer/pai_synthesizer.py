@@ -203,30 +203,17 @@ class PaiSynthesizer:
                 history_str = query.chat_messages_str
             else:
                 history_str = ""
-            if query.no_retrieval:
-                response = await self.aget_llm_only_response(
-                    query_str=query_str,
-                    history_str=history_str,
-                    streaming=query.stream,
-                    system_role_str=system_role_str or self._system_role_template,
-                    prompt_template_str=prompt_template_str
-                    or self._custom_prompt_template,
-                    **response_kwargs,
-                )
-            else:
-                response = await self.aget_response(
-                    query_str=query_str,
-                    original_query_str=query.original_query_str,
-                    nodes=nodes,
-                    history_str=history_str,
-                    streaming=query.stream,
-                    citation=query.citation,
-                    system_role_str=system_role_str or self._system_role_template,
-                    prompt_template_str=prompt_template_str
-                    or self._custom_prompt_template,
-                    prompt_template_args=prompt_template_args or {},
-                    **response_kwargs,
-                )
+            response = await self.aget_response(
+                query_str=query_str,
+                original_query_str=query.original_query_str,
+                nodes=nodes,
+                history_str=history_str,
+                streaming=query.stream,
+                system_role_str=system_role_str or self._system_role_template,
+                prompt_template_str=prompt_template_str or self._custom_prompt_template,
+                prompt_template_args=prompt_template_args or {},
+                **response_kwargs,
+            )
             additional_source_nodes = additional_source_nodes or []
             source_nodes = list(nodes) + list(additional_source_nodes)
             event.on_end(payload={EventPayload.RESPONSE: response})
