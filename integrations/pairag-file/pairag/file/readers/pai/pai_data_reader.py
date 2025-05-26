@@ -19,6 +19,7 @@ import logging
 from loguru import logger
 
 from pairag.file.store.pai_image_store import PaiImageStore
+from pairag.file.readers.pai.utils.modelscope_utils import DEFAULT_MODEL_DIR
 
 
 class DataReaderConfig(BaseModel):
@@ -29,7 +30,9 @@ class DataReaderConfig(BaseModel):
 
 
 def get_file_readers(
-    reader_config: DataReaderConfig = None, image_store: PaiImageStore = None
+    reader_config: DataReaderConfig = None,
+    image_store: PaiImageStore = None,
+    model_dir: str = DEFAULT_MODEL_DIR,
 ):
     from pairag.file.readers.pai.file_readers.pai_excel_reader import (
         PaiPandasExcelReader,
@@ -63,6 +66,7 @@ def get_file_readers(
         ".pdf": PaiPDFReader(
             enable_mandatory_ocr=reader_config.enable_mandatory_ocr,
             image_store=image_store,  # Storing pdf images
+            model_dir=model_dir,
         ),
         ".pptx": PaiPptxReader(
             image_store=image_store,  # Storing pptx images
@@ -146,8 +150,9 @@ class PaiDataReader(BaseReader):
         self,
         reader_config: DataReaderConfig,
         image_store: PaiImageStore = None,
+        model_dir: str = DEFAULT_MODEL_DIR,
     ):
-        self.file_readers = get_file_readers(reader_config, image_store)
+        self.file_readers = get_file_readers(reader_config, image_store, model_dir)
         self.image_store = image_store
 
         logger.info(f"[PaiDataReader] created with {reader_config}")

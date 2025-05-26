@@ -60,6 +60,7 @@ from pairag.integrations.postprocessor.pai.pai_postprocessor import (
     DEFAULT_RERANK_TOP_N,
 )
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
+from pairag.utils.constants import DEFAULT_MODEL_DIR
 
 cls_cache = {}
 
@@ -184,6 +185,7 @@ def resolve_task_executor(
         cls=PaiDataReader,
         reader_config=DataReaderConfig(),
         image_store=image_store,
+        model_dir=DEFAULT_MODEL_DIR,
     )
 
     node_parser = resolve(
