@@ -12,10 +12,10 @@ if "DASHSCOPE_API_KEY" not in os.environ:
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
-from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.chat.chat_flow import ChatFlow
-from pai_rag.chat.models import ChatCompletionRequest
-from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pairag.core.rag_config_manager import RagConfigManager
+from pairag.chat.chat_flow import ChatFlow
+from pairag.chat.models import ChatCompletionRequest
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 
 
 # 定义测试文件路径

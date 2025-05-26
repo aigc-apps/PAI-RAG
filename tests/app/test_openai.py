@@ -5,7 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from fastapi.testclient import TestClient
 import time
-from pai_rag.app.app import app
+from pairag.app.app import app
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"

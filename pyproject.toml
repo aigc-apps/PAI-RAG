@@ -3,8 +3,8 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "pai_rag"
-version = "1.1.0"
+name = "pairag"
+version = "1.2.0"
 description = "Open source RAG framework built on Aliyun PAI"
 authors = []
 readme = "README.md"
@@ -103,9 +103,9 @@ llama-index-vector-stores-dashvector = "^0.3.0"
 llama-index-multi-modal-llms-dashscope = "^0.3.0"
 
 [tool.poetry.scripts]
-load_data = "pai_rag.tools.load_data_tool:run"
-load_model = "pai_rag.utils.download_models:load_models"
-run_eval_exp = "pai_rag.evaluation.run_evaluation_experiments:run"
+load_data = "pairag.tools.load_data_tool:run"
+load_model = "pairag.utils.download_models:load_models"
+run_eval_exp = "pairag.evaluation.run_evaluation_experiments:run"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -8,4 +8,4 @@ SCRIPT_DIR=$(dirname "$0")
 cd "$SCRIPT_DIR/.."
 pwd
 
-python src/pai_rag/data_ingestion/main.py $*
+python src/pairag/data_ingestion/main.py $*

@@ -13,17 +13,17 @@ if "DASHSCOPE_API_KEY" not in os.environ:
         reason='Environment variable "DASHSCOPE_API_KEY" not set.',
     )
 
-from pai_rag.core.rag_config_manager import RagConfigManager
-from pai_rag.chat.chat_flow import ChatFlow
-from pai_rag.chat.models import ChatCompletionRequest
-from pai_rag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
-from pai_rag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
+from pairag.core.rag_config_manager import RagConfigManager
+from pairag.chat.chat_flow import ChatFlow
+from pairag.chat.models import ChatCompletionRequest
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from pairag.extensions.news.news_config import DEFAULT_NEWS_DOMAIN_MAP
 
 
 # 定义测试文件路径
 _BASE_DIR = Path(__file__).parent.parent
 DEFAULT_APPLICATION_CONFIG_FILE = os.path.join(
-    _BASE_DIR, "../../src/pai_rag/config/settings.toml"
+    _BASE_DIR, "../../src/pairag/config/settings.toml"
 )
 TEST_FILE = os.path.join(_BASE_DIR, "intent_eval/intent_sample.json")
 

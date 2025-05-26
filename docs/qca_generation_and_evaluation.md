@@ -20,7 +20,7 @@ RAG评估工具是一种用于测试和评估基于检索的文本生成系统�
    run_eval_exp [-i yaml_path] [--o output_path]
 ```
 
-配置案例可参考src/pai_rag/config/evaluation/config.yaml
+配置案例可参考src/pairag/config/evaluation/config.yaml
 
 ### 实验类型一：根据文档内容，创建评估数据集，进行RAG系统评估
 
@@ -29,7 +29,7 @@ RAG评估工具是一种用于测试和评估基于检索的文本生成系统�
 ```yaml
 - name: "text_exp1"
   eval_data_path: "example_data/eval_docs_text"
-  rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_text.toml"
+  rag_setting_file: "src/pairag/config/evaluation/settings_eval_for_text.toml"
   eval_model_llm:
     source: "dashscope"
     model: "qwen-max"
@@ -72,7 +72,7 @@ Response
     source: "dashscope"
     model: "qwen-max"
     max_tokens: 1024
-  rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
+  rag_setting_file: "src/pairag/config/evaluation/settings_eval_for_image.toml"
   tested_multimodal_llm:
     source: "dashscope"
     model: "qwen-vl-max"
@@ -107,7 +107,7 @@ Response
     source: "dashscope"
     model: "qwen-max"
     max_tokens: 1024
-  rag_setting_file: "src/pai_rag/config/evaluation/settings_eval_for_image.toml"
+  rag_setting_file: "src/pairag/config/evaluation/settings_eval_for_image.toml"
   tested_multimodal_llm:
     source: "dashscope"
     model: "qwen-vl-max"

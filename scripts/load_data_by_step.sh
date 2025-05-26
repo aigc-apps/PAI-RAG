@@ -14,24 +14,24 @@ cd "$SCRIPT_DIR/.."
 pwd
 
 echo "reading data source..."
-python src/pai_rag/data_ingestion/main.py data-source \
+python src/pairag/data_ingestion/main.py data-source \
     --enable-delta \
     --input-path $INPUT_PATH \
     --output-path $OUTPUT_PATH
 
 echo "parsing files..."
-python src/pai_rag/data_ingestion/main.py parse \
+python src/pairag/data_ingestion/main.py parse \
     --input-path $OUTPUT_PATH \
     --output-path $OUTPUT_PATH
 
 
 echo "splitting into chunks..."
-python src/pai_rag/data_ingestion/main.py split \
+python src/pairag/data_ingestion/main.py split \
     --input-path $OUTPUT_PATH \
     --output-path $OUTPUT_PATH \
 
 echo "embedding data..."
-python src/pai_rag/data_ingestion/main.py embed \
+python src/pairag/data_ingestion/main.py embed \
     --input-path $OUTPUT_PATH \
     --output-path $OUTPUT_PATH \
     --num-gpus 0.5 \
@@ -41,6 +41,6 @@ python src/pai_rag/data_ingestion/main.py embed \
 
 
 echo "writing to data sink..."
-python src/pai_rag/data_ingestion/main.py data-sink \
+python src/pairag/data_ingestion/main.py data-sink \
     --input-path $OUTPUT_PATH \
     --output-path $OUTPUT_PATH \
