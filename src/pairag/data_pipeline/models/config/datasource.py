@@ -8,10 +8,6 @@ class DataSourceConfig(BaseModel):
     enable_delta: bool = False
     file_extensions: Optional[List[str]] = None
 
-    # use langstudio index manifest
-    target_index: Optional[str] = None
-    target_index_version: Optional[str] = None
-
     # connect to rag service
     pairag_token: Optional[str] = None
     pairag_endpoint: Optional[str] = None

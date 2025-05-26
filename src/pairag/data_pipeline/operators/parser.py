@@ -18,21 +18,13 @@ from pairag.data_pipeline.utils.path_resolver import (
     MountPathResolver,
     LocalPathResolver,
 )
-from pairag.data_pipeline.ext.langstudio.langstudio_path_resolver import (
-    LangStudioPathResolver,
-)
 from loguru import logger
 
 from pairag.utils.file_utils import generate_file_md5, get_modified_time
 
 
 def get_path_resolver() -> MountPathResolver:
-    try:
-        langstudio_path_resolver = LangStudioPathResolver.from_env()
-        return langstudio_path_resolver
-    except Exception as e:
-        logger.warning(f"Failed to create LangStudioPathResolver from env: {e}")
-        return LocalPathResolver()
+    return LocalPathResolver()
 
 
 class Parser(BaseOperator):

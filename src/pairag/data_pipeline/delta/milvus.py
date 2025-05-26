@@ -1,7 +1,5 @@
-from typing import Dict, Optional
+from typing import Dict
 from pymilvus import Collection
-from pymilvus import connections as milvus_connections
-from langstudio.rag.index_manifest import IndexManifest
 
 from pairag.data_pipeline.constants import (
     DEFAULT_MODIFIED_AT_FIELD,
@@ -49,31 +47,3 @@ def list_docs_in_milvus_collection(
                 results[source].node_ids.append(record["id"])
 
     return results
-
-
-def list_docs_in_milvus_from_langstudio_index_manifest(
-    index_manifest: IndexManifest, oss_path_prefix: Optional[str] = None
-) -> Dict[str, DocItem]:
-    """
-    List the documents in the vector database.
-
-    Args:
-        index_manifest (IndexManifest): The index manifest.
-        oss_path_prefix (Optional[str]): The prefix of the OSS path, used to filter the documents
-            under the prefix.
-
-    Returns:
-        Dict[str, DocumentVectorStoreEntry]: The documents in the vector database, the
-            key is the OSS path of the document, the value is a tuple of the latest
-            modified time and the node ids.
-    """
-    connection = index_manifest.vector_store_connection
-    milvus_connections.connect(
-        uri=connection.uri,
-        token=connection.token,
-    )
-    collection = Collection(index_manifest.store.collection_name)
-
-    return list_docs_in_milvus_collection(
-        collection=collection, oss_path_prefix=oss_path_prefix
-    )

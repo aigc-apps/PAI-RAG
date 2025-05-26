@@ -49,19 +49,5 @@ export OUTPUT_PATH=/testdata/output0505
 export pairag_ENDPOINT=
 export pairag_TOKEN=
 
-python src/pairag/data_ingestion/main.py e2e --input-path xx --output-path $OUTPUT_PATH
-```
-
-### Appendix
-
-1. 安装Langstudio依赖
-
-```sh
-poetry add llama-index-vector-stores-hologres
-poetry add llama-index-vector-stores-dashvector
-poetry add promptflow-tracing https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-tracing/dist/promptflow_tracing-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl
-poetry add promptflow-core https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-core/dist/promptflow_core-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl
-poetry add promptflow-devkit https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow-devkit/dist/promptflow_devkit-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl
-poetry add promptflow https://pai-sdk.oss-cn-shanghai.aliyuncs.com/promptflow/dist/promptflow-1.17.0%2Blangstudio2502.378942e-py3-none-any.whl
-poetry add https://pai-sdk.oss-cn-shanghai.aliyuncs.com/langstudio/dist/langstudio-0.2.0.dev8-py3-none-any.whl
+python src/pairag/data_pipeline/main.py e2e --input-path xx --output-path $OUTPUT_PATH
 ```

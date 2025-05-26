@@ -10,7 +10,6 @@ from pairag.data_pipeline.constants import (
     DEFAULT_NODE_SOURCE_FIELD,
 )
 from pairag.data_pipeline.delta.list_delta import (
-    list_files_from_langstudio_index,
     list_files_from_rag_service,
 )
 from pairag.data_pipeline.delta.models import DocItem
@@ -38,19 +37,7 @@ class FileDeltaDatasource(Datasource):
 
         # default empty
         self.docs_in_store: Dict[str, DocItem] = {}
-        if config.enable_delta and config.target_index:
-            logger.info(
-                f"""Reading existing docs from vector store using langstudio index.
-                index_name: {config.target_index}
-                version: {config.target_index_version}
-            """
-            )
-            self.docs_in_store = list_files_from_langstudio_index(
-                index_name=config.target_index,
-                index_version=config.target_index_version,
-                oss_path_prefix=oss_path_prefix,
-            )
-        elif (
+        if (
             config.enable_delta
             and config.pairag_endpoint
             and config.pairag_token

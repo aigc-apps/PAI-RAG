@@ -3,7 +3,10 @@ from typing import Optional
 from pydantic import BaseModel
 from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
-from pairag.utils.constants import DEFAULT_NODE_PARSER_TYPE, DEFAULT_PARAGRAPH_SEP
+from pairag.file.nodeparsers.pai.constants import (
+    DEFAULT_NODE_PARSER_TYPE,
+    DEFAULT_PARAGRAPH_SEP,
+)
 
 
 class OperatorName(str, Enum):

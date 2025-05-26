@@ -23,7 +23,7 @@ from llama_index.core.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
 from pairag.integrations.embeddings.pai.pai_embedding_config import SupportedEmbedType
 from pairag.file.nodeparsers.pai.pai_node_parser import NodeParserType
-from pairag.utils.constants import DEFAULT_PARAGRAPH_SEP
+from pairag.file.nodeparsers.pai.constants import DEFAULT_PARAGRAPH_SEP
 
 app = typer.Typer()
 
@@ -42,16 +42,6 @@ def data_source(
         default=DEFAULT_FILE_EXTENSIONS_STR,
         help="The supported file extensions.",
         show_default=True,
-    ),
-    target_index: str = typer.Option(
-        default=None,
-        show_default=True,
-        help="The path to the index manifest or the ID of the registered dataset(DataType=INDEX) in PAI.",
-    ),
-    target_index_version: str = typer.Option(
-        default=None,
-        show_default=True,
-        help="The version name of the knowledge base, used for incremental ingestion.",
     ),
     pairag_token: str = typer.Option(
         default=None, show_default=True, help="The PAI-RAG API key to use."
@@ -72,12 +62,10 @@ def data_source(
         output_path=os.path.join(output_path, OperatorName.DATA_SOURCE.value),
         enable_delta=enable_delta,
         file_extensions=parse_file_extensions(supported_file_types_str),
-        target_index=target_index,
-        target_index_version=target_index_version,
-        pairag_token=pairag_token or os.environ.get("pairag_TOKEN"),
-        pairag_endpoint=pairag_endpoint or os.environ.get("pairag_ENDPOINT"),
+        pairag_token=pairag_token or os.environ.get("PAIRAG_TOKEN"),
+        pairag_endpoint=pairag_endpoint or os.environ.get("PAIRAG_ENDPOINT"),
         pairag_knowledgebase=pairag_knowledgebase
-        or os.environ.get("pairag_KNOWLEDGEBASE", "default"),
+        or os.environ.get("PAIRAG_KNOWLEDGEBASE", "default"),
         pairag_embed_dims=pairag_embed_dims,
     )
     ray_executor.run(op_configs=[], datasource_config=data_source_config)
@@ -195,12 +183,6 @@ def embed(
     model: str = typer.Option(
         default="bge-m3", show_default=True, help="Embedding model name."
     ),
-    connection_name: str = typer.Option(
-        default=None, show_default=True, help="Langstudio connection."
-    ),
-    workspace_id: str = typer.Option(
-        default=None, show_default=True, help="PAI workspace id."
-    ),
     enable_sparse: bool = typer.Option(
         default=False, show_default=True, help="Whether to enable sparse embedding."
     ),
@@ -218,8 +200,6 @@ def embed(
         source=source,
         model=model,
         enable_sparse=enable_sparse,
-        connection_name=connection_name,
-        workspace_id=workspace_id,
         batch_size=batch_size,
         concurrency=concurrency,
     )
@@ -254,8 +234,8 @@ def data_sink(
         default=1, show_default=True, help="Concurrency of sink op."
     ),
 ):
-    pairag_endpoint = pairag_endpoint or os.environ.get("pairag_ENDPOINT")
-    pairag_token = pairag_token or os.environ.get("pairag_TOKEN")
+    pairag_endpoint = pairag_endpoint or os.environ.get("PAIRAG_ENDPOINT")
+    pairag_token = pairag_token or os.environ.get("PAIRAG_TOKEN")
     pairag_knowledgebase = pairag_knowledgebase or os.environ.get(
         "pairag_KNOWLEDGEBASE", "default"
     )
@@ -316,14 +296,12 @@ def e2e(
             output_path=read_output_path,
             enable_delta=datasource_yaml.get("enable_delta", True),
             file_extensions=parse_file_extensions(supported_file_types_str),
-            target_index=datasource_yaml.get("target_index"),
-            target_index_version=datasource_yaml.get("target_index_version"),
             pairag_endpoint=datasource_yaml.get("pairag_endpoint")
-            or os.environ.get("pairag_ENDPOINT"),
+            or os.environ.get("PAIRAG_ENDPOINT"),
             pairag_token=datasource_yaml.get("pairag_token")
-            or os.environ.get("pairag_TOKEN"),
+            or os.environ.get("PAIRAG_TOKEN"),
             pairag_knowledgebase=datasource_yaml.get("pairag_knowledgebase")
-            or os.environ.get("pairag_KNOWLEDGEBASE", "default"),
+            or os.environ.get("PAIRAG_KNOWLEDGEBASE", "default"),
             pairag_embed_dims=datasource_yaml.get("pairag_embed_dims", 1024),
         )
 
@@ -377,11 +355,11 @@ def e2e(
             input_path=embed_output_path,
             output_path=write_output_path,
             pairag_endpoint=sink_yaml.get("pairag_endpoint")
-            or os.environ.get("pairag_ENDPOINT"),
+            or os.environ.get("PAIRAG_ENDPOINT"),
             pairag_token=sink_yaml.get("pairag_token")
-            or os.environ.get("pairag_TOKEN"),
+            or os.environ.get("PAIRAG_TOKEN"),
             pairag_knowledgebase=sink_yaml.get("pairag_knowledgebase")
-            or os.environ.get("pairag_KNOWLEDGEBASE", "default"),
+            or os.environ.get("PAIRAG_KNOWLEDGEBASE", "default"),
             pairag_embed_dims=sink_yaml.get("pairag_embed_dims", 1024),
             concurrency=sink_yaml.get("concurrency", 1),
             num_cpus=sink_yaml.get("num_cpus", 1),
