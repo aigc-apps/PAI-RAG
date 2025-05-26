@@ -111,7 +111,7 @@ def setup_app():
                 response.json()["msg"] == "Add knowledgebase 'test_index' successfully."
             )
 
-    upload_file(["tests/testdata/data/md_data/pai_document.md"])
+    upload_file(["tests/testdata/pai_document.md"])
     upload_file(
         ["tests/testdata/paul_graham/paul_graham_essay.txt"], index_name="test_index"
     )
