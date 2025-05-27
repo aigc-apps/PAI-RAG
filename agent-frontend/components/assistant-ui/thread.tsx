@@ -6,6 +6,7 @@ import {
   ThreadPrimitive,
 } from "@assistant-ui/react";
 import type { FC } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -25,38 +26,221 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { ToolFallback } from "@/components/ui/custom-tool-fallback";
 import { Brain, Search, Wrench } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { MCPConfig } from "@/app/config/mcp/page";
+import { McpModal } from "@/app/config/mcp/mcpmodal";
 
 export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
   onToggleChange,
 }) => {
+  const [activeTools, setActiveTools] = useState<string[]>([]);
+  const [mcpConfigs, setMcpConfigs] = useState<MCPConfig[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpError, setMcpError] = useState<string | null>(null);
+
+  // 使用 ref 保存最新值
+  const activeToolsRef = useRef<string[]>([]);
+  useEffect(() => {
+    activeToolsRef.current = activeTools;
+  }, [activeTools]);
+
+  const mcpConfigsRef = useRef<MCPConfig[]>([]);
+  useEffect(() => {
+    mcpConfigsRef.current = mcpConfigs;
+  }, [mcpConfigs]);
+
+  // 获取MCP配置
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      try {
+        setMcpLoading(true);
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const res = await fetch(`http://localhost:${port}/api/configs`);
+        if (!res.ok) throw new Error("获取配置失败");
+        const data = await res.json();
+        const configs = data.mcp_config.map(
+          (cfg: any) =>
+            new MCPConfig(
+              cfg.id,
+              cfg.name,
+              cfg.url,
+              cfg.type,
+              cfg.active || false,
+              cfg.enabled || true,
+            ),
+        );
+        setMcpConfigs(
+          configs.filter((item: { enabled: boolean }) => item.enabled === true),
+        );
+      } catch (err: any) {
+        setMcpError(err.message || "加载失败");
+      } finally {
+        setMcpLoading(false);
+      }
+    };
+    fetchConfigs();
+  }, []);
+
+  // 保存MCP配置到后端
+  const handleSaveMcpConfig = useCallback(
+    async (updatedConfigs: MCPConfig[]) => {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+      const url = `http://localhost:${port}/api/add_mcp`;
+      console.log("Sending updated MCP configs:", updatedConfigs);
+      try {
+        const savePromises = updatedConfigs.map((config) =>
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mcp_config: config }),
+          }),
+        );
+        const responses = await Promise.all(savePromises);
+        const hasError = responses.some((res) => !res.ok);
+        if (hasError) {
+          throw new Error("部分配置保存失败");
+        }
+
+        // 更新本地状态
+        setMcpConfigs((prev) =>
+          prev.map((cfg) => {
+            const updated = updatedConfigs.find((u) => u.id === cfg.id);
+            return updated
+              ? new MCPConfig(
+                  updated.id,
+                  updated.name,
+                  updated.url,
+                  updated.type,
+                  updated.active,
+                  updated.enabled,
+                )
+              : cfg;
+          }),
+        );
+      } catch (err: any) {
+        setMcpError(err.message || "保存失败");
+      } finally {
+        setIsModalOpen(false);
+      }
+    },
+    [],
+  );
+
+  const activeMcpConfigs = useMemo(
+    () => mcpConfigs.filter((cfg) => cfg.active),
+    [mcpConfigs],
+  );
+
+  // 处理工具切换
+  const handleToolToggle = useCallback(
+    (newOptions: string[]) => {
+      console.log("mcpConfigs", mcpConfigsRef.current);
+      let updatedOptions = [...newOptions];
+      const hasMcp = updatedOptions.includes("mcp");
+      const hasActiveMcp = activeMcpConfigs.length > 0;
+
+      // 自动添加 Thinking
+      if (hasMcp && !updatedOptions.includes("thinking") && hasActiveMcp) {
+        updatedOptions.push("thinking");
+      }
+
+      // 确保没有激活的MCP时清除'mcp'
+      if (!hasActiveMcp && updatedOptions.includes("mcp")) {
+        updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
+      }
+
+      setActiveTools(updatedOptions);
+      onToggleChange?.(updatedOptions);
+    },
+    [mcpConfigsRef],
+  );
+
+  // 清除MCP激活状态
+  const clearMcpActivation = useCallback(() => {
+    const updatedConfigs = mcpConfigs.map((cfg) => ({ ...cfg, active: false }));
+    handleSaveMcpConfig(updatedConfigs).catch(console.error);
+  }, [mcpConfigs, handleSaveMcpConfig]);
+
+  // 监听activeTools变化处理MCP逻辑
+  useEffect(() => {
+    const hasMcp = activeTools.includes("mcp");
+    const hasActiveMcp = activeMcpConfigs.length > 0;
+
+    // 如果 MCP 被选中但没有激活的配置，打开模态框
+    if (hasMcp && !hasActiveMcp) {
+      setIsModalOpen(true);
+    }
+
+    // 当取消选择 thinking 且存在 activeMcp 时清除 MCP 激活
+    if (
+      !activeTools.includes("thinking") &&
+      activeToolsRef.current.includes("thinking") &&
+      hasActiveMcp
+    ) {
+      clearMcpActivation();
+    }
+  }, [activeTools, activeMcpConfigs, clearMcpActivation]);
+
+  // 监听 mcpConfigs 变化更新工具状态
+  useEffect(() => {
+    const hasActiveMcp = activeMcpConfigs.length > 0;
+    setActiveTools((prev) => {
+      let newTools = [...prev];
+
+      if (hasActiveMcp && !newTools.includes("thinking")) {
+        newTools.push("thinking");
+      } else if (!hasActiveMcp && newTools.includes("mcp")) {
+        newTools = newTools.filter((t) => t !== "mcp");
+      }
+
+      return newTools;
+    });
+  }, [mcpConfigs, activeMcpConfigs]);
+
+  const handleOpenMcpModal = () => {
+    setIsModalOpen(true);
+  };
+
   return (
-    <ThreadPrimitive.Root
-      className="bg-background box-border flex h-full flex-col overflow-hidden"
-      style={{
-        ["--thread-max-width" as string]: "60rem",
-      }}
-    >
-      <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
-        <ThreadWelcome />
-
-        <ThreadPrimitive.Messages
-          components={{
-            UserMessage: UserMessage,
-            EditComposer: EditComposer,
-            AssistantMessage: AssistantMessage,
-          }}
-        />
-
-        <ThreadPrimitive.If empty={false}>
-          <div className="min-h-8 flex-grow" />
-        </ThreadPrimitive.If>
-
-        <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
-          <ThreadScrollToBottom />
-          <Composer onToggleChange={onToggleChange} /> {/* 传递回调 */}
-        </div>
-      </ThreadPrimitive.Viewport>
-    </ThreadPrimitive.Root>
+    <>
+      <ThreadPrimitive.Root
+        className="bg-background box-border flex h-full flex-col overflow-hidden"
+        style={{
+          ["--thread-max-width" as string]: "60rem",
+        }}
+      >
+        <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
+          <ThreadWelcome />
+          <ThreadPrimitive.Messages
+            components={{
+              UserMessage: UserMessage,
+              EditComposer: EditComposer,
+              AssistantMessage: AssistantMessage,
+            }}
+          />
+          <ThreadPrimitive.If empty={false}>
+            <div className="min-h-8 flex-grow" />
+          </ThreadPrimitive.If>
+          <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
+            <ThreadScrollToBottom />
+            <Composer
+              onToggleChange={handleToolToggle}
+              value={activeTools}
+              mcpConfigs={mcpConfigs}
+              onOpenMcpModal={handleOpenMcpModal}
+            />
+          </div>
+        </ThreadPrimitive.Viewport>
+      </ThreadPrimitive.Root>
+      <McpModal
+        mcpConfigs={mcpConfigs}
+        isOpen={isModalOpen}
+        onSave={handleSaveMcpConfig}
+        onClose={() => setIsModalOpen(false)}
+        isLoading={mcpLoading}
+        error={mcpError}
+      />
+    </>
   );
 };
 
@@ -114,8 +298,18 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
+interface ComposerProps {
+  onToggleChange?: (options: string[]) => void;
+  value?: string[];
+  mcpConfigs?: MCPConfig[]; // 新增
+  onOpenMcpModal?: () => void; // 新增
+}
+
+const Composer: FC<ComposerProps> = ({
   onToggleChange,
+  value,
+  mcpConfigs = [], // 默认值
+  onOpenMcpModal,
 }) => {
   return (
     <ComposerPrimitive.Root
@@ -139,7 +333,12 @@ const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
             className="flex gap-x-4 overflow-visible"
             onValueChange={(value) => {
               onToggleChange?.(value); // 传递选中状态到父组件
+              // 2. 如果选中了 "mcp"，则打开模态框
+              if (value.includes("mcp")) {
+                onOpenMcpModal?.();
+              }
             }}
+            value={value} // 同步 Thread 的 activeTools
           >
             <ToggleGroupItem
               value="thinking"
@@ -158,7 +357,11 @@ const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
             <ToggleGroupItem
               value="mcp"
               aria-label="Toggle mcp"
-              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              className={cn("!rounded-full px-2 py-3", {
+                "bg-black text-white":
+                  value?.includes("mcp") ||
+                  mcpConfigs.some((cfg) => cfg.active),
+              })}
             >
               <Wrench /> MCP
             </ToggleGroupItem>

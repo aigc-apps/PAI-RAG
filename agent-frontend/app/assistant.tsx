@@ -15,6 +15,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import LlmConfig from "./config/llm/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
+import { useMemo } from "react";
 
 export const Assistant = () => {
   // LLM 配置状态
@@ -56,14 +57,22 @@ export const Assistant = () => {
     });
   };
 
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    console.log("selectedOptions updated:", selectedOptions);
+  }, [selectedOptions]);
+
+  const headers = useMemo(() => {
+    return {
+      "X-Model-Id": llmConfig.id || "",
+      "X-Options": selectedOptions.join(",") || "",
+    };
+  }, [llmConfig.id, selectedOptions]);
 
   const runtime = useChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/api/chat`,
-    headers: {
-      "X-Model-Id": llmConfig.id || "",
-      "X-Options": selectedOptions.join(",") || "",
-    },
+    headers: headers,
   });
 
   const [activeTab, setActiveTab] = useState("/"); // 提升状态到父组件
@@ -88,6 +97,7 @@ export const Assistant = () => {
               </header>
               <Thread
                 onToggleChange={(options) => {
+                  console.log("Received options from Thread:", options); // ✅ 添加日志
                   setSelectedOptions(options); // 更新状态
                 }}
               />
@@ -123,3 +133,6 @@ export const Assistant = () => {
     </AssistantRuntimeProvider>
   );
 };
+function useRef<T>(arg0: never[]) {
+  throw new Error("Function not implemented.");
+}

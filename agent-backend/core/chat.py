@@ -4,7 +4,7 @@ from openai import AsyncOpenAI
 import json
 from utils.messages import convert_to_openai_messages
 from tools.mcp.mcp_client import resolve_mcp_clients
-from utils.prompts import SYSTEM_PROMPT
+from utils.prompts import NOT_DEEP_RESEARCH_PROMPT, DEEP_RESEARCH_PROMPT
 from utils.time_utils import get_prompt_current_time_str
 from llama_index.tools.mcp.base import McpToolSpec
 from loguru import logger
@@ -106,6 +106,8 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
         async for chunk in response:
             for choice in chunk.choices:
                 # 模型生成已结束
+                print("*******choice*******")
+                print(choice)
                 if choice.finish_reason == "stop":
                     stop_flag = True
                     if choice.delta.content:
@@ -224,10 +226,6 @@ async def handle_chat(request: Request):
         # 解析请求体
         data = await request.json()
         messages = data.get("messages", [])
-        system_prompt = SYSTEM_PROMPT.format(
-            current_datetime=get_prompt_current_time_str()
-        )
-        system = data.get("system", system_prompt)
 
         # 从 headers 中获取模型参数
         model_id = request.headers.get("X-Model-Id")
@@ -239,6 +237,17 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
+        print("**********x_options**********:", x_options)
+        if "thinking" in x_options:
+            system_prompt = DEEP_RESEARCH_PROMPT.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+        else:
+            system_prompt = NOT_DEEP_RESEARCH_PROMPT.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+        system = data.get("system", system_prompt)
+
         if "search" in x_options:
             search_openai_tools, search_tools_name_to_fn = (
                 await aget_aliyun_search_tool()
