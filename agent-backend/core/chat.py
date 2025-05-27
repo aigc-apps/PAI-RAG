@@ -50,6 +50,7 @@ async def get_model_instance(model_id: str):
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
 async def gen_stream_response(model, model_name, messages, openai_tools):
     logger.info(f"messages {messages}")
+    logger.info(f"openai_tools {openai_tools}")
     if openai_tools:
         return await model.create(
             model=model_name,
@@ -106,8 +107,8 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
         async for chunk in response:
             for choice in chunk.choices:
                 # 模型生成已结束
-                print("*******choice*******")
-                print(choice)
+                # print("*******choice*******")
+                # print(choice)
                 if choice.finish_reason == "stop":
                     stop_flag = True
                     if choice.delta.content:
@@ -237,7 +238,6 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
-        print("**********x_options**********:", x_options)
         if "thinking" in x_options:
             system_prompt = DEEP_RESEARCH_PROMPT.format(
                 current_datetime=get_prompt_current_time_str()
