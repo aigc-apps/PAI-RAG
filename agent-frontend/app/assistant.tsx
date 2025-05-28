@@ -15,6 +15,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import LlmConfig from "./config/llm/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
+import TracingConfig from "./config/tracing/page";
 
 export const Assistant = () => {
   // LLM 配置状态
@@ -116,6 +117,14 @@ export const Assistant = () => {
                 <SidebarTrigger />
               </header>
               <SearchConfig />
+            </div>
+          )}
+          {activeTab === "/config/tracing" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <TracingConfig />
             </div>
           )}
         </SidebarInset>

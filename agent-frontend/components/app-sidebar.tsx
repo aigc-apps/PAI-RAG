@@ -91,6 +91,11 @@ export function AppSidebar({
                 >
                   <Search /> <span>搜索</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setActiveTab("/config/tracing")}
+                >
+                  <Wrench /> <span>链路追踪</span>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>

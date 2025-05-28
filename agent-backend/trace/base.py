@@ -1,3 +1,4 @@
+import os
 import socket
 from loguru import logger
 from pydantic.v1 import json as pydantic_v1_json
@@ -26,7 +27,16 @@ resource: Resource = None
 trace_provider: TracerProvider = None
 
 
-def init_instrument(config: TracingConfig):
+def init_instrument():
+    config = TracingConfig()
+    config.endpoint = os.getenv("TRACING_ENDPOINT")
+    config.token = os.getenv("TRACING_TOKEN")
+    config.service_name = os.getenv("TRACING_SERVICE_NAME")
+
+    if not config.is_enabled():
+        logger.info("Tracing is NOT enabled.")
+        return
+
     global tracing_config
     if config == tracing_config:
         logger.info("Trace config not changed.")

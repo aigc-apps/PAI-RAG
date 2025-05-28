@@ -15,8 +15,10 @@ from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
 )
+from opentelemetry import trace
 from search.aliyun_search_tool import aget_aliyun_search_tool
 from utils.models import fetch_llm
+from trace.pai_query_wrapper import pai_query_wrapper, with_current_context
 
 app = FastAPI()
 
@@ -97,7 +99,10 @@ async def process_mcp_tools():
 
 
 # 流式生成文本
-async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
+@with_current_context
+async def generate_stream(
+    model, model_name, messages, openai_tools, tools_name_to_fn, current_context
+):
     max_steps = 5  # 防止无限循环的最大步骤数
     step_count = 0
     while step_count < max_steps:
@@ -221,7 +226,10 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
         step_count += 1
 
 
+@pai_query_wrapper
 async def handle_chat(request: Request):
+    current_span = trace.get_current_span()
+    current_context = trace.set_span_in_context(current_span)
     try:
         # 解析请求体
         data = await request.json()
@@ -265,7 +273,12 @@ async def handle_chat(request: Request):
         # 返回流式响应
         return StreamingResponse(
             generate_stream(
-                model, model_name, full_messages, openai_tools, tools_name_to_fn
+                model,
+                model_name,
+                full_messages,
+                openai_tools,
+                tools_name_to_fn,
+                current_context,
             ),
             media_type="text/event-stream",
             headers={"x-vercel-ai-data-stream": "v1"},
