@@ -204,7 +204,7 @@ class PaiNodeParser(TransformComponent):
                     md_node_parser = MarkdownNodeParser(
                         id_func=rand_node_id_hash,
                         image_caption_tool=self._image_caption_tool,
-                        max_chunk_size=self._parser_config.chunk_size,
+                        chunk_size=self._parser_config.chunk_size,
                         chunk_overlap_size=self._parser_config.chunk_overlap,
                         base_parser=self._parser,
                     )
