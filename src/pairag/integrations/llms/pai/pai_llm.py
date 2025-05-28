@@ -14,7 +14,6 @@ from llama_index.core.base.llms.types import (
     CompletionResponseAsyncGen,
     CompletionResponseGen,
 )
-from pairag.chat.models import ChatIntentType
 from llama_index.core.base.llms.generic_utils import (
     completion_response_to_chat_response,
     stream_completion_response_to_chat_response,
@@ -135,8 +134,6 @@ class PaiLlm(OpenAILike):
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
-        if "intent" in kwargs:
-            kwargs.pop("intent")
 
         if self.llm_config.is_reasoning_model:
             logger.info(f"Using reasoning models, messages: {messages}")
@@ -166,22 +163,14 @@ class PaiLlm(OpenAILike):
         return _response
 
     def async_stream_completion_response_to_chat_response(
-        self, completion_response_gen: CompletionResponseAsyncGen, intent_type: str
+        self,
+        completion_response_gen: CompletionResponseAsyncGen,
     ) -> ChatResponseAsyncGen:
         """Convert a stream completion response to a stream chat response."""
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
             response_content = ""
-            if intent_type is not None:
-                yield ChatResponse(
-                    message=ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content="",
-                    ),
-                    delta="",
-                    additional_kwargs={"intent": intent_type},
-                )
             async for response in completion_response_gen:
                 if self.llm_config.is_reasoning_model:
                     if start_label and not response.text:
@@ -230,18 +219,6 @@ class PaiLlm(OpenAILike):
 
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
-                if "intent" in kwargs:
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content="",
-                        ),
-                        delta="",
-                        additional_kwargs={
-                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
-                        },
-                    )
-                    kwargs.pop("intent")
                 async for response in await self._llm.astream_chat(messages, **kwargs):
                     yield response
 
@@ -250,18 +227,6 @@ class PaiLlm(OpenAILike):
 
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
-                if "intent" in kwargs:
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content="",
-                        ),
-                        delta="",
-                        additional_kwargs={
-                            "intent": kwargs.get("intent", ChatIntentType.CHAT_LLM),
-                        },
-                    )
-                    kwargs.pop("intent")
                 start_label = True
                 async for response in await self._llm.astream_chat(messages, **kwargs):
                     if start_label and not response.delta:
@@ -300,16 +265,12 @@ class PaiLlm(OpenAILike):
         if self.llm_config.is_reasoning_model:
             logger.info("Using reasoning models")
         if not self.metadata.is_chat_model:
-            intent = None
-            if "intent" in kwargs:
-                intent = kwargs.get("intent", ChatIntentType.CHAT_LLM)
-                kwargs.pop("intent")
             prompt = self.messages_to_prompt(messages)
             completion_response = await self.astream_complete(
                 prompt, formatted=True, **kwargs
             )
             return self.async_stream_completion_response_to_chat_response(
-                completion_response, intent
+                completion_response,
             )
 
         filterd_messages = [

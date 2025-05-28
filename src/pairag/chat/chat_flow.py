@@ -1,18 +1,20 @@
 import re
 import time
 from typing import AsyncGenerator, List
+from llama_index.core.schema import NodeWithScore
 
 from pairag.core.rag_config import RagConfig
 from pairag.core.rag_module import (
     resolve_chat_llm,
+    resolve_db_retriever,
     resolve_llm_guardrail,
     resolve_openai_query_transform,
-    resolve_query_engine,
     resolve_searcher,
     resolve_news_tool,
-    resolve_data_analysis_query,
+    resolve_synthesizer,
     resolve_vector_index,
-    resolve_query_engine_from_knowledgebase,
+    resolve_index_retriever_from_retrieval_settings,
+    resolve_postprocessor_from_retrieval_settings,
 )
 from pairag.chat.utils.chat_utils import (
     chat_id_generator,
@@ -25,20 +27,21 @@ from pairag.chat.utils.chat_utils import (
 from pairag.integrations.query_transform.pai_query_transform import (
     messages_to_history_str,
 )
-from pairag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
+from pairag.integrations.query_transform.intent_models import (
+    ChatIntentType,
+    ChatToolType,
+    IntentResult,
+)
+from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.chat.models import (
     ChatCompletionRequest,
-    ChatIntentType,
     ChatResponseWrapper,
-    ChatToolType,
-    PaiQueryBundle,
 )
 from llama_index.core.base.llms.types import (
     ChatMessage,
     MessageRole,
 )
 
-from openai.types.completion_usage import CompletionUsage
 from openai.types.chat import (
     ChatCompletion,
 )
@@ -98,7 +101,8 @@ class ChatFlow:
     async def _recognize_intent(
         self,
         chat_request: ChatCompletionRequest,
-    ) -> PaiQueryBundle:
+        chat_history_str: str,
+    ) -> IntentResult:
         # 默认RAG
         potential_intents = [ChatToolType.CHAT_LLM]
 
@@ -106,45 +110,31 @@ class ChatFlow:
             ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase,
             ChatToolType.SEARCH_WEB: chat_request.search_web,
             ChatToolType.CHAT_DB: chat_request.chat_db,
-            ChatToolType.CHAT_AGENT: chat_request.chat_agent,
             ChatToolType.CHAT_NEWS: chat_request.chat_news,
         }
         enabled_tools = [k for k, v in tool_switches.items() if v]
         potential_intents.extend(enabled_tools)
-        logger.debug(f"Enabled tool candidates: {potential_intents}.")
-
-        llm_kwargs = {}
-        if chat_request.temperature is not None:
-            llm_kwargs["temperature"] = chat_request.temperature
-        if chat_request.max_tokens is not None:
-            llm_kwargs["max_tokens"] = chat_request.max_tokens
 
         query_transform = resolve_openai_query_transform(self.config)
         logger.debug(
             f"[Parameters][QueryTransform] {query_transform}, [potential_intents]{potential_intents}"
         )
+
         if query_transform is not None and len(potential_intents) > 1:
-            query_bundle = await query_transform.arun(
+            intent_result = await query_transform.arun(
                 chat_messages=chat_request.messages,
                 potential_intents=potential_intents,
+                chat_history_str=chat_history_str,
             )
-            query_bundle.llm_kwargs = llm_kwargs
-            query_bundle.stream = chat_request.stream
-            query_bundle.model = chat_request.model
-            return query_bundle
+            return intent_result
+
         else:
             logger.info(
                 f"No query transform found, using default intent. {potential_intents[-1].value}"
             )
-            return PaiQueryBundle(
+            return IntentResult(
+                intent=potential_intents[-1],
                 query_str=chat_request.messages[-1].content,
-                original_query_str=chat_request.messages[-1].content,
-                messages=chat_request.messages,
-                intent=potential_intents[-1].value,
-                stream=chat_request.stream,
-                model=chat_request.model,
-                chat_messages_str=messages_to_history_str(chat_request.messages[-7:-1]),
-                llm_kwargs=llm_kwargs,
             )
 
     @pai_query_wrapper()
@@ -160,18 +150,10 @@ class ChatFlow:
             chat_request=chat_request,
             start_time=start_time,
         )
-        token_usage = CompletionUsage(
-            completion_tokens=response_wrapper.additional_kwargs.get(
-                "completion_tokens", 0
-            ),
-            prompt_tokens=response_wrapper.additional_kwargs.get("prompt_tokens", 0),
-            total_tokens=response_wrapper.additional_kwargs.get("total_tokens", 0),
-        )
         return make_completion_chunk_response(
             chat_id=chat_id,
             model=chat_request.model,
             response_wrapper=response_wrapper,
-            base_token_usage=token_usage,
             start_time=start_time,
             return_reference=chat_request.return_reference,
         )
@@ -188,20 +170,226 @@ class ChatFlow:
             chat_request=chat_request,
             start_time=start_time,
         )
-        token_usage = CompletionUsage(
-            completion_tokens=response_wrapper.additional_kwargs.get(
-                "completion_tokens", 0
-            ),
-            prompt_tokens=response_wrapper.additional_kwargs.get("prompt_tokens", 0),
-            total_tokens=response_wrapper.additional_kwargs.get("total_tokens", 0),
-        )
         return make_completion_response(
             chat_id=chat_id,
             model=chat_request.model,
             response_wrapper=response_wrapper,
-            base_token_usage=token_usage,
             return_reference=chat_request.return_reference,
         )
+
+    @dispatcher.span
+    async def achat_db(
+        self,
+        query_str: str,
+        chat_history_str: str,
+        model_id: str,
+        stream: bool = False,
+        **llm_kwargs,
+    ):
+        db_retriever = resolve_db_retriever(self.config, model_id=model_id)
+        if not db_retriever:
+            raise ValueError(
+                "DBChat config is not valid. Please check your DBChat api configuration."
+            )
+
+        nodes = await db_retriever.aretrieve(query_str)
+
+        db_schema = ""
+        query_code_instruction = ""
+        if len(nodes) > 0:
+            db_schema = nodes[0].node.metadata.get("db_schema", "")
+            query_code_instruction = nodes[0].node.metadata.get(
+                "query_code_instruction", ""
+            )
+
+        synthesizer = resolve_synthesizer(self.config, model_id=model_id)
+
+        response = await synthesizer.asynthesize(
+            query_str=query_str,
+            nodes=nodes,
+            stream=stream,
+            chat_history_str=chat_history_str,
+            system_role_str=self.config.data_analysis.system_role_prompt,
+            prompt_template_str=self.config.data_analysis.synthesizer_prompt,
+            prompt_template_args={
+                "db_schema": db_schema,
+                "query_code_instruction": query_code_instruction,
+            },
+            **llm_kwargs,
+        )
+
+        return response
+
+    @dispatcher.span
+    async def alist_news(
+        self,
+        query_str: str,
+        news_topics: List[str] = [],
+        stream: bool = False,
+    ) -> ChatResponseWrapper:
+        news_tool = resolve_news_tool(self.config)
+        if not stream:
+            response_wrapper = await news_tool.alist_topics(
+                messages=[], query_str=query_str, news_topics=news_topics
+            )
+        else:
+            response_gen = await news_tool.astream_list_topics(
+                messages=[], query_str=query_str, news_topics=news_topics
+            )
+            response_wrapper = ChatResponseWrapper(response=response_gen)
+        return response_wrapper
+
+    @dispatcher.span
+    async def achat_news(
+        self,
+        query_str: str,
+        stream: bool = True,
+    ) -> ChatResponseWrapper:
+        news_tool = resolve_news_tool(self.config)
+        if stream:
+            response_gen = await news_tool.astream_chat(messages=[], prompt=query_str)
+            response_wrapper = ChatResponseWrapper(response=response_gen)
+        else:
+            response = await news_tool.achat(messages=[], prompt=query_str)
+            response_wrapper = ChatResponseWrapper(response=response)
+
+        return response_wrapper
+
+    @dispatcher.span
+    async def achat_news_llm(
+        self,
+        query_str: str,
+        stream: bool = True,
+    ) -> ChatResponseWrapper:
+        news_tool = resolve_news_tool(self.config)
+
+        if not stream:
+            response_wrapper = await news_tool.achat_llm(query_str=query_str)
+        else:
+            response_wrapper = await news_tool.astream_chat_llm(query_str=query_str)
+
+        return response_wrapper
+
+    @dispatcher.span
+    async def achat_web(
+        self,
+        query_str: str,
+        chat_history_str: str = None,
+        model_id: str = None,
+        stream: bool = False,
+        **lm_kwargs,
+    ) -> ChatResponseWrapper:
+        search_engine = resolve_searcher(self.config, model_id=model_id)
+        if not search_engine:
+            raise ValueError(
+                "Web search config is not valid. Please check your search api configuration."
+            )
+        nodes = await search_engine.aretrieve(query_str)
+
+        synthesizer = resolve_synthesizer(self.config, model_id=model_id)
+
+        response = await synthesizer.asynthesize(
+            query_str=query_str,
+            nodes=nodes,
+            stream=stream,
+            chat_history_str=chat_history_str,
+            system_role_str=" ",
+            prompt_template_str=self.config.search.search_qa_prompt_template,
+            **lm_kwargs,
+        )
+        return response
+
+    @dispatcher.span
+    async def achat_knowledgebase(
+        self,
+        query_str: str,
+        knowledgebase_name: str,
+        chat_history_str: str = None,
+        model_id: str = None,
+        stream: bool = False,
+        **lm_kwargs,
+    ) -> ChatResponseWrapper:
+        nodes = await self.aretrieve(
+            query_str=query_str, knowledgebase_name=knowledgebase_name
+        )
+        knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
+        synthesizer = resolve_synthesizer(self.config, model_id=model_id)
+
+        qa_prompt_templates = knowledgebase.qa_prompt_templates
+        response = await synthesizer.asynthesize(
+            query_str=query_str,
+            nodes=nodes,
+            stream=stream,
+            chat_history_str=chat_history_str,
+            system_role_str=qa_prompt_templates["system_prompt_template"],
+            prompt_template_str=qa_prompt_templates["task_prompt_template"],
+            **lm_kwargs,
+        )
+
+        return response
+
+    @dispatcher.span
+    async def achat_llm(
+        self,
+        model_id: str,
+        messages: List[ChatMessage],
+        system_prompt: str = None,
+        stream: bool = False,
+        **llm_kwargs,
+    ) -> ChatResponseWrapper:
+        llm = resolve_chat_llm(self.config, model_id=model_id)
+        system_role = system_prompt or self.config.synthesizer.system_role_template
+
+        prompt_messages = []
+        if system_role:
+            prompt_messages.append(
+                ChatMessage(role=MessageRole.SYSTEM, content=system_role)
+            )
+
+        # prompt_message
+        prompt_messages.append(
+            ChatMessage(
+                role=MessageRole.USER,
+                content="{}\n{}\n{}".format(
+                    self.config.synthesizer.custom_prompt_template,
+                    CURRENT_TIME_PROMPT.format(
+                        current_datetime=get_prompt_current_time_str()
+                    ),
+                    DEFAULT_ANSWER_TEMPLATE,
+                ),
+            )
+        )
+
+        messages = prompt_messages + messages
+
+        if stream:
+            response_gen = await llm.astream_chat(messages, **llm_kwargs)
+            return ChatResponseWrapper(response=response_gen)
+        else:
+            response = await llm.achat(messages, **llm_kwargs)
+            return ChatResponseWrapper(response=response)
+
+    async def aretrieve(
+        self,
+        query_str: str,
+        knowledgebase_name: str = None,
+    ) -> List[NodeWithScore]:
+        knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
+        vector_index = resolve_vector_index(knowledgebase=knowledgebase)
+        retriever = resolve_index_retriever_from_retrieval_settings(
+            vector_index=vector_index,
+            retrieval_settings=knowledgebase.retrieval_settings,
+        )
+        postprocessor = resolve_postprocessor_from_retrieval_settings(
+            retrieval_settings=knowledgebase.retrieval_settings
+        )
+        nodes = await retriever.aretrieve(query_str)
+
+        reranked_nodes = await postprocessor.apostprocess_nodes(
+            nodes,
+            query_str=query_str,
+        )
+        return reranked_nodes
 
     async def _achat_internal(
         self,
@@ -216,204 +404,95 @@ class ChatFlow:
             return response_from_text(DEFAULT_EMPTY_RESPONSE)
 
         chat_request.messages = remove_think_from_messages(messages)
+        chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
+
+        original_query_str = chat_request.messages[-1].content
+        llm_kwargs = {}
+        if chat_request.temperature is not None:
+            llm_kwargs["temperature"] = chat_request.temperature
+        if chat_request.max_tokens is not None:
+            llm_kwargs["max_tokens"] = chat_request.max_tokens
 
         # 意图识别
-        query_bundle = await self._recognize_intent(chat_request)
-        query_bundle.system_role = system_prompt
-        logger.info(
-            f"[{chat_id}] Intent recognized: {query_bundle.intent}, query: {query_bundle.query_str}, elapsed time: {time.time() - start_time}s."
+        intent_result = await self._recognize_intent(
+            chat_request, chat_history_str=chat_history_str
         )
         logger.info(
-            f"[{chat_id}] Intent recognizede with {query_bundle.prompt_tokens} prompt tokens, {query_bundle.completion_tokens} completion tokens, {query_bundle.total_tokens} total tokens."
+            f"[{chat_id}] Intent recognized: {intent_result.intent}, query: {intent_result.query_str}, elapsed time: {time.time() - start_time}s. Token usage: {intent_result.token_usage}"
         )
 
         # 安全护栏
         guardrail = resolve_llm_guardrail(self.config)
         if guardrail is not None:
-            check_result = await guardrail.acheck(text=query_bundle.query_str)
+            check_result = await guardrail.acheck(text=intent_result.query_str)
             if check_result.reject:
-                logger.info(f"Guadrail check failed: {query_bundle.query_str}.")
+                logger.info(f"Guadrail check failed: {intent_result.query_str}.")
                 if chat_request.stream:
                     return response_gen_from_text(check_result.advice)
                 else:
                     return response_from_text(check_result.advice)
 
-            logger.info(f"Guadrail check passed: {query_bundle.query_str}.")
+            logger.info(f"Guadrail check passed: {intent_result.query_str}.")
 
         # 意图分发
-        logger.info(f"Routing query {query_bundle.query_str} to {query_bundle.intent}")
-        if query_bundle.intent == ChatIntentType.CHAT_LLM:
-            response_wrapper = await self.achat_llm(query_bundle)
-        elif query_bundle.intent == ChatIntentType.CHAT_NEWS:
-            response_wrapper = await self.achat_news(query_bundle)
-        elif query_bundle.intent == ChatIntentType.CHAT_NEWS_LLM:
-            response_wrapper = await self.achat_news_llm(query_bundle)
-        elif query_bundle.intent == ChatIntentType.LIST_NEWS:
-            response_wrapper = await self.alist_news(query_bundle)
-        elif query_bundle.intent == ChatIntentType.CHAT_AGENT:
-            response_wrapper = await self.achat_agent(query_bundle)
-        elif query_bundle.intent == ChatIntentType.SEARCH_WEB:
-            response_wrapper = await self.achat_web(query_bundle)
-        elif query_bundle.intent == ChatIntentType.CHAT_DB:
-            response_wrapper = await self.achat_db(query_bundle)
-        elif query_bundle.intent == ChatIntentType.CHAT_KNOWLEDGEBASE:
-            knowledgebase = knowledgebase_manager.get_knowledgebase(
-                chat_request.index_name
+        logger.info(f"Routing query {original_query_str} to {intent_result.intent}")
+        if intent_result.intent == ChatIntentType.CHAT_LLM:
+            response_wrapper = await self.achat_llm(
+                model_id=chat_request.model,
+                messages=chat_request.messages,
+                stream=chat_request.stream,
+                system_prompt=system_prompt,
+                **llm_kwargs,
             )
+        elif intent_result.intent == ChatIntentType.CHAT_NEWS:
+            response_wrapper = await self.achat_news(
+                query_str=intent_result.query_str,
+                stream=chat_request.stream,
+            )
+        elif intent_result.intent == ChatIntentType.CHAT_NEWS_LLM:
+            response_wrapper = await self.achat_news_llm(
+                query_str=intent_result.query_str,
+                stream=chat_request.stream,
+            )
+        elif intent_result.intent == ChatIntentType.LIST_NEWS:
+            response_wrapper = await self.alist_news(
+                query_str=original_query_str,
+                news_topics=intent_result.news_topics,
+                stream=chat_request.stream,
+            )
+        elif intent_result.intent == ChatIntentType.SEARCH_WEB:
+            response_wrapper = await self.achat_web(
+                query_str=intent_result.query_str,
+                chat_history_str=chat_history_str,
+                stream=chat_request.stream,
+                model_id=chat_request.model,
+                **llm_kwargs,
+            )
+        elif intent_result.intent == ChatIntentType.CHAT_DB:
+            response_wrapper = await self.achat_db(
+                query_str=intent_result.query_str,
+                chat_history_str=chat_history_str,
+                stream=chat_request.stream,
+                model_id=chat_request.model,
+                **llm_kwargs,
+            )
+        elif intent_result.intent == ChatIntentType.CHAT_KNOWLEDGEBASE:
             response_wrapper = await self.achat_knowledgebase(
-                query_bundle, knowledgebase=knowledgebase
+                query_str=intent_result.query_str,
+                chat_history_str=chat_history_str,
+                stream=chat_request.stream,
+                model_id=chat_request.model,
+                knowledgebase_name=chat_request.index_name,
+                **llm_kwargs,
             )
         else:
-            logger.warning(f"Unknown intent: {query_bundle.intent}")
-            response_wrapper = await self.achat_llm(query_bundle)
-
-        # 计算query_rewrite的token数量
-        response_wrapper.additional_kwargs[
-            "completion_tokens"
-        ] = query_bundle.completion_tokens
-        response_wrapper.additional_kwargs["prompt_tokens"] = query_bundle.prompt_tokens
-        response_wrapper.additional_kwargs["total_tokens"] = query_bundle.total_tokens
-        return response_wrapper
-
-    @dispatcher.span
-    async def achat_db(
-        self,
-        query_bundle: PaiQueryBundle,
-    ):
-        data_analysis_query_engine = resolve_data_analysis_query(
-            self.config, model_id=query_bundle.model
-        )
-        if not data_analysis_query_engine:
-            raise ValueError(
-                "DBChat config is not valid. Please check your DBChat api configuration."
-            )
-
-        return await data_analysis_query_engine.aquery(query_bundle)
-
-    @dispatcher.span
-    async def alist_news(
-        self,
-        query_bundle: PaiQueryBundle,
-    ):
-        news_tool = resolve_news_tool(self.config)
-        if not query_bundle.stream:
-            response_wrapper = await news_tool.alist_topics(
-                query_str=query_bundle.query_str, news_topics=query_bundle.news_topics
-            )
-        else:
-            args = {
-                "query_str": query_bundle.query_str,
-                "news_topics": query_bundle.news_topics,
-            }
-            response_gen = await news_tool.astream_list_topics([], **args)
-            response_wrapper = ChatResponseWrapper(response=response_gen)
-        return response_wrapper
-
-    @dispatcher.span
-    async def achat_news(
-        self,
-        query_bundle: PaiQueryBundle,
-    ):
-        news_tool = resolve_news_tool(self.config)
-        args = {"prompt": query_bundle.query_str}
-        if query_bundle.stream:
-            response_gen = await news_tool.astream_chat([], **args)
-            response_wrapper = ChatResponseWrapper(response=response_gen)
-        else:
-            response = await news_tool.achat([], **args)
-            response_wrapper = ChatResponseWrapper(response=response)
-
-        return response_wrapper
-
-    @dispatcher.span
-    async def achat_news_llm(
-        self,
-        query_bundle: PaiQueryBundle,
-    ):
-        news_tool = resolve_news_tool(self.config)
-
-        if not query_bundle.stream:
-            response_wrapper = await news_tool.achat_llm(
-                query_str=query_bundle.query_str
-            )
-        else:
-            response_wrapper = await news_tool.astream_chat_llm(
-                query_str=query_bundle.query_str
+            logger.warning(f"Unknown intent: {intent_result.intent}")
+            response_wrapper = await self.achat_llm(
+                model_id=chat_request.model,
+                messages=chat_request.messages,
+                stream=chat_request.stream,
+                system_prompt=system_prompt,
+                **llm_kwargs,
             )
 
         return response_wrapper
-
-    @dispatcher.span
-    async def achat_web(
-        self,
-        query_bundle: PaiQueryBundle,
-    ):
-        search_engine = resolve_searcher(self.config, model_id=query_bundle.model)
-        query_bundle.llm_kwargs["intent"] = ChatIntentType.SEARCH_WEB
-        if not search_engine:
-            raise ValueError(
-                "Web search config is not valid. Please check your search api configuration."
-            )
-        return await search_engine.aquery(
-            query_bundle,
-        )
-
-    @dispatcher.span
-    async def achat_knowledgebase(
-        self,
-        query_bundle: PaiQueryBundle,
-        knowledgebase: KnowledgeBase,
-    ) -> ChatResponseWrapper:
-        vector_index = resolve_vector_index(knowledgebase)
-        if (
-            knowledgebase.retrieval_settings is not None
-            or knowledgebase.qa_prompt_templates is not None
-        ):
-            query_engine = resolve_query_engine_from_knowledgebase(
-                self.config,
-                vector_index=vector_index,
-                model_id=query_bundle.model,
-                knowledgebase=knowledgebase,
-            )
-        else:
-            query_engine = resolve_query_engine(
-                self.config, vector_index=vector_index, model_id=query_bundle.model
-            )
-        query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_KNOWLEDGEBASE
-        response = await query_engine.aquery(query_bundle)
-        return response
-
-    @dispatcher.span
-    async def achat_llm(
-        self,
-        query_bundle: PaiQueryBundle,
-    ) -> ChatResponseWrapper:
-        llm = resolve_chat_llm(self.config, model_id=query_bundle.model)
-        system_role = (
-            query_bundle.system_role or self.config.synthesizer.system_role_template
-        )
-        messages = []
-        if system_role:
-            messages.append(ChatMessage(role=MessageRole.USER, content=system_role))
-
-        # prompt_message
-        messages.append(
-            ChatMessage(
-                role=MessageRole.USER,
-                content="{}\n{}\n{}".format(
-                    self.config.synthesizer.custom_prompt_template,
-                    CURRENT_TIME_PROMPT.format(
-                        current_datetime=get_prompt_current_time_str()
-                    ),
-                    DEFAULT_ANSWER_TEMPLATE,
-                ),
-            )
-        )
-        messages.extend(query_bundle.messages)
-        if query_bundle.stream:
-            query_bundle.llm_kwargs["intent"] = ChatIntentType.CHAT_LLM
-            response_gen = await llm.astream_chat(messages, **query_bundle.llm_kwargs)
-            return ChatResponseWrapper(response=response_gen)
-        else:
-            response = await llm.achat(messages, **query_bundle.llm_kwargs)
-            return ChatResponseWrapper(response=response)

@@ -5,21 +5,24 @@ from pairag.extensions.news.news_config import (
     DEFAULT_NEWS_DOMAIN_LIST,
     DEFAULT_NEWS_DOMAIN_MAP,
 )
+from pairag.integrations.query_transform.intent_models import (
+    ChatIntentType,
+    ChatToolType,
+    IntentResult,
+)
 from pairag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
     NL2SQL_REWRITE_PROMPT_ZH,
     NEWS_REWRITE_PROMPT_ZH,
-    AGENT_REWRITE_PROMPT_ZH,
     REWRITE_PROMPT_ROLE_ZH,
 )
 from llama_index.core.prompts import PromptTemplate
-from pairag.chat.models import ChatToolType, ChatIntentType, PaiQueryBundle
 from pairag.utils.json_parser import parse_json_from_code_block_str
 from loguru import logger
 import re
-
+from openai.types.completion_usage import CompletionUsage
 from pairag.utils.time_utils import get_prompt_current_time_str
 
 
@@ -59,7 +62,6 @@ class OpenAICompatibleQueryTransform:
         llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH,
         knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
         websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH,
-        agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH,
         db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH,
         news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH,
         news_valid_domain_list: List[str] = DEFAULT_NEWS_DOMAIN_LIST,
@@ -76,7 +78,6 @@ class OpenAICompatibleQueryTransform:
             ChatToolType.CHAT_KNOWLEDGEBASE: knowledge_tool_prompt_str,
             ChatToolType.SEARCH_WEB: websearch_tool_prompt_str,
             ChatToolType.CHAT_NEWS: news_tool_prompt_str,
-            ChatToolType.CHAT_AGENT: agent_tool_prompt_str,
         }
 
     def get_prompt(self, query_str: str, chat_history: str, potential_intents):
@@ -95,11 +96,9 @@ class OpenAICompatibleQueryTransform:
     async def arun(
         self,
         chat_messages: List[ChatMessage] = [],
+        chat_history_str: str = None,
         potential_intents: List[ChatToolType] = [],
-    ) -> PaiQueryBundle:
-        chat_history_str = messages_to_history_str(
-            chat_messages[-7:-1], max_length=1000
-        )
+    ) -> IntentResult:
         query_str = chat_messages[-1].content
         rewrite_prompt = self.get_prompt(
             chat_history=chat_history_str,
@@ -110,14 +109,9 @@ class OpenAICompatibleQueryTransform:
         logger.debug(
             f"Chat history: {chat_history_str} \n rewrite_prompt: {rewrite_prompt}"
         )
-        messages = self._llm._get_messages(
-            rewrite_prompt,
-            question=query_str,
-            chat_history=chat_history_str,
-        )
-        chat_response = await self._llm.achat(
-            messages=messages,
-        )
+        messages = self._llm._get_messages(rewrite_prompt)
+        chat_response = await self._llm.achat(messages=messages)
+
         transformed_query_str = chat_response.message.content
 
         logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
@@ -130,41 +124,45 @@ class OpenAICompatibleQueryTransform:
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
         intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
-        query = query_json.get("query", query_str)
-        news_topics = query_json.get("news_topics", [])
+        new_query_str = query_json.get("query", query_str)
 
-        # 过滤掉无关话题 并且 进行严格的落域字符串匹配
-        # filtered_news_topics = [
-        #     topic for topic in news_topics if topic in set(self._news_valid_domain_list)
-        # ]
-        filtered_news_topics = []
-        for topic in news_topics:
-            if topic in set(self._news_valid_domain_list) and check_keywords_in_string(
-                query_str, DEFAULT_NEWS_DOMAIN_MAP[topic]
+        news_topics = None
+        if intent == ChatIntentType.LIST_NEWS:
+            original_news_topics = query_json.get("news_topics", [])
+
+            # 过滤掉无关话题 并且 进行严格的落域字符串匹配
+            filtered_news_topics = []
+            for topic in original_news_topics:
+                if topic in set(
+                    self._news_valid_domain_list
+                ) and check_keywords_in_string(
+                    query_str, DEFAULT_NEWS_DOMAIN_MAP[topic]
+                ):
+                    logger.debug(f"Valid news topic [{topic}]")
+                    filtered_news_topics.append(topic)
+                else:
+                    logger.debug(f"Invalid news topic [{topic}]")
+
+            logger.debug(f"Filtered news topics [{filtered_news_topics}]")
+            if (
+                len(original_news_topics) > 0
+                and len(filtered_news_topics) == 0
+                and intent == ChatIntentType.LIST_NEWS
             ):
-                logger.debug(f"Valid news topic [{topic}]")
-                filtered_news_topics.append(topic)
+                intent = ChatIntentType.CHAT_NEWS
+                news_topics = None  # 无须news_topics
             else:
-                logger.debug(f"Invalid news topic [{topic}]")
-        logger.debug(f"Filtered news topics [{filtered_news_topics}]")
-        if (
-            len(news_topics) > 0
-            and len(filtered_news_topics) == 0
-            and intent == ChatIntentType.LIST_NEWS
-        ):
-            intent = ChatIntentType.CHAT_NEWS
+                news_topics = filtered_news_topics
 
-        return PaiQueryBundle(
+        return IntentResult(
             intent=intent,
-            messages=chat_messages,
-            query_str=query,
-            original_query_str=query_str,
-            news_topics=filtered_news_topics,
-            custom_embedding_strs=[transformed_query_str],
-            chat_messages_str=chat_history_str,
-            completion_tokens=chat_response.additional_kwargs.get(
-                "completion_tokens", 0
+            news_topics=news_topics,
+            query_str=new_query_str,
+            token_usage=CompletionUsage(
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
             ),
-            prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
-            total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
         )

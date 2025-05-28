@@ -111,75 +111,6 @@ class DBQuery:
             sql_revision_prompt=self._sql_revision_prompt,
         )
 
-    def query_pipeline(self, nl_query: QueryBundle, hint: str = None):
-        if isinstance(nl_query, str):
-            nl_query = QueryBundle(nl_query)
-
-        # 查询问题预处理, 可选
-        if self._enable_query_preprocessor:
-            keywords = self._keyword_extractor.process(nl_query, hint)
-        else:
-            keywords = []
-
-        # 筛选q-sql pair, 可选
-        if self._enable_db_history:
-            # history info retrieval
-            retrieved_history_nodes = self._history_retriever.retrieve_nodes(nl_query)
-            logger.info(
-                f"History nodes retrieved with number {len(retrieved_history_nodes)}"
-            )
-            # history filter
-            retrieved_history_list = self._history_filter.filter(
-                retrieved_history_nodes
-            )
-        else:
-            retrieved_history_list = []
-
-        # pre_retrieval, 可选
-        if self._enable_db_preretriever:
-            # schema info retrieval
-            retrieved_description_nodes_from_query = (
-                self._schema_retriever.retrieve_nodes(nl_query)
-            )
-            if hint:
-                retrieved_description_nodes_from_hint = (
-                    self._schema_retriever.retrieve_nodes(hint)
-                )
-            else:
-                retrieved_description_nodes_from_hint = []
-            # value info retrieval
-            if keywords:
-                retrieved_value_nodes = self._value_retriever.retrieve_nodes(keywords)
-            else:
-                retrieved_value_nodes = []
-            # schema+value filter
-            retrieved_description_dict = self._schema_value_filter.filter(
-                self._db_description_dict,
-                retrieved_description_nodes_from_query,
-                retrieved_description_nodes_from_hint,
-                retrieved_value_nodes,
-            )
-        else:
-            retrieved_description_dict = self._db_description_dict
-
-        # schema selector, 可选
-        if self._enable_db_selector:
-            selected_description_dict = self._db_schema_selector.select(
-                query=nl_query, db_info=retrieved_description_dict, hint=hint
-            )
-        else:
-            selected_description_dict = retrieved_description_dict
-
-        # sql generator, 必须
-        response_node, metadata = self._sql_generator.generate_sql_node(
-            nl_query,
-            selected_description_dict,
-            retrieved_history_list,
-            max_retry=1,
-            hint=hint,
-        )
-        return response_node, metadata["schema_description"]
-
     async def aquery_pipeline(self, nl_query: QueryBundle, hint: str = None):
         if isinstance(nl_query, str):
             nl_query = QueryBundle(nl_query)
@@ -246,18 +177,19 @@ class DBQuery:
             selected_description_dict = retrieved_description_dict
 
         # sql generator, 必须
-        response_node, metadata = await self._sql_generator.agenerate_sql_node(
+        response_nodes, metadata = await self._sql_generator.agenerate_sql_node(
             nl_query,
             selected_description_dict,
             retrieved_history_list,
             max_retry=1,
             hint=hint,
         )
-        return response_node, metadata["schema_description"]
 
-    def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        """Retrieve sql nodes from the database."""
-        return self.query_pipeline(query_bundle)
+        if len(response_nodes) > 0:
+            response_nodes[0].node.metadata["db_schema"] = metadata[
+                "schema_description"
+            ]
+        return response_nodes
 
     async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve sql nodes from the database."""

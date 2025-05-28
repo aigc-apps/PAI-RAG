@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Literal
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
-DEFAULT_QUARK_SEARCH_ENDPOINT = "https://zx-dsc.sm.cn/"
 DEFAULT_GOOGLE_SEARCH_ENDPOINT = "https://serpapi.com/search"
 DEFAULT_SEARCH_COUNT = 10
 DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
@@ -24,7 +23,6 @@ DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
 
 class SupportedSearchType(str, Enum):
     bing = "bing"
-    quark = "quark"
     aliyun = "aliyun"
     google = "google"
 
@@ -50,13 +48,6 @@ class BingSearchConfig(BaseSearchConfig):
     source: Literal[SupportedSearchType.bing] = SupportedSearchType.bing
     search_api_key: str | None = None
     search_lang: str = "zh-CN"
-
-
-class QuarkSearchConfig(BaseSearchConfig):
-    source: Literal[SupportedSearchType.quark] = SupportedSearchType.quark
-    host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
-    user: str | None = None
-    secret: str | None = None
 
 
 class AliyunSearchConfig(BaseSearchConfig):

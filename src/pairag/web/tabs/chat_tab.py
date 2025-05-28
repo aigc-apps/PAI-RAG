@@ -49,7 +49,6 @@ async def respond(input_elements: List[Any]):
     chat_knowledgebase = True if "查询知识库" in query_types else False
     search_web = True if "联网搜索" in query_types else False
     chat_llm = True if "大模型" in query_types else False
-    chat_agent = True if "agent" in query_types else False
     chat_db = True if "查询数据库" in query_types else False
     chat_news = True if "新闻工具" in query_types else False
 
@@ -65,7 +64,6 @@ async def respond(input_elements: List[Any]):
             chat_knowledgebase=chat_knowledgebase,
             search_web=search_web,
             chat_db=chat_db,
-            chat_agent=chat_agent,
             chat_llm=chat_llm,
             chat_news=chat_news,
         )
@@ -180,139 +178,9 @@ def create_chat_tab() -> Dict[str, Any]:
                 else:
                     quer_rewrite_model_name = model_choices[0]
 
-            # with gr.Column(visible=True) as llm_col:
-            #     model_argument = gr.Accordion("LLM推理参数设置", open=True)
-            #     with model_argument:
-            #         llm_temperature = gr.Slider(
-            #             minimum=0,
-            #             maximum=1,
-            #             step=0.001,
-            #             value=0.1,
-            #             elem_id="llm_temperature",
-            #             label="温度 (0 到 1)",
-            #         )
             llm_args = {llm_temperature}
 
-            # with gr.Column(visible=False) as search_col:
-            #     search_model_argument = gr.Accordion("网络搜索参数设置", open=False)
-            #     with search_model_argument:
-            #         search_type = gr.Radio(
-            #             ["bing", "aliyun", "google"],
-            #             label="搜索引擎",
-            #             elem_id="search_type",
-            #         )
-            #         serpapi_key_tips = gr.Markdown(
-            #             value="如何获取 [SerpAPI Key](https://serpapi.com)"
-            #         )
-            #         search_api_key = gr.Text(
-            #             label="Bing API Key",
-            #             value="",
-            #             type="password",
-            #             elem_id="search_api_key",
-            #         )
-            #         serpapi_key = gr.Text(
-            #             label="SerpAPI Key",
-            #             value="",
-            #             type="password",
-            #             elem_id="serpapi_key",
-            #         )
-            #         search_count = gr.Slider(
-            #             label="搜索数量",
-            #             minimum=5,
-            #             maximum=50,
-            #             step=1,
-            #             elem_id="search_count",
-            #         )
-            #         search_lang = gr.Radio(
-            #             label="语言",
-            #             choices=["zh-CN", "en-US"],
-            #             value="zh-CN",
-            #             elem_id="search_lang",
-            #         )
-            #         aliyun_endpoint = gr.Text(
-            #             label="Endpoint", value="", elem_id="aliyun_endpoint"
-            #         )
-            #         aliyun_access_key_id = gr.Text(
-            #             label="AccessKey ID", value="", elem_id="aliyun_access_key_id"
-            #         )
-            #         aliyun_access_key_secret = gr.Text(
-            #             label="AccessKey Secret",
-            #             value="",
-            #             type="password",
-            #             elem_id="aliyun_access_key_secret",
-            #         )
-            #     search_args = {
-            #         search_type,
-            #         search_api_key,
-            #         search_count,
-            #         search_lang,
-            #         aliyun_endpoint,
-            #         aliyun_access_key_id,
-            #         aliyun_access_key_secret,
-            #         serpapi_key,
-            #     }
-            #     search_type.input(
-            #         fn=change_search_model_argument,
-            #         inputs=[search_type],
-            #         outputs=[
-            #             search_api_key,
-            #             search_count,
-            #             search_lang,
-            #             aliyun_endpoint,
-            #             aliyun_access_key_id,
-            #             aliyun_access_key_secret,
-            #             serpapi_key,
-            #             serpapi_key_tips,
-            #         ],
-            #     )
-
             cur_tokens = gr.Textbox(label="\N{fire} 当前Tokens总数", visible=False)
-
-            # def change_query_radio(query_type):
-            #     if query_type == "检索测试":
-            #         return {
-            #             search_model_argument: gr.update(open=False),
-            #             search_col: gr.update(visible=False),
-            #             llm_col: gr.update(visible=False),
-            #             model_argument: gr.update(open=False),
-            #             return_reference: gr.update(visible=False),
-            #         }
-            #     elif query_type == "对话 (大模型)":
-            #         return {
-            #             search_model_argument: gr.update(open=False),
-            #             search_col: gr.update(visible=False),
-            #             llm_col: gr.update(visible=True),
-            #             model_argument: gr.update(open=True),
-            #             return_reference: gr.update(visible=False),
-            #         }
-            #     elif query_type == "对话 (知识库)":
-            #         return {
-            #             search_model_argument: gr.update(open=False),
-            #             search_col: gr.update(visible=False),
-            #             llm_col: gr.update(visible=True),
-            #             model_argument: gr.update(open=False),
-            #             return_reference: gr.update(visible=True),
-            #         }
-            #     elif query_type == "对话 (网络搜索)":
-            #         return {
-            #             search_model_argument: gr.update(open=True),
-            #             search_col: gr.update(visible=True),
-            #             llm_col: gr.update(visible=True),
-            #             model_argument: gr.update(open=False),
-            #             return_reference: gr.update(visible=True),
-            #         }
-
-            # query_type.input(
-            #     fn=change_query_radio,
-            #     inputs=query_type,
-            #     outputs=[
-            #         search_model_argument,
-            #         search_col,
-            #         llm_col,
-            #         model_argument,
-            #         return_reference,
-            #     ],
-            # )
 
         with gr.Column(scale=9):
             chatbot = gr.Chatbot(height=500, elem_id="chatbot", type="messages")
@@ -320,7 +188,6 @@ def create_chat_tab() -> Dict[str, Any]:
                 with gr.Column(variant="panel"):
                     query_types = gr.CheckboxGroup(
                         ["大模型", "联网搜索", "查询知识库", "查询数据库", "新闻工具"],
-                        # ["大模型", "联网搜索", "查询知识库", "查询数据库", "agent", "新闻工具"],
                         label="使用更多工具",
                         elem_id="query_types",
                     )

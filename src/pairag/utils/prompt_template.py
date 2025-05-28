@@ -223,15 +223,6 @@ CONDENSE_QUESTION_CHAT_ENGINE_PROMPT_ZH = """# 角色
 - 除非用户要求，否则保持输出语种与用户输入问题语种的一致性。
 """
 
-CONDENSE_QUESTION_ANSWER_PROMPT_ZH = """## 聊天记录:
-{chat_history}
-
-用户:
-{question}
-
-请仔细思考后，给出你的答案。除非用户要求，否则请保持输出语种与用户输入问题语种的一致性：
-"""
-
 
 DEFAULT_SUMMARY_PROMPT = (
     "Summarize the provided text in Chinese, including as many key details as needed."

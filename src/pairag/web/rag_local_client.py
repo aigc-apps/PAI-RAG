@@ -184,7 +184,6 @@ class RagLocalClient:
         chat_knowledgebase: bool = False,
         search_web: bool = False,
         chat_llm: bool = False,
-        chat_agent: bool = False,
         chat_db: bool = False,
         chat_news: bool = False,
     ):
@@ -199,7 +198,6 @@ class RagLocalClient:
             chat_knowledgebase=chat_knowledgebase,
             search_web=search_web,
             chat_llm=chat_llm,
-            chat_agent=chat_agent,
             chat_db=chat_db,
             chat_news=chat_news,
         )

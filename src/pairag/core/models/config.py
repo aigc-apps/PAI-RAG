@@ -4,7 +4,6 @@ from pairag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
 )
 from pairag.utils.prompt_template import (
-    AGENT_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     NEWS_REWRITE_PROMPT_ZH,
@@ -28,7 +27,6 @@ class QueryRewriteConfig(BaseModel):
     llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH
     knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH
     websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH
-    agent_tool_prompt_str: str = AGENT_REWRITE_PROMPT_ZH
     db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH
     news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH
 

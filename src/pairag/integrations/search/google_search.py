@@ -1,7 +1,5 @@
-from typing import Optional
 from llama_index.core.schema import NodeWithScore, TextNode
-from llama_index.core.query_engine import BaseQueryEngine
-from llama_index.core.response_synthesizers import BaseSynthesizer
+from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import QueryBundle
 from pairag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 import time
@@ -9,30 +7,26 @@ from loguru import logger
 
 from pairag.integrations.search.search_config import (
     DEFAULT_SEARCH_COUNT,
-    DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
 )
 import serpapi
+
 
 DEFAULT_LANG = "zh-CN"
 
 
-class GoogleSearchTool(BaseQueryEngine):
+class GoogleSearchTool(BaseRetriever):
     def __init__(
         self,
         api_key: str,
-        synthesizer: BaseSynthesizer = None,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
-        search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
     ):
         self.api_key = api_key
-        self.synthesizer = synthesizer
 
         self.search_count = search_count
         self.search_lang = search_lang
 
         self.html_reader = ParallelBeautifulSoupWebReader()
-        self.search_qa_prompt_template = search_qa_prompt_template
 
     async def _asearch(
         self,
@@ -88,22 +82,15 @@ class GoogleSearchTool(BaseQueryEngine):
 
         return docs
 
-    async def aquery(
+    async def _aretrieve(
         self,
-        query: QueryBundle,
-        lang: str = None,
-        search_top_k: Optional[int] = None,
+        query_bundle: QueryBundle,
     ):
         start = time.time()
 
-        if lang:
-            self.search_lang = lang
-        if search_top_k:
-            self.search_count = search_top_k
-
-        logger.info(f"Google Search with query {query.query_str}.")
+        logger.info(f"Google Search with query {query_bundle.query_str}.")
         docs = await self._asearch(
-            query=query.query_str,
+            query=query_bundle.query_str,
         )
 
         nodes = []
@@ -115,19 +102,7 @@ class GoogleSearchTool(BaseQueryEngine):
             f"[WebSearch]-Google Get {len(docs)} docs from url. Elapsed time: {time.time() - start} seconds."
         )
 
-        return await self.synthesizer.asynthesize(
-            query=query,
-            nodes=nodes,
-            system_role_str=" ",
-            prompt_template_str=self.search_qa_prompt_template,
-            **query.llm_kwargs,
-        )
+        return nodes
 
-    def _get_prompt_modules(self):
-        raise NotImplementedError
-
-    def _query(self, query_bundle):
-        raise NotImplementedError
-
-    async def _aquery(self, query_bundle):
+    def _retrieve(self, query: QueryBundle):
         raise NotImplementedError

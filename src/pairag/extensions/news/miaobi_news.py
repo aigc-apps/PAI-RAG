@@ -1,7 +1,7 @@
 import traceback
 from typing import Dict, List, Any, Sequence
 from llama_index.core.prompts import PromptTemplate
-from pairag.chat.models import ChatIntentType, ChatResponseWrapper
+from pairag.chat.models import ChatResponseWrapper
 from pairag.extensions.news.news_config import (
     MiaobiNewsConfig,
     DEFAULT_NEWS_ROLE,
@@ -211,6 +211,10 @@ class MiaobiNewsTool(LLM):
         assert (
             broadcast_response.status_code == 200
         ), "Get hot topic status code is not 200."
+        logger.info(
+            f"Get hot topics from miaobi news. Request-ID: {broadcast_response.body.request_id}."
+        )
+
         hot_topics = []
         for topic in broadcast_response.body.data.data:
             hot_topics.append(
@@ -232,6 +236,7 @@ class MiaobiNewsTool(LLM):
         self,
         query_str: str,
         news_topics: List[str] = [],
+        **kwargs,
     ) -> ChatResponseWrapper:
         try:
             hot_topics = await self._alist_hot_topics(news_topics=news_topics)
@@ -275,7 +280,7 @@ class MiaobiNewsTool(LLM):
                     span_id=span_id,
                 )
             )
-            response = await self.llm.achat(messages)
+            response = await self.llm.achat(messages, **kwargs)
             response.additional_kwargs["news_articles"] = hot_topics
             return ChatResponseWrapper(response=response)
         except Exception as ex:
@@ -298,18 +303,6 @@ class MiaobiNewsTool(LLM):
             # when self.llm.astream_chat executes in this gen()
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
-                yield ChatResponse(
-                    message=ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content="",
-                    ),
-                    delta="",
-                    additional_kwargs={
-                        "intent": ChatIntentType.LIST_NEWS,
-                        "news_topics": news_topics,
-                    },
-                )
-
                 try:
                     hot_topics = await self._alist_hot_topics(news_topics=news_topics)
                 except Exception as ex:
@@ -413,14 +406,6 @@ class MiaobiNewsTool(LLM):
 
         async def gen() -> ChatResponseAsyncGen:
             origin_text = ""
-            yield ChatResponse(
-                message=ChatMessage(
-                    role=MessageRole.ASSISTANT,
-                    content="",
-                ),
-                delta="",
-                additional_kwargs={"intent": ChatIntentType.CHAT_NEWS},
-            )
             logger.info(f"Chat news with param {param}.")
             use_web_search = False
             additional_kwargs = {}

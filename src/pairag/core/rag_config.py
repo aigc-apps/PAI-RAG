@@ -22,7 +22,6 @@ from pairag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pairag.integrations.search.search_config import (
     BingSearchConfig,
-    QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
@@ -91,9 +90,7 @@ class RagConfig(BaseModel):
 
     # search web
     search: Annotated[
-        Union[
-            BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig, GoogleSearchConfig
-        ],
+        Union[BingSearchConfig, AliyunSearchConfig, GoogleSearchConfig],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]

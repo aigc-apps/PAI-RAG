@@ -1,22 +1,16 @@
-from typing import Optional, List, Tuple, Any
+from typing import Optional, Any
 from loguru import logger
-import asyncio
 
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from llama_index.core.base.response.schema import RESPONSE_TYPE
 from llama_index.core.llms.llm import LLM
-from llama_index.core.schema import QueryBundle, NodeWithScore
+from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.settings import Settings
 from llama_index.core.utilities.sql_wrapper import SQLDatabase
 from llama_index.core.callbacks.base import CallbackManager
-from llama_index.core.callbacks.schema import CBEventType, EventPayload
-from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.core.prompts.mixin import PromptMixinType
 import llama_index.core.instrumentation as instrument
 
 from pairag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
-from pairag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
-from pairag.chat.models import ChatResponseWrapper, PaiQueryBundle
 from pairag.integrations.data_analysis.text2sql.db_connector import (
     MysqlConnector,
     SqliteConnector,
@@ -180,7 +174,7 @@ class DataAnalysisLoader:
         return await self._db_loader.aload_db_info()
 
 
-class DataAnalysisQuery(BaseQueryEngine):
+class SqlRetriever(BaseRetriever):
     """
     Used for db or excel/csv file Data Query
     """
@@ -203,99 +197,14 @@ class DataAnalysisQuery(BaseQueryEngine):
             llm=self._llm,
             embed_model=self._embed_model,
         )
-        self._synthesizer = PaiSynthesizer(
-            llm=self._llm,
-            system_role_template=analysis_config.system_role_prompt,
-            custom_prompt_template=analysis_config.synthesizer_prompt,
-        )
         super().__init__(callback_manager=callback_manager or Settings.callback_manager)
 
     def _get_prompt_modules(self) -> PromptMixinType:
         """Get prompt sub-modules."""
         return {}
 
-    def retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = self._query_retriever.retrieve(query_bundle)
-        if isinstance(nodes, Tuple):
-            return nodes[0], nodes[1]
-        else:
-            return nodes, ""
+    async def _aretrieve(self, query_bundle):
+        return await self._query_retriever.aretrieve(query_bundle)
 
-    async def aretrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        nodes = await self._query_retriever.aretrieve(query_bundle)
-        if isinstance(nodes, Tuple):
-            return nodes[0], nodes[1]
-        else:
-            return nodes, ""
-
-    def _query(
-        self,
-        query_bundle: QueryBundle,
-    ) -> RESPONSE_TYPE:
-        """Answer a query."""
-        with self.callback_manager.event(
-            CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
-        ) as query_event:
-            nodes, description = self.retrieve(query_bundle)
-            response = asyncio.run(
-                self._synthesizer.asynthesize(
-                    query=query_bundle,
-                    db_description_str=description,
-                    nodes=nodes,
-                )
-            )
-            query_event.on_end(payload={EventPayload.RESPONSE: response})
-
-        return response
-
-    async def _aquery(self, query_bundle: QueryBundle) -> RESPONSE_TYPE:
-        """Answer a query."""
-        with self.callback_manager.event(
-            CBEventType.QUERY, payload={EventPayload.QUERY_STR: query_bundle.query_str}
-        ) as query_event:
-            nodes, description = await self.aretrieve(query_bundle)
-            response = await self._synthesizer.asynthesize(
-                query=query_bundle,
-                db_description_str=description,
-                nodes=nodes,
-            )
-            query_event.on_end(payload={EventPayload.RESPONSE: response})
-
-        return response
-
-    async def aquery(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
-        nodes, description = await self.aretrieve(query_bundle)
-        query_code_instruction = (
-            [n.node.metadata["query_code_instruction"] for n in nodes],
-        )
-        response = await self._synthesizer.asynthesize(
-            query=query_bundle,
-            nodes=nodes,
-            system_role_str=self._synthesizer._system_role_template,
-            prompt_template_str=self._synthesizer._custom_prompt_template,
-            prompt_template_args={
-                "db_schema": description,
-                "query_code_instruction": query_code_instruction,
-            },
-        )
-
-        return response
-
-    def query(self, query_bundle: PaiQueryBundle) -> ChatResponseWrapper:
-        nodes, description = self.retrieve(query_bundle)
-        query_code_instruction = (
-            [n.node.metadata["query_code_instruction"] for n in nodes],
-        )
-        response = asyncio.run(
-            self._synthesizer.asynthesize(
-                query=query_bundle,
-                nodes=nodes,
-                system_role_str=self._synthesizer._system_role_template,
-                prompt_template_str=self._synthesizer._custom_prompt_template,
-                prompt_template_args={
-                    "db_schema": description,
-                    "query_code_instruction": query_code_instruction,
-                },
-            )
-        )
-        return response
+    def _retrieve(self, query_bundle):
+        raise NotImplementedError
