@@ -64,6 +64,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             model=model_name,
             messages=messages,
             stream=True,
+            tool_choice="none",
         )
 
 
@@ -107,8 +108,6 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
         async for chunk in response:
             for choice in chunk.choices:
                 # 模型生成已结束
-                # print("*******choice*******")
-                # print(choice)
                 if choice.finish_reason == "stop":
                     stop_flag = True
                     if choice.delta.content:
