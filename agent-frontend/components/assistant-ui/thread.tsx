@@ -60,9 +60,10 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
               cfg.enabled || true,
             ),
         );
-        setMcpConfigs(
-          configs.filter((item: { enabled: boolean }) => item.enabled === true),
+        const enabledConfigs = configs.filter(
+          (item: { enabled: boolean }) => item.enabled === true,
         );
+        setMcpConfigs(enabledConfigs);
       } catch (err: any) {
         setMcpError(err.message || "加载失败");
       } finally {

@@ -70,7 +70,7 @@ export const McpModal: FC<McpModalProps> = ({
                   variant={cfg.active ? "default" : "outline"}
                   onClick={() => toggleActive(cfg.id)}
                 >
-                  {cfg.active ? "已激活" : "激活"}
+                  {cfg.active ? "激活" : "激活"}
                 </Button>
               </div>
             ))

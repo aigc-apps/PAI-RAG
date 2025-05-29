@@ -4,7 +4,11 @@ from openai import AsyncOpenAI
 import json
 from utils.messages import convert_to_openai_messages
 from tools.mcp.mcp_client import resolve_mcp_clients
-from utils.prompts import NOT_DEEP_RESEARCH_PROMPT, DEEP_RESEARCH_PROMPT
+from utils.prompts import (
+    NOT_DEEP_RESEARCH_PROMPT,
+    DEEP_RESEARCH_PROMPT,
+    PROMPT_WITHOUT_TOOLS,
+)
 from utils.time_utils import get_prompt_current_time_str
 from llama_index.tools.mcp.base import McpToolSpec
 from loguru import logger
@@ -64,7 +68,6 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             model=model_name,
             messages=messages,
             stream=True,
-            tool_choice="none",
         )
 
 
@@ -98,127 +101,139 @@ async def process_mcp_tools():
 
 # 流式生成文本
 async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
-    max_steps = 5  # 防止无限循环的最大步骤数
-    step_count = 0
-    while step_count < max_steps:
+    try:
+        max_steps = 15  # 防止无限循环的最大步骤数
+        step_count = 0
         stop_flag = False
-        response = await gen_stream_response(model, model_name, messages, openai_tools)
-        draft_tool_calls = []
-        draft_tool_calls_index = -1
-        async for chunk in response:
-            for choice in chunk.choices:
-                # 模型生成已结束
-                if choice.finish_reason == "stop":
-                    stop_flag = True
-                    if choice.delta.content:
+        while step_count < max_steps:
+            response = await gen_stream_response(
+                model, model_name, messages, openai_tools
+            )
+            draft_tool_calls = []
+            draft_tool_calls_index = -1
+            async for chunk in response:
+                for choice in chunk.choices:
+                    # 模型生成已结束
+                    if choice.finish_reason == "stop":
+                        stop_flag = True
+                        if choice.delta.content:
+                            yield "0:{text}\n".format(
+                                text=json.dumps(
+                                    choice.delta.content, ensure_ascii=False
+                                )
+                            )
+                        yield 'd:{"finishReason":"stop"}\n'
+                        break
+                    # 调用工具,收集工具参数
+                    elif choice.delta.tool_calls:
+                        for tool_call in choice.delta.tool_calls:
+                            id = tool_call.id
+                            name = tool_call.function.name
+                            arguments = tool_call.function.arguments or ""
+
+                            if id is not None and id != "":
+                                draft_tool_calls_index += 1
+                                draft_tool_calls.append(
+                                    {"id": id, "name": name, "arguments": arguments}
+                                )
+
+                            else:
+                                draft_tool_calls[draft_tool_calls_index][
+                                    "arguments"
+                                ] += arguments
+                    # 普通内容
+                    elif choice.delta.content:
                         yield "0:{text}\n".format(
                             text=json.dumps(choice.delta.content, ensure_ascii=False)
                         )
-                    yield 'd:{"finishReason":"stop"}\n'
-                    break
-                # 调用工具,收集工具参数
-                elif choice.delta.tool_calls:
-                    for tool_call in choice.delta.tool_calls:
-                        id = tool_call.id
-                        name = tool_call.function.name
-                        arguments = tool_call.function.arguments or ""
-
-                        if id is not None and id != "":
-                            draft_tool_calls_index += 1
-                            draft_tool_calls.append(
-                                {"id": id, "name": name, "arguments": arguments}
-                            )
-
+                        if (
+                            isinstance(messages[-1], ChatCompletionMessage)
+                            and messages[-1].role == "assistant"
+                        ):
+                            messages[-1].content += str(choice.delta.content)
                         else:
-                            draft_tool_calls[draft_tool_calls_index][
-                                "arguments"
-                            ] += arguments
-                # 普通内容
-                elif choice.delta.content:
-                    yield "0:{text}\n".format(
-                        text=json.dumps(choice.delta.content, ensure_ascii=False)
-                    )
-                    if (
-                        isinstance(messages[-1], ChatCompletionMessage)
-                        and messages[-1].role == "assistant"
-                    ):
-                        messages[-1].content += str(choice.delta.content)
-                    else:
-                        messages.append(
-                            ChatCompletionMessage(
-                                role="assistant", content=str(choice.delta.content)
-                            )
-                        )  # 更新历史
-
-                # 根据参数调用工具
-                if choice.finish_reason == "tool_calls":
-                    for tool_call in draft_tool_calls:
-                        if tool_call and tool_call["arguments"].strip():
-                            args = json.loads(tool_call["arguments"])
-                        else:
-                            args = {}
-                        try:
-                            result = await tools_name_to_fn[tool_call["name"]].acall(
-                                **args
-                            )
-
-                            tool_result = result.content
-
-                            # 返回工具调用和结果（标记9和a）
-                            yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
-                            if tool_call["name"] == "search_web":
-                                yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
-                            else:
-                                yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
-
-                            # 将工具调用和结果加入消息历史,供模型继续推理
                             messages.append(
                                 ChatCompletionMessage(
-                                    role="assistant",
-                                    content="",
-                                    tool_calls=[
-                                        ChatCompletionMessageToolCall(
-                                            id=tool_call["id"],
-                                            type="function",
-                                            function={
-                                                "name": tool_call["name"],
-                                                "arguments": tool_call["arguments"],
-                                            },
-                                        )
-                                    ],
+                                    role="assistant", content=str(choice.delta.content)
                                 )
-                            )
+                            )  # 更新历史
 
-                            messages.append(
-                                ChatCompletionToolMessageParam(
-                                    role="tool",
-                                    content=json.dumps(tool_result, ensure_ascii=False),
-                                    tool_call_id=tool_call["id"],
+                    # 根据参数调用工具
+                    if choice.finish_reason == "tool_calls":
+                        for tool_call in draft_tool_calls:
+                            if tool_call and tool_call["arguments"].strip():
+                                args = json.loads(tool_call["arguments"])
+                            else:
+                                args = {}
+                            try:
+                                result = await tools_name_to_fn[
+                                    tool_call["name"]
+                                ].acall(**args)
+
+                                tool_result = result.content
+
+                                # 返回工具调用和结果（标记9和a）
+                                yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
+                                if tool_call["name"] == "search_web":
+                                    yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
+                                else:
+                                    yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
+
+                                # 将工具调用和结果加入消息历史,供模型继续推理
+                                messages.append(
+                                    ChatCompletionMessage(
+                                        role="assistant",
+                                        content="",
+                                        tool_calls=[
+                                            ChatCompletionMessageToolCall(
+                                                id=tool_call["id"],
+                                                type="function",
+                                                function={
+                                                    "name": tool_call["name"],
+                                                    "arguments": tool_call["arguments"],
+                                                },
+                                            )
+                                        ],
+                                    )
                                 )
-                            )
 
-                        except Exception as e:
-                            logger.error(f"工具调用异常: {str(e)}")
-                            error_message = {
-                                "finishReason": "工具调用发生未知错误，请检查输入或重试"
-                            }
-                            yield "d:{text}\n".format(
-                                text=json.dumps(error_message, ensure_ascii=False)
-                            )
+                                messages.append(
+                                    ChatCompletionToolMessageParam(
+                                        role="tool",
+                                        content=json.dumps(
+                                            tool_result, ensure_ascii=False
+                                        ),
+                                        tool_call_id=tool_call["id"],
+                                    )
+                                )
 
-            if chunk.choices == []:
-                usage = chunk.usage
-                prompt_tokens = usage.prompt_tokens
-                completion_tokens = usage.completion_tokens
+                            except Exception as e:
+                                logger.error(f"工具调用异常: {str(e)}")
+                                error_message = {
+                                    "finishReason": "工具调用发生未知错误，请检查输入或重试"
+                                }
+                                yield "d:{text}\n".format(
+                                    text=json.dumps(error_message, ensure_ascii=False)
+                                )
 
-                yield 'd:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
-                    reason="tool-calls" if len(draft_tool_calls) > 0 else "stop",
-                    prompt=prompt_tokens,
-                    completion=completion_tokens,
-                )
-        if stop_flag:
-            break
-        step_count += 1
+                if chunk.choices == []:
+                    usage = chunk.usage
+                    prompt_tokens = usage.prompt_tokens
+                    completion_tokens = usage.completion_tokens
+
+                    yield 'd:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
+                        reason="tool-calls" if len(draft_tool_calls) > 0 else "stop",
+                        prompt=prompt_tokens,
+                        completion=completion_tokens,
+                    )
+            if stop_flag:
+                break
+            step_count += 1
+        if not stop_flag:
+            yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
+    except Exception as e:
+        yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(e)
+        raise
 
 
 async def handle_chat(request: Request):
@@ -237,12 +252,17 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
-        if "thinking" in x_options:
-            system_prompt = DEEP_RESEARCH_PROMPT.format(
-                current_datetime=get_prompt_current_time_str()
-            )
+        if "search" in x_options or "mcp" in x_options:
+            if "thinking" in x_options:
+                system_prompt = DEEP_RESEARCH_PROMPT.format(
+                    current_datetime=get_prompt_current_time_str()
+                )
+            else:
+                system_prompt = NOT_DEEP_RESEARCH_PROMPT.format(
+                    current_datetime=get_prompt_current_time_str()
+                )
         else:
-            system_prompt = NOT_DEEP_RESEARCH_PROMPT.format(
+            system_prompt = PROMPT_WITHOUT_TOOLS.format(
                 current_datetime=get_prompt_current_time_str()
             )
         system = data.get("system", system_prompt)
