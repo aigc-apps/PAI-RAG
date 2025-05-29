@@ -7,7 +7,7 @@ from llama_index.core.schema import TransformComponent
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core import Settings
 from llama_index.core.node_parser.interface import NodeParser
-from llama_index.core.bridge.pydantic import PrivateAttr
+from llama_index.core.bridge.pydantic import PrivateAttr, Field
 from llama_index.core.node_parser import TokenTextSplitter
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.node_parser import (
@@ -117,7 +117,7 @@ def get_data_parser(parser_config: NodeParserConfig) -> NodeParser:
 
 
 class PaiNodeParser(TransformComponent):
-    _parser_config: NodeParserConfig = PrivateAttr()
+    parser_config: NodeParserConfig = Field(default=NodeParserConfig())
     _image_caption_tool: ImageCaptionTool = PrivateAttr()
     _parser: NodeParser = PrivateAttr()
     _doc_cnt_map: Any = PrivateAttr()
@@ -128,9 +128,10 @@ class PaiNodeParser(TransformComponent):
         caption_tool: ImageCaptionTool = None,
     ):
         super().__init__()
-        self._parser_config = parser_config or NodeParserConfig()
+        self.parser_config = parser_config or NodeParserConfig()
+        logger.info(f"Initialize PaiNodeParser with config: {self.parser_config}")
         self._image_caption_tool = caption_tool
-        self._parser = get_data_parser(self._parser_config)
+        self._parser = get_data_parser(self.parser_config)
         self._doc_cnt_map = {}
 
         self._caption_tool = caption_tool
@@ -204,8 +205,8 @@ class PaiNodeParser(TransformComponent):
                     md_node_parser = MarkdownNodeParser(
                         id_func=rand_node_id_hash,
                         image_caption_tool=self._image_caption_tool,
-                        chunk_size=self._parser_config.chunk_size,
-                        chunk_overlap_size=self._parser_config.chunk_overlap,
+                        chunk_size=self.parser_config.chunk_size,
+                        chunk_overlap_size=self.parser_config.chunk_overlap,
                         base_parser=self._parser,
                     )
                     chunks = md_node_parser.get_nodes_from_documents([doc_node])
