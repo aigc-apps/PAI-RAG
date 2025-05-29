@@ -106,5 +106,33 @@ class ChatService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Load DB info: {ex}")
 
+    async def astream_web_atomic(self, chat_request):
+        try:
+            return await self.app.astream_web_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat web failed: {ex}")
+
+    async def astream_llm_atomic(self, chat_request):
+        try:
+            return await self.app.astream_llm_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat llm failed: {ex}")
+
+    async def astream_news_agent_atomic(self, chat_request):
+        try:
+            return await self.app.astream_news_agent_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat news failed: {ex}")
+
+    async def astream_knowledgebase_atomic(self, chat_request):
+        try:
+            return await self.app.astream_knowledgebase_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat web failed: {ex}")
+
 
 chat_service = ChatService()

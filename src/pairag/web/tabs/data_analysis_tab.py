@@ -158,10 +158,11 @@ async def respond(input_elements: List[Any]):
 
     try:
         # print(chatbot)
-        response_gen = rag_client.query_data_analysis(
+        response_gen = rag_client.query(
             chat_messages=chatbot[:-1],
             stream=True,
             chat_model_id=da_chat_model_id,
+            chat_db=True,
         )
 
         is_thinking = False

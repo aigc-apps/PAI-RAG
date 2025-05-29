@@ -43,7 +43,6 @@ class PaiLlm(OpenAILike):
     def __init__(self, llm_config: PaiBaseLlmConfig):
         super().__init__(
             temperature=llm_config.temperature,
-            max_tokens=llm_config.max_tokens,
         )
         self.llm_config = llm_config
         self._llm = create_llm(self.llm_config)

@@ -49,13 +49,17 @@ class ChatCompletionRequest(BaseModel):
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    intent: Optional[IntentResult] = None  # 意图
+
+    class Config:
+        extra = "allow"  # allow extra fields
 
 
 class ChatResponseWrapper(BaseModel):
     response: Any
     additional_kwargs: Dict[str, Any] = {}
     source_nodes: List[NodeWithScore] = []
-    intent_result: IntentResult = IntentResult()
+    intent_result: Optional[IntentResult] = None
 
     def model_dump_json(self, exclude=None, **kwargs) -> str:
         if exclude is None:

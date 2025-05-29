@@ -432,7 +432,7 @@ class MiaobiNewsTool(LLM):
                             data.get("payload").get("output").get("searchQuery")
                         )
                         if search_query:
-                            additional_kwargs["search_query"] = search_query
+                            logger.info(f"News Search Query: {search_query}.")
 
                         text = data.get("payload").get("output").get("text")
                         if text:
@@ -447,17 +447,6 @@ class MiaobiNewsTool(LLM):
                             origin_text = text
                             yield response
 
-                        # 不只有usage信息
-                        elif len(additional_kwargs) > 3:
-                            empty_response = ChatResponse(
-                                message=ChatMessage(
-                                    role=MessageRole.ASSISTANT,
-                                    content="",
-                                ),
-                                delta="",
-                                additional_kwargs=additional_kwargs,
-                            )
-                            yield empty_response
                     elif origin_text == "":
                         # (task finished or task failed) and no origin_text
                         text = data.get("payload").get("output").get(

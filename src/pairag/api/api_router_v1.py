@@ -10,7 +10,7 @@ from pairag.data_pipeline.job.rag_job_manager import job_manager
 from pairag.knowledgebase.rag_knowledgebase import KnowledgeBase, knowledgebase_manager
 from pairag.core.chat_service import chat_service
 from pairag.core.rag_module import resolve
-from pairag.chat.models import ChatCompletionRequest, RetrievalRequest
+from pairag.chat.models import RetrievalRequest
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
@@ -426,27 +426,3 @@ async def aload_db_info():
 @router_v1.get("/health")
 def health_check():
     return {"status": "OK"}
-
-
-# api for embedding
-
-
-# api for rerank
-
-
-# api for intent router
-
-
-# api for search web
-
-
-# api for news
-
-
-# api for pure llm chat
-@router_v1.post("/chat")
-async def achat(
-    chat_request: ChatCompletionRequest,
-):
-    response = await chat_service.achat(chat_request)
-    return response

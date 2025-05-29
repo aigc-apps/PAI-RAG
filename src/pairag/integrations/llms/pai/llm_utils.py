@@ -52,7 +52,6 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             system_prompt=llm_config.system_prompt,
             api_key=llm_config.api_key,
             context_window=llm_config.context_window,
-            max_tokens=llm_config.max_tokens,
             reuse_client=False,
         )
     elif isinstance(llm_config, DashScopeLlmConfig):
@@ -72,7 +71,6 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             is_chat_model=True,
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             context_window=llm_config.context_window,
-            max_tokens=llm_config.max_tokens,
             reuse_client=False,
             timeout=120,
         )
@@ -93,7 +91,6 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             api_key=llm_config.token,
             is_chat_model=True,
             context_window=llm_config.context_window,
-            max_tokens=llm_config.max_tokens,
             reuse_client=False,
             timeout=120,
         )
@@ -116,7 +113,6 @@ def create_llm(llm_config: PaiBaseLlmConfig):
             is_chat_model=True,
             api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
             context_window=llm_config.context_window,
-            max_tokens=llm_config.max_tokens,
             reuse_client=False,
             timeout=120,
         )

@@ -92,3 +92,21 @@ class ChatApp:
         await db_info_loader.aload_db_info()
 
         return "Load database info successfully."
+
+
+    ## 原子能力调用
+    async def astream_llm_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_llm_atomic(chat_request)
+
+    async def astream_web_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_web_atomic(chat_request)
+
+    async def astream_knowledgebase_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_knowledgebase_atomic(chat_request)
+
+    async def astream_news_agent_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_news_agent_atomic(chat_request)

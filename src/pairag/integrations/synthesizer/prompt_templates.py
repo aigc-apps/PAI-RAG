@@ -62,6 +62,7 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"# 以下内容是基于用户发送的消�
 # 以下内容是用户消息:
 {query_str}
 """
+
 DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """# The following contents are the search results related to the user's message:
 {context_str}
 # The following contents are the user's Q&A history:
