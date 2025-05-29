@@ -99,11 +99,25 @@ def save_retrieval_config(input_elements: List[Any]):
     return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
 
 
+def check_variables_in_string(text, variables):
+    missing_variables = [var for var in variables if f"{{{var}}}" not in text]
+    if missing_variables:
+        raise ValueError(f"以下变量名缺失: {', '.join(missing_variables)}")
+
+
 def save_knowledgebase_qa_prompt_func(input_elements: List[Any]):
+    pmt_required_variables = ["context_str", "query_str"]
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
     knowledgebase_id = update_dict["knowledgebase_qa_prompt_index"]
+    try:
+        check_variables_in_string(
+            update_dict["knowledgebase_qa_task_prompt_template"], pmt_required_variables
+        )
+    except RagApiError:
+        return gr.Error("保存知识库问答提示词模板出错，必须包含变量context_str 和 query_str")
+
     qa_prompt_templates = {
         "system_prompt_template": update_dict[
             "knowledgebase_qa_system_prompt_template"

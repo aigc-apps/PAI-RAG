@@ -18,6 +18,15 @@ DEFAULT_CUSTOM_PROMPT_TEMPLATE = """你的目标是提供准确、有用且易�
 - 除非用户要求，否则请保持输出语种与用户输入问题语种的一致性。
 - 对于违反法律、道德和社会责任的非法行为以及涉及不安全/不道德/敏感/色情/暴力/赌博/违法等行为的问题，或者是可能存在非法目的的问题，请明确拒绝提供所要求的信息，并简单解释为什么这样的请求不能被满足。
 如果答案中需要使用材料中提到的操作步骤类型的图文内容，必须在相应的步骤给出图片链接。
+
+# 以下内容是基于用户发送的消息的搜索结果:
+{context_str}
+# 以下内容是用户问答历史记录:
+{history_str}
+# 以下内容是用户消息:
+{query_str}
+
+你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。
 """
 
 DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful, and easy-to-understand information.
@@ -33,6 +42,15 @@ DEFAULT_CUSTOM_PROMPT_TEMPLATE_EN = """Your goal is to provide accurate, useful,
 - For objective Q&A, if the answer is very brief, you may add one or two related sentences to enrich the content.
 - Unless the user requests otherwise, your response should be in the same language as the user's question.
 - For questions involving unsafe, unethical, sensitive, pornographic, violent, gambling, or illegal behaviors, please clearly refuse to provide the requested information and briefly explain why such requests cannot be fulfilled.
+
+# The following contents are the search results related to the user's message:
+{context_str}
+# The following contents are the user's Q&A history:
+{history_str}
+# The user's message is:
+{query_str}
+
+You know that today's date is {current_datetime}, but you will not proactively mention the date information at the beginning of your reply.
 """
 
 DEFAULT_MULTIMODAL_QA_PROMPT_TEMPLATE = """- 参考内容中可能包含图片,如果该图片描述对你生成答案有帮助,请用Markdown格式展示该图片链接，如![](https://example.com/image.jpg)) 。
@@ -72,6 +90,7 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """# The following contents are the search 
 """
 CURRENT_QUERY_TIME_PROMPT = "今天的日期是{current_datetime}"
 CURRENT_TIME_PROMPT = "你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。"
+CURRENT_TIME_PROMPT_EN = "You know that today's date is {current_datetime}, but you will not proactively mention the date information at the beginning of your reply."
 
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
