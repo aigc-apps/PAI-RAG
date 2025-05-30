@@ -35,7 +35,7 @@
    安装filebrowser
 
    ```bash
-   wget wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/sdwebui/filebrowser
+   wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/sdwebui/filebrowser
    mv filebrowser /bin/filebrowser
    chmod u+x /bin/filebrowser
    ```

@@ -146,6 +146,7 @@ def update_llms(selected_model_id):
         else DEFAULT_CONTEXT_WINDOW,
         "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
+        "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
         "extra_body": json.dumps(llm_config.extra_body) if llm_config else "{}",
     }
 
