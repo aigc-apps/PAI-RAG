@@ -56,10 +56,6 @@ from openai.types.create_embedding_response import (
 from loguru import logger
 
 from pairag.utils.time_utils import get_prompt_current_time_str
-from pairag.integrations.synthesizer.prompt_templates import (
-    DEFAULT_ANSWER_TEMPLATE,
-    CURRENT_TIME_PROMPT,
-)
 from pairag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 import llama_index.core.instrumentation as instrument
 
@@ -353,17 +349,18 @@ class ChatFlow:
                 ChatMessage(role=MessageRole.SYSTEM, content=system_role)
             )
 
+        current_datetime = get_prompt_current_time_str()
+        user_prompt = self.config.synthesizer.custom_prompt_template.format(
+            current_datetime=current_datetime,
+            cur_date=current_datetime,
+            query_str=messages[-1].content,
+        )
+
         # prompt_message
         prompt_messages.append(
             ChatMessage(
                 role=MessageRole.USER,
-                content="{}\n{}\n{}".format(
-                    self.config.synthesizer.custom_prompt_template,
-                    CURRENT_TIME_PROMPT.format(
-                        current_datetime=get_prompt_current_time_str()
-                    ),
-                    DEFAULT_ANSWER_TEMPLATE,
-                ),
+                content=user_prompt,
             )
         )
 

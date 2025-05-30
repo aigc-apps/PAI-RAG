@@ -24,8 +24,6 @@ from pairag.chat.models import ChatResponseWrapper
 from pairag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
-    DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-    CURRENT_TIME_PROMPT,
 )
 from loguru import logger
 
@@ -138,7 +136,7 @@ class PaiSynthesizer:
         context_str = ""
         for i, node in enumerate(nodes):
             context_str += f"""
-材料 {i+1}:
+Document {i+1}:
 {node.node.get_content()}
 
                 """
@@ -157,19 +155,21 @@ class PaiSynthesizer:
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
-        cur_date = get_prompt_current_time_str()
+        current_datetime = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
         prompt_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
+            template="{}\n{}\n".format(
                 system_role_str,
                 prompt_template_str,
-                CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
             )
         )
 
         prompt_template_args.update(
-            {"query_str": query_str, "history_str": history_str}
+            {
+                "query_str": query_str,
+                "history_str": history_str,
+                "current_datetime": current_datetime,
+            }
         )
         text_qa_template = prompt_template.partial_format(**prompt_template_args)
 

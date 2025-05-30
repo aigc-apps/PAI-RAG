@@ -84,12 +84,14 @@ class OpenAICompatibleQueryTransform:
         tool_prompt = "\n\n".join(
             [self._tool_prompts[intent] for intent in potential_intents]
         )
+        current_datetime = get_prompt_current_time_str()
         return PromptTemplate(
             template=self._base_transform_prompt.format(
                 tool_list=tool_prompt,
                 chat_history=chat_history,
                 query_str=query_str,
-                cur_date=get_prompt_current_time_str(),
+                cur_date=current_datetime,  # backward compatibility
+                current_datetime=current_datetime,
             )
         )
 
