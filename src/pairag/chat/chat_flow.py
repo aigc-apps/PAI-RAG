@@ -5,6 +5,7 @@ from llama_index.core.schema import NodeWithScore
 
 from pairag.core.rag_config import RagConfig
 from pairag.core.rag_module import (
+    resolve_huggingface_embedding,
     resolve_chat_llm,
     resolve_db_retriever,
     resolve_llm_guardrail,
@@ -36,6 +37,7 @@ from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.chat.models import (
     ChatCompletionRequest,
     ChatResponseWrapper,
+    EmbeddingInput,
 )
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -44,6 +46,11 @@ from llama_index.core.base.llms.types import (
 
 from openai.types.chat import (
     ChatCompletion,
+)
+from openai.types.embedding import Embedding
+from openai.types.create_embedding_response import (
+    CreateEmbeddingResponse,
+    Usage as EmbeddingUsage,
 )
 
 from loguru import logger
@@ -534,24 +541,23 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        if chat_request.intent == ChatIntentType.LIST_NEWS:
-            response = await self.alist_news(
+        if chat_request.intent.intent == ChatIntentType.LIST_NEWS:
+            response_wrapper = await self.alist_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
-        elif chat_request.intent == ChatIntentType.CHAT_NEWS:
-            response = await self.achat_news(
+        elif chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
+            response_wrapper = await self.achat_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
         else:
             chat_request.intent = IntentResult(intent=ChatIntentType.CHAT_NEWS_LLM)
-            response = await self.achat_news_llm(
+            response_wrapper = await self.achat_news_llm(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
 
-        response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
         return make_completion_response(
             chat_id=chat_id,
@@ -572,8 +578,9 @@ class ChatFlow:
 
         llm = resolve_chat_llm(self.config, model_id=chat_request.model)
         llm_kwargs = self._get_llm_kwargs(chat_request)
-        response = await llm.achat(chat_request.messages, **llm_kwargs)
+        response = await llm.astream_chat(chat_request.messages, **llm_kwargs)
         response_wrapper = ChatResponseWrapper(response=response)
+        response_wrapper.intent_result = chat_request.intent
 
         return make_completion_chunk_response(
             chat_id=chat_id,
@@ -592,24 +599,23 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        if chat_request.intent == ChatIntentType.LIST_NEWS:
-            response = await self.alist_news(
+        if chat_request.intent.intent == ChatIntentType.LIST_NEWS:
+            response_wrapper = await self.alist_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
-        elif chat_request.intent == ChatIntentType.CHAT_NEWS:
-            response = await self.achat_news(
+        elif chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
+            response_wrapper = await self.achat_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
         else:
             chat_request.intent = IntentResult(intent=ChatIntentType.CHAT_NEWS_LLM)
-            response = await self.achat_news_llm(
+            response_wrapper = await self.achat_news_llm(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
 
-        response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
         return make_completion_chunk_response(
             chat_id=chat_id,
@@ -632,7 +638,7 @@ class ChatFlow:
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
-        response = await self.achat_web(
+        response_wrapper = await self.achat_web(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
@@ -641,7 +647,6 @@ class ChatFlow:
             **llm_kwargs,
         )
 
-        response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
         return make_completion_response(
             chat_id=chat_id,
@@ -664,7 +669,7 @@ class ChatFlow:
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
-        response = await self.achat_web(
+        response_wrapper = await self.achat_web(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
@@ -673,7 +678,6 @@ class ChatFlow:
             **llm_kwargs,
         )
 
-        response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
         return make_completion_chunk_response(
             chat_id=chat_id,
@@ -696,7 +700,7 @@ class ChatFlow:
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
-        response = await self.achat_knowledgebase(
+        response_wrapper = await self.achat_knowledgebase(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
@@ -706,7 +710,6 @@ class ChatFlow:
             **llm_kwargs,
         )
 
-        response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
         return make_completion_chunk_response(
             chat_id=chat_id,
@@ -714,4 +717,65 @@ class ChatFlow:
             response_wrapper=response_wrapper,
             start_time=start_time,
             return_reference=False,
+        )
+
+    async def arecognize_intent(
+        self,
+        chat_request: ChatCompletionRequest,
+    ) -> IntentResult:
+        logger.info(f"arecognize_intent: {chat_request}")
+        _, messages = parse_system_prompt(chat_request.messages)
+
+        chat_request.messages = remove_think_from_messages(messages)
+        chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
+
+        # 意图识别
+        intent_result = await self._recognize_intent(
+            chat_request, chat_history_str=chat_history_str
+        )
+
+        return intent_result
+
+    async def aembed(
+        self,
+        embedding_input: EmbeddingInput,
+    ) -> CreateEmbeddingResponse:
+        assert embedding_input.input is not None, "embeddig 'input' cannot be None"
+
+        text_inputs = []
+        if isinstance(embedding_input.input, str):
+            text_inputs = [embedding_input.input]
+        elif isinstance(embedding_input.input, list):
+            assert (
+                len(embedding_input.input) > 0
+            ), "embeddig 'input' cannot be empty list."
+            assert all(
+                item is not None and isinstance(item, str)
+                for item in embedding_input.input
+            ), "embedding 'input' must be a list of strings."
+            text_inputs = embedding_input.input
+        else:
+            raise ValueError("embedding 'input' must be a string or a list of strings.")
+
+        logger.info(f"aembed: {embedding_input}.")
+
+        embed_model = resolve_huggingface_embedding(model=embedding_input.model)
+        text_embeddings = await embed_model.aget_text_embedding_batch(text_inputs)
+        embedding_data_list = [
+            Embedding(
+                embedding=embedding,
+                index=i,
+                object="embedding",
+            )
+            for i, embedding in enumerate(text_embeddings)
+        ]
+        logger.info(f"aembed: finished embedding {len(embedding_data_list)} texts.")
+        return CreateEmbeddingResponse(
+            object="list",
+            data=embedding_data_list,
+            model=embedding_input.model,
+            usage=EmbeddingUsage(
+                prompt_tokens=0,
+                total_tokens=0,
+            ),
         )

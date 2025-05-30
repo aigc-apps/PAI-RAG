@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Any, List, Dict, Optional, AsyncGenerator, Generator
 from llama_index.core.base.llms.types import ChatMessage
 from llama_index.core.schema import NodeWithScore
-
 from pairag.integrations.query_transform.pai_query_transform import IntentResult
 
 
@@ -72,3 +71,8 @@ class ChatResponseWrapper(BaseModel):
             exclude.add("response")
 
         return super().model_dump_json(exclude=exclude, **kwargs)
+
+
+class EmbeddingInput(BaseModel):
+    input: str | List[str] = None
+    model: str = "bge-m3"

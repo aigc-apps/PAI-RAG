@@ -1,5 +1,6 @@
 from pairag.chat.chat_flow import ChatFlow
 from pairag.core.rag_config import RagConfig
+from pairag.integrations.query_transform.intent_models import IntentResult
 from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.core.rag_module import (
     resolve_data_analysis_loader,
@@ -8,18 +9,18 @@ from pairag.core.rag_module import (
 )
 
 from pairag.chat.models import (
-    ContextDoc,
-    RetrievalResponse,
+    EmbeddingInput,
     RetrievalRequest,
     DocRecord,
     NewRetrievalResponse,
     ChatCompletionRequest,
 )
 from llama_index.core.schema import QueryBundle
-from llama_index.core.schema import ImageNode
 from loguru import logger
 from enum import Enum
 from pairag.integrations.trace.base import init_trace
+from openai.types.create_embedding_response import CreateEmbeddingResponse
+
 
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
 
@@ -110,3 +111,11 @@ class ChatApp:
     async def astream_news_agent_atomic(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
         return await chat_flow.astream_news_agent_atomic(chat_request)
+
+    async def arecognize_intent(self, chat_request: ChatCompletionRequest) -> IntentResult:
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.arecognize_intent(chat_request)
+
+    async def aembed(self, embedding_input: EmbeddingInput) -> CreateEmbeddingResponse:
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.aembed(embedding_input)

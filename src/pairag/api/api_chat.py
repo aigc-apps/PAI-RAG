@@ -1,10 +1,15 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pairag.chat.models import ChatCompletionRequest
+from openai.types.create_embedding_response import CreateEmbeddingResponse
+from pairag.chat.models import ChatCompletionRequest, EmbeddingInput
 from pairag.core.chat_service import chat_service
+
 
 router_openai = APIRouter()
 router_chat = APIRouter()
+
+
+### OpenAI API ###
 
 
 @router_openai.get("/models")
@@ -33,6 +38,16 @@ async def chat_completions(request: ChatCompletionRequest):
             response,
             media_type="text/event-stream",
         )
+
+
+@router_openai.post("/embeddings")
+async def aembed(
+    embedding_input: EmbeddingInput,
+) -> CreateEmbeddingResponse:
+    return await chat_service.aembed(embedding_input)
+
+
+### 原子能力API ###
 
 
 @router_chat.post("/knowledgebase/v1/chat/completions")
@@ -85,3 +100,8 @@ async def chat_news_agent(request: ChatCompletionRequest):
             response,
             media_type="text/event-stream",
         )
+
+
+@router_chat.post("/intent")
+async def recognize_intent(request: ChatCompletionRequest):
+    return await chat_service.arecognize_intent(request)

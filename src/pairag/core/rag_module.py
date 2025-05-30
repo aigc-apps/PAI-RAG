@@ -148,8 +148,10 @@ def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     return None
 
 
-def resolve_default_embedding():
-    return resolve(cls=PaiEmbedding, embed_config=HuggingFaceEmbeddingConfig())
+def resolve_huggingface_embedding(model: str = "bge-m3") -> PaiEmbedding:
+    return resolve(
+        cls=PaiEmbedding, embed_config=HuggingFaceEmbeddingConfig(model=model)
+    )
 
 
 def resolve_task_executor(
@@ -237,7 +239,7 @@ def resolve_data_analysis_loader(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
-        embed_model=resolve_default_embedding(),
+        embed_model=resolve_huggingface_embedding(),
         llm=llm,
     )
 
@@ -266,7 +268,7 @@ def resolve_db_retriever(config: RagConfig, model_id: str = None) -> SqlRetrieve
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm_da,
-        embed_model=resolve_default_embedding(),
+        embed_model=resolve_huggingface_embedding(),
         callback_manager=None,
     )
 

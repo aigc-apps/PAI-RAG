@@ -128,9 +128,12 @@ def make_completion_response(
 ):
     chat_response: ChatResponse = response_wrapper.response
     logger.info(f"Finished response: {chat_response.message.content}")
-    token_usage = get_token_usage(
-        chat_response, response_wrapper.intent_result.token_usage
-    )
+    if response_wrapper.intent_result:
+        token_usage = get_token_usage(
+            chat_response, response_wrapper.intent_result.token_usage
+        )
+    else:
+        token_usage = get_token_usage(chat_response)
 
     if response_wrapper.intent_result is not None:
         chat_response.additional_kwargs["intent"] = (
@@ -222,9 +225,12 @@ async def make_completion_chunk_response(
             chunk_id += 1
 
         async for chat_response in chat_response_gen:
-            chunk_token_usage = get_token_usage(
-                chat_response, response_wrapper.intent_result.token_usage
-            )
+            if response_wrapper.intent_result:
+                chunk_token_usage = get_token_usage(
+                    chat_response, response_wrapper.intent_result.token_usage
+                )
+            else:
+                chunk_token_usage = get_token_usage(chat_response)
             if not chat_response.delta and not chat_response.additional_kwargs:
                 continue
 

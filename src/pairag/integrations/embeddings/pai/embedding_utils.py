@@ -4,13 +4,14 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from pairag.utils.cuda_utils import infer_cuda_device
-from pairag.utils.download_models import ModelScopeDownloader
 from pairag.integrations.embeddings.pai.pai_embedding_config import (
     PaiBaseEmbeddingConfig,
     DashScopeEmbeddingConfig,
     OpenAIEmbeddingConfig,
     HuggingFaceEmbeddingConfig,
 )
+from pairag.utils.mdoelscope_utils import download_model_to_directory
+
 from loguru import logger
 
 
@@ -54,17 +55,7 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig, model_dir: str = None
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
         model_dir = model_dir or os.getenv("PAIRAG_MODEL_DIR", "./model_repository")
         pai_model_path = os.path.join(model_dir, embed_config.model)
-        if not os.path.exists(pai_model_path):
-            logger.info(
-                f"Embedding model {embed_config.model} not found in {model_dir}, try download it."
-            )
-            download_models = ModelScopeDownloader(
-                fetch_config=True, download_directory_path=model_dir
-            )
-            download_models.load_model(model=embed_config.model)
-            logger.info(
-                f"Embedding model {embed_config.model} downloaded to {pai_model_path}."
-            )
+        download_model_to_directory(embed_config.model, model_dir)
 
         embed_model = HuggingFaceEmbedding(
             model_name=pai_model_path,

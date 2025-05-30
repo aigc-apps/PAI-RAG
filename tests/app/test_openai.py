@@ -81,8 +81,6 @@ def setup_app():
             },
         )
         assert response.status_code == 200
-        config_response = client.get("api/v1/config")
-        print(config_response.json())
 
     with TestClient(app) as client:
         response = client.get("/api/v1/knowledgebases")
@@ -473,3 +471,46 @@ async def test_rag_chat():
 
     assert "program" in answer
     assert len(citations) > 0
+
+
+@pytest.mark.asyncio(scope="session")
+async def test_embedding():
+    import openai
+
+    client = openai.Client(base_url="http://test", api_key="123")
+    embedding_result = client.embeddings.create(
+        input="hello world",
+        model="bge-m3",
+    )
+
+    assert len(embedding_result.data[0].embedding) == 1024
+    assert embedding_result.data[0].index == 0
+
+    embedding_result = client.embeddings.create(
+        input="",
+        model="bge-m3",
+    )
+
+    assert len(embedding_result.data[0].embedding) == 1024
+    assert embedding_result.data[0].index == 0
+
+    embedding_result = client.embeddings.create(
+        input=["", "hi", "你在干什么"],
+        model="bge-m3",
+    )
+
+    assert len(embedding_result.data[0].embedding) == 1024
+    assert len(embedding_result.data[1].embedding) == 1024
+    assert len(embedding_result.data[2].embedding) == 1024
+    assert embedding_result.data[0].index == 0
+    assert embedding_result.data[1].index == 1
+    assert embedding_result.data[2].index == 2
+
+    try:
+        embedding_result = client.embeddings.create(
+            input=None,
+            model="bge-m3",
+        )
+        raise Exception("should not reach here.")
+    except Exception as e:
+        print(e)

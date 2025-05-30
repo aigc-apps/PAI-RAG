@@ -9,6 +9,7 @@ from pairag.core.models.state import FileServiceState
 from pairag.chat.chat_app import ChatApp
 from pairag.core.rag_config_manager import RagConfigManager, GENERATED_CONFIG_FILE_NAME
 from pairag.chat.models import (
+    EmbeddingInput,
     RetrievalRequest,
     NewRetrievalResponse,
 )
@@ -16,6 +17,7 @@ from typing import Dict
 from loguru import logger
 from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.data_pipeline.job.rag_job_manager import job_manager
+from openai.types.create_embedding_response import CreateEmbeddingResponse
 
 
 class ChatService:
@@ -132,7 +134,21 @@ class ChatService:
             return await self.app.astream_knowledgebase_atomic(chat_request)
         except Exception as ex:
             logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat knowledgebase failed: {ex}")
+
+    async def arecognize_intent(self, chat_request):
+        try:
+            return await self.app.arecognize_intent(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
             raise UserInputError(f"Chat web failed: {ex}")
+
+    async def aembed(self, embedding_input: EmbeddingInput) -> CreateEmbeddingResponse:
+        try:
+            return await self.app.aembed(embedding_input)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Embedding failed: {ex}")
 
 
 chat_service = ChatService()
