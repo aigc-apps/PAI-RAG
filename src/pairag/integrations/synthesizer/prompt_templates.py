@@ -81,17 +81,6 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE = """"# 以下内容是基于用户发送的消�
 {query_str}
 """
 
-DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """# The following contents are the search results related to the user's message:
-{context_str}
-# The following contents are the user's Q&A history:
-{history_str}
-# The user's message is:
-{query_str}
-"""
-
-CURRENT_TIME_PROMPT = "你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。"
-CURRENT_TIME_PROMPT_EN = "You know that today's date is {current_datetime}, but you will not proactively mention the date information at the beginning of your reply."
-
 
 DEFAULT_MULTI_MODAL_IMAGE_QA_PROMPT_TMPL = (
     "你是一个知识问答小助手，专门根据提供的参考材料来解答用户的问题。"

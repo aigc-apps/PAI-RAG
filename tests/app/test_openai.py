@@ -480,7 +480,7 @@ async def test_embedding():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        client = openai.Client(base_url="http://test", api_key="123")
+        client = openai.Client(base_url="http://test/v1", api_key="123")
         embedding_result = client.embeddings.create(
             input="hello world",
             model="bge-m3",
