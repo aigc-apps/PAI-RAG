@@ -81,8 +81,6 @@ def setup_app():
             },
         )
         assert response.status_code == 200
-        config_response = client.get("api/v1/config")
-        print(config_response.json())
 
     with TestClient(app) as client:
         response = client.get("/api/v1/knowledgebases")

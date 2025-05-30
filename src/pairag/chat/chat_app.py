@@ -1,26 +1,26 @@
 from pairag.chat.chat_flow import ChatFlow
 from pairag.core.rag_config import RagConfig
+from pairag.integrations.query_transform.intent_models import IntentResult
 from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.core.rag_module import (
     resolve_data_analysis_loader,
-    resolve_query_engine,
+    resolve_index_retriever_from_retrieval_settings,
     resolve_vector_index,
-    resolve_query_engine_from_retrieval_request,
 )
 
 from pairag.chat.models import (
-    ContextDoc,
-    RetrievalResponse,
+    EmbeddingInput,
     RetrievalRequest,
     DocRecord,
     NewRetrievalResponse,
     ChatCompletionRequest,
 )
 from llama_index.core.schema import QueryBundle
-from llama_index.core.schema import ImageNode
 from loguru import logger
 from enum import Enum
 from pairag.integrations.trace.base import init_trace
+from openai.types.create_embedding_response import CreateEmbeddingResponse
+
 
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
 
@@ -39,8 +39,7 @@ class ChatApp:
         if self.config.trace.is_enabled():
             init_trace(self.config.trace)
 
-        vector_index = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
-        _ = resolve_query_engine(self.config, vector_index=vector_index)
+        _ = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
 
     def refresh(self, config: RagConfig):
         self.config = config
@@ -54,35 +53,6 @@ class ChatApp:
     async def astream_chat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
         return await chat_flow.astream_chat(chat_request)
-
-    async def aretrieve(
-        self,
-        question: str,
-        knowledgebase_name: str = None,
-    ) -> RetrievalResponse:
-        query_bundle = QueryBundle(question)
-        knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
-        vector_index = resolve_vector_index(knowledgebase=knowledgebase)
-        query_engine = resolve_query_engine(self.config, vector_index=vector_index)
-        node_results = await query_engine.aretrieve(query_bundle)
-
-        docs = [
-            ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-                image_url=score_node.node.image_url,
-            )
-            if isinstance(score_node.node, ImageNode)
-            else ContextDoc(
-                text=score_node.node.get_content(),
-                metadata=score_node.node.metadata,
-                score=score_node.score,
-            )
-            for score_node in node_results
-        ]
-
-        return RetrievalResponse(docs=docs)
 
     async def aknowledgebase_retrieval(
         self, retrieval_request: RetrievalRequest
@@ -99,12 +69,12 @@ class ChatApp:
         logger.info(
             f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
         )
-        query_engine = resolve_query_engine_from_retrieval_request(
-            self.config,
+
+        retriever = resolve_index_retriever_from_retrieval_settings(
             vector_index=vector_index,
             retrieval_settings=_retrieval_settings,
         )
-        node_results = await query_engine.aretrieve(query_bundle)
+        node_results = await retriever.aretrieve(query_bundle)
 
         records = [
             DocRecord(
@@ -123,3 +93,29 @@ class ChatApp:
         await db_info_loader.aload_db_info()
 
         return "Load database info successfully."
+
+
+    ## 原子能力调用
+    async def astream_llm_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_llm_atomic(chat_request)
+
+    async def astream_web_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_web_atomic(chat_request)
+
+    async def astream_knowledgebase_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_knowledgebase_atomic(chat_request)
+
+    async def astream_news_agent_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.astream_news_agent_atomic(chat_request)
+
+    async def arecognize_intent(self, chat_request: ChatCompletionRequest) -> IntentResult:
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.arecognize_intent(chat_request)
+
+    async def aembed(self, embedding_input: EmbeddingInput) -> CreateEmbeddingResponse:
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.aembed(embedding_input)

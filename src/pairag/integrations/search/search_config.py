@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Literal
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
-DEFAULT_QUARK_SEARCH_ENDPOINT = "https://zx-dsc.sm.cn/"
 DEFAULT_GOOGLE_SEARCH_ENDPOINT = "https://serpapi.com/search"
 DEFAULT_SEARCH_COUNT = 10
 DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
@@ -19,12 +18,21 @@ DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
 - 对于客观类的问答，如果问题的答案非常简短，可以适当补充一到两句相关信息，以丰富内容。
 - 除非用户要求，否则请保持输出语种与用户输入问题语种的一致性。
 - 对于涉及不安全/不道德/敏感/色情/暴力/赌博/违法等行为的问题，请明确拒绝提供所要求的信息，并简单解释为什么这样的请求不能被满足。
+- 你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。
+
+# 以下内容是基于用户发送的消息的搜索/查询结果:
+{context_str}
+
+# 以下内容是用户问答历史记录:
+{history_str}
+
+# 以下内容是用户消息:
+{query_str}
 """
 
 
 class SupportedSearchType(str, Enum):
     bing = "bing"
-    quark = "quark"
     aliyun = "aliyun"
     google = "google"
 
@@ -50,13 +58,6 @@ class BingSearchConfig(BaseSearchConfig):
     source: Literal[SupportedSearchType.bing] = SupportedSearchType.bing
     search_api_key: str | None = None
     search_lang: str = "zh-CN"
-
-
-class QuarkSearchConfig(BaseSearchConfig):
-    source: Literal[SupportedSearchType.quark] = SupportedSearchType.quark
-    host: str = DEFAULT_QUARK_SEARCH_ENDPOINT
-    user: str | None = None
-    secret: str | None = None
 
 
 class AliyunSearchConfig(BaseSearchConfig):

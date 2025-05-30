@@ -124,12 +124,25 @@ def make_completion_response(
     chat_id: str,
     model: str,
     response_wrapper: ChatResponseWrapper,
-    base_token_usage: CompletionUsage,
     return_reference: bool = False,
 ):
     chat_response: ChatResponse = response_wrapper.response
     logger.info(f"Finished response: {chat_response.message.content}")
-    token_usage = get_token_usage(chat_response, base_token_usage)
+    if response_wrapper.intent_result:
+        token_usage = get_token_usage(
+            chat_response, response_wrapper.intent_result.token_usage
+        )
+    else:
+        token_usage = get_token_usage(chat_response)
+
+    if response_wrapper.intent_result is not None:
+        chat_response.additional_kwargs["intent"] = (
+            response_wrapper.intent_result.intent,
+        )
+        if response_wrapper.intent_result.news_topics is not None:
+            chat_response.additional_kwargs[
+                "news_topics"
+            ] = response_wrapper.intent_result.news_topics
 
     citations, citation_details = [], []
     if return_reference:
@@ -163,7 +176,6 @@ async def make_completion_chunk_response(
     chat_id: str,
     model: str,
     response_wrapper: ChatResponseWrapper,
-    base_token_usage: CompletionUsage,
     start_time: float = 0,
     return_reference: bool = False,
 ) -> AsyncGenerator[str, None]:
@@ -181,8 +193,44 @@ async def make_completion_chunk_response(
             citations, citation_details = parse_citations_from_source_nodes(
                 response_wrapper
             )
+
+        if response_wrapper.intent_result is not None:
+            intent_kwargs = {
+                "intent": response_wrapper.intent_result.intent,
+            }
+            if response_wrapper.intent_result.news_topics is not None:
+                intent_kwargs[
+                    "news_topics"
+                ] = response_wrapper.intent_result.news_topics
+
+            intent_chunk = ChatCompletionChunk(
+                id=chat_id,
+                created=created_ts,
+                model=model,
+                choices=[
+                    chat_completion_chunk.Choice(
+                        index=chunk_id,
+                        delta=chat_completion_chunk.ChoiceDelta(
+                            role=MessageRole.ASSISTANT.value,
+                            content="",
+                        ),
+                        finish_reason=None,
+                    )
+                ],
+                usage=chunk_token_usage,
+                object="chat.completion.chunk",
+                **intent_kwargs,
+            )
+            yield _make_json_chunk(data=intent_chunk.model_dump(mode="json"))
+            chunk_id += 1
+
         async for chat_response in chat_response_gen:
-            chunk_token_usage = get_token_usage(chat_response, base_token_usage)
+            if response_wrapper.intent_result:
+                chunk_token_usage = get_token_usage(
+                    chat_response, response_wrapper.intent_result.token_usage
+                )
+            else:
+                chunk_token_usage = get_token_usage(chat_response)
             if not chat_response.delta and not chat_response.additional_kwargs:
                 continue
 

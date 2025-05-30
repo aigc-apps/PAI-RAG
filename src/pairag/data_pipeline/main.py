@@ -344,9 +344,9 @@ def e2e(
             source=embed_yaml.get("source", "huggingface"),
             batch_size=embed_yaml.get("batch_size", 32),
             concurrency=embed_yaml.get("concurrency", 1),
-            num_cpus=4,
-            num_gpus=1,
-            memory=12,
+            num_cpus=embed_yaml.get("num_cpus", 1),
+            num_gpus=embed_yaml.get("num_gpus", 0),
+            memory=embed_yaml.get("memory", 12),
         )
 
         assert "data_sink" in op_yaml_map, "data_sink op is required for e2e pipeline."
@@ -364,7 +364,7 @@ def e2e(
             concurrency=sink_yaml.get("concurrency", 1),
             num_cpus=sink_yaml.get("num_cpus", 1),
             num_gpus=sink_yaml.get("num_gpus", 0),
-            memory=sink_yaml.get("memory", "4GB"),
+            memory=sink_yaml.get("memory", 4),
             batch_size=sink_yaml.get("batch_size", 100),
         )
 

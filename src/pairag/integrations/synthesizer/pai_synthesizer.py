@@ -10,7 +10,6 @@ from llama_index.core.types import RESPONSE_TEXT_TYPE
 import llama_index.core.instrumentation as instrument
 from llama_index.core.schema import (
     NodeWithScore,
-    QueryBundle,
     QueryType,
 )
 from llama_index.core.base.response.schema import (
@@ -21,14 +20,10 @@ from llama_index.core.instrumentation.events.synthesis import (
 )
 from llama_index.core.base.llms.types import ChatResponse, ChatResponseAsyncGen
 from llama_index.core.prompts import PromptTemplate
-from pairag.chat.models import ChatResponseWrapper, PaiQueryBundle
+from pairag.chat.models import ChatResponseWrapper
 from pairag.integrations.synthesizer.prompt_templates import (
     DEFAULT_SYSTEM_ROLE_TEMPLATE,
     DEFAULT_CUSTOM_PROMPT_TEMPLATE,
-    DEFAULT_ANSWER_TEMPLATE,
-    DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-    DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-    CURRENT_TIME_PROMPT,
 )
 from loguru import logger
 
@@ -36,7 +31,6 @@ from pairag.utils.time_utils import get_prompt_current_time_str
 
 dispatcher = instrument.get_dispatcher(__name__)
 
-QueryTextType = QueryType
 
 """
 PaiSynthesizer:
@@ -51,8 +45,6 @@ class PaiSynthesizer:
         llm: Optional[LLM] = None,
         callback_manager: Optional[CallbackManager] = None,
         prompt_helper: Optional[PromptHelper] = None,
-        system_role_template: Optional[str] = None,
-        custom_prompt_template: Optional[str] = None,
     ) -> None:
         self._llm = llm
         self._callback_manager = callback_manager or Settings.callback_manager
@@ -62,10 +54,6 @@ class PaiSynthesizer:
             or PromptHelper.from_llm_metadata(
                 self._llm.metadata,
             )
-        )
-        self._update_prompts(
-            system_role_str=system_role_template,
-            prompt_template_str=custom_prompt_template,
         )
 
     @property
@@ -90,72 +78,10 @@ class PaiSynthesizer:
             "citation_multimodal_qa_template": self._citation_multimodal_qa_template,
         }
 
-    def _update_prompts(
-        self, system_role_str: str = None, prompt_template_str: str = None
-    ) -> None:
-        """Update prompts."""
-        self._system_role_template = system_role_str or DEFAULT_SYSTEM_ROLE_TEMPLATE
-        self._custom_prompt_template = (
-            prompt_template_str or DEFAULT_CUSTOM_PROMPT_TEMPLATE
-        )
-
-        self._llm_only_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
-                self._system_role_template,
-                self._custom_prompt_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_ANSWER_TEMPLATE,
-            )
-        )
-        self._text_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
-                self._system_role_template,
-                self._custom_prompt_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-            )
-        )
-        self._citation_text_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}".format(
-                self._system_role_template,
-                self._custom_prompt_template,
-                DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-            )
-        )
-        self._multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
-                self._system_role_template,
-                self._custom_prompt_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-            )
-        )
-        self._citation_multimodal_qa_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}\n{}".format(
-                self._system_role_template,
-                self._custom_prompt_template,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-            )
-        )
-
     @dispatcher.span
     def synthesize(
         self,
-        query: PaiQueryBundle,
+        query: QueryType,
         nodes: List[NodeWithScore],
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         system_role_str: str = None,
@@ -167,50 +93,33 @@ class PaiSynthesizer:
     @dispatcher.span
     async def asynthesize(
         self,
-        query: PaiQueryBundle,
+        query_str: str,
+        chat_history_str: str,
         nodes: List[NodeWithScore],
+        stream: bool = False,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
-        system_role_str: str = None,
-        prompt_template_str: str = None,
+        system_role_str: str = DEFAULT_SYSTEM_ROLE_TEMPLATE,
+        prompt_template_str: str = DEFAULT_CUSTOM_PROMPT_TEMPLATE,
         prompt_template_args: Dict[str, str] = None,
         **response_kwargs: Any,
     ) -> ChatResponseWrapper:
         dispatcher.event(
             SynthesizeStartEvent(
-                query=query,
+                query=query_str,
             )
         )
 
-        if isinstance(query, str):
-            query = QueryBundle(query_str=query)
-
-        if query.original_query_str:
-            query_str = query.original_query_str + "\nassistant: "
-        else:
-            query_str = query.query_str + "\nassistant: "
-        if query.chat_messages_str:
-            history_str = query.chat_messages_str
-        else:
-            history_str = ""
-
         with self.callback_manager.event(
             CBEventType.SYNTHESIZE,
-            payload={EventPayload.QUERY_STR: query.query_str},
+            payload={EventPayload.QUERY_STR: query_str},
         ) as event:
-            query_str = query.query_str
-
-            if query.chat_messages_str:
-                history_str = query.chat_messages_str
-            else:
-                history_str = ""
             response = await self.aget_response(
                 query_str=query_str,
-                original_query_str=query.original_query_str,
                 nodes=nodes,
-                history_str=history_str,
-                streaming=query.stream,
-                system_role_str=system_role_str or self._system_role_template,
-                prompt_template_str=prompt_template_str or self._custom_prompt_template,
+                history_str=chat_history_str,
+                streaming=stream,
+                system_role_str=system_role_str,
+                prompt_template_str=prompt_template_str,
                 prompt_template_args=prompt_template_args or {},
                 **response_kwargs,
             )
@@ -227,7 +136,7 @@ class PaiSynthesizer:
         context_str = ""
         for i, node in enumerate(nodes):
             context_str += f"""
-材料 {i+1}:
+Document {i+1}:
 {node.node.get_content()}
 
                 """
@@ -236,7 +145,6 @@ class PaiSynthesizer:
     async def aget_response(
         self,
         query_str: str,
-        original_query_str: str,
         nodes: List[NodeWithScore],
         history_str: str = None,
         streaming: bool = False,
@@ -247,36 +155,21 @@ class PaiSynthesizer:
         **response_kwargs: Any,
     ) -> Union[ChatResponse, ChatResponseAsyncGen]:
         context_str = self._contruct_context_str(nodes)
-        cur_date = get_prompt_current_time_str()
+        current_datetime = get_prompt_current_time_str()
         logger.info(f"Synthesize using LLM with  citation flag: {citation}")
-        if not citation:
-            prompt_template = (
-                PromptTemplate(
-                    template="{}\n{}\n{}\n{}".format(
-                        system_role_str,
-                        prompt_template_str,
-                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                    )
-                )
-                or self._multimodal_qa_template
+        prompt_template = PromptTemplate(
+            template="{}\n{}\n".format(
+                system_role_str,
+                prompt_template_str,
             )
-        else:
-            prompt_template = (
-                PromptTemplate(
-                    template="{}\n{}\n{}\n{}\n{}".format(
-                        system_role_str,
-                        prompt_template_str,
-                        DEFAULT_CUSTOM_CITATION_PROMPR_TEMPLATE,
-                        CURRENT_TIME_PROMPT.format(current_datetime=cur_date),
-                        DEFAULT_CONTEXT_ANSWER_TEMPLATE,
-                    )
-                )
-                or self._citation_multimodal_qa_template
-            )
+        )
 
         prompt_template_args.update(
-            {"query_str": query_str, "history_str": history_str}
+            {
+                "query_str": query_str,
+                "history_str": history_str,
+                "current_datetime": current_datetime,
+            }
         )
         text_qa_template = prompt_template.partial_format(**prompt_template_args)
 
@@ -309,50 +202,6 @@ class PaiSynthesizer:
             response = await self._llm.astream_chat(
                 messages=messages,
                 **response_kwargs,
-            )
-
-        return response
-
-    async def aget_llm_only_response(
-        self,
-        query_str: str,
-        history_str: str = None,
-        streaming: bool = False,
-        system_role_str: str = None,
-        prompt_template_str: str = None,
-        **kwargs: Any,
-    ) -> Union[ChatResponse, ChatResponseAsyncGen]:
-        response: RESPONSE_TEXT_TYPE
-        _llm_only_template = PromptTemplate(
-            template="{}\n{}\n{}\n{}".format(
-                system_role_str,
-                prompt_template_str,
-                CURRENT_TIME_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                ),
-                DEFAULT_ANSWER_TEMPLATE,
-            )
-        )
-
-        _llm_only_template = _llm_only_template.partial_format(history_str=history_str)
-        logger.info(
-            f"Synthsize using LLM only. \n Prompt: {_llm_only_template}. \n Chat History: {history_str} \n Query: {query_str}"
-        )
-        messages = self._llm._get_messages(
-            _llm_only_template,
-            query_str=query_str,
-            **kwargs,
-        )
-
-        if not streaming:
-            response = await self._llm.achat(
-                messages=messages,
-                **kwargs,
-            )
-        else:
-            response = await self._llm.astream_chat(
-                messages=messages,
-                **kwargs,
             )
 
         return response

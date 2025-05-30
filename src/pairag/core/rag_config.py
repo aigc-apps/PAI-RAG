@@ -14,7 +14,7 @@ from pairag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
 )
 from pairag.integrations.llms.pai.llm_config import (
-    PaiBaseLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from pairag.integrations.postprocessor.pai.pai_postprocessor import (
     RerankModelPostProcessorConfig,
@@ -22,34 +22,22 @@ from pairag.integrations.postprocessor.pai.pai_postprocessor import (
 )
 from pairag.integrations.search.search_config import (
     BingSearchConfig,
-    QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
 from pairag.integrations.trace.trace_config import TraceConfig
+from pairag.knowledgebase.index.pai.vector_store_config import PaiVectorIndexConfig
 
 
 def validate_case_insensitive(value: Dict) -> Dict:
     if value is None:
         return value
 
-    if isinstance(value, PaiBaseLlmConfig):
-        value = value.model_dump()
-
     keys = ["type", "source", "reranker_type"]
     for key in keys:
         if key in value:
             value[key] = value[key].lower()
-            # fix old config
-            if value[key] == "simple-weighted-reranker":
-                value[key] = "no-reranker"
 
-    if value.get("source") == "paieas":
-        value["source"] = "openai_compatible"
-        value["base_url"] = value["endpoint"]
-        value["api_key"] = str(value["token"])
-    elif value.get("source") == "dashscope" and "embed_batch_size" not in value:
-        value["source"] = "openai_compatible"
     return value
 
 
@@ -64,11 +52,7 @@ class RagConfig(BaseModel):
     # system
     system: SystemConfig = SystemConfig()
 
-    llms: Annotated[
-        List[Union[PaiBaseLlmConfig.get_subclasses()]],
-        Field(default_factory=list),
-        BeforeValidator(lambda x: [validate_case_insensitive(item) for item in x]),
-    ]
+    llms: List[OpenAICompatibleLlmConfig] = []
 
     chat: ChatConfig = ChatConfig()
 
@@ -78,6 +62,9 @@ class RagConfig(BaseModel):
         Field(discriminator="type"),
         BeforeValidator(validate_case_insensitive),
     ]
+
+    # vector_index connection
+    index: PaiVectorIndexConfig
 
     # oss_store
     oss_store: OssStoreConfig
@@ -91,9 +78,7 @@ class RagConfig(BaseModel):
 
     # search web
     search: Annotated[
-        Union[
-            BingSearchConfig, QuarkSearchConfig, AliyunSearchConfig, GoogleSearchConfig
-        ],
+        Union[BingSearchConfig, AliyunSearchConfig, GoogleSearchConfig],
         Field(discriminator="source"),
         BeforeValidator(validate_case_insensitive),
     ]

@@ -214,14 +214,6 @@ class PandasQueryRetriever(BaseRetriever):
                         "query_code_instruction": pandas_response_str,
                         "query_output": pandas_output,
                     },
-                    excluded_embed_metadata_keys=[
-                        "query_code_instruction",
-                        "query_output",
-                    ],
-                    excluded_llm_metadata_keys=[
-                        "query_code_instruction",
-                        "query_output",
-                    ],
                 ),
                 score=1.0,
             )

@@ -16,13 +16,12 @@ from pairag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
 )
 from pairag.integrations.llms.pai.llm_config import (
-    PaiBaseLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from pairag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
     DEFAULT_SEARCH_COUNT,
     BingSearchConfig,
-    QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
@@ -48,7 +47,6 @@ QUERY_TYPES_MAP = {
     "联网搜索": "search_web",
     "查询知识库": "chat_knowledgebase",
     "查询数据库": "chat_db",
-    "agent": "chat_agent",
     "新闻工具": "chat_news",
 }
 
@@ -57,7 +55,6 @@ INVERTED_QUERY_TYPES_MAP = {
     "search_web": "联网搜索",
     "chat_knowledgebase": "查询知识库",
     "chat_db": "查询数据库",
-    "chat_agent": "agent",
     "chat_news": "新闻工具",
 }
 
@@ -170,7 +167,7 @@ class ViewModel(BaseModel):
     enable_guardrail: bool = False
 
     # llms
-    llms: List[PaiBaseLlmConfig] = None
+    llms: List[OpenAICompatibleLlmConfig] = None
 
     # news_extension
     news_extension_model_id: str = "default"
@@ -223,7 +220,6 @@ class ViewModel(BaseModel):
             config.query_rewrite.knowledge_tool_prompt_str
         )
 
-        view_model.rewrite_agent_prompt = config.query_rewrite.agent_tool_prompt_str
         view_model.rewrite_search_prompt = (
             config.query_rewrite.websearch_tool_prompt_str
         )
@@ -246,12 +242,6 @@ class ViewModel(BaseModel):
                 "BING_SEARCH_KEY"
             )
             view_model.search_lang = config.search.search_lang
-            view_model.search_count = config.search.search_count
-        elif isinstance(config.search, QuarkSearchConfig):
-            view_model.search_type = "aliyun"
-            view_model.aliyun_endpoint = ""
-            view_model.aliyun_access_key_id = ""
-            view_model.aliyun_access_key_secret = ""
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, AliyunSearchConfig):
             view_model.search_type = "aliyun"
@@ -409,7 +399,6 @@ class ViewModel(BaseModel):
         config["query_rewrite"][
             "knowledge_tool_prompt_str"
         ] = self.rewrite_knowledgebase_prompt
-        config["query_rewrite"]["agent_tool_prompt_str"] = self.rewrite_agent_prompt
         config["query_rewrite"][
             "websearch_tool_prompt_str"
         ] = self.rewrite_search_prompt

@@ -1,10 +1,8 @@
-from dataclasses import dataclass
-from enum import Enum
 from pydantic import BaseModel
 from typing import Any, List, Dict, Optional, AsyncGenerator, Generator
-from llama_index.core.schema import QueryBundle
 from llama_index.core.base.llms.types import ChatMessage
 from llama_index.core.schema import NodeWithScore
+from pairag.integrations.query_transform.pai_query_transform import IntentResult
 
 
 class ContextDoc(BaseModel):
@@ -45,54 +43,22 @@ class ChatCompletionRequest(BaseModel):
     search_web: Optional[bool] = False  # 搜索网络
     return_reference: Optional[bool] = False  # 返回参考
     chat_llm: Optional[bool] = False  # llm聊天
-    chat_agent: Optional[bool] = False  # 使用agent
     chat_db: Optional[bool] = False  # 查询数据库
     chat_news: Optional[bool] = False  # 使用新闻工具
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    intent: Optional[IntentResult] = None  # 意图
 
-
-class ChatToolType(str, Enum):
-    SEARCH_WEB = "search_web"
-    CHAT_NEWS = "chat_news"
-    CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
-    CHAT_DB = "chat_db"
-    CHAT_AGENT = "chat_agent"
-    CHAT_LLM = "chat_llm"
-
-
-class ChatIntentType(str, Enum):
-    SEARCH_WEB = "search_web"  # search web
-    CHAT_LLM = "chat_llm"  # llm chat
-    LIST_NEWS = "list_news"  # list news
-    CHAT_NEWS = "chat_news"  # chat news
-    CHAT_NEWS_LLM = "chat_news_llm"  # chat news only by llm
-    CHAT_KNOWLEDGEBASE = "chat_knowledgebase"
-    CHAT_AGENT = "chat_agent"  # chat agent
-    CHAT_DB = "chat_db"  # chat sql
-
-
-@dataclass
-class PaiQueryBundle(QueryBundle):
-    system_role: str | None = None
-    messages: Optional[List[ChatMessage]] = None
-    stream: bool = False
-    intent: ChatIntentType = ChatIntentType.CHAT_KNOWLEDGEBASE
-    original_query_str: str = None
-    chat_messages_str: str = None
-    completion_tokens: int = 0
-    prompt_tokens: int = 0
-    total_tokens: int = 0
-    llm_kwargs: Optional[Dict[str, Any]] = None
-    model: str | None = None
-    news_topics: Optional[List[str]] = None
+    class Config:
+        extra = "allow"  # allow extra fields
 
 
 class ChatResponseWrapper(BaseModel):
     response: Any
     additional_kwargs: Dict[str, Any] = {}
     source_nodes: List[NodeWithScore] = []
+    intent_result: Optional[IntentResult] = None
 
     def model_dump_json(self, exclude=None, **kwargs) -> str:
         if exclude is None:
@@ -105,3 +71,8 @@ class ChatResponseWrapper(BaseModel):
             exclude.add("response")
 
         return super().model_dump_json(exclude=exclude, **kwargs)
+
+
+class EmbeddingInput(BaseModel):
+    input: str | List[str] = None
+    model: str = "bge-m3"

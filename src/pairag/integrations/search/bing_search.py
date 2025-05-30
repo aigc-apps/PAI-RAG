@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import List
 from llama_index.core.schema import NodeWithScore, TextNode
-from llama_index.core.query_engine import BaseQueryEngine
+from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.response_synthesizers import BaseSynthesizer
 from llama_index.core.schema import QueryBundle
 from pairag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
@@ -10,14 +10,13 @@ from loguru import logger
 
 from pairag.integrations.search.search_config import (
     DEFAULT_SEARCH_COUNT,
-    DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
 )
 
 DEFAULT_ENDPOINT_BASE_URL = "https://api.bing.microsoft.com/v7.0/search"
 DEFAULT_LANG = "zh-CN"
 
 
-class BingSearchTool(BaseQueryEngine):
+class BingSearchTool(BaseRetriever):
     def __init__(
         self,
         api_key: str,
@@ -25,7 +24,6 @@ class BingSearchTool(BaseQueryEngine):
         endpoint: str = DEFAULT_ENDPOINT_BASE_URL,
         search_count: int = DEFAULT_SEARCH_COUNT,
         search_lang: str = DEFAULT_LANG,
-        search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE,
     ):
         self.api_key = api_key
         self.synthesizer = synthesizer
@@ -35,18 +33,23 @@ class BingSearchTool(BaseQueryEngine):
 
         self.endpoint = endpoint
         self.html_reader = ParallelBeautifulSoupWebReader()
-        self.search_qa_prompt_template = search_qa_prompt_template
 
-    async def _asearch(
+        super().__init__()
+
+    async def _aretrieve(
         self,
-        query: str,
+        query_bundle: QueryBundle,
     ):
+        start = time.time()
+
+        logger.info(f"Bing Search with query {query_bundle.query_str}.")
+
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 self.endpoint,
                 headers={"Ocp-Apim-Subscription-Key": self.api_key},
                 params={
-                    "q": query,
+                    "q": query_bundle.query_str,
                     "mkt": self.search_lang,
                     "count": self.search_count,
                     "responseFilter": "webpages",
@@ -84,48 +87,15 @@ class BingSearchTool(BaseQueryEngine):
                 doc.metadata["file_name"] = url2titles[doc.metadata["URL"]]
                 doc.metadata["publish_time"] = url2dates[doc.metadata["URL"]]
 
-            return docs
+            nodes = []
+            for doc in docs:
+                doc_node = TextNode(text=doc.text[:800], metadata=doc.metadata)
+                nodes.append(NodeWithScore(node=doc_node, score=1))
 
-    async def aquery(
-        self,
-        query: QueryBundle,
-        lang: str = None,
-        search_top_k: Optional[int] = None,
-    ):
-        start = time.time()
+            logger.info(
+                f"[WebSearch]-Bing Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
+            )
+            return nodes
 
-        if lang:
-            self.search_lang = lang
-        if search_top_k:
-            self.search_count = search_top_k
-
-        logger.info(f"Bing Search with query {query.query_str}.")
-        docs = await self._asearch(
-            query=query.query_str,
-        )
-
-        nodes = []
-        for doc in docs:
-            doc_node = TextNode(text=doc.text[:800], metadata=doc.metadata)
-            nodes.append(NodeWithScore(node=doc_node, score=1))
-
-        logger.info(
-            f"[WebSearch]-Bing Get {len(docs)} docs from url. Elapsed time: {time.time() - start}seconds."
-        )
-
-        return await self.synthesizer.asynthesize(
-            query=query,
-            nodes=nodes,
-            system_role_str=" ",
-            prompt_template_str=self.search_qa_prompt_template,
-            **query.llm_kwargs,
-        )
-
-    def _get_prompt_modules(self):
-        raise NotImplementedError
-
-    def _query(self, query_bundle):
-        raise NotImplementedError
-
-    async def _aquery(self, query_bundle):
+    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         raise NotImplementedError

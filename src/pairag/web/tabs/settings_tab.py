@@ -117,6 +117,14 @@ def create_setting_tab() -> Dict[str, Any]:
                                     container=True,  # 让复选框有背景容器
                                     scale=1,
                                 )
+                                llm_extra_kwargs_str = gr.Code(
+                                    label="LLM其他推理参数(extra_body字典)",
+                                    elem_id="llm_extra_kwargs_str",
+                                    value="{}",
+                                    interactive=True,
+                                    language="json",
+                                )
+
                     save_btn = gr.Button("保存模型配置", variant="primary")
 
                     llm_model_name.change(
@@ -139,6 +147,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
+                            llm_extra_kwargs_str,
                         ],
                     )
 
@@ -154,6 +163,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
+                            llm_extra_kwargs_str,
                         ],
                         outputs=[llm_model, delete_btn],
                     )

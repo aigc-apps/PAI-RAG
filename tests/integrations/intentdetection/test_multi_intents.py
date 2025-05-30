@@ -61,9 +61,11 @@ def test_intent_detection(setup_config, test_data):
             chat_db=request_settings["chat_db"],
             temperature=request_settings["temperature"],
         )
-        query_bundle = asyncio.run(chat_flow._recognize_intent(chat_request))
+        intent_result = asyncio.run(
+            chat_flow._recognize_intent(chat_request, chat_history_str="")
+        )
         sample["intent_output"] = {}
-        sample["intent_output"]["intent_name"] = query_bundle.intent
+        sample["intent_output"]["intent_name"] = intent_result.intent
 
         sample["score"] = int(
             sample["intent_output"]["intent_name"] == sample["intent"]["intent_name"]

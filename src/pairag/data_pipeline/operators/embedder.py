@@ -53,7 +53,7 @@ class Embedder(BaseOperator):
             f"""Embedder [PaiEmbedding] init finished with following parameters: {config}"""
         )
 
-    def calc_embedings(self, texts: List[str]):
+    def calc_embeddings(self, texts: List[str]):
         embeddings = self.embed_model.get_text_embedding_batch(texts)
         return embeddings
 
@@ -73,7 +73,7 @@ class Embedder(BaseOperator):
                 logger.warning("No nodes to embed, directly returning...")
                 return nodes
 
-            nodes["embedding"] = self.calc_embedings(node_texts)
+            nodes["embedding"] = self.calc_embeddings(node_texts)
             nodes["sparse_embedding"] = self.calc_sparse_embeddings(node_texts)
 
             logger.info(

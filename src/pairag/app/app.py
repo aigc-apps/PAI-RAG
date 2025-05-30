@@ -6,7 +6,6 @@ from fastapi import FastAPI
 
 # setup models
 
-from pairag.api.middleware import add_middlewares
 from pairag.utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 from pairag.utils.download_models import ModelScopeDownloader
@@ -36,13 +35,14 @@ async def lifespan(app: FastAPI):
 
 def configure(app: FastAPI):
     from pairag.api.api_router_v1 import router_v1
-    from pairag.api.chat_completions import router_openai
+    from pairag.api.api_chat import router_openai, router_chat
     from pairag.api.exception_handler import add_exception_handler
     from pairag.api.middleware import add_middlewares
     from pairag.web.webui import configure_webapp
 
     app.include_router(router_v1, prefix="/api/v1", tags=["api_v1"])
     app.include_router(router_openai, prefix="/v1", tags=["chat_completions"])
+    app.include_router(router_chat, prefix="/chat", tags=["chat_api"])
 
     chat_service.initialize()
     add_middlewares(app)

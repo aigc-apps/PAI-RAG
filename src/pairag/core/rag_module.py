@@ -4,7 +4,8 @@ from copy import deepcopy
 import threading
 
 from llama_index.core import Settings
-from llama_index.core.query_engine import BaseQueryEngine
+from llama_index.core.retrievers import BaseRetriever
+from llama_index.core.postprocessor.types import BaseNodePostprocessor
 
 from pairag.core.rag_config import RagConfig
 from pairag.extensions.news.miaobi_news import MiaobiNewsTool
@@ -16,19 +17,15 @@ from pairag.data_pipeline.job.file_task_executor import FileTaskExecutor
 from pairag.integrations.data_analysis.data_analysis_tool import (
     DataAnalysisConnector,
     DataAnalysisLoader,
-    DataAnalysisQuery,
+    SqlRetriever,
 )
 from pairag.integrations.embeddings.pai.pai_embedding import PaiEmbedding
 
-# cnclip import should come before others. otherwise will segment fault.
 from pairag.integrations.guardrail.pai_guardrail import PaiLlmGuardrail
 from pairag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
 from pairag.file.nodeparsers.pai.pai_node_parser import PaiNodeParser
 from pairag.file.store.oss_store import PaiOssStore
 from pairag.integrations.postprocessor.pai.pai_postprocessor import PaiPostProcessor
-from pairag.integrations.query_engine.pai_retriever_query_engine import (
-    PaiRetrieverQueryEngine,
-)
 from pairag.integrations.query_transform.pai_query_transform import (
     OpenAICompatibleQueryTransform,
 )
@@ -36,7 +33,6 @@ from pairag.knowledgebase.index.pai.vector_store_config import FaissVectorStoreC
 from pairag.knowledgebase.rag_knowledgebase import KnowledgeBase
 from pairag.file.readers.pai.pai_data_reader import DataReaderConfig, PaiDataReader
 from pairag.integrations.search.bing_search import BingSearchTool
-from pairag.integrations.search.quark_search import QuarkSearchTool
 from pairag.integrations.search.aliyun_search import AliyunSearchTool
 from pairag.integrations.search.google_search import GoogleSearchTool
 from pairag.integrations.synthesizer.pai_synthesizer import PaiSynthesizer
@@ -45,7 +41,6 @@ from pairag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pairag.file.nodeparsers.pai.image_caption_tool import ImageCaptionTool
 from pairag.integrations.search.search_config import (
     BingSearchConfig,
-    QuarkSearchConfig,
     AliyunSearchConfig,
     GoogleSearchConfig,
 )
@@ -153,8 +148,10 @@ def resolve_llm_guardrail(config: RagConfig) -> PaiLlmGuardrail:
     return None
 
 
-def resolve_default_embedding():
-    return resolve(cls=PaiEmbedding, embed_config=HuggingFaceEmbeddingConfig())
+def resolve_huggingface_embedding(model: str = "bge-m3") -> PaiEmbedding:
+    return resolve(
+        cls=PaiEmbedding, embed_config=HuggingFaceEmbeddingConfig(model=model)
+    )
 
 
 def resolve_task_executor(
@@ -242,7 +239,7 @@ def resolve_data_analysis_loader(
         cls=DataAnalysisLoader,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
-        embed_model=resolve_default_embedding(),
+        embed_model=resolve_huggingface_embedding(),
         llm=llm,
     )
 
@@ -262,18 +259,16 @@ def resolve_da_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
         return None
 
 
-def resolve_data_analysis_query(
-    config: RagConfig, model_id: str = None
-) -> DataAnalysisQuery:
+def resolve_db_retriever(config: RagConfig, model_id: str = None) -> SqlRetriever:
     llm_da = resolve_chat_llm(config, model_id)
     sql_database = resolve_data_analysis_connector(config).connect()
 
     return resolve(
-        cls=DataAnalysisQuery,
+        cls=SqlRetriever,
         analysis_config=config.data_analysis,
         sql_database=sql_database,
         llm=llm_da,
-        embed_model=resolve_default_embedding(),
+        embed_model=resolve_huggingface_embedding(),
         callback_manager=None,
     )
 
@@ -292,7 +287,6 @@ def resolve_openai_query_transform(
         llm_tool_prompt_str=config.query_rewrite.llm_tool_prompt_str,
         knowledge_tool_prompt_str=config.query_rewrite.knowledge_tool_prompt_str,
         websearch_tool_prompt_str=config.query_rewrite.websearch_tool_prompt_str,
-        agent_tool_prompt_str=config.query_rewrite.agent_tool_prompt_str,
         db_tool_prompt_str=config.query_rewrite.db_tool_prompt_str,
         news_tool_prompt_str=config.query_rewrite.news_tool_prompt_str.format(
             domain_list=config.news_extension.domain_list,
@@ -309,8 +303,6 @@ def resolve_synthesizer(config: RagConfig, model_id: str = None) -> PaiSynthesiz
     synthesizer = resolve(
         cls=PaiSynthesizer,
         llm=llm,
-        system_role_template=config.synthesizer.system_role_template,
-        custom_prompt_template=config.synthesizer.custom_prompt_template,
     )
     return synthesizer
 
@@ -334,61 +326,29 @@ def resolve_vector_index(knowledgebase: KnowledgeBase) -> PaiVectorStoreIndex:
     return vector_index
 
 
-def resolve_query_engine(
-    config: RagConfig, vector_index: PaiVectorStoreIndex, model_id: str = None
-) -> PaiRetrieverQueryEngine:
-    retriever = vector_index.as_retriever()
-
-    synthesizer = resolve_synthesizer(config, model_id)
-    postprocessor = resolve(
-        cls=PaiPostProcessor, postprocessor_config=config.postprocessor
-    )
-
-    query_engine = resolve(
-        cls=PaiRetrieverQueryEngine,
-        retriever=retriever,
-        response_synthesizer=synthesizer,
-        node_postprocessors=[postprocessor],
-        callback_manager=Settings.callback_manager,
-    )
-
-    return query_engine
-
-
-def resolve_query_engine_from_retrieval_request(
-    config: RagConfig,
+def resolve_index_retriever_from_retrieval_settings(
     vector_index: PaiVectorStoreIndex,
     retrieval_settings: dict = {},
-    model_id: str = None,
-) -> PaiRetrieverQueryEngine:
+):
     retrieval_mode = retrieval_settings.get(
         "retrieval_mode", VectorStoreQueryMode.DEFAULT
     )
     if isinstance(retrieval_mode, str):
         retrieval_mode = VectorStoreQueryMode(retrieval_mode)
 
-    """
-    hybrid_fusion_weights = [
-        retrieval_settings.get(
-            "vector_weight", 0.5
-        ),
-        retrieval_settings.get(
-            "keyword_weight", 0.5
-        ),
-    ]
-    """
-
-    retriever = vector_index.as_retriever(
+    return vector_index.as_retriever(
         vector_store_query_mode=retrieval_mode,
         similarity_top_k=retrieval_settings.get(
             "similarity_top_k", DEFAULT_SIMILARITY_TOP_K
         ),
     )
 
-    synthesizer = resolve_synthesizer(config, model_id)
 
+def resolve_postprocessor_from_retrieval_settings(
+    retrieval_settings: dict = {},
+) -> BaseNodePostprocessor:
     _reranker_type = retrieval_settings.get(
-        "reranker_type", config.postprocessor.reranker_type
+        "reranker_type", PostProcessorType.no_reranker
     )
 
     if isinstance(_reranker_type, str):
@@ -418,124 +378,18 @@ def resolve_query_engine_from_retrieval_request(
     postprocessor = resolve(
         cls=PaiPostProcessor, postprocessor_config=_postprocessor_config
     )
-
-    query_engine = resolve(
-        cls=PaiRetrieverQueryEngine,
-        retriever=retriever,
-        response_synthesizer=synthesizer,
-        node_postprocessors=[postprocessor],
-        callback_manager=Settings.callback_manager,
-    )
-
-    return query_engine
+    return postprocessor
 
 
-def resolve_query_engine_from_knowledgebase(
-    config: RagConfig,
-    vector_index: PaiVectorStoreIndex,
-    knowledgebase: KnowledgeBase,
-    model_id: str = None,
-) -> PaiRetrieverQueryEngine:
-    retrieval_settings = knowledgebase.retrieval_settings
-    if retrieval_settings is not None:
-        retrieval_mode = retrieval_settings.get(
-            "retrieval_mode", VectorStoreQueryMode.DEFAULT
-        )
-        if isinstance(retrieval_mode, str):
-            retrieval_mode = VectorStoreQueryMode(retrieval_mode)
-
-        retriever = vector_index.as_retriever(
-            vector_store_query_mode=retrieval_mode,
-        )
-
-        _reranker_type = retrieval_settings.get(
-            "reranker_type", config.postprocessor.reranker_type
-        )
-
-        if isinstance(_reranker_type, str):
-            _reranker_type = PostProcessorType(_reranker_type)
-        if _reranker_type == PostProcessorType.no_reranker:
-            _postprocessor_config = SimilarityPostProcessorConfig(
-                reranker_type=PostProcessorType.no_reranker,
-                similarity_threshold=retrieval_settings.get(
-                    "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
-                ),
-            )
-        elif _reranker_type == PostProcessorType.reranker_model:
-            _postprocessor_config = RerankModelPostProcessorConfig(
-                reranker_type=PostProcessorType.reranker_model,
-                reranker_model=retrieval_settings.get(
-                    "reranker_model", DEFAULT_RERANK_MODEL
-                ),
-                top_n=retrieval_settings.get(
-                    "reranker_similarity_top_k", DEFAULT_RERANK_TOP_N
-                ),
-                similarity_threshold=retrieval_settings.get(
-                    "reranker_similarity_threshold", DEFAULT_RERANK_SIMILARITY_THRESHOLD
-                ),
-            )
-
-        postprocessor = resolve(
-            cls=PaiPostProcessor, postprocessor_config=_postprocessor_config
-        )
-    else:
-        retriever = vector_index.as_retriever(
-            vector_store_query_mode=VectorStoreQueryMode.DEFAULT,
-        )
-        postprocessor = resolve(
-            cls=PaiPostProcessor, postprocessor_config=config.postprocessor
-        )
-
-    qa_prompt_templates = knowledgebase.qa_prompt_templates
-    if qa_prompt_templates is not None:
-        llm = resolve_chat_llm(config, model_id)
-
-        synthesizer = resolve(
-            cls=PaiSynthesizer,
-            llm=llm,
-            system_role_template=qa_prompt_templates["system_prompt_template"],
-            custom_prompt_template=qa_prompt_templates["task_prompt_template"],
-        )
-    else:
-        synthesizer = resolve_synthesizer(config, model_id)
-
-    query_engine = resolve(
-        cls=PaiRetrieverQueryEngine,
-        retriever=retriever,
-        response_synthesizer=synthesizer,
-        node_postprocessors=[postprocessor],
-        callback_manager=Settings.callback_manager,
-    )
-
-    return query_engine
-
-
-def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine:
-    synthesizer = resolve_synthesizer(config, model_id)
+def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseRetriever:
     searcher = None
 
     if isinstance(config.search, BingSearchConfig) and config.search.search_api_key:
         searcher = resolve(
             cls=BingSearchTool,
             api_key=config.search.search_api_key,
-            synthesizer=synthesizer,
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
-            search_qa_prompt_template=config.search.search_qa_prompt_template,
-        )
-    elif (
-        isinstance(config.search, QuarkSearchConfig)
-        and config.search.user
-        and config.search.secret
-    ):
-        searcher = resolve(
-            cls=QuarkSearchTool,
-            user=config.search.user,
-            secret=config.search.secret,
-            host=config.search.host,
-            synthesizer=synthesizer,
-            search_count=config.search.search_count,
-            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
     elif (
         isinstance(config.search, AliyunSearchConfig)
@@ -547,18 +401,14 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseQueryEngine
             access_key_id=config.search.access_key_id,
             access_key_secret=config.search.access_key_secret,
             endpoint=config.search.endpoint,
-            synthesizer=synthesizer,
             search_count=config.search.search_count,
-            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
     elif isinstance(config.search, GoogleSearchConfig) and config.search.serpapi_key:
         searcher = resolve(
             cls=GoogleSearchTool,
             api_key=config.search.serpapi_key,
-            synthesizer=synthesizer,
             search_count=config.search.search_count,
             search_lang=config.search.search_lang,
-            search_qa_prompt_template=config.search.search_qa_prompt_template,
         )
 
     return searcher

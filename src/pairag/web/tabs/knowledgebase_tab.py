@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import gradio as gr
 from pairag.web.ui_constants import EMBEDDING_API_KEY_DICT
-from pairag.web.utils import components_to_dict
+from pairag.web.utils import check_variables_in_string, components_to_dict
 from pairag.web.index_utils import index_related_component_keys
 from pairag.web.tabs.vector_db_panel import create_vector_db_panel
 import pairag.web.event_listeners as ev_listeners
@@ -100,10 +100,18 @@ def save_retrieval_config(input_elements: List[Any]):
 
 
 def save_knowledgebase_qa_prompt_func(input_elements: List[Any]):
+    pmt_required_variables = ["context_str", "query_str"]
     update_dict = {}
     for element, value in input_elements.items():
         update_dict[element.elem_id] = value
     knowledgebase_id = update_dict["knowledgebase_qa_prompt_index"]
+    try:
+        check_variables_in_string(
+            update_dict["knowledgebase_qa_task_prompt_template"], pmt_required_variables
+        )
+    except RagApiError:
+        return gr.Error("保存知识库问答提示词模板出错，必须包含变量context_str 和 query_str")
+
     qa_prompt_templates = {
         "system_prompt_template": update_dict[
             "knowledgebase_qa_system_prompt_template"
