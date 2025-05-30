@@ -1,4 +1,7 @@
-class TracingConfig:
+from pydantic import BaseModel
+
+
+class TracingConfig(BaseModel):
     service_name: str | None = None
     token: str | None = None
     endpoint: str | None = None
