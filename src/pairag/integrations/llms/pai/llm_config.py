@@ -206,9 +206,7 @@ class OpenAICompatibleLlmConfig(BaseModel):
     base_url: str | None = os.environ.get(
         EAS_LLM_ENDPOINT_VARIABLE_NAME, DASHSCOPE_BASE_URL
     )
-    api_key: str | None = os.environ.get(
-        EAS_LLM_TOKEN_VARIABLE_NAME, DASHSCOPE_BASE_URL
-    )
+    api_key: str | None = os.environ.get(EAS_LLM_TOKEN_VARIABLE_NAME, "")
     model: str = ""
 
     temperature: float = DEFAULT_TEMPERATURE

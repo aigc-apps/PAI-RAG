@@ -34,7 +34,9 @@ if os.path.exists("./model_repository/bge-m3"):
 else:
     embed_model_bge = None
 
-llm_config = OpenAICompatibleLlmConfig(model="qwen-max")
+llm_config = OpenAICompatibleLlmConfig(
+    model="qwen-max", api_key=os.environ.get("DASHSCOPE_API_KEY")
+)
 llm = PaiLlm(llm_config)
 
 
