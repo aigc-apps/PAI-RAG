@@ -78,7 +78,7 @@ llama-index-vector-stores-dashvector = "^0.3.0"
 llama-index-multi-modal-llms-dashscope = "^0.3.0"
 jieba = "^0.42.1"
 opentelemetry-sdk = "^1.33.1"
-pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.1-py3-none-any.whl"}
+pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.2-py3-none-any.whl"}
 
 [tool.poetry.scripts]
 load_model = "pairag.utils.download_models:load_models"
