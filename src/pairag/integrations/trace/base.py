@@ -16,7 +16,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
 )
-from opentelemetry.trace import Span, use_span
+from opentelemetry.trace import Span
+from opentelemetry.context import attach, detach
 
 from pairag.integrations.trace.reloadable_exporter import ReloadableOTLPSpanExporter
 from pairag.integrations.trace.trace_config import TraceConfig
@@ -91,7 +92,15 @@ def use_current_span(span: Span):
     def decorator(func: Callable[..., AsyncGenerator]):
         @wraps(func)
         async def wrapper(*args, **kwargs) -> AsyncGenerator:
-            with use_span(span, end_on_exit=False):
+            if span and span.is_recording():
+                ctx = trace.set_span_in_context(span)
+                token = attach(ctx)
+                try:
+                    async for item in func(*args, **kwargs):
+                        yield item
+                finally:
+                    detach(token)
+            else:
                 async for item in func(*args, **kwargs):
                     yield item
 
