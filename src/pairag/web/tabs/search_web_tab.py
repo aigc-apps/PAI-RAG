@@ -30,7 +30,7 @@ def save_search_web_cfg_func(input_elements: List[Any]):
             update_dict["search_qa_prompt_template"], pmt_required_variables
         )
     except RagApiError:
-        return gr.Error("保存知识库问答提示词模板出错，必须包含变量context_str 和 query_str")
+        return gr.Error("保存联网搜索提示词模板出错，必须包含变量context_str 和 query_str")
 
     try:
         rag_client.patch_config(update_dict)
