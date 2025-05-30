@@ -88,7 +88,7 @@ DEFAULT_CONTEXT_ANSWER_TEMPLATE_EN = """# The following contents are the search 
 # The user's message is:
 {query_str}
 """
-CURRENT_QUERY_TIME_PROMPT = "今天的日期是{current_datetime}"
+
 CURRENT_TIME_PROMPT = "你知道今天的日期是{current_datetime}，但你不会主动在回复开头提到日期信息。"
 CURRENT_TIME_PROMPT_EN = "You know that today's date is {current_datetime}, but you will not proactively mention the date information at the beginning of your reply."
 

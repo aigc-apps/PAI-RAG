@@ -2,7 +2,7 @@ import datetime
 import gradio as gr
 from typing import Dict, Any, List
 from pairag.web.rag_local_client import RagApiError, rag_client
-from pairag.web.utils import components_to_dict
+from pairag.web.utils import check_variables_in_string, components_to_dict
 
 
 def change_search_model_argument(search_type):
@@ -19,10 +19,20 @@ def change_search_model_argument(search_type):
 
 
 def save_search_web_cfg_func(input_elements: List[Any]):
+    pmt_required_variables = ["context_str", "query_str"]
+
+    update_dict = {}
+    for element, value in input_elements.items():
+        update_dict[element.elem_id] = value
+
     try:
-        update_dict = {}
-        for element, value in input_elements.items():
-            update_dict[element.elem_id] = value
+        check_variables_in_string(
+            update_dict["search_qa_prompt_template"], pmt_required_variables
+        )
+    except RagApiError:
+        return gr.Error("保存知识库问答提示词模板出错，必须包含变量context_str 和 query_str")
+
+    try:
         rag_client.patch_config(update_dict)
 
         return gr.update(

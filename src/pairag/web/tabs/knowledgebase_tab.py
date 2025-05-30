@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import gradio as gr
 from pairag.web.ui_constants import EMBEDDING_API_KEY_DICT
-from pairag.web.utils import components_to_dict
+from pairag.web.utils import check_variables_in_string, components_to_dict
 from pairag.web.index_utils import index_related_component_keys
 from pairag.web.tabs.vector_db_panel import create_vector_db_panel
 import pairag.web.event_listeners as ev_listeners
@@ -97,12 +97,6 @@ def save_retrieval_config(input_elements: List[Any]):
         "retrieval_settings": retrieval_settings,
     }
     return json.dumps(index_retrieval_settings, indent=4, ensure_ascii=False)
-
-
-def check_variables_in_string(text, variables):
-    missing_variables = [var for var in variables if f"{{{var}}}" not in text]
-    if missing_variables:
-        raise ValueError(f"以下变量名缺失: {', '.join(missing_variables)}")
 
 
 def save_knowledgebase_qa_prompt_func(input_elements: List[Any]):
