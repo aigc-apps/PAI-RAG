@@ -2,7 +2,7 @@ import click
 import os
 from pathlib import Path
 from pairag.core.rag_config_manager import RagConfigManager
-from pairag.core.chat_flow import ChatFlow
+from pairag.chat.chat_flow import ChatFlow
 from pairag.chat.models import ChatCompletionRequest
 from llama_index.core.base.llms.types import ChatMessage
 import asyncio
@@ -49,16 +49,18 @@ def run(
                     search_web=request_settings["search_web"],
                     temperature=request_settings["temperature"],
                 )
-                query_bundle = asyncio.run(chat_flow._recognize_intent(chat_request))
+                intent_result = asyncio.run(
+                    chat_flow._recognize_intent(chat_request, chat_history_str="")
+                )
                 sample["intent_output"] = {}
-                sample["intent_output"]["intent_name"] = query_bundle.intent
+                sample["intent_output"]["intent_name"] = intent_result.intent
 
                 if (
                     str(sample["intent"]["intent_name"]) == "list_news"
                     and "news_topics" in sample["intent"]
                     and len(sample["intent"]["news_topics"]) > 0
                 ):
-                    sample["intent_output"]["news_topics"] = query_bundle.news_topics
+                    sample["intent_output"]["news_topics"] = intent_result.news_topics
                     sample["score"] = (
                         int(
                             sample["intent_output"]["intent_name"]
