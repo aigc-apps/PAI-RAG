@@ -16,7 +16,7 @@ from pairag.integrations.data_analysis.data_analysis_config import (
     SqliteAnalysisConfig,
 )
 from pairag.integrations.llms.pai.llm_config import (
-    PaiBaseLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from pairag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
@@ -167,7 +167,7 @@ class ViewModel(BaseModel):
     enable_guardrail: bool = False
 
     # llms
-    llms: List[PaiBaseLlmConfig] = None
+    llms: List[OpenAICompatibleLlmConfig] = None
 
     # news_extension
     news_extension_model_id: str = "default"

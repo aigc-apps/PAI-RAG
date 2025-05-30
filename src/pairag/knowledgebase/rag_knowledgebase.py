@@ -12,7 +12,6 @@ from pairag.integrations.embeddings.pai.pai_embedding_config import (
 from pairag.knowledgebase.index.pai.vector_store_config import (
     DEFAULT_LOCAL_STORAGE_PATH_OLD,
     DEFAULT_LOCAL_STORAGE_PATH,
-    FaissVectorStoreConfig,
 )
 
 # TODO: 移除knowlegebase对file的依赖
@@ -93,7 +92,7 @@ class KnowledgeBaseManager:
     def create_default_knowledgebase(self, rag_config):
         default_knowledge_base = KnowledgeBase(
             name=DEFAULT_KNOWLEDGEBASE_NAME,
-            vector_store_config=FaissVectorStoreConfig(),
+            vector_store_config=rag_config.index.vector_store,
             embedding_config=HuggingFaceEmbeddingConfig(),
             node_parser_config=NodeParserConfig(),
         )

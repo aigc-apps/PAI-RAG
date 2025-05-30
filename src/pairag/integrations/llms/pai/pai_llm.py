@@ -23,7 +23,7 @@ from pairag.integrations.llms.pai.llm_utils import (
     merge_consecutive_messages,
 )
 from pairag.integrations.llms.pai.llm_config import (
-    PaiBaseLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from llama_index.core.base.llms.types import MessageRole
 import llama_index.core.instrumentation as instrument
@@ -35,12 +35,12 @@ dispatcher = instrument.get_dispatcher(__name__)
 
 class PaiLlm(OpenAILike):
     _llm: Any = PrivateAttr()
-    llm_config: PaiBaseLlmConfig = Field(
+    llm_config: OpenAICompatibleLlmConfig = Field(
         default=None,
         description="Llm configuration",
     )
 
-    def __init__(self, llm_config: PaiBaseLlmConfig):
+    def __init__(self, llm_config: OpenAICompatibleLlmConfig):
         super().__init__(
             temperature=llm_config.temperature,
         )
@@ -133,16 +133,21 @@ class PaiLlm(OpenAILike):
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
+        kwargs["extra_body"] = kwargs.get("extra_body", self.llm_config.extra_body)
 
-        if self.llm_config.is_reasoning_model:
-            logger.info(f"Using reasoning models, messages: {messages}")
+        is_enable_thinking = (
+            self.llm_config.is_reasoning_model and self._is_enable_thinking(**kwargs)
+        )
+        if is_enable_thinking:
+            logger.info(f"Using reasoning models with think, messages: {messages}")
+
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             logger.info(f"llm complete, prompt: {prompt}")
             completion_response = await self.acomplete(prompt, formatted=True, **kwargs)
-            if self.llm_config.is_reasoning_model and not str(
-                completion_response.text
-            ).startswith("<think>"):
+            if is_enable_thinking and not str(completion_response.text).startswith(
+                "<think>"
+            ):
                 completion_response.text = "<think>\n" + completion_response.text
             return completion_response_to_chat_response(completion_response)
 
@@ -153,10 +158,7 @@ class PaiLlm(OpenAILike):
         ]
         logger.info(f"llm chat, filterd_messages: {filterd_messages}")
         _response = await self._llm.achat(filterd_messages, **kwargs)
-        if (
-            self.llm_config.is_reasoning_model
-            and not _response.message.content.startswith("<think>")
-        ):
+        if is_enable_thinking and not _response.message.content.startswith("<think>"):
             _response.message.content = "<think>\n" + _response.message.content
 
         return _response
@@ -164,14 +166,21 @@ class PaiLlm(OpenAILike):
     def async_stream_completion_response_to_chat_response(
         self,
         completion_response_gen: CompletionResponseAsyncGen,
+        **kwargs,
     ) -> ChatResponseAsyncGen:
         """Convert a stream completion response to a stream chat response."""
+        is_enable_thinking = (
+            self.llm_config.is_reasoning_model and self._is_enable_thinking(**kwargs)
+        )
+
+        if is_enable_thinking:
+            logger.info("Using reasoning models with think.")
 
         async def gen() -> ChatResponseAsyncGen:
             start_label = True
             response_content = ""
             async for response in completion_response_gen:
-                if self.llm_config.is_reasoning_model:
+                if is_enable_thinking:
                     if start_label and not response.text:
                         continue
                     if start_label and not response.text.startswith("<think>"):
@@ -214,7 +223,12 @@ class PaiLlm(OpenAILike):
     async def async_chat_response_to_chat_response_with_think(
         self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
-        if not self.llm_config.is_reasoning_model:
+        is_enable_thinking = (
+            self.llm_config.is_reasoning_model and self._is_enable_thinking(**kwargs)
+        )
+        if is_enable_thinking:
+            logger.info("Using reasoning models with think.")
+        if not is_enable_thinking:
 
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
@@ -259,10 +273,9 @@ class PaiLlm(OpenAILike):
         kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
+        kwargs["extra_body"] = kwargs.get("extra_body", self.llm_config.extra_body)
+
         messages = merge_consecutive_messages(messages)
-        logger.debug(f"Chat messages: {messages}")
-        if self.llm_config.is_reasoning_model:
-            logger.info("Using reasoning models")
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             completion_response = await self.astream_complete(
@@ -282,3 +295,12 @@ class PaiLlm(OpenAILike):
             filterd_messages, **kwargs
         )
         return response_gen
+
+    # 是否打开think开关，默认为True，对于Qwen3系列，可设置为False
+    def _is_enable_thinking(self, **kwargs) -> bool:
+        enable_thinking = kwargs.get(
+            "extra_body",
+            {},
+        ).get("enable_thinking", True)
+
+        return enable_thinking

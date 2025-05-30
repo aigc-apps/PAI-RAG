@@ -1,12 +1,17 @@
 import os
-from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, Literal
+from pydantic import BaseModel, ConfigDict
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
 DEFAULT_CONTEXT_WINDOW = 8000
 DEFAULT_MAX_TOKENS = 4000
 DEFAULT_MLLM_MAX_TOKENS = 2048
+DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# Compatible with EAS
+EAS_LLM_ENDPOINT_VARIABLE_NAME = "PAIRAG_RAG__LLM__endpoint"
+EAS_LLM_TOKEN_VARIABLE_NAME = "PAIRAG_RAG__LLM__token"
 
 
 class DashScopeGenerationModels:
@@ -191,35 +196,32 @@ DASHSCOPE_MODEL_META = {
 
 
 class SupportedLlmType(str, Enum):
-    dashscope = "dashscope"
-    openai = "openai"
     openai_compatible = "openai_compatible"
-    paieas = "paieas"
 
 
-class PaiBaseLlmConfig(BaseModel):
-    source: SupportedLlmType | None = None
+class OpenAICompatibleLlmConfig(BaseModel):
+    source: Literal[
+        SupportedLlmType.openai_compatible
+    ] = SupportedLlmType.openai_compatible
+    base_url: str | None = os.environ.get(
+        EAS_LLM_ENDPOINT_VARIABLE_NAME, DASHSCOPE_BASE_URL
+    )
+    api_key: str | None = os.environ.get(
+        EAS_LLM_TOKEN_VARIABLE_NAME, DASHSCOPE_BASE_URL
+    )
+    model: str = ""
+
     temperature: float = DEFAULT_TEMPERATURE
     system_prompt: str | None = None
     context_window: int = DEFAULT_CONTEXT_WINDOW
     max_tokens: int = DEFAULT_MAX_TOKENS
-    base_url: str | None = None
-    api_key: str | None = None
-    model: str | None = None
     vision_support: bool | None = None
-    is_reasoning_model: bool | None = None
-    is_streaming_model: bool | None = None
-    model_id: str | None = None
+    is_reasoning_model: bool | None = None  # reasoning support
+    is_streaming_only: bool | None = None  # only supports streaming mode
+    model_id: str | None = "default"  # unique model id
+    extra_body: Dict[str, Any] = {}  # extra body params
 
     model_config = ConfigDict(coerce_numbers_to_str=True, frozen=False)
-
-    @classmethod
-    def get_subclasses(cls):
-        return tuple(cls.__subclasses__())
-
-    @classmethod
-    def get_type(cls):
-        return cls.model_fields["source"].default
 
     def is_validate(self):
         return all(
@@ -229,60 +231,3 @@ class PaiBaseLlmConfig(BaseModel):
                 self.model not in [None, ""],
             ]
         )
-
-
-class DashScopeLlmConfig(PaiBaseLlmConfig):
-    source: Literal[SupportedLlmType.dashscope] = SupportedLlmType.dashscope
-    api_key: str | None = Field(default=os.getenv("DASHSCOPE_API_KEY"))  # use default
-    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: str = "qwen-max"
-
-
-class OpenAILlmConfig(PaiBaseLlmConfig):
-    source: Literal[SupportedLlmType.openai] = SupportedLlmType.openai
-    api_key: str | None = None
-    model: str = "gpt-3.5-turbo"
-
-
-class OpenAICompatibleLlmConfig(PaiBaseLlmConfig):
-    source: Literal[
-        SupportedLlmType.openai_compatible
-    ] = SupportedLlmType.openai_compatible
-    base_url: str | None = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    api_key: str | None = None
-    model: str = ""
-
-
-class PaiEasLlmConfig(PaiBaseLlmConfig):
-    source: Literal[SupportedLlmType.paieas] = SupportedLlmType.paieas
-    endpoint: str
-    token: str
-    model: str = "default"
-
-
-class DashScopeMultiModalLlmConfig(DashScopeLlmConfig):
-    model: str = "qwen-vl-max"
-
-
-SupporttedLlmClsMap = {cls.get_type(): cls for cls in PaiBaseLlmConfig.get_subclasses()}
-
-
-def parse_llm_config(config_data):
-    if "source" not in config_data:
-        raise ValueError("Llm config must contain 'source' field")
-
-    llm_cls = SupporttedLlmClsMap.get(config_data["source"].lower())
-    if llm_cls is None:
-        raise ValueError(f"Unsupported llm source: {config_data['source']}")
-
-    return llm_cls(**config_data)
-
-
-if __name__ == "__main__":
-    llm_config_data = {
-        "source": "dashscope",
-        "model": "qwen-turbo",
-        "api_key": None,
-        "max_tokens": 1024,
-    }
-    print(parse_llm_config(llm_config_data))

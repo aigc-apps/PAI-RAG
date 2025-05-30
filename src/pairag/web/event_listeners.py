@@ -1,3 +1,4 @@
+import json
 import gradio as gr
 import os
 from typing import Any, List
@@ -18,7 +19,7 @@ from pairag.integrations.embeddings.pai.pai_embedding_config import (
 from pairag.knowledgebase.index.pai.vector_store_config import FaissVectorStoreConfig
 
 from pairag.integrations.llms.pai.llm_config import (
-    PaiBaseLlmConfig,
+    OpenAICompatibleLlmConfig,
     DashScopeGenerationModels,
     DASHSCOPE_MODEL_META,
     DEFAULT_CONTEXT_WINDOW,
@@ -145,7 +146,7 @@ def update_llms(selected_model_id):
         else DEFAULT_CONTEXT_WINDOW,
         "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
-        "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
+        "extra_body": json.dumps(llm_config.extra_body) if llm_config else "{}",
     }
 
     # Update UI components based on the configuration
@@ -160,6 +161,7 @@ def update_llms(selected_model_id):
         gr.update(value=initial_values["max_tokens"]),
         gr.update(value=initial_values["vision_support"]),
         gr.update(value=initial_values["is_reasoning_model"]),
+        gr.update(value=initial_values["extra_body"]),
     ]
 
 
@@ -173,7 +175,14 @@ def save_new_llm(
     max_tokens,
     vision_support,
     is_reasoning_model,
+    extra_body_str,
 ):
+    try:
+        extra_body_str = extra_body_str or "{}"
+        extra_body = json.loads(extra_body_str)
+    except json.JSONDecodeError:
+        raise gr.Error(f"Invalid JSON format in extra_body '{extra_body_str}'.")
+
     if context_window <= max_tokens:
         raise ValueError("context_window should be greater than max_tokens")
 
@@ -212,6 +221,7 @@ def save_new_llm(
         existing_model.max_tokens = max_tokens
         existing_model.vision_support = vision_support
         existing_model.is_reasoning_model = is_reasoning_model
+        existing_model.extra_body = extra_body
         rag_config.llms[model_index] = existing_model
 
     else:
@@ -225,8 +235,9 @@ def save_new_llm(
             "max_tokens": max_tokens,
             "vision_support": vision_support,
             "is_reasoning_model": is_reasoning_model,
+            "extra_body": extra_body,
         }
-        new_llm = PaiBaseLlmConfig(**new_llm_config)
+        new_llm = OpenAICompatibleLlmConfig(**new_llm_config)
 
         rag_config.llms.append(new_llm)
 

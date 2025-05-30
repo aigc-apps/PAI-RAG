@@ -141,7 +141,6 @@ class PaiVectorIndexConfig(BaseModel):
     vector_store: Annotated[
         Union[BaseVectorStoreConfig.get_subclasses()], Field(discriminator="type")
     ]
-    enable_multimodal: bool = True  # default enable multimodal
     persist_path: str = DEFAULT_LOCAL_STORAGE_PATH
 
 

@@ -7,7 +7,6 @@ import os
 from pairag.core.rag_config import RagConfig
 from pairag.integrations.llms.pai.llm_config import (
     OpenAICompatibleLlmConfig,
-    PaiBaseLlmConfig,
 )
 
 # store config file generated from ui.
@@ -78,7 +77,7 @@ class RagConfigManager:
             data["RAG"]["llms"] = [
                 llm.model_dump()
                 for llm in data["RAG"]["llms"]
-                if isinstance(llm, PaiBaseLlmConfig)
+                if isinstance(llm, OpenAICompatibleLlmConfig)
             ]
         os.makedirs("localdata", exist_ok=True)
         loaders.write(GENERATED_CONFIG_FILE_NAME, DynaBox(data).to_dict())

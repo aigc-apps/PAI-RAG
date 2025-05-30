@@ -14,17 +14,17 @@ from llama_index.core.base.llms.types import (
     CompletionResponseGen,
 )
 from pairag.integrations.llms.pai.llm_utils import create_multi_modal_llm
-from pairag.integrations.llms.pai.llm_config import PaiBaseLlmConfig
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 
 
 class PaiMultiModalLlm(OpenAIMultiModal):
     _llm: MultiModalLLM = PrivateAttr()
-    llm_config: PaiBaseLlmConfig = Field(
+    llm_config: OpenAICompatibleLlmConfig = Field(
         default=None,
         description="Llm configuration",
     )
 
-    def __init__(self, llm_config: PaiBaseLlmConfig):
+    def __init__(self, llm_config: OpenAICompatibleLlmConfig):
         super().__init__()
         self.llm_config = llm_config
         self.model = llm_config.model
