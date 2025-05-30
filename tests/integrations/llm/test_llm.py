@@ -1,12 +1,12 @@
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
-from pairag.integrations.llms.pai.llm_config import DashScopeLlmConfig
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 import pytest
 
 
 @pytest.fixture(scope="module", autouse=True)
 def llm():
-    llm_config = DashScopeLlmConfig(model="qwen-turbo")
+    llm_config = OpenAICompatibleLlmConfig(model="qwen-turbo")
     return PaiLlm(llm_config)
 
 

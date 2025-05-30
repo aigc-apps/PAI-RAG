@@ -1,8 +1,8 @@
 from llama_index.core.tools import FunctionTool
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
-from pairag.integrations.llms.pai.llm_config import DashScopeLlmConfig
+from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 
-fc_llm_config = DashScopeLlmConfig(model="qwen-max")
+fc_llm_config = OpenAICompatibleLlmConfig(model="qwen-max")
 fc_llm = PaiLlm(fc_llm_config)
 
 

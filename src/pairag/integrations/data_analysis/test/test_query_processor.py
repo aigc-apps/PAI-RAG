@@ -8,7 +8,7 @@ from llama_index.core import Settings
 
 from pairag.integrations.data_analysis.text2sql.query_processor import KeywordExtractor
 from pairag.integrations.llms.pai.llm_config import (
-    DashScopeLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 
 
@@ -23,7 +23,7 @@ llm_ds = DashScope(
 )
 print("DashScope:", llm_ds.metadata.is_function_calling_model)
 
-llm_config = DashScopeLlmConfig()
+llm_config = OpenAICompatibleLlmConfig(model="qwen-max")
 
 llm_ol = OpenAILike(
     model=llm_config.model,

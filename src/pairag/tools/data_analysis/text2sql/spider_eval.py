@@ -9,7 +9,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
 from pairag.integrations.llms.pai.llm_config import (
-    DashScopeLlmConfig,
+    OpenAICompatibleLlmConfig,
 )
 from pairag.integrations.data_analysis.text2sql.evaluations.spider_evaluator import (
     SpiderEvaluator,
@@ -34,7 +34,7 @@ if os.path.exists("./model_repository/bge-m3"):
 else:
     embed_model_bge = None
 
-llm_config = DashScopeLlmConfig()
+llm_config = OpenAICompatibleLlmConfig(model="qwen-max")
 llm = PaiLlm(llm_config)
 
 
