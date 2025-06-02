@@ -1,3 +1,4 @@
+import os
 import socket
 from functools import wraps
 from typing import Callable, AsyncGenerator
@@ -32,10 +33,17 @@ resource: Resource = None
 trace_provider: TracerProvider = None
 
 
-def init_trace(config: TraceConfig):
+def init_instrument(config: TraceConfig):
     global trace_config
     if config == trace_config:
         logger.info("Trace config not changed.")
+        return
+
+    if not config.is_enabled():
+        os.environ["TRACING_ENABLED"] = "false"
+        LlamaIndexInstrumentor().uninstrument()
+        trace_config = config
+        logger.info("Tracing is DISABLED.")
         return
 
     grpc_endpoint = config.endpoint
@@ -77,11 +85,9 @@ def init_trace(config: TraceConfig):
 
         trace.set_tracer_provider(trace_provider)
 
-        instrumentor = LlamaIndexInstrumentor()
-        instrumentor.instrument()
-        logger.info("Init trace successfully.")
-    else:
-        logger.info("Reload trace successfully.")
+    LlamaIndexInstrumentor().instrument()
+    os.environ["TRACING_ENABLED"] = "true"
+    logger.info("Init trace successfully.")
 
     trace_config = config
 

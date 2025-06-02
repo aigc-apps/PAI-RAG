@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import contextmanager
 from typing import (
     Any,
@@ -44,6 +45,10 @@ def pai_query_wrapper() -> Callable:
         async def wrapped_async_llm_chat(
             _self: Any, request: ChatCompletionRequest, **kwargs: Any
         ) -> Any:
+            # if not enabled, directly return
+            if os.getenv("TRACING_ENABLED", "false") != "true":
+                return await f(_self, request, **kwargs)
+
             with wrapper_logic(_self) as callback_manager, callback_manager.as_trace(
                 "chat"
             ):
@@ -123,6 +128,10 @@ def pai_query_wrapper() -> Callable:
         def wrapped_llm_chat(
             _self: Any, request: ChatCompletionRequest, **kwargs: Any
         ) -> Any:
+            # if not enabled, directly return
+            if os.getenv("TRACING_ENABLED", "false") != "true":
+                return f(_self, request, **kwargs)
+
             with wrapper_logic(_self) as callback_manager, callback_manager.as_trace(
                 "chat"
             ):

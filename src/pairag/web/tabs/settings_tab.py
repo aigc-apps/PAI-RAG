@@ -483,6 +483,11 @@ def create_setting_tab() -> Dict[str, Any]:
                 interactive=True,
                 type="password",
             )
+            telemetry_enabled = gr.Checkbox(
+                label="开启OpenTelemetry链路追踪",
+                elem_id="telemetry_enabled",
+                container=False,
+            )
             save_trace_btn = gr.Button(
                 value="保存OpenTelemetry信息",
                 elem_id="save_trace_btn",
@@ -494,6 +499,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 trace_app_name,
                 telemetry_endpoint,
                 telemetry_token,
+                telemetry_enabled,
             ]
             save_trace_btn.click(
                 fn=ev_listeners.save_trace_cfg,

@@ -18,7 +18,7 @@ from pairag.chat.models import (
 from llama_index.core.schema import QueryBundle
 from loguru import logger
 from enum import Enum
-from pairag.integrations.trace.base import init_trace
+from pairag.integrations.trace.base import init_instrument
 from openai.types.create_embedding_response import CreateEmbeddingResponse
 
 
@@ -36,15 +36,13 @@ class RagChatType(str, Enum):
 class ChatApp:
     def __init__(self, config: RagConfig):
         self.config = config
-        if self.config.trace.is_enabled():
-            init_trace(self.config.trace)
+        init_instrument(self.config.trace)
 
         _ = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
 
     def refresh(self, config: RagConfig):
         self.config = config
-        if self.config.trace.is_enabled():
-            init_trace(self.config.trace)
+        init_instrument(self.config.trace)
 
     async def achat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
