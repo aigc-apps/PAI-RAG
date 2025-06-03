@@ -27,6 +27,8 @@ import json
 
 from loguru import logger
 
+from pairag.integrations.query_transform.intent_models import ChatIntentType
+
 
 def chat_id_generator() -> str:
     return uuid4().hex
@@ -136,13 +138,9 @@ def make_completion_response(
         token_usage = get_token_usage(chat_response)
 
     if response_wrapper.intent_result is not None:
-        chat_response.additional_kwargs["intent"] = (
-            response_wrapper.intent_result.intent,
-        )
-        if response_wrapper.intent_result.news_topics is not None:
-            chat_response.additional_kwargs[
-                "news_topics"
-            ] = response_wrapper.intent_result.news_topics
+        chat_response.additional_kwargs[
+            "intent"
+        ] = response_wrapper.intent_result.intent
 
     citations, citation_details = [], []
     if return_reference:
@@ -194,14 +192,13 @@ async def make_completion_chunk_response(
                 response_wrapper
             )
 
-        if response_wrapper.intent_result is not None:
+        if (
+            response_wrapper.intent_result is not None
+            and response_wrapper.intent_result.intent != ChatIntentType.CHAT_NEWS
+        ):
             intent_kwargs = {
                 "intent": response_wrapper.intent_result.intent,
             }
-            if response_wrapper.intent_result.news_topics is not None:
-                intent_kwargs[
-                    "news_topics"
-                ] = response_wrapper.intent_result.news_topics
 
             intent_chunk = ChatCompletionChunk(
                 id=chat_id,

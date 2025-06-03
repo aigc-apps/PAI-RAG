@@ -1,10 +1,6 @@
 from typing import List, Optional, Sequence
 from llama_index.core.llms.utils import LLMType
 from llama_index.core.base.llms.types import ChatMessage
-from pairag.extensions.news.news_config import (
-    DEFAULT_NEWS_DOMAIN_LIST,
-    DEFAULT_NEWS_DOMAIN_MAP,
-)
 from pairag.integrations.query_transform.intent_models import (
     ChatIntentType,
     ChatToolType,
@@ -64,13 +60,11 @@ class OpenAICompatibleQueryTransform:
         websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH,
         db_tool_prompt_str: str = NL2SQL_REWRITE_PROMPT_ZH,
         news_tool_prompt_str: str = NEWS_REWRITE_PROMPT_ZH,
-        news_valid_domain_list: List[str] = DEFAULT_NEWS_DOMAIN_LIST,
     ):
         super().__init__()
 
         self._llm = llm
         self._base_transform_prompt = PromptTemplate(template=base_transform_prompt)
-        self._news_valid_domain_list = news_valid_domain_list
 
         self._tool_prompts = {
             ChatToolType.CHAT_LLM: llm_tool_prompt_str,
@@ -128,37 +122,8 @@ class OpenAICompatibleQueryTransform:
         intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
         new_query_str = query_json.get("query", query_str)
 
-        news_topics = None
-        if intent == ChatIntentType.LIST_NEWS:
-            original_news_topics = query_json.get("news_topics", [])
-
-            # 过滤掉无关话题 并且 进行严格的落域字符串匹配
-            filtered_news_topics = []
-            for topic in original_news_topics:
-                if topic in set(
-                    self._news_valid_domain_list
-                ) and check_keywords_in_string(
-                    query_str, DEFAULT_NEWS_DOMAIN_MAP[topic]
-                ):
-                    logger.debug(f"Valid news topic [{topic}]")
-                    filtered_news_topics.append(topic)
-                else:
-                    logger.debug(f"Invalid news topic [{topic}]")
-
-            logger.debug(f"Filtered news topics [{filtered_news_topics}]")
-            if (
-                len(original_news_topics) > 0
-                and len(filtered_news_topics) == 0
-                and intent == ChatIntentType.LIST_NEWS
-            ):
-                intent = ChatIntentType.CHAT_NEWS
-                news_topics = None  # 无须news_topics
-            else:
-                news_topics = filtered_news_topics
-
         return IntentResult(
             intent=intent,
-            news_topics=news_topics,
             query_str=new_query_str,
             token_usage=CompletionUsage(
                 prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),

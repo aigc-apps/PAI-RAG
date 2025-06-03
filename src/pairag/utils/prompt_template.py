@@ -111,56 +111,29 @@ WEBSEARCH_REWRITE_PROMPT_ZH = """
 NEWS_REWRITE_PROMPT_ZH = """
 ## 新闻热榜互动工具
 根据对话内容，判断是否需要提供时事新闻、热点新闻资讯等相关查询。
-1. 意图：list_news
+1. 意图：chat_news
+   用户想要了解最新的新闻、热点新闻资讯等信息，需要生成"chat_news"的意图，并且根据用户输入改写更加精确的新闻查询"query"。
    适用场景：
     - 用户查询全局热门新闻，如“新闻热点”“有什么新闻”。
-    - 用户想要了解某话题领域的新闻，且该领域在指定领域列表 {domain_list} 中。（“时事”和“政治”属于“时政”领域）
     - 用户提及“{news_role}”但未涉及具体查询（如“打开{news_role}”“切换到{news_role}”）。
+    - 用户想要了解某个领域、某个具体的新闻。
    示例：
     - 输入：“今天有什么新闻？”
-      输出：{{ "intent": "list_news" }}
-    - 输入：“科技的新闻”
-      输出：{{ "intent": "list_news", "news_topics": ["科技"] }}
-    - 输入：“打开{news_role}”
-      输出：{{ "intent": "list_news" }}
-    - 输入：“经济的新闻”
-      输出：{{ "intent": "list_news", "news_topics": ["财经"] }}
-    - 输入：“{news_role}，有哪些国际新闻”
-      输出：{{ "intent": "list_news", "news_topics": ["国际"] }}
-      理由：“国际”在指定领域列表 {domain_list} 中。
+      输出：{{ "intent": "chat_news", "query": "今天有什么新闻" }}
     - 输入：“汽车圈有什么新闻”
-      输出：{{ "intent": "list_news", "news_topics": ["汽车"] }}
-      理由：“汽车”在指定领域列表 {domain_list} 中。
-    - 输入：“娱乐圈热点事件”
-      输出：{{ "intent": "list_news", "news_topics": ["娱乐"] }}
-      理由：“娱乐”在指定领域列表 {domain_list} 中。
-
-2. 意图：chat_news
-   适用场景：
-    - 用户查询具体某个人的新闻（如“陈奕迅的新闻”）。
-    - 用户查询具体的新闻，且必须指明是新闻查询（如“最新关税的新闻”）。
-    - 用户查询不在指定列表 {domain_list} 中的领域新闻。
-    - 根据用户查询改写为更精确的查询语句。
-   示例：
-    - 输入：“陈奕迅的新闻”
-      输出：{{ "intent": "chat_news", "query": "陈奕迅的新闻" }}
-    - 输入：“美国最近的新闻”
-      输出：{{ "intent": "chat_news", "query": "美国最近的新闻" }}
+      输出：{{ "intent": "chat_news", "query": "汽车圈有什么新闻" }}
+    - 输入：“打开{news_role}”
+      输出：{{ "intent": "chat_news", "query": "有哪些热点新闻" }}
     - 输入：“深蓝汽车有什么新闻”
-      输出：{{ "intent": "chat_news", "query": "深蓝汽车的新闻" }}
-    - 输入：“医疗新闻”
-      输出：{{ "intent": "chat_news", "query": "医疗新闻" }}
-      理由： “医疗”不在指定列表 {domain_list} 中。
+      输出：{{ "intent": "chat_news", "query": "深蓝汽车有什么新闻" }}
 
-3. 意图：chat_news_llm
+2. 意图：chat_news_llm
    适用场景：
     - 用户查询必须提到了“{news_role}”，并且询问与“{news_role}”相关的功能或背景（如“{news_role}是谁”“{news_role}能做什么”）。
    示例：
     - 输入：“{news_role}是谁？”
       输出：{{ "intent": "chat_news_llm" }}
 
-4. 其他说明
-时间信息：除非用户明确指定时间，否则生成的查询中不包含时间信息。
 """
 
 
