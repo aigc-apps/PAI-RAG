@@ -129,8 +129,6 @@ NEWS_REWRITE_PROMPT_ZH = """
       输出：{{ "intent": "chat_news", "query": "有哪些足球新闻" }}
     - 输入："打开{news_role}"
       输出：{{ "intent": "chat_news", "query": "有哪些热点新闻" }}
-    - 输入："深蓝汽车有什么新闻"
-      输出：{{ "intent": "chat_news", "query": "深蓝汽车有什么新闻" }}
 
 2. 意图：chat_news_llm
    适用场景：

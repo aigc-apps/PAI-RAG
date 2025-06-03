@@ -10,10 +10,10 @@
     {
       "query": "今天有什么趣事",
       "intent": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -150,218 +150,200 @@
     {
       "query": "新闻小助手，有什么新闻",
       "intent": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "新闻小助手，有什么国际新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["国际"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "新闻小助手，有什么科技新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["科技"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "有什么娱乐圈新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["娱乐"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "最近有什么体育新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["体育"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "新闻小助手，有什么社会新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["社会"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "有什么旅游新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["旅游"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "最近有什么文化新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["文化"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "政治新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["时政"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "有什么汽车的新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["汽车"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "新闻小助手，教育有什么新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["教育"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "娱乐圈最近又发生了哪些热点事件",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["娱乐"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "教育圈的最新新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["教育"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "最近有哪些社会热点新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["社会"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "科技圈有哪些新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["科技"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "今天有哪些新闻热点",
       "intent": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "体育新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["体育"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "汽车圈有哪些新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["汽车"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "旅游新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["旅游"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "最近有哪些文化新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["文化"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -388,11 +370,10 @@
     {
       "query": "经济新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["财经"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -409,43 +390,40 @@
     {
       "query": "有什么国防新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["军事"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "全球新闻",
       "intent": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "有什么国外的新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["国际"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "外国有什么新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["国际"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -462,10 +440,10 @@
     {
       "query": "打开新闻小助手",
       "intent": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -612,11 +590,10 @@
     {
       "query": "有什么民生新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["社会"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
@@ -663,22 +640,20 @@
     {
       "query": "时事新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["时政"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
     {
       "query": "政治新闻",
       "intent": {
-        "intent_name": "list_news",
-        "news_topics": ["时政"]
+        "intent_name": "chat_news"
       },
       "intent_output": {
-        "intent_name": "list_news"
+        "intent_name": "chat_news"
       },
       "score": 1
     },
