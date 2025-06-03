@@ -54,7 +54,6 @@ async def get_model_instance(model_id: str):
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
 async def gen_stream_response(model, model_name, messages, openai_tools):
     logger.info(f"messages {messages}")
-    logger.info(f"openai_tools {openai_tools}")
     if openai_tools:
         return await model.create(
             model=model_name,
