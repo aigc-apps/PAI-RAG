@@ -183,6 +183,7 @@ class ViewModel(BaseModel):
     trace_app_name: str = None
     telemetry_endpoint: str = None
     telemetry_token: str = None
+    telemetry_enabled: bool = None
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -321,6 +322,7 @@ class ViewModel(BaseModel):
         view_model.trace_app_name = config.trace.service_name
         view_model.telemetry_endpoint = config.trace.endpoint
         view_model.telemetry_token = config.trace.token
+        view_model.telemetry_enabled = config.trace.enabled
 
         return view_model
 
@@ -455,6 +457,7 @@ class ViewModel(BaseModel):
         config["trace"]["service_name"] = self.trace_app_name
         config["trace"]["endpoint"] = self.telemetry_endpoint
         config["trace"]["token"] = self.telemetry_token
+        config["trace"]["enabled"] = self.telemetry_enabled
 
         return _transform_to_dict(config)
 
@@ -720,5 +723,6 @@ class ViewModel(BaseModel):
         settings["trace_app_name"] = {"value": self.trace_app_name}
         settings["telemetry_endpoint"] = {"value": self.telemetry_endpoint}
         settings["telemetry_token"] = {"value": self.telemetry_token}
+        settings["telemetry_enabled"] = {"value": self.telemetry_enabled}
 
         return settings
