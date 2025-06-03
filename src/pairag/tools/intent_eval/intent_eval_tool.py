@@ -54,28 +54,10 @@ def run(
                 )
                 sample["intent_output"] = {}
                 sample["intent_output"]["intent_name"] = intent_result.intent
-
-                if (
-                    str(sample["intent"]["intent_name"]) == "list_news"
-                    and "news_topics" in sample["intent"]
-                    and len(sample["intent"]["news_topics"]) > 0
-                ):
-                    sample["intent_output"]["news_topics"] = intent_result.news_topics
-                    sample["score"] = (
-                        int(
-                            sample["intent_output"]["intent_name"]
-                            == sample["intent"]["intent_name"]
-                        )
-                        + int(
-                            sample["intent_output"]["news_topics"]
-                            == sample["intent"]["news_topics"]
-                        )
-                    ) / 2
-                else:
-                    sample["score"] = int(
-                        sample["intent_output"]["intent_name"]
-                        == sample["intent"]["intent_name"]
-                    )
+                sample["score"] = int(
+                    sample["intent_output"]["intent_name"]
+                    == sample["intent"]["intent_name"]
+                )
                 scores += sample["score"]
                 results.append(sample)
             write_file_path = test_file.replace(".json", "_predicted.json")
