@@ -192,6 +192,7 @@ Document {i+1}:
             context_str=truncated_context_list[0],
             **response_kwargs,
         )
+        logger.info(f"chat database messages: {messages}")
 
         if not streaming:
             response = await self._llm.achat(

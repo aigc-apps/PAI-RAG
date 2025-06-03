@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 from loguru import logger
 from copy import deepcopy
 import threading
@@ -76,7 +76,9 @@ def resolve(cls: Any, **kwargs):
     return cls_cache[cls_key]
 
 
-def resolve_chat_llm(config: RagConfig, model_id: str = None) -> PaiLlm:
+def resolve_chat_llm(
+    config: RagConfig, model_id: str = None
+) -> Union[PaiLlm, PaiMultiModalLlm]:
     if model_id == "default":
         model_id = None
 

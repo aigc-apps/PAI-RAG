@@ -69,8 +69,11 @@ def create_multi_modal_llm(llm_config: OpenAICompatibleLlmConfig):
         api_base=api_base,
         temperature=llm_config.temperature,
         system_prompt=llm_config.system_prompt,
-        api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
         is_chat_model=True,
+        api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
+        context_window=llm_config.context_window,
+        reuse_client=False,
+        timeout=120,
     )
     return llm
 

@@ -306,6 +306,7 @@ class ChatFlow:
     async def achat_knowledgebase(
         self,
         query_str: str,
+        original_query_str: str,
         knowledgebase_name: str,
         chat_history_str: str = None,
         model_id: str = None,
@@ -320,7 +321,7 @@ class ChatFlow:
 
         qa_prompt_templates = knowledgebase.qa_prompt_templates
         response = await synthesizer.asynthesize(
-            query_str=query_str,
+            query_str=original_query_str,
             nodes=nodes,
             stream=stream,
             chat_history_str=chat_history_str,
@@ -365,7 +366,6 @@ class ChatFlow:
         )
 
         messages = prompt_messages + messages
-
         if stream:
             response_gen = await llm.astream_chat(messages, **llm_kwargs)
             return ChatResponseWrapper(response=response_gen)
@@ -478,6 +478,7 @@ class ChatFlow:
         elif intent_result.intent == ChatIntentType.CHAT_KNOWLEDGEBASE:
             response_wrapper = await self.achat_knowledgebase(
                 query_str=intent_result.query_str,
+                original_query_str=original_query_str,
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,
