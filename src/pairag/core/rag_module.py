@@ -360,7 +360,7 @@ def resolve_postprocessor_from_retrieval_settings(
                 "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
             ),
         )
-    elif _reranker_type == PostProcessorType.reranker_model:
+    else:
         _postprocessor_config = RerankModelPostProcessorConfig(
             reranker_type=PostProcessorType.reranker_model,
             reranker_model=retrieval_settings.get(
