@@ -98,11 +98,14 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     def chat(
         self,
         messages: Sequence[ChatMessage],
+        image_documents: Sequence[ImageDocument],
         **kwargs: Any,
     ) -> ChatResponse:
         """Chat endpoint for Multi-Modal LLM."""
         query_str = messages[-1].content
-        image_documents = transform_to_image_nodes(query_str)
+        additonal_images = transform_to_image_nodes(query_str)
+        if additonal_images:
+            image_documents.extend(additonal_images)
         prompt = self.messages_to_prompt(messages)
         chat_message = self._get_multi_modal_chat_message(
             prompt=prompt,
@@ -114,11 +117,14 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     def stream_chat(
         self,
         messages: Sequence[ChatMessage],
+        image_documents: Sequence[ImageDocument],
         **kwargs: Any,
     ) -> ChatResponseGen:
         """Stream chat endpoint for Multi-Modal LLM."""
         query_str = messages[-1].content
-        image_documents = transform_to_image_nodes(query_str)
+        additonal_images = transform_to_image_nodes(query_str)
+        if additonal_images:
+            image_documents.extend(additonal_images)
         prompt = self.messages_to_prompt(messages)
         chat_message = self._get_multi_modal_chat_message(
             prompt=prompt,
@@ -148,12 +154,15 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     async def achat(
         self,
         messages: Sequence[ChatMessage],
+        image_documents: Sequence[ImageDocument],
         **kwargs: Any,
     ) -> ChatResponse:
         """Async chat endpoint for Multi-Modal LLM."""
         """Chat with the model."""
         query_str = messages[-1].content
-        image_documents = transform_to_image_nodes(query_str)
+        additonal_images = transform_to_image_nodes(query_str)
+        if additonal_images:
+            image_documents.extend(additonal_images)
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             completion_response = self.complete(prompt, image_documents, **kwargs)
@@ -171,6 +180,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     async def astream_chat(
         self,
         messages: Sequence[ChatMessage],
+        image_documents: Sequence[ImageDocument],
         **kwargs: Any,
     ) -> ChatResponseAsyncGen:
         """Async streaming chat endpoint for Multi-Modal LLM."""
@@ -183,7 +193,9 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
                 f"add mandatory think for reasoning models, messages: {messages}"
             )
         query_str = messages[-1].content
-        image_documents = transform_to_image_nodes(query_str)
+        additonal_images = transform_to_image_nodes(query_str)
+        if additonal_images:
+            image_documents.extend(additonal_images)
         logger.info(f"images: {image_documents}")
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)

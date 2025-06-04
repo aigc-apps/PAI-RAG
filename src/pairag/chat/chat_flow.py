@@ -1,6 +1,6 @@
 import re
 import time
-from typing import AsyncGenerator, Dict, List
+from typing import AsyncGenerator, Dict, List, Tuple
 from llama_index.core.schema import NodeWithScore
 
 from pairag.core.rag_config import RagConfig
@@ -58,6 +58,12 @@ from loguru import logger
 from pairag.utils.time_utils import get_prompt_current_time_str
 from pairag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 import llama_index.core.instrumentation as instrument
+from openai.types.chat import ChatCompletionUserMessageParam
+from llama_index.core.schema import (
+    ImageNode,
+)
+from pairag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
+from pairag.integrations.llms.pai.pai_llm import PaiLlm
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -87,13 +93,49 @@ def remove_think_from_messages(messages: List[ChatMessage]):
     return new_messages
 
 
-def parse_system_prompt(messages: List[ChatMessage]):
-    messages = [message for message in messages if message.content]
-    if len(messages) > 0 and messages[0].role == MessageRole.SYSTEM:
-        system_prompt = messages[0].content
+def parse_system_prompt(messages: List[ChatCompletionUserMessageParam]):
+    messages = [message for message in messages if message["content"]]
+    if len(messages) > 0 and messages[0]["role"] == MessageRole.SYSTEM:
+        system_prompt = messages[0]["content"]
         return system_prompt, messages[1:]
 
     return None, messages
+
+
+def parse_image_documents(
+    messages: List[ChatCompletionUserMessageParam],
+) -> Tuple[List[ChatMessage], List[List[ImageNode]]]:
+    chat_messages = []
+    image_documents = []
+    for message in messages:
+        if isinstance(message["content"], str):
+            chat_messages.append(
+                ChatMessage(role=message["role"], content=message["content"])
+            )
+        elif isinstance(message["content"], list):
+            message_content = []
+            message_images = []
+            for content in message["content"]:
+                if (
+                    isinstance(content, dict)
+                    and content["type"]
+                    and content["type"] == "text"
+                ):
+                    message_content.append(content["text"])
+                elif (
+                    isinstance(content, dict)
+                    and content["type"]
+                    and content["type"] == "image_url"
+                ):
+                    message_images.append(
+                        ImageNode(image_url=content["image_url"]["url"])
+                    )
+            chat_messages.append(
+                ChatMessage(role=message["role"], content="\n".join(message_content))
+            )
+            image_documents.append(message_images)
+
+    return chat_messages, image_documents
 
 
 class ChatFlow:
@@ -319,6 +361,7 @@ class ChatFlow:
         self,
         model_id: str,
         messages: List[ChatMessage],
+        image_documents: List[ImageNode] = [],
         system_prompt: str = None,
         stream: bool = False,
         **llm_kwargs,
@@ -348,12 +391,22 @@ class ChatFlow:
         )
 
         messages = prompt_messages + messages
-        if stream:
-            response_gen = await llm.astream_chat(messages, **llm_kwargs)
-            return ChatResponseWrapper(response=response_gen)
-        else:
-            response = await llm.achat(messages, **llm_kwargs)
-            return ChatResponseWrapper(response=response)
+        if isinstance(llm, PaiLlm):
+            if stream:
+                response_gen = await llm.astream_chat(messages, **llm_kwargs)
+                return ChatResponseWrapper(response=response_gen)
+            else:
+                response = await llm.achat(messages, **llm_kwargs)
+                return ChatResponseWrapper(response=response)
+        elif isinstance(llm, PaiMultiModalLlm):
+            if stream:
+                response_gen = await llm.astream_chat(
+                    messages, image_documents, **llm_kwargs
+                )
+                return ChatResponseWrapper(response=response_gen)
+            else:
+                response = await llm.achat(messages, image_documents, **llm_kwargs)
+                return ChatResponseWrapper(response=response)
 
     async def aretrieve(
         self,
@@ -384,6 +437,7 @@ class ChatFlow:
         start_time: float = 0.0,
     ) -> ChatResponseWrapper:
         system_prompt, messages = parse_system_prompt(chat_request.messages)
+        messages, image_documents = parse_image_documents(messages)
         if message_is_empty(messages):
             if chat_request.stream:
                 return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
@@ -421,6 +475,11 @@ class ChatFlow:
             response_wrapper = await self.achat_llm(
                 model_id=chat_request.model,
                 messages=chat_request.messages,
+                image_documents=[
+                    item
+                    for message_images in image_documents
+                    for item in message_images
+                ],
                 stream=chat_request.stream,
                 system_prompt=system_prompt,
                 **llm_kwargs,
