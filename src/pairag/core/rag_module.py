@@ -1,3 +1,4 @@
+import os
 from typing import Any
 from loguru import logger
 from copy import deepcopy
@@ -158,7 +159,10 @@ def resolve_task_executor(
     config: RagConfig, knowledgebase: KnowledgeBase
 ) -> FileTaskExecutor:
     image_store = None
-    if config.oss_store.bucket:
+    if config.oss_store.bucket and config.oss_store.ak and config.oss_store.sk:
+        os.environ["OSS_ACCESS_KEY_ID"] = config.oss_store.ak
+        os.environ["OSS_ACCESS_KEY_SECRET"] = config.oss_store.sk
+
         oss_store = resolve(
             cls=PaiOssStore,
             bucket_name=config.oss_store.bucket,
@@ -170,7 +174,6 @@ def resolve_task_executor(
         )
 
     multimodal_llm = resolve_multimodal_llm(config)
-
     caption_tool = None
     if multimodal_llm:
         caption_tool = resolve(

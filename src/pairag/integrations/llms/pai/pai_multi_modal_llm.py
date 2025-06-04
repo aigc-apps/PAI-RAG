@@ -13,6 +13,7 @@ from llama_index.core.base.llms.types import (
     CompletionResponseAsyncGen,
     CompletionResponseGen,
 )
+from loguru import logger
 from pairag.integrations.llms.pai.llm_utils import create_multi_modal_llm
 from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 
@@ -32,6 +33,9 @@ class PaiMultiModalLlm(OpenAIMultiModal):
         self._llm = create_multi_modal_llm(llm_config)
         self._llm.callback_manager = Settings.callback_manager
         self.callback_manager = Settings.callback_manager
+        logger.info(
+            f"Created PaiMultiModalLlm with {llm_config.model} - {llm_config.base_url}"
+        )
 
     @classmethod
     def class_name(cls) -> str:

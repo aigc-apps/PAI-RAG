@@ -118,7 +118,7 @@ def get_data_parser(parser_config: NodeParserConfig) -> NodeParser:
 
 class PaiNodeParser(TransformComponent):
     parser_config: NodeParserConfig = Field(default=NodeParserConfig())
-    _image_caption_tool: ImageCaptionTool = PrivateAttr()
+    caption_tool: ImageCaptionTool = Field(default=None)
     _parser: NodeParser = PrivateAttr()
     _doc_cnt_map: Any = PrivateAttr()
 
@@ -130,17 +130,15 @@ class PaiNodeParser(TransformComponent):
         super().__init__()
         self.parser_config = parser_config or NodeParserConfig()
         logger.info(f"Initialize PaiNodeParser with config: {self.parser_config}")
-        self._image_caption_tool = caption_tool
         self._parser = get_data_parser(self.parser_config)
         self._doc_cnt_map = {}
-
-        self._caption_tool = caption_tool
+        self.caption_tool = caption_tool
 
     def _extract_image_info(self, image_path):
         assert (
-            self._caption_tool is not None
+            self.caption_tool is not None
         ), "Multimodal LLM must be provided for image processing."
-        return self._caption_tool.extract_path(image_path)
+        return self.caption_tool.extract_path(image_path)
 
     def _extract_file_type(self, metadata: Dict[str, Any]):
         file_name = metadata.get("file_name", "dummy.txt")
@@ -204,7 +202,7 @@ class PaiNodeParser(TransformComponent):
                     # markdown格式(pdf, md, html, doc 等)
                     md_node_parser = MarkdownNodeParser(
                         id_func=rand_node_id_hash,
-                        image_caption_tool=self._image_caption_tool,
+                        image_caption_tool=self.caption_tool,
                         chunk_size=self.parser_config.chunk_size,
                         chunk_overlap_size=self.parser_config.chunk_overlap,
                         base_parser=self._parser,
