@@ -360,12 +360,12 @@ class ChatFlow:
         self,
         query_str: str,
         knowledgebase_name: str = None,
-        extra_retrieve_settings: Dict[str, Any] = {},
+        extra_retrieval_settings: Dict[str, Any] = {},
     ) -> List[NodeWithScore]:
         knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
         _retrieval_settings = {
             **knowledgebase.retrieval_settings,
-            **extra_retrieve_settings,
+            **extra_retrieval_settings,
         }
         logger.info(
             f"Retrieving {knowledgebase_name} with query {query_str}, retrieve settings: {_retrieval_settings}."

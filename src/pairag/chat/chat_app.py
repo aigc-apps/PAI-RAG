@@ -63,7 +63,7 @@ class ChatApp:
         node_results = await chat_flow.aretrieve(
             query_str=retrieval_request.query,
             knowledgebase_name=retrieval_request.knowledgebase_id,
-            extra_retrieve_settings=retrieval_request.retrieval_settings)
+            extra_retrieval_settings=retrieval_request.retrieval_settings)
 
         records = [
             DocRecord(
