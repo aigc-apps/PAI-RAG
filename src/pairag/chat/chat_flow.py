@@ -278,7 +278,7 @@ class ChatFlow:
             nodes=nodes,
             stream=stream,
             chat_history_str=chat_history_str,
-            system_role_str=" ",
+            system_role_str=self.config.search.search_role_template,
             prompt_template_str=self.config.search.search_qa_prompt_template,
             **lm_kwargs,
         )
