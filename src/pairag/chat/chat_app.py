@@ -55,24 +55,15 @@ class ChatApp:
     async def aknowledgebase_retrieval(
         self, retrieval_request: RetrievalRequest
     ) -> NewRetrievalResponse:
-        query_bundle = QueryBundle(retrieval_request.query)
-        knowledgebase = knowledgebase_manager.get_knowledgebase(
-            retrieval_request.knowledgebase_id
-        )
-        vector_index = resolve_vector_index(knowledgebase=knowledgebase)
-        _retrieval_settings = {
-            **knowledgebase.retrieval_settings,
-            **retrieval_request.retrieval_settings,
-        }
         logger.info(
-            f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id} with retrieval_settings: {_retrieval_settings}"
+            f"aknowledgebase_retrieval ==> query: {retrieval_request.query} to knowledgebase_id: {retrieval_request.knowledgebase_id}"
         )
 
-        retriever = resolve_index_retriever_from_retrieval_settings(
-            vector_index=vector_index,
-            retrieval_settings=_retrieval_settings,
-        )
-        node_results = await retriever.aretrieve(query_bundle)
+        chat_flow = ChatFlow(self.config)
+        node_results = await chat_flow.aretrieve(
+            query_str=retrieval_request.query,
+            knowledgebase_name=retrieval_request.knowledgebase_id,
+            extra_retrieve_settings=retrieval_request.retrieval_settings)
 
         records = [
             DocRecord(
@@ -94,6 +85,22 @@ class ChatApp:
 
 
     ## 原子能力调用
+    async def achat_llm_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.achat_llm_atomic(chat_request)
+
+    async def achat_web_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.achat_web_atomic(chat_request)
+
+    async def achat_knowledgebase_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.achat_knowledgebase_atomic(chat_request)
+
+    async def achat_news_agent_atomic(self, chat_request: ChatCompletionRequest):
+        chat_flow = ChatFlow(self.config)
+        return await chat_flow.achat_news_agent_atomic(chat_request)
+
     async def astream_llm_atomic(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
         return await chat_flow.astream_llm_atomic(chat_request)
