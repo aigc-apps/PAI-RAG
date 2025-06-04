@@ -53,7 +53,7 @@ async def aembed(
 @router_chat.post("/knowledgebase/v1/chat/completions")
 async def chat_knowledgebase(request: ChatCompletionRequest):
     if not request.stream:
-        response = await chat_service.astream_knowledgebase_atomic(request)
+        response = await chat_service.achat_knowledgebase_atomic(request)
         return response
     else:
         response = await chat_service.astream_knowledgebase_atomic(request)
@@ -66,7 +66,7 @@ async def chat_knowledgebase(request: ChatCompletionRequest):
 @router_chat.post("/web/v1/chat/completions")
 async def chat_web(request: ChatCompletionRequest):
     if not request.stream:
-        response = await chat_service.astream_web_atomic(request)
+        response = await chat_service.achat_web_atomic(request)
         return response
     else:
         response = await chat_service.astream_web_atomic(request)
@@ -79,7 +79,7 @@ async def chat_web(request: ChatCompletionRequest):
 @router_chat.post("/llm/v1/chat/completions")
 async def chat_llm(request: ChatCompletionRequest):
     if not request.stream:
-        response = await chat_service.astream_llm_atomic(request)
+        response = await chat_service.achat_llm_atomic(request)
         return response
     else:
         response = await chat_service.astream_llm_atomic(request)
@@ -92,7 +92,7 @@ async def chat_llm(request: ChatCompletionRequest):
 @router_chat.post("/news/v1/chat/completions")
 async def chat_news_agent(request: ChatCompletionRequest):
     if not request.stream:
-        response = await chat_service.astream_news_agent_atomic(request)
+        response = await chat_service.achat_news_agent_atomic(request)
         return response
     else:
         response = await chat_service.astream_news_agent_atomic(request)
