@@ -224,25 +224,6 @@ class ChatFlow:
         return response
 
     @dispatcher.span
-    async def alist_news(
-        self,
-        query_str: str,
-        news_topics: List[str] = [],
-        stream: bool = False,
-    ) -> ChatResponseWrapper:
-        news_tool = resolve_news_tool(self.config)
-        if not stream:
-            response_wrapper = await news_tool.alist_topics(
-                messages=[], query_str=query_str, news_topics=news_topics
-            )
-        else:
-            response_gen = await news_tool.astream_list_topics(
-                messages=[], query_str=query_str, news_topics=news_topics
-            )
-            response_wrapper = ChatResponseWrapper(response=response_gen)
-        return response_wrapper
-
-    @dispatcher.span
     async def achat_news(
         self,
         query_str: str,
@@ -277,6 +258,7 @@ class ChatFlow:
     async def achat_web(
         self,
         query_str: str,
+        original_user_message: str,
         chat_history_str: str = None,
         model_id: str = None,
         stream: bool = False,
@@ -292,7 +274,7 @@ class ChatFlow:
         synthesizer = resolve_synthesizer(self.config, model_id=model_id)
 
         response = await synthesizer.asynthesize(
-            query_str=query_str,
+            query_str=original_user_message,  # 不使用改写查询生成答案
             nodes=nodes,
             stream=stream,
             chat_history_str=chat_history_str,
@@ -306,7 +288,7 @@ class ChatFlow:
     async def achat_knowledgebase(
         self,
         query_str: str,
-        original_query_str: str,
+        original_user_message: str,
         knowledgebase_name: str,
         chat_history_str: str = None,
         model_id: str = None,
@@ -321,7 +303,7 @@ class ChatFlow:
 
         qa_prompt_templates = knowledgebase.qa_prompt_templates
         response = await synthesizer.asynthesize(
-            query_str=original_query_str,
+            query_str=original_user_message,
             nodes=nodes,
             stream=stream,
             chat_history_str=chat_history_str,
@@ -410,7 +392,7 @@ class ChatFlow:
         chat_request.messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
 
-        original_query_str = chat_request.messages[-1].content
+        original_user_message = chat_request.messages[-1].content
         llm_kwargs = self._get_llm_kwargs(chat_request=chat_request)
         # 意图识别
         intent_result = await self._recognize_intent(
@@ -434,7 +416,7 @@ class ChatFlow:
             logger.info(f"Guadrail check passed: {intent_result.query_str}.")
 
         # 意图分发
-        logger.info(f"Routing query {original_query_str} to {intent_result.intent}")
+        logger.info(f"Routing query {original_user_message} to {intent_result.intent}")
         if intent_result.intent == ChatIntentType.CHAT_LLM:
             response_wrapper = await self.achat_llm(
                 model_id=chat_request.model,
@@ -453,15 +435,10 @@ class ChatFlow:
                 query_str=intent_result.query_str,
                 stream=chat_request.stream,
             )
-        elif intent_result.intent == ChatIntentType.LIST_NEWS:
-            response_wrapper = await self.alist_news(
-                query_str=original_query_str,
-                news_topics=intent_result.news_topics,
-                stream=chat_request.stream,
-            )
         elif intent_result.intent == ChatIntentType.SEARCH_WEB:
             response_wrapper = await self.achat_web(
                 query_str=intent_result.query_str,
+                original_user_message=original_user_message,
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,
@@ -478,7 +455,7 @@ class ChatFlow:
         elif intent_result.intent == ChatIntentType.CHAT_KNOWLEDGEBASE:
             response_wrapper = await self.achat_knowledgebase(
                 query_str=intent_result.query_str,
-                original_query_str=original_query_str,
+                original_user_message=original_user_message,
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,
@@ -539,24 +516,20 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        if chat_request.intent.intent == ChatIntentType.LIST_NEWS:
-            response_wrapper = await self.alist_news(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-        elif chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
+        if chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
             response_wrapper = await self.achat_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
         else:
-            chat_request.intent = IntentResult(intent=ChatIntentType.CHAT_NEWS_LLM)
             response_wrapper = await self.achat_news_llm(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
+            response_wrapper.intent_result = IntentResult(
+                intent=ChatIntentType.CHAT_NEWS_LLM
+            )
 
-        response_wrapper.intent_result = chat_request.intent
         return make_completion_response(
             chat_id=chat_id,
             model=chat_request.model,
@@ -597,21 +570,18 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        if chat_request.intent.intent == ChatIntentType.LIST_NEWS:
-            response_wrapper = await self.alist_news(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-        elif chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
+        if chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
             response_wrapper = await self.achat_news(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
             )
         else:
-            chat_request.intent = IntentResult(intent=ChatIntentType.CHAT_NEWS_LLM)
             response_wrapper = await self.achat_news_llm(
                 query_str=chat_request.intent.query_str,
                 stream=chat_request.stream,
+            )
+            response_wrapper.intent_result = IntentResult(
+                intent=ChatIntentType.CHAT_NEWS_LLM
             )
 
         response_wrapper.intent_result = chat_request.intent

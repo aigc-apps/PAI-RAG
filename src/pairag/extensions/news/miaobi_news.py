@@ -1,4 +1,3 @@
-import traceback
 from typing import Dict, List, Any, Sequence
 from llama_index.core.prompts import PromptTemplate
 from pairag.chat.models import ChatResponseWrapper
@@ -29,7 +28,6 @@ from llama_index.core.instrumentation.span import active_span_id
 from llama_index.core.llms.llm import LLM
 from llama_index.core.llms.callbacks import llm_chat_callback, llm_completion_callback
 
-from alibabacloud_aimiaobi20230801 import models as aimiaobi_models
 from alibabacloud_aimiaobi20230801.client import Client as AimiaobiClient
 from alibabacloud_tea_openapi.models import Config
 from alibabacloud_tea_openapi_sse.client import Client as OpenApiClient
@@ -37,10 +35,10 @@ from alibabacloud_tea_openapi_sse import models as open_api_models
 from alibabacloud_tea_util_sse import models as open_api_util_models
 import json
 
-from openinference.instrumentation.llama_index import get_current_span
-from pairag.integrations.trace.base import use_current_span
 from pydantic import BaseModel
 from loguru import logger
+from openinference.instrumentation.llama_index import get_current_span
+from pairag.integrations.trace.base import use_current_span
 
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
 import llama_index.core.instrumentation as instrument
@@ -194,176 +192,6 @@ class MiaobiNewsTool(LLM):
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    async def _alist_hot_topics(self, news_topics) -> List[Dict[str, Any]]:
-        """Returns a list of dict, each dict represents a news, list is sorted in descending order of hot_value."""
-        request = aimiaobi_models.GetHotTopicBroadcastRequest(
-            workspace_id=self.config.workspace_id,
-            size=self.config.top_news_count,
-            current=1,
-            step_for_news_broadcast_content_config=aimiaobi_models.GetHotTopicBroadcastRequestStepForNewsBroadcastContentConfig(
-                categories=news_topics
-            ),
-        )
-
-        broadcast_response = await self.miaobi_client.get_hot_topic_broadcast_async(
-            request=request
-        )
-        assert (
-            broadcast_response.status_code == 200
-        ), "Get hot topic status code is not 200."
-        logger.info(
-            f"Get hot topics from miaobi news. Request-ID: {broadcast_response.body.request_id}."
-        )
-
-        hot_topics = []
-        for topic in broadcast_response.body.data.data:
-            hot_topics.append(
-                {
-                    "title": topic.hot_topic,
-                    "url": topic.news[0].url,
-                    "summary": topic.text_summary,
-                    "category": topic.category,
-                    "hot_value": topic.hot_value,
-                }
-            )
-        sorted_hot_topics = sorted(
-            hot_topics, key=lambda x: x["hot_value"], reverse=True
-        )
-        return sorted_hot_topics
-
-    @dispatcher.span
-    async def alist_topics(
-        self,
-        query_str: str,
-        news_topics: List[str] = [],
-        **kwargs,
-    ) -> ChatResponseWrapper:
-        try:
-            hot_topics = await self._alist_hot_topics(news_topics=news_topics)
-        except Exception as ex:
-            logger.error(
-                f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
-            )
-            response = ChatResponse(
-                message=ChatMessage(
-                    role=MessageRole.ASSISTANT,
-                    content=DEFAULT_NEWS_ERROR_MESSAGE,
-                ),
-                delta=DEFAULT_NEWS_ERROR_MESSAGE,
-                additional_kwargs={"news_articles": []},
-            )
-            return ChatResponseWrapper(response=response)
-
-        try:
-            logger.debug(
-                f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
-            )
-            content = self.list_topics_prompt_template.format(
-                news_role=self.config.news_role,
-                news_list_str=_make_context(hot_topics),
-                query_str=query_str,
-                topics_str="、".join(news_topics),
-                conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
-            )
-            messages = [
-                ChatMessage(
-                    role="user",
-                    content=content,
-                )
-            ]
-            # store hot topics in span output
-            span_id = active_span_id.get()
-            dispatcher.event(
-                QueryEndEvent(
-                    response=Response(response=str(hot_topics), source_nodes=[]),
-                    query="",
-                    span_id=span_id,
-                )
-            )
-            response = await self.llm.achat(messages, **kwargs)
-            response.additional_kwargs["news_articles"] = hot_topics
-            return ChatResponseWrapper(response=response)
-        except Exception as ex:
-            logger.error(
-                f"News chat llm failed. Exception: {ex}. {traceback.format_exc()}"
-            )
-            raise ex
-
-    @dispatcher.span
-    async def astream_list_topics(
-        self, messages: List[ChatMessage] = [], **kwargs: Any
-    ) -> ChatResponseAsyncGen:
-        try:
-            query_str = kwargs.get("query_str", "")
-            news_topics = kwargs.get("news_topics", [])
-            span_id = active_span_id.get()
-
-            # use use_current_span decorator to keep miaobinews span
-            # as the parent of the self.llm's span,
-            # when self.llm.astream_chat executes in this gen()
-            @use_current_span(get_current_span())
-            async def gen() -> ChatResponseAsyncGen:
-                try:
-                    hot_topics = await self._alist_hot_topics(news_topics=news_topics)
-                except Exception as ex:
-                    logger.error(
-                        f"List news api failed. Exception: {ex}. {traceback.format_exc()}"
-                    )
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=DEFAULT_NEWS_ERROR_MESSAGE,
-                        ),
-                        delta=DEFAULT_NEWS_ERROR_MESSAGE,
-                        additional_kwargs={"news_articles": []},
-                    )
-                    return
-
-                logger.debug(
-                    f"Using list_topics_prompt_template: {self.list_topics_prompt_template}"
-                )
-                messages = [
-                    ChatMessage(
-                        role="user",
-                        content=self.list_topics_prompt_template.format(
-                            news_role=self.config.news_role,
-                            news_list_str=_make_context(hot_topics),
-                            query_str=query_str,
-                            topics_str="、".join(news_topics),
-                            conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
-                        ),
-                    )
-                ]
-                yield ChatResponse(
-                    message=ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content="",
-                    ),
-                    delta="",
-                    additional_kwargs={"news_articles": hot_topics},
-                )
-
-                # store hot topics in span output
-                dispatcher.event(
-                    QueryEndEvent(
-                        response=Response(response=str(hot_topics), source_nodes=[]),
-                        query="",
-                        span_id=span_id,
-                    )
-                )
-                async for response in await self.llm.astream_chat(
-                    messages=messages,
-                ):
-                    yield response
-
-            return gen()
-        except Exception as e:
-            logger.error(
-                f"Error while getting hot topics: {e}, {traceback.format_exc()}"
-            )
-            raise e
-
-    @llm_chat_callback()
     async def achat(
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponse:
@@ -387,7 +215,6 @@ class MiaobiNewsTool(LLM):
         )
         return response
 
-    @llm_chat_callback()
     async def astream_chat(
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponseAsyncGen:
@@ -404,8 +231,11 @@ class MiaobiNewsTool(LLM):
             modelCustomPromptTemplate=self.chat_news_prompt_template,
         ).model_dump()
 
+        @use_current_span(get_current_span())
         async def gen() -> ChatResponseAsyncGen:
             origin_text = ""
+            intent = "chat_news"
+
             logger.info(f"Chat news with param {param}.")
             use_web_search = False
             additional_kwargs = {}
@@ -417,6 +247,7 @@ class MiaobiNewsTool(LLM):
                     event = data.get("header").get("event")
                     if event == "task-hot-topic-chat-internet-search-start":
                         use_web_search = True
+
                     if event != "task-finished" and event != "task-failed":
                         usage = data.get("payload").get("usage")
                         if usage:
@@ -435,6 +266,78 @@ class MiaobiNewsTool(LLM):
                             logger.info(f"News Search Query: {search_query}.")
 
                         text = data.get("payload").get("output").get("text")
+                        if event == "task-hot-topic-chat-topic-recommend-end":
+                            category = data.get("payload").get("output").get("category")
+                            keyword = data.get("payload").get("output").get("keyword")
+                            location = data.get("payload").get("output").get("location")
+                            hot_topics_summaries = (
+                                data.get("payload")
+                                .get("output")
+                                .get("hotTopicSummaries")
+                            )
+
+                            news_topics = []
+                            # 关键词为空，category为空或者在domain_list中
+                            if (
+                                not location
+                                and not keyword
+                                and (
+                                    not category or category in self.config.domain_list
+                                )
+                            ):
+                                intent = "list_news"
+                                if category:
+                                    news_topics = [category]
+
+                                hot_topics = []
+                                for topic in hot_topics_summaries:
+                                    hot_topics.append(
+                                        {
+                                            "title": topic.get("hotTopic"),
+                                            "summary": topic.get("textSummary"),
+                                            "url": topic.get("url"),
+                                            "hot_value": topic.get("hotValue"),
+                                        }
+                                    )
+
+                                content = self.list_topics_prompt_template.format(
+                                    news_role=self.config.news_role,
+                                    news_list_str=_make_context(hot_topics),
+                                    query_str=prompt,
+                                    topics_str="、".join(news_topics),
+                                    conclusion_str=DEFAULT_LIST_NEWS_END_RESPONSE,
+                                )
+                                messages = [
+                                    ChatMessage(
+                                        role="user",
+                                        content=content,
+                                    )
+                                ]
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="",
+                                    ),
+                                    delta="",
+                                    additional_kwargs={"intent": intent},
+                                )
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="",
+                                    ),
+                                    delta="",
+                                    additional_kwargs={"news_articles": hot_topics},
+                                )
+
+                                async for response in await self.llm.astream_chat(
+                                    messages=messages,
+                                ):
+                                    yield response
+
+                                # list_news 直接返回
+                                return
+
                         if text:
                             response = ChatResponse(
                                 message=ChatMessage(
@@ -444,6 +347,15 @@ class MiaobiNewsTool(LLM):
                                 delta=text[len(origin_text) :],
                                 additional_kwargs=additional_kwargs,
                             )
+                            if not origin_text:
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="",
+                                    ),
+                                    delta="",
+                                    additional_kwargs={"intent": intent},
+                                )
                             origin_text = text
                             yield response
 
@@ -490,13 +402,13 @@ class MiaobiNewsTool(LLM):
                         delta=DEFAULT_NEWS_ERROR_MESSAGE,
                         additional_kwargs={},
                     )
-                    continue
+                    return
 
             if use_web_search:
                 yield ChatResponse(
                     message=ChatMessage(
                         role=MessageRole.ASSISTANT,
-                        content=f"{origin_text}\n{DEFAULT_WEB_SEARCH_INFO_MESSAGE}",
+                        content=f"{origin_text}{DEFAULT_WEB_SEARCH_INFO_MESSAGE}",
                     ),
                     delta=DEFAULT_WEB_SEARCH_INFO_MESSAGE,
                     additional_kwargs=additional_kwargs,

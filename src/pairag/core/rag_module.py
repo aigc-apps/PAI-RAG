@@ -294,7 +294,6 @@ def resolve_openai_query_transform(
             domain_list=config.news_extension.domain_list,
             news_role=config.news_extension.news_role,
         ),
-        news_valid_domain_list=config.news_extension.domain_list,
     )
     return openai_query_transform
 
