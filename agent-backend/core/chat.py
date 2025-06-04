@@ -16,7 +16,8 @@ from openai.types.chat import (
     ChatCompletionMessageToolCall,
 )
 from opentelemetry import trace
-from search.aliyun_search_tool import aget_aliyun_search_tool
+from tools.search.aliyun_search_tool import aget_aliyun_search_tool
+from tools.think.simple_think_tool import aget_simple_think_tool, clear_thoughts_log
 from utils.models import fetch_llm
 from trace.pai_query_wrapper import pai_query_wrapper, with_current_context
 
@@ -103,8 +104,9 @@ async def process_mcp_tools():
 async def generate_stream(
     model, model_name, messages, openai_tools, tools_name_to_fn, current_context
 ):
-    max_steps = 5  # 防止无限循环的最大步骤数
+    max_steps = 15  # 防止无限循环的最大步骤数
     step_count = 0
+    clear_thoughts_log()  # 清除思考记录
     while step_count < max_steps:
         stop_flag = False
         response = await gen_stream_response(model, model_name, messages, openai_tools)
@@ -171,7 +173,8 @@ async def generate_stream(
 
                             # 返回工具调用和结果（标记9和a）
                             yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
-                            if tool_call["name"] == "search_web":
+                            if tool_call["name"] in ["think", "search_web"]:
+                                # 特殊处理think和search_web工具的结果
                                 yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
                             else:
                                 yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
@@ -249,6 +252,11 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
+        # 获取思考工具
+        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool()
+        openai_tools.extend(think_openai_tools)
+        tools_name_to_fn.update(think_tools_name_to_fn)
+
         if "search" in x_options:
             search_openai_tools, search_tools_name_to_fn = (
                 await aget_aliyun_search_tool()

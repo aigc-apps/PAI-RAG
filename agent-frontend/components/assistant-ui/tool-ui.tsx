@@ -299,7 +299,7 @@ export const SearchWebToolUI = makeAssistantToolUI<
       );
     }
     return (
-      <div className="rounded-md p-1">
+      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
         <Sheet>
           <SheetTrigger asChild>
             <Button
@@ -359,12 +359,52 @@ export const SearchWebToolUI = makeAssistantToolUI<
   },
 });
 
+/* Think Tool UI */
+
+export type ThinkArgs = {
+  thought: string;
+};
+
+type ThinkResult = {
+  type: string;
+  text: string;
+  thoughts_count: number;
+};
+
+export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
+  toolName: "think",
+  render: ({ args, status, result }) => {
+    if (!result) {
+      return null;
+    }
+    console.log("think 结果:", result);
+    return (
+      <div
+        className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
+        role="button"
+      >
+        {/* 条件渲染头部内容：仅当 thoughts_count 为 1 时显示 */}
+        {result?.thoughts_count === 1 && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xl" aria-hidden="true">
+              🧠
+            </span>
+            <span className="font-semibold">思考中... </span>
+          </div>
+        )}
+        <div className="text-sm mt-2">{args.thought}</div>
+      </div>
+    );
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
       <SearchWebToolUI />
+      <ThinkToolUI />
     </>
   );
 };
