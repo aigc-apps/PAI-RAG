@@ -62,6 +62,9 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         self._llm = create_multi_modal_llm(llm_config)
         self._llm.callback_manager = Settings.callback_manager
         self.callback_manager = Settings.callback_manager
+        logger.info(
+            f"Created PaiMultiModalLlm with {llm_config.model} - {llm_config.base_url}"
+        )
 
     @classmethod
     def class_name(cls) -> str:

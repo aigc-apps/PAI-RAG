@@ -72,6 +72,7 @@ def create_multi_modal_llm(llm_config: OpenAICompatibleLlmConfig):
         is_chat_model=True,
         api_key=llm_config.api_key or os.environ.get("DASHSCOPE_API_KEY"),
         context_window=llm_config.context_window,
+        max_tokens=llm_config.max_tokens,
         reuse_client=False,
         timeout=120,
     )

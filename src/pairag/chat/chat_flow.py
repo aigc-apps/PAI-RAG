@@ -1,6 +1,6 @@
 import re
 import time
-from typing import AsyncGenerator, Dict, List, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Tuple
 from llama_index.core.schema import NodeWithScore
 
 from pairag.core.rag_config import RagConfig
@@ -327,7 +327,7 @@ class ChatFlow:
             nodes=nodes,
             stream=stream,
             chat_history_str=chat_history_str,
-            system_role_str=" ",
+            system_role_str=self.config.search.search_role_template,
             prompt_template_str=self.config.search.search_qa_prompt_template,
             **lm_kwargs,
         )
@@ -419,15 +419,26 @@ class ChatFlow:
         self,
         query_str: str,
         knowledgebase_name: str = None,
+        extra_retrieval_settings: Dict[str, Any] = {},
     ) -> List[NodeWithScore]:
         knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_name)
+        _retrieval_settings = {
+            **knowledgebase.retrieval_settings,
+            **extra_retrieval_settings,
+        }
+        logger.info(
+            f"Retrieving {knowledgebase_name} with query {query_str}, retrieve settings: {_retrieval_settings}."
+        )
+
         vector_index = resolve_vector_index(knowledgebase=knowledgebase)
+
         retriever = resolve_index_retriever_from_retrieval_settings(
             vector_index=vector_index,
-            retrieval_settings=knowledgebase.retrieval_settings,
+            retrieval_settings=_retrieval_settings,
         )
+
         postprocessor = resolve_postprocessor_from_retrieval_settings(
-            retrieval_settings=knowledgebase.retrieval_settings
+            retrieval_settings=_retrieval_settings
         )
         nodes = await retriever.aretrieve(query_str)
 
@@ -558,7 +569,6 @@ class ChatFlow:
         chat_request: ChatCompletionRequest,
     ) -> ChatResponseWrapper:
         logger.info(f"achat_llm_atomic: {chat_request}")
-        start_time = time.time()
         chat_id = chat_id_generator()
 
         llm = resolve_chat_llm(self.config, model_id=chat_request.model)
@@ -569,7 +579,6 @@ class ChatFlow:
             chat_id=chat_id,
             model=chat_request.model,
             response_wrapper=response_wrapper,
-            start_time=start_time,
             return_reference=False,
         )
 
@@ -579,7 +588,6 @@ class ChatFlow:
         chat_request: ChatCompletionRequest,
     ) -> ChatResponseWrapper:
         logger.info(f"achat_news_agent_atomic: {chat_request}")
-        start_time = time.time()
         chat_id = chat_id_generator()
 
         if chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
@@ -600,11 +608,10 @@ class ChatFlow:
             chat_id=chat_id,
             model=chat_request.model,
             response_wrapper=response_wrapper,
-            start_time=start_time,
             return_reference=False,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def astream_llm_atomic(
         self,
         chat_request: ChatCompletionRequest,
@@ -627,7 +634,7 @@ class ChatFlow:
             return_reference=False,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def astream_news_agent_atomic(
         self,
         chat_request: ChatCompletionRequest,
@@ -665,7 +672,6 @@ class ChatFlow:
         chat_request: ChatCompletionRequest,
     ) -> ChatResponseWrapper:
         logger.info(f"achat_web_atomic: {chat_request}")
-        start_time = time.time()
         chat_id = chat_id_generator()
 
         messages = remove_think_from_messages(chat_request.messages)
@@ -675,6 +681,7 @@ class ChatFlow:
         response_wrapper = await self.achat_web(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
+            original_user_message=chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
             stream=chat_request.stream,
             model_id=chat_request.model,
@@ -686,11 +693,10 @@ class ChatFlow:
             chat_id=chat_id,
             model=chat_request.model,
             response_wrapper=response_wrapper,
-            start_time=start_time,
             return_reference=False,
         )
 
-    @dispatcher.span
+    @pai_query_wrapper()
     async def astream_web_atomic(
         self,
         chat_request: ChatCompletionRequest,
@@ -706,6 +712,7 @@ class ChatFlow:
         response_wrapper = await self.achat_web(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
+            original_user_message=chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
             stream=chat_request.stream,
             model_id=chat_request.model,
@@ -722,6 +729,37 @@ class ChatFlow:
         )
 
     @dispatcher.span
+    async def achat_knowledgebase_atomic(
+        self,
+        chat_request: ChatCompletionRequest,
+    ) -> ChatResponseWrapper:
+        logger.info(f"achat_knowledgebase_atomic: {chat_request}")
+        chat_id = chat_id_generator()
+
+        messages = remove_think_from_messages(chat_request.messages)
+        chat_history_str = messages_to_history_str(messages[-7:-1])
+        llm_kwargs = self._get_llm_kwargs(chat_request)
+
+        response_wrapper = await self.achat_knowledgebase(
+            query_str=chat_request.intent.query_str
+            or chat_request.messages[-1].content,
+            original_user_message=chat_request.messages[-1].content,
+            chat_history_str=chat_history_str,
+            knowledgebase_name=chat_request.index_name,
+            stream=chat_request.stream,
+            model_id=chat_request.model,
+            **llm_kwargs,
+        )
+
+        response_wrapper.intent_result = chat_request.intent
+        return make_completion_response(
+            chat_id=chat_id,
+            model=chat_request.model,
+            response_wrapper=response_wrapper,
+            return_reference=False,
+        )
+
+    @pai_query_wrapper()
     async def astream_knowledgebase_atomic(
         self,
         chat_request: ChatCompletionRequest,
@@ -737,6 +775,7 @@ class ChatFlow:
         response_wrapper = await self.achat_knowledgebase(
             query_str=chat_request.intent.query_str
             or chat_request.messages[-1].content,
+            original_user_message=chat_request.messages[-1].content,
             chat_history_str=chat_history_str,
             knowledgebase_name=chat_request.index_name,
             stream=chat_request.stream,
@@ -753,6 +792,7 @@ class ChatFlow:
             return_reference=False,
         )
 
+    @dispatcher.span
     async def arecognize_intent(
         self,
         chat_request: ChatCompletionRequest,
@@ -770,6 +810,7 @@ class ChatFlow:
 
         return intent_result
 
+    @dispatcher.span
     async def aembed(
         self,
         embedding_input: EmbeddingInput,

@@ -56,8 +56,7 @@ class ImageCaptionTool:
             ),
         ]
         response: ChatResponse = self.multimodal_llm.chat(messages)
-        logger.info("上下文介绍: ", context_str)
-        logger.info("图片描述: ", response.message.content)
+        logger.info(f"[图像解析]上下文介绍: {context_str} \n图片描述: {response.message.content}")
 
         return response.message.content
 
