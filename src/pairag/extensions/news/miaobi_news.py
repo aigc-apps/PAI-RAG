@@ -37,6 +37,8 @@ import json
 
 from pydantic import BaseModel
 from loguru import logger
+from openinference.instrumentation.llama_index import get_current_span
+from pairag.integrations.trace.base import use_current_span
 
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
 import llama_index.core.instrumentation as instrument
@@ -190,7 +192,6 @@ class MiaobiNewsTool(LLM):
             f"MiaobiNewsTool initialized with workspace_id {config.workspace_id}."
         )
 
-    @llm_chat_callback()
     async def achat(
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponse:
@@ -214,7 +215,6 @@ class MiaobiNewsTool(LLM):
         )
         return response
 
-    @llm_chat_callback()
     async def astream_chat(
         self, messages: List[ChatMessage] = [], **kwargs: Any
     ) -> ChatResponseAsyncGen:
@@ -231,6 +231,7 @@ class MiaobiNewsTool(LLM):
             modelCustomPromptTemplate=self.chat_news_prompt_template,
         ).model_dump()
 
+        @use_current_span(get_current_span())
         async def gen() -> ChatResponseAsyncGen:
             origin_text = ""
             intent = "chat_news"

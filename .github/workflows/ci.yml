@@ -61,3 +61,4 @@ jobs:
           PAIRAG_RAG__embedding__source: "huggingface"
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
+          TRACE_TOKEN: ${{ secrets.TRACE_TOKEN }}

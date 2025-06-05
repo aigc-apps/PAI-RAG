@@ -82,6 +82,7 @@ class PaiPostProcessor(BaseNodePostprocessor):
     ):
         super().__init__()
         self._postprocessors = create_postprocessors(postprocessor_config)
+        logger.info(f"[PostProcessor] inited: {postprocessor_config}")
 
     @classmethod
     def class_name(cls) -> str:

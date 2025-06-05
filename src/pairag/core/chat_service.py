@@ -136,6 +136,34 @@ class ChatService:
             logger.error(traceback.format_exc())
             raise UserInputError(f"Chat knowledgebase failed: {ex}")
 
+    async def achat_news_agent_atomic(self, chat_request):
+        try:
+            return await self.app.achat_news_agent_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat news failed: {ex}")
+
+    async def achat_web_atomic(self, chat_request):
+        try:
+            return await self.app.achat_web_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat web failed: {ex}")
+
+    async def achat_llm_atomic(self, chat_request):
+        try:
+            return await self.app.achat_llm_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat llm failed: {ex}")
+
+    async def achat_knowledgebase_atomic(self, chat_request):
+        try:
+            return await self.app.achat_knowledgebase_atomic(chat_request)
+        except Exception as ex:
+            logger.error(traceback.format_exc())
+            raise UserInputError(f"Chat knowledgebase failed: {ex}")
+
     async def arecognize_intent(self, chat_request):
         try:
             return await self.app.arecognize_intent(chat_request)
