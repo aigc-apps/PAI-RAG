@@ -1,8 +1,7 @@
 import re
 import time
-from typing import Any, AsyncGenerator, Dict, List, Tuple
-from llama_index.core.schema import NodeWithScore
-
+from typing import Any, AsyncGenerator, Dict, List, Tuple, Sequence
+from llama_index.core.schema import NodeWithScore, ImageDocument
 from pairag.core.rag_config import RagConfig
 from pairag.core.rag_module import (
     resolve_huggingface_embedding,
@@ -331,7 +330,8 @@ class ChatFlow:
         self,
         query_str: str,
         original_user_message: str,
-        knowledgebase_name: str,
+        image_documents: Sequence[ImageDocument] = [],
+        knowledgebase_name: str = "default",
         chat_history_str: str = None,
         model_id: str = None,
         stream: bool = False,
@@ -347,6 +347,7 @@ class ChatFlow:
         response = await synthesizer.asynthesize(
             query_str=original_user_message,
             nodes=nodes,
+            image_documents=image_documents,
             stream=stream,
             chat_history_str=chat_history_str,
             system_role_str=qa_prompt_templates["system_prompt_template"],
@@ -526,6 +527,7 @@ class ChatFlow:
             response_wrapper = await self.achat_knowledgebase(
                 query_str=intent_result.query_str,
                 original_user_message=original_user_message,
+                image_documents=image_documents[-1] if image_documents else [],
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,
