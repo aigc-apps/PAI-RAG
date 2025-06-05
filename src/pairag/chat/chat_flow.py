@@ -64,6 +64,7 @@ from llama_index.core.schema import (
 )
 from pairag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
 from pairag.integrations.llms.pai.pai_llm import PaiLlm
+from pairag.integrations.llms.utils.utils import transform_to_image_nodes
 
 dispatcher = instrument.get_dispatcher(__name__)
 
@@ -107,14 +108,20 @@ def parse_image_documents(
 ) -> Tuple[List[ChatMessage], List[List[ImageNode]]]:
     chat_messages = []
     image_documents = []
-    for message in messages:
+    num_messages = len(messages)
+    for index, message in enumerate(messages):
+        message_images = []
         if isinstance(message["content"], str):
             chat_messages.append(
                 ChatMessage(role=message["role"], content=message["content"])
             )
+            if index == num_messages - 1:
+                additonal_images = transform_to_image_nodes(message["content"])
+                if additonal_images:
+                    message_images.extend(additonal_images)
+            image_documents.append(message_images)
         elif isinstance(message["content"], list):
             message_content = []
-            message_images = []
             for content in message["content"]:
                 if (
                     isinstance(content, dict)
