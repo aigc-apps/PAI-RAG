@@ -1,11 +1,12 @@
 # init trace
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import asyncio
 import threading
 from fastapi import FastAPI
-
 # setup models
-
 from pairag.utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 from pairag.utils.download_models import ModelScopeDownloader
@@ -17,6 +18,7 @@ from pairag.utils.format_logging import format_logging
 from pairag.core.chat_service import chat_service
 from pairag.data_pipeline.job.rag_job_manager import job_manager
 from pairag.core.service_daemon import startup_event
+from pairag.app.feature_flags import is_feature_enabled, FeatureFlags
 from loguru import logger
 
 format_logging()
@@ -24,6 +26,11 @@ format_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
+    if is_feature_enabled(FeatureFlags.MCP):
+        logger.info("Initialize databases for MCP.")
+        from pairag.db.db_context import db_context
+        await db_context.init_db()
+
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
 
