@@ -60,6 +60,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             model=model_name,
             messages=messages,
             stream=True,
+            stream_options={"include_usage": True},
             tools=openai_tools,
             tool_choice="auto",
         )
@@ -68,6 +69,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             model=model_name,
             messages=messages,
             stream=True,
+            stream_options={"include_usage": True},
         )
 
 
@@ -104,6 +106,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
     try:
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
+        stop_flag = False
         while step_count < max_steps:
             response = await gen_stream_response(
                 model, model_name, messages, openai_tools
@@ -112,23 +115,10 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
             draft_tool_calls_index = -1
             async for chunk in response:
                 for choice in chunk.choices:
-                    # 模型生成已结束
-                    if (
-                        choice.finish_reason == "stop"
-                        or choice.finish_reason == "length"
-                    ):
-                        if choice.delta.content:
-                            yield "0:{text}\n".format(
-                                text=json.dumps(
-                                    choice.delta.content, ensure_ascii=False
-                                )
-                            )
-                        yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
-                        return
                     # 调用工具,收集工具参数
                     if choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
-                            id = tool_call.idll
+                            id = tool_call.id
                             name = tool_call.function.name
                             arguments = tool_call.function.arguments or ""
 
@@ -159,7 +149,8 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                 )
                             )  # 更新历史
 
-                    # 根据参数调用工具
+                    # 模型生成已结束
+                    # 1. 因需要调用工具而结束,根据参数调用工具
                     if choice.finish_reason == "tool_calls":
                         for tool_call in draft_tool_calls:
                             if tool_call and tool_call["arguments"].strip():
@@ -213,6 +204,20 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                 yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
                                     e
                                 )
+                    # 2.自然停止输出or因生成长度过长而结束
+                    elif (
+                        choice.finish_reason == "stop"
+                        or choice.finish_reason == "length"
+                    ):
+                        stop_flag = True
+                        if choice.delta.content:
+                            yield "0:{text}\n".format(
+                                text=json.dumps(
+                                    choice.delta.content, ensure_ascii=False
+                                )
+                            )
+                        yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
+                        break
 
                 if chunk.choices == []:
                     usage = chunk.usage
@@ -224,9 +229,12 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                         prompt=prompt_tokens,
                         completion=completion_tokens,
                     )
+            if stop_flag:
+                break
             step_count += 1
-        yield "0:Agent stopped due to iteration limit\n"
-        yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
+        if not stop_flag:
+            yield "0:Agent stopped due to iteration limit\n"
+            yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
     except Exception as e:
         yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(e)
         raise
