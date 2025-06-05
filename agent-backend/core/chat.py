@@ -112,7 +112,6 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
             draft_tool_calls_index = -1
             async for chunk in response:
                 for choice in chunk.choices:
-                    print("*******choice*******", choice)
                     # 模型生成已结束
                     if (
                         choice.finish_reason == "stop"
@@ -127,7 +126,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                         yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
                         return
                     # 调用工具,收集工具参数
-                    elif choice.delta.tool_calls:
+                    if choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
                             id = tool_call.idll
                             name = tool_call.function.name
@@ -144,7 +143,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                     "arguments"
                                 ] += arguments
                     # 普通内容
-                    elif choice.delta.content:
+                    if choice.delta.content:
                         yield "0:{text}\n".format(
                             text=json.dumps(choice.delta.content, ensure_ascii=False)
                         )
@@ -210,7 +209,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                 )
 
                             except Exception as e:
-                                logger.error(f"工具调用异常: {str(e)}")
+                                logger.exception("工具调用异常")
                                 yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
                                     e
                                 )
@@ -298,6 +297,6 @@ async def handle_chat(request: Request):
             headers={"x-vercel-ai-data-stream": "v1"},
         )
 
-    except Exception as e:
-        logger.exception(f"Error in /api/chat: {str(e)}")
+    except Exception:
+        logger.exception("Error in /api/chat")
         return Response(content="Internal Server Error", status_code=500)
