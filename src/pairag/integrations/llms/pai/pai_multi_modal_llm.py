@@ -82,7 +82,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         )
 
     def complete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageDocument] = [], **kwargs: Any
     ) -> CompletionResponse:
         """Completion endpoint for Multi-Modal LLM."""
         return self._llm.complete(
@@ -100,7 +100,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     def chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument],
+        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponse:
         """Chat endpoint for Multi-Modal LLM."""
@@ -115,7 +115,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     def stream_chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument],
+        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponseGen:
         """Stream chat endpoint for Multi-Modal LLM."""
@@ -130,7 +130,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     # ===== Async methods =====
 
     async def acomplete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageDocument] = [], **kwargs: Any
     ) -> CompletionResponse:
         """Async completion endpoint for Multi-Modal LLM."""
         return await self._llm.acomplete(
@@ -138,7 +138,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         )
 
     async def astream_complete(
-        self, prompt: str, image_documents: Sequence[ImageDocument], **kwargs: Any
+        self, prompt: str, image_documents: Sequence[ImageDocument] = [], **kwargs: Any
     ) -> CompletionResponseAsyncGen:
         """Async streaming completion endpoint for Multi-Modal LLM."""
         return await self._llm.astream_complete(
@@ -148,7 +148,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     async def achat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument],
+        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponse:
         """Async chat endpoint for Multi-Modal LLM."""
@@ -170,7 +170,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     async def astream_chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument],
+        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponseAsyncGen:
         """Async streaming chat endpoint for Multi-Modal LLM."""
