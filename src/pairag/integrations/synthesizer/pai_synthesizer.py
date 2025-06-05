@@ -197,7 +197,6 @@ Document {i+1}:
             context_str=truncated_context_list[0],
             **response_kwargs,
         )
-        logger.info(f"chat database messages: {messages}")
         if isinstance(self._llm, PaiMultiModalLlm):
             # If the LLM supports multimodal inputs, we can pass image documents
             logger.info(f"Image documents: {image_documents}")
