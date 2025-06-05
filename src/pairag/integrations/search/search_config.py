@@ -5,6 +5,8 @@ from typing import Literal
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
 DEFAULT_GOOGLE_SEARCH_ENDPOINT = "https://serpapi.com/search"
 DEFAULT_SEARCH_COUNT = 10
+DEFAULT_SEARCH_ROLE_TEMPLATE = """你是一个知识问答小助手，乐于解答用户的问题。
+"""
 DEFAULT_SEARCH_QA_PROMPT_TEMPLATE = """
 你的目标是根据搜索结果提供准确、有用且易于理解的信息。
 # 任务要求：
@@ -41,6 +43,7 @@ class BaseSearchConfig(BaseModel):
     source: SupportedSearchType
     search_count: int = DEFAULT_SEARCH_COUNT
     search_qa_prompt_template: str = DEFAULT_SEARCH_QA_PROMPT_TEMPLATE
+    search_role_template: str = DEFAULT_SEARCH_ROLE_TEMPLATE
 
     class Config:
         frozen = True

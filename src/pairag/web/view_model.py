@@ -111,6 +111,7 @@ class ViewModel(BaseModel):
     search_api_key: str = None
     search_count: int = DEFAULT_SEARCH_COUNT
     search_lang: str = "zh-CN"
+    search_role_template: str = None
     search_qa_prompt_template: str = ""
 
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
@@ -258,6 +259,7 @@ class ViewModel(BaseModel):
             view_model.search_lang = config.search.search_lang
             view_model.search_count = config.search.search_count
         view_model.search_qa_prompt_template = config.search.search_qa_prompt_template
+        view_model.search_role_template = config.search.search_role_template
         view_model.data_analysis_model_id = config.data_analysis.model_id or "default"
 
         if isinstance(config.data_analysis, PandasAnalysisConfig):
@@ -434,6 +436,7 @@ class ViewModel(BaseModel):
             config["search"]["access_key_secret"] = self.aliyun_access_key_secret
             config["search"]["search_count"] = self.search_count
         config["search"]["search_qa_prompt_template"] = self.search_qa_prompt_template
+        config["search"]["search_role_template"] = self.search_role_template
 
         config["guardrail"]["region"] = self.guardrail_region
         config["guardrail"]["endpoint"] = self.guardrail_endpoint
@@ -602,6 +605,11 @@ class ViewModel(BaseModel):
             "value": self.search_qa_prompt_template,
             "visible": True,
         }
+        settings["search_role_template"] = {
+            "value": self.search_role_template,
+            "visible": True,
+        }
+
         if self.search_type == "bing":
             settings["search_api_key"] = {"value": self.search_api_key, "visible": True}
             settings["search_lang"] = {"value": self.search_lang, "visible": True}

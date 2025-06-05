@@ -94,6 +94,13 @@ def create_search_web_tab() -> Dict[str, Any]:
             )
         with gr.Column(scale=7):
             _ = gr.Markdown(value="## \N{WHITE MEDIUM STAR} **调整提示词模板**")
+            search_role_template = gr.Textbox(
+                label="联网搜索问答角色模板",
+                value="",
+                elem_id="search_role_template",
+                lines=10,
+                interactive=True,
+            )
             search_qa_prompt_template = gr.Textbox(
                 label="联网搜索问答的提示词模板",
                 value="",
@@ -120,6 +127,7 @@ def create_search_web_tab() -> Dict[str, Any]:
             aliyun_access_key_id,
             aliyun_access_key_secret,
             serpapi_key,
+            search_role_template,
             search_qa_prompt_template,
             save_search_web_cfg,
             save_state_for_search_web,

@@ -6,13 +6,14 @@ from tenacity import (
     before_sleep_log,
 )
 from pydantic import BaseModel
-from typing import List, Any
+from typing import Dict, List, Any
 import os
 import pathlib
 from llama_index.core.readers.file.base import default_file_metadata_func
-from llama_index.core.readers.base import BaseReader
+from llama_index.core.readers.base import BasePydanticReader, BaseReader
 from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
+from llama_index.core.bridge.pydantic import Field
 from functools import partial
 from pairag.file.readers.pai.constants import ACCEPTABLE_DOC_TYPES
 import logging
@@ -145,17 +146,23 @@ def get_file_metadata(x, file_metadata_map):
     return file_metadata_map.get(x, {})
 
 
-class PaiDataReader(BaseReader):
+class PaiDataReader(BasePydanticReader):
+    reader_config: DataReaderConfig = Field(default=DataReaderConfig())
+    image_store: PaiImageStore = Field(default=None)
+    file_readers: Dict[str, BaseReader] = Field(default={})
+
     def __init__(
         self,
         reader_config: DataReaderConfig,
         image_store: PaiImageStore = None,
         model_dir: str = DEFAULT_MODEL_DIR,
     ):
+        super().__init__()
         self.file_readers = get_file_readers(reader_config, image_store, model_dir)
         self.image_store = image_store
+        self.reader_config = reader_config
 
-        logger.info(f"[PaiDataReader] created with {reader_config}")
+        logger.info(f"[PaiDataReader] created with {self.reader_config}")
 
     @retry(
         retry=retry_if_exception_type(OSError),
