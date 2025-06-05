@@ -1,7 +1,16 @@
 import re
 import time
-from typing import Any, AsyncGenerator, Dict, List, Tuple, Sequence
-from llama_index.core.schema import NodeWithScore, ImageDocument
+from typing import (
+    Any,
+    AsyncGenerator,
+    Dict,
+    List,
+    Sequence,
+    Literal,
+    Required,
+    TypedDict,
+)
+from llama_index.core.schema import NodeWithScore
 from pairag.core.rag_config import RagConfig
 from pairag.core.rag_module import (
     resolve_huggingface_embedding,
@@ -41,6 +50,8 @@ from pairag.chat.models import (
 from llama_index.core.base.llms.types import (
     ChatMessage,
     MessageRole,
+    ImageBlock,
+    TextBlock,
 )
 
 from openai.types.chat import (
@@ -58,18 +69,29 @@ from pairag.utils.time_utils import get_prompt_current_time_str
 from pairag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 import llama_index.core.instrumentation as instrument
 from openai.types.chat import ChatCompletionUserMessageParam
-from llama_index.core.schema import (
-    ImageNode,
+from pairag.integrations.llms.utils.utils import extract_image_links
+from openai.types.chat import (
+    ChatCompletionContentPartTextParam,
+    ChatCompletionContentPartImageParam,
 )
-from pairag.integrations.llms.pai.pai_multi_modal_llm import PaiMultiModalLlm
-from pairag.integrations.llms.pai.pai_llm import PaiLlm
-from pairag.integrations.llms.utils.utils import transform_to_image_nodes
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
+
+
+class ImageURL(TypedDict, total=False):
+    url: Required[str]
+    """Either a URL of the image or the base64 encoded image data."""
+
+    detail: Literal["auto", "low", "high"]
+    """Specifies the detail level of the image.
+
+    Learn more in the
+    [Vision guide](https://platform.openai.com/docs/guides/vision#low-or-high-fidelity-image-understanding).
+    """
 
 
 def message_is_empty(messages: List[ChatMessage]):
@@ -80,17 +102,18 @@ def message_is_empty(messages: List[ChatMessage]):
 
 
 def remove_think_from_messages(messages: List[ChatMessage]):
-    new_messages = []
     for message in messages:
-        if message.content is not None:
-            message.content = re.sub(
-                r"<think>.*?</think>\n*",
-                "",
-                message.content,
-                flags=re.DOTALL,
-            )
-        new_messages.append(message)
-    return new_messages
+        new_blocks = []
+        for block in message.blocks:
+            if isinstance(block, TextBlock):
+                # 对文本内容进行正则替换
+                cleaned_text = re.sub(r"</think>\n*", "", block.text, flags=re.DOTALL)
+                if cleaned_text.strip():
+                    new_blocks.append(TextBlock(text=cleaned_text))
+            else:
+                new_blocks.append(block)
+        message.blocks = new_blocks
+    return messages
 
 
 def parse_system_prompt(messages: List[ChatCompletionUserMessageParam]):
@@ -102,46 +125,63 @@ def parse_system_prompt(messages: List[ChatCompletionUserMessageParam]):
     return None, messages
 
 
-def parse_image_documents(
-    messages: List[ChatCompletionUserMessageParam],
-) -> Tuple[List[ChatMessage], List[List[ImageNode]]]:
-    chat_messages = []
-    image_documents = []
-    num_messages = len(messages)
-    for index, message in enumerate(messages):
-        message_images = []
-        if isinstance(message["content"], str):
-            chat_messages.append(
-                ChatMessage(role=message["role"], content=message["content"])
-            )
-            if index == num_messages - 1:
-                additonal_images = transform_to_image_nodes(message["content"])
-                if additonal_images:
-                    message_images.extend(additonal_images)
-            image_documents.append(message_images)
-        elif isinstance(message["content"], list):
-            message_content = []
-            for content in message["content"]:
-                if (
-                    isinstance(content, dict)
-                    and content["type"]
-                    and content["type"] == "text"
-                ):
-                    message_content.append(content["text"])
-                elif (
-                    isinstance(content, dict)
-                    and content["type"]
-                    and content["type"] == "image_url"
-                ):
-                    message_images.append(
-                        ImageNode(image_url=content["image_url"]["url"])
-                    )
-            chat_messages.append(
-                ChatMessage(role=message["role"], content="\n".join(message_content))
-            )
-            image_documents.append(message_images)
+def from_openai_message_dict(message_dict: dict) -> ChatMessage:
+    """Convert openai message dict to generic message."""
+    role = message_dict["role"]
+    # NOTE: Azure OpenAI returns function calling messages without a content key
+    content = message_dict.get("content")
+    blocks = []
+    if isinstance(content, list):
+        for elem in content:
+            t = elem.get("type")
+            if t == "text":
+                blocks.append(TextBlock(text=elem.get("text")))
+            elif t == "image_url":
+                img = elem["image_url"]["url"]
+                detail = elem["image_url"].get("detail", "auto")
+                if img.startswith("data:"):
+                    blocks.append(ImageBlock(image=img, detail=detail))
+                else:
+                    blocks.append(ImageBlock(url=img, detail=detail))
+            else:
+                msg = f"Unsupported message type: {t}"
+                raise ValueError(msg)
+        content = None
 
-    return chat_messages, image_documents
+    additional_kwargs = message_dict.copy()
+    additional_kwargs.pop("role")
+    additional_kwargs.pop("content", None)
+
+    return ChatMessage(
+        role=role, content=content, additional_kwargs=additional_kwargs, blocks=blocks
+    )
+
+
+def parse_messages(
+    messages: List[ChatCompletionUserMessageParam],
+) -> List[ChatMessage]:
+    num_messages = len(messages)
+    chat_messages = []
+    for index, message in enumerate(messages):
+        if index == num_messages - 1 and isinstance(message["content"], str):
+            image_list = extract_image_links(message["content"])
+            if image_list:
+                image_josn_list = [
+                    ChatCompletionContentPartImageParam(
+                        type="image_url", image_url=ImageURL(url=image_url)
+                    )
+                    for image_url in image_list
+                ]
+                content = [
+                    ChatCompletionContentPartTextParam(
+                        type="text", text=message["content"]
+                    )
+                ]
+                content.extend(image_josn_list)
+                message = {"role": message["role"], "content": content}
+        chat_messages.append(from_openai_message_dict(message))
+
+    return chat_messages
 
 
 class ChatFlow:
@@ -337,7 +377,7 @@ class ChatFlow:
         self,
         query_str: str,
         original_user_message: str,
-        image_documents: Sequence[ImageDocument] = [],
+        image_blocks: Sequence[ImageBlock] = [],
         knowledgebase_name: str = "default",
         chat_history_str: str = None,
         model_id: str = None,
@@ -354,7 +394,7 @@ class ChatFlow:
         response = await synthesizer.asynthesize(
             query_str=original_user_message,
             nodes=nodes,
-            image_documents=image_documents,
+            image_blocks=image_blocks,
             stream=stream,
             chat_history_str=chat_history_str,
             system_role_str=qa_prompt_templates["system_prompt_template"],
@@ -369,7 +409,6 @@ class ChatFlow:
         self,
         model_id: str,
         messages: List[ChatMessage],
-        image_documents: List[ImageNode] = [],
         system_prompt: str = None,
         stream: bool = False,
         **llm_kwargs,
@@ -399,22 +438,13 @@ class ChatFlow:
         )
 
         messages = prompt_messages + messages
-        if isinstance(llm, PaiLlm):
-            if stream:
-                response_gen = await llm.astream_chat(messages, **llm_kwargs)
-                return ChatResponseWrapper(response=response_gen)
-            else:
-                response = await llm.achat(messages, **llm_kwargs)
-                return ChatResponseWrapper(response=response)
-        elif isinstance(llm, PaiMultiModalLlm):
-            if stream:
-                response_gen = await llm.astream_chat(
-                    messages, image_documents, **llm_kwargs
-                )
-                return ChatResponseWrapper(response=response_gen)
-            else:
-                response = await llm.achat(messages, image_documents, **llm_kwargs)
-                return ChatResponseWrapper(response=response)
+
+        if stream:
+            response_gen = await llm.astream_chat(messages, **llm_kwargs)
+            return ChatResponseWrapper(response=response_gen)
+        else:
+            response = await llm.achat(messages, **llm_kwargs)
+            return ChatResponseWrapper(response=response)
 
     async def aretrieve(
         self,
@@ -456,13 +486,17 @@ class ChatFlow:
         start_time: float = 0.0,
     ) -> ChatResponseWrapper:
         system_prompt, messages = parse_system_prompt(chat_request.messages)
-        messages, image_documents = parse_image_documents(messages)
+        messages = parse_messages(messages)
         if message_is_empty(messages):
             if chat_request.stream:
                 return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
             return response_from_text(DEFAULT_EMPTY_RESPONSE)
 
         chat_request.messages = remove_think_from_messages(messages)
+        image_blocks = [
+            block for block in messages[-1].blocks if isinstance(block, ImageBlock)
+        ]
+
         chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
 
         original_user_message = chat_request.messages[-1].content
@@ -494,11 +528,6 @@ class ChatFlow:
             response_wrapper = await self.achat_llm(
                 model_id=chat_request.model,
                 messages=chat_request.messages,
-                image_documents=[
-                    item
-                    for message_images in image_documents
-                    for item in message_images
-                ],
                 stream=chat_request.stream,
                 system_prompt=system_prompt,
                 **llm_kwargs,
@@ -534,7 +563,7 @@ class ChatFlow:
             response_wrapper = await self.achat_knowledgebase(
                 query_str=intent_result.query_str,
                 original_user_message=original_user_message,
-                image_documents=image_documents[-1] if image_documents else [],
+                image_blocks=image_blocks,
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,

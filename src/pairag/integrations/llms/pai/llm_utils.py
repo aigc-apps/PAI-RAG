@@ -1,5 +1,5 @@
 import os
-from typing import Sequence
+from typing import Sequence, List, Union
 from urllib.parse import urljoin
 from llama_index.llms.openai_like import OpenAILike
 from pairag.integrations.llms.pai.llm_config import (
@@ -8,7 +8,7 @@ from pairag.integrations.llms.pai.llm_config import (
 from pairag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
-from llama_index.core.base.llms.types import ChatMessage
+from llama_index.core.base.llms.types import ChatMessage, TextBlock, ImageBlock
 
 from loguru import logger
 
@@ -87,16 +87,21 @@ def merge_consecutive_messages(
         return merged_messages
 
     current_role = messages[0].role
-    current_text = ""
+    current_blocks: List[Union[TextBlock, ImageBlock]] = []
 
     for message in messages:
         if message.role == current_role:
-            current_text += message.content
+            # 保留所有块（包括文本、图片等）
+            current_blocks.extend(message.blocks)
         else:
-            merged_messages.append(ChatMessage(role=current_role, content=current_text))
+            # 添加合并后的消息
+            merged_messages.append(
+                ChatMessage(role=current_role, blocks=current_blocks)
+            )
             current_role = message.role
-            current_text = message.content
+            current_blocks = message.blocks.copy()  # 开始新的块序列
 
-    merged_messages.append(ChatMessage(role=current_role, content=current_text))
+    # 添加最后一个合并后的消息
+    merged_messages.append(ChatMessage(role=current_role, blocks=current_blocks))
 
     return merged_messages

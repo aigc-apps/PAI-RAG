@@ -38,22 +38,6 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         description="Llm configuration",
     )
 
-    def messages_to_prompt(messages: Sequence[ChatMessage]) -> str:
-        """Convert messages to a prompt string."""
-        string_messages = []
-        for message in messages:
-            role = message.role
-            content = message.content
-            string_message = f"{role.value}: {content}"
-
-            additional_kwargs = message.additional_kwargs
-            if additional_kwargs:
-                string_message += f"\n{additional_kwargs}"
-            string_messages.append(string_message)
-
-        string_messages.append(f"{MessageRole.ASSISTANT.value}: ")
-        return "\n".join(string_messages)
-
     def __init__(self, llm_config: OpenAICompatibleLlmConfig):
         super().__init__()
         self.llm_config = llm_config
@@ -100,32 +84,18 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     def chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponse:
         """Chat endpoint for Multi-Modal LLM."""
-        prompt = self.messages_to_prompt(messages)
-        chat_message = self._get_multi_modal_chat_message(
-            prompt=prompt,
-            role=MessageRole.USER,
-            image_documents=image_documents,
-        )
-        return self._llm.chat(messages=[chat_message], **kwargs)
+        return self._llm.chat(messages=messages, **kwargs)
 
     def stream_chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponseGen:
         """Stream chat endpoint for Multi-Modal LLM."""
-        prompt = self.messages_to_prompt(messages)
-        chat_message = self._get_multi_modal_chat_message(
-            prompt=prompt,
-            role=MessageRole.USER,
-            image_documents=image_documents,
-        )
-        return self._llm.stream_chat(messages=[chat_message], **kwargs)
+        return self._llm.stream_chat(messages=messages, **kwargs)
 
     # ===== Async methods =====
 
@@ -148,29 +118,19 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     async def achat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponse:
         """Async chat endpoint for Multi-Modal LLM."""
         """Chat with the model."""
         if not self.metadata.is_chat_model:
-            prompt = self.messages_to_prompt(messages)
-            completion_response = self.complete(prompt, image_documents, **kwargs)
+            completion_response = await self.achat(messages, **kwargs)
             return completion_response_to_chat_response(completion_response)
 
-        prompt = self.messages_to_prompt(messages)
-        chat_message = self._get_multi_modal_chat_message(
-            prompt=prompt,
-            role=MessageRole.USER,
-            image_documents=image_documents,
-        )
-
-        return self._llm.chat([chat_message], **kwargs)
+        return await self._llm.achat(messages, **kwargs)
 
     async def astream_chat(
         self,
         messages: Sequence[ChatMessage],
-        image_documents: Sequence[ImageDocument] = [],
         **kwargs: Any,
     ) -> ChatResponseAsyncGen:
         """Async streaming chat endpoint for Multi-Modal LLM."""
@@ -182,12 +142,8 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
             logger.info(
                 f"add mandatory think for reasoning models, messages: {messages}"
             )
-        logger.info(f"images: {image_documents}")
         if not self.metadata.is_chat_model:
-            prompt = self.messages_to_prompt(messages)
-            completion_response = await self.astream_complete(
-                prompt, image_documents, **kwargs
-            )
+            completion_response = await self.astream_chat(messages, **kwargs)
             return self.async_stream_completion_response_to_chat_response(
                 completion_response
             )
@@ -199,9 +155,8 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         ]
 
         return await self.async_chat_response_to_chat_response_with_think(
-            filterd_messages, image_documents, **kwargs
+            filterd_messages, **kwargs
         )
-        # return await self._llm.astream_chat(messages=messages, **kwargs)
 
     def async_stream_completion_response_to_chat_response(
         self,
@@ -246,16 +201,10 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         return gen()
 
     async def async_chat_response_to_chat_response_with_think(
-        self, messages, image_documents, **kwargs
+        self, messages, **kwargs
     ) -> ChatResponseAsyncGen:
         is_enable_thinking = (
             self.llm_config.is_reasoning_model and self._is_enable_thinking(**kwargs)
-        )
-        prompt = self.messages_to_prompt(messages)
-        chat_message = self._get_multi_modal_chat_message(
-            prompt=prompt,
-            role=MessageRole.USER,
-            image_documents=image_documents,
         )
         if is_enable_thinking:
             logger.info("Using reasoning models with think.")
@@ -263,9 +212,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
 
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
-                async for response in await self._llm.astream_chat(
-                    [chat_message], **kwargs
-                ):
+                async for response in await self._llm.astream_chat(messages, **kwargs):
                     yield response
 
             return gen()
@@ -274,9 +221,7 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
             @use_current_span(get_current_span())
             async def gen() -> ChatResponseAsyncGen:
                 start_label = True
-                async for response in await self._llm.astream_chat(
-                    [chat_message], **kwargs
-                ):
+                async for response in await self._llm.astream_chat(messages, **kwargs):
                     if start_label and not response.delta:
                         continue
                     if start_label and not response.delta.startswith("<think>"):
