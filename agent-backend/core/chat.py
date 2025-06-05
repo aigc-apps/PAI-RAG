@@ -5,8 +5,8 @@ import json
 from utils.messages import convert_to_openai_messages
 from tools.mcp.mcp_client import resolve_mcp_clients
 from utils.prompts import (
-    NOT_DEEP_RESEARCH_PROMPT,
-    DEEP_RESEARCH_PROMPT,
+    PROMPT_WITH_DEEP_RESEARCH,
+    PROMPT_WITHOUT_DEEP_RESEARCH,
     PROMPT_WITHOUT_TOOLS,
 )
 from utils.time_utils import get_prompt_current_time_str
@@ -21,6 +21,7 @@ from openai.types.chat import (
 )
 from search.aliyun_search_tool import aget_aliyun_search_tool
 from utils.models import fetch_llm
+from utils.constants import MAX_CHAT_STEPS
 
 app = FastAPI()
 
@@ -101,9 +102,8 @@ async def process_mcp_tools():
 # 流式生成文本
 async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
     try:
-        max_steps = 15  # 防止无限循环的最大步骤数
+        max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
-        stop_flag = False
         while step_count < max_steps:
             response = await gen_stream_response(
                 model, model_name, messages, openai_tools
@@ -112,21 +112,24 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
             draft_tool_calls_index = -1
             async for chunk in response:
                 for choice in chunk.choices:
+                    print("*******choice*******", choice)
                     # 模型生成已结束
-                    if choice.finish_reason == "stop":
-                        stop_flag = True
+                    if (
+                        choice.finish_reason == "stop"
+                        or choice.finish_reason == "length"
+                    ):
                         if choice.delta.content:
                             yield "0:{text}\n".format(
                                 text=json.dumps(
                                     choice.delta.content, ensure_ascii=False
                                 )
                             )
-                        yield 'd:{"finishReason":"stop"}\n'
-                        break
+                        yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
+                        return
                     # 调用工具,收集工具参数
                     elif choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
-                            id = tool_call.id
+                            id = tool_call.idll
                             name = tool_call.function.name
                             arguments = tool_call.function.arguments or ""
 
@@ -208,11 +211,8 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
 
                             except Exception as e:
                                 logger.error(f"工具调用异常: {str(e)}")
-                                error_message = {
-                                    "finishReason": "工具调用发生未知错误，请检查输入或重试"
-                                }
-                                yield "d:{text}\n".format(
-                                    text=json.dumps(error_message, ensure_ascii=False)
+                                yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
+                                    e
                                 )
 
                 if chunk.choices == []:
@@ -225,14 +225,29 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                         prompt=prompt_tokens,
                         completion=completion_tokens,
                     )
-            if stop_flag:
-                break
             step_count += 1
-        if not stop_flag:
-            yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
+        yield "0:Agent stopped due to iteration limit\n"
+        yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
     except Exception as e:
         yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(e)
         raise
+
+
+def x_options_to_prompt_mode(x_options):
+    if "search" in x_options or "mcp" in x_options:
+        if "thinking" in x_options:
+            system_prompt = PROMPT_WITH_DEEP_RESEARCH.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+        else:
+            system_prompt = PROMPT_WITHOUT_DEEP_RESEARCH.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+    else:
+        system_prompt = PROMPT_WITHOUT_TOOLS.format(
+            current_datetime=get_prompt_current_time_str()
+        )
+    return system_prompt
 
 
 async def handle_chat(request: Request):
@@ -251,20 +266,7 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
-        if "search" in x_options or "mcp" in x_options:
-            if "thinking" in x_options:
-                system_prompt = DEEP_RESEARCH_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                )
-            else:
-                system_prompt = NOT_DEEP_RESEARCH_PROMPT.format(
-                    current_datetime=get_prompt_current_time_str()
-                )
-        else:
-            system_prompt = PROMPT_WITHOUT_TOOLS.format(
-                current_datetime=get_prompt_current_time_str()
-            )
-        system = data.get("system", system_prompt)
+        system = data.get("system", x_options_to_prompt_mode(x_options))
 
         if "search" in x_options:
             search_openai_tools, search_tools_name_to_fn = (

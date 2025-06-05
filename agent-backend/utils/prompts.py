@@ -8,7 +8,7 @@ PROMPT_WITHOUT_TOOLS = """
 """
 
 
-DEEP_RESEARCH_PROMPT = """
+PROMPT_WITH_DEEP_RESEARCH = """
 当前系统时间：{current_datetime}
 
 1. 你是一个 agent，请首先判断是否被提供可用的互联网搜索工具search_web或者其他工具。如果没有被提供任何工具，请思考后直接回答。如果有可用工具，再决定是否需要调用工具。
@@ -50,7 +50,7 @@ DEEP_RESEARCH_PROMPT = """
 6. 请仔细思考后，给出你的答案：
 """
 
-NOT_DEEP_RESEARCH_PROMPT = """
+PROMPT_WITHOUT_DEEP_RESEARCH = """
 当前系统时间：{current_datetime}
 
 1. 你是一个 agent，请首先判断是否被提供可用的互联网搜索工具search_web。如果没有被提供网络搜索工具search_web，请直接回答。
