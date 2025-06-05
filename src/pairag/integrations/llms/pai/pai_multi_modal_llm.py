@@ -28,7 +28,6 @@ from pairag.integrations.trace.base import use_current_span
 from pairag.integrations.llms.pai.open_ai_alike_multi_modal import (
     OpenAIAlikeMultiModal,
 )
-from pairag.integrations.llms.utils.utils import transform_to_image_nodes
 from loguru import logger
 
 
@@ -105,10 +104,6 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         **kwargs: Any,
     ) -> ChatResponse:
         """Chat endpoint for Multi-Modal LLM."""
-        query_str = messages[-1].content
-        additonal_images = transform_to_image_nodes(query_str)
-        if additonal_images:
-            image_documents.extend(additonal_images)
         prompt = self.messages_to_prompt(messages)
         chat_message = self._get_multi_modal_chat_message(
             prompt=prompt,
@@ -124,10 +119,6 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
         **kwargs: Any,
     ) -> ChatResponseGen:
         """Stream chat endpoint for Multi-Modal LLM."""
-        query_str = messages[-1].content
-        additonal_images = transform_to_image_nodes(query_str)
-        if additonal_images:
-            image_documents.extend(additonal_images)
         prompt = self.messages_to_prompt(messages)
         chat_message = self._get_multi_modal_chat_message(
             prompt=prompt,
@@ -162,10 +153,6 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
     ) -> ChatResponse:
         """Async chat endpoint for Multi-Modal LLM."""
         """Chat with the model."""
-        query_str = messages[-1].content
-        additonal_images = transform_to_image_nodes(query_str)
-        if additonal_images:
-            image_documents.extend(additonal_images)
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
             completion_response = self.complete(prompt, image_documents, **kwargs)
@@ -195,10 +182,6 @@ class PaiMultiModalLlm(OpenAIAlikeMultiModal):
             logger.info(
                 f"add mandatory think for reasoning models, messages: {messages}"
             )
-        query_str = messages[-1].content
-        additonal_images = transform_to_image_nodes(query_str)
-        if additonal_images:
-            image_documents.extend(additonal_images)
         logger.info(f"images: {image_documents}")
         if not self.metadata.is_chat_model:
             prompt = self.messages_to_prompt(messages)
