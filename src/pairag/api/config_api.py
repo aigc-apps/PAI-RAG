@@ -5,7 +5,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models import LlmModelEntity, LlmModelCreate, LlmModelRead
 from pairag.db.db_context import db_context
 from pairag.db.encrypt_utils import encrypt_key
-
+from sqlalchemy.exc import IntegrityError
+from loguru import logger
 
 config_router = APIRouter()
 
@@ -22,9 +23,27 @@ async def create_llm(
         llm_data, update={"encrypted_api_key": encrypted_api_key}
     )
     session.add(llm)
-    await session.commit()
-    await session.refresh(llm)
-    return llm
+    try:
+        await session.commit()
+        await session.refresh(llm)
+        return llm
+    except IntegrityError as e:
+        logger.error(f"IntegrityError occurred when add llm: {e.orig}")
+        await session.rollback()
+
+        if "UniqueViolationError" in str(e.orig):
+            raise HTTPException(
+                status_code=400, detail=f"Model_id {llm_data.model_id} already exists."
+            )
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to add llm config: {str(e)}"
+            )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"Failed to add llm config: {str(e)}"
+        )
 
 
 @config_router.get("/llms/", response_model=List[LlmModelRead])
