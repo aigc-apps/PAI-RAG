@@ -5,9 +5,11 @@ import json
 import tablestore
 from llama_index.core.vector_stores.simple import DEFAULT_VECTOR_STORE, NAMESPACE_SEP
 from llama_index.core.vector_stores.types import DEFAULT_PERSIST_FNAME
+from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
+    SparseEmbeddingFunctionType,
 )
 from pairag.integrations.vector_stores.tablestore.tablestore import (
     TablestoreVectorStore,
@@ -154,6 +156,11 @@ def create_milvus(
 
     milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}/{milvus_config.database}"
     token = f"{milvus_config.user}:{milvus_config.password}"
+
+    if milvus_config.sparse_embedding_type == SparseEmbeddingFunctionType.bge_m3:
+        sparse_embedding_function = BGEM3SparseEmbeddingFunction()
+    else:
+        sparse_embedding_function = BM25BuiltInFunction()
     milvus_store = MilvusVectorStore(
         uri=milvus_url,
         token=token,
@@ -164,6 +171,7 @@ def create_milvus(
         hybrid_ranker="WeightedRanker",
         # TODO: add weighted reranker config
         hybrid_ranker_params={"weights": [0.5, 0.5]},
+        sparse_embedding_function=sparse_embedding_function,
     )
 
     return milvus_store

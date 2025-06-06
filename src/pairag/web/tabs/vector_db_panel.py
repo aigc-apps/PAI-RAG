@@ -169,6 +169,12 @@ def create_vector_db_panel() -> Dict[str, Any]:
                         elem_id="milvus_collection_name",
                         interactive=True,
                     )
+                    milvus_sparse_type = gr.Radio(
+                        label="稀疏向量(推荐bm25)",
+                        choices=["bge-m3", "bm25"],
+                        value="bm25",
+                        elem_id="milvus_sparse_type",
+                    )
 
             with gr.Column(visible=(vectordb_type == "faiss")) as faiss_col:
                 faiss_path = gr.Textbox(
@@ -337,6 +343,7 @@ def create_vector_db_panel() -> Dict[str, Any]:
                 milvus_password,
                 milvus_database,
                 milvus_collection_name,
+                milvus_sparse_type,
                 # opensearch
                 opensearch_endpoint,
                 opensearch_instance_id,
