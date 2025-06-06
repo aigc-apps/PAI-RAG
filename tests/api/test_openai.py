@@ -159,7 +159,9 @@ async def test_openai_chat_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "中国首都在哪里"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "中国首都在哪里"}]}
+                ],
                 "search_web": False,
                 "stream": True,
             },
@@ -290,7 +292,9 @@ async def test_openai_websearch_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": True,
                 "return_reference": True,
@@ -323,7 +327,9 @@ async def test_openai_websearch_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": True,
                 "return_reference": False,
@@ -362,7 +368,12 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Where do you recommend for a good trip to China?",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Where do you recommend for a good trip to China?",
+                            }
+                        ],
                     }
                 ],
                 "stream": True,
@@ -460,7 +471,10 @@ async def test_rag_chat():
             json={
                 "model": "default",
                 "messages": [
-                    {"role": "user", "content": "What did the author do growing up?"}
+                    {
+                        "role": "user",
+                        "content": "What did the author do growing up?",
+                    }
                 ],
                 "stream": True,
                 "chat_knowledgebase": True,

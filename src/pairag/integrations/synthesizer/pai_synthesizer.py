@@ -18,7 +18,11 @@ from llama_index.core.base.response.schema import (
 from llama_index.core.instrumentation.events.synthesis import (
     SynthesizeStartEvent,
 )
-from llama_index.core.base.llms.types import ChatResponse, ChatResponseAsyncGen
+from llama_index.core.base.llms.types import (
+    ChatResponse,
+    ChatResponseAsyncGen,
+    ImageBlock,
+)
 from llama_index.core.prompts import PromptTemplate
 from pairag.chat.models import ChatResponseWrapper
 from pairag.integrations.synthesizer.prompt_templates import (
@@ -96,6 +100,7 @@ class PaiSynthesizer:
         query_str: str,
         chat_history_str: str,
         nodes: List[NodeWithScore],
+        image_blocks: Sequence[ImageBlock] = [],
         stream: bool = False,
         additional_source_nodes: Optional[Sequence[NodeWithScore]] = None,
         system_role_str: str = DEFAULT_SYSTEM_ROLE_TEMPLATE,
@@ -116,6 +121,7 @@ class PaiSynthesizer:
             response = await self.aget_response(
                 query_str=query_str,
                 nodes=nodes,
+                image_blocks=image_blocks,
                 history_str=chat_history_str,
                 streaming=stream,
                 system_role_str=system_role_str,
@@ -146,6 +152,7 @@ Document {i+1}:
         self,
         query_str: str,
         nodes: List[NodeWithScore],
+        image_blocks: Sequence[ImageBlock] = [],
         history_str: str = None,
         streaming: bool = False,
         citation: bool = False,
@@ -192,7 +199,7 @@ Document {i+1}:
             context_str=truncated_context_list[0],
             **response_kwargs,
         )
-
+        messages[-1].blocks.extend(image_blocks)
         if not streaming:
             response = await self._llm.achat(
                 messages=messages,

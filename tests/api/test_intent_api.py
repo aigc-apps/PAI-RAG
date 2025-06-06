@@ -16,7 +16,9 @@ async def test_intent():
             "/chat/intent",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "今天有哪些国际新闻"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "今天有哪些国际新闻"}]}
+                ],
                 "search_web": True,
                 "chat_news": True,
             },

@@ -1,8 +1,12 @@
-import re
 import time
-from typing import Any, AsyncGenerator, Dict, List
+from typing import (
+    Any,
+    AsyncGenerator,
+    Dict,
+    List,
+    Sequence,
+)
 from llama_index.core.schema import NodeWithScore
-
 from pairag.core.rag_config import RagConfig
 from pairag.core.rag_module import (
     resolve_huggingface_embedding,
@@ -42,6 +46,7 @@ from pairag.chat.models import (
 from llama_index.core.base.llms.types import (
     ChatMessage,
     MessageRole,
+    ImageBlock,
 )
 
 from openai.types.chat import (
@@ -58,42 +63,19 @@ from loguru import logger
 from pairag.utils.time_utils import get_prompt_current_time_str
 from pairag.integrations.trace.pai_query_wrapper import pai_query_wrapper
 import llama_index.core.instrumentation as instrument
+from pairag.chat.utils.message_utils import (
+    remove_think_from_messages,
+    message_is_empty,
+    parse_system_prompt,
+    parse_messages,
+)
+
 
 dispatcher = instrument.get_dispatcher(__name__)
 
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
-
-
-def message_is_empty(messages: List[ChatMessage]):
-    if len(messages) == 0 or messages[-1].content is None or messages[-1].content == "":
-        return True
-
-    return False
-
-
-def remove_think_from_messages(messages: List[ChatMessage]):
-    new_messages = []
-    for message in messages:
-        if message.content is not None:
-            message.content = re.sub(
-                r"<think>.*?</think>\n*",
-                "",
-                message.content,
-                flags=re.DOTALL,
-            )
-        new_messages.append(message)
-    return new_messages
-
-
-def parse_system_prompt(messages: List[ChatMessage]):
-    messages = [message for message in messages if message.content]
-    if len(messages) > 0 and messages[0].role == MessageRole.SYSTEM:
-        system_prompt = messages[0].content
-        return system_prompt, messages[1:]
-
-    return None, messages
 
 
 class ChatFlow:
@@ -289,7 +271,8 @@ class ChatFlow:
         self,
         query_str: str,
         original_user_message: str,
-        knowledgebase_name: str,
+        image_blocks: Sequence[ImageBlock] = [],
+        knowledgebase_name: str = "default",
         chat_history_str: str = None,
         model_id: str = None,
         stream: bool = False,
@@ -305,6 +288,7 @@ class ChatFlow:
         response = await synthesizer.asynthesize(
             query_str=original_user_message,
             nodes=nodes,
+            image_blocks=image_blocks,
             stream=stream,
             chat_history_str=chat_history_str,
             system_role_str=qa_prompt_templates["system_prompt_template"],
@@ -396,12 +380,17 @@ class ChatFlow:
         start_time: float = 0.0,
     ) -> ChatResponseWrapper:
         system_prompt, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
         if message_is_empty(messages):
             if chat_request.stream:
                 return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
             return response_from_text(DEFAULT_EMPTY_RESPONSE)
 
         chat_request.messages = remove_think_from_messages(messages)
+        image_blocks = [
+            block for block in messages[-1].blocks if isinstance(block, ImageBlock)
+        ]
+
         chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
 
         original_user_message = chat_request.messages[-1].content
@@ -468,6 +457,7 @@ class ChatFlow:
             response_wrapper = await self.achat_knowledgebase(
                 query_str=intent_result.query_str,
                 original_user_message=original_user_message,
+                image_blocks=image_blocks,
                 chat_history_str=chat_history_str,
                 stream=chat_request.stream,
                 model_id=chat_request.model,
@@ -734,7 +724,7 @@ class ChatFlow:
     ) -> IntentResult:
         logger.info(f"arecognize_intent: {chat_request}")
         _, messages = parse_system_prompt(chat_request.messages)
-
+        messages = parse_messages(messages)
         chat_request.messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
 
