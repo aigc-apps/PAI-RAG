@@ -724,7 +724,7 @@ class ChatFlow:
     ) -> IntentResult:
         logger.info(f"arecognize_intent: {chat_request}")
         _, messages = parse_system_prompt(chat_request.messages)
-
+        messages = parse_messages(messages)
         chat_request.messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(chat_request.messages[-7:-1])
 
