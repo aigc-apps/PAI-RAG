@@ -154,7 +154,7 @@ def create_milvus(
     if is_image_store:
         collection_name = f"{collection_name}__image"
 
-    milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}/{milvus_config.database}"
+    milvus_url = f"http://{milvus_config.host.strip('/')}:{milvus_config.port}"
     token = f"{milvus_config.user}:{milvus_config.password}"
 
     if milvus_config.sparse_embedding_type == SparseEmbeddingFunctionType.bge_m3:
@@ -172,6 +172,7 @@ def create_milvus(
         # TODO: add weighted reranker config
         hybrid_ranker_params={"weights": [0.5, 0.5]},
         sparse_embedding_function=sparse_embedding_function,
+        db_name=milvus_config.database,
     )
 
     return milvus_store
