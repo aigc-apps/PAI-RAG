@@ -12,7 +12,7 @@ from utils.prompts import (
 from utils.time_utils import get_prompt_current_time_str
 from llama_index.tools.mcp.base import McpToolSpec
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, wait_fixed
 from openai.types.chat import (
     ChatCompletionToolMessageParam,
     ChatCompletionSystemMessageParam,
@@ -101,6 +101,11 @@ async def process_mcp_tools():
     return openai_tools, tools_name_to_fn
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+async def call_tool_with_retry(tool_name, tool_args, tools_name_to_fn):
+    return await tools_name_to_fn[tool_name].acall(**tool_args)
+
+
 # 流式生成文本
 async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
     try:
@@ -122,7 +127,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             name = tool_call.function.name
                             arguments = tool_call.function.arguments or ""
 
-                            if id is not None and id != "":
+                            if id:
                                 draft_tool_calls_index += 1
                                 draft_tool_calls.append(
                                     {"id": id, "name": name, "arguments": arguments}
@@ -158,9 +163,9 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             else:
                                 args = {}
                             try:
-                                result = await tools_name_to_fn[
-                                    tool_call["name"]
-                                ].acall(**args)
+                                result = await call_tool_with_retry(
+                                    tool_call["name"], args, tools_name_to_fn
+                                )
 
                                 tool_result = result.content
 
@@ -199,11 +204,21 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                                     )
                                 )
 
+                            except (ValueError, TypeError, KeyError) as e:
+                                # 情况1: 参数错误
+                                logger.exception("工具调用参数异常")
+                                yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
+                                    e
+                                )
+                                continue  # 继续调用 LLM
                             except Exception as e:
+                                # 情况3: 其他错误
                                 logger.exception("工具调用异常")
                                 yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
                                     e
                                 )
+                                stop_flag = True
+
                     # 2.自然停止输出or因生成长度过长而结束
                     elif (
                         choice.finish_reason == "stop"
@@ -218,7 +233,7 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                             )
                         yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
                         break
-
+                # 在include_usage为true时，最后一个chunk为空，本次chat请求使用的Token信息在最后一个chunk显示。
                 if chunk.choices == []:
                     usage = chunk.usage
                     prompt_tokens = usage.prompt_tokens
