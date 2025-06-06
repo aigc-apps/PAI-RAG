@@ -138,7 +138,9 @@ async def test_openai_chat():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "中国首都在哪里"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "中国首都在哪里"}]}
+                ],
                 "search_web": False,
                 "stream": False,
             },
@@ -159,7 +161,9 @@ async def test_openai_chat_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "中国首都在哪里"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "中国首都在哪里"}]}
+                ],
                 "search_web": False,
                 "stream": True,
             },
@@ -187,7 +191,9 @@ async def test_openai_websearch():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "你是谁"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "你是谁"}]}
+                ],
                 "search_web": True,
                 "stream": False,
                 "return_reference": True,
@@ -208,7 +214,9 @@ async def test_openai_websearch():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": False,
                 "return_reference": True,
@@ -233,7 +241,9 @@ async def test_openai_websearch():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": False,
                 "return_reference": False,
@@ -261,7 +271,9 @@ async def test_openai_websearch_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "你是谁"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "你是谁"}]}
+                ],
                 "search_web": True,
                 "stream": True,
                 "return_reference": True,
@@ -290,7 +302,9 @@ async def test_openai_websearch_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": True,
                 "return_reference": True,
@@ -323,7 +337,9 @@ async def test_openai_websearch_stream():
             "/v1/chat/completions",
             json={
                 "model": "default",
-                "messages": [{"role": "user", "content": "最新的阿里巴巴股价"}],
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "最新的阿里巴巴股价"}]}
+                ],
                 "search_web": True,
                 "stream": True,
                 "return_reference": False,
@@ -362,7 +378,12 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Where do you recommend for a good trip to China?",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Where do you recommend for a good trip to China?",
+                            }
+                        ],
                     }
                 ],
                 "stream": True,
@@ -395,7 +416,7 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "为什么会生成空模型?",
+                        "content": [{"type": "text", "text": "为什么会生成空模型?"}],
                     }
                 ],
                 "stream": True,
@@ -428,7 +449,12 @@ async def test_rag_chat():
                 "messages": [
                     {
                         "role": "user",
-                        "content": "Why does my experiment generate an empty model?",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Why does my experiment generate an empty model?",
+                            }
+                        ],
                     }
                 ],
                 "stream": True,
@@ -460,7 +486,15 @@ async def test_rag_chat():
             json={
                 "model": "default",
                 "messages": [
-                    {"role": "user", "content": "What did the author do growing up?"}
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "What did the author do growing up?",
+                            }
+                        ],
+                    }
                 ],
                 "stream": True,
                 "chat_knowledgebase": True,
