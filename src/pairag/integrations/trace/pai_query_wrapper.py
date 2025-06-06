@@ -18,6 +18,7 @@ from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindVal
 from opentelemetry.context import attach, detach
 from opentelemetry import trace
 from opentelemetry.trace.status import Status, StatusCode
+from pairag.chat.utils.message_utils import extract_openai_message_content
 
 tracer = trace.get_tracer(__name__, tracer_provider=trace.get_tracer_provider())
 
@@ -60,7 +61,8 @@ def pai_query_wrapper() -> Callable:
                 if request.messages:
                     # set latest input as input value
                     otel_span.set_attribute(
-                        INPUT_VALUE, request.messages[-1].blocks[0].text
+                        INPUT_VALUE,
+                        extract_openai_message_content(request.messages[-1]),
                     )
                 otel_span.set_attribute(
                     INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
