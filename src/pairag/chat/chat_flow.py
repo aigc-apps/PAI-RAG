@@ -127,7 +127,7 @@ def parse_system_prompt(messages: List[ChatCompletionUserMessageParam]):
 
 def from_openai_message_dict(message_dict: dict) -> ChatMessage:
     """Convert openai message dict to generic message."""
-    role = message_dict["role"]
+    role = message_dict.get("role")
     # NOTE: Azure OpenAI returns function calling messages without a content key
     content = message_dict.get("content")
     blocks = []
@@ -137,8 +137,8 @@ def from_openai_message_dict(message_dict: dict) -> ChatMessage:
             if t == "text":
                 blocks.append(TextBlock(text=elem.get("text")))
             elif t == "image_url":
-                img = elem["image_url"]["url"]
-                detail = elem["image_url"].get("detail", "auto")
+                img = elem.get("image_url").get("url")
+                detail = elem.get("image_url").get("detail", "auto")
                 if img.startswith("data:"):
                     blocks.append(ImageBlock(image=img, detail=detail))
                 else:
