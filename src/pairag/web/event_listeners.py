@@ -54,6 +54,8 @@ def update_index(*components):
     rag_client.update_index(index_entry)
     index_map = get_index_map()
     logger.info(f"Update index {index_entry.name} successfully")
+    gr.Success(f"Update index {index_entry.name} successfully.", duration=1)
+
     return [
         gr.update(
             choices=list(index_map.knowledgebases.keys()) + ["NEW"],
