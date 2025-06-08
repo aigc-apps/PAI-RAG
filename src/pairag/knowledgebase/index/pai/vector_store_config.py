@@ -1,5 +1,8 @@
 from typing import Annotated, Literal, Union
 from pydantic import BaseModel, ConfigDict, Field
+from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
+    SparseEmbeddingFunctionType,
+)
 from enum import Enum
 
 DEFAULT_LOCAL_STORAGE_PATH_OLD = "./localdata/storage"
@@ -91,6 +94,9 @@ class MilvusVectorStoreConfig(BaseVectorStoreConfig):
     password: str
     database: str
     collection_name: str
+    sparse_embedding_type: SparseEmbeddingFunctionType = (
+        SparseEmbeddingFunctionType.bm25
+    )
 
 
 class OpenSearchVectorStoreConfig(BaseVectorStoreConfig):
