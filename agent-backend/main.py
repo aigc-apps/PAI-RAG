@@ -36,10 +36,11 @@ class MCPConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     id: str
-    source: str = None
+    model_id: str = None
     model_name: str = None
+    base_url: str = None
     api_key: str = None
-    max_context: int = 4096
+    is_active: bool = True
 
 
 class LLMConfigRequest(BaseModel):
@@ -98,19 +99,31 @@ def get_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取配置失败: {str(e)}")
 
+    url_and_source_map = {
+        "https://api.openai.com/v1": "OpenAI",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1": "Qwen",
+    }
+
     grouped = {}
 
     # 处理 llm_config
     for config in data.get("llm_config", []):
-        source = config.get("source")
-        model_name = config.get("model_name")
-        if not source or not model_name:
+        base_url = config.get("base_url")
+        model_id = config.get("model_id")
+        is_active = config.get("is_active", False)
+        source = None
+        if base_url in url_and_source_map:
+            source = url_and_source_map[base_url]
+        else:
+            source = "Others"
+
+        if not source or not model_id or not is_active:
             continue  # 跳过无效配置
 
         if source not in grouped:
             grouped[source] = []
 
-        grouped[source].append({"name": model_name, "id": config.get("id")})
+        grouped[source].append({"name": model_id, "id": config.get("id")})
 
     return {
         "groups": [
@@ -138,10 +151,11 @@ async def add_llm(req: LLMConfigRequest):
         is_existing = False
         for existing_config in current_data["llm_config"]:
             if existing_config["id"] == req.llm_config.id:
-                existing_config["source"] = req.llm_config.source
+                existing_config["model_id"] = req.llm_config.model_id
                 existing_config["model_name"] = req.llm_config.model_name
+                existing_config["base_url"] = req.llm_config.base_url
                 existing_config["api_key"] = req.llm_config.api_key
-                existing_config["max_context"] = req.llm_config.max_context
+                existing_config["is_active"] = req.llm_config.is_active
                 is_existing = True
                 break
         if not is_existing:
