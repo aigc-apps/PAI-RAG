@@ -225,12 +225,6 @@ async def generate_stream(model, model_name, messages, openai_tools, tools_name_
                         or choice.finish_reason == "length"
                     ):
                         stop_flag = True
-                        if choice.delta.content:
-                            yield "0:{text}\n".format(
-                                text=json.dumps(
-                                    choice.delta.content, ensure_ascii=False
-                                )
-                            )
                         yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
                         break
                 # 在include_usage为true时，最后一个chunk为空，本次chat请求使用的Token信息在最后一个chunk显示。

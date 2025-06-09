@@ -17,7 +17,7 @@ class MCPServerConfig(BaseModel):
     url: str
     auth_token: Optional[str] = None
     type: str = "sse"
-    active: Optional[bool] = False
+    enabled: Optional[bool] = True
 
 
 class BasicMCPClient:

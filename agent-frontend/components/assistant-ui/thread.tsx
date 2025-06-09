@@ -109,8 +109,9 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
     }
 
-    const activeMcp = mcpConfigs.find((cfg) => cfg.active);
-    if (activeMcp && hasMcp) {
+    const activeMcp = updatedConfigs.find((cfg) => cfg.active);
+
+    if (activeMcp) {
       updatedOptions = [
         ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")),
         `mcp:${activeMcp.id}`,
@@ -122,71 +123,6 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
 
     // 7. 同步到父组件
     onToggleChange?.(updatedOptions);
-  };
-  // 保存MCP配置到后端
-  const handleSaveMcpConfig = async (updatedConfigs: MCPConfig[]) => {
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-    const url = `http://localhost:${port}/api/add_mcp`;
-
-    try {
-      // 使用 Promise.all 并行发送所有请求
-      const savePromises = updatedConfigs.map((config) =>
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mcp_config: config }), // 每个请求只发送一个配置项
-        }),
-      );
-
-      // 等待所有请求完成
-      const responses = await Promise.all(savePromises);
-
-      // 检查是否有失败的响应
-      const hasError = responses.some((res) => !res.ok);
-
-      if (hasError) {
-        throw new Error("部分配置保存失败");
-      }
-
-      // 如果全部成功，更新本地状态
-      setMcpConfigs(updatedConfigs);
-      // 仅更新 MCP 激活状态，不强制触发 toggle change
-      const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
-      setActiveTools((prev) => {
-        const newTools = [...prev.filter((t) => t !== "mcp")]; // 先移除现有mcp状态
-        if (hasActiveMcp) {
-          newTools.push("mcp");
-          if (!newTools.includes("thinking")) newTools.push("thinking");
-        }
-        return newTools;
-      });
-    } catch (err: any) {
-      // 设置错误信息
-      setMcpError(err.message || "保存失败");
-    } finally {
-      // 关闭模态框
-      setIsModalOpen(false);
-    }
-  };
-  // 处理工具切换
-  const handleToggleChange = (newOptions: string[]) => {
-    let updatedOptions = [...newOptions];
-    const hasMcp = updatedOptions.includes("mcp");
-    const hasThinking = updatedOptions.includes("thinking");
-    const activeMcp = mcpConfigs.find((cfg) => cfg.active);
-
-    // 自动添加Thinking
-    if (hasMcp && !hasThinking && !activeTools.includes("thinking"))
-      updatedOptions.push("thinking");
-    if (
-      !hasThinking &&
-      activeTools.includes("thinking") &&
-      activeTools.includes("mcp")
-    )
-      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
-
-    setActiveTools(updatedOptions); // 更新状态
-    onToggleChange?.(updatedOptions); // 同步到父组件
   };
   const handleOpenMcpModal = () => {
     setIsModalOpen(true);
