@@ -2,7 +2,14 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pairag.db.models import LlmModelEntity, LlmModelCreate, LlmModelRead
+from pairag.db.models import (
+    LlmModelEntity,
+    LlmModelCreate,
+    LlmModelRead,
+    McpServerEntity,
+    McpServerCreate,
+    McpServerRead,
+)
 from pairag.db.db_context import db_context
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
@@ -85,7 +92,7 @@ async def update_llm(
         encrypt_key(update_llm.api_key) if update_llm.api_key else llm.encrypted_api_key
     )
 
-    await session.add(llm)
+    session.add(llm)
     await session.commit()
     await session.refresh(llm)
 
@@ -103,3 +110,107 @@ async def delete_llm(
     await session.delete(llm)
     await session.commit()
     return {"message": f"LLM {llm_id} deleted."}
+
+
+# MCP CRUD
+
+
+@config_router.post("/mcps/", response_model=McpServerRead)
+async def create_mcp(
+    mcp_data: McpServerCreate, session: AsyncSession = Depends(db_context.get_session)
+):
+    encrypted_auth_token = encrypt_key(mcp_data.auth_token)
+    mcp = McpServerEntity.model_validate(
+        mcp_data, update={"encrypted_auth_token": encrypted_auth_token}
+    )
+    session.add(mcp)
+    try:
+        await session.commit()
+        await session.refresh(mcp)
+        return mcp
+    except IntegrityError as e:
+        logger.error(f"IntegrityError occurred when add mcp: {e.orig}")
+        await session.rollback()
+
+        if "UniqueViolationError" in str(e.orig):
+            raise HTTPException(
+                status_code=400, detail=f"Mcp name {mcp.name} already exists."
+            )
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to add mcp config: {str(e)}"
+            )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"Failed to add mcp config: {str(e)}"
+        )
+
+
+@config_router.get("/mcps/", response_model=List[McpServerRead])
+async def list_mcps(
+    session: AsyncSession = Depends(db_context.get_session),
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+):
+    mcp_results = await session.exec(
+        select(McpServerEntity).offset(offset).limit(limit)
+    )
+    return mcp_results.all()
+
+
+@config_router.get("/mcps/{mcp_id}", response_model=McpServerRead)
+async def read_mcp(
+    mcp_id: int, session: AsyncSession = Depends(db_context.get_session)
+):
+    mcp = await session.get(McpServerEntity, mcp_id)
+    if not mcp:
+        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+
+    return mcp
+
+
+@config_router.patch("/mcps/{mcp_id}", response_model=McpServerRead)
+async def update_mcp(
+    mcp_id: int,
+    update_mcp: McpServerCreate,
+    session: AsyncSession = Depends(db_context.get_session),
+):
+    mcp = await session.get(McpServerEntity, mcp_id)
+    if not mcp:
+        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+
+    mcp.name = update_mcp.name or mcp.name
+    mcp.active = update_mcp.active
+    mcp.encrypted_auth_token = (
+        encrypt_key(update_mcp.auth_token)
+        if update_mcp.auth_token
+        else mcp.encrypted_auth_token
+    )
+    mcp.type = update_mcp.type or mcp.type
+    mcp.url = update_mcp.url or mcp.url
+
+    session.add(mcp)
+    await session.commit()
+    await session.refresh(mcp)
+
+    logger.info(f"MCP {mcp_id} updated to {mcp}.")
+
+    return mcp
+
+
+@config_router.delete("/mcps/{mcp_id}")
+async def delete_mcp(
+    mcp_id: int,
+    session: AsyncSession = Depends(db_context.get_session),
+):
+    mcp = await session.get(McpServerEntity, mcp_id)
+    if not mcp:
+        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+
+    await session.delete(mcp)
+    await session.commit()
+
+    logger.info(f"MCP {mcp_id} has been deleted.")
+
+    return {"message": f"MCP {mcp_id} has been deleted."}
