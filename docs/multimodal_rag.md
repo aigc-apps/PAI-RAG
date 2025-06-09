@@ -36,11 +36,7 @@ curl -X 'POST' http://localhost:8680/v1/chat/completions -H "Content-Type: appli
         ]
       }
     ],
-    "stream": true,
-    "chat_news": false,
-    "search_web": false,
-    "chat_knowledgebase": false,
-    "index_name": "default"
+    "stream": true
 }'
 ```
 
@@ -94,8 +90,6 @@ curl -X 'POST' http://localhost:8680/v1/chat/completions -H "Content-Type: appli
       }
     ],
     "stream": true,
-    "chat_news": false,
-    "search_web": false,
     "chat_knowledgebase": true,
     "index_name": "default"
 }'
