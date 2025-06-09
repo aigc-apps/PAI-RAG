@@ -319,7 +319,10 @@ class MiaobiNewsTool(LLM):
                                         content="",
                                     ),
                                     delta="",
-                                    additional_kwargs={"intent": intent},
+                                    additional_kwargs={
+                                        "intent": intent,
+                                        "news_topics": news_topics,
+                                    },
                                 )
                                 yield ChatResponse(
                                     message=ChatMessage(
