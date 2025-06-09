@@ -73,6 +73,56 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
 
     fetchConfigs();
   }, []);
+
+  const handleMcpAndToolUpdate = (
+    updatedConfigs: MCPConfig[],
+    newOptions: string[],
+  ) => {
+    // 1. 更新 MCP 配置
+    setMcpConfigs(updatedConfigs);
+
+    // 2. 检查是否有激活的 MCP
+    const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
+    const hasMcp = newOptions.includes("mcp");
+    const hasThinking = newOptions.includes("thinking");
+
+    // 3. 根据 MCP 激活状态调整工具选项
+    let updatedOptions = [...newOptions];
+
+    if (hasActiveMcp && !hasMcp) {
+      updatedOptions.push("mcp"); // 自动启用 mcp
+    } else if (!hasActiveMcp && hasMcp) {
+      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp"); // 移除 mcp
+    }
+
+    // 4. 自动添加 thinking（如果启用了 mcp 且未启用 thinking）
+    if (hasActiveMcp && !hasThinking && !activeTools.includes("thinking")) {
+      updatedOptions.push("thinking");
+    }
+
+    // 5. 如果 thinking 被移除且之前有 mcp，则自动移除 mcp
+    if (
+      !hasThinking &&
+      activeTools.includes("thinking") &&
+      activeTools.includes("mcp")
+    ) {
+      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
+    }
+
+    const activeMcp = mcpConfigs.find((cfg) => cfg.active);
+    if (activeMcp && hasMcp) {
+      updatedOptions = [
+        ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")),
+        `mcp:${activeMcp.id}`,
+      ];
+    }
+
+    // 6. 更新本地状态
+    setActiveTools(updatedOptions);
+
+    // 7. 同步到父组件
+    onToggleChange?.(updatedOptions);
+  };
   // 保存MCP配置到后端
   const handleSaveMcpConfig = async (updatedConfigs: MCPConfig[]) => {
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
@@ -123,6 +173,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
     let updatedOptions = [...newOptions];
     const hasMcp = updatedOptions.includes("mcp");
     const hasThinking = updatedOptions.includes("thinking");
+    const activeMcp = mcpConfigs.find((cfg) => cfg.active);
 
     // 自动添加Thinking
     if (hasMcp && !hasThinking && !activeTools.includes("thinking"))
@@ -167,7 +218,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
           <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
             <ThreadScrollToBottom />
             <Composer
-              onToggleChange={handleToggleChange}
+              onToggleChange={handleMcpAndToolUpdate}
               value={activeTools}
               mcpConfigs={mcpConfigs}
               onOpenMcpModal={handleOpenMcpModal}
@@ -179,7 +230,11 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       <McpModal
         mcpConfigs={mcpConfigs}
         isOpen={isModalOpen}
-        onSave={handleSaveMcpConfig}
+        onSave={(updatedConfigs) => {
+          // 传入当前的 activeTools 作为 newOptions
+          handleMcpAndToolUpdate(updatedConfigs, activeTools);
+          setIsModalOpen(false);
+        }}
         onClose={() => setIsModalOpen(false)}
         isLoading={mcpLoading}
         error={mcpError}
@@ -243,7 +298,7 @@ const ThreadWelcomeSuggestions: FC = () => {
 };
 
 interface ComposerProps {
-  onToggleChange?: (options: string[]) => void;
+  onToggleChange?: (updatedConfigs: MCPConfig[], options: string[]) => void;
   value?: string[];
   mcpConfigs?: MCPConfig[]; // 新增
   onOpenMcpModal?: () => void; // 新增
@@ -282,7 +337,7 @@ const Composer: FC<ComposerProps> = ({
               // if (isMcpAdded) {
               //   onOpenMcpModal?.();
               // }
-              onToggleChange?.(newValue);
+              onToggleChange?.(mcpConfigs, newValue);
               setPrevMcpValue(newValue);
             }}
             value={value} // 同步 Thread 的 activeTools

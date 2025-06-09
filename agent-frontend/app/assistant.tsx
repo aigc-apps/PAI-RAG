@@ -64,9 +64,13 @@ export const Assistant = () => {
   }, [selectedOptions]);
 
   const headers = useMemo(() => {
+    const mcpOption = selectedOptions.find((opt) => opt.startsWith("mcp:"));
     return {
       "X-Model-Id": llmConfig.id || "",
-      "X-Options": selectedOptions.join(",") || "",
+      "X-Options": selectedOptions
+        .filter((opt) => !opt.startsWith("mcp:"))
+        .join(","),
+      "X-MCP-ID": mcpOption?.split(":")[1] || "",
     };
   }, [llmConfig.id, selectedOptions]);
 

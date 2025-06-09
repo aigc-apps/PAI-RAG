@@ -87,9 +87,7 @@ async def fetch_mcp_servers():
             config_data = response.json()
 
             mcp_servers = [
-                MCPServerConfig(**item)
-                for item in config_data.get("mcp_config", [])
-                if item.get("active")
+                MCPServerConfig(**item) for item in config_data.get("mcp_config", [])
             ]
     except httpx.HTTPError as fetch_error:
         logger.exception("Failed to fetch MCP server configurations")
@@ -98,11 +96,11 @@ async def fetch_mcp_servers():
     return mcp_servers
 
 
-async def resolve_mcp_clients() -> List[BasicMCPClient]:
+async def resolve_mcp_clients(active_mcp_id) -> List[BasicMCPClient]:
     mcp_clients = []
     mcp_server_configs = await fetch_mcp_servers()
     for mcp_server_config in mcp_server_configs:
-        if mcp_server_config.active:
+        if mcp_server_config.id in active_mcp_id:
             mcp_headers = {}
             if mcp_server_config.auth_token:
                 mcp_headers = {

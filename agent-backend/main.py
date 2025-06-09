@@ -211,7 +211,7 @@ async def add_mcp(req: MCPConfigRequest):
                 existing_config["name"] = req.mcp_config.name
                 existing_config["url"] = req.mcp_config.url
                 existing_config["type"] = req.mcp_config.type
-                existing_config["active"] = req.mcp_config.active
+                # existing_config["active"] = req.mcp_config.active
                 existing_config["enabled"] = req.mcp_config.enabled
                 is_existing = True
                 break
