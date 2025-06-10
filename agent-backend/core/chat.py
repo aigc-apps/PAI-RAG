@@ -27,25 +27,17 @@ app = FastAPI()
 async def get_model_instance(model_id: str):
     model = await fetch_llm(model_id)
     if model:
-        model_source = model.get("source", "unknown")
+        base_url = model.get("base_url", None)
         model_name = model.get("model_name", "unknown")
-        if model_source == "openai":
+        if base_url:
             return (
                 model_name,
                 AsyncOpenAI(
-                    api_key=model["api_key"], base_url="https://api.openai.com/v1"
-                ).chat.completions,
-            )
-        elif model_source == "qwen":
-            return (
-                model_name,
-                AsyncOpenAI(
-                    api_key=model["api_key"],
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    api_key=model["api_key"], base_url=base_url
                 ).chat.completions,
             )
         else:
-            raise ValueError(f"Unsupported model provider: {model_source}")
+            raise ValueError(f"Model {model_name} has no base_url configured.")
     else:
         raise ValueError(f"Model id {model_id} not exists.")
 
