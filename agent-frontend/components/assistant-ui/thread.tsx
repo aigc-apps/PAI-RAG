@@ -56,8 +56,8 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
               cfg.name,
               cfg.url,
               cfg.type,
-              cfg.active || false,
-              cfg.enabled || true,
+              cfg.active ?? false,
+              cfg.enabled ?? true,
             ),
         );
         const enabledConfigs = configs.filter(
@@ -109,12 +109,12 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
     }
 
-    const activeMcp = updatedConfigs.find((cfg) => cfg.active);
+    const activeMcps = updatedConfigs.filter((cfg) => cfg.active);
 
-    if (activeMcp) {
+    if (activeMcps.length > 0) {
       updatedOptions = [
-        ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")),
-        `mcp:${activeMcp.id}`,
+        ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")), // 移除旧的 mcp:id
+        ...activeMcps.map((mcp) => `mcp:${mcp.id}`), // 添加所有激活的 mcp:id
       ];
     }
 
