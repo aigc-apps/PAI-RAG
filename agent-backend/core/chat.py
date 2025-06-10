@@ -111,7 +111,7 @@ async def call_tool_with_retry(tool_name, tool_args, tools_name_to_fn):
 # 流式生成文本
 @with_current_context
 async def generate_stream(
-    model, model_name, full_messages, openai_tools, tools_name_to_fn
+    model, model_name, full_messages, openai_tools, tools_name_to_fn, current_context
 ):
     messages = full_messages.copy()
     try:
