@@ -1,51 +1,49 @@
-from typing import List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from datetime import datetime
 import json
 from llama_index.core.tools import FunctionTool
+from loguru import logger
+from functools import partial
 
 
-# 定义思考记录接口
 class ThoughtRecord(BaseModel):
     timestamp: str
     thought: str
 
 
-class ThinkParams(BaseModel):
-    thought: str = Field(..., description="需要记录的思考内容")
-
-
-# 全局日志（适用于单用户场景）
-thoughts_log: List[ThoughtRecord] = []
-
-
-def clear_thoughts_log():
-    global thoughts_log
-    thoughts_log = []
-
-
-async def simple_think_handler(thought: str):
-    params_model = ThinkParams(thought=thought)
+def record_thought(cache, cache_key: str, thought: str):
     timestamp = datetime.utcnow().isoformat()
-    thoughts_log.append(
-        ThoughtRecord(timestamp=timestamp, thought=params_model.thought)
-    )
-    print(f"[{timestamp}] Thought recorded: {params_model.thought[:50]}...")
+    record = ThoughtRecord(timestamp=timestamp, thought=thought)
+
+    # 写入缓存
+    if cache_key not in cache:
+        cache[cache_key] = []
+    cache[cache_key].append(record)
+
+    logger.info(f"[{timestamp}] Thought recorded: {thought[:50]}...")
+    logger.info(f"Total thoughts recorded: {len(cache[cache_key])} for key {cache_key}")
     return json.dumps(
         {
             "type": "text",
             "text": (
-                f"Thought recorded: {params_model.thought[:50]}..."
-                if len(params_model.thought) > 50
-                else params_model.thought
+                f"Thought recorded: {thought[:50]}..." if len(thought) > 50 else thought
             ),
-            "thoughts_count": len(thoughts_log),  # 返回当前思考记录数量
+            "thoughts_count": len(cache[cache_key]),
         },
         ensure_ascii=False,
     )
 
 
-async def aget_simple_think_tool():
+def get_think_function(cache_key: str):
+    return partial(record_thought, cache={}, cache_key=cache_key)
+
+
+async def aget_simple_think_tool(cache_key: str):
+    add_thought_func = get_think_function(cache_key)
+
+    async def simple_think_handler(thought: str):
+        return add_thought_func(thought=thought)
+
     think_tool = FunctionTool.from_defaults(
         async_fn=simple_think_handler,
         name="think",

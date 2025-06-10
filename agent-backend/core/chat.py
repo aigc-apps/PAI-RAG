@@ -17,9 +17,11 @@ from openai.types.chat import (
 )
 from opentelemetry import trace
 from tools.search.aliyun_search_tool import aget_aliyun_search_tool
-from tools.think.simple_think_tool import aget_simple_think_tool, clear_thoughts_log
+from tools.think.simple_think_tool import aget_simple_think_tool
 from utils.models import fetch_llm
 from trace.pai_query_wrapper import pai_query_wrapper, with_current_context
+import uuid
+
 
 app = FastAPI()
 
@@ -98,7 +100,6 @@ async def generate_stream(
 ):
     max_steps = 15  # 防止无限循环的最大步骤数
     step_count = 0
-    clear_thoughts_log()  # 清除思考记录
     while step_count < max_steps:
         stop_flag = False
         response = await gen_stream_response(model, model_name, messages, openai_tools)
@@ -245,7 +246,9 @@ async def handle_chat(request: Request):
         openai_tools = []
         tools_name_to_fn = {}
         # 获取思考工具
-        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool()
+        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool(
+            cache_key=str(uuid.uuid4())
+        )
         openai_tools.extend(think_openai_tools)
         tools_name_to_fn.update(think_tools_name_to_fn)
 
