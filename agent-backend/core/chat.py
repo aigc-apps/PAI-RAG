@@ -124,7 +124,9 @@ async def generate_stream(
             )
             draft_tool_calls = []
             draft_tool_calls_index = -1
+            last_chunk = None
             async for chunk in response:
+                last_chunk = chunk
                 for choice in chunk.choices:
                     # 调用工具,收集工具参数
                     if choice.delta.tool_calls:
@@ -224,6 +226,7 @@ async def generate_stream(
                                     e
                                 )
                                 stop_flag = True
+                                break
 
                     # 2.自然停止输出or因生成长度过长而结束
                     elif (
@@ -233,17 +236,17 @@ async def generate_stream(
                         stop_flag = True
                         yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
                         break
-                # 在include_usage为true时，最后一个chunk为空，本次chat请求使用的Token信息在最后一个chunk显示。
-                if chunk.choices == []:
-                    usage = chunk.usage
-                    prompt_tokens = usage.prompt_tokens
-                    completion_tokens = usage.completion_tokens
+            # 在include_usage为true时，最后一个chunk为空，本次chat请求使用的Token信息在最后一个chunk显示。
+            if last_chunk and last_chunk.choices == []:
+                usage = last_chunk.usage
+                prompt_tokens = usage.prompt_tokens
+                completion_tokens = usage.completion_tokens
 
-                    yield 'd:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
-                        reason="tool-calls" if len(draft_tool_calls) > 0 else "stop",
-                        prompt=prompt_tokens,
-                        completion=completion_tokens,
-                    )
+                yield 'd:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
+                    reason="tool-calls" if len(draft_tool_calls) > 0 else "stop",
+                    prompt=prompt_tokens,
+                    completion=completion_tokens,
+                )
             if stop_flag:
                 break
             step_count += 1
