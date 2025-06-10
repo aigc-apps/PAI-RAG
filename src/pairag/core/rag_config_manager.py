@@ -25,6 +25,7 @@ class RagConfigManager:
                 # don't respect env when checking snapshot
                 envvar_prefix="SOME_DUMMY_PREFIX",
                 settings_file=settings_files,
+                auto_cast=False,
                 merge=True,
             )
             return cls(config)
@@ -39,6 +40,7 @@ class RagConfigManager:
             config = Dynaconf(
                 envvar_prefix="PAIRAG",
                 settings_file=settings_files,
+                auto_cast=False,
                 merge=True,
             )
             snapshot_config = Dynaconf(settings_file=[GENERATED_CONFIG_FILE_NAME])

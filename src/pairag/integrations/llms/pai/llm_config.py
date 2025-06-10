@@ -1,6 +1,7 @@
+import json
 import os
 from typing import Literal
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -229,3 +230,11 @@ class OpenAICompatibleLlmConfig(BaseModel):
                 self.model not in [None, ""],
             ]
         )
+
+    @model_validator(mode="before")
+    def normalize_data(cls, data: dict) -> dict:
+        # Convert name to title case
+        if "extra_body_str" in data and isinstance(data["extra_body_str"], dict):
+            data["extra_body_str"] = json.dumps(data["extra_body_str"])
+
+        return data
