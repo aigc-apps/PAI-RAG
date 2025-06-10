@@ -80,6 +80,9 @@ jieba = "^0.42.1"
 opentelemetry-sdk = "^1.33.1"
 pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.7-py3-none-any.whl"}
 sqlmodel = "^0.0.24"
+mcp = "^1.9.3"
+llama-index-tools-mcp = "^0.2.5"
+openinference-instrumentation-openai = "^0.1.30"
 
 [tool.poetry.scripts]
 load_model = "pairag.utils.download_models:load_models"

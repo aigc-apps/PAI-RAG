@@ -16,6 +16,7 @@ class LlmModelCreate(LlmModel):
 
 class LlmModelRead(LlmModel):
     id: str = Field(default=None)
+    source: str = Field(default=None)
 
 
 # table entity
@@ -59,7 +60,7 @@ class TraceConfig(SQLModel):
 class TraceConfigEntity(TraceConfig, table=True):
     __tablename__ = "pai_trace_config"
 
-    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    id: str = Field(default="default_trace_id", primary_key=True)
 
 
 class WebSearchConfig(SQLModel):
