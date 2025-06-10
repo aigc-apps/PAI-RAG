@@ -62,7 +62,6 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             model=model_name,
             messages=messages,
             stream=True,
-            stream_options={"include_usage": True},
             tools=openai_tools,
             tool_choice="auto",
             stream_options={"include_usage": True},
