@@ -149,7 +149,7 @@ def update_llms(selected_model_id):
         "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
         "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
-        "extra_body": json.dumps(llm_config.extra_body) if llm_config else "{}",
+        "extra_body_str": llm_config.extra_body_str if llm_config else "{}",
     }
 
     # Update UI components based on the configuration
@@ -164,7 +164,7 @@ def update_llms(selected_model_id):
         gr.update(value=initial_values["max_tokens"]),
         gr.update(value=initial_values["vision_support"]),
         gr.update(value=initial_values["is_reasoning_model"]),
-        gr.update(value=initial_values["extra_body"]),
+        gr.update(value=initial_values["extra_body_str"]),
     ]
 
 
@@ -182,7 +182,7 @@ def save_new_llm(
 ):
     try:
         extra_body_str = extra_body_str or "{}"
-        extra_body = json.loads(extra_body_str)
+        _ = json.loads(extra_body_str)
     except json.JSONDecodeError:
         raise gr.Error(f"Invalid JSON format in extra_body '{extra_body_str}'.")
 
@@ -224,7 +224,7 @@ def save_new_llm(
         existing_model.max_tokens = max_tokens
         existing_model.vision_support = vision_support
         existing_model.is_reasoning_model = is_reasoning_model
-        existing_model.extra_body = extra_body
+        existing_model.extra_body_str = extra_body_str
         rag_config.llms[model_index] = existing_model
 
     else:
@@ -238,7 +238,7 @@ def save_new_llm(
             "max_tokens": max_tokens,
             "vision_support": vision_support,
             "is_reasoning_model": is_reasoning_model,
-            "extra_body": extra_body,
+            "extra_body_str": extra_body_str,
         }
         new_llm = OpenAICompatibleLlmConfig(**new_llm_config)
 

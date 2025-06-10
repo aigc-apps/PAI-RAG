@@ -45,6 +45,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="URL",
                                     placeholder="Open AI compatible url, e.g. https://api.openai.com/v1",
                                     interactive=True,
+                                    elem_id="llm_base_url",
                                     scale=1,
                                 )
                                 llm_api_key = gr.Textbox(
@@ -54,6 +55,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="密钥",
                                     type="password",
                                     interactive=True,
+                                    elem_id="llm_api_key",
                                     scale=1,
                                 )
 
@@ -65,6 +67,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="模型名称",
                                     placeholder="模型名称, e.g. qwen-max",
                                     interactive=True,
+                                    elem_id="llm_model_name",
                                     scale=1,
                                 )
                                 llm_model_id = gr.Textbox(
@@ -74,6 +77,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="模型ID",
                                     placeholder="模型ID(建议模型ID与模型名称保持一致，或填写一个您偏好的、便于区分的名称), e.g. model_1",
                                     interactive=True,
+                                    elem_id="llm_model_id",
                                     scale=1,
                                 )
                             # 第三行: llm token参数
@@ -85,6 +89,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="上下文窗口",
                                     # placeholder="上下文窗口, e.g. 8000",
                                     interactive=True,
+                                    elem_id="llm_model_context_window",
                                     scale=1,
                                 )
                                 llm_model_max_tokens = gr.Number(
@@ -94,6 +99,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     label="最大输出长度",
                                     # placeholder="最大输出长度, e.g. 4000",
                                     interactive=True,
+                                    elem_id="llm_model_max_tokens",
                                     scale=1,
                                 )
 
@@ -104,7 +110,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     if rag_config.llms
                                     else False,
                                     label="是否支持多模态",
-                                    elem_id="vision_support",
+                                    elem_id="llm_vision_support",
                                     container=True,  # 让复选框有背景容器
                                     scale=1,
                                 )
@@ -113,7 +119,7 @@ def create_setting_tab() -> Dict[str, Any]:
                                     if rag_config.llms
                                     else False,
                                     label="是否支持深度思考",
-                                    elem_id="reasoning_support",
+                                    elem_id="llm_reasoning_support",
                                     container=True,  # 让复选框有背景容器
                                     scale=1,
                                 )
@@ -173,6 +179,21 @@ def create_setting_tab() -> Dict[str, Any]:
                         inputs=llm_model,
                         outputs=[llm_model, config_row, delete_btn],
                     )
+                    components.extend(
+                        [
+                            llm_model,
+                            llm_model_name,
+                            llm_base_url,
+                            llm_api_key,
+                            llm_model_id,
+                            llm_model_context_window,
+                            llm_model_max_tokens,
+                            llm_vision_support,
+                            llm_reasoning_support,
+                            llm_extra_kwargs_str,
+                        ]
+                    )
+
                     ############################ llms settings end  ############################
 
                 with gr.Column():
@@ -263,7 +284,6 @@ def create_setting_tab() -> Dict[str, Any]:
                     ]
 
                     components.extend(oss_components)
-                    components.append(llm_model)
 
                     # use_mllm.input(
                     #     fn=ev_listeners.choose_use_mllm,
