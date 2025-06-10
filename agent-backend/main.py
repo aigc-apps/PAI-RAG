@@ -7,8 +7,11 @@ from core.chat import handle_chat
 
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, set_key, find_dotenv
+from trace.tracing_config import TracingConfig
+from trace.base import init_instrument
 
 load_dotenv()
+init_instrument()
 
 app = FastAPI()
 
@@ -287,6 +290,42 @@ def update_search_config(request: SearchConfigRequest):
         os.environ["ACCESS_KEY_ID"] = request.aliyun_ak
         os.environ["ACCESS_KEY_SECRET"] = request.aliyun_sk
 
+        return {"message": "配置已更新"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
+
+
+@app.get("/api/tracing_config")
+def get_tracing_config():
+    try:
+        # 加载现有 .env 文件（可选）
+        load_dotenv()
+
+        return {
+            "TRACING_ENDPOINT": os.getenv("TRACING_ENDPOINT"),
+            "TRACING_TOKEN": os.getenv("TRACING_TOKEN"),
+            "TRACING_SERVICE_NAME": os.getenv("TRACING_SERVICE_NAME"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取失败: {str(e)}")
+
+
+@app.post("/api/tracing_config")
+def update_tracing_config(tracing_config: TracingConfig):
+    try:
+        # 加载现有 .env 文件（可选）
+        load_dotenv()
+
+        # 写入新的 AK/SK 到 .env 文件
+        set_key(find_dotenv(), "TRACING_ENDPOINT", tracing_config.endpoint)
+        set_key(find_dotenv(), "TRACING_TOKEN", tracing_config.token)
+        set_key(find_dotenv(), "TRACING_SERVICE_NAME", tracing_config.service_name)
+
+        os.environ["TRACING_ENDPOINT"] = tracing_config.endpoint
+        os.environ["TRACING_TOKEN"] = tracing_config.token
+        os.environ["TRACING_SERVICE_NAME"] = tracing_config.service_name
+
+        init_instrument()
         return {"message": "配置已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")

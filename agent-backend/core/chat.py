@@ -19,9 +19,11 @@ from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
 )
+from opentelemetry import trace
 from search.aliyun_search_tool import aget_aliyun_search_tool
 from utils.models import fetch_llm
 from utils.constants import MAX_CHAT_STEPS
+from trace.pai_query_wrapper import pai_query_wrapper, with_current_context
 
 app = FastAPI()
 
@@ -63,6 +65,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             stream_options={"include_usage": True},
             tools=openai_tools,
             tool_choice="auto",
+            stream_options={"include_usage": True},
         )
     else:
         return await model.create(
@@ -107,6 +110,7 @@ async def call_tool_with_retry(tool_name, tool_args, tools_name_to_fn):
 
 
 # 流式生成文本
+@with_current_context
 async def generate_stream(
     model, model_name, full_messages, openai_tools, tools_name_to_fn
 ):
@@ -269,7 +273,10 @@ def x_options_to_prompt_mode(x_options):
     return system_prompt
 
 
+@pai_query_wrapper
 async def handle_chat(request: Request):
+    current_span = trace.get_current_span()
+    current_context = trace.set_span_in_context(current_span)
     try:
         # 解析请求体
         data = await request.json()
@@ -314,7 +321,12 @@ async def handle_chat(request: Request):
         # 返回流式响应
         return StreamingResponse(
             generate_stream(
-                model, model_name, full_messages, openai_tools, tools_name_to_fn
+                model,
+                model_name,
+                full_messages,
+                openai_tools,
+                tools_name_to_fn,
+                current_context,
             ),
             media_type="text/event-stream",
             headers={"x-vercel-ai-data-stream": "v1"},
