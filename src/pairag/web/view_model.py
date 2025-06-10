@@ -443,7 +443,7 @@ class ViewModel(BaseModel):
         config["guardrail"]["access_key_id"] = self.guardrail_ak
         config["guardrail"]["access_key_secret"] = self.guardrail_sk
 
-        config["llms"] = self.llms
+        config["llms"] = [llm.model_dump(mode="json") for llm in self.llms]
 
         # news_extension
         config["news_extension"]["workspace_id"] = self.bailian_workspaceid
@@ -705,9 +705,7 @@ class ViewModel(BaseModel):
         ]
         settings["llm_model"] = {
             "choices": model_choices + ["NEW"],
-            "value": "NEW"
-            if not self.llms and len(self.llms) == 0
-            else model_choices[0],
+            "value": "NEW" if not self.llms else model_choices[0],
         }
 
         # news_extension
@@ -733,4 +731,31 @@ class ViewModel(BaseModel):
         settings["telemetry_token"] = {"value": self.telemetry_token}
         settings["telemetry_enabled"] = {"value": self.telemetry_enabled}
 
+        settings["llm_model_name"] = {
+            "value": self.llms[0].model if self.llms else "",
+        }
+        settings["llm_base_url"] = {
+            "value": self.llms[0].base_url if self.llms else "",
+        }
+        settings["llm_api_key"] = {
+            "value": self.llms[0].api_key if self.llms else "",
+        }
+        settings["llm_model_id"] = {
+            "value": self.llms[0].model_id if self.llms else "",
+        }
+        settings["llm_model_context_window"] = {
+            "value": self.llms[0].context_window if self.llms else "",
+        }
+        settings["llm_model_max_tokens"] = {
+            "value": self.llms[0].max_tokens if self.llms else "",
+        }
+        settings["llm_vision_support"] = {
+            "value": self.llms[0].vision_support if self.llms else "",
+        }
+        settings["llm_reasoning_support"] = {
+            "value": self.llms[0].is_reasoning_model if self.llms else "",
+        }
+        settings["llm_extra_kwargs_str"] = {
+            "value": self.llms[0].extra_body_str if self.llms else "",
+        }
         return settings

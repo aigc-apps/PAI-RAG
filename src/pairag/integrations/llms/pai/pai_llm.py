@@ -1,3 +1,4 @@
+import json
 from typing import Any, Sequence
 from loguru import logger
 
@@ -39,6 +40,10 @@ class PaiLlm(OpenAILike):
         default=None,
         description="Llm configuration",
     )
+    extra_body: dict = Field(
+        default={},
+        description="Extra body for llm",
+    )
 
     def __init__(self, llm_config: OpenAICompatibleLlmConfig):
         super().__init__(
@@ -47,6 +52,13 @@ class PaiLlm(OpenAILike):
         self.llm_config = llm_config
         self._llm = create_llm(self.llm_config)
         self.model = llm_config.model
+        try:
+            if llm_config.extra_body_str:
+                self.extra_body = json.loads(llm_config.extra_body_str)
+        except Exception as e:
+            logger.error(f"Failed to parse extra_body_str: {e}")
+            self.extra_body = {}
+
         self._llm.callback_manager = Settings.callback_manager
         self.callback_manager = Settings.callback_manager
 
@@ -133,7 +145,7 @@ class PaiLlm(OpenAILike):
         messages = merge_consecutive_messages(messages)
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
-        kwargs["extra_body"] = kwargs.get("extra_body", self.llm_config.extra_body)
+        kwargs["extra_body"] = kwargs.get("extra_body", self.extra_body)
 
         is_enable_thinking = (
             self.llm_config.is_reasoning_model and self._is_enable_thinking(**kwargs)
@@ -273,7 +285,7 @@ class PaiLlm(OpenAILike):
         kwargs["stream_options"] = kwargs.get("stream_options", {"include_usage": True})
         kwargs["temperature"] = kwargs.get("temperature", self.temperature)
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
-        kwargs["extra_body"] = kwargs.get("extra_body", self.llm_config.extra_body)
+        kwargs["extra_body"] = kwargs.get("extra_body", self.extra_body)
 
         messages = merge_consecutive_messages(messages)
         if not self.metadata.is_chat_model:
