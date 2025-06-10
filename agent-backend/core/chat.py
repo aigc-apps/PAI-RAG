@@ -107,7 +107,10 @@ async def call_tool_with_retry(tool_name, tool_args, tools_name_to_fn):
 
 
 # 流式生成文本
-async def generate_stream(model, model_name, messages, openai_tools, tools_name_to_fn):
+async def generate_stream(
+    model, model_name, full_messages, openai_tools, tools_name_to_fn
+):
+    messages = full_messages.copy()
     try:
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
