@@ -234,7 +234,7 @@ def index_to_components_settings(
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
-                {"value": ""},
+                {"value": "bm25"},
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
