@@ -229,3 +229,15 @@ model_repository/
 arms.trace*
 
 notebooks/
+node_modules
+# next.js
+.next/
+out/
+
+# fumadocs
+.source
+
+# production
+dist
+apps/docs/generated
+packages/*/generated
