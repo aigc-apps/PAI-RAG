@@ -18,3 +18,4 @@ def get_int_env(key, default_value=None):
 
 load_dotenv(".env")
 BACKEND_PORT = get_int_env("BACKEND_PORT", 8029)
+MAX_CHAT_STEPS = get_int_env("MAX_CHAT_STEPS", 15)

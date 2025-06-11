@@ -6,6 +6,7 @@ import {
   ThreadPrimitive,
 } from "@assistant-ui/react";
 import type { FC } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -25,38 +26,156 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { ToolFallback } from "@/components/ui/custom-tool-fallback";
 import { Brain, Search, Wrench } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { MCPConfig } from "@/app/config/mcp/page";
+import { McpModal } from "@/app/config/mcp/mcpmodal";
 
 export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
   onToggleChange,
 }) => {
+  // 使用useState来保存工具的选中状态
+  const [activeTools, setActiveTools] = useState<string[]>([]);
+  const [mcpConfigs, setMcpConfigs] = useState<MCPConfig[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpError, setMcpError] = useState<string | null>(null);
+
+  // 获取MCP配置
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      try {
+        setMcpLoading(true);
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const res = await fetch(`http://localhost:${port}/api/configs`);
+        if (!res.ok) throw new Error("获取配置失败");
+        const data = await res.json();
+
+        const configs = data.mcp_config.map(
+          (cfg: any) =>
+            new MCPConfig(
+              cfg.id,
+              cfg.name,
+              cfg.url,
+              cfg.type,
+              cfg.active ?? false,
+              cfg.enabled ?? true,
+            ),
+        );
+        const enabledConfigs = configs.filter(
+          (item: { enabled: boolean }) => item.enabled === true,
+        );
+        setMcpConfigs(enabledConfigs);
+      } catch (err: any) {
+        setMcpError(err.message || "加载失败");
+      } finally {
+        setMcpLoading(false);
+      }
+    };
+
+    fetchConfigs();
+  }, []);
+
+  const handleMcpAndToolUpdate = (
+    updatedConfigs: MCPConfig[],
+    newOptions: string[],
+  ) => {
+    // 1. 更新 MCP 配置
+    setMcpConfigs(updatedConfigs);
+
+    // 2. 检查是否有激活的 MCP
+    const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
+    const hasMcp = newOptions.includes("mcp");
+    const hasThinking = newOptions.includes("thinking");
+
+    // 3. 根据 MCP 激活状态调整工具选项
+    let updatedOptions = [...newOptions];
+
+    if (hasActiveMcp && !hasMcp) {
+      updatedOptions.push("mcp"); // 自动启用 mcp
+    } else if (!hasActiveMcp && hasMcp) {
+      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp"); // 移除 mcp
+    }
+
+    // 4. 自动添加 thinking（如果启用了 mcp 且未启用 thinking）
+    if (hasActiveMcp && !hasThinking && !activeTools.includes("thinking")) {
+      updatedOptions.push("thinking");
+    }
+
+    // 5. 如果 thinking 被移除且之前有 mcp，则自动移除 mcp
+    if (
+      !hasThinking &&
+      activeTools.includes("thinking") &&
+      activeTools.includes("mcp")
+    ) {
+      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
+    }
+
+    const activeMcps = updatedConfigs.filter((cfg) => cfg.active);
+
+    if (activeMcps.length > 0) {
+      updatedOptions = [
+        ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")), // 移除旧的 mcp:id
+        ...activeMcps.map((mcp) => `mcp:${mcp.id}`), // 添加所有激活的 mcp:id
+      ];
+    }
+
+    // 6. 更新本地状态
+    setActiveTools(updatedOptions);
+
+    // 7. 同步到父组件
+    onToggleChange?.(updatedOptions);
+  };
+  const handleOpenMcpModal = () => {
+    setIsModalOpen(true);
+  };
+
   return (
-    <ThreadPrimitive.Root
-      className="bg-background box-border flex h-full flex-col overflow-hidden"
-      style={{
-        ["--thread-max-width" as string]: "60rem",
-      }}
-    >
-      <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
-        <ThreadWelcome />
+    <>
+      <ThreadPrimitive.Root
+        className="bg-background box-border flex h-full flex-col overflow-hidden"
+        style={{
+          ["--thread-max-width" as string]: "60rem",
+        }}
+      >
+        <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
+          <ThreadWelcome />
 
-        <ThreadPrimitive.Messages
-          components={{
-            UserMessage: UserMessage,
-            EditComposer: EditComposer,
-            AssistantMessage: AssistantMessage,
-          }}
-        />
+          <ThreadPrimitive.Messages
+            components={{
+              UserMessage: UserMessage,
+              EditComposer: EditComposer,
+              AssistantMessage: AssistantMessage,
+            }}
+          />
 
-        <ThreadPrimitive.If empty={false}>
-          <div className="min-h-8 flex-grow" />
-        </ThreadPrimitive.If>
+          <ThreadPrimitive.If empty={false}>
+            <div className="min-h-8 flex-grow" />
+          </ThreadPrimitive.If>
 
-        <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
-          <ThreadScrollToBottom />
-          <Composer onToggleChange={onToggleChange} /> {/* 传递回调 */}
-        </div>
-      </ThreadPrimitive.Viewport>
-    </ThreadPrimitive.Root>
+          <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
+            <ThreadScrollToBottom />
+            <Composer
+              onToggleChange={handleMcpAndToolUpdate}
+              value={activeTools}
+              mcpConfigs={mcpConfigs}
+              onOpenMcpModal={handleOpenMcpModal}
+            />{" "}
+            {/* 传递回调 */}
+          </div>
+        </ThreadPrimitive.Viewport>
+      </ThreadPrimitive.Root>
+      <McpModal
+        mcpConfigs={mcpConfigs}
+        isOpen={isModalOpen}
+        onSave={(updatedConfigs) => {
+          // 传入当前的 activeTools 作为 newOptions
+          handleMcpAndToolUpdate(updatedConfigs, activeTools);
+          setIsModalOpen(false);
+        }}
+        onClose={() => setIsModalOpen(false)}
+        isLoading={mcpLoading}
+        error={mcpError}
+      />
+    </>
   );
 };
 
@@ -114,9 +233,20 @@ const ThreadWelcomeSuggestions: FC = () => {
   );
 };
 
-const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
+interface ComposerProps {
+  onToggleChange?: (updatedConfigs: MCPConfig[], options: string[]) => void;
+  value?: string[];
+  mcpConfigs?: MCPConfig[]; // 新增
+  onOpenMcpModal?: () => void; // 新增
+}
+
+const Composer: FC<ComposerProps> = ({
   onToggleChange,
+  value,
+  mcpConfigs = [], // 默认值
+  onOpenMcpModal,
 }) => {
+  const [prevMcpValue, setPrevMcpValue] = useState<string[]>(value || []);
   return (
     <ComposerPrimitive.Root
       // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
@@ -137,9 +267,16 @@ const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
             type="multiple"
             variant="outline"
             className="flex gap-x-4 overflow-visible"
-            onValueChange={(value) => {
-              onToggleChange?.(value); // 传递选中状态到父组件
+            onValueChange={(newValue) => {
+              // 仅当 "mcp" 被新增时打开模态框
+              // const isMcpAdded = newValue.includes("mcp") && !prevMcpValue.includes("mcp");
+              // if (isMcpAdded) {
+              //   onOpenMcpModal?.();
+              // }
+              onToggleChange?.(mcpConfigs, newValue);
+              setPrevMcpValue(newValue);
             }}
+            value={value} // 同步 Thread 的 activeTools
           >
             <ToggleGroupItem
               value="thinking"
@@ -159,6 +296,9 @@ const Composer: FC<{ onToggleChange?: (options: string[]) => void }> = ({
               value="mcp"
               aria-label="Toggle mcp"
               className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              onClick={() => {
+                onOpenMcpModal?.();
+              }}
             >
               <Wrench /> MCP
             </ToggleGroupItem>
