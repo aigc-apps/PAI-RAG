@@ -1,12 +1,10 @@
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters
-from loguru import logger
 from pydantic import BaseModel
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from typing import List, Optional
-import httpx
 
 
 # MCP 客户端配置
@@ -73,33 +71,8 @@ class BasicMCPClient:
             return await session.list_tools()
 
 
-async def fetch_mcp_servers():
-    mcp_servers = []
-    try:
-        port = 8680
-        logger.info(f"/api/chat BACKEND_PORT {port}")
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"http://localhost:{port}/api/configs")
-            response.raise_for_status()
-
-            config_data = response.json()
-
-            mcp_servers = [
-                MCPServerConfig(**item)
-                for item in config_data.get("mcp_config", [])
-                if item.get("active")
-            ]
-    except httpx.HTTPError as fetch_error:
-        logger.exception("Failed to fetch MCP server configurations")
-        raise fetch_error
-
-    return mcp_servers
-
-
-async def resolve_mcp_clients() -> List[BasicMCPClient]:
+async def resolve_mcp_clients(mcp_server_configs) -> List[BasicMCPClient]:
     mcp_clients = []
-    mcp_server_configs = await fetch_mcp_servers()
     for mcp_server_config in mcp_server_configs:
         if mcp_server_config.active:
             mcp_headers = {}

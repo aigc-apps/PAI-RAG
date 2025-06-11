@@ -172,7 +172,9 @@ async def delete_llm(
 async def create_mcp(
     mcp_data: McpServerCreate, session: AsyncSession = Depends(db_context.get_session)
 ):
-    encrypted_auth_token = encrypt_key(mcp_data.auth_token)
+    encrypted_auth_token = None
+    if mcp_data.auth_token:
+        encrypted_auth_token = encrypt_key(mcp_data.auth_token)
     mcp = McpServerEntity.model_validate(
         mcp_data, update={"encrypted_auth_token": encrypted_auth_token}
     )
@@ -428,7 +430,23 @@ async def chat(
             openai_tools.extend(search_openai_tools)
             tools_name_to_fn.update(search_tools_name_to_fn)
         if "mcp" in x_options:
-            mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools()
+            sql_result = await session.exec(select(McpServerEntity))
+            mcp_entities = sql_result.all()
+            mcp_configs = [
+                McpServerCreate.model_validate(
+                    mcp_entity,
+                    update={
+                        "auth_token": decrypt_key(mcp_entity.encrypted_auth_token)
+                        if mcp_entity.encrypted_auth_token
+                        else None
+                    },
+                )
+                for mcp_entity in mcp_entities
+            ]
+
+            mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools(
+                mcp_configs
+            )
             openai_tools.extend(mcp_openai_tools)
             tools_name_to_fn.update(mcp_tools_name_to_fn)
 

@@ -8,6 +8,7 @@ import * as Toast from "@radix-ui/react-toast";
 import { EyeIcon, EyeOffIcon } from "lucide-react"; // 示例图标库
 
 export default function SearchConfig() {
+  const [aliyunHasKey, setAliyunHasKey] = useState(false); // AccessKey ID
   const [aliyunAK, setAliyunAK] = useState(""); // AccessKey ID
   const [aliyunSK, setAliyunSK] = useState(""); // AccessKey Secret
   const [isLoading, setIsLoading] = useState(false); // 加载状态
@@ -28,17 +29,21 @@ export default function SearchConfig() {
         setIsLoading(true);
         setError("");
 
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-        const res = await fetch(`http://localhost:${port}/api/search_config`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const res = await fetch(
+          `http://localhost:${port}/v1/config/websearch`,
+          {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
 
         if (!res.ok) throw new Error("加载配置失败");
 
         const data = await res.json();
-        setAliyunAK(data["ACCESS_KEY_ID"] || "");
-        setAliyunSK(data["ACCESS_KEY_SECRET"] || "");
+        setAliyunHasKey(data.length > 0);
+        setAliyunAK(data[0]?.encrypted_access_key_id || "");
+        setAliyunSK(data[0]?.encrypted_access_key_secret || "");
       } catch (err: any) {
         setError(err.message || "加载失败");
         setToastState({
@@ -64,11 +69,16 @@ export default function SearchConfig() {
       setIsLoading(true);
       setError("");
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-      const res = await fetch(`http://localhost:${port}/api/search_config`, {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(`http://localhost:${port}/v1/config/websearch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aliyun_ak: aliyunAK, aliyun_sk: aliyunSK }),
+        body: JSON.stringify({
+          access_key_id: aliyunAK,
+          access_key_secret: aliyunSK,
+          type: "aliyun",
+          endpoint: "iqs.cn-zhangjiakou.aliyuncs.com",
+        }),
       });
 
       if (!res.ok) throw new Error("保存失败，请检查网络或配置");
@@ -113,17 +123,6 @@ export default function SearchConfig() {
                   placeholder="输入 AccessKey ID"
                   className="col-span-3"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowAK(!showAK)}
-                  className="ml-2 text-gray-500 hover:text-gray-700"
-                >
-                  {showAK ? (
-                    <EyeOffIcon className="w-4 h-4" />
-                  ) : (
-                    <EyeIcon className="w-4 h-4" />
-                  )}
-                </button>
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -139,17 +138,6 @@ export default function SearchConfig() {
                   placeholder="输入 AccessKey Secret"
                   className="col-span-3"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowSK(!showSK)}
-                  className="ml-2 text-gray-500 hover:text-gray-700"
-                >
-                  {showSK ? (
-                    <EyeOffIcon className="w-4 h-4" />
-                  ) : (
-                    <EyeIcon className="w-4 h-4" />
-                  )}
-                </button>
               </div>
             </div>
           </div>

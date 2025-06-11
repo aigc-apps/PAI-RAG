@@ -126,10 +126,10 @@ export default function McpConfig() {
     const fetchConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-        const res = await fetch(`http://localhost:${port}/api/configs`);
+        const res = await fetch(`http://localhost:${port}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
-        setMcpConfigs(data.mcp_config || []); // 更新状态
+        setMcpConfigs(data || []); // 更新状态
       } catch (err: any) {
         setMcpError(err || "加载失败");
       } finally {
@@ -178,19 +178,27 @@ export default function McpConfig() {
 
   const addMCP = async () => {
     try {
-      const newMCP = {
+      const mcp_data = {
         ...addFormData,
-        id: uuidv4(),
       };
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-      const res = await fetch(`http://localhost:${port}/api/add_mcp`, {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(`http://localhost:${port}/v1/config/mcps`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcp_config: newMCP }), // 包装为数组
+        body: JSON.stringify(mcp_data), // 包装为数组
       });
 
       if (!res.ok) throw new Error("添加 MCP 配置失败");
+
+      const mcpDto = await res.json();
+      const newMcp = new MCPConfig(
+        mcpDto.id,
+        mcpDto.name,
+        mcpDto.url,
+        mcpDto.type,
+        mcpDto.active,
+      );
       setToastState({
         open: true,
         title: "MCP 配置已添加",
@@ -198,7 +206,7 @@ export default function McpConfig() {
         variant: "default",
       });
       setIsOpen(false); // 关闭 AddDialog
-      setMcpConfigs((prev) => [...prev, newMCP]); // 追加新 MCP 配置
+      setMcpConfigs((prev) => [...prev, newMcp]); // 追加新 MCP 配置
     } catch (err: any) {
       setError(err || "添加失败，请重试"); // 显示错误信息
       setToastState({
@@ -217,10 +225,10 @@ export default function McpConfig() {
       if (!editingConfig) return;
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-      const res = await fetch(`http://localhost:${port}/api/add_mcp`, {
+      const res = await fetch(`http://localhost:${port}/v1/config/mcps`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcp_config: editingConfig }), // 包装为数组
+        body: JSON.stringify(editingConfig), // 包装为数组
       });
 
       if (!res.ok) throw new Error("修改 MCP 配置失败");

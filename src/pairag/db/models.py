@@ -36,7 +36,7 @@ class McpServer(SQLModel):
 
 
 class McpServerCreate(McpServer):
-    auth_token: str = Field(default=None)
+    auth_token: str | None = Field(default=None)
 
 
 class McpServerRead(McpServer):
@@ -47,7 +47,7 @@ class McpServerEntity(McpServer, table=True):
     __tablename__ = "pai_mcp_server"
 
     id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
-    encrypted_auth_token: str = Field(default=None)
+    encrypted_auth_token: str | None = Field(default=None)
 
 
 class TraceConfig(SQLModel):

@@ -35,7 +35,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
         )
 
 
-async def process_mcp_tools():
+async def process_mcp_tools(mcp_server_configs):
     """
     process_mcp_tools will get the tools from MCP Client (only need to implement ClientSession) and convert them to LlamaIndex's FunctionTool objects and transformed tool name to tool Dict.
     Args:
@@ -45,7 +45,7 @@ async def process_mcp_tools():
 
     """
     # TODO: 不用每个request都list_tools
-    mcp_clients = await resolve_mcp_clients()
+    mcp_clients = await resolve_mcp_clients(mcp_server_configs)
     openai_tools = []
     tools_name_to_fn = {}
     for mcp_client in mcp_clients:
