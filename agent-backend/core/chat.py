@@ -20,38 +20,33 @@ from openai.types.chat import (
     ChatCompletionMessageToolCall,
 )
 from opentelemetry import trace
-from search.aliyun_search_tool import aget_aliyun_search_tool
+from tools.search.aliyun_search_tool import aget_aliyun_search_tool
+from tools.think.think_and_planning_tool import aget_simple_think_tool
 from utils.models import fetch_llm
 from utils.constants import MAX_CHAT_STEPS
 from trace.pai_query_wrapper import pai_query_wrapper, with_current_context
+import uuid
+
 
 app = FastAPI()
 
 
 async def get_model_instance(model_id: str):
     model = await fetch_llm(model_id)
-    if model:
-        model_source = model.get("source", "unknown")
-        model_name = model.get("model_name", "unknown")
-        if model_source == "openai":
-            return (
-                model_name,
-                AsyncOpenAI(
-                    api_key=model["api_key"], base_url="https://api.openai.com/v1"
-                ).chat.completions,
-            )
-        elif model_source == "qwen":
-            return (
-                model_name,
-                AsyncOpenAI(
-                    api_key=model["api_key"],
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                ).chat.completions,
-            )
-        else:
-            raise ValueError(f"Unsupported model provider: {model_source}")
-    else:
+    if not model:
         raise ValueError(f"Model id {model_id} not exists.")
+
+    model_name = model.get("model_name", None)
+    base_url = model.get("base_url", None)
+    api_key = model.get("api_key", None)
+
+    if not all([model_name, base_url, api_key]):
+        raise ValueError(f"Model {model_id} is not configured properly.")
+
+    return (
+        model_name,
+        AsyncOpenAI(api_key=api_key, base_url=base_url).chat.completions,
+    )
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
@@ -179,7 +174,10 @@ async def generate_stream(
 
                                 # 返回工具调用和结果（标记9和a）
                                 yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
-                                if tool_call["name"] == "search_web":
+                                if tool_call["name"] in [
+                                    "search_web",
+                                    "think_and_planning",
+                                ]:
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
                                 else:
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
@@ -299,6 +297,12 @@ async def handle_chat(request: Request):
 
         openai_tools = []
         tools_name_to_fn = {}
+        # 获取思考工具
+        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool(
+            cache_key=str(uuid.uuid4())
+        )
+        openai_tools.extend(think_openai_tools)
+        tools_name_to_fn.update(think_tools_name_to_fn)
         system = data.get("system", x_options_to_prompt_mode(x_options))
 
         if "search" in x_options:

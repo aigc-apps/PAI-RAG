@@ -23,7 +23,7 @@ export const Assistant = () => {
   const [llmConfig, setLlmConfig] = useState({
     id: "",
     source: "",
-    model_name: "",
+    model_id: "",
   });
 
   // 页面加载时拉取 LLM 配置
@@ -48,13 +48,13 @@ export const Assistant = () => {
   const handleModelChange = async (
     id: string,
     source: string,
-    model_name: string,
+    model_id: string,
   ) => {
     setLlmConfig({
       ...llmConfig,
       id,
       source,
-      model_name,
+      model_id,
     });
   };
 
@@ -94,7 +94,7 @@ export const Assistant = () => {
                   <ModelSelector
                     selectedModel={{
                       source: llmConfig.source || "",
-                      model_name: llmConfig.model_name || "",
+                      model_id: llmConfig.model_id || "",
                     }}
                     onModelChange={handleModelChange}
                   />

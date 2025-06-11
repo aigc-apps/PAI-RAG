@@ -27,9 +27,9 @@ interface ModelGroup {
 interface ModelSelectorProps {
   selectedModel: {
     source: string;
-    model_name: string;
+    model_id: string;
   };
-  onModelChange: (id: string, source: string, model_name: string) => void;
+  onModelChange: (id: string, source: string, model_id: string) => void;
 }
 
 export default function ModelSelector({
@@ -71,7 +71,7 @@ export default function ModelSelector({
       <PopoverTrigger className="min-w-[180px] w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 h-9 px-3 py-2 text-sm focus:ring-1 focus:ring-ring">
         <div className="flex items-center pr-2 truncate">
           <span className="flex flex-row items-center justify-start gap-2 text-lg font-semibold">
-            {selectedModel.model_name || "请选择模型"}
+            {selectedModel.model_id || "请选择模型"}
           </span>
           <ChevronsUpDown className="size-4 opacity-50 ml-auto" />
         </div>
@@ -105,7 +105,7 @@ export default function ModelSelector({
                       className="flex items-center"
                     >
                       <Check
-                        className={`mr-1 size-4 ${selectedModel.model_name === model.name ? "opacity-100" : "opacity-0"}`}
+                        className={`mr-1 size-4 ${selectedModel.model_id === model.name ? "opacity-100" : "opacity-0"}`}
                       />
                       <span className="flex flex-row w-full items-center justify-start gap-2">
                         {model.name}
