@@ -28,20 +28,20 @@ app = FastAPI()
 
 async def get_model_instance(model_id: str):
     model = await fetch_llm(model_id)
-    if model:
-        base_url = model.get("base_url", None)
-        model_name = model.get("model_name", "unknown")
-        if base_url:
-            return (
-                model_name,
-                AsyncOpenAI(
-                    api_key=model["api_key"], base_url=base_url
-                ).chat.completions,
-            )
-        else:
-            raise ValueError(f"Model {model_name} has no base_url configured.")
-    else:
+    if not model:
         raise ValueError(f"Model id {model_id} not exists.")
+
+    model_name = model.get("model_name", None)
+    base_url = model.get("base_url", None)
+    api_key = model.get("api_key", None)
+
+    if not all([model_name, base_url, api_key]):
+        raise ValueError(f"Model {model_id} is not configured properly.")
+
+    return (
+        model_name,
+        AsyncOpenAI(api_key=api_key, base_url=base_url).chat.completions,
+    )
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))

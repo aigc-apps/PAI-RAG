@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, set_key, find_dotenv
 from trace.tracing_config import TracingConfig
 from trace.base import init_instrument
+from loguru import logger
 
 load_dotenv()
 init_instrument()
@@ -108,17 +109,21 @@ def get_models():
 
     # 处理 llm_config
     for config in data.get("llm_config", []):
-        base_url = config.get("base_url")
         model_id = config.get("model_id")
+        base_url = config.get("base_url")
         is_active = config.get("is_active", False)
+
+        if not all([model_id, base_url, is_active]):
+            logger.warning(
+                f"LLM配置无效: {config}, model_id: {model_id}, base_url: {base_url}, is_active: {is_active}。已跳过。"
+            )
+            continue
+
         source = None
         if base_url in url_and_source_map:
             source = url_and_source_map[base_url]
         else:
             source = "Others"
-
-        if not source or not model_id or not is_active:
-            continue  # 跳过无效配置
 
         if source not in grouped:
             grouped[source] = []
