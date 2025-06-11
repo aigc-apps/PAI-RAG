@@ -63,13 +63,13 @@ export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
     </div>
   );
 };
-
-class MCPConfig {
+export class MCPConfig {
   id: string;
   name: string;
   url: string;
   type: string;
   active: boolean;
+  enabled: boolean;
 
   constructor(
     id: string,
@@ -77,12 +77,14 @@ class MCPConfig {
     url: string,
     type: string,
     active: boolean,
+    enabled: boolean,
   ) {
     this.id = id;
     this.name = name;
     this.url = url;
     this.type = type;
     this.active = active;
+    this.enabled = enabled;
   }
 }
 
@@ -106,6 +108,7 @@ export default function McpConfig() {
     url: "",
     type: "sse",
     active: false,
+    enabled: true,
   });
 
   const [mcpconfigs, setMcpConfigs] = useState(
@@ -115,6 +118,7 @@ export default function McpConfig() {
       url: string;
       type: string;
       active: boolean;
+      enabled: boolean;
     }>,
   ); // 存储 MCP 配置
   const [mcploading, setMcpLoading] = useState(true); // 加载状态
@@ -305,7 +309,7 @@ export default function McpConfig() {
                     <TableHead className="w-1/10">MCP 名称</TableHead>
                     <TableHead className="w-2/5">MCP 链接</TableHead>
                     <TableHead className="w-1/10">MCP 类型</TableHead>
-                    <TableHead className="w-1/10">是否激活</TableHead>
+                    <TableHead className="w-1/10">是否启用</TableHead>
                     <TableHead className="w-1/5">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -317,7 +321,7 @@ export default function McpConfig() {
                       <TableCell>{config.url} </TableCell>
                       <TableCell> {config.type} </TableCell>
                       <TableCell>
-                        <Checkbox id="terms" checked={config.active} />
+                        <Checkbox id="terms" checked={config.enabled} />
                       </TableCell>
                       <TableCell>
                         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -399,20 +403,20 @@ export default function McpConfig() {
                               </div>
                               <div className="grid grid-cols-4 items-center gap-4">
                                 <Label
-                                  htmlFor="edit_mcp_active"
+                                  htmlFor="edit_mcp_enabled"
                                   className="text-right"
                                 >
-                                  是否激活
+                                  是否启用
                                 </Label>
                                 <Checkbox
-                                  id="edit_mcp_active"
-                                  checked={editingConfig?.active || false}
+                                  id="edit_mcp_enabled"
+                                  checked={editingConfig?.enabled || false}
                                   onCheckedChange={(checkedState) => {
                                     // 将 CheckedState 转换为 boolean
                                     const isChecked = checkedState === true;
                                     handleEditInputChangeCheckbox(
                                       isChecked,
-                                      "edit_mcp_active",
+                                      "edit_mcp_enabled",
                                     );
                                   }}
                                   className="col-span-3"

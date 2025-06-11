@@ -366,13 +366,15 @@ export type ThinkArgs = {
 };
 
 type ThinkResult = {
-  type: string;
-  text: string;
+  thought: string;
+  action: string;
+  plan: string;
+  thought_number: number;
   thoughts_count: number;
 };
 
 export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
-  toolName: "think",
+  toolName: "think_and_planning",
   render: ({ args, status, result }) => {
     if (!result) {
       return null;
@@ -392,7 +394,20 @@ export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
             <span className="font-semibold">思考中... </span>
           </div>
         )}
-        <div className="text-sm mt-2">{args.thought}</div>
+        <div className="text-sm mt-2">
+          <div className="mb-2">
+            <strong>思考内容：</strong> {result?.thought}
+          </div>
+          <div className="mb-2">
+            <strong>计划详情：</strong> {result?.plan}
+          </div>
+          <div className="mb-2">
+            <strong>下一步计划行动：</strong> {result?.action}
+          </div>
+          <div className="text-xs text-gray-500">
+            思考次数：{result?.thought_number} / {result.thoughts_count}
+          </div>
+        </div>
       </div>
     );
   },
