@@ -70,12 +70,16 @@ export default function SearchConfig() {
       setError("");
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      var update_ak = aliyunAK === "******" ? "" : aliyunAK;
+      var update_sk = aliyunSK === "******" ? "" : aliyunSK;
+
       const res = await fetch(`http://localhost:${port}/v1/config/websearch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+
         body: JSON.stringify({
-          access_key_id: aliyunAK,
-          access_key_secret: aliyunSK,
+          access_key_id: update_ak,
+          access_key_secret: update_sk,
           type: "aliyun",
           endpoint: "iqs.cn-zhangjiakou.aliyuncs.com",
         }),
@@ -117,8 +121,8 @@ export default function SearchConfig() {
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_ak"
-                  value={aliyunAK}
-                  type={showAK ? "text" : "password"} // 动态切换类型
+                  defaultValue={aliyunHasKey ? "******" : ""}
+                  type="password" // 动态切换类型
                   onChange={(e) => setAliyunAK(e.target.value)}
                   placeholder="输入 AccessKey ID"
                   className="col-span-3"
@@ -132,8 +136,8 @@ export default function SearchConfig() {
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_sk"
-                  value={aliyunSK}
-                  type={showSK ? "text" : "password"} // 动态切换类型
+                  defaultValue={aliyunHasKey ? "******" : ""}
+                  type="password" // 动态切换类型
                   onChange={(e) => setAliyunSK(e.target.value)}
                   placeholder="输入 AccessKey Secret"
                   className="col-span-3"

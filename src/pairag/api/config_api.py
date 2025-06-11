@@ -135,7 +135,7 @@ async def read_llm(
 
 @config_router.patch("/llms/{llm_id}", response_model=LlmModelRead)
 async def update_llm(
-    llm_id: int,
+    llm_id: str,
     update_llm: LlmModelCreate,
     session: AsyncSession = Depends(db_context.get_session),
 ):
@@ -143,6 +143,7 @@ async def update_llm(
     if not llm:
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
 
+    logger.info(f"Updating LLM {llm_id} to {update_llm}.")
     llm.base_url = update_llm.base_url or llm.base_url
     llm.context_window = update_llm.context_window or llm.context_window
     llm.model = update_llm.model or llm.model
@@ -160,7 +161,7 @@ async def update_llm(
 
 @config_router.delete("/llms/{llm_id}")
 async def delete_llm(
-    llm_id: int,
+    llm_id: str,
     session: AsyncSession = Depends(db_context.get_session),
 ):
     llm = await session.get(LlmModelEntity, llm_id)
@@ -168,6 +169,7 @@ async def delete_llm(
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
     await session.delete(llm)
     await session.commit()
+    logger.info(f"LLM {llm_id} deleted.")
     return {"message": f"LLM {llm_id} deleted."}
 
 
@@ -222,7 +224,7 @@ async def list_mcps(
 
 @config_router.get("/mcps/{mcp_id}", response_model=McpServerRead)
 async def read_mcp(
-    mcp_id: int, session: AsyncSession = Depends(db_context.get_session)
+    mcp_id: str, session: AsyncSession = Depends(db_context.get_session)
 ):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
@@ -233,7 +235,7 @@ async def read_mcp(
 
 @config_router.patch("/mcps/{mcp_id}", response_model=McpServerRead)
 async def update_mcp(
-    mcp_id: int,
+    mcp_id: str,
     update_mcp: McpServerCreate,
     session: AsyncSession = Depends(db_context.get_session),
 ):
@@ -242,7 +244,7 @@ async def update_mcp(
         raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
 
     mcp.name = update_mcp.name or mcp.name
-    mcp.active = update_mcp.active
+    mcp.enabled = update_mcp.enabled
     mcp.encrypted_auth_token = (
         encrypt_key(update_mcp.auth_token)
         if update_mcp.auth_token
@@ -262,7 +264,7 @@ async def update_mcp(
 
 @config_router.delete("/mcps/{mcp_id}")
 async def delete_mcp(
-    mcp_id: int,
+    mcp_id: str,
     session: AsyncSession = Depends(db_context.get_session),
 ):
     mcp = await session.get(McpServerEntity, mcp_id)

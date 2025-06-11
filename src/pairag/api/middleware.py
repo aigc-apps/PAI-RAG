@@ -24,12 +24,12 @@ class CustomMiddleWare(BaseHTTPMiddleware):
             current_time = time.time()
             if current_time - self.last_log_time >= self.log_interval:
                 logger.info(
-                    f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
+                    f"Request: {request.method} {request.url} {response.status_code} - Response Time: {process_time:.4f} seconds Host {host}"
                 )
                 self.last_log_time = current_time
         else:
             logger.info(
-                f"Request: {request.method} {request.url} - Response Time: {process_time:.4f} seconds Host {host}"
+                f"Request: {request.method} {request.url} {response.status_code} - Response Time: {process_time:.4f} seconds Host {host}"
             )
         return response
 

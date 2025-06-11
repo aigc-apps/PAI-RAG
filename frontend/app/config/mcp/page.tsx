@@ -225,11 +225,14 @@ export default function McpConfig() {
       if (!editingConfig) return;
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/mcps`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingConfig), // 包装为数组
-      });
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/mcps/${editingConfig.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editingConfig), // 包装为数组
+        },
+      );
 
       if (!res.ok) throw new Error("修改 MCP 配置失败");
       setToastState({
@@ -260,7 +263,7 @@ export default function McpConfig() {
   const removeMCP = async (id: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/api/delete_mcp/${id}`, {
+      const res = await fetch(`http://localhost:${port}/v1/config/mcps/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -311,7 +314,6 @@ export default function McpConfig() {
               <Table className="w-full table-fixed border bg-white rounded-md overflow-hidden">
                 <TableHeader className="bg-gray-100">
                   <TableRow>
-                    <TableHead className="w-1/10">MCP ID</TableHead>
                     <TableHead className="w-1/10">MCP 名称</TableHead>
                     <TableHead className="w-2/5">MCP 链接</TableHead>
                     <TableHead className="w-1/10">MCP 类型</TableHead>
@@ -322,7 +324,6 @@ export default function McpConfig() {
                 <TableBody>
                   {mcpconfigs.map((config) => (
                     <TableRow key={config.id}>
-                      <TableCell>{config.id} </TableCell>
                       <TableCell>{config.name} </TableCell>
                       <TableCell>{config.url} </TableCell>
                       <TableCell> {config.type} </TableCell>
@@ -351,20 +352,6 @@ export default function McpConfig() {
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_id"
-                                  className="text-right"
-                                >
-                                  MCP ID
-                                </Label>
-                                <Input
-                                  id="edit_mcp_id"
-                                  defaultValue={editingConfig?.id || "null"}
-                                  disabled
-                                  className="col-span-3"
-                                />
-                              </div>
                               <div className="grid grid-cols-4 items-center gap-4">
                                 <Label
                                   htmlFor="edit_mcp_name"

@@ -220,6 +220,8 @@ export default function LlmConfig() {
     try {
       if (!editingConfig) return;
 
+      if (editingConfig.api_key === "******") editingConfig.api_key = "";
+
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/v1/config/llms/${id}`, {
         method: "PATCH",
@@ -358,9 +360,11 @@ export default function LlmConfig() {
                       </span>
                     </div>
                     <div className="mb-4">
-                      <p className="text-sm text-gray-600">{config.model_id}</p>
+                      <p className="text-sm text-gray-600">
+                        模型ID: {config.model_id}
+                      </p>
                       <p className="text-sm font-mono bg-gray-50 px-2 py-1 rounded text-gray-800 truncate">
-                        {config.base_url}
+                        API地址: {config.base_url}
                       </p>
                     </div>
                     <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
@@ -406,16 +410,14 @@ export default function LlmConfig() {
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                               <Label
-                                htmlFor="edit_model_name"
+                                htmlFor="edit_model"
                                 className="text-right"
                               >
                                 模型名称
                               </Label>
                               <Input
-                                id="edit_model_name"
-                                defaultValue={
-                                  editingConfig?.model_name || "null"
-                                }
+                                id="edit_model"
+                                defaultValue={editingConfig?.model || "null"}
                                 onChange={handleEditInputChange}
                                 className="col-span-3"
                               />
@@ -443,7 +445,10 @@ export default function LlmConfig() {
                               </Label>
                               <Input
                                 id="edit_api_key"
-                                defaultValue={editingConfig?.api_key || "null"}
+                                type="password"
+                                defaultValue={
+                                  editingConfig?.api_key || "******"
+                                }
                                 onChange={handleEditInputChange}
                                 className="col-span-3"
                               />
@@ -451,7 +456,7 @@ export default function LlmConfig() {
                           </div>
                           <DialogFooter>
                             <Button
-                              onClick={updatedLLM}
+                              onClick={() => updatedLLM(config.id)}
                               type="submit"
                               disabled={isEditLoading}
                             >
