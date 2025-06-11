@@ -299,7 +299,7 @@ export const SearchWebToolUI = makeAssistantToolUI<
       );
     }
     return (
-      <div className="rounded-md p-1">
+      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
         <Sheet>
           <SheetTrigger asChild>
             <Button
@@ -359,12 +359,67 @@ export const SearchWebToolUI = makeAssistantToolUI<
   },
 });
 
+/* Think Tool UI */
+
+export type ThinkArgs = {
+  thought: string;
+};
+
+type ThinkResult = {
+  thought: string;
+  action: string;
+  plan: string;
+  thought_number: number;
+  thoughts_count: number;
+};
+
+export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
+  toolName: "think_and_planning",
+  render: ({ args, status, result }) => {
+    if (!result) {
+      return null;
+    }
+    console.log("think 结果:", result);
+    return (
+      <div
+        className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
+        role="button"
+      >
+        {/* 条件渲染头部内容：仅当 thoughts_count 为 1 时显示 */}
+        {result?.thoughts_count === 1 && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xl" aria-hidden="true">
+              🧠
+            </span>
+            <span className="font-semibold">思考中... </span>
+          </div>
+        )}
+        <div className="text-sm mt-2">
+          <div className="mb-2">
+            <strong>思考内容：</strong> {result?.thought}
+          </div>
+          <div className="mb-2">
+            <strong>计划详情：</strong> {result?.plan}
+          </div>
+          <div className="mb-2">
+            <strong>下一步计划行动：</strong> {result?.action}
+          </div>
+          <div className="text-xs text-gray-500">
+            思考次数：{result?.thought_number} / {result.thoughts_count}
+          </div>
+        </div>
+      </div>
+    );
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
       <SearchWebToolUI />
+      <ThinkToolUI />
     </>
   );
 };

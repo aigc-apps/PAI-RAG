@@ -8,6 +8,7 @@ class LlmModel(SQLModel):
     context_window: int = Field(default=8000)
     temperature: float = Field(default=0.1)
     model_id: str = Field(default=None, unique=True)
+    enabled: bool = Field(default=True)
 
 
 class LlmModelCreate(LlmModel):

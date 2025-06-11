@@ -140,7 +140,10 @@ async def generate_stream(
 
                                 # 返回工具调用和结果（标记9和a）
                                 yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
-                                if tool_call["name"] == "search_web":
+                                if tool_call["name"] in [
+                                    "search_web",
+                                    "think_and_planning",
+                                ]:
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
                                 else:
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'

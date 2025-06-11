@@ -68,7 +68,8 @@ export const ToolFallback: ToolCallContentPartComponent = ({
   // const parsedArgs = JSON.parse(argsText);
 
   return (
-    <div className="rounded-md p-1">
+    // <div className="rounded-md p-1">
+    <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
       <Sheet>
         <SheetTrigger asChild>
           <Button

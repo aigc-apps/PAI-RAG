@@ -22,7 +22,8 @@ from pairag.db.encrypt_utils import decrypt_key, encrypt_key
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
 from openai.types.chat import ChatCompletionSystemMessageParam
-from pairag.mcp.chat_mcp import handle_chat, process_mcp_tools
+from pairag.mcp.chat import handle_chat, process_mcp_tools
+from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
 from pairag.mcp.prompts import (
     PROMPT_WITH_DEEP_RESEARCH,
     PROMPT_WITHOUT_DEEP_RESEARCH,
@@ -30,7 +31,7 @@ from pairag.mcp.prompts import (
 )
 from pairag.mcp.utils.message_utils import convert_to_openai_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
-from pairag.mcp.websearch.aliyun_search_tool import aget_aliyun_search_tool
+from pairag.mcp.tools.search.aliyun_search_tool import aget_aliyun_search_tool
 
 config_router = APIRouter()
 
@@ -50,6 +51,7 @@ async def create_llm(
     llm = LlmModelEntity.model_validate(
         llm_data, update={"encrypted_api_key": encrypted_api_key}
     )
+
     session.add(llm)
     try:
         await session.commit()
@@ -410,6 +412,14 @@ async def chat(
 
         openai_tools = []
         tools_name_to_fn = {}
+        # 获取思考工具
+        think_cache = []
+        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool(
+            think_cache=think_cache
+        )
+        openai_tools.extend(think_openai_tools)
+        tools_name_to_fn.update(think_tools_name_to_fn)
+
         if "search" in x_options:
             sql_result = await session.exec(select(WebSearchConfigEntity))
             search_entity = sql_result.first()
