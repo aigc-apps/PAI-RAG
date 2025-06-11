@@ -599,14 +599,20 @@ class ChatFlow:
         logger.info(f"achat_web_atomic: {chat_request}")
         chat_id = chat_id_generator()
 
-        messages = remove_think_from_messages(chat_request.messages)
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
+        messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
         response_wrapper = await self.achat_web(
-            query_str=chat_request.intent.query_str
-            or chat_request.messages[-1].content,
-            original_user_message=chat_request.messages[-1].content,
+            query_str=chat_request.intent.query_str or messages.messages[-1].content,
+            original_user_message=messages[-1].content,
             chat_history_str=chat_history_str,
             stream=chat_request.stream,
             model_id=chat_request.model,
@@ -630,14 +636,20 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        messages = remove_think_from_messages(chat_request.messages)
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
+        messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
         response_wrapper = await self.achat_web(
-            query_str=chat_request.intent.query_str
-            or chat_request.messages[-1].content,
-            original_user_message=chat_request.messages[-1].content,
+            query_str=chat_request.intent.query_str or messages[-1].content,
+            original_user_message=messages[-1].content,
             chat_history_str=chat_history_str,
             stream=chat_request.stream,
             model_id=chat_request.model,
@@ -661,14 +673,20 @@ class ChatFlow:
         logger.info(f"achat_knowledgebase_atomic: {chat_request}")
         chat_id = chat_id_generator()
 
-        messages = remove_think_from_messages(chat_request.messages)
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
+        messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
         response_wrapper = await self.achat_knowledgebase(
-            query_str=chat_request.intent.query_str
-            or chat_request.messages[-1].content,
-            original_user_message=chat_request.messages[-1].content,
+            query_str=chat_request.intent.query_str or messages[-1].content,
+            original_user_message=messages[-1].content,
             chat_history_str=chat_history_str,
             knowledgebase_name=chat_request.index_name,
             stream=chat_request.stream,
@@ -693,14 +711,20 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
-        messages = remove_think_from_messages(chat_request.messages)
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
+        messages = remove_think_from_messages(messages)
         chat_history_str = messages_to_history_str(messages[-7:-1])
         llm_kwargs = self._get_llm_kwargs(chat_request)
 
         response_wrapper = await self.achat_knowledgebase(
-            query_str=chat_request.intent.query_str
-            or chat_request.messages[-1].content,
-            original_user_message=chat_request.messages[-1].content,
+            query_str=chat_request.intent.query_str or messages[-1].content,
+            original_user_message=messages[-1].content,
             chat_history_str=chat_history_str,
             knowledgebase_name=chat_request.index_name,
             stream=chat_request.stream,
