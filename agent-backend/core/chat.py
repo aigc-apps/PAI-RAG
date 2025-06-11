@@ -75,7 +75,7 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
         )
 
 
-async def process_mcp_tools(active_mcp_id):
+async def process_mcp_tools(active_mcp_ids):
     """
     process_mcp_tools will get the tools from MCP Client (only need to implement ClientSession) and convert them to LlamaIndex's FunctionTool objects and transformed tool name to tool Dict.
     Args:
@@ -85,7 +85,7 @@ async def process_mcp_tools(active_mcp_id):
 
     """
     # TODO: 不用每个request都list_tools
-    mcp_clients = await resolve_mcp_clients(active_mcp_id)
+    mcp_clients = await resolve_mcp_clients(active_mcp_ids)
     openai_tools = []
     tools_name_to_fn = {}
     for mcp_client in mcp_clients:
@@ -291,7 +291,11 @@ async def handle_chat(request: Request):
             if request.headers.get("X-Options")
             else []
         )
-        active_mcp_id = request.headers.get("X-MCP-ID")
+        active_mcp_ids = (
+            request.headers.get("X-MCP-ID").split(",")
+            if request.headers.get("X-MCP-ID")
+            else []
+        )
 
         openai_tools = []
         tools_name_to_fn = {}
@@ -305,7 +309,7 @@ async def handle_chat(request: Request):
             tools_name_to_fn.update(search_tools_name_to_fn)
         if "mcp" in x_options:
             mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools(
-                active_mcp_id
+                active_mcp_ids
             )
             openai_tools.extend(mcp_openai_tools)
             tools_name_to_fn.update(mcp_tools_name_to_fn)
