@@ -15,6 +15,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import LlmConfig from "./config/llm/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
+import { useMemo } from "react";
 import TracingConfig from "./config/tracing/page";
 
 export const Assistant = () => {
@@ -29,7 +30,7 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         console.log("assistant BACKEND_PORT", port);
         const res = await fetch(`http://localhost:${port}/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
@@ -57,14 +58,26 @@ export const Assistant = () => {
     });
   };
 
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]); // 存储 ToggleGroup 状态
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    console.log("selectedOptions updated:", selectedOptions);
+  }, [selectedOptions]);
+
+  const headers = useMemo(() => {
+    const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
+    return {
+      "X-Model-Id": llmConfig.model_id || "",
+      "X-Options": selectedOptions
+        .filter((opt) => !opt.startsWith("mcp:"))
+        .join(","),
+      "X-MCP-ID": mcpOptions.map((opt) => opt.split(":")[1]).join(","),
+    };
+  }, [llmConfig.model_id, selectedOptions]);
 
   const runtime = useChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/config/api/chat`,
-    headers: {
-      "X-Model-Id": llmConfig.model_id || "",
-      "X-Options": selectedOptions.join(",") || "",
-    },
+    headers: headers,
   });
 
   const [activeTab, setActiveTab] = useState("/"); // 提升状态到父组件
@@ -89,6 +102,7 @@ export const Assistant = () => {
               </header>
               <Thread
                 onToggleChange={(options) => {
+                  console.log("Received options from Thread:", options); // ✅ 添加日志
                   setSelectedOptions(options); // 更新状态
                 }}
               />
@@ -132,3 +146,6 @@ export const Assistant = () => {
     </AssistantRuntimeProvider>
   );
 };
+function useRef<T>(arg0: never[]) {
+  throw new Error("Function not implemented.");
+}

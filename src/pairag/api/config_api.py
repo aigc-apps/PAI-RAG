@@ -23,7 +23,11 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 from openai.types.chat import ChatCompletionSystemMessageParam
 from pairag.mcp.chat_mcp import handle_chat, process_mcp_tools
-from pairag.mcp.prompts import SYSTEM_PROMPT
+from pairag.mcp.prompts import (
+    PROMPT_WITH_DEEP_RESEARCH,
+    PROMPT_WITHOUT_DEEP_RESEARCH,
+    PROMPT_WITHOUT_TOOLS,
+)
 from pairag.mcp.utils.message_utils import convert_to_openai_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.websearch.aliyun_search_tool import aget_aliyun_search_tool
@@ -378,10 +382,6 @@ async def chat(
         # 解析请求体
         data = await request.json()
         messages = data.get("messages", [])
-        system_prompt = SYSTEM_PROMPT.format(
-            current_datetime=get_prompt_current_time_str()
-        )
-        system = data.get("system", system_prompt)
 
         # 从 headers 中获取模型参数
         model_id = request.headers.get("X-Model-Id")
@@ -406,6 +406,7 @@ async def chat(
             if request.headers.get("X-Options")
             else []
         )
+        system = data.get("system", x_options_to_prompt_mode(x_options))
 
         openai_tools = []
         tools_name_to_fn = {}
@@ -430,7 +431,16 @@ async def chat(
             openai_tools.extend(search_openai_tools)
             tools_name_to_fn.update(search_tools_name_to_fn)
         if "mcp" in x_options:
-            sql_result = await session.exec(select(McpServerEntity))
+            active_mcp_ids = (
+                request.headers.get("X-MCP-ID").split(",")
+                if request.headers.get("X-MCP-ID")
+                else []
+            )
+            logger.info(f"[Model] selected mcp_ids: {active_mcp_ids}")
+
+            sql_result = await session.exec(
+                select(McpServerEntity).where(McpServerEntity.id.in_(active_mcp_ids))
+            )
             mcp_entities = sql_result.all()
             mcp_configs = [
                 McpServerCreate.model_validate(
@@ -447,6 +457,8 @@ async def chat(
             mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools(
                 mcp_configs
             )
+            logger.info(f"[Model] mcp_openai_tools: {mcp_openai_tools}")
+
             openai_tools.extend(mcp_openai_tools)
             tools_name_to_fn.update(mcp_tools_name_to_fn)
 
@@ -469,3 +481,20 @@ async def chat(
     except Exception as e:
         logger.exception(f"Error in /api/chat: {str(e)}")
         return Response(content="Internal Server Error", status_code=500)
+
+
+def x_options_to_prompt_mode(x_options):
+    if "search" in x_options or "mcp" in x_options:
+        if "thinking" in x_options:
+            system_prompt = PROMPT_WITH_DEEP_RESEARCH.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+        else:
+            system_prompt = PROMPT_WITHOUT_DEEP_RESEARCH.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+    else:
+        system_prompt = PROMPT_WITHOUT_TOOLS.format(
+            current_datetime=get_prompt_current_time_str()
+        )
+    return system_prompt

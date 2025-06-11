@@ -32,7 +32,7 @@ class McpServer(SQLModel):
     name: str = Field(default=None)
     url: str = Field(default=None)
     type: str = Field(default="sse")
-    active: bool = Field(default=True)
+    enabled: bool = Field(default=True)
 
 
 class McpServerCreate(McpServer):
@@ -54,7 +54,7 @@ class TraceConfig(SQLModel):
     endpoint: str = Field(default=None)
     token: str = Field(default=None)
     service_name: str = Field(default=None)
-    active: bool = Field(default=False)
+    enabled: bool = Field(default=False)
 
 
 class TraceConfigEntity(TraceConfig, table=True):

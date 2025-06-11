@@ -74,7 +74,7 @@ class BasicMCPClient:
 async def resolve_mcp_clients(mcp_server_configs) -> List[BasicMCPClient]:
     mcp_clients = []
     for mcp_server_config in mcp_server_configs:
-        if mcp_server_config.active:
+        if mcp_server_config.enabled:
             mcp_headers = {}
             if mcp_server_config.auth_token:
                 mcp_headers = {

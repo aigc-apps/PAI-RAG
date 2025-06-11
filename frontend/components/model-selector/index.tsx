@@ -47,7 +47,7 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
           `http://localhost:${port}/v1/config/llm_groups`,
         );

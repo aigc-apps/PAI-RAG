@@ -140,7 +140,7 @@ export default function LlmConfig() {
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(`http://localhost:${port}/v1/config/llms`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
@@ -188,7 +188,7 @@ export default function LlmConfig() {
         id: uuidv4(),
       };
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/v1/config/llms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -221,7 +221,7 @@ export default function LlmConfig() {
     try {
       if (!editingConfig) return;
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/v1/config/llms/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -256,7 +256,7 @@ export default function LlmConfig() {
   };
   const removeLLM = async (id: string) => {
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/v1/config/llms/${id}`, {
         method: "DELETE",
         headers: {

@@ -26,7 +26,7 @@ export default function TracingConfig() {
         setIsLoading(true);
         setError("");
 
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(`http://localhost:${port}/api/tracing_config`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -63,7 +63,7 @@ export default function TracingConfig() {
       setIsLoading(true);
       setError("");
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/api/tracing_config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
