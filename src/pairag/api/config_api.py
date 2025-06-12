@@ -11,8 +11,8 @@ from pairag.db.models import (
     McpServerEntity,
     McpServerCreate,
     McpServerRead,
-    TraceConfig,
-    TraceConfigEntity,
+    TraceModel,
+    TraceModelEntity,
     WebSearchConfigCreate,
     WebSearchConfigEntity,
     WebSearchConfigRead,
@@ -24,6 +24,7 @@ from loguru import logger
 from openai.types.chat import ChatCompletionSystemMessageParam
 from pairag.mcp.chat import handle_chat, process_mcp_tools
 from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
+from pairag.integrations.trace.base import init_instrument, TraceConfig
 from pairag.mcp.prompts import (
     PROMPT_WITH_DEEP_RESEARCH,
     PROMPT_WITHOUT_DEEP_RESEARCH,
@@ -334,12 +335,12 @@ async def list_search_config(
     return search_config_results.all()
 
 
-@config_router.post("/trace", response_model=TraceConfig)
+@config_router.post("/trace", response_model=TraceModel)
 async def set_trace_config(
-    new_trace_config: TraceConfig,
+    new_trace_config: TraceModel,
     session: AsyncSession = Depends(db_context.get_session),
 ):
-    trace_config = (await session.exec(select(TraceConfigEntity))).first()
+    trace_config = (await session.exec(select(TraceModelEntity))).first()
     if trace_config is None:
         logger.info(f"Adding new trace config {trace_config}")
 
@@ -353,6 +354,15 @@ async def set_trace_config(
         trace_config.service_name = (
             new_trace_config.service_name or trace_config.service_name
         )
+
+    init_instrument(
+        config=TraceConfig(
+            service_name=trace_config.service_name,
+            endpoint=trace_config.endpoint,
+            token=trace_config.token,
+            enabled=trace_config.enabled,
+        )
+    )
 
     session.add(trace_config)
     try:
@@ -370,15 +380,15 @@ async def set_trace_config(
         )
 
 
-@config_router.get("/trace", response_model=TraceConfig)
+@config_router.get("/trace", response_model=TraceModel)
 async def get_trace_config(
     session: AsyncSession = Depends(db_context.get_session),
 ):
-    trace_config_results = await session.exec(select(TraceConfigEntity))
+    trace_config_results = await session.exec(select(TraceModelEntity))
     trace_config = trace_config_results.first()
     if not trace_config:
         logger.warning("No trace config found.")
-        return TraceConfig()
+        return TraceModel()
 
     return trace_config
 

@@ -1,6 +1,6 @@
 from functools import wraps
 import time
-from fastapi import Request
+import json
 from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 from opentelemetry.context import attach, detach, Context
@@ -60,22 +60,17 @@ def _get_final_chunk_content(chunk: str):
     return ""
 
 
-def pai_query_wrapper(func):
+def pai_agent_wrapper(func):
     """decorator to capture input & output string of entry point (handle_chat in our case)."""
 
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        request: Request = kwargs.get("request") or next(
-            (arg for arg in args if isinstance(arg, Request)), None
-        )
-
+        messages = kwargs.get("messages", [])
         try:
-            data = await request.json()
-            request_text = (
-                data.get("messages", [{}])[0]
-                .get("content", [{}])[0]
-                .get("text", "[unknown]")
-            )
+            user_content = json.loads(messages[-1]["content"])
+            request_text = ""
+            for block in user_content:
+                request_text += block.get("text", "")
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
             request_text = "[unknown]"

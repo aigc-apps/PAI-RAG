@@ -11,7 +11,7 @@ from openai.types.chat import (
     ChatCompletionMessageToolCall,
 )
 from opentelemetry import trace
-from pairag.mcp.trace.pai_query_wrapper import pai_query_wrapper, with_current_context
+from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper, with_current_context
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 app = FastAPI()
@@ -222,7 +222,7 @@ async def generate_stream(
         raise
 
 
-@pai_query_wrapper
+@pai_agent_wrapper
 async def handle_chat(model, model_name, messages, tools, tools_name_to_fn):
     current_span = trace.get_current_span()
     current_context = trace.set_span_in_context(current_span)
