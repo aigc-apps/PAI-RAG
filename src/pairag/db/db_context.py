@@ -1,3 +1,4 @@
+from loguru import logger
 from sqlmodel import SQLModel
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -26,6 +27,9 @@ def create_db_engine(
 class DbContext:
     def __init__(self):
         # 从环境变量中读取数据库配置
+        local_db_url = os.getenv(
+            "SQLITE_URL", "sqlite+aiosqlite:///./localdata/local.db"
+        )
         db_name = os.getenv("DB_NAME")
         db_user = os.getenv("DB_USER")
         db_password = os.getenv("DB_PASSWORD")
@@ -33,15 +37,25 @@ class DbContext:
         db_port = os.getenv("DB_PORT", 5432)
 
         if not all([db_name, db_user, db_password, db_host, db_port]):
-            raise ValueError("One or more database environment variables are missing.")
-
-        self.async_engine = create_db_engine(
-            db_name=db_name,
-            db_user=db_user,
-            db_password=db_password,
-            db_host=db_host,
-            db_port=db_port,
-        )
+            logger.warning(
+                f"One or more database environment variables are missing. Will use sqlite {local_db_url} instead."
+            )
+            self.async_engine = create_async_engine(
+                local_db_url,
+                echo=True,  # 输出执行的 SQL 语句
+                connect_args={"check_same_thread": False},  # SQLite 特有参数
+            )
+        else:
+            self.async_engine = create_db_engine(
+                db_name=db_name,
+                db_user=db_user,
+                db_password=db_password,
+                db_host=db_host,
+                db_port=db_port,
+            )
+            logger.info(
+                "created sql engine with {db_user}@{db_host}:{db_port}/{db_name}"
+            )
 
     async def init_db(self):
         async with self.async_engine.begin() as conn:

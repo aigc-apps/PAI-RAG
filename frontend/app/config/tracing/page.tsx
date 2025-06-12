@@ -27,7 +27,7 @@ export default function TracingConfig() {
         setError("");
 
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        const res = await fetch(`http://localhost:${port}/api/tracing_config`, {
+        const res = await fetch(`http://localhost:${port}/v1/config/trace`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         });
@@ -35,9 +35,9 @@ export default function TracingConfig() {
         if (!res.ok) throw new Error("加载配置失败");
 
         const data = await res.json();
-        setEndpoint(data["TRACING_ENDPOINT"] || "");
-        setToken(data["TRACING_TOKEN"] || "");
-        setServiceName(data["TRACING_SERVICE_NAME"] || "");
+        setEndpoint(data["endpoint"] || "");
+        setToken(data["token"] || "");
+        setServiceName(data["service_name"] || "");
       } catch (err: any) {
         setError(err.message || "加载失败");
         setToastState({
@@ -64,7 +64,7 @@ export default function TracingConfig() {
       setError("");
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/api/tracing_config`, {
+      const res = await fetch(`http://localhost:${port}/v1/config/trace`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

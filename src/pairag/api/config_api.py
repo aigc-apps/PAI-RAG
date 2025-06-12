@@ -334,7 +334,7 @@ async def list_search_config(
     return search_config_results.all()
 
 
-@config_router.post("/trace", response_model=TraceConfigEntity)
+@config_router.post("/trace", response_model=TraceConfig)
 async def set_trace_config(
     new_trace_config: TraceConfig,
     session: AsyncSession = Depends(db_context.get_session),
@@ -348,7 +348,7 @@ async def set_trace_config(
         )
     else:
         trace_config.endpoint = new_trace_config.endpoint or trace_config.endpoint
-        trace_config.active = new_trace_config.active or trace_config.active
+        trace_config.enabled = new_trace_config.enabled or trace_config.enabled
         trace_config.token = new_trace_config.token or trace_config.token
         trace_config.service_name = (
             new_trace_config.service_name or trace_config.service_name
@@ -370,12 +370,17 @@ async def set_trace_config(
         )
 
 
-@config_router.get("/trace", response_model=WebSearchConfigRead)
+@config_router.get("/trace", response_model=TraceConfig)
 async def get_trace_config(
     session: AsyncSession = Depends(db_context.get_session),
 ):
-    search_config_results = await session.exec(select(WebSearchConfigEntity))
-    return search_config_results.first()
+    trace_config_results = await session.exec(select(TraceConfigEntity))
+    trace_config = trace_config_results.first()
+    if not trace_config:
+        logger.warning("No trace config found.")
+        return TraceConfig()
+
+    return trace_config
 
 
 @config_router.post("/api/chat")

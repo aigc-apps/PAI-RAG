@@ -52,7 +52,7 @@ class McpServerEntity(McpServer, table=True):
 
 
 class TraceConfig(SQLModel):
-    endpoint: str = Field(default=None)
+    endpoint: str = Field(default="http://tracing-analysis-dc-hz.aliyuncs.com:8090")
     token: str = Field(default=None)
     service_name: str = Field(default=None)
     enabled: bool = Field(default=False)
