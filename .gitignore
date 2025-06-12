@@ -16,8 +16,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -229,15 +227,7 @@ model_repository/
 arms.trace*
 
 notebooks/
-node_modules
-# next.js
-.next/
-out/
 
-# fumadocs
-.source
 
-# production
-dist
-apps/docs/generated
-packages/*/generated
+# tmp_files
+tmp

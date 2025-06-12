@@ -5,14 +5,14 @@ from pairag.chat.models import ChatCompletionRequest, EmbeddingInput
 from pairag.core.chat_service import chat_service
 
 
-router_openai = APIRouter()
-router_chat = APIRouter()
+openai_router = APIRouter()
+chat_router = APIRouter()
 
 
 ### OpenAI API ###
 
 
-@router_openai.get("/models")
+@openai_router.get("/models")
 async def get_models():
     return {
         "data": [
@@ -27,7 +27,7 @@ async def get_models():
     }
 
 
-@router_openai.post("/chat/completions")
+@openai_router.post("/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     if not request.stream:
         response = await chat_service.achat(request)
@@ -40,7 +40,7 @@ async def chat_completions(request: ChatCompletionRequest):
         )
 
 
-@router_openai.post("/embeddings")
+@openai_router.post("/embeddings")
 async def aembed(
     embedding_input: EmbeddingInput,
 ) -> CreateEmbeddingResponse:
@@ -50,7 +50,7 @@ async def aembed(
 ### 原子能力API ###
 
 
-@router_chat.post("/knowledgebase/v1/chat/completions")
+@chat_router.post("/knowledgebase/v1/chat/completions")
 async def chat_knowledgebase(request: ChatCompletionRequest):
     if not request.stream:
         response = await chat_service.achat_knowledgebase_atomic(request)
@@ -63,7 +63,7 @@ async def chat_knowledgebase(request: ChatCompletionRequest):
         )
 
 
-@router_chat.post("/web/v1/chat/completions")
+@chat_router.post("/web/v1/chat/completions")
 async def chat_web(request: ChatCompletionRequest):
     if not request.stream:
         response = await chat_service.achat_web_atomic(request)
@@ -76,7 +76,7 @@ async def chat_web(request: ChatCompletionRequest):
         )
 
 
-@router_chat.post("/llm/v1/chat/completions")
+@chat_router.post("/llm/v1/chat/completions")
 async def chat_llm(request: ChatCompletionRequest):
     if not request.stream:
         response = await chat_service.achat_llm_atomic(request)
@@ -89,7 +89,7 @@ async def chat_llm(request: ChatCompletionRequest):
         )
 
 
-@router_chat.post("/news/v1/chat/completions")
+@chat_router.post("/news/v1/chat/completions")
 async def chat_news_agent(request: ChatCompletionRequest):
     if not request.stream:
         response = await chat_service.achat_news_agent_atomic(request)
@@ -102,6 +102,6 @@ async def chat_news_agent(request: ChatCompletionRequest):
         )
 
 
-@router_chat.post("/intent")
+@chat_router.post("/intent")
 async def recognize_intent(request: ChatCompletionRequest):
     return await chat_service.arecognize_intent(request)
