@@ -35,7 +35,7 @@ export const Assistant = () => {
         const res = await fetch(`http://localhost:${port}/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
-        if (data.llm_config?.[0]) setLlmConfig(data.llm_config[0]);
+        if (data.length > 0) setLlmConfig(data[0]);
       } catch (error) {
         console.error("拉取 LLM 配置失败:", error);
       }
@@ -67,7 +67,7 @@ export const Assistant = () => {
   const headers = useMemo(() => {
     const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
     return {
-      "X-Model-Id": llmConfig.model_id || "",
+      "X-Model-Id": llmConfig.model_id,
       "X-Options": selectedOptions
         .filter((opt) => !opt.startsWith("mcp:"))
         .join(","),
