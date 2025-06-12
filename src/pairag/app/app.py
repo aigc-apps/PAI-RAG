@@ -51,7 +51,8 @@ def configure(app: FastAPI):
     app.include_router(v1_router, prefix="/api/v1", tags=["api_v1"])
     app.include_router(openai_router, prefix="/v1", tags=["chat_completions"])
     app.include_router(chat_router, prefix="/chat", tags=["chat_api"])
-    app.include_router(config_router, prefix="/v1/config", tags=["config_api"])
+    if is_feature_enabled(FeatureFlags.MCP):
+        app.include_router(config_router, prefix="/v1/config", tags=["config_api"])
 
     chat_service.initialize()
     add_middlewares(app)
