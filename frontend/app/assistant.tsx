@@ -71,7 +71,7 @@ export const Assistant = () => {
       "X-Options": selectedOptions
         .filter((opt) => !opt.startsWith("mcp:"))
         .join(","),
-      "X-MCP-ID": mcpOptions.map((opt) => opt.split(":")[1]).join(","),
+      "X-MCP-NAMES": mcpOptions.map((opt) => opt.split(":")[1]).join(","),
     };
   }, [llmConfig.model_id, selectedOptions]);
 

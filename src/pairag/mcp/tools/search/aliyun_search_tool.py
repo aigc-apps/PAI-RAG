@@ -154,15 +154,7 @@ async def aget_aliyun_search_result(query: str):
 async def aget_aliyun_search_tool():
     search_tool = FunctionTool.from_defaults(
         async_fn=aget_aliyun_search_result,
-        name="search_web",
+        name="search-web",
         description="从阿里云搜索引擎中搜索给定查询的最新内容。",
     )
-    openai_tools = []
-    tools_name_to_fn = {}
-    tool_name = "search_web"
-    tools_name_to_fn[tool_name] = search_tool
-    tool_metadata = search_tool.metadata
-    tool_metadata.name = tool_name
-    openai_tools.append(tool_metadata.to_openai_tool())
-
-    return openai_tools, tools_name_to_fn
+    return search_tool

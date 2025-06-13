@@ -282,7 +282,7 @@ export const SearchWebToolUI = makeAssistantToolUI<
   SearchWebArgs,
   SearchWebResult
 >({
-  toolName: "search_web",
+  toolName: "search-web",
   render: ({ args, status, result }) => {
     if (!result) {
       return null;
@@ -373,7 +373,7 @@ type ThinkResult = {
 };
 
 export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
-  toolName: "think_and_planning",
+  toolName: "think-and-planning",
   render: ({ args, status, result }) => {
     if (!result) {
       return null;

@@ -1,20 +1,8 @@
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters
-from pydantic import BaseModel
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
-from typing import List, Optional
-
-
-# MCP 客户端配置
-class MCPServerConfig(BaseModel):
-    id: str
-    name: str
-    url: str
-    auth_token: Optional[str] = None
-    type: str = "sse"
-    active: Optional[bool] = False
 
 
 class BasicMCPClient:
@@ -69,21 +57,3 @@ class BasicMCPClient:
     async def list_tools(self):
         async with self._run_session() as session:
             return await session.list_tools()
-
-
-async def resolve_mcp_clients(mcp_server_configs) -> List[BasicMCPClient]:
-    mcp_clients = []
-    for mcp_server_config in mcp_server_configs:
-        if mcp_server_config.enabled:
-            mcp_headers = {}
-            if mcp_server_config.auth_token:
-                mcp_headers = {
-                    "Authorization": "Bearer " + mcp_server_config.auth_token
-                }
-            mcp_client = BasicMCPClient(
-                name=mcp_server_config.name,
-                command_or_url=mcp_server_config.url,
-                headers=mcp_headers,
-            )
-            mcp_clients.append(mcp_client)
-    return mcp_clients

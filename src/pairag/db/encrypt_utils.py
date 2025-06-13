@@ -11,8 +11,14 @@ cipher = Fernet(ENCRYPTION_KEY)
 
 
 def encrypt_key(key: str) -> str:
+    if key is None:
+        return key
+
     return cipher.encrypt(key.encode()).decode()
 
 
 def decrypt_key(key: str) -> str:
+    if not key:
+        return key
+
     return cipher.decrypt(key.encode()).decode()

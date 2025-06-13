@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -17,12 +18,12 @@ from pairag.db.models import (
     WebSearchConfigEntity,
     WebSearchConfigRead,
 )
-from pairag.db.db_context import db_context
+from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import decrypt_key, encrypt_key
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
 from openai.types.chat import ChatCompletionSystemMessageParam
-from pairag.mcp.chat import handle_chat, process_mcp_tools
+from pairag.mcp.chat import handle_chat
 from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
 from pairag.integrations.trace.base import init_instrument, TraceConfig
 from pairag.mcp.prompts import (
@@ -33,6 +34,7 @@ from pairag.mcp.prompts import (
 from pairag.mcp.utils.message_utils import convert_to_openai_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.tools.search.aliyun_search_tool import aget_aliyun_search_tool
+from pairag.mcp.mcp_tool_provider import mcp_provider
 
 config_router = APIRouter()
 
@@ -46,7 +48,7 @@ llm_url_group_map = {
 
 @config_router.post("/llms", response_model=LlmModelRead)
 async def create_llm(
-    llm_data: LlmModelCreate, session: AsyncSession = Depends(db_context.get_session)
+    llm_data: LlmModelCreate, session: AsyncSession = Depends(get_session)
 ):
     encrypted_api_key = encrypt_key(llm_data.api_key)
     llm = LlmModelEntity.model_validate(
@@ -79,7 +81,7 @@ async def create_llm(
 
 @config_router.get("/llm_groups")
 async def get_llm_groups(
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
@@ -106,7 +108,7 @@ async def get_llm_groups(
 
 @config_router.get("/llms", response_model=List[LlmModelRead])
 async def get_llms(
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
@@ -124,9 +126,7 @@ async def get_llms(
 
 
 @config_router.get("/llms/{llm_id}", response_model=LlmModelRead)
-async def read_llm(
-    llm_id: int, session: AsyncSession = Depends(db_context.get_session)
-):
+async def read_llm(llm_id: int, session: AsyncSession = Depends(get_session)):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
@@ -138,7 +138,7 @@ async def read_llm(
 async def update_llm(
     llm_id: str,
     update_llm: LlmModelCreate,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
@@ -163,7 +163,7 @@ async def update_llm(
 @config_router.delete("/llms/{llm_id}")
 async def delete_llm(
     llm_id: str,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
@@ -179,7 +179,7 @@ async def delete_llm(
 
 @config_router.post("/mcps", response_model=McpServerRead)
 async def create_mcp(
-    mcp_data: McpServerCreate, session: AsyncSession = Depends(db_context.get_session)
+    mcp_data: McpServerCreate, session: AsyncSession = Depends(get_session)
 ):
     encrypted_auth_token = None
     if mcp_data.auth_token:
@@ -191,6 +191,7 @@ async def create_mcp(
     try:
         await session.commit()
         await session.refresh(mcp)
+        asyncio.create_task(mcp_provider.refresh())
         return mcp
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add mcp: {e.orig}")
@@ -213,7 +214,7 @@ async def create_mcp(
 
 @config_router.get("/mcps", response_model=List[McpServerRead])
 async def list_mcps(
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
@@ -224,9 +225,7 @@ async def list_mcps(
 
 
 @config_router.get("/mcps/{mcp_id}", response_model=McpServerRead)
-async def read_mcp(
-    mcp_id: str, session: AsyncSession = Depends(db_context.get_session)
-):
+async def read_mcp(mcp_id: str, session: AsyncSession = Depends(get_session)):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
         raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
@@ -238,7 +237,7 @@ async def read_mcp(
 async def update_mcp(
     mcp_id: str,
     update_mcp: McpServerCreate,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
@@ -258,6 +257,8 @@ async def update_mcp(
     await session.commit()
     await session.refresh(mcp)
 
+    asyncio.create_task(mcp_provider.refresh())
+
     logger.info(f"MCP {mcp_id} updated to {mcp}.")
 
     return mcp
@@ -266,7 +267,7 @@ async def update_mcp(
 @config_router.delete("/mcps/{mcp_id}")
 async def delete_mcp(
     mcp_id: str,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
@@ -274,6 +275,8 @@ async def delete_mcp(
 
     await session.delete(mcp)
     await session.commit()
+
+    asyncio.create_task(mcp_provider.refresh())
 
     logger.info(f"MCP {mcp_id} has been deleted.")
 
@@ -283,7 +286,7 @@ async def delete_mcp(
 @config_router.post("/websearch", response_model=WebSearchConfigRead)
 async def add_search_config(
     new_search_config: WebSearchConfigCreate,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     encrypted_access_key_id = encrypt_key(new_search_config.access_key_id)
     encrypted_access_key_secret = encrypt_key(new_search_config.access_key_secret)
@@ -325,7 +328,7 @@ async def add_search_config(
 
 @config_router.get("/websearch", response_model=List[WebSearchConfigRead])
 async def list_search_config(
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
@@ -338,7 +341,7 @@ async def list_search_config(
 @config_router.post("/trace", response_model=TraceModel)
 async def set_trace_config(
     new_trace_config: TraceModel,
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     trace_config = (await session.exec(select(TraceModelEntity))).first()
     if trace_config is None:
@@ -382,7 +385,7 @@ async def set_trace_config(
 
 @config_router.get("/trace", response_model=TraceModel)
 async def get_trace_config(
-    session: AsyncSession = Depends(db_context.get_session),
+    session: AsyncSession = Depends(get_session),
 ):
     trace_config_results = await session.exec(select(TraceModelEntity))
     trace_config = trace_config_results.first()
@@ -394,9 +397,7 @@ async def get_trace_config(
 
 
 @config_router.post("/api/chat")
-async def chat(
-    request: Request, session: AsyncSession = Depends(db_context.get_session)
-):
+async def chat(request: Request, session: AsyncSession = Depends(get_session)):
     try:
         # 解析请求体
         data = await request.json()
@@ -427,15 +428,11 @@ async def chat(
         )
         system = data.get("system", x_options_to_prompt_mode(x_options))
 
-        openai_tools = []
-        tools_name_to_fn = {}
+        mcp_tools = []
         # 获取思考工具
         think_cache = []
-        think_openai_tools, think_tools_name_to_fn = await aget_simple_think_tool(
-            think_cache=think_cache
-        )
-        openai_tools.extend(think_openai_tools)
-        tools_name_to_fn.update(think_tools_name_to_fn)
+        think_tool = await aget_simple_think_tool(think_cache=think_cache)
+        mcp_tools.append(think_tool)
 
         if "search" in x_options:
             sql_result = await session.exec(select(WebSearchConfigEntity))
@@ -451,46 +448,18 @@ async def chat(
             os.environ["WEBSEARCH_ACCESS_KEY_SECRET"] = decrypt_key(
                 search_entity.encrypted_access_key_secret
             )
-            (
-                search_openai_tools,
-                search_tools_name_to_fn,
-            ) = await aget_aliyun_search_tool()
-            openai_tools.extend(search_openai_tools)
-            tools_name_to_fn.update(search_tools_name_to_fn)
+            search_tool = await aget_aliyun_search_tool()
+            mcp_tools.append(search_tool)
         if "mcp" in x_options:
-            active_mcp_ids = (
-                request.headers.get("X-MCP-ID").split(",")
-                if request.headers.get("X-MCP-ID")
+            active_mcp_names = (
+                request.headers.get("X-MCP-NAMES").split(",")
+                if request.headers.get("X-MCP-NAMES")
                 else []
             )
-            logger.info(f"[Model] selected mcp_ids: {active_mcp_ids}")
+            logger.info(f"[Model] selected mcp_ids: {active_mcp_names}")
 
-            sql_result = await session.exec(
-                select(McpServerEntity).where(McpServerEntity.id.in_(active_mcp_ids))
-            )
-            mcp_entities = sql_result.all()
-            mcp_configs = [
-                McpServerCreate.model_validate(
-                    mcp_entity,
-                    update={
-                        "auth_token": decrypt_key(mcp_entity.encrypted_auth_token)
-                        if mcp_entity.encrypted_auth_token
-                        else None
-                    },
-                )
-                for mcp_entity in mcp_entities
-            ]
-
-            mcp_openai_tools, mcp_tools_name_to_fn = await process_mcp_tools(
-                mcp_configs
-            )
-            logger.info(f"[Model] mcp_openai_tools: {mcp_openai_tools}")
-
-            openai_tools.extend(mcp_openai_tools)
-            tools_name_to_fn.update(mcp_tools_name_to_fn)
-
-        logger.info(f"[Tool] openai_tools: {openai_tools}")
-        logger.info(f"[Tool] tools_name_to_fn: {tools_name_to_fn}")
+            mcp_tools.extend(mcp_provider.get_mcp_tools(active_mcp_names))
+            logger.info(f"[Model] mcp_openai_tools: {mcp_tools}")
 
         # 构建openai_messages
         full_messages = [
@@ -502,8 +471,7 @@ async def chat(
             model=model,
             model_name=model_entity.model,
             messages=full_messages,
-            tools=openai_tools,
-            tools_name_to_fn=tools_name_to_fn,
+            tools=mcp_tools,
         )
     except Exception as e:
         logger.exception(f"Error in /api/chat: {str(e)}")

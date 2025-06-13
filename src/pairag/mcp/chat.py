@@ -1,11 +1,12 @@
+from typing import List
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
 from pairag.mcp.constants import MAX_CHAT_STEPS
-from pairag.mcp.mcp_client import resolve_mcp_clients
-from llama_index.tools.mcp.base import McpToolSpec
+from llama_index.core.tools import FunctionTool
 from loguru import logger
 from openai.types.chat import (
+    ChatCompletionToolParam,
     ChatCompletionToolMessageParam,
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
@@ -18,7 +19,7 @@ app = FastAPI()
 
 
 async def gen_stream_response(model, model_name, messages, openai_tools):
-    logger.info(f"messages {messages}")
+    logger.info(f"messages {messages}, tools {openai_tools}")
     if openai_tools:
         return await model.create(
             model=model_name,
@@ -37,45 +38,25 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
         )
 
 
-async def process_mcp_tools(mcp_server_configs):
-    """
-    process_mcp_tools will get the tools from MCP Client (only need to implement ClientSession) and convert them to LlamaIndex's FunctionTool objects and transformed tool name to tool Dict.
-    Args:
-    Returns:
-        openai_tools: List[Dict]
-        tools_name_to_fn: Dict[str, FunctionTool]
-
-    """
-    # TODO: 不用每个request都list_tools
-    mcp_clients = await resolve_mcp_clients(mcp_server_configs)
-    openai_tools = []
-    tools_name_to_fn = {}
-    for mcp_client in mcp_clients:
-        mcp_tool = McpToolSpec(client=mcp_client)
-        mcp_server_name = mcp_client.name
-        tools = await mcp_tool.to_tool_list_async()
-        for tool in tools:
-            # transform tool name to server_name--tool_name
-            tool_name = mcp_server_name + "--" + tool.metadata.name
-            tools_name_to_fn[tool_name] = tool
-            tool_metadata = tool.metadata
-            tool_metadata.name = tool_name
-            openai_tools.append(tool_metadata.to_openai_tool())
-
-    return openai_tools, tools_name_to_fn
-
-
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
-async def call_tool_with_retry(tool_name, tool_args, tools_name_to_fn):
-    return await tools_name_to_fn[tool_name].acall(**tool_args)
+async def call_tool_with_retry(async_fn, fn_args):
+    return await async_fn.acall(**fn_args)
 
 
 # 流式生成文本
 @with_current_context
-async def generate_stream(
-    model, model_name, messages, openai_tools, tools_name_to_fn, current_context
-):
+async def generate_stream(model, model_name, messages, tools: List[FunctionTool]):
     try:
+        openai_tools = []
+        tool_name_map = {}
+        for tool in tools:
+            openai_tools.append(
+                ChatCompletionToolParam(
+                    type="function", function=tool.metadata.to_openai_function()
+                )
+            )
+            tool_name_map[tool.metadata.name] = tool
+
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
         stop_flag = False
@@ -132,17 +113,16 @@ async def generate_stream(
                             else:
                                 args = {}
                             try:
-                                result = await call_tool_with_retry(
-                                    tool_call["name"], args, tools_name_to_fn
-                                )
+                                async_fn = tool_name_map[tool_call["name"]]
+                                result = await call_tool_with_retry(async_fn, args)
 
                                 tool_result = result.content
 
                                 # 返回工具调用和结果（标记9和a）
                                 yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
                                 if tool_call["name"] in [
-                                    "search_web",
-                                    "think_and_planning",
+                                    "search-web",
+                                    "think-and-planning",
                                 ]:
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": json.loads(tool_result)}, ensure_ascii=False)}\n'
                                 else:
@@ -223,9 +203,9 @@ async def generate_stream(
 
 
 @pai_agent_wrapper
-async def handle_chat(model, model_name, messages, tools, tools_name_to_fn):
+async def handle_chat(model, model_name, messages, tools: List[FunctionTool]):
     current_span = trace.get_current_span()
-    current_context = trace.set_span_in_context(current_span)
+    trace.set_span_in_context(current_span)
 
     # 返回流式响应
     return StreamingResponse(
@@ -234,8 +214,6 @@ async def handle_chat(model, model_name, messages, tools, tools_name_to_fn):
             model_name,
             messages,
             tools,
-            tools_name_to_fn,
-            current_context,
         ),
         media_type="text/event-stream",
         headers={"x-vercel-ai-data-stream": "v1"},
