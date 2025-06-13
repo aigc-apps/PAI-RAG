@@ -45,7 +45,9 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 # 流式生成文本
 @with_current_context
-async def generate_stream(model, model_name, messages, tools: List[FunctionTool]):
+async def generate_stream(
+    model, model_name, messages, tools: List[FunctionTool], current_context
+):
     try:
         openai_tools = []
         tool_name_map = {}
@@ -205,7 +207,7 @@ async def generate_stream(model, model_name, messages, tools: List[FunctionTool]
 @pai_agent_wrapper
 async def handle_chat(model, model_name, messages, tools: List[FunctionTool]):
     current_span = trace.get_current_span()
-    trace.set_span_in_context(current_span)
+    current_context = trace.set_span_in_context(current_span)
 
     # 返回流式响应
     return StreamingResponse(
@@ -214,6 +216,7 @@ async def handle_chat(model, model_name, messages, tools: List[FunctionTool]):
             model_name,
             messages,
             tools,
+            current_context=current_context,
         ),
         media_type="text/event-stream",
         headers={"x-vercel-ai-data-stream": "v1"},

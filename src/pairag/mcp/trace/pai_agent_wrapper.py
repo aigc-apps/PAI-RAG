@@ -1,4 +1,5 @@
 from functools import wraps
+import os
 import time
 import json
 from fastapi.responses import StreamingResponse
@@ -65,6 +66,10 @@ def pai_agent_wrapper(func):
 
     @wraps(func)
     async def wrapper(*args, **kwargs):
+        # if not enabled, directly return
+        if os.getenv("TRACING_ENABLED", "false") != "true":
+            return await func(*args, **kwargs)
+
         messages = kwargs.get("messages", [])
         try:
             user_content = json.loads(messages[-1]["content"])
