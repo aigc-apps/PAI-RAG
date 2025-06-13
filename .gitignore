@@ -231,3 +231,6 @@ notebooks/
 
 # tmp_files
 tmp
+.next
+node_modules
+config.json

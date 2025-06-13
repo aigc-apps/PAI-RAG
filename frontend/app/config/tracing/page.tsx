@@ -5,11 +5,13 @@ import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import * as Toast from "@radix-ui/react-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function TracingConfig() {
   const [endpoint, setEndpoint] = useState("");
   const [token, setToken] = useState("");
   const [serviceName, setServiceName] = useState("");
+  const [traceEnabled, setTraceEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // 加载状态
   const [error, setError] = useState(""); // 错误提示
   const [toastState, setToastState] = useState({
@@ -38,6 +40,7 @@ export default function TracingConfig() {
         setEndpoint(data["endpoint"] || "");
         setToken(data["token"] || "");
         setServiceName(data["service_name"] || "");
+        setTraceEnabled(data["enabled"] || false);
       } catch (err: any) {
         setError(err.message || "加载失败");
         setToastState({
@@ -71,6 +74,7 @@ export default function TracingConfig() {
           endpoint: endpoint,
           token: token,
           service_name: serviceName,
+          enabled: traceEnabled,
         }),
       });
 
@@ -149,6 +153,18 @@ export default function TracingConfig() {
                   className="col-span-3"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="traceEnabled">是否启用</Label>
+              <Checkbox
+                id="traceEnabled"
+                checked={traceEnabled || false}
+                onCheckedChange={(checkedState) => {
+                  const isChecked = checkedState === true;
+                  setTraceEnabled(isChecked);
+                }}
+                className="col-span-3"
+              />
             </div>
           </div>
           <Button
