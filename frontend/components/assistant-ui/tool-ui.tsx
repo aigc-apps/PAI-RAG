@@ -363,14 +363,13 @@ export const SearchWebToolUI = makeAssistantToolUI<
 
 export type ThinkArgs = {
   thought: string;
-};
-
-type ThinkResult = {
-  thought: string;
   action: string;
   plan: string;
   thought_number: number;
-  thoughts_count: number;
+};
+
+type ThinkResult = {
+  status: string;
 };
 
 export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
@@ -379,14 +378,14 @@ export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
     if (!result) {
       return null;
     }
-    console.log("think 结果:", result);
+    console.log("think args:", args);
     return (
       <div
         className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
         role="button"
       >
-        {/* 条件渲染头部内容：仅当 thoughts_count 为 1 时显示 */}
-        {result?.thoughts_count === 1 && (
+        {/* 条件渲染头部内容：仅当 thought_number 为 1 时显示 */}
+        {args.thought_number === 1 && (
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xl" aria-hidden="true">
               🧠
@@ -396,16 +395,16 @@ export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
         )}
         <div className="text-sm mt-2">
           <div className="mb-2">
-            <strong>思考内容：</strong> {result?.thought}
+            <strong>思考内容：</strong> {args.thought}
           </div>
           <div className="mb-2">
-            <strong>计划详情：</strong> {result?.plan}
+            <strong>计划详情：</strong> {args.plan}
           </div>
           <div className="mb-2">
-            <strong>下一步计划行动：</strong> {result?.action}
+            <strong>下一步计划行动：</strong> {args.action}
           </div>
           <div className="text-xs text-gray-500">
-            思考次数：{result?.thought_number} / {result.thoughts_count}
+            思考次数：{args.thought_number} / {args.thought_number}
           </div>
         </div>
       </div>
