@@ -44,11 +44,8 @@ def record_thought(
 
     return json.dumps(
         {
-            "thought": thought,
-            "thought_number": thought_number,
-            "action": action,
-            "plan": "\n".join(plan) if plan else "",
-            "thoughts_count": len(think_cache),
+            "status": "success",
+            "message": "Thought recorded successfully.",
         },
         ensure_ascii=False,
     )
