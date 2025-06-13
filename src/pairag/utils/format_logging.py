@@ -33,6 +33,7 @@ def formatter(record):
         return (
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{process}</level> | "
+            "<level>{extra[request_id]} |</level> "
             "<level>{level: <8}</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
             "- <level>{message}</level>\n"
@@ -41,7 +42,6 @@ def formatter(record):
         return (
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{process}</level> | "
-            "<level>{extra[request_id]} |</level> "
             "<level>{level: <8}</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
             "- <level>{message}</level>\n"
