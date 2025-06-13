@@ -2,7 +2,7 @@ import asyncio
 import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from openai import AsyncOpenAI
+from llama_index.llms.openai_like import OpenAILike
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models import (
@@ -22,7 +22,6 @@ from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import decrypt_key, encrypt_key
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
-from openai.types.chat import ChatCompletionSystemMessageParam
 from pairag.mcp.chat import handle_chat
 from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
 from pairag.integrations.trace.base import init_instrument, TraceConfig
@@ -31,7 +30,7 @@ from pairag.mcp.prompts import (
     PROMPT_WITHOUT_DEEP_RESEARCH,
     PROMPT_WITHOUT_TOOLS,
 )
-from pairag.mcp.utils.message_utils import convert_to_openai_messages
+from pairag.mcp.utils.message_utils import convert_to_chat_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.tools.search.aliyun_search_tool import aget_aliyun_search_tool
 from pairag.mcp.mcp_tool_provider import mcp_provider
@@ -415,10 +414,12 @@ async def chat(request: Request, session: AsyncSession = Depends(get_session)):
             return None
 
         api_key = decrypt_key(model_entity.encrypted_api_key)
-        model = AsyncOpenAI(
+        model = OpenAILike(
+            model=model_entity.model,
             api_key=api_key,
-            base_url=model_entity.base_url,
-        ).chat.completions
+            api_base=model_entity.base_url,
+            is_chat_model=True,
+        )
         logger.info(f"[Model] model_name: {model_entity.model}")
 
         x_options = (
@@ -459,13 +460,11 @@ async def chat(request: Request, session: AsyncSession = Depends(get_session)):
             logger.info(f"[Model] selected mcp_ids: {active_mcp_names}")
 
             mcp_tools.extend(mcp_provider.get_mcp_tools(active_mcp_names))
-            logger.info(f"[Model] mcp_openai_tools: {mcp_tools}")
+            logger.info(f"[Model] mcp_tools: {mcp_tools}")
 
-        # 构建openai_messages
-        full_messages = [
-            ChatCompletionSystemMessageParam(role="system", content=system)
-        ] + messages
-        full_messages = convert_to_openai_messages(full_messages)
+        # 构建chat_messages
+        full_messages = [{"role": "system", "content": system}] + messages
+        full_messages = convert_to_chat_messages(full_messages)
 
         return await handle_chat(
             model=model,
