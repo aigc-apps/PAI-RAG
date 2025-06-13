@@ -27,9 +27,13 @@ format_logging()
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     if is_feature_enabled(FeatureFlags.MCP):
-        logger.info("Initialize databases for MCP.")
-        from pairag.db.db_context import db_context
-        await db_context.init_db()
+        logger.info("Initializing databases for MCP.")
+        from pairag.db.db_context import init_db
+        from pairag.mcp.mcp_tool_provider import mcp_provider
+        await init_db()
+        logger.info("Initialized databases for MCP.")
+        await mcp_provider.refresh()
+        logger.info("Initialized mcp tools.")
 
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
@@ -43,7 +47,6 @@ async def lifespan(app: FastAPI):
 def configure(app: FastAPI):
     from pairag.api.v1_api import v1_router
     from pairag.api.chat_api import openai_router, chat_router
-    from pairag.api.config_api import config_router
     from pairag.api.exception_handler import add_exception_handler
     from pairag.api.middleware import add_middlewares
     from pairag.web.webui import configure_webapp
@@ -52,6 +55,7 @@ def configure(app: FastAPI):
     app.include_router(openai_router, prefix="/v1", tags=["chat_completions"])
     app.include_router(chat_router, prefix="/chat", tags=["chat_api"])
     if is_feature_enabled(FeatureFlags.MCP):
+        from pairag.api.config_api import config_router
         app.include_router(config_router, prefix="/v1/config", tags=["config_api"])
 
     chat_service.initialize()
