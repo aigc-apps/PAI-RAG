@@ -29,7 +29,7 @@ class InterceptHandler(logging.Handler):
 # 自定义日志格式，加入 request_id
 def formatter(record):
     record["extra"]["request_id"] = correlation_id.get()
-    if record["extra"].get("request_id") is None:
+    if record["extra"].get("request_id", None):
         return (
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{process}</level> | "
