@@ -54,6 +54,7 @@ index_related_component_keys = [
     "milvus_host",
     "milvus_port",
     "milvus_collection_name",
+    "milvus_sparse_type",
     "milvus_user",
     "milvus_database",
     "milvus_password",
@@ -221,6 +222,7 @@ def index_to_components_settings(
                 {"value": vector_store_config.host},
                 {"value": vector_store_config.port},
                 {"value": vector_store_config.collection_name},
+                {"value": vector_store_config.sparse_embedding_type.value},
                 {"value": vector_store_config.user},
                 {"value": vector_store_config.database},
                 {"value": vector_store_config.password},
@@ -232,6 +234,7 @@ def index_to_components_settings(
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
+                {"value": "bm25"},
                 {"value": ""},
                 {"value": ""},
                 {"value": ""},
@@ -367,13 +370,22 @@ def index_to_components(
     component_settings = index_to_components_settings(
         index_entry, index_list, is_new_index
     )
-    return [gr.update(**setting) for setting in component_settings.values()] + [
-        gr.update(choices=index_list, value=index_entry.name),
-        gr.update(choices=index_list, value=index_entry.name),
-        gr.update(choices=index_list, value=index_entry.name),
-        gr.update(choices=index_list, value=index_entry.name),
-        gr.update(visible=False if is_new_index else True),
-    ]
+    if is_new_index:
+        return [gr.update(**setting) for setting in component_settings.values()] + [
+            gr.update(choices=index_list, value=index_entry.name),
+            gr.update(choices=index_list),
+            gr.update(choices=index_list),
+            gr.update(choices=index_list),
+            gr.update(visible=False),
+        ]
+    else:
+        return [gr.update(**setting) for setting in component_settings.values()] + [
+            gr.update(choices=index_list, value=index_entry.name),
+            gr.update(choices=index_list, value=index_entry.name),
+            gr.update(choices=index_list, value=index_entry.name),
+            gr.update(choices=index_list, value=index_entry.name),
+            gr.update(visible=True),
+        ]
 
 
 def components_to_index(
@@ -421,6 +433,7 @@ def components_to_index(
     milvus_password,
     milvus_database,
     milvus_collection_name,
+    milvus_sparse_type,
     tablestore_endpoint,
     tablestore_instance_name,
     tablestore_access_key_id,
@@ -501,6 +514,7 @@ def components_to_index(
             "password": milvus_password,
             "database": milvus_database,
             "collection_name": milvus_collection_name,
+            "sparse_embedding_type": milvus_sparse_type,
         }
 
     elif vectordb_type.lower() == "opensearch":

@@ -1,6 +1,7 @@
+import json
 import os
-from typing import Any, Dict, Literal
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, model_validator
 from enum import Enum
 from llama_index.core.constants import DEFAULT_TEMPERATURE
 
@@ -217,7 +218,7 @@ class OpenAICompatibleLlmConfig(BaseModel):
     is_reasoning_model: bool | None = None  # reasoning support
     is_streaming_only: bool | None = None  # only supports streaming mode
     model_id: str | None = "default"  # unique model id
-    extra_body: Dict[str, Any] = {}  # extra body params
+    extra_body_str: str | None = None  # extra body params
 
     model_config = ConfigDict(coerce_numbers_to_str=True, frozen=False)
 
@@ -229,3 +230,11 @@ class OpenAICompatibleLlmConfig(BaseModel):
                 self.model not in [None, ""],
             ]
         )
+
+    @model_validator(mode="before")
+    def normalize_data(cls, data: dict) -> dict:
+        # Convert name to title case
+        if "extra_body_str" in data and isinstance(data["extra_body_str"], dict):
+            data["extra_body_str"] = json.dumps(data["extra_body_str"])
+
+        return data

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
-from typing import Any, List, Dict, Optional, AsyncGenerator, Generator
-from llama_index.core.base.llms.types import ChatMessage
+from typing import Any, List, Dict, Optional, AsyncGenerator, Generator, Union
+from openai.types.chat import ChatCompletionMessageParam
 from llama_index.core.schema import NodeWithScore
 from pairag.integrations.query_transform.pai_query_transform import IntentResult
 
@@ -36,7 +36,7 @@ class RetrievalResponse(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     model: str  # 模型名称
-    messages: List[ChatMessage]  # 上下文聊天
+    messages: Union[List[Any], List[ChatCompletionMessageParam]]  # 上下文聊天
     stream: Optional[bool] = False  # 流式输出
     index_name: Optional[str] = None  # 索引名称
     chat_knowledgebase: Optional[bool] = False  # 查询知识库

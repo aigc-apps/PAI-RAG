@@ -1,0 +1,87 @@
+import uuid
+from sqlmodel import Field, SQLModel
+
+
+class LlmModel(SQLModel):
+    base_url: str = Field(default=None)
+    model: str = Field(default=None)
+    context_window: int = Field(default=8000)
+    temperature: float = Field(default=0.1)
+    model_id: str = Field(default=None, unique=True)
+    enabled: bool = Field(default=True)
+
+
+class LlmModelCreate(LlmModel):
+    api_key: str = Field(default=None)
+
+
+class LlmModelRead(LlmModel):
+    id: str = Field(default=None)
+    source: str = Field(default=None)
+
+
+# table entity
+class LlmModelEntity(LlmModel, table=True):
+    __tablename__ = "pai_llm_model"
+
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    encrypted_api_key: str = Field(default=None)
+
+
+# table名为paimcpserver
+class McpServer(SQLModel):
+    name: str = Field(default=None)
+    url: str = Field(default=None)
+    type: str = Field(default="sse")
+    enabled: bool = Field(default=True)
+
+
+class McpServerCreate(McpServer):
+    auth_token: str | None = Field(default=None)
+
+
+class McpServerRead(McpServer):
+    id: str = Field(default=None)
+
+
+class McpServerEntity(McpServer, table=True):
+    __tablename__ = "pai_mcp_server"
+
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    encrypted_auth_token: str | None = Field(default=None)
+
+
+class TraceModel(SQLModel):
+    endpoint: str = Field(default="http://tracing-analysis-dc-hz.aliyuncs.com:8090")
+    token: str = Field(default=None)
+    service_name: str = Field(default=None)
+    enabled: bool = Field(default=False)
+
+
+class TraceModelEntity(TraceModel, table=True):
+    __tablename__ = "pai_trace_config"
+
+    id: str = Field(default="default_trace_id", primary_key=True)
+
+
+class WebSearchConfig(SQLModel):
+    type: str = Field(default=None)
+    search_count: int = Field(default=10)
+    endpoint: str = Field(default=None)
+
+
+class WebSearchConfigRead(WebSearchConfig):
+    id: str = Field(default=None)
+
+
+class WebSearchConfigCreate(WebSearchConfig):
+    access_key_id: str = Field(default=None)
+    access_key_secret: str = Field(default=None)
+
+
+class WebSearchConfigEntity(WebSearchConfig, table=True):
+    __tablename__ = "pai_websearch_config"
+
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    encrypted_access_key_id: str = Field(default=None)
+    encrypted_access_key_secret: str = Field(default=None)

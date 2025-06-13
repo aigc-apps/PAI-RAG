@@ -1,21 +1,17 @@
-from abc import ABC, abstractmethod
 import os
-from typing import List, Optional, Dict
+from typing import List, Optional
 from pairag.utils.constants import DEFAULT_MODEL_DIR
-
+from llama_index.vector_stores.milvus.utils import BaseSparseEmbeddingFunction
+from enum import Enum
 from loguru import logger
+
 
 MODEL_NAME = "bge-m3"
 
 
-class BaseSparseEmbeddingFunction(ABC):
-    @abstractmethod
-    def encode_queries(self, queries: List[str]) -> List[Dict[int, float]]:
-        pass
-
-    @abstractmethod
-    def encode_documents(self, documents: List[str]) -> List[Dict[int, float]]:
-        pass
+class SparseEmbeddingFunctionType(str, Enum):
+    bge_m3 = "bge-m3"
+    bm25 = "bm25"
 
 
 class BGEM3SparseEmbeddingFunction(BaseSparseEmbeddingFunction):

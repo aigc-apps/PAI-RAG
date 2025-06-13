@@ -16,8 +16,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -229,3 +227,7 @@ model_repository/
 arms.trace*
 
 notebooks/
+
+
+# tmp_files
+tmp
