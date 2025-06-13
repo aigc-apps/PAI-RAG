@@ -451,14 +451,14 @@ async def chat(request: Request, session: AsyncSession = Depends(get_session)):
             search_tool = await aget_aliyun_search_tool()
             mcp_tools.append(search_tool)
         if "mcp" in x_options:
-            active_mcp_ids = (
+            active_mcp_names = (
                 request.headers.get("X-MCP-NAMES").split(",")
                 if request.headers.get("X-MCP-NAMES")
                 else []
             )
-            logger.info(f"[Model] selected mcp_ids: {active_mcp_ids}")
+            logger.info(f"[Model] selected mcp_ids: {active_mcp_names}")
 
-            mcp_tools.extend(mcp_provider.get_mcp_tools(active_mcp_ids))
+            mcp_tools.extend(mcp_provider.get_mcp_tools(active_mcp_names))
             logger.info(f"[Model] mcp_openai_tools: {mcp_tools}")
 
         # 构建openai_messages
