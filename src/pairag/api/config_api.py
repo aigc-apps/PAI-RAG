@@ -349,12 +349,12 @@ async def set_trace_config(
     if trace_config is None:
         logger.info(f"Adding new trace config {trace_config}")
 
-        trace_config = WebSearchConfigEntity.model_validate(
+        trace_config = TraceModelEntity.model_validate(
             new_trace_config,
         )
     else:
         trace_config.endpoint = new_trace_config.endpoint or trace_config.endpoint
-        trace_config.enabled = new_trace_config.enabled or trace_config.enabled
+        trace_config.enabled = new_trace_config.enabled
         trace_config.token = new_trace_config.token or trace_config.token
         trace_config.service_name = (
             new_trace_config.service_name or trace_config.service_name
