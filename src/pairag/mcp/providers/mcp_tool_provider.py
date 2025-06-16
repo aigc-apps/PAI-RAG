@@ -1,10 +1,9 @@
 from typing import Dict, List
-
 from sqlmodel import select
 from pairag.db.encrypt_utils import decrypt_key
-from pairag.db.models import McpServerCreate, McpServerEntity
+from pairag.db.models.mcp import McpServerCreate, McpServerEntity
 from pairag.db.db_context import with_async_db_session
-from pairag.mcp.mcp_client import BasicMCPClient
+from pairag.mcp.providers.mcp_client import BasicMCPClient
 from llama_index.tools.mcp.base import McpToolSpec
 from llama_index.core.tools.function_tool import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -55,14 +54,18 @@ async def create_mcp_tools(mcp_server_configs: List[McpServerCreate]):
         mcp_tool = McpToolSpec(client=mcp_client)
 
         # TODO: can retrieve in parallel with asyncio.gather
-        tools: List[FunctionTool] = await mcp_tool.to_tool_list_async()
-        for tool in tools:
-            # transform tool name to server_name-tool_name
-            # 尽管存在mcp server为a,tool name 为b-c和server为a-b, tool为c的小概率撞车情形
-            # 考虑到大部分tool命名规则以及撞车概率极小，故忽略此情形（真撞车的话说明这俩mcp事实上重复了）
-            # 若因为碰撞报错，则建议用户修改server name 或者不用某个tool
-            tool.metadata.name = f"{mcp_server_name}-{tool.metadata.name}"
-            mcp_tools_map[mcp_server_name].append(tool)
+        try:
+            tools: List[FunctionTool] = await mcp_tool.to_tool_list_async()
+            for tool in tools:
+                # transform tool name to server_name-tool_name
+                # 尽管存在mcp server为a,tool name 为b-c和server为a-b, tool为c的小概率撞车情形
+                # 考虑到大部分tool命名规则以及撞车概率极小，故忽略此情形（真撞车的话说明这俩mcp事实上重复了）
+                # 若因为碰撞报错，则建议用户修改server name 或者不用某个tool
+                tool.metadata.name = f"{mcp_server_name}-{tool.metadata.name}"
+                mcp_tools_map[mcp_server_name].append(tool)
+        except Exception as e:
+            # it happens when mcp server is not reachable. just log it without throwing
+            logger.error(f"Failed to create mcp tools for {mcp_server_name}: {e}")
 
     logger.info("Created mcp tools from server config.")
     return mcp_tools_map

@@ -18,11 +18,11 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 app = FastAPI()
 
 
-async def gen_stream_response(model, model_name, messages, openai_tools):
+async def gen_stream_response(llm, messages, openai_tools):
     logger.info(f"messages {messages}, tools {openai_tools}")
     if openai_tools:
-        return await model.create(
-            model=model_name,
+        return await llm.client.chat.completions.create(
+            model=llm.model,
             messages=messages,
             stream=True,
             tools=openai_tools,
@@ -30,8 +30,8 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             stream_options={"include_usage": True},
         )
     else:
-        return await model.create(
-            model=model_name,
+        return await llm.client.chat.completions.create(
+            model=llm.model,
             messages=messages,
             stream=True,
             stream_options={"include_usage": True},
@@ -45,7 +45,7 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 # 流式生成文本
 @with_current_context
-async def generate_stream(model, model_name, messages, tools: List[FunctionTool]):
+async def generate_stream(llm, messages, tools: List[FunctionTool]):
     try:
         openai_tools = []
         tool_name_map = {}
@@ -61,9 +61,7 @@ async def generate_stream(model, model_name, messages, tools: List[FunctionTool]
         step_count = 0
         stop_flag = False
         while step_count < max_steps:
-            response = await gen_stream_response(
-                model, model_name, messages, openai_tools
-            )
+            response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1
             last_chunk = None
@@ -203,15 +201,14 @@ async def generate_stream(model, model_name, messages, tools: List[FunctionTool]
 
 
 @pai_agent_wrapper
-async def handle_chat(model, model_name, messages, tools: List[FunctionTool]):
+async def handle_chat(llm, messages, tools: List[FunctionTool]):
     current_span = trace.get_current_span()
     trace.set_span_in_context(current_span)
 
     # 返回流式响应
     return StreamingResponse(
         generate_stream(
-            model,
-            model_name,
+            llm,
             messages,
             tools,
         ),
