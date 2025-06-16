@@ -1,16 +1,11 @@
-from typing import List
+from typing import List, AsyncGenerator
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
 from pairag.mcp.constants import MAX_CHAT_STEPS
 from llama_index.core.tools import FunctionTool
+from llama_index.core.llms import ChatMessage
 from loguru import logger
-from openai.types.chat import (
-    ChatCompletionToolParam,
-    ChatCompletionToolMessageParam,
-    ChatCompletionMessage,
-    ChatCompletionMessageToolCall,
-)
 from opentelemetry import trace
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper, with_current_context
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -18,24 +13,38 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 app = FastAPI()
 
 
+async def response_to_raw(
+    astream_chat_response: AsyncGenerator,
+) -> AsyncGenerator:
+    async for chat_response in astream_chat_response:
+        yield chat_response.raw
+
+
 async def gen_stream_response(llm, messages, openai_tools):
     logger.info(f"messages {messages}, tools {openai_tools}")
+    chat_messages = []
+    for m in messages:
+        if isinstance(m, dict):
+            chat_messages.append(ChatMessage.parse_obj(m))
+        elif isinstance(m, ChatMessage):
+            chat_messages.append(m)
+        else:
+            logger.error(f"wrong message type, {type(m)}: {m}")
+
     if openai_tools:
-        return await llm.client.chat.completions.create(
-            model=llm.model,
-            messages=messages,
-            stream=True,
+        response = await llm.astream_chat(
+            messages=chat_messages,
             tools=openai_tools,
             tool_choice="auto",
             stream_options={"include_usage": True},
         )
     else:
-        return await llm.client.chat.completions.create(
-            model=llm.model,
-            messages=messages,
-            stream=True,
+        response = await llm.astream_chat(
+            messages=chat_messages,
             stream_options={"include_usage": True},
         )
+
+    return response_to_raw(response)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -51,9 +60,7 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
         tool_name_map = {}
         for tool in tools:
             openai_tools.append(
-                ChatCompletionToolParam(
-                    type="function", function=tool.metadata.to_openai_function()
-                )
+                {"type": "function", "function": tool.metadata.to_openai_function()}
             )
             tool_name_map[tool.metadata.name] = tool
 
@@ -91,13 +98,13 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                             text=json.dumps(choice.delta.content, ensure_ascii=False)
                         )
                         if (
-                            isinstance(messages[-1], ChatCompletionMessage)
+                            isinstance(messages[-1], ChatMessage)
                             and messages[-1].role == "assistant"
                         ):
                             messages[-1].content += str(choice.delta.content)
                         else:
                             messages.append(
-                                ChatCompletionMessage(
+                                ChatMessage(
                                     role="assistant", content=str(choice.delta.content)
                                 )
                             )  # 更新历史
@@ -128,24 +135,28 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
 
                                 # 将工具调用和结果加入消息历史,供模型继续推理
                                 messages.append(
-                                    ChatCompletionMessage(
+                                    ChatMessage(
                                         role="assistant",
                                         content="",
-                                        tool_calls=[
-                                            ChatCompletionMessageToolCall(
-                                                id=tool_call["id"],
-                                                type="function",
-                                                function={
-                                                    "name": tool_call["name"],
-                                                    "arguments": tool_call["arguments"],
+                                        additional_kwargs={
+                                            "tool_calls": [
+                                                {
+                                                    "id": tool_call["id"],
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": tool_call["name"],
+                                                        "arguments": tool_call[
+                                                            "arguments"
+                                                        ],
+                                                    },
                                                 },
-                                            )
-                                        ],
+                                            ]
+                                        },
                                     )
                                 )
 
                                 messages.append(
-                                    ChatCompletionToolMessageParam(
+                                    ChatMessage(
                                         role="tool",
                                         content=json.dumps(
                                             tool_result, ensure_ascii=False
