@@ -20,7 +20,7 @@ async def response_to_raw(
         yield chat_response.raw
 
 
-async def gen_stream_response(model, model_name, messages, openai_tools):
+async def gen_stream_response(llm, messages, openai_tools):
     logger.info(f"messages {messages}, tools {openai_tools}")
     chat_messages = []
     for m in messages:
@@ -32,14 +32,14 @@ async def gen_stream_response(model, model_name, messages, openai_tools):
             logger.error(f"wrong message type, {type(m)}: {m}")
 
     if openai_tools:
-        response = await model.astream_chat(
+        response = await llm.astream_chat(
             messages=chat_messages,
             tools=openai_tools,
             tool_choice="auto",
             stream_options={"include_usage": True},
         )
     else:
-        response = await model.astream_chat(
+        response = await llm.astream_chat(
             messages=chat_messages,
             stream_options={"include_usage": True},
         )
@@ -54,9 +54,7 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 # 流式生成文本
 @with_current_context
-async def generate_stream(
-    model, model_name, messages, tools: List[FunctionTool], current_context
-):
+async def generate_stream(llm, messages, tools: List[FunctionTool]):
     try:
         openai_tools = []
         tool_name_map = {}
@@ -70,9 +68,7 @@ async def generate_stream(
         step_count = 0
         stop_flag = False
         while step_count < max_steps:
-            response = await gen_stream_response(
-                model, model_name, messages, openai_tools
-            )
+            response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1
             last_chunk = None
@@ -219,18 +215,16 @@ async def generate_stream(
 
 
 @pai_agent_wrapper
-async def handle_chat(model, model_name, messages, tools: List[FunctionTool]):
+async def handle_chat(llm, messages, tools: List[FunctionTool]):
     current_span = trace.get_current_span()
-    current_context = trace.set_span_in_context(current_span)
+    trace.set_span_in_context(current_span)
 
     # 返回流式响应
     return StreamingResponse(
         generate_stream(
-            model,
-            model_name,
+            llm,
             messages,
             tools,
-            current_context=current_context,
         ),
         media_type="text/event-stream",
         headers={"x-vercel-ai-data-stream": "v1"},

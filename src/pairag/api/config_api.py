@@ -2,21 +2,15 @@ import asyncio
 import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from llama_index.llms.openai_like import OpenAILike
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pairag.db.models import (
-    LlmModelEntity,
-    LlmModelCreate,
-    LlmModelRead,
-    McpServerEntity,
-    McpServerCreate,
-    McpServerRead,
-    TraceModel,
-    TraceModelEntity,
+from pairag.db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
+from pairag.db.models.mcp import McpServerCreate, McpServerRead, McpServerEntity
+from pairag.db.models.trace import TraceModel, TraceModelEntity
+from pairag.db.models.websearch import (
     WebSearchConfigCreate,
-    WebSearchConfigEntity,
     WebSearchConfigRead,
+    WebSearchConfigEntity,
 )
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import decrypt_key, encrypt_key
@@ -33,7 +27,9 @@ from pairag.mcp.prompts import (
 from pairag.mcp.utils.message_utils import convert_to_chat_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.tools.search.aliyun_search_tool import aget_aliyun_search_tool
-from pairag.mcp.mcp_tool_provider import mcp_provider
+from pairag.mcp.providers.mcp_tool_provider import mcp_provider
+from pairag.mcp.providers.llm_provider import llm_provider
+
 
 config_router = APIRouter()
 
@@ -58,6 +54,8 @@ async def create_llm(
     try:
         await session.commit()
         await session.refresh(llm)
+        asyncio.create_task(llm_provider.refresh())
+
         return llm
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add llm: {e.orig}")
@@ -156,6 +154,8 @@ async def update_llm(
     await session.commit()
     await session.refresh(llm)
 
+    asyncio.create_task(llm_provider.refresh())
+
     return llm
 
 
@@ -169,6 +169,8 @@ async def delete_llm(
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
     await session.delete(llm)
     await session.commit()
+    asyncio.create_task(llm_provider.refresh())
+
     logger.info(f"LLM {llm_id} deleted.")
     return {"message": f"LLM {llm_id} deleted."}
 
@@ -404,23 +406,7 @@ async def chat(request: Request, session: AsyncSession = Depends(get_session)):
 
         # 从 headers 中获取模型参数
         model_id = request.headers.get("X-Model-Id")
-        sql_result = await session.exec(
-            select(LlmModelEntity).where(LlmModelEntity.model_id == model_id)
-        )
-        model_entity = sql_result.first()
-
-        if model_entity is None:
-            logger.error(f"Model id {model_id} not exists.")
-            return None
-
-        api_key = decrypt_key(model_entity.encrypted_api_key)
-        model = OpenAILike(
-            model=model_entity.model,
-            api_key=api_key,
-            api_base=model_entity.base_url,
-            is_chat_model=True,
-        )
-        logger.info(f"[Model] model_name: {model_entity.model}")
+        llm = llm_provider.get_llm_model(model_id=model_id)
 
         x_options = (
             request.headers.get("X-Options").split(",")
@@ -467,8 +453,7 @@ async def chat(request: Request, session: AsyncSession = Depends(get_session)):
         full_messages = convert_to_chat_messages(full_messages)
 
         return await handle_chat(
-            model=model,
-            model_name=model_entity.model,
+            llm=llm,
             messages=full_messages,
             tools=mcp_tools,
         )
