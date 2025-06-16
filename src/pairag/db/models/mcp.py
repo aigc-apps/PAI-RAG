@@ -2,7 +2,6 @@ import uuid
 from sqlmodel import Field, SQLModel
 
 
-# table名为paimcpserver
 class McpServer(SQLModel):
     name: str = Field(default=None)
     url: str = Field(default=None)
@@ -18,6 +17,7 @@ class McpServerRead(McpServer):
     id: str = Field(default=None)
 
 
+# table名为pai_mcp_server
 class McpServerEntity(McpServer, table=True):
     __tablename__ = "pai_mcp_server"
 
