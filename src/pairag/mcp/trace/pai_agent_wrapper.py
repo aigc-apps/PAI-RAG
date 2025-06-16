@@ -1,7 +1,7 @@
 from functools import wraps
 import os
-import time
 import json
+import time
 from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 from opentelemetry.context import attach, detach, Context
@@ -72,10 +72,20 @@ def pai_agent_wrapper(func):
 
         messages = kwargs.get("messages", [])
         try:
-            user_content = json.loads(messages[-1]["content"])
-            request_text = ""
-            for block in user_content:
-                request_text += block.get("text", "")
+            for message in reversed(messages):
+                if message.role == "user":
+                    request_text = ""
+                    for block in message.blocks:
+                        if block.block_type == "text":
+                            try:
+                                j = json.loads(block.text)
+                                request_text += j[0].get("text", "")
+                            except Exception:
+                                logger.warning(
+                                    f"Failed to extract request text, block.text: {block.text}"
+                                )
+                                request_text += block.text
+                    break
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
             request_text = "[unknown]"

@@ -1,19 +1,12 @@
 import json
-from typing import Any, Dict, List, Union
+from typing import Dict, List
 from llama_index.core.utils import resolve_binary
-from openai.types.chat import (
-    ChatCompletionToolMessageParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionMessageToolCall,
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionContentPartImageParam,
-    ChatCompletionContentPartTextParam,
-)
+from llama_index.core.llms import ChatMessage
 
 
-def to_openai_message_dict(
+def to_chat_message(
     message_dict: dict,
-) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+) -> ChatMessage:
     assert "role" in message_dict
     assert "content" in message_dict
     role = message_dict["role"]
@@ -24,9 +17,7 @@ def to_openai_message_dict(
         for elem in content:
             t = elem.get("type")
             if t == "text":
-                contents.append(
-                    ChatCompletionContentPartTextParam(type=t, text=elem.get("text"))
-                )
+                contents.append({"type": t, "text": elem.get("text")})
             elif t == "image_url":
                 img = elem["image_url"]["url"]
                 detail = elem["image_url"]["detail"]
@@ -37,24 +28,24 @@ def to_openai_message_dict(
                 else:
                     image_url = str(img)
                 contents.append(
-                    ChatCompletionContentPartImageParam(
-                        type=t,
-                        image_url={
+                    {
+                        "type": t,
+                        "image_url": {
                             "url": image_url,
                             "detail": detail or "auto",
                         },
-                    )
+                    }
                 )
             elif t == "tool-call":
                 tool_calls.append(
-                    ChatCompletionMessageToolCall(
-                        id=elem["toolCallId"],
-                        type="function",
-                        function={
+                    {
+                        "id": elem["toolCallId"],
+                        "type": "function",
+                        "function": {
                             "name": elem["toolName"],
                             "arguments": json.dumps(elem["args"], ensure_ascii=False),
                         },
-                    )
+                    }
                 )
             elif t == "tool-result":
                 call_id = elem["toolCallId"]
@@ -62,42 +53,42 @@ def to_openai_message_dict(
                     raise ValueError(
                         "tool_call_id or call_id is required in additional_kwargs for tool messages"
                     )
-                message_dict = ChatCompletionToolMessageParam(
+                chat_message = ChatMessage(
                     role=role,
                     content=str(elem["result"]),
                     tool_call_id=call_id,
                 )
-                return message_dict
+                return chat_message
     elif isinstance(content, str) or isinstance(content, Dict):
         if role == "system":
-            message_dict = ChatCompletionSystemMessageParam(role=role, content=content)
+            chat_message = ChatMessage(role=role, content=content)
         else:
-            message_dict = ChatCompletionAssistantMessageParam(
+            chat_message = ChatMessage(
                 role=role, content=json.dumps(content, ensure_ascii=False)
             )
 
         return message_dict
 
     if tool_calls:
-        message_dict = ChatCompletionAssistantMessageParam(
+        chat_message = ChatMessage(
             role=role,
-            content=json.dumps(content, ensure_ascii=False),
-            tool_calls=tool_calls,
+            content="",
+            additional_kwargs={"tool_calls": tool_calls},
         )
     else:
-        message_dict = ChatCompletionAssistantMessageParam(
+        chat_message = ChatMessage(
             role=role, content=json.dumps(content, ensure_ascii=False)
         )
 
-    return message_dict
+    return chat_message
 
 
-def convert_to_openai_messages(messages: List[dict]):
-    openai_messages = []
+def convert_to_chat_messages(messages: List[dict]):
+    ret_messages = []
     for message in messages:
-        message_dict = to_openai_message_dict(message)
+        message_dict = to_chat_message(message)
         if isinstance(message_dict, list):
-            openai_messages.extend(message_dict)
+            ret_messages.extend(message_dict)
         else:
-            openai_messages.append(message_dict)
-    return openai_messages
+            ret_messages.append(message_dict)
+    return ret_messages
