@@ -6,7 +6,8 @@ from llama_index.core.tools import FunctionTool
 from llama_index.core.llms import ChatMessage
 from loguru import logger
 from opentelemetry import trace
-from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper, with_current_context
+from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
+from pairag.integrations.trace.base import use_current_span
 from tenacity import retry, stop_after_attempt, wait_fixed
 from pairag.mcp.constants import MAX_CHAT_STEPS
 
@@ -53,7 +54,6 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 
 # 流式生成文本
-@with_current_context
 async def generate_stream(llm, messages, tools: List[FunctionTool]):
     try:
         openai_tools = []
@@ -216,16 +216,14 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
 
 @pai_agent_wrapper
 async def handle_chat(llm, messages, tools: List[FunctionTool]):
-    current_span = trace.get_current_span()
-    trace.set_span_in_context(current_span)
+    # wrap to inherit current context
+    @use_current_span(trace.get_current_span())
+    def _gen_streaming_response():
+        return generate_stream(llm, messages, tools)
 
     # 返回流式响应
     return StreamingResponse(
-        generate_stream(
-            llm,
-            messages,
-            tools,
-        ),
+        _gen_streaming_response(),
         media_type="text/event-stream",
         headers={"x-vercel-ai-data-stream": "v1"},
     )

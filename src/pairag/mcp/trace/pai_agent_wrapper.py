@@ -4,7 +4,7 @@ import json
 import time
 from fastapi.responses import StreamingResponse
 from opentelemetry import trace
-from opentelemetry.context import attach, detach, Context
+from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
@@ -21,34 +21,6 @@ GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 
 STATUS_OK = Status(StatusCode.OK)
-
-
-def with_current_context(func):
-    """decorator to pass context in streaming mode.
-
-    To take current_context from out side functions and let `func` share the it.
-    NOTE: `func` must provide a current_context parameter.
-    """
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        current_context = kwargs.get("current_context") or next(
-            (arg for arg in args if isinstance(arg, Context)), None
-        )
-
-        if current_context is None:
-            current_span = trace.get_current_span()
-            current_context = trace.set_span_in_context(current_span)
-
-        token = attach(current_context)
-
-        try:
-            async for chunk in func(*args, **kwargs):
-                yield chunk
-        finally:
-            detach(token)
-
-    return wrapper
 
 
 def _get_final_chunk_content(chunk: str):
@@ -107,11 +79,17 @@ def pai_agent_wrapper(func):
                     final_output = ""
                     first_token_time = None
                     try:
+                        is_error = False
                         async for chunk in original_body:
                             final_output += _get_final_chunk_content(chunk)
                             first_token_time = first_token_time or time.time_ns()
+                            if '"finishReason":"error"' in chunk:
+                                is_error = True
                             yield chunk
-                        span.set_status(STATUS_OK)
+                        if not is_error:
+                            span.set_status(STATUS_OK)
+                        else:
+                            span.set_status(Status(StatusCode.ERROR))
                     except Exception as stream_exc:
                         span.record_exception(stream_exc)
                         span.set_status(Status(StatusCode.ERROR, str(stream_exc)))
