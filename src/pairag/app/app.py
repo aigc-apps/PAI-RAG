@@ -29,11 +29,15 @@ async def lifespan(app: FastAPI):
     if is_feature_enabled(FeatureFlags.MCP):
         logger.info("Initializing databases for MCP.")
         from pairag.db.db_context import init_db
-        from pairag.mcp.mcp_tool_provider import mcp_provider
+        from pairag.mcp.providers.mcp_tool_provider import mcp_provider
+        from pairag.mcp.providers.llm_provider import llm_provider
+
         await init_db()
         logger.info("Initialized databases for MCP.")
         await mcp_provider.refresh()
         logger.info("Initialized mcp tools.")
+        await llm_provider.refresh()
+        logger.info("Initialized llm models.")
 
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
