@@ -17,7 +17,10 @@ import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
 import TracingConfig from "./config/tracing/page";
-
+import KnowledgeBase from "./knowledgebase/page";
+import { usePathname } from "next/navigation";
+import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
+import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -79,8 +82,10 @@ export const Assistant = () => {
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/config/api/chat`,
     headers: headers,
   });
-
-  const [activeTab, setActiveTab] = useState("/"); // 提升状态到父组件
+  const pathname = usePathname();
+  console.log("pathname:", pathname);
+  const [activeTab, setActiveTab] = useState(pathname);
+  console.log("activeTab:", activeTab);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <SidebarProvider defaultOpen={true}>
@@ -107,6 +112,33 @@ export const Assistant = () => {
                 }}
               />
               <ToolUIWrapper />
+            </div>
+          )}
+          {activeTab === "/knowledgebase" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBase setActiveTab={setActiveTab} />
+            </div>
+          )}
+          {activeTab.startsWith("/knowledgebase/create") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBaseCreatePage setActiveTab={setActiveTab} />
+            </div>
+          )}
+          {activeTab.startsWith("/knowledgebase/details") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBaseDetailPage
+                knowledgebase_id={activeTab.split("/")[3]}
+                setActiveTab={setActiveTab}
+              />
             </div>
           )}
           {activeTab === "/config/llm" && (
