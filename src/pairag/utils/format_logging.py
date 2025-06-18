@@ -1,6 +1,7 @@
 import logging
 import sys
 from loguru import logger
+from asgi_correlation_id.context import correlation_id
 
 
 class InterceptHandler(logging.Handler):
@@ -25,10 +26,32 @@ class InterceptHandler(logging.Handler):
         ).log(level, record.getMessage())
 
 
+# 自定义日志格式，加入 request_id
+def formatter(record):
+    record["extra"]["request_id"] = correlation_id.get()
+    if record["extra"].get("request_id", None):
+        return (
+            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+            "<level>{process}</level> | "
+            "<level>{extra[request_id]} |</level> "
+            "<level>{level: <8}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
+            "- <level>{message}</level>\n"
+        )
+    else:
+        return (
+            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+            "<level>{process}</level> | "
+            "<level>{level: <8}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
+            "- <level>{message}</level>\n"
+        )
+
+
 def format_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
     logger.remove(0)
     logger.add(
         sys.stderr,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{process}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        format=formatter,
     )
