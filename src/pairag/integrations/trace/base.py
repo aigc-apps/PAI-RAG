@@ -19,10 +19,11 @@ from opentelemetry.sdk.trace.export import (
 )
 from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from openinference.semconv.trace import SpanAttributes
 
 from pairag.integrations.trace.reloadable_exporter import ReloadableOTLPSpanExporter
 from pairag.integrations.trace.trace_config import TraceConfig
-from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
 
 # trace_provider为singleton, 不支持覆盖，故修改trace配置时，默认覆盖exporter和resource
@@ -113,6 +114,38 @@ def use_current_span(span: Span):
         return wrapper
 
     return decorator
+
+
+def gen_ai_semantic_conversion():
+    """
+    semantic conversion:
+    ref: https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/
+    ref: https://www.alibabacloud.com/help/zh/arms/application-monitoring/developer-reference/llm-trace-field-definition-description
+    """
+    for attr_name in dir(SpanAttributes):
+        if attr_name.startswith("__"):
+            continue
+
+        value = getattr(SpanAttributes, attr_name)
+        if isinstance(value, str) and value.startswith("llm."):
+            if value == "llm.invocation_parameters":
+                new_value = "gen_ai.request.parameters"
+            elif value.startswith("llm.token_count.prompt"):
+                new_value = "gen_ai.usage.input_tokens"
+            elif value.startswith("llm.token_count.completion"):
+                new_value = "gen_ai.usage.output_tokens"
+            elif value.startswith("llm.token_count.total"):
+                new_value = "gen_ai.usage.total_tokens"
+            elif value.startswith("llm.input_messages"):
+                new_value = "gen_ai.prompts"
+            elif value.startswith("llm.output_messages"):
+                new_value = "gen_ai.completions"
+            else:
+                new_value = value.replace("llm.", "gen_ai.", 1)
+            setattr(SpanAttributes, attr_name, new_value)
+
+
+gen_ai_semantic_conversion()
 
 
 # arize instrumentation uses: pydantic.v1.json.pydantic_encoder
