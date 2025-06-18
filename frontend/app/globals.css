@@ -112,3 +112,88 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* modern-markdown.css */
+.markdown-content {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.8;
+  color: #2d3748;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  position: relative;
+  padding-bottom: 0.3em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  border-bottom: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.markdown-content h1 {
+  font-size: 2.2rem;
+  background: linear-gradient(120deg, #2c3e50, #34495e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.markdown-content h2 {
+  font-size: 1.7rem;
+  color: #2d3748;
+}
+
+.markdown-content h3 {
+  font-size: 1.4rem;
+  color: #4a5568;
+}
+
+.markdown-content p {
+  margin-bottom: 1.2em;
+}
+
+.markdown-content code {
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  background-color: #f7fafc;
+  color: #4299e1;
+  font-weight: 500;
+}
+
+.markdown-content pre {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  padding: 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1.5em 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 1.2em;
+  padding-left: 1.5em;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid #3b82f6;
+  color: #475569;
+  margin: 1.5em 0;
+  padding-left: 1em;
+}
+
+.markdown-content a {
+  color: #3b82f6;
+  text-decoration: none;
+  position: relative;
+}
+
+.markdown-content a:hover::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background-color: #3b82f6;
+}

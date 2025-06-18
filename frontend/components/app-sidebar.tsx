@@ -13,8 +13,6 @@ import {
   SidebarMenuSub,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
 import { ThreadList } from "@/components/assistant-ui/thread-list";
 import {
   DropdownMenu,
@@ -22,7 +20,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronUp, MessageCircle, ChevronDown } from "lucide-react";
+import { ChevronUp, MessageCircle, ChevronDown, BookIcon } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -35,8 +33,6 @@ export function AppSidebar({
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
   return (
     <Sidebar side="left">
       <SidebarHeader>
@@ -50,6 +46,12 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarMenu>
           <Collapsible defaultOpen className="group/collapsible">
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => setActiveTab("/knowledgebase")}>
+                <BookIcon />
+                <span>知识库</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton onClick={() => setActiveTab("/")}>
