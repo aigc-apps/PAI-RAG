@@ -7,6 +7,7 @@ class McpServer(SQLModel):
     url: str = Field(default=None)
     type: str = Field(default="sse")
     enabled: bool = Field(default=True)
+    need_token: bool = Field(default=False)
 
 
 class McpServerCreate(McpServer):
