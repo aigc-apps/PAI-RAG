@@ -2,13 +2,13 @@ from typing import List, AsyncGenerator
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
-from pairag.mcp.constants import MAX_CHAT_STEPS
 from llama_index.core.tools import FunctionTool
 from llama_index.core.llms import ChatMessage
 from loguru import logger
 from opentelemetry import trace
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper, with_current_context
 from tenacity import retry, stop_after_attempt, wait_fixed
+from pairag.mcp.constants import MAX_CHAT_STEPS
 
 app = FastAPI()
 
@@ -204,8 +204,11 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                 break
             step_count += 1
         if not stop_flag:
-            yield "0:Agent stopped due to iteration limit\n"
-            yield 'd:{"finishReason":"Agent stopped due to iteration limit"}\n'
+            finish_reason = "Agent stopped due to iteration limit"
+            yield "0:{reason}\n".format(
+                reason=json.dumps(finish_reason, ensure_ascii=False)
+            )
+            yield 'd:{{"finishReason":"{reason}"}}\n'.format(reason=finish_reason)
     except Exception as e:
         yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(e)
         raise
