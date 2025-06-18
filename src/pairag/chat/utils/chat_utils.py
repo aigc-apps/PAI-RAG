@@ -137,7 +137,10 @@ def make_completion_response(
     else:
         token_usage = get_token_usage(chat_response)
 
-    if response_wrapper.intent_result is not None:
+    if (
+        response_wrapper.intent_result is not None
+        and response_wrapper.intent_result.intent != ChatIntentType.CHAT_NEWS
+    ):
         chat_response.additional_kwargs[
             "intent"
         ] = response_wrapper.intent_result.intent
