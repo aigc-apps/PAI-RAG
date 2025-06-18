@@ -132,7 +132,7 @@ export default function KnowledgeBaseCreatePage({
       <div className="flex-1 overflow-y-auto">
         <Card className="border-none px-4">
           <CardHeader>
-            <CardTitle>知识库配置</CardTitle>
+            <CardTitle className="text-xl font-semibold">知识库配置</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">

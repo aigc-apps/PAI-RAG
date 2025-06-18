@@ -100,6 +100,13 @@ export default function KnowledgeBase({
             <CardFooter className="mt-auto pt-0 flex justify-end">
               <Button
                 variant="link"
+                className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
+              >
+                删除
+              </Button>
+
+              <Button
+                variant="link"
                 className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
                 onClick={() =>
                   setActiveTab(`/knowledgebase/details/${base.id}`)
