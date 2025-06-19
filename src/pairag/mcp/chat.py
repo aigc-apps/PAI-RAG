@@ -73,6 +73,9 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
             draft_tool_calls_index = -1
             last_chunk = None
             async for chunk in response:
+                if stop_flag:
+                    logger.info("Stop early due to errors.")
+                    break
                 last_chunk = chunk
                 for choice in chunk.choices:
                     # 调用工具,收集工具参数
@@ -201,6 +204,7 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                     completion=completion_tokens,
                 )
             if stop_flag:
+                logger.info(f"Agent loop break at step {step_count}")
                 break
             step_count += 1
         if not stop_flag:
