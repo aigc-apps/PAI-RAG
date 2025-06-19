@@ -63,7 +63,7 @@ def get_async_db_angine():
         db_url = f"postgresql+asyncpg://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
         async_engine = create_async_engine(db_url)
         logger.info(
-            f"created async sql engine with {db_user}@{db_host}:{db_port}/{db_name}"
+            f"created async engine with {db_user}@{db_host}:{db_port}/{db_name}"
         )
 
         return async_engine

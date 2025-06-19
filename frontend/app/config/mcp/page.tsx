@@ -71,6 +71,8 @@ export class MCPConfig {
   name: string;
   url: string;
   type: string;
+  auth_token: string;
+  need_token: boolean;
   enabled: boolean;
 
   constructor(
@@ -78,12 +80,16 @@ export class MCPConfig {
     name: string,
     url: string,
     type: string,
+    auth_token: string,
+    need_token: boolean,
     enabled: boolean,
   ) {
     this.id = id;
     this.name = name;
     this.url = url;
     this.type = type;
+    this.auth_token = auth_token;
+    this.need_token = need_token;
     this.enabled = enabled;
   }
 }
@@ -107,6 +113,8 @@ export default function McpConfig() {
     name: "未命名服务器",
     url: "",
     type: "sse",
+    auth_token: "",
+    need_token: false,
     enabled: false,
   });
 
@@ -116,6 +124,8 @@ export default function McpConfig() {
       name: string;
       url: string;
       type: string;
+      auth_token: string;
+      need_token: boolean;
       enabled: boolean;
     }>,
   ); // 存储 MCP 配置
@@ -181,7 +191,7 @@ export default function McpConfig() {
       const mcp_data = {
         ...addFormData,
       };
-
+      mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(`http://localhost:${port}/v1/config/mcps`, {
         method: "POST",
@@ -197,6 +207,8 @@ export default function McpConfig() {
         mcpDto.name,
         mcpDto.url,
         mcpDto.type,
+        mcpDto.auth_token,
+        mcpDto.need_token,
         mcpDto.enabled,
       );
       setToastState({
@@ -394,6 +406,23 @@ export default function McpConfig() {
                                   className="col-span-3"
                                 />
                               </div>
+                              <div className="grid grid-cols-7 items-center gap-4">
+                                <Label
+                                  htmlFor="edit_mcp_auth_token"
+                                  className="text-right col-span-2"
+                                >
+                                  Bear Token
+                                </Label>
+                                <Input
+                                  id="edit_mcp_auth_token"
+                                  type="password"
+                                  defaultValue={
+                                    editingConfig?.need_token ? "******" : ""
+                                  }
+                                  onChange={handleEditInputChange}
+                                  className="col-span-5"
+                                />
+                              </div>
                               <div className="grid grid-cols-4 items-center gap-4">
                                 <Label
                                   htmlFor="edit_mcp_enabled"
@@ -462,10 +491,11 @@ export default function McpConfig() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_name" className="text-right">
                     MCP 名称
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="mcp_name"
-                    placeholder="mcp_name"
+                    placeholder="MCP"
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -473,10 +503,11 @@ export default function McpConfig() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_url" className="text-right">
                     MCP 链接
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="mcp_url"
-                    placeholder="mcp_url"
+                    placeholder="URL"
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -484,12 +515,28 @@ export default function McpConfig() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_type" className="text-right">
                     MCP 类型
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="mcp_type"
-                    placeholder="mcp_type"
+                    placeholder="SSE / STDIO / HTTP"
                     onChange={handleInputChange}
                     className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-7 items-center gap-4">
+                  <Label
+                    htmlFor="mcp_auth_token"
+                    className="text-right col-span-2"
+                  >
+                    Bearer Token
+                  </Label>
+                  <Input
+                    id="mcp_auth_token"
+                    type="password"
+                    placeholder="Bearer Token (可选)"
+                    onChange={handleInputChange}
+                    className="col-span-5"
                   />
                 </div>
               </div>
