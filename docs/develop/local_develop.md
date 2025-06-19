@@ -32,6 +32,12 @@ For local development, please refer to the following steps:
    pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
    ```
 
+   Upgrade db schema
+
+   ```
+   alembic upgrade head
+   ```
+
 - Common network timeout issues
 
   Note: During the installation, if you encounter a network connection timeout, you can add the Alibaba Cloud or Tsinghua mirror source and append the following lines to the end of the pyproject.toml file:
