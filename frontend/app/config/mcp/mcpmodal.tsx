@@ -30,7 +30,7 @@ export class McpEntry extends MCPConfig {
     enabled: boolean,
     active: boolean,
   ) {
-    super(id, name, url, type, enabled);
+    super(id, name, url, type, "", false, enabled);
     this.active = active;
   }
 }
