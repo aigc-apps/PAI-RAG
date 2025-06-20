@@ -79,7 +79,7 @@ export const Assistant = () => {
   }, [llmConfig.model_id, selectedOptions]);
 
   const runtime = useChatRuntime({
-    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/config/api/chat`,
+    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
     headers: headers,
   });
   const pathname = usePathname();

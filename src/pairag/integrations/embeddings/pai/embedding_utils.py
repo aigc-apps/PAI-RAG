@@ -10,8 +10,7 @@ from pairag.integrations.embeddings.pai.pai_embedding_config import (
     OpenAIEmbeddingConfig,
     HuggingFaceEmbeddingConfig,
 )
-from pairag.utils.mdoelscope_utils import download_model_to_directory
-
+from pairag.utils.modelscope_utils import download_model_to_directory
 from loguru import logger
 
 
@@ -53,9 +52,7 @@ def create_embedding(embed_config: PaiBaseEmbeddingConfig, model_dir: str = None
             f"Initialized DashScope embedding model with {embed_config.embed_batch_size} batch size."
         )
     elif isinstance(embed_config, HuggingFaceEmbeddingConfig):
-        model_dir = model_dir or os.getenv("PAIRAG_MODEL_DIR", "./model_repository")
-        pai_model_path = os.path.join(model_dir, embed_config.model)
-        download_model_to_directory(embed_config.model, model_dir)
+        pai_model_path = download_model_to_directory(embed_config.model, model_dir)
 
         embed_model = HuggingFaceEmbedding(
             model_name=pai_model_path,

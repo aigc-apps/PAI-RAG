@@ -1,5 +1,4 @@
 from typing import List, AsyncGenerator
-from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
 from llama_index.core.tools import FunctionTool
@@ -10,8 +9,6 @@ from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.integrations.trace.base import use_current_span
 from tenacity import retry, stop_after_attempt, wait_fixed
 from pairag.mcp.constants import MAX_CHAT_STEPS
-
-app = FastAPI()
 
 
 async def response_to_raw(

@@ -49,7 +49,7 @@ export default function ModelSelector({
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
-          `http://localhost:${port}/v1/config/llm_groups`,
+          `http://localhost:${port}/v1/config/llms/groups`,
         );
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();

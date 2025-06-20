@@ -57,24 +57,25 @@ interface KnowledgeBase {
   id: string;
   name: string;
   description: string;
+  doc_num: number;
+  chunk_num: number;
   chunk_config: {
     parser_type: string; // 切片类型
     separator: string; // 切片标识符
     chunk_size: string; // 切片大小
     chunk_overlap: string; // 切片重叠大小
   };
-  embedding_config: {
-    model_name: string; // 向量模型名称
-  };
+  embedding_model: string; //向量模型名称
   retrieval_config: {
-    index_type: string; // 索引类型：vector, fulltext, hybrid
-    top_k: string; // Top-K 值
+    retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
+    top_k: number; // Top-K 值
     similarity_threshold: string; // 相似度分数阈值
-    enable_rerank: boolean; // 是否启用 Rerank 模型
+    rerank_model: string; // rerank模型名称
     vector_weight?: string; // 向量检索权重（仅 hybrid 时使用）
   };
-  files?: KnowledgeBaseFile[]; // 新增文件列表字段
+  files?: KnowledgeBaseFile[];
 }
+
 export default function KnowledgeBaseDetailPage({
   knowledgebase_id,
   setActiveTab,
@@ -82,7 +83,7 @@ export default function KnowledgeBaseDetailPage({
   knowledgebase_id: string;
   setActiveTab: (tab: string) => void;
 }) {
-  const [knowledgebases, setKnowledgeBases] = useState(Array<KnowledgeBase>); // 知识库列表
+  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库列表
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
   const [editknowledgebase, setEditKnowledgeBase] = useState<KnowledgeBase>(); // 编辑的知识库
@@ -163,11 +164,14 @@ export default function KnowledgeBaseDetailPage({
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        // const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         // // 模拟 API 请求：/v1/knowledgebases
-        // const res = await fetch(`http://localhost:${port}/v1/knowledgebases`);
-        // if (!res.ok) throw new Error("获取知识库列表失败");
-        // const data = await res.json();
+        const res = await fetch(
+          `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}`,
+        );
+        if (!res.ok) throw new Error("获取知识库列表失败");
+        const json_data = await res.json();
+        const kb_data = json_data.data;
 
         // // 并行获取每个知识库的文件列表
         // const knowledgeBasesWithFiles = await Promise.all(
@@ -190,144 +194,8 @@ export default function KnowledgeBaseDetailPage({
         //     { id: '4', name: 'API 文档', description: 'RESTful 接口规范与示例' }
         // ]
 
-        const knowledgeBasesWithFiles = [
-          {
-            id: "1",
-            name: "产品文档库",
-            description: "包含所有产品技术规格与使用指南",
-            chunk_config: {
-              parser_type: "Sentence",
-              separator: "\\n\\n",
-              chunk_size: "512",
-              chunk_overlap: "50",
-            },
-            embedding_config: {
-              model_name: "bge-m3",
-            },
-            retrieval_config: {
-              index_type: "hybrid",
-              top_k: "5",
-              similarity_threshold: "0.8",
-              enable_rerank: true,
-              vector_weight: "0.5",
-            },
-            files: [
-              {
-                id: "f1",
-                name: "产品规格书.pdf",
-                type: "PDF",
-                size: "2.1MB",
-                status: "done",
-                uploadedAt: "2025-03-15",
-              },
-              {
-                id: "f2",
-                name: "安装指南.pdf",
-                type: "PDF",
-                size: "1.8MB",
-                status: "pending",
-                uploadedAt: "2025-03-10",
-              },
-              {
-                id: "f3",
-                name: "API文档.pdf",
-                type: "PDF",
-                size: "3.2MB",
-                status: "pending",
-                uploadedAt: "2025-03-05",
-              },
-            ],
-          },
-          {
-            id: "2",
-            name: "技术白皮书",
-            description: "深度解析核心算法与架构设计",
-            chunk_config: {
-              parser_type: "Sentence",
-              separator: "\\n\\n",
-              chunk_size: "512",
-              chunk_overlap: "50",
-            },
-            embedding_config: {
-              model_name: "bge-m3",
-            },
-            retrieval_config: {
-              index_type: "hybrid",
-              top_k: "5",
-              similarity_threshold: "0.8",
-              enable_rerank: true,
-              vector_weight: "0.5",
-            },
-            files: [
-              {
-                id: "f4",
-                name: "分布式架构设计.pdf",
-                type: "PDF",
-                size: "4.5MB",
-                status: "pending",
-                uploadedAt: "2025-03-18",
-              },
-              {
-                id: "f5",
-                name: "机器学习白皮书.pdf",
-                type: "PDF",
-                size: "6.2MB",
-                status: "done",
-                uploadedAt: "2025-03-12",
-              },
-            ],
-          },
-          {
-            id: "3",
-            name: "用户指南",
-            description: "从入门到精通的全流程操作手册",
-            chunk_config: {
-              parser_type: "Sentence",
-              separator: "\\n\\n",
-              chunk_size: "512",
-              chunk_overlap: "50",
-            },
-            embedding_config: {
-              model_name: "bge-m3",
-            },
-            retrieval_config: {
-              index_type: "hybrid",
-              top_k: "5",
-              similarity_threshold: "0.8",
-              enable_rerank: true,
-              vector_weight: "0.5",
-            },
-            files: [],
-          },
-          {
-            id: "4",
-            name: "API 文档",
-            description: "RESTful 接口规范与示例",
-            chunk_config: {
-              parser_type: "Sentence",
-              separator: "\\n\\n",
-              chunk_size: "512",
-              chunk_overlap: "50",
-            },
-            embedding_config: {
-              model_name: "bge-m3",
-            },
-            retrieval_config: {
-              index_type: "hybrid",
-              top_k: "5",
-              similarity_threshold: "0.8",
-              enable_rerank: true,
-              vector_weight: "0.5",
-            },
-            files: [],
-          },
-        ];
-
-        setKnowledgeBases(knowledgeBasesWithFiles || []); // 更新状态
-        setEditKnowledgeBase(
-          knowledgeBasesWithFiles.find((kb) => kb.id === knowledgebase_id) ||
-            undefined,
-        ); // 设置编辑的知识库
+        setKnowledgeBase(kb_data); // 更新状态
+        setEditKnowledgeBase(kb_data || undefined); // 设置编辑的知识库
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
       } finally {
@@ -336,7 +204,7 @@ export default function KnowledgeBaseDetailPage({
     };
     fetchConfigs();
   }, []);
-  const knowledgebase = knowledgebases.find((kb) => kb.id === knowledgebase_id);
+
   if (!knowledgebase) {
     return <div className="p-6">加载中...</div>;
   }
@@ -634,19 +502,18 @@ export default function KnowledgeBaseDetailPage({
                     <div className="col-span-2">
                       <Select
                         value={
-                          editknowledgebase?.embedding_config.model_name ||
-                          "bge-m3"
+                          editknowledgebase?.embedding_model || "BAAI/bge-m3"
                         }
-                        onValueChange={handleEditFieldChange(
-                          "embedding_config.model_name",
-                        )}
+                        onValueChange={handleEditFieldChange("embedding_model")}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="请选择向量类型" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="bge-m3">bge-m3</SelectItem>
+                            <SelectItem value="BAAI/bge-m3">
+                              BAAI/bge-m3
+                            </SelectItem>
                             <SelectItem value="text-embedding-v1">
                               text-embedding-v1
                             </SelectItem>
@@ -657,7 +524,7 @@ export default function KnowledgeBaseDetailPage({
                     </div>
 
                     <div className="col-span-1 text-sm text-muted-foreground">
-                      <p className="pt-2 pl-6">推荐值：bge-m3</p>
+                      <p className="pt-2 pl-6">推荐值：BAAI/bge-m3</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-6 space-y-2">
@@ -666,9 +533,11 @@ export default function KnowledgeBaseDetailPage({
                       <div className="space-y-2 pt-4 pb-2">
                         <ToggleGroup
                           type="single"
-                          value={editknowledgebase?.retrieval_config.index_type}
+                          value={
+                            editknowledgebase?.retrieval_config.retrieval_mode
+                          }
                           onValueChange={handleEditFieldChange(
-                            "retrieval_config.index_type",
+                            "retrieval_config.retrieval_mode",
                           )}
                           variant="outline"
                           className="flex gap-x-4 overflow-visible"
@@ -701,7 +570,7 @@ export default function KnowledgeBaseDetailPage({
                       </div>
                       {/* 动态参数配置区域 */}
                       <div className="space-y-4 pt-2">
-                        {editknowledgebase?.retrieval_config.index_type ===
+                        {editknowledgebase?.retrieval_config.retrieval_mode ===
                           "vector" && (
                           <div>
                             <div className="grid grid-cols-5 space-y-4 ">
@@ -746,33 +615,49 @@ export default function KnowledgeBaseDetailPage({
                                 推荐值：0.8
                               </p>
                             </div>
-                            <div className="flex items-start gap-3 pt-2">
-                              <Checkbox
-                                id="retrieval_config.enable_rerank"
-                                checked={
-                                  editknowledgebase?.retrieval_config
-                                    .enable_rerank
-                                }
-                                onCheckedChange={(checkedState) => {
-                                  const isChecked = checkedState === true;
-                                  handleEditInputChangeCheckbox(
-                                    isChecked,
-                                    "retrieval_config.enable_rerank",
-                                  );
-                                }}
-                              />
-                              <div className="grid gap-2">
-                                <Label htmlFor="terms-2">
-                                  启用 Rerank 模型
-                                </Label>
-                                <p className="text-muted-foreground text-sm">
-                                  默认使用bge-ranker模型进行重排序
-                                </p>
-                              </div>
+                            <Label
+                              htmlFor="embeddingModel"
+                              className="col-span-1"
+                            >
+                              重排序模型 (rerank_model){" "}
+                              <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="col-span-2">
+                              <Select>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="请选择重排序模型" />
+                                </SelectTrigger>
+                                <SelectContent
+                                  id="rerankModel"
+                                  defaultValue={
+                                    editknowledgebase.retrieval_config
+                                      .rerank_model
+                                  }
+                                >
+                                  <SelectGroup>
+                                    <SelectItem value="none">
+                                      NO RERANK
+                                    </SelectItem>
+                                    <SelectItem value="BAAI/bge-reranker-base">
+                                      BAAI/bge-reranker-base
+                                    </SelectItem>
+                                    <SelectItem value="BAAI/bge-reranker-large">
+                                      BAAI/bge-reranker-large
+                                    </SelectItem>
+                                    <SelectItem value="qwen3">qwen3</SelectItem>
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="col-span-1 text-sm text-muted-foreground">
+                              <p className="pt-2 pl-6">
+                                推荐值： BAAI/bge-reranker-base
+                              </p>
                             </div>
                           </div>
                         )}
-                        {editknowledgebase?.retrieval_config.index_type ===
+                        {editknowledgebase?.retrieval_config.retrieval_mode ===
                           "fulltext" && (
                           <div>
                             <div className="grid grid-cols-5 space-y-4 ">
@@ -818,32 +703,52 @@ export default function KnowledgeBaseDetailPage({
                               </p>
                             </div>
                             <div className="flex items-start gap-3 pt-2">
-                              <Checkbox
-                                id="retrieval_config.enable_rerank"
-                                checked={
-                                  editknowledgebase?.retrieval_config
-                                    .enable_rerank
-                                }
-                                onCheckedChange={(checkedState) => {
-                                  const isChecked = checkedState === true;
-                                  handleEditInputChangeCheckbox(
-                                    isChecked,
-                                    "retrieval_config.enable_rerank",
-                                  );
-                                }}
-                              />
-                              <div className="grid gap-2">
-                                <Label htmlFor="terms-2">
-                                  启用 Rerank 模型
-                                </Label>
-                                <p className="text-muted-foreground text-sm">
-                                  默认使用bge-ranker模型进行重排序
+                              <Label
+                                htmlFor="embeddingModel"
+                                className="col-span-1"
+                              >
+                                重排序模型 (rerank_model){" "}
+                                <span className="text-destructive">*</span>
+                              </Label>
+                              <div className="col-span-2">
+                                <Select>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="请选择重排序模型" />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    id="rerankModel"
+                                    defaultValue={
+                                      editknowledgebase.retrieval_config
+                                        .rerank_model
+                                    }
+                                  >
+                                    <SelectGroup>
+                                      <SelectItem value="none">
+                                        NO RERANK
+                                      </SelectItem>
+                                      <SelectItem value="BAAI/bge-reranker-base">
+                                        BAAI/bge-reranker-base
+                                      </SelectItem>
+                                      <SelectItem value="BAAI/bge-reranker-large">
+                                        BAAI/bge-reranker-large
+                                      </SelectItem>
+                                      <SelectItem value="qwen3">
+                                        qwen3
+                                      </SelectItem>
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="col-span-1 text-sm text-muted-foreground">
+                                <p className="pt-2 pl-6">
+                                  推荐值： BAAI/bge-reranker-base
                                 </p>
                               </div>
                             </div>
                           </div>
                         )}
-                        {editknowledgebase?.retrieval_config.index_type ===
+                        {editknowledgebase?.retrieval_config.retrieval_mode ===
                           "hybrid" && (
                           <div className="space-y-6">
                             <div className="grid grid-cols-5 gap-4 pt-2">
@@ -921,26 +826,46 @@ export default function KnowledgeBaseDetailPage({
                               </p>
                             </div>
                             <div className="flex items-start gap-3 pt-2">
-                              <Checkbox
-                                id="retrieval_config.enable_rerank"
-                                checked={
-                                  editknowledgebase?.retrieval_config
-                                    .enable_rerank
-                                }
-                                onCheckedChange={(checkedState) => {
-                                  const isChecked = checkedState === true;
-                                  handleEditInputChangeCheckbox(
-                                    isChecked,
-                                    "retrieval_config.enable_rerank",
-                                  );
-                                }}
-                              />
-                              <div className="grid gap-2">
-                                <Label htmlFor="terms-2">
-                                  启用 Rerank 模型
-                                </Label>
-                                <p className="text-muted-foreground text-sm">
-                                  默认使用bge-ranker模型进行重排序
+                              <Label
+                                htmlFor="embeddingModel"
+                                className="col-span-1"
+                              >
+                                重排序模型 (rerank_model){" "}
+                                <span className="text-destructive">*</span>
+                              </Label>
+                              <div className="col-span-2">
+                                <Select>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="请选择重排序模型" />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    id="rerankModel"
+                                    defaultValue={
+                                      editknowledgebase.retrieval_config
+                                        .rerank_model
+                                    }
+                                  >
+                                    <SelectGroup>
+                                      <SelectItem value="none">
+                                        NO RERANK
+                                      </SelectItem>
+                                      <SelectItem value="BAAI/bge-reranker-base">
+                                        BAAI/bge-reranker-base
+                                      </SelectItem>
+                                      <SelectItem value="BAAI/bge-reranker-large">
+                                        BAAI/bge-reranker-large
+                                      </SelectItem>
+                                      <SelectItem value="qwen3">
+                                        qwen3
+                                      </SelectItem>
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="col-span-1 text-sm text-muted-foreground">
+                                <p className="pt-2 pl-6">
+                                  推荐值： BAAI/bge-reranker-base
                                 </p>
                               </div>
                             </div>
