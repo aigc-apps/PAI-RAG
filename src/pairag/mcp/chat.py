@@ -74,6 +74,10 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                     logger.info("Stop early due to errors.")
                     break
                 last_chunk = chunk
+                if stop_flag:
+                    logger.info("Stop early as stop_flag=True.")
+                    continue
+
                 for choice in chunk.choices:
                     # 调用工具,收集工具参数
                     if choice.delta.tool_calls:
@@ -119,12 +123,13 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                                 args = {}
                             try:
                                 async_fn = tool_name_map[tool_call["name"]]
+                                # 返回工具调用（标记9和a）
+                                yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
                                 result = await call_tool_with_retry(async_fn, args)
 
                                 tool_result = result.content
 
-                                # 返回工具调用和结果（标记9和a）
-                                yield f'9:{json.dumps({"toolCallId": tool_call["id"], "toolName": tool_call["name"], "args": args}, ensure_ascii=False)}\n'
+                                # 返回工具结果（标记9和a）
                                 if tool_call["name"] in [
                                     "search-web",
                                     "think-and-planning",
@@ -175,11 +180,17 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                             except Exception as e:
                                 # 情况3: 其他错误
                                 logger.exception("工具调用异常")
+                                err = e
+                                if hasattr(e, "last_attempt") and hasattr(
+                                    e.last_attempt, "_exception"
+                                ):
+                                    err = e.last_attempt._exception
+
+                                yield f'0:"### ERROR\\n{err}"\n'
                                 yield 'd:{"finishReason":"error", "error": "%s"}\n' % str(
                                     e
                                 )
                                 stop_flag = True
-                                break
 
                     # 2.自然停止输出or因生成长度过长而结束
                     elif (
@@ -187,8 +198,10 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                         or choice.finish_reason == "length"
                     ):
                         stop_flag = True
-                        yield 'd:{"finishReason":"{choice.finish_reason}"}\n'
-                        break
+                        yield 'd:{{"finishReason":"{reason}"}}\n'.format(
+                            reason=choice.finish_reason
+                        )
+
             # 在include_usage为true时，最后一个chunk为空，本次chat请求使用的Token信息在最后一个chunk显示。
             if last_chunk and last_chunk.choices == []:
                 usage = last_chunk.usage
@@ -196,7 +209,7 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
                 completion_tokens = usage.completion_tokens
 
                 yield 'd:{{"finishReason":"{reason}","usage":{{"promptTokens":{prompt},"completionTokens":{completion}}}}}\n'.format(
-                    reason="tool-calls" if len(draft_tool_calls) > 0 else "stop",
+                    reason="stop",
                     prompt=prompt_tokens,
                     completion=completion_tokens,
                 )
