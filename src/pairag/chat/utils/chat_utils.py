@@ -1,5 +1,4 @@
 from enum import Enum
-from uuid import uuid4
 
 import asyncio
 import time
@@ -28,10 +27,11 @@ import json
 from loguru import logger
 
 from pairag.integrations.query_transform.intent_models import ChatIntentType
+from asgi_correlation_id import correlation_id
 
 
 def chat_id_generator() -> str:
-    return uuid4().hex
+    return correlation_id.get()
 
 
 def parse_citations_from_source_nodes(
@@ -137,7 +137,10 @@ def make_completion_response(
     else:
         token_usage = get_token_usage(chat_response)
 
-    if response_wrapper.intent_result is not None:
+    if (
+        response_wrapper.intent_result is not None
+        and response_wrapper.intent_result.intent != ChatIntentType.CHAT_NEWS
+    ):
         chat_response.additional_kwargs[
             "intent"
         ] = response_wrapper.intent_result.intent

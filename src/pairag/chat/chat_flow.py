@@ -496,9 +496,16 @@ class ChatFlow:
         logger.info(f"achat_llm_atomic: {chat_request}")
         chat_id = chat_id_generator()
 
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
         llm = resolve_chat_llm(self.config, model_id=chat_request.model)
         llm_kwargs = self._get_llm_kwargs(chat_request)
-        response = await llm.achat(chat_request.messages, **llm_kwargs)
+        response = await llm.achat(messages, **llm_kwargs)
         response_wrapper = ChatResponseWrapper(response=response)
         return make_completion_response(
             chat_id=chat_id,
@@ -545,9 +552,16 @@ class ChatFlow:
         start_time = time.time()
         chat_id = chat_id_generator()
 
+        _, messages = parse_system_prompt(chat_request.messages)
+        messages = parse_messages(messages)
+        if message_is_empty(messages):
+            if chat_request.stream:
+                return response_gen_from_text(DEFAULT_EMPTY_RESPONSE)
+            return response_from_text(DEFAULT_EMPTY_RESPONSE)
+
         llm = resolve_chat_llm(self.config, model_id=chat_request.model)
         llm_kwargs = self._get_llm_kwargs(chat_request)
-        response = await llm.astream_chat(chat_request.messages, **llm_kwargs)
+        response = await llm.astream_chat(messages, **llm_kwargs)
         response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
 

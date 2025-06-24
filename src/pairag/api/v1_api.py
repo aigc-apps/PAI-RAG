@@ -22,21 +22,21 @@ from pairag.integrations.data_analysis.text2sql.utils.constants import (
 from pairag.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from pairag.file.store.oss_store import PaiOssStore
 
-router_v1 = APIRouter()
+v1_router = APIRouter()
 
 
-@router_v1.patch("/config")
+@v1_router.patch("/config")
 async def aupdate(new_config: Any = Body(None)):
     chat_service.reload(new_config)
     return {"msg": "Update RAG configuration successfully."}
 
 
-@router_v1.get("/config")
+@v1_router.get("/config")
 async def aconfig():
     return chat_service.get_config()
 
 
-@router_v1.get("/indexes/{index_name}")
+@v1_router.get("/indexes/{index_name}")
 async def get_index(index_name: str):
     try:
         return knowledgebase_manager.get_knowledgebase(name=index_name)
@@ -45,7 +45,7 @@ async def get_index(index_name: str):
         raise UserInputError(f"Get index '{index_name}' failed: {ex}")
 
 
-@router_v1.post("/indexes/{index_name}")
+@v1_router.post("/indexes/{index_name}")
 async def add_index(index_name: str, index_entry: KnowledgeBase):
     try:
         knowledgebase_manager.add_knowledgebase(index_entry)
@@ -55,7 +55,7 @@ async def add_index(index_name: str, index_entry: KnowledgeBase):
         raise UserInputError(f"Add index '{index_name}' failed: {ex}")
 
 
-@router_v1.patch("/indexes/{index_name}")
+@v1_router.patch("/indexes/{index_name}")
 async def update_index(index_name: str, index_entry: KnowledgeBase):
     try:
         knowledgebase_manager.update_knowledgebase(index_entry)
@@ -67,7 +67,7 @@ async def update_index(index_name: str, index_entry: KnowledgeBase):
         raise UserInputError(f"Update index '{index_name}' failed: {ex}")
 
 
-@router_v1.delete("/indexes/{index_name}")
+@v1_router.delete("/indexes/{index_name}")
 async def delete_index(index_name: str):
     try:
         knowledgebase_manager.delete_knowledgebase(index_name)
@@ -79,7 +79,7 @@ async def delete_index(index_name: str):
         raise UserInputError(f"Delete index '{index_name}' failed: {ex}")
 
 
-@router_v1.get("/indexes")
+@v1_router.get("/indexes")
 async def list_indexes():
     return knowledgebase_manager.list_knowledgebases()
 
@@ -87,7 +87,7 @@ async def list_indexes():
 # New knowledgebase API
 
 
-@router_v1.get("/knowledgebases/{name}")
+@v1_router.get("/knowledgebases/{name}")
 async def get_knowledgebase(name: str):
     """查询指定知识库信息"""
     try:
@@ -99,7 +99,7 @@ async def get_knowledgebase(name: str):
         raise UserInputError(f"Get knowledgebase '{name}' failed: {ex}")
 
 
-@router_v1.post("/knowledgebases/{name}")
+@v1_router.post("/knowledgebases/{name}")
 async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
     """新增知识库"""
     try:
@@ -112,7 +112,7 @@ async def add_knowledgebase(name: str, knowledgebase: KnowledgeBase):
         raise UserInputError(f"Add knowledgebase '{name}' failed: {ex}")
 
 
-@router_v1.patch("/knowledgebases/{name}")
+@v1_router.patch("/knowledgebases/{name}")
 async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
     """更新指定知识库"""
     try:
@@ -125,7 +125,7 @@ async def update_knowledgebase(name: str, knowledgebase: KnowledgeBase):
         raise UserInputError(f"Update knowledgebase '{name}' failed: {ex}")
 
 
-@router_v1.delete("/knowledgebases/{name}")
+@v1_router.delete("/knowledgebases/{name}")
 async def delete_knowledgebase(name: str):
     """删除指定知识库"""
     try:
@@ -138,25 +138,25 @@ async def delete_knowledgebase(name: str):
         raise UserInputError(f"Delete knowledgebase '{name}' failed: {ex}")
 
 
-@router_v1.get("/knowledgebases")
+@v1_router.get("/knowledgebases")
 async def list_knowledgebases():
     """知识库列表"""
     return knowledgebase_manager.list_knowledgebases()
 
 
-@router_v1.get("/knowledgebases/{name}/files")
+@v1_router.get("/knowledgebases/{name}/files")
 async def list_knowledgebase_files(name: str):
     """指定知识库查询文件列表"""
     return knowledgebase_manager.get_docs_from_knowledgebase(name)
 
 
-@router_v1.get("/knowledgebases/{name}/history")
+@v1_router.get("/knowledgebases/{name}/history")
 async def get_upload_history(name: str):
     """新知识库查询上传历史"""
     return job_manager.get_job_history(name)
 
 
-@router_v1.post("/knowledgebases/{name}/files")
+@v1_router.post("/knowledgebases/{name}/files")
 async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(...)):
     """新知识库上传文件"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
@@ -184,7 +184,7 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(..
     return {"message": "Files have been successfully uploaded."}
 
 
-@router_v1.post("/knowledgebases/{name}/oss_files")
+@v1_router.post("/knowledgebases/{name}/oss_files")
 async def add_oss_file_to_knowledgebase(
     name: str,
     files: List[str] = Form(...),
@@ -234,7 +234,7 @@ async def add_oss_file_to_knowledgebase(
     return {"message": "Oss files have been successfully uploaded."}
 
 
-@router_v1.get("/knowledgebases/{name}/files/{file_name}")
+@v1_router.get("/knowledgebases/{name}/files/{file_name}")
 async def get_file_from_knowledgebase(name: str, file_name: str):
     """新知识库查询文件上传状态"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
@@ -246,7 +246,7 @@ async def get_file_from_knowledgebase(name: str, file_name: str):
     return job_manager.get_file_upload_status(name, file_name)
 
 
-@router_v1.delete("/knowledgebases/{name}/files/{file_name}")
+@v1_router.delete("/knowledgebases/{name}/files/{file_name}")
 async def delete_file_from_knowledgebase(name: str, file_name: str):
     """新知识库删除文件"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
@@ -274,13 +274,13 @@ async def delete_file_from_knowledgebase(name: str, file_name: str):
         raise ServiceError(f"Error deleting file '{file_name}': {str(e)}")
 
 
-@router_v1.post("/retrieval")
+@v1_router.post("/retrieval")
 async def aknowledgebase_retrieval(retrieval_request: RetrievalRequest):
     response = await chat_service.aknowledgebase_retrieval(retrieval_request)
     return response
 
 
-@router_v1.post("/upload_datasheet")
+@v1_router.post("/upload_datasheet")
 async def upload_datasheet(
     file: UploadFile,
 ):
@@ -328,7 +328,7 @@ async def upload_datasheet(
     }
 
 
-@router_v1.post("/upload_db_history")
+@v1_router.post("/upload_db_history")
 async def upload_history_json(
     file: UploadFile,
     db_name: str = Form(None),
@@ -379,7 +379,7 @@ async def upload_history_json(
     }
 
 
-@router_v1.post("/upload_db_description")
+@v1_router.post("/upload_db_description")
 async def upload_description(
     files: List[UploadFile] = Body(None),
     db_name: str = Form(None),
@@ -416,13 +416,13 @@ async def upload_description(
     }
 
 
-@router_v1.post("/query/load_db_info")
+@v1_router.post("/query/load_db_info")
 async def aload_db_info():
     task_id = uuid.uuid4().hex
     await chat_service.aload_db_info()
     return {"task_id": task_id}
 
 
-@router_v1.get("/health")
+@v1_router.get("/health")
 def health_check():
     return {"status": "OK"}
