@@ -52,10 +52,12 @@ class KnowledgebaseEntity(SQLModel, table=True):
     description: str = Field(default=None)
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
     )
 
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL)

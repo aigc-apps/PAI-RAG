@@ -33,6 +33,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 
+interface EmbeddingModel {
+  id: string;
+  model_id: string;
+  model_name: string;
+  type: string;
+}
 export default function KnowledgeBaseCreatePage({
   setActiveTab,
 }: {
@@ -60,11 +66,30 @@ export default function KnowledgeBaseCreatePage({
   });
 
   const [indexType, setIndexType] = useState("vector");
+  const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [modelloading, setModelLoading] = useState(true); // 加载状态
+  const [modelerror, setModelError] = useState(""); // 错误信息
+  useEffect(() => {
+    const fetchModelConfigs = async () => {
+      try {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const [embRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/embeddings`),
+        ]);
 
+        const embData = (await embRes.json())?.data || [];
+        console.log("embData", embData);
+        setEmbeddingModels([...embData]);
+      } catch (err: any) {
+        setModelError(err || "加载失败");
+      } finally {
+        setModelLoading(false);
+      }
+    };
+    fetchModelConfigs();
+  }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 模拟创建知识库请求
-    console.log("创建知识库:", formData);
     console.log("创建知识库:", JSON.stringify(formData));
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const res = await fetch(
@@ -78,28 +103,6 @@ export default function KnowledgeBaseCreatePage({
 
     if (!res.ok) throw new Error("添加 知识库 失败");
     setActiveTab(`/knowledgebase/details/${formData.name}`);
-    // const formData = {
-    //     "kb_name": "pairag_QA_v1",
-    //     "kb_description": "eqwewq",
-    //     "chunk_config": {
-    //         "parser_type": "Sentence",
-    //         "separator": "\\n\\n",
-    //         "chunk_size": "512",
-    //         "chunk_overlap": "50"
-    //     },
-    //     "embedding_config": {
-    //         "model_name": "bge-m3"
-    //     },
-    //     "retrieval_config": {
-    //         "index_type": "hybrid",
-    //         "top_k": "5",
-    //         "similarity_threshold": "0.8",
-    //         "enable_rerank": true,
-    //         "vector_weight": "0.5"
-    //     }
-    // }
-    // 实际应调用 API: POST /v1/knowledgebase/create
-    // params: formData
   };
 
   return (
@@ -192,18 +195,26 @@ export default function KnowledgeBaseCreatePage({
                 <h3 className="text-lg font-semibold pb-2">文档切片配置</h3>
                 <div className="grid grid-cols-4 gap-8">
                   <div className="space-y-2">
-                    <Label htmlFor="parserType">
+                    <Label>
                       切片类型 (parser_type){" "}
                       <span className="text-destructive">*</span>
                     </Label>
-                    <Select>
+                    <Select
+                      defaultValue={formData.chunk_config.parser_type}
+                      onValueChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          chunk_config: {
+                            ...formData.chunk_config,
+                            parser_type: value,
+                          },
+                        });
+                      }}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="请选择切片类型" />
                       </SelectTrigger>
-                      <SelectContent
-                        id="parserType"
-                        defaultValue={formData.chunk_config.parser_type}
-                      >
+                      <SelectContent>
                         <SelectGroup>
                           <SelectItem value="Token">Token</SelectItem>
                           <SelectItem value="Sentence">Sentence</SelectItem>
@@ -301,27 +312,28 @@ export default function KnowledgeBaseCreatePage({
                     <span className="text-destructive">*</span>
                   </Label>
                   <div className="col-span-2">
-                    <Select>
+                    <Select
+                      defaultValue={formData.embedding_model}
+                      onValueChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          embedding_model: value,
+                        });
+                      }}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="请选择向量类型" />
                       </SelectTrigger>
-                      <SelectContent
-                        id="embeddingModel"
-                        defaultValue={formData.embedding_model}
-                      >
+                      <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="bge-m3">bge-m3</SelectItem>
-                          <SelectItem value="text-embedding-v1">
-                            text-embedding-v1
-                          </SelectItem>
-                          <SelectItem value="qwen3">qwen3</SelectItem>
+                          {embeddingmodels.map((model) => (
+                            <SelectItem key={model.id} value={model.model_name}>
+                              {model.model_name}
+                            </SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div className="col-span-1 text-sm text-muted-foreground">
-                    <p className="pt-2 pl-6">推荐值：bge-m3</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-6 space-y-2">
@@ -439,16 +451,24 @@ export default function KnowledgeBaseCreatePage({
                               <span className="text-destructive">*</span>
                             </Label>
                             <div className="col-span-2">
-                              <Select>
+                              <Select
+                                defaultValue={
+                                  formData.retrieval_config.rerank_model
+                                }
+                                onValueChange={(value) => {
+                                  setFormData({
+                                    ...formData,
+                                    retrieval_config: {
+                                      ...formData.retrieval_config,
+                                      rerank_model: value,
+                                    },
+                                  });
+                                }}
+                              >
                                 <SelectTrigger className="w-full">
                                   <SelectValue placeholder="请选择重排序模型" />
                                 </SelectTrigger>
-                                <SelectContent
-                                  id="rerankModel"
-                                  defaultValue={
-                                    formData.retrieval_config.rerank_model
-                                  }
-                                >
+                                <SelectContent>
                                   <SelectGroup>
                                     <SelectItem value="none">
                                       NO RERANK
@@ -538,16 +558,24 @@ export default function KnowledgeBaseCreatePage({
                             <span className="text-destructive">*</span>
                           </Label>
                           <div className="col-span-2">
-                            <Select>
+                            <Select
+                              defaultValue={
+                                formData.retrieval_config.rerank_model
+                              }
+                              onValueChange={(value) => {
+                                setFormData({
+                                  ...formData,
+                                  retrieval_config: {
+                                    ...formData.retrieval_config,
+                                    rerank_model: value,
+                                  },
+                                });
+                              }}
+                            >
                               <SelectTrigger className="w-full">
                                 <SelectValue placeholder="请选择重排序模型" />
                               </SelectTrigger>
-                              <SelectContent
-                                id="rerankModel"
-                                defaultValue={
-                                  formData.retrieval_config.rerank_model
-                                }
-                              >
+                              <SelectContent>
                                 <SelectGroup>
                                   <SelectItem value="none">
                                     NO RERANK
@@ -668,16 +696,24 @@ export default function KnowledgeBaseCreatePage({
                             <span className="text-destructive">*</span>
                           </Label>
                           <div className="col-span-2">
-                            <Select>
+                            <Select
+                              defaultValue={
+                                formData.retrieval_config.rerank_model
+                              }
+                              onValueChange={(value) => {
+                                setFormData({
+                                  ...formData,
+                                  retrieval_config: {
+                                    ...formData.retrieval_config,
+                                    rerank_model: value,
+                                  },
+                                });
+                              }}
+                            >
                               <SelectTrigger className="w-full">
                                 <SelectValue placeholder="请选择重排序模型" />
                               </SelectTrigger>
-                              <SelectContent
-                                id="rerankModel"
-                                defaultValue={
-                                  formData.retrieval_config.rerank_model
-                                }
-                              >
+                              <SelectContent>
                                 <SelectGroup>
                                   <SelectItem value="none">
                                     NO RERANK

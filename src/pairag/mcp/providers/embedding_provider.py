@@ -72,7 +72,7 @@ class EmbeddingProvider:
             self.embedding_models_map,
         ) = await fetch_embedding_models()
         logger.info(
-            f"[EmbeddingProvider]refreshed {len(self.embedding_models_map)} llm models."
+            f"[EmbeddingProvider]refreshed {len(self.embedding_models_map)} embedding models."
         )
 
     def get_embedding_config(self, model_name: str) -> EmbeddingModelEntity:

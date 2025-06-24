@@ -39,10 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 import { ScanSearch, TextSearch, SearchCode } from "lucide-react";
+import * as Toast from "@radix-ui/react-toast";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -76,6 +76,12 @@ interface KnowledgeBase {
   files?: KnowledgeBaseFile[];
 }
 
+interface EmbeddingModel {
+  id: string;
+  model_id: string;
+  model_name: string;
+  type: string;
+}
 export default function KnowledgeBaseDetailPage({
   knowledgebase_id,
   setActiveTab,
@@ -86,17 +92,16 @@ export default function KnowledgeBaseDetailPage({
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库列表
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
+  const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [modelloading, setModelLoading] = useState(true); // 加载状态
+  const [modelerror, setModelError] = useState(""); // 错误信息
   const [editknowledgebase, setEditKnowledgeBase] = useState<KnowledgeBase>(); // 编辑的知识库
-  // const updateNestedObject = (obj: Record<string, any>, path: string, value: any) => {
-  //   const keys = path.split(".");
-  //   const lastKey = keys.pop()!;
-  //   const lastObj = keys.reduce((acc, key) => {
-  //     acc[key] = { ...acc[key] };
-  //     return acc;
-  //   }, { ...obj });
-  //   lastObj[lastKey] = value;
-  //   return lastObj;
-  // };
+  const [toastState, setToastState] = useState({
+    open: false,
+    title: "",
+    description: "",
+    variant: "default" as "default" | "destructive",
+  });
   // 递归更新嵌套对象
   const updateNestedObject = (
     obj: Record<string, any>,
@@ -119,6 +124,25 @@ export default function KnowledgeBaseDetailPage({
     };
   };
 
+  useEffect(() => {
+    const fetchModelConfigs = async () => {
+      try {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const [embRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/embeddings`),
+        ]);
+
+        const embData = (await embRes.json())?.data || [];
+        console.log("embData", embData);
+        setEmbeddingModels([...embData]);
+      } catch (err: any) {
+        setModelError(err || "加载失败");
+      } finally {
+        setModelLoading(false);
+      }
+    };
+    fetchModelConfigs();
+  }, []);
   const handleEditInputChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
@@ -149,23 +173,10 @@ export default function KnowledgeBaseDetailPage({
       console.log("当前编辑的知识库状态:", editknowledgebase);
     };
 
-  const handleEditInputChangeCheckbox = (isChecked: boolean, id: string) => {
-    setEditKnowledgeBase((prev) => {
-      if (!prev) return prev;
-      const path = id.split(".");
-      return {
-        ...prev,
-        ...updateNestedObject(prev, path, isChecked),
-      };
-    });
-    console.log("当前编辑的知识库状态:", editknowledgebase);
-  };
-
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        // // 模拟 API 请求：/v1/knowledgebases
         const res = await fetch(
           `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}`,
         );
@@ -173,6 +184,7 @@ export default function KnowledgeBaseDetailPage({
         const json_data = await res.json();
         const kb_data = json_data.data;
 
+        // TODO：获取每个知识库的文件列表
         // // 并行获取每个知识库的文件列表
         // const knowledgeBasesWithFiles = await Promise.all(
         //   data.map(async (kb) => {
@@ -195,6 +207,7 @@ export default function KnowledgeBaseDetailPage({
         // ]
 
         setKnowledgeBase(kb_data); // 更新状态
+        console.log("知识库详情数据:", kb_data);
         setEditKnowledgeBase(kb_data || undefined); // 设置编辑的知识库
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
@@ -209,32 +222,35 @@ export default function KnowledgeBaseDetailPage({
     return <div className="p-6">加载中...</div>;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 模拟创建知识库请求
-    console.log("创建知识库:", editknowledgebase);
-    // const editknowledgebase = {
-    //     "kb_name": "pairag_QA_v1",
-    //     "kb_description": "eqwewq",
-    //     "chunk_config": {
-    //         "parser_type": "Sentence",
-    //         "separator": "\\n\\n",
-    //         "chunk_size": "512",
-    //         "chunk_overlap": "50"
-    //     },
-    //     "embedding_config": {
-    //         "model_name": "bge-m3"
-    //     },
-    //     "retrieval_config": {
-    //         "index_type": "hybrid",
-    //         "top_k": "5",
-    //         "similarity_threshold": "0.8",
-    //         "enable_rerank": true,
-    //         "vector_weight": "0.5"
-    //     }
-    // }
-    // 实际应调用 API: POST /v1/knowledgebase/update/{knowledgebase_id}
-    // params: editknowledgebase
+    console.log("更新知识库:", editknowledgebase);
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editknowledgebase), // 包装为数组
+        },
+      );
+      if (!res.ok) throw new Error(`修改 ${knowledgebase_id} 配置失败`);
+      setToastState({
+        open: true,
+        title: `知识库${knowledgebase_id} 配置已修改`,
+        description: "修改的模型配置已成功保存",
+        variant: "default",
+      });
+      console.log(`update ${knowledgebase_id}`, editknowledgebase);
+    } catch (err: any) {
+      setToastState({
+        open: true,
+        title: "知识库配置修改失败",
+        description: err.message || "请检查网络或重试",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -511,20 +527,17 @@ export default function KnowledgeBaseDetailPage({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="BAAI/bge-m3">
-                              BAAI/bge-m3
-                            </SelectItem>
-                            <SelectItem value="text-embedding-v1">
-                              text-embedding-v1
-                            </SelectItem>
-                            <SelectItem value="qwen3">qwen3</SelectItem>
+                            {embeddingmodels.map((model) => (
+                              <SelectItem
+                                key={model.id}
+                                value={model.model_name}
+                              >
+                                {model.model_name}
+                              </SelectItem>
+                            ))}
                           </SelectGroup>
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    <div className="col-span-1 text-sm text-muted-foreground">
-                      <p className="pt-2 pl-6">推荐值：BAAI/bge-m3</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-6 space-y-2">
@@ -623,17 +636,19 @@ export default function KnowledgeBaseDetailPage({
                               <span className="text-destructive">*</span>
                             </Label>
                             <div className="col-span-2">
-                              <Select>
+                              <Select
+                                defaultValue={
+                                  editknowledgebase.retrieval_config
+                                    .rerank_model
+                                }
+                                onValueChange={handleEditFieldChange(
+                                  "retrieval_config.rerank_model",
+                                )}
+                              >
                                 <SelectTrigger className="w-full">
                                   <SelectValue placeholder="请选择重排序模型" />
                                 </SelectTrigger>
-                                <SelectContent
-                                  id="rerankModel"
-                                  defaultValue={
-                                    editknowledgebase.retrieval_config
-                                      .rerank_model
-                                  }
-                                >
+                                <SelectContent>
                                   <SelectGroup>
                                     <SelectItem value="none">
                                       NO RERANK
@@ -711,17 +726,19 @@ export default function KnowledgeBaseDetailPage({
                                 <span className="text-destructive">*</span>
                               </Label>
                               <div className="col-span-2">
-                                <Select>
+                                <Select
+                                  defaultValue={
+                                    editknowledgebase.retrieval_config
+                                      .rerank_model
+                                  }
+                                  onValueChange={handleEditFieldChange(
+                                    "retrieval_config.rerank_model",
+                                  )}
+                                >
                                   <SelectTrigger className="w-full">
                                     <SelectValue placeholder="请选择重排序模型" />
                                   </SelectTrigger>
-                                  <SelectContent
-                                    id="rerankModel"
-                                    defaultValue={
-                                      editknowledgebase.retrieval_config
-                                        .rerank_model
-                                    }
-                                  >
+                                  <SelectContent>
                                     <SelectGroup>
                                       <SelectItem value="none">
                                         NO RERANK
@@ -834,17 +851,19 @@ export default function KnowledgeBaseDetailPage({
                                 <span className="text-destructive">*</span>
                               </Label>
                               <div className="col-span-2">
-                                <Select>
+                                <Select
+                                  defaultValue={
+                                    editknowledgebase.retrieval_config
+                                      .rerank_model
+                                  }
+                                  onValueChange={handleEditFieldChange(
+                                    "retrieval_config.rerank_model",
+                                  )}
+                                >
                                   <SelectTrigger className="w-full">
                                     <SelectValue placeholder="请选择重排序模型" />
                                   </SelectTrigger>
-                                  <SelectContent
-                                    id="rerankModel"
-                                    defaultValue={
-                                      editknowledgebase.retrieval_config
-                                        .rerank_model
-                                    }
-                                  >
+                                  <SelectContent>
                                     <SelectGroup>
                                       <SelectItem value="none">
                                         NO RERANK
@@ -877,11 +896,6 @@ export default function KnowledgeBaseDetailPage({
                 </div>
               </CardContent>
               <CardFooter className="flex justify-center space-x-6">
-                {/* <Button
-                  className="px-6 py-3 bg-secondary text-secondary-foreground rounded-md text-sm font-medium hover:bg-secondary/90"
-                >
-                  取消
-                </Button> */}
                 <Button
                   type="submit"
                   className="px-10 py-3 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
@@ -893,6 +907,28 @@ export default function KnowledgeBaseDetailPage({
             </Card>
           </TabsContent>
         </Tabs>
+        <Toast.Root
+          open={toastState.open}
+          onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
+          className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
+            toastState.variant === "destructive"
+              ? "border-red-500 bg-red-50 text-red-900"
+              : "border-gray-200 bg-white text-gray-900"
+          }`}
+        >
+          <Toast.Description className="pl-4 text-sm font-medium">
+            {toastState.description}
+          </Toast.Description>
+          <Toast.Action
+            altText="关闭"
+            onClick={() => setToastState((prev) => ({ ...prev, open: false }))}
+          >
+            ×
+          </Toast.Action>
+        </Toast.Root>
+
+        {/* 触发 Toast 的隐藏容器 */}
+        <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
       </div>
     </div>
   );

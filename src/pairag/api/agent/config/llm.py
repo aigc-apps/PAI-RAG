@@ -118,8 +118,7 @@ async def update_llm(
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
-
-    logger.info(f"Updating LLM {llm_id} to {update_llm}.")
+    logger.info(f"update_llm {update_llm}.")
     llm.base_url = update_llm.base_url or llm.base_url
     llm.context_window = update_llm.context_window or llm.context_window
     llm.model = update_llm.model or llm.model
@@ -127,7 +126,9 @@ async def update_llm(
     llm.encrypted_api_key = (
         encrypt_key(update_llm.api_key) if update_llm.api_key else llm.encrypted_api_key
     )
+    llm.enabled = update_llm.enabled
 
+    logger.info(f"Updating LLM {llm_id} to {llm}.")
     session.add(llm)
     await session.commit()
     await session.refresh(llm)
