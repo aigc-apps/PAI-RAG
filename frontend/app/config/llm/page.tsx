@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import * as Toast from "@radix-ui/react-toast";
 import { Switch } from "@/components/ui/switch";
 import { v4 as uuidv4 } from "uuid";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
   const maskApiKey = (
@@ -58,7 +59,7 @@ export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
   );
 };
 
-class LLMConfig {
+interface LlmConfig {
   id: string;
   model_id: string;
   source: string;
@@ -66,33 +67,35 @@ class LLMConfig {
   api_key: string;
   base_url: string;
   max_context: number;
-  enabled: boolean = true;
-
-  constructor(
-    id: string,
-    model_id: string,
-    source: string,
-    model: string,
-    api_key: string,
-    base_url: string,
-    max_context: number,
-    enabled: boolean,
-  ) {
-    this.id = id;
-    this.model_id = model_id;
-    this.source = source;
-    this.model = model;
-    this.api_key = api_key;
-    this.base_url = base_url;
-    this.max_context = max_context;
-    this.enabled = enabled;
-  }
+  enabled: boolean;
 }
 
-export default function LlmConfig() {
+interface EmbConfig {
+  id: string;
+  model_id: string;
+  model_name: string;
+  type: string;
+  api_key: string;
+  endpoint: string;
+  dimension: number;
+  embed_batch_size: number;
+}
+
+// 联合类型
+type ModelConfig = LlmConfig | EmbConfig;
+
+const isLlmConfig = (config: ModelConfig | null): config is LlmConfig => {
+  return config !== null && "base_url" in config;
+};
+
+const isEmbConfig = (config: ModelConfig | null): config is EmbConfig => {
+  return config !== null && "endpoint" in config;
+};
+
+export default function ModelConfigPage() {
   const [isOpen, setIsOpen] = useState(false); // 控制 AddLlmDialog 显示
   const [isEditOpen, setIsEditOpen] = useState(false); // 控制 EditLlmDialog 显示
-  const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null);
+  const [editingConfig, setEditingConfig] = useState<ModelConfig | null>(null); // 当前编辑的配置
   const [isLoading, setIsLoading] = useState(false); // 加载 AddLlmDialog 状态
   const [isEditLoading, setIsEditLoading] = useState(false); // 加载 EditLlmDialog 状态
   const [error, setError] = useState(""); // 错误信息
@@ -107,54 +110,46 @@ export default function LlmConfig() {
     id: uuidv4(),
     model: "qwen-max",
     model_id: "qwen-max",
+    source: "",
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key: "sk-xxxxxx",
     enabled: true,
+    dimension: 1024, // 默认向量维度
+    embed_batch_size: 10, // 默认向量Batch大小
   });
 
-  const [editFormData, setEditFormData] = useState({
-    id: uuidv4(),
-    model_id: "qwen-max",
-    model: "qwen-max",
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    api_key: "sk-xxxxxx",
-    enabled: true,
-  });
+  const [modelconfigs, setModelConfigs] = useState<ModelConfig[]>([]); // 存储 LLM 配置
+  const [modelloading, setModelLoading] = useState(true); // 加载状态
+  const [modelerror, setModelError] = useState(""); // 错误信息
 
-  const [llmconfigs, setLlmConfigs] = useState(
-    Array<{
-      id: string;
-      source: string;
-      model: string;
-      model_id: string;
-      api_key: string;
-      base_url: string;
-      max_context: number;
-      enabled: boolean;
-    }>,
-  ); // 存储 LLM 配置
-  const [llmloading, setLlmLoading] = useState(true); // 加载状态
-  const [llmerror, setLlmError] = useState(""); // 错误信息
+  const [selectedModelType, setSelectedModelType] = useState("llm"); // 默认值为 "llm"
+  const [selectedEmbeddingModelType, setSelectedEmbeddingModelType] =
+    useState("local"); // 默认值为 "local"
 
   useEffect(() => {
-    const fetchConfigs = async () => {
+    const fetchModelConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        const res = await fetch(`http://localhost:${port}/v1/config/llms`);
-        if (!res.ok) throw new Error("获取配置失败");
-        const data = await res.json();
-        setLlmConfigs(data || []); // 更新状态
+        const [llmRes, embRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/llms`),
+          fetch(`http://localhost:${port}/v1/config/embeddings`),
+        ]);
+
+        const llmData = await llmRes.json();
+        const embData = (await embRes.json())?.data || [];
+        console.log("llmData", llmData);
+        console.log("embData", embData);
+        setModelConfigs([...llmData, ...embData]); // 合并
       } catch (err: any) {
-        setLlmError(err || "加载失败");
+        setModelError(err || "加载失败");
       } finally {
-        setLlmLoading(false);
+        setModelLoading(false);
       }
     };
-
-    fetchConfigs();
+    fetchModelConfigs();
   }, []);
 
-  const handleEditClick = (config: LLMConfig) => {
+  const handleEditClick = (config: ModelConfig) => {
     console.log("handleEditClick", config);
     setEditingConfig({ ...config }); // 深拷贝当前配置
     setIsEditOpen(true);
@@ -163,46 +158,66 @@ export default function LlmConfig() {
     const { id, value } = e.target;
     setAddFormData((prev) => ({ ...prev, [id]: value }));
   };
-
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target;
-    console.log("formData:", id, value);
-    const key = id.replace(/^edit_/, "");
-    setEditFormData((prev) => ({ ...prev, [key]: value }));
-    console.log("更新后的 formData:", { ...editFormData, [key]: value });
-    setEditingConfig((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        [key]: value,
-      };
-    });
-  };
-
-  const addLLM = async () => {
+  const addModel = async () => {
     try {
-      const newLLM = {
+      const newModel = {
         ...addFormData,
-        max_context: 0,
-        id: uuidv4(),
       };
-
+      console.log("newModel:", newModel);
+      console.log("selectModelType:", selectedModelType);
+      console.log("selectEmbeddingModelType:", selectedEmbeddingModelType);
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/llms`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newLLM), // 包装为数组
-      });
 
-      if (!res.ok) throw new Error("添加 LLM 配置失败");
+      if (selectedModelType === "llm") {
+        const newLlmModel: LlmConfig = {
+          id: uuidv4(),
+          base_url: newModel.base_url,
+          model: newModel.model,
+          model_id: newModel.model_id,
+          enabled: newModel.enabled,
+          api_key: newModel.api_key,
+          source: newModel.source,
+          max_context: 0,
+        };
+        console.log("newLlmModel:", newLlmModel);
+        const res = await fetch(`http://localhost:${port}/v1/config/llms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newLlmModel), // 包装为数组
+        });
+        if (!res.ok) throw new Error("添加 LLM 模型配置失败");
+        setModelConfigs((prev) => [...prev, newLlmModel]); // 追加新 LLM 配置
+      } else {
+        const newEmbModel: EmbConfig = {
+          id: uuidv4(),
+          model_name: newModel.model,
+          dimension: newModel.dimension,
+          endpoint: newModel.base_url,
+          type: selectedEmbeddingModelType,
+          api_key: newModel.api_key,
+          embed_batch_size: newModel.embed_batch_size,
+          model_id: newModel.model_id,
+        };
+        console.log("newEmbModel:", newEmbModel);
+        const res = await fetch(
+          `http://localhost:${port}/v1/config/embeddings`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newEmbModel), // 包装为数组
+          },
+        );
+        if (!res.ok) throw new Error("添加 Embedding 模型配置失败");
+        setModelConfigs((prev) => [...prev, newEmbModel]); // 追加新 Embedding 配置
+      }
+
       setToastState({
         open: true,
-        title: "LLM 配置已添加",
+        title: "配置已添加",
         description: "新模型配置已成功保存",
         variant: "default",
       });
       setIsOpen(false); // 关闭 AddDialog
-      setLlmConfigs((prev) => [...prev, newLLM]); // 追加新 LLM 配置
     } catch (err: any) {
       setError(err || "添加失败，请重试"); // 显示错误信息
       setToastState({
@@ -216,29 +231,33 @@ export default function LlmConfig() {
     }
   };
 
-  const updatedLLM = async (id: string) => {
+  const updateModel = async (model_type: string) => {
     try {
       if (!editingConfig) return;
 
       if (editingConfig.api_key === "******") editingConfig.api_key = "";
+      console.log("editingConfig", editingConfig);
 
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/llms/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingConfig), // 包装为数组
-      });
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/${model_type}/${editingConfig.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editingConfig), // 包装为数组
+        },
+      );
 
-      if (!res.ok) throw new Error("修改 LLM 配置失败");
+      if (!res.ok) throw new Error(`修改 ${model_type} 配置失败`);
       setToastState({
         open: true,
-        title: "LLM 配置已修改",
+        title: `${model_type} 配置已修改`,
         description: "修改的模型配置已成功保存",
         variant: "default",
       });
       setIsEditOpen(false); // 关闭 EditDialog
-      console.log("updateLLM", editingConfig);
-      setLlmConfigs((prev) =>
+      console.log(`update ${model_type}`, editingConfig);
+      setModelConfigs((prev) =>
         prev.map((config) =>
           config.id === editingConfig.id ? editingConfig : config,
         ),
@@ -255,30 +274,34 @@ export default function LlmConfig() {
       setIsEditLoading(false);
     }
   };
-  const removeLLM = async (id: string) => {
+
+  const removeModel = async (id: string, model_type: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/llms/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/${model_type}/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      });
+      );
 
       if (!res.ok) {
-        throw new Error("删除失败，请检查网络或配置");
+        throw new Error(`${model_type}删除失败，请检查网络或配置`);
       }
 
       // 显示成功提示（可选）
       setToastState({
         open: true,
         title: "删除成功",
-        description: "LLM 配置已移除",
+        description: `${model_type} 配置已移除`,
         variant: "default",
       });
 
       // 删除成功后更新本地状态
-      setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
+      setModelConfigs((prev) => prev.filter((config) => config.id !== id));
     } catch (err: any) {
       // 显示错误提示
       setToastState({
@@ -290,22 +313,24 @@ export default function LlmConfig() {
     }
   };
 
-  const handleActivateToggle = async (config: LLMConfig) => {
+  const handleActivateToggle = async (config: LlmConfig) => {
     console.log("handleActivateToggle", config);
     const updatedConfig = {
       ...config,
       enabled: !config.enabled,
     };
     console.log("updatedConfig", updatedConfig);
-    // 更新本地状态
 
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
-      const res = await fetch(`http://localhost:${port}/api/add_llm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llm_config: updatedConfig }), // 包装为数组
-      });
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/llms/${updatedConfig.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedConfig), // 包装为数组
+        },
+      );
 
       if (!res.ok) throw new Error("更新 LLM 状态失败");
       setToastState({
@@ -315,7 +340,7 @@ export default function LlmConfig() {
         variant: "default",
       });
 
-      setLlmConfigs((prev) =>
+      setModelConfigs((prev) =>
         prev.map((item) => (item.id === config.id ? updatedConfig : item)),
       );
     } catch (err: any) {
@@ -333,46 +358,73 @@ export default function LlmConfig() {
     <div id="llm">
       <div className={`transition-colors rounded-lg overflow-hidden`}>
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          {llmloading ? (
+          {modelloading ? (
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
             </div>
-          ) : error ? (
+          ) : modelerror ? (
             <div className="py-12 text-center text-red-500">
-              <p>{error}</p>
+              <p>{modelerror}</p>
             </div>
-          ) : llmconfigs.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">暂无 LLM</h3>
+          ) : modelconfigs.length === 0 ? (
+            <h3 className="text-lg font-medium text-gray-700 py-6">暂无模型</h3>
           ) : (
             <div className="gap-6 p-4 w-full">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {llmconfigs.map((config) => (
+                {modelconfigs.map((config) => (
                   <div
                     key={config.id}
                     className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <h3 className="font-medium text-gray-800">
-                        {config.model}
-                      </h3>
-                      <span className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">
-                        {config.source}
-                      </span>
+                      {isLlmConfig(config) ? (
+                        <div>
+                          <h3 className="font-medium text-gray-800">
+                            {config.model}
+                          </h3>
+                          <span className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">
+                            LLM
+                          </span>
+                          <span className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">
+                            {config.source}
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <h3 className="font-medium text-gray-800">
+                            {config.model_name}
+                          </h3>
+                          <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full">
+                            Embedding
+                          </span>
+                          <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full">
+                            {config.type === "local" ? "本地模型" : "API模型"}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="mb-4">
                       <p className="text-sm text-gray-600">
                         模型ID: {config.model_id}
                       </p>
-                      <p className="text-sm font-mono bg-gray-50 px-2 py-1 rounded text-gray-800 truncate">
-                        API地址: {config.base_url}
-                      </p>
+                      {isLlmConfig(config) ? (
+                        <p className="text-sm font-mono px-2 py-4 rounded text-gray-800 truncate">
+                          API地址: {config.base_url}
+                        </p>
+                      ) : (
+                        <p className="text-sm font-mono px-2 py-4 rounded text-gray-800 truncate">
+                          API地址: {config.endpoint}
+                        </p>
+                      )}
                     </div>
                     <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                      <Switch
-                        checked={config.enabled}
-                        onCheckedChange={() => handleActivateToggle(config)}
-                        className="ml-auto"
-                      />
+                      {isLlmConfig(config) && (
+                        <Switch
+                          checked={config.enabled}
+                          onCheckedChange={() => handleActivateToggle(config)}
+                          className="ml-auto"
+                        />
+                      )}
                       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                         <DialogTrigger asChild>
                           <button
@@ -382,27 +434,20 @@ export default function LlmConfig() {
                             <Edit className="w-4 h-4" />
                           </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
+                        <DialogContent className="sm:max-w-[700px]">
                           {error && (
                             <div className="text-red-500 mb-4">{error}</div>
                           )}{" "}
-                          {/* 显示错误信息 */}
                           <DialogHeader>
                             <DialogTitle>编辑模型配置</DialogTitle>
                             <DialogDescription>
-                              编辑模型配置信息后，点击保存。
+                              编辑模型配置信息后，点击保存。{editingConfig?.id}
                             </DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
-                              <Label
-                                htmlFor="edit_model_id"
-                                className="text-right"
-                              >
-                                模型ID
-                              </Label>
+                              <Label className="text-right">模型ID</Label>
                               <Input
-                                id="edit_model_id"
                                 defaultValue={editingConfig?.model_id || "null"}
                                 disabled
                                 className="col-span-3"
@@ -415,63 +460,266 @@ export default function LlmConfig() {
                               >
                                 模型名称
                               </Label>
-                              <Input
-                                id="edit_model"
-                                defaultValue={editingConfig?.model || "null"}
-                                onChange={handleEditInputChange}
-                                className="col-span-3"
-                              />
+                              {isLlmConfig(editingConfig) ? (
+                                <Input
+                                  defaultValue={editingConfig?.model || "null"}
+                                  onChange={(e) =>
+                                    setEditingConfig({
+                                      ...editingConfig,
+                                      model: e.target.value,
+                                    })
+                                  }
+                                  className="col-span-3"
+                                />
+                              ) : (
+                                <Input
+                                  defaultValue={
+                                    editingConfig?.model_name || "null"
+                                  }
+                                  onChange={(e) =>
+                                    setEditingConfig(
+                                      editingConfig
+                                        ? {
+                                            ...editingConfig,
+                                            id: editingConfig.id ?? "",
+                                            model_name: e.target.value,
+                                          }
+                                        : null,
+                                    )
+                                  }
+                                  className="col-span-3"
+                                />
+                              )}
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label
-                                htmlFor="edit_source"
-                                className="text-right"
-                              >
-                                模型来源
-                              </Label>
-                              <Input
-                                id="edit_source"
-                                defaultValue={editingConfig?.base_url || "null"}
-                                onChange={handleEditInputChange}
-                                className="col-span-3"
-                              />
+                            <div>
+                              {isLlmConfig(editingConfig) ? (
+                                <div className="grid grid-cols-4 items-center gap-4 py-2">
+                                  <Label className="text-right">
+                                    Endpoint URL
+                                    <span className="text-destructive">*</span>
+                                  </Label>
+                                  <div className="col-span-3">
+                                    <input
+                                      list="base_url_options"
+                                      placeholder="输入或选择模型base_url"
+                                      defaultValue={editingConfig.base_url}
+                                      onChange={(e) =>
+                                        setEditingConfig({
+                                          ...editingConfig,
+                                          base_url: e.target.value,
+                                        })
+                                      }
+                                      className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                                    />
+                                    <datalist id="base_url_options">
+                                      <option value="https://api.openai.com/v1">
+                                        OpenAI
+                                      </option>
+                                      <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                                        通义千问
+                                      </option>
+                                      {/* 添加更多预设选项 */}
+                                    </datalist>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label
+                                    htmlFor="model_type"
+                                    className="text-right"
+                                  >
+                                    模型类型
+                                    <span className="text-destructive">*</span>
+                                  </Label>
+                                  <RadioGroup
+                                    className="flex flex-row gap-6 col-span-3"
+                                    value={editingConfig?.type}
+                                    onValueChange={(value) =>
+                                      setEditingConfig(
+                                        editingConfig
+                                          ? {
+                                              ...editingConfig,
+                                              id: editingConfig.id ?? "",
+                                              type: value,
+                                            }
+                                          : null,
+                                      )
+                                    }
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <RadioGroupItem value="local" />
+                                      <Label>本地 (Local Hosted)</Label>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <RadioGroupItem value="openai_like" />
+                                      <Label>API (OpenAI Like)</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </div>
+                              )}
                             </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                              <Label
-                                htmlFor="edit_api_key"
-                                className="text-right"
-                              >
-                                API Key
-                              </Label>
-                              <Input
-                                id="edit_api_key"
-                                type="password"
-                                defaultValue={
-                                  editingConfig?.api_key || "******"
-                                }
-                                onChange={handleEditInputChange}
-                                className="col-span-3"
-                              />
+                            <div>
+                              {isEmbConfig(editingConfig) &&
+                                editingConfig?.type === "openai_like" && (
+                                  <div className="grid grid-cols-4 items-center gap-4 py-2">
+                                    <Label className="text-right">
+                                      Endpoint URL
+                                      <span className="text-destructive">
+                                        *
+                                      </span>
+                                    </Label>
+                                    <div className="col-span-3">
+                                      <input
+                                        list="base_url_options"
+                                        placeholder="输入或选择模型base_url"
+                                        defaultValue={editingConfig.endpoint}
+                                        onChange={(e) =>
+                                          setEditingConfig({
+                                            ...editingConfig,
+                                            endpoint: e.target.value,
+                                          })
+                                        }
+                                        className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                                      />
+                                      <datalist id="base_url_options">
+                                        <option value="https://api.openai.com/v1">
+                                          OpenAI
+                                        </option>
+                                        <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                                          通义千问
+                                        </option>
+                                        {/* 添加更多预设选项 */}
+                                      </datalist>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                            <div>
+                              {(isLlmConfig(editingConfig) ||
+                                editingConfig?.type === "openai_like") && (
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label
+                                    htmlFor="edit_api_key"
+                                    className="text-right"
+                                  >
+                                    API Key
+                                  </Label>
+                                  <Input
+                                    type="password"
+                                    defaultValue={
+                                      editingConfig?.api_key || "******"
+                                    }
+                                    onChange={(e) =>
+                                      setEditingConfig(
+                                        editingConfig
+                                          ? {
+                                              ...editingConfig,
+                                              id: editingConfig.id ?? "",
+                                              api_key: e.target.value,
+                                            }
+                                          : null,
+                                      )
+                                    }
+                                    className="col-span-3"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              {isEmbConfig(editingConfig) && (
+                                <div>
+                                  <div className="grid grid-cols-4 items-center gap-4 py-2">
+                                    <Label
+                                      htmlFor="dimension"
+                                      className="text-right"
+                                    >
+                                      向量维度
+                                    </Label>
+                                    <div className="col-span-3">
+                                      <Input
+                                        id="dimension"
+                                        type="number"
+                                        placeholder="向量维度"
+                                        defaultValue={
+                                          editingConfig?.dimension || "null"
+                                        }
+                                        onChange={(e) =>
+                                          setEditingConfig({
+                                            ...editingConfig,
+                                            dimension: Number(e.target.value),
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-4 items-center gap-4 py-2">
+                                    <Label
+                                      htmlFor="embed_batch_size"
+                                      className="text-right"
+                                    >
+                                      向量Batch大小
+                                    </Label>
+                                    <Input
+                                      id="embed_batch_size"
+                                      type="number"
+                                      placeholder="向量Batch大小"
+                                      defaultValue={
+                                        editingConfig?.embed_batch_size ||
+                                        "null"
+                                      }
+                                      onChange={(e) =>
+                                        setEditingConfig({
+                                          ...editingConfig,
+                                          embed_batch_size: Number(
+                                            e.target.value,
+                                          ),
+                                        })
+                                      }
+                                      className="col-span-3"
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <DialogFooter>
-                            <Button
-                              onClick={() => updatedLLM(config.id)}
-                              type="submit"
-                              disabled={isEditLoading}
-                            >
-                              {isEditLoading ? "提交中..." : "修改"}
-                            </Button>
+                            {isLlmConfig(editingConfig) ? (
+                              <Button
+                                onClick={() => updateModel("llms")}
+                                type="submit"
+                                disabled={isEditLoading}
+                              >
+                                {isEditLoading ? "提交中..." : "修改"}
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => updateModel("embeddings")}
+                                type="submit"
+                                disabled={isEditLoading}
+                              >
+                                {isEditLoading ? "提交中..." : "修改"}
+                              </Button>
+                            )}
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      <button
-                        onClick={() => removeLLM(config.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        aria-label="删除"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                      {isLlmConfig(editingConfig) ? (
+                        <button
+                          onClick={() => removeModel(config.id, "llms")}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          aria-label="删除"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => removeModel(config.id, "embeddings")}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          aria-label="删除"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -479,26 +727,73 @@ export default function LlmConfig() {
             </div>
           )}
           <SettingsIcon className="w-10 h-6 text-gray-400 mb-4" />
-          <p className="text-gray-500 mt-1">点击下方按钮添加新的 LLM</p>
+          <p className="text-gray-500 mt-1">点击下方按钮添加新的模型</p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button className="mt-4 px-4 py-2 text-white rounded-lg transition-colors">
-                添加LLM
+                添加模型
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[700px]">
               {error && <div className="text-red-500 mb-4">{error}</div>}{" "}
               {/* 显示错误信息 */}
               <DialogHeader>
-                <DialogTitle>添加大模型</DialogTitle>
+                <DialogTitle>添加模型</DialogTitle>
                 <DialogDescription>
                   填写模型配置信息后，点击保存。
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-2">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="model_type" className="text-right">
+                    模型类型
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <RadioGroup
+                    className="col-span-3"
+                    value={selectedModelType}
+                    onValueChange={setSelectedModelType}
+                  >
+                    <div className="flex items-center gap-3">
+                      <RadioGroupItem value="llm" />
+                      <Label>LLM (Large Language Model)</Label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <RadioGroupItem value="embedding" />
+                      <Label>Embedding (Embedding Model)</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+              <div>
+                {selectedModelType === "embedding" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="base_url" className="text-right">
+                      模型来源
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <RadioGroup
+                      className="flex flex-row gap-6 col-span-3"
+                      value={selectedEmbeddingModelType}
+                      onValueChange={setSelectedEmbeddingModelType}
+                    >
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value="local" />
+                        <Label>本地 (Local Hosted)</Label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value="openai_like" />
+                        <Label>API (OpenAI Like)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-4 py-2">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="model_id" className="text-right">
                     模型ID
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="model_id"
@@ -508,42 +803,54 @@ export default function LlmConfig() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="base_url" className="text-right">
-                  模型来源
-                </Label>
-                <div className="col-span-3">
-                  <input
-                    id="base_url"
-                    list="base_url_options"
-                    placeholder="输入或选择模型base_url"
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-md p-2"
-                  />
-                  <datalist id="base_url_options">
-                    <option value="https://api.openai.com/v1">OpenAI</option>
-                    <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                      通义千问
-                    </option>
-                    {/* 添加更多预设选项 */}
-                  </datalist>
-                </div>
+              <div>
+                {(selectedModelType === "llm" ||
+                  selectedEmbeddingModelType === "openai_like") && (
+                  <div>
+                    <div className="grid grid-cols-4 items-center gap-4 py-2">
+                      <Label htmlFor="base_url" className="text-right">
+                        Endpoint URL
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="col-span-3">
+                        <input
+                          id="base_url"
+                          list="base_url_options"
+                          placeholder="输入或选择模型base_url"
+                          onChange={handleInputChange}
+                          className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                        />
+                        <datalist id="base_url_options">
+                          <option value="https://api.openai.com/v1">
+                            OpenAI
+                          </option>
+                          <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                            通义千问
+                          </option>
+                          {/* 添加更多预设选项 */}
+                        </datalist>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4 py-2">
+                      <Label htmlFor="api_key" className="text-right">
+                        API Key
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="api_key"
+                        placeholder="api_key"
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="api_key" className="text-right">
-                  API Key
-                </Label>
-                <Input
-                  id="api_key"
-                  placeholder="api_key"
-                  onChange={handleInputChange}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="model" className="text-right">
                     模型名称
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="model"
@@ -553,8 +860,39 @@ export default function LlmConfig() {
                   />
                 </div>
               </div>
+              <div>
+                {selectedModelType === "embedding" && (
+                  <div>
+                    <div className="grid grid-cols-4 items-center gap-4 py-2">
+                      <Label htmlFor="dimension" className="text-right">
+                        向量维度
+                      </Label>
+                      <div className="col-span-3">
+                        <Input
+                          id="dimension"
+                          type="number"
+                          placeholder="向量维度"
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4 py-2">
+                      <Label htmlFor="embed_batch_size" className="text-right">
+                        向量Batch大小
+                      </Label>
+                      <Input
+                        id="embed_batch_size"
+                        type="number"
+                        placeholder="向量Batch大小"
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
               <DialogFooter>
-                <Button onClick={addLLM} type="submit" disabled={isLoading}>
+                <Button onClick={addModel} type="submit" disabled={isLoading}>
                   {isLoading ? "提交中..." : "添加"}
                 </Button>
               </DialogFooter>

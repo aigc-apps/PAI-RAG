@@ -46,7 +46,7 @@ async def create_knowledgebase(
 
     except IntegrityError as e:
         # TODO: 这里有bug,logger.exception没有打印错误调用栈
-        logger.exception("创建知识库失败。")
+        logger.exception(f"创建知识库失败。\nIntegrityError:{e}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
@@ -60,7 +60,7 @@ async def create_knowledgebase(
                 status_code=400,
             )
     except Exception as e:
-        logger.exception("创建知识库失败")
+        logger.exception(f"创建知识库失败。\nException:{e}")
         await session.rollback()
         return JSONResponse(
             content=error_response(code=400, message=f"创建知识库失败: {e}."),
@@ -121,6 +121,9 @@ async def update_knowledgebase(
     knowledgebase.description = new_kb.description or knowledgebase.description
     knowledgebase.doc_num = new_kb.doc_num or knowledgebase.doc_num
     knowledgebase.chunk_num = new_kb.chunk_num or knowledgebase.chunk_num
+    knowledgebase.embedding_model = (
+        new_kb.embedding_model or knowledgebase.embedding_model
+    )
     if new_kb.chunk_config:
         knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
     if new_kb.retrieval_config:

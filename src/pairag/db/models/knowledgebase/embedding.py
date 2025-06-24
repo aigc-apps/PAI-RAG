@@ -16,10 +16,15 @@ class EmbeddingModel(SQLModel):
     endpoint: str | None = Field(default=None)
     type: EmbeddingType = Field(default=EmbeddingType.LOCAL)
     embed_batch_size: int = Field(default=10)
+    model_id: str = Field(default=None, unique=True)
 
 
 class EmbeddingModelCreate(EmbeddingModel):
     api_key: str | None = Field(default=None)  # required for openai_like type
+
+
+class EmbeddingModelRead(EmbeddingModel):
+    id: str = Field(default=None)
 
 
 class EmbeddingModelEntity(EmbeddingModel, table=True):
