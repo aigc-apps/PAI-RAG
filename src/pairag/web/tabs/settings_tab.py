@@ -265,6 +265,10 @@ def create_setting_tab() -> Dict[str, Any]:
                                 elem_id="guardrail_sk",
                                 type="password",
                             )
+                            guardrail_advice = gr.Textbox(
+                                label="安全提示语",
+                                elem_id="guardrail_advice",
+                            )
                         enable_guardrail.input(
                             fn=ev_listeners.change_enable_guardrail,
                             inputs=enable_guardrail,
@@ -277,10 +281,12 @@ def create_setting_tab() -> Dict[str, Any]:
                         oss_sk,
                         oss_endpoint,
                         oss_bucket,
+                        enable_guardrail,
                         guardrail_ak,
                         guardrail_sk,
                         guardrail_region,
                         guardrail_endpoint,
+                        guardrail_advice,
                     ]
 
                     components.extend(oss_components)
@@ -531,5 +537,7 @@ def create_setting_tab() -> Dict[str, Any]:
 
     elems = components_to_dict(components)
     # elems.update(vector_db_components)
-    elems.update({use_oss_col.elem_id: use_oss_col})
+    elems.update(
+        {use_oss_col.elem_id: use_oss_col, guardrail_col.elem_id: guardrail_col}
+    )
     return elems

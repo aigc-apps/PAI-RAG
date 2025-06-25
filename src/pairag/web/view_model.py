@@ -166,6 +166,7 @@ class ViewModel(BaseModel):
     guardrail_endpoint: str = None
     guardrail_region: str = None
     enable_guardrail: bool = False
+    guardrail_advice: str = None
 
     # llms
     llms: List[OpenAICompatibleLlmConfig] = None
@@ -307,6 +308,7 @@ class ViewModel(BaseModel):
             view_model.guardrail_sk = config.guardrail.access_key_secret
             view_model.guardrail_endpoint = config.guardrail.endpoint
             view_model.guardrail_region = config.guardrail.region
+            view_model.guardrail_advice = config.guardrail.custom_advice
 
         # news_extension
         view_model.news_extension_model_id = config.news_extension.model_id or "default"
@@ -442,6 +444,7 @@ class ViewModel(BaseModel):
         config["guardrail"]["endpoint"] = self.guardrail_endpoint
         config["guardrail"]["access_key_id"] = self.guardrail_ak
         config["guardrail"]["access_key_secret"] = self.guardrail_sk
+        config["guardrail"]["custom_advice"] = self.guardrail_advice
 
         config["llms"] = [llm.model_dump(mode="json") for llm in self.llms]
 
@@ -696,6 +699,8 @@ class ViewModel(BaseModel):
         settings["synthesizer_prompt"] = {"value": self.synthesizer_prompt}
 
         settings["enable_guardrail"] = {"value": self.enable_guardrail}
+        settings["guardrail_col"] = {"visible": self.enable_guardrail}
+        settings["guardrail_advice"] = {"value": self.guardrail_advice}
         settings["guardrail_region"] = {"value": self.guardrail_region}
         settings["guardrail_endpoint"] = {"value": self.guardrail_endpoint}
         settings["guardrail_ak"] = {"value": self.guardrail_ak}

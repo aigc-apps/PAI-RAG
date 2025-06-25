@@ -1,13 +1,13 @@
 from typing import Annotated, Dict, Union, List
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
 from pairag.core.models.config import (
-    AliyunTextModerationPlusConfig,
     OssStoreConfig,
     QueryRewriteConfig,
     SynthesizerConfig,
     ChatConfig,
 )
 from pairag.extensions.news.news_config import MiaobiNewsConfig
+from pairag.integrations.guardrail.config import AliyunTextModerationPlusConfig
 from pairag.integrations.data_analysis.data_analysis_config import (
     MysqlAnalysisConfig,
     PandasAnalysisConfig,

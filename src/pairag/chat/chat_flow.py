@@ -406,15 +406,15 @@ class ChatFlow:
         # 安全护栏
         guardrail = resolve_llm_guardrail(self.config)
         if guardrail is not None:
-            check_result = await guardrail.acheck(text=intent_result.query_str)
+            check_result = await guardrail.acheck(text=original_user_message)
             if check_result.reject:
-                logger.info(f"Guadrail check failed: {intent_result.query_str}.")
+                logger.info(f"Guadrail check failed: {original_user_message}.")
                 if chat_request.stream:
                     return response_gen_from_text(check_result.advice)
                 else:
                     return response_from_text(check_result.advice)
 
-            logger.info(f"Guadrail check passed: {intent_result.query_str}.")
+            logger.info(f"Guadrail check passed: {original_user_message}.")
 
         # 意图分发
         logger.info(f"Routing query {original_user_message} to {intent_result.intent}")

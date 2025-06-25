@@ -1,14 +1,14 @@
 from pydantic import BaseModel
-from pairag.core.models.config import AliyunTextModerationPlusConfig
+from pairag.integrations.guardrail.config import (
+    DEFAULT_GUARDRAIL_ADVICE,
+    AliyunTextModerationPlusConfig,
+)
 from alibabacloud_green20220302.client import Client
 from alibabacloud_green20220302 import models
 from alibabacloud_tea_openapi.models import Config
 import json
 import time
 from loguru import logger
-
-
-DEFAULT_GUARDRAIL_ADVICE = "抱歉，我无法提供该信息。"
 
 
 class TextCheckResult(BaseModel):
@@ -46,7 +46,7 @@ class PaiLlmGuardrail:
 
         textModerationPlusRequest = models.TextModerationPlusRequest(
             # 检测类型
-            service="llm_query_moderation",
+            service="query_security_check",
             service_parameters=json.dumps(serviceParameters),
         )
 
@@ -62,7 +62,7 @@ class PaiLlmGuardrail:
                     reject = True
 
                 advice = self.custom_advice
-                if advice is None and reject:
+                if not advice and reject:
                     if len(response.body.data.advice) > 0:
                         advice = response.body.data.advice[0].answer
                     else:

@@ -35,26 +35,6 @@ class QueryRewriteConfig(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
 
-class AliyunTextModerationPlusConfig(BaseModel):
-    endpoint: str | None = None
-    region: str | None = None
-    access_key_id: str | None = None
-    access_key_secret: str | None = None
-    custom_advice: str | None = None
-
-    def is_enabled(self) -> bool:
-        return (
-            self.access_key_id is not None
-            and self.access_key_secret is not None
-            and len(self.access_key_id) > 0
-            and len(self.access_key_secret) > 0
-            and self.endpoint is not None
-            and self.endpoint != ""
-            and self.region is not None
-            and self.region != ""
-        )
-
-
 class NodeEnhancementConfig(BaseModel):
     tree_depth: int = 3
     max_clusters: int = 52
