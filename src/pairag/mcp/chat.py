@@ -1,4 +1,4 @@
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Optional
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
@@ -9,6 +9,7 @@ from opentelemetry import trace
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.integrations.trace.base import use_current_span
 from tenacity import retry, stop_after_attempt, wait_fixed
+from pairag.memory.messages_processor import MessagesProcessor
 from pairag.mcp.constants import MAX_CHAT_STEPS
 
 app = FastAPI()
@@ -54,7 +55,9 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 
 # 流式生成文本
-async def generate_stream(llm, messages, tools: List[FunctionTool]):
+async def generate_stream(
+    llm, messages, tools: List[FunctionTool], messages_summarize: Optional[bool] = False
+):
     try:
         openai_tools = []
         tool_name_map = {}
@@ -67,7 +70,9 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
         stop_flag = False
+        message_processor = MessagesProcessor(llm, llm.max_tokens, messages_summarize)
         while step_count < max_steps:
+            messages = message_processor.compress_messages(messages)
             response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1

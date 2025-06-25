@@ -67,7 +67,7 @@ def to_chat_message(
                 role=role, content=json.dumps(content, ensure_ascii=False)
             )
 
-        return message_dict
+        return chat_message
 
     if tool_calls:
         chat_message = ChatMessage(
