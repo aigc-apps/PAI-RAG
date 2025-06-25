@@ -1,8 +1,8 @@
 from typing import List, Optional
-from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS, DEFAULT_SUMMARIZE_LENGTH
+from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS, DEFAULT_SUMMARIZER_LENGTH
 from pairag.memory.utils import truncate
 from llama_index.core.llms import ChatMessage, MessageRole
-from pairag.mcp.prompts import DEFAULT_SUMMARIZE_PROMPT
+from pairag.mcp.prompts import DEFAULT_SUMMARIZER_PROMPT
 from llama_index.core.utilities.token_counting import TokenCounter
 from loguru import logger
 
@@ -17,15 +17,15 @@ class MessagesProcessor:
         self,
         llm,
         max_tokens: Optional[int] = None,
-        memory_summarize: Optional[bool] = False,
-        summarize_length: Optional[int] = None,
-        summarize_prompt: Optional[str] = None,
+        memory_summarizer: Optional[bool] = False,
+        summarizer_length: Optional[int] = None,
+        summarizer_prompt: Optional[str] = None,
     ):
         self.llm = llm
-        self.summarize_prompt = summarize_prompt or DEFAULT_SUMMARIZE_PROMPT
-        self.memory_summarize = memory_summarize
+        self.summarizer_prompt = summarizer_prompt or DEFAULT_SUMMARIZER_PROMPT
+        self.memory_summarizer = memory_summarizer
         self.max_tokens = max_tokens or DEFAULT_MAX_INPUT_TOKENS
-        self.summarize_length = summarize_length or DEFAULT_SUMMARIZE_LENGTH
+        self.summarizer_length = summarizer_length or DEFAULT_SUMMARIZER_LENGTH
 
     def count_tokens(self, msg: ChatMessage) -> int:
         return TokenCounter().estimate_tokens_in_messages([msg])
@@ -45,10 +45,10 @@ class MessagesProcessor:
         if not self.llm:
             logger.warning("No model to perform summarization.")
             return msg
-        if not self.memory_summarize:
+        if not self.memory_summarizer:
             logger.info("not perform summarization.")
             return msg
-        if self.count_tokens(msg) < self.summarize_length:
+        if self.count_tokens(msg) < self.summarizer_length:
             logger.info("not need summarization.")
             return msg
 
@@ -64,11 +64,11 @@ class MessagesProcessor:
             query_str = self.get_nearest_user_message(messages, index)
             context_str = self.get_nearest_assistant_message(messages, index)
         if query_str or context_str:
-            prompt = self.summarize_prompt + context_prompt_str.format(
+            prompt = self.summarizer_prompt + context_prompt_str.format(
                 query_str=query_str, context_str=context_str
             )
         else:
-            prompt = self.summarize_prompt
+            prompt = self.summarizer_prompt
         summary_messages = [
             ChatMessage(role=MessageRole.SYSTEM, content=prompt),
             ChatMessage(role=MessageRole.USER, content=msg.content),
@@ -102,7 +102,7 @@ class MessagesProcessor:
         if not self.llm:
             logger.info("No model to perform summarization.")
             return messages
-        if not self.memory_summarize:
+        if not self.memory_summarizer:
             logger.info("not perform summarization.")
             return messages
         new_messages = []
@@ -110,7 +110,7 @@ class MessagesProcessor:
             if message.role == MessageRole.SYSTEM:
                 new_messages.append(message)
                 continue
-            if self.memory_summarize:
+            if self.memory_summarizer:
                 new_messages.append(self.summarize(message, messages, index))
         return new_messages
 

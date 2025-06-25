@@ -92,4 +92,4 @@ PROMPT_WITHOUT_DEEP_RESEARCH = """
 """
 
 
-DEFAULT_SUMMARIZE_PROMPT = "请根据上下文对下面这段文字生成详细的总结"
+DEFAULT_SUMMARIZER_PROMPT = "请根据上下文对下面这段文字生成详细的总结"

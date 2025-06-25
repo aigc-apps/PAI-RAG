@@ -53,7 +53,10 @@ async def call_tool_with_retry(async_fn, fn_args):
 
 # 流式生成文本
 async def generate_stream(
-    llm, messages, tools: List[FunctionTool], messages_summarize: Optional[bool] = False
+    llm,
+    messages,
+    tools: List[FunctionTool],
+    messages_summarizer: Optional[bool] = False,
 ):
     try:
         openai_tools = []
@@ -67,7 +70,7 @@ async def generate_stream(
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
         stop_flag = False
-        message_processor = MessagesProcessor(llm, llm.max_tokens, messages_summarize)
+        message_processor = MessagesProcessor(llm, llm.max_tokens, messages_summarizer)
         while step_count < max_steps:
             messages = message_processor.compress_messages(messages)
             response = await gen_stream_response(llm, messages, openai_tools)
