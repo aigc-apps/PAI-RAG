@@ -16,7 +16,6 @@ interface KnowledgeBase {
   name: string;
   description: string;
 }
-
 export default function KnowledgeBase({
   setActiveTab,
 }: {
@@ -29,29 +28,13 @@ export default function KnowledgeBase({
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        // const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        // const res = await fetch(`http://localhost:${port}/v1/knowledgebases`);
-        // if (!res.ok) throw new Error("获取知识库列表失败");
-        // const data = await res.json();
-        const data = [
-          {
-            id: "1",
-            name: "产品文档库",
-            description: "包含所有产品技术规格与使用指南",
-          },
-          {
-            id: "2",
-            name: "技术白皮书",
-            description:
-              "深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计",
-          },
-          {
-            id: "3",
-            name: "用户指南",
-            description: "从入门到精通的全流程操作手册",
-          },
-          { id: "4", name: "API 文档", description: "RESTful 接口规范与示例" },
-        ];
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const res = await fetch(
+          `http://localhost:${port}/v1/config/knowledgebases`,
+        );
+        if (!res.ok) throw new Error("获取知识库列表失败");
+        const json_data = await res.json();
+        const data = json_data.data;
         setKnowledgeBases(data || []); // 更新状态
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
@@ -62,6 +45,33 @@ export default function KnowledgeBase({
 
     fetchConfigs();
   }, []);
+
+  const deleteKnowledgebase = async (kb_name: string) => {
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${kb_name}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("删除失败，请检查网络或配置");
+      }
+
+      // 显示成功提示（可选）
+
+      // 删除成功后更新本地状态
+      setKnowledgeBases((prev) =>
+        prev.filter((config) => config.name !== kb_name),
+      );
+    } catch (err: any) {}
+    // 显示错误提示
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -100,6 +110,7 @@ export default function KnowledgeBase({
             <CardFooter className="mt-auto pt-0 flex justify-end">
               <Button
                 variant="link"
+                onClick={() => deleteKnowledgebase(base.name)}
                 className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
               >
                 删除
@@ -109,7 +120,7 @@ export default function KnowledgeBase({
                 variant="link"
                 className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
                 onClick={() =>
-                  setActiveTab(`/knowledgebase/details/${base.id}`)
+                  setActiveTab(`/knowledgebase/details/${base.name}`)
                 }
               >
                 查看详情 <ChevronRight className="ml-1" size={16} />

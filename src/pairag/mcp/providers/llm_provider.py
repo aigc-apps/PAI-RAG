@@ -10,7 +10,7 @@ from loguru import logger
 
 @with_async_db_session
 async def fetch_llm_models(session: AsyncSession):
-    logger.info("[LlmProvider] Start fetching mcp servers.")
+    logger.info("[LlmProvider] Start fetching llm model.")
     sql_results = await session.exec(select(LlmModelEntity))
     llm_results = sql_results.all()
 

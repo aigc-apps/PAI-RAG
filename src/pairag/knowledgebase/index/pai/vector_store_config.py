@@ -27,15 +27,6 @@ class VectorIndexRetrievalType(str, Enum):
     hybrid = "hybrid"
 
 
-VECTOR_STORE_TYPES_WITH_HYBRID_SEARCH = [
-    SupportedVectorStoreType.elasticsearch,
-    SupportedVectorStoreType.postgresql,
-    SupportedVectorStoreType.milvus,
-    SupportedVectorStoreType.tablestore,
-    SupportedVectorStoreType.dashvector,
-]
-
-
 class BaseVectorStoreConfig(BaseModel):
     persist_path: str = DEFAULT_LOCAL_STORAGE_PATH
     type: SupportedVectorStoreType

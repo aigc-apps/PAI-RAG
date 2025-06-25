@@ -1,5 +1,4 @@
 from typing import List, AsyncGenerator
-from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 import json
 from llama_index.core.tools import FunctionTool
@@ -10,8 +9,6 @@ from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.integrations.trace.base import use_current_span
 from tenacity import retry, stop_after_attempt, wait_fixed
 from pairag.mcp.constants import MAX_CHAT_STEPS
-
-app = FastAPI()
 
 
 async def response_to_raw(
@@ -73,6 +70,9 @@ async def generate_stream(llm, messages, tools: List[FunctionTool]):
             draft_tool_calls_index = -1
             last_chunk = None
             async for chunk in response:
+                if stop_flag:
+                    logger.info("Stop early due to errors.")
+                    break
                 last_chunk = chunk
                 if stop_flag:
                     logger.info("Stop early as stop_flag=True.")

@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI):
         from pairag.db.db_context import init_db
         from pairag.mcp.providers.mcp_tool_provider import mcp_provider
         from pairag.mcp.providers.llm_provider import llm_provider
+        from pairag.mcp.providers.embedding_provider import embedding_provider
+        from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 
         await init_db()
         logger.info("Initialized databases for MCP.")
@@ -38,6 +40,11 @@ async def lifespan(app: FastAPI):
         logger.info("Initialized mcp tools.")
         await llm_provider.refresh()
         logger.info("Initialized llm models.")
+        await embedding_provider.refresh()
+        logger.info("Initialized embedding models.")
+        await knowledgebase_provider.refresh()
+        logger.info("Initialized knowledgebases.")
+
 
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
@@ -59,8 +66,9 @@ def configure(app: FastAPI):
     app.include_router(openai_router, prefix="/v1", tags=["chat_completions"])
     app.include_router(chat_router, prefix="/chat", tags=["chat_api"])
     if is_feature_enabled(FeatureFlags.MCP):
-        from pairag.api.config_api import config_router
-        app.include_router(config_router, prefix="/v1/config", tags=["config_api"])
+        from pairag.api.agent.routers import add_chat_router, add_config_router
+        add_config_router(app)
+        add_chat_router(app)
 
     chat_service.initialize()
     add_middlewares(app)
