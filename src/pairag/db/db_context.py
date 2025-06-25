@@ -33,7 +33,7 @@ def get_sync_db_engine():
 
         db_url = f"postgresql+asyncpg://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
         engine = create_engine(db_url)
-        logger.info("created sql engine with {db_user}@{db_host}:{db_port}/{db_name}")
+        logger.info(f"created sql engine with {db_user}@{db_host}:{db_port}/{db_name}")
 
         return engine
 

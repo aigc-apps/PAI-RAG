@@ -83,7 +83,7 @@ export function AppSidebar({
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-50">
                 <DropdownMenuItem onClick={() => setActiveTab("/config/llm")}>
-                  <Bot /> <span>LLM</span>
+                  <Bot /> <span>Model</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setActiveTab("/config/mcp")}>
                   <Wrench /> <span>MCP</span>

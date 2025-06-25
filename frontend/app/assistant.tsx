@@ -12,7 +12,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import LlmConfig from "./config/llm/page";
+import ModelConfigPage from "./config/llm/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
@@ -79,7 +79,7 @@ export const Assistant = () => {
   }, [llmConfig.model_id, selectedOptions]);
 
   const runtime = useChatRuntime({
-    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/config/api/chat`,
+    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
     headers: headers,
   });
   const pathname = usePathname();
@@ -146,7 +146,7 @@ export const Assistant = () => {
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
-              <LlmConfig />
+              <ModelConfigPage />
             </div>
           )}
           {activeTab === "/config/mcp" && (

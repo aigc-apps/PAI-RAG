@@ -33,60 +33,76 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 
+interface EmbeddingModel {
+  id: string;
+  model_id: string;
+  model_name: string;
+  type: string;
+}
 export default function KnowledgeBaseCreatePage({
   setActiveTab,
 }: {
   setActiveTab: (tab: string) => void;
 }) {
   const [formData, setFormData] = useState({
-    kb_name: "",
-    kb_description: "",
+    name: "",
+    description: "",
     chunk_config: {
       parser_type: "Sentence",
       separator: "\n\n",
       chunk_size: "512",
       chunk_overlap: "50",
     },
-    embedding_config: {
-      model_name: "bge-m3",
-    },
+    chunk_num: 0,
+    doc_num: 0,
+    embedding_model: "BAAI/bge-m3",
     retrieval_config: {
-      index_type: "vector",
+      retrieval_mode: "vector",
       top_k: "5",
       similarity_threshold: "0.8",
-      enable_rerank: false,
+      rerank_model: "",
       vector_weight: "0.7",
     },
   });
 
   const [indexType, setIndexType] = useState("vector");
+  const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [modelloading, setModelLoading] = useState(true); // 加载状态
+  const [modelerror, setModelError] = useState(""); // 错误信息
+  useEffect(() => {
+    const fetchModelConfigs = async () => {
+      try {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const [embRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/embeddings`),
+        ]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+        const embData = (await embRes.json())?.data || [];
+        console.log("embData", embData);
+        setEmbeddingModels([...embData]);
+      } catch (err: any) {
+        setModelError(err || "加载失败");
+      } finally {
+        setModelLoading(false);
+      }
+    };
+    fetchModelConfigs();
+  }, []);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 模拟创建知识库请求
-    console.log("创建知识库:", formData);
-    // const formData = {
-    //     "kb_name": "pairag_QA_v1",
-    //     "kb_description": "eqwewq",
-    //     "chunk_config": {
-    //         "parser_type": "Sentence",
-    //         "separator": "\\n\\n",
-    //         "chunk_size": "512",
-    //         "chunk_overlap": "50"
-    //     },
-    //     "embedding_config": {
-    //         "model_name": "bge-m3"
-    //     },
-    //     "retrieval_config": {
-    //         "index_type": "hybrid",
-    //         "top_k": "5",
-    //         "similarity_threshold": "0.8",
-    //         "enable_rerank": true,
-    //         "vector_weight": "0.5"
-    //     }
-    // }
-    // 实际应调用 API: POST /v1/knowledgebase/create
-    // params: formData
+    console.log("创建知识库:", JSON.stringify(formData));
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const res = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData), // 包装为数组
+      },
+    );
+
+    if (!res.ok) throw new Error("添加 知识库 失败");
+    setActiveTab(`/knowledgebase/details/${formData.name}`);
   };
 
   return (
@@ -145,15 +161,15 @@ export default function KnowledgeBaseCreatePage({
                   </Label>
                   <Input
                     id="name"
-                    value={formData.kb_name}
+                    value={formData.name}
                     onChange={(e) =>
-                      setFormData({ ...formData, kb_name: e.target.value })
+                      setFormData({ ...formData, name: e.target.value })
                     }
-                    placeholder="请输入知识库名称"
+                    placeholder="请输入知识库名称(大小写字母、数字、下划线)"
                     required
                   />
                   <p className="text-sm text-muted-foreground">
-                    例如："产品文档库"、"技术白皮书"
+                    例如："user_manual_1"、"pai_api_docs"
                   </p>
                 </div>
 
@@ -161,11 +177,11 @@ export default function KnowledgeBaseCreatePage({
                   <Label htmlFor="description">描述</Label>
                   <Textarea
                     id="description"
-                    value={formData.kb_description}
+                    value={formData.description}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        kb_description: e.target.value,
+                        description: e.target.value,
                       })
                     }
                     placeholder="描述知识库内容（可选）"
@@ -179,18 +195,26 @@ export default function KnowledgeBaseCreatePage({
                 <h3 className="text-lg font-semibold pb-2">文档切片配置</h3>
                 <div className="grid grid-cols-4 gap-8">
                   <div className="space-y-2">
-                    <Label htmlFor="parserType">
+                    <Label>
                       切片类型 (parser_type){" "}
                       <span className="text-destructive">*</span>
                     </Label>
-                    <Select>
+                    <Select
+                      defaultValue={formData.chunk_config.parser_type}
+                      onValueChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          chunk_config: {
+                            ...formData.chunk_config,
+                            parser_type: value,
+                          },
+                        });
+                      }}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="请选择切片类型" />
                       </SelectTrigger>
-                      <SelectContent
-                        id="parserType"
-                        defaultValue={formData.chunk_config.parser_type}
-                      >
+                      <SelectContent>
                         <SelectGroup>
                           <SelectItem value="Token">Token</SelectItem>
                           <SelectItem value="Sentence">Sentence</SelectItem>
@@ -288,27 +312,28 @@ export default function KnowledgeBaseCreatePage({
                     <span className="text-destructive">*</span>
                   </Label>
                   <div className="col-span-2">
-                    <Select>
+                    <Select
+                      defaultValue={formData.embedding_model}
+                      onValueChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          embedding_model: value,
+                        });
+                      }}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="请选择向量类型" />
                       </SelectTrigger>
-                      <SelectContent
-                        id="embeddingModel"
-                        defaultValue={formData.embedding_config.model_name}
-                      >
+                      <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="bge-m3">bge-m3</SelectItem>
-                          <SelectItem value="text-embedding-v1">
-                            text-embedding-v1
-                          </SelectItem>
-                          <SelectItem value="qwen3">qwen3</SelectItem>
+                          {embeddingmodels.map((model) => (
+                            <SelectItem key={model.id} value={model.model_name}>
+                              {model.model_name}
+                            </SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div className="col-span-1 text-sm text-muted-foreground">
-                    <p className="pt-2 pl-6">推荐值：bge-m3</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-6 space-y-2">
@@ -317,7 +342,7 @@ export default function KnowledgeBaseCreatePage({
                     <div className="space-y-2 pt-4 pb-2">
                       <ToggleGroup
                         type="single"
-                        value={formData.retrieval_config.index_type}
+                        value={formData.retrieval_config.retrieval_mode}
                         onValueChange={(value) => {
                           // 同时更新 indexType 和 formData.retrieval_config.index_type
                           setIndexType(value);
@@ -325,7 +350,7 @@ export default function KnowledgeBaseCreatePage({
                             ...formData,
                             retrieval_config: {
                               ...formData.retrieval_config,
-                              index_type: value,
+                              retrieval_mode: value,
                             },
                           });
                         }}
@@ -417,26 +442,52 @@ export default function KnowledgeBaseCreatePage({
                               推荐值：0.8
                             </p>
                           </div>
-                          <div className="flex items-start gap-3 pt-2">
-                            <Checkbox
-                              id="terms-2"
-                              checked={formData.retrieval_config.enable_rerank}
-                              onCheckedChange={(checkedState) => {
-                                // 将 CheckedState 转换为 boolean
-                                const isChecked = checkedState === true;
-                                setFormData({
-                                  ...formData,
-                                  retrieval_config: {
-                                    ...formData.retrieval_config,
-                                    enable_rerank: isChecked,
-                                  },
-                                });
-                              }}
-                            />
-                            <div className="grid gap-2">
-                              <Label htmlFor="terms-2">启用 Rerank 模型</Label>
-                              <p className="text-muted-foreground text-sm">
-                                默认使用bge-ranker模型进行重排序
+                          <div className="grid grid-cols-6 space-y-2">
+                            <Label
+                              htmlFor="embeddingModel"
+                              className="col-span-1"
+                            >
+                              重排序模型 (rerank_model){" "}
+                              <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="col-span-2">
+                              <Select
+                                defaultValue={
+                                  formData.retrieval_config.rerank_model
+                                }
+                                onValueChange={(value) => {
+                                  setFormData({
+                                    ...formData,
+                                    retrieval_config: {
+                                      ...formData.retrieval_config,
+                                      rerank_model: value,
+                                    },
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="请选择重排序模型" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    <SelectItem value="none">
+                                      NO RERANK
+                                    </SelectItem>
+                                    <SelectItem value="BAAI/bge-reranker-base">
+                                      BAAI/bge-reranker-base
+                                    </SelectItem>
+                                    <SelectItem value="BAAI/bge-reranker-large">
+                                      BAAI/bge-reranker-large
+                                    </SelectItem>
+                                    <SelectItem value="qwen3">qwen3</SelectItem>
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="col-span-1 text-sm text-muted-foreground">
+                              <p className="pt-2 pl-6">
+                                推荐值： BAAI/bge-reranker-base
                               </p>
                             </div>
                           </div>
@@ -499,28 +550,52 @@ export default function KnowledgeBaseCreatePage({
                               推荐值：0.8
                             </p>
                           </div>
-                          <div className="flex items-start gap-3 pt-2">
-                            <Checkbox
-                              id="terms-2"
-                              checked={formData.retrieval_config.enable_rerank}
-                              onCheckedChange={(checkedState) => {
-                                // 将 CheckedState 转换为 boolean
-                                const isChecked = checkedState === true;
+                          <Label
+                            htmlFor="embeddingModel"
+                            className="col-span-1"
+                          >
+                            重排序模型 (rerank_model){" "}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="col-span-2">
+                            <Select
+                              defaultValue={
+                                formData.retrieval_config.rerank_model
+                              }
+                              onValueChange={(value) => {
                                 setFormData({
                                   ...formData,
                                   retrieval_config: {
                                     ...formData.retrieval_config,
-                                    enable_rerank: isChecked,
+                                    rerank_model: value,
                                   },
                                 });
                               }}
-                            />
-                            <div className="grid gap-2">
-                              <Label htmlFor="terms-2">启用 Rerank 模型</Label>
-                              <p className="text-muted-foreground text-sm">
-                                默认使用bge-ranker模型进行重排序
-                              </p>
-                            </div>
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="请选择重排序模型" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  <SelectItem value="none">
+                                    NO RERANK
+                                  </SelectItem>
+                                  <SelectItem value="BAAI/bge-reranker-base">
+                                    BAAI/bge-reranker-base
+                                  </SelectItem>
+                                  <SelectItem value="BAAI/bge-reranker-large">
+                                    BAAI/bge-reranker-large
+                                  </SelectItem>
+                                  <SelectItem value="qwen3">qwen3</SelectItem>
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="col-span-1 text-sm text-muted-foreground">
+                            <p className="pt-2 pl-6">
+                              推荐值： BAAI/bge-reranker-base
+                            </p>
                           </div>
                         </div>
                       )}
@@ -613,28 +688,52 @@ export default function KnowledgeBaseCreatePage({
                               推荐值：0.8
                             </p>
                           </div>
-                          <div className="flex items-start gap-3 pt-2">
-                            <Checkbox
-                              id="terms-2"
-                              checked={formData.retrieval_config.enable_rerank}
-                              onCheckedChange={(checkedState) => {
-                                // 将 CheckedState 转换为 boolean
-                                const isChecked = checkedState === true;
+                          <Label
+                            htmlFor="embeddingModel"
+                            className="col-span-1"
+                          >
+                            重排序模型 (rerank_model){" "}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="col-span-2">
+                            <Select
+                              defaultValue={
+                                formData.retrieval_config.rerank_model
+                              }
+                              onValueChange={(value) => {
                                 setFormData({
                                   ...formData,
                                   retrieval_config: {
                                     ...formData.retrieval_config,
-                                    enable_rerank: isChecked,
+                                    rerank_model: value,
                                   },
                                 });
                               }}
-                            />
-                            <div className="grid gap-2">
-                              <Label htmlFor="terms-2">启用 Rerank 模型</Label>
-                              <p className="text-muted-foreground text-sm">
-                                默认使用bge-ranker模型进行重排序
-                              </p>
-                            </div>
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="请选择重排序模型" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  <SelectItem value="none">
+                                    NO RERANK
+                                  </SelectItem>
+                                  <SelectItem value="BAAI/bge-reranker-base">
+                                    BAAI/bge-reranker-base
+                                  </SelectItem>
+                                  <SelectItem value="BAAI/bge-reranker-large">
+                                    BAAI/bge-reranker-large
+                                  </SelectItem>
+                                  <SelectItem value="qwen3">qwen3</SelectItem>
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="col-span-1 text-sm text-muted-foreground">
+                            <p className="pt-2 pl-6">
+                              推荐值： BAAI/bge-reranker-base
+                            </p>
                           </div>
                         </div>
                       )}

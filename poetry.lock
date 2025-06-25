@@ -3821,6 +3821,21 @@ llama-index-core = ">=0.12.0,<0.13.0"
 openai = ">=1.1.0"
 
 [[package]]
+name = "llama-index-embeddings-openai-like"
+version = "0.1.1"
+description = "llama-index embeddings openai integration"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_index_embeddings_openai_like-0.1.1-py3-none-any.whl", hash = "sha256:e9b49ce66b2f1ec27818b653541d8ce3fcdcbecea56c6c10e3180ff1251132d2"},
+    {file = "llama_index_embeddings_openai_like-0.1.1.tar.gz", hash = "sha256:95b460a43415866d1e74c4e0f884af8d9e828051b39ae15e5b438dc3e3ede71f"},
+]
+
+[package.dependencies]
+llama-index-embeddings-openai = ">=0.3.0,<0.4"
+
+[[package]]
 name = "llama-index-llms-azure-openai"
 version = "0.3.2"
 description = "llama-index llms azure openai integration"
@@ -9794,4 +9809,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "578035df19df3dd5cc216b1112be1d55e9a9617630c6c55b8d6a6f91edc8e9e8"
+content-hash = "78bff00fce7c30d1d576d652e969a9ef7a5350587c765869bc76d81f2aed6c9a"
