@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
-import { ScanSearch, TextSearch, SearchCode } from "lucide-react";
+import { ScanSearch, TextSearch, SearchCode, PlusIcon } from "lucide-react";
 import * as Toast from "@radix-ui/react-toast";
 
 interface KnowledgeBaseFile {
@@ -102,6 +102,7 @@ export default function KnowledgeBaseDetailPage({
     description: "",
     variant: "default" as "default" | "destructive",
   });
+  const [uploading, setUploading] = useState(false);
   // 递归更新嵌套对象
   const updateNestedObject = (
     obj: Record<string, any>,
@@ -253,6 +254,53 @@ export default function KnowledgeBaseDetailPage({
     }
   };
 
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files) return;
+    setUploading(true);
+
+    // 文件校验 (Demo功能，后续调整优化)
+    const validFiles = Array.from(files).filter((file) => {
+      // const isValidType = ['application/pdf', 'application/msword'].includes(file.type);
+      const isValidSize = file.size <= 10 * 1024 * 1024;
+      // return isValidType && isValidSize;
+      return isValidSize;
+    });
+
+    if (validFiles.length === 0) {
+      alert("请选择有效的文件（如 PDF 或 Word，且小于 10MB）");
+      setUploading(false);
+      return;
+    }
+
+    // 上传文件
+    const formData = new FormData();
+    validFiles.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      // 模拟知识库的文件上传
+      // const res = await fetch(
+      //   `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/upload`,
+      //   {
+      //     method: "POST",
+      //     body: formData,
+      //   },
+      // );
+      // const result = await response.json();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = {
+        status: "success",
+      };
+      console.log("上传成功:", result);
+    } catch (error) {
+      console.error("上传失败:", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen">
       <div className="flex-none">
@@ -296,13 +344,38 @@ export default function KnowledgeBaseDetailPage({
           <TabsContent value="details" className="py-4">
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>知识库文件列表</CardTitle>
+                <CardTitle>知识库：{knowledgebase.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="mb-4">名称：{knowledgebase.name}</p>
-                <p className="text-muted-foreground mb-4">
-                  描述：{knowledgebase.description}
-                </p>
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-muted-foreground mb-4">
+                    描述：{knowledgebase.description}
+                  </p>
+                  <Button
+                    onClick={() =>
+                      document.getElementById("file-upload")?.click()
+                    }
+                    disabled={uploading} // 上传时禁用按钮
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        上传中...
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon className="mr-2 h-4 w-4" />
+                        上传文件
+                      </>
+                    )}
+                  </Button>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => handleFileUpload(e.target.files)}
+                  />
+                </div>
 
                 {knowledgebase.files && knowledgebase.files.length > 0 ? (
                   <>
