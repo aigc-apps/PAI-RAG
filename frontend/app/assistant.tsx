@@ -21,6 +21,13 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
+import {
+  CompositeAttachmentAdapter,
+  SimpleImageAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
+} from "@assistant-ui/react";
+import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -81,6 +88,9 @@ export const Assistant = () => {
   const runtime = useChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
     headers: headers,
+    adapters: {
+      attachments: new UploadAttachmentAdapter(),
+    },
   });
   const pathname = usePathname();
   console.log("pathname:", pathname);
