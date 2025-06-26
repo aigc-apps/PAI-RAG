@@ -3,6 +3,7 @@ from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS
 from pairag.memory.utils import truncate
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.utilities.token_counting import TokenCounter
+from llama_index.core.utils import get_tokenizer
 
 
 class BaseMemory:
@@ -17,9 +18,10 @@ class BaseMemory:
     ):
         self.max_tokens = max_tokens or DEFAULT_MAX_INPUT_TOKENS
         self.messages = []
+        self.tokenizer = get_tokenizer()
 
     def count_tokens(self, msg: ChatMessage) -> int:
-        return TokenCounter().estimate_tokens_in_messages([msg])
+        return TokenCounter(tokenizer=self.tokenizer).estimate_tokens_in_messages([msg])
 
     def add(self, msg: Union[List[ChatMessage], ChatMessage]):
         new_messages = [msg] if isinstance(msg, ChatMessage) else msg
@@ -99,5 +101,5 @@ class BaseMemory:
                     return None
                 text.append(item.text)
             text = "\n".join(text)
-            content = truncate(text, max_token=max_tokens)
+            content = truncate(text, max_token=max_tokens, tokenizer=self.tokenizer)
         return ChatMessage(role=msg.role, content=content)

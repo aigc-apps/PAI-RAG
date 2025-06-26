@@ -1,8 +1,14 @@
 from llama_index.core.utils import get_tokenizer
+from typing import Optional, Callable, List
 
 
-def truncate(text: str, max_token: int, start_token: int = 0) -> str:
-    tokenizer = get_tokenizer()
+def truncate(
+    text: str,
+    max_token: int,
+    start_token: int = 0,
+    tokenizer: Optional[Callable[[str], List]] = None,
+) -> str:
+    tokenizer = tokenizer or get_tokenizer()
 
     token_ids = tokenizer(text)[start_token:]
 
