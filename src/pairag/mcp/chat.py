@@ -1,4 +1,4 @@
-from typing import List, AsyncGenerator, Optional
+from typing import List, AsyncGenerator
 from fastapi.responses import StreamingResponse
 import json
 from llama_index.core.tools import FunctionTool
@@ -8,7 +8,7 @@ from opentelemetry import trace
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.integrations.trace.base import use_current_span
 from tenacity import retry, stop_after_attempt, wait_fixed
-from pairag.memory.messages_processor import MessagesProcessor
+from pairag.memory.base_memory import BaseMemory
 from pairag.mcp.constants import MAX_CHAT_STEPS
 
 
@@ -56,7 +56,6 @@ async def generate_stream(
     llm,
     messages,
     tools: List[FunctionTool],
-    messages_summarizer: Optional[bool] = False,
 ):
     try:
         openai_tools = []
@@ -70,9 +69,10 @@ async def generate_stream(
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
         stop_flag = False
-        message_processor = MessagesProcessor(llm, llm.max_tokens, messages_summarizer)
+        memory_processor = BaseMemory(llm.max_tokens)
+        memory_processor.add(messages)
         while step_count < max_steps:
-            messages = message_processor.compress_messages(messages)
+            messages = memory_processor.get_truncated_messages()
             response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1
@@ -107,12 +107,14 @@ async def generate_stream(
                             text=json.dumps(choice.delta.content, ensure_ascii=False)
                         )
                         if (
-                            isinstance(messages[-1], ChatMessage)
-                            and messages[-1].role == "assistant"
+                            isinstance(memory_processor.get()[-1], ChatMessage)
+                            and memory_processor.get()[-1].role == "assistant"
                         ):
-                            messages[-1].content += str(choice.delta.content)
+                            memory_processor.get()[-1].content += str(
+                                choice.delta.content
+                            )
                         else:
-                            messages.append(
+                            memory_processor.add(
                                 ChatMessage(
                                     role="assistant", content=str(choice.delta.content)
                                 )
@@ -144,7 +146,7 @@ async def generate_stream(
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
 
                                 # 将工具调用和结果加入消息历史,供模型继续推理
-                                messages.append(
+                                memory_processor.add(
                                     ChatMessage(
                                         role="assistant",
                                         content="",
@@ -165,7 +167,7 @@ async def generate_stream(
                                     )
                                 )
 
-                                messages.append(
+                                memory_processor.add(
                                     ChatMessage(
                                         role="tool",
                                         content=json.dumps(
