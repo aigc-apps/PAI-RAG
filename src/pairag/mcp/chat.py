@@ -78,9 +78,6 @@ async def generate_stream(
             draft_tool_calls_index = -1
             last_chunk = None
             async for chunk in response:
-                if stop_flag:
-                    logger.info("Stop early due to errors.")
-                    break
                 last_chunk = chunk
                 if stop_flag:
                     logger.info("Stop early as stop_flag=True.")

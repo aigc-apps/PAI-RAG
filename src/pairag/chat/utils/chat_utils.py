@@ -3,6 +3,7 @@ from enum import Enum
 import asyncio
 import time
 import traceback
+import uuid
 from typing import Any, AsyncGenerator, List
 
 from openai import APIError
@@ -31,7 +32,7 @@ from asgi_correlation_id import correlation_id
 
 
 def chat_id_generator() -> str:
-    return correlation_id.get()
+    return correlation_id.get() or str(uuid.uuid4().hex)
 
 
 def parse_citations_from_source_nodes(
