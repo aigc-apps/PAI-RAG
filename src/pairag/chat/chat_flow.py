@@ -311,24 +311,20 @@ class ChatFlow:
         system_role = system_prompt or self.config.synthesizer.system_role_template
 
         prompt_messages = []
-        if system_role:
-            prompt_messages.append(
-                ChatMessage(role=MessageRole.SYSTEM, content=system_role)
-            )
-
         current_datetime = get_prompt_current_time_str()
-        user_prompt = self.config.synthesizer.custom_prompt_template.format(
+
+        system_prompt = self.config.synthesizer.custom_prompt_template.format(
             current_datetime=current_datetime,
             cur_date=current_datetime,
-            query_str=messages[-1].content,
         )
 
-        # prompt_message
-        prompt_messages.append(
-            ChatMessage(
-                role=MessageRole.USER,
-                content=user_prompt,
+        if system_role:
+            system_prompt = (
+                f"{system_role}\n\n{self.config.synthesizer.custom_prompt_template}"
             )
+
+        prompt_messages.append(
+            ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)
         )
 
         messages = prompt_messages + messages
