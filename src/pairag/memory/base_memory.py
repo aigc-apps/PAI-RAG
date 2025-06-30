@@ -1,9 +1,18 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS
 from pairag.memory.utils import truncate
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.utilities.token_counting import TokenCounter
 from llama_index.core.utils import get_tokenizer
+from llama_index.core.bridge.pydantic import Field, BaseModel
+from collections import deque
+from loguru import logger
+import copy
+
+
+class MessageInfo(BaseModel):
+    message: ChatMessage = Field(description="Original message.")
+    tokens_num: int = Field(description="message token.", default=0)
 
 
 class BaseMemory:
@@ -19,81 +28,103 @@ class BaseMemory:
         self.max_tokens = max_tokens or DEFAULT_MAX_INPUT_TOKENS
         self.messages = []
         self.tokenizer = get_tokenizer()
+        self.queue = deque()
+        self.tokens_in_queue = 0
+        self.history_messages = []
+        self.history_token = 0
 
     def count_tokens(self, msg: ChatMessage) -> int:
         return TokenCounter(tokenizer=self.tokenizer).estimate_tokens_in_messages([msg])
 
-    def add(self, msg: Union[List[ChatMessage], ChatMessage]):
-        new_messages = [msg] if isinstance(msg, ChatMessage) else msg
-        self.messages.extend(new_messages)
+    def from_messages(self, msgs: List[ChatMessage]) -> List[ChatMessage]:
+        if not msgs:
+            return []
+        self.messages.extend(msgs)
+        recent_msg = [msgs[0]] + msgs[1:][-10:]
+
+        for message in recent_msg:
+            tokens_num = self.count_tokens(message)
+            self.history_messages.append(message)
+            self.history_token += tokens_num
+
+        if self.history_token > self.max_tokens:
+            raise Exception(
+                "The input messages exceed the maximum context length ({self.max_tokens} tokens)"
+            )
+
+        return recent_msg
+
+    def add(self, msg: ChatMessage):
+        self.messages.append(msg)
+
+        tokens_num = self.count_tokens(msg)
+        available_tokens = self.max_tokens - self.tokens_in_queue - self.history_token
+        if available_tokens <= 0:
+            return
+        if tokens_num <= available_tokens:
+            queue_message = MessageInfo(message=msg, tokens_num=tokens_num)
+            self.queue.append(queue_message)
+            self.tokens_in_queue += tokens_num
+        else:
+            available_tokens = self.max_tokens - self.history_token
+            # 如果是tool,不能把preceeding message with "tool_calls" pop出queue,必须成对出现
+            if msg.role == MessageRole.TOOL:
+                available_tokens = available_tokens - self.queue[-1].tokens_num
+            new_msg = self.truncate_message(msg, max_tokens=available_tokens)
+            new_tokens_num = self.count_tokens(new_msg)
+            queue_message = MessageInfo(message=new_msg, tokens_num=new_tokens_num)
+            self.queue.append(queue_message)
+            self.tokens_in_queue += new_tokens_num
+            while (
+                self.tokens_in_queue > self.max_tokens - self.history_token
+                and self.queue
+            ):
+                first_msg_info = self.queue[0]
+                first_msg_available_tokens = (
+                    self.max_tokens
+                    - self.history_token
+                    - (self.tokens_in_queue - first_msg_info.tokens_num)
+                )
+                # 直接pop出第一条消息
+                if first_msg_available_tokens <= 0:
+                    self.tokens_in_queue -= first_msg_info.tokens_num
+                    logger.info(f"Pop out the first message {self.queue[0]}")
+                    self.queue.popleft()
+                    # 如果是tool,不能把preceeding message with "tool_calls" pop出queue,必须成对出现
+                    if self.queue[0].message.role == MessageRole.TOOL:
+                        self.tokens_in_queue -= self.queue[0].tokens_num
+                        logger.info(f"Pop out the first message {self.queue[0]}")
+                        self.queue.popleft()
+                # 截断第一条消息
+                else:
+                    logger.info(f"truncate first message {self.queue[0]}")
+                    new_first_msg = self.truncate_message(
+                        first_msg_info.message, max_tokens=first_msg_available_tokens
+                    )
+                    new_first_tokens_num = self.count_tokens(new_first_msg)
+                    self.queue[0].tokens_num = new_first_tokens_num
+                    self.queue[0].message = new_first_msg
+                    self.tokens_in_queue -= new_first_tokens_num
+                    break
+
+    def get_truncated_messages(self) -> List[ChatMessage]:
+        messages = copy.deepcopy(self.history_messages)
+        for item in self.queue:
+            messages.append(item.message)
+
+        if len([m for m in messages if m.role == MessageRole.SYSTEM]) != 1:
+            raise Exception(
+                "The input messages must contain only one system message. "
+                " And the system message, if exists, must be the first message."
+            )
+        return messages
 
     def get(self) -> List[ChatMessage]:
         return self.messages
 
-    def get_truncated_messages(self) -> List[ChatMessage]:
-        return self.truncate_messages(self.messages)
-
-    def truncate_messages(
-        self, messages: List[ChatMessage], max_tokens: Optional[int] = None
-    ) -> List[ChatMessage]:
-        max_tokens = max_tokens or self.max_tokens
-        if len([m for m in messages if m.role == MessageRole.SYSTEM]) >= 2:
-            raise Exception(
-                code="400",
-                message="The input messages must contain no more than one system message. "
-                " And the system message, if exists, must be the first message.",
-            )
-        if messages and messages[0].role == MessageRole.SYSTEM:
-            sys_msg = messages[0]
-            available_token = max_tokens - self.count_tokens(sys_msg)
-        else:
-            sys_msg = None
-            available_token = max_tokens
-        token_cnt = 0
-        new_messages = []
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i].role == MessageRole.SYSTEM:
-                continue
-            cur_token_cnt = self.count_tokens(messages[i])
-            if cur_token_cnt <= available_token:
-                new_messages = [messages[i]] + new_messages
-                available_token -= cur_token_cnt
-            else:
-                if (messages[i].role == MessageRole.USER) and (i != len(messages) - 1):
-                    _msg = self.truncate_message(
-                        messages[i], max_tokens=available_token
-                    )
-                    if _msg:
-                        new_messages = [_msg] + new_messages
-                    break
-                elif messages[i].role in (MessageRole.TOOL, MessageRole.ASSISTANT):
-                    _msg = self.truncate_message(
-                        messages[i], max_tokens=available_token
-                    )
-                    if _msg:
-                        new_messages = [_msg] + new_messages
-                    else:
-                        break
-                else:
-                    token_cnt = (max_tokens - available_token) + cur_token_cnt
-                    break
-
-        if sys_msg is not None:
-            new_messages = [sys_msg] + new_messages
-
-        if (sys_msg is not None and len(new_messages) < 2) or (
-            sys_msg is None and len(new_messages) < 1
-        ):
-            raise Exception(
-                code="400",
-                message=f"The input messages exceed the maximum context length ({max_tokens} tokens) after "
-                f"keeping only the system message (if exists) and the latest one user message (around {token_cnt} tokens). ",
-            )
-        return new_messages
-
-    def truncate_message(self, msg: ChatMessage, max_tokens: int):
+    def get_message_context(self, msg: ChatMessage) -> str:
         if isinstance(msg.content, str):
-            content = truncate(msg.content, max_token=max_tokens)
+            return msg.content
         else:
             text = []
             for item in msg.content:
@@ -101,5 +132,32 @@ class BaseMemory:
                     return None
                 text.append(item.text)
             text = "\n".join(text)
+            return text
+
+    def truncate_message(self, msg: ChatMessage, max_tokens: int):
+        # 仅处理包含 tool_calls 的消息
+        if "tool_calls" in msg.additional_kwargs:
+            tool_calls = copy.deepcopy(msg.additional_kwargs["tool_calls"])
+            # 截断 arguments 字段
+            for call in tool_calls:
+                if "arguments" in call["function"]:
+                    args = str(call["function"]["arguments"])
+                    # 截断 arguments 字符串
+                    truncated_args = truncate(args, max_tokens)
+                    call["function"]["arguments"] = truncated_args
+                    estimated_arg_tokens = self.count_tokens(
+                        ChatMessage(role="assistant", content=truncated_args)
+                    )
+                    max_tokens -= estimated_arg_tokens
+                    if max_tokens <= 0:
+                        break
+            return ChatMessage(
+                role=msg.role,
+                content=msg.content,
+                additional_kwargs={"tool_calls": tool_calls},
+            )
+        else:
+            # 普通消息按 content 截断
+            text = self.get_message_context(msg)
             content = truncate(text, max_token=max_tokens, tokenizer=self.tokenizer)
-        return ChatMessage(role=msg.role, content=content)
+            return ChatMessage(role=msg.role, content=content)

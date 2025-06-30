@@ -69,10 +69,10 @@ async def generate_stream(
         max_steps = MAX_CHAT_STEPS  # 防止无限循环的最大步骤数
         step_count = 0
         stop_flag = False
-        memory_processor = BaseMemory(llm.max_tokens)
-        memory_processor.add(messages)
+        chat_memory = BaseMemory()
+        chat_memory.from_messages(messages)
         while step_count < max_steps:
-            messages = memory_processor.get_truncated_messages()
+            messages = chat_memory.get_truncated_messages()
             response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1
@@ -106,19 +106,12 @@ async def generate_stream(
                         yield "0:{text}\n".format(
                             text=json.dumps(choice.delta.content, ensure_ascii=False)
                         )
-                        if (
-                            isinstance(memory_processor.get()[-1], ChatMessage)
-                            and memory_processor.get()[-1].role == "assistant"
-                        ):
-                            memory_processor.get()[-1].content += str(
-                                choice.delta.content
+                        chat_memory.add(
+                            ChatMessage(
+                                role="assistant", content=str(choice.delta.content)
                             )
-                        else:
-                            memory_processor.add(
-                                ChatMessage(
-                                    role="assistant", content=str(choice.delta.content)
-                                )
-                            )  # 更新历史
+                        )
+                        # 更新历史
 
                     # 模型生成已结束
                     # 1. 因需要调用工具而结束,根据参数调用工具
@@ -146,7 +139,7 @@ async def generate_stream(
                                     yield f'a:{json.dumps({"toolCallId": tool_call["id"], "result": tool_result}, ensure_ascii=False)}\n'
 
                                 # 将工具调用和结果加入消息历史,供模型继续推理
-                                memory_processor.add(
+                                chat_memory.add(
                                     ChatMessage(
                                         role="assistant",
                                         content="",
@@ -167,7 +160,7 @@ async def generate_stream(
                                     )
                                 )
 
-                                memory_processor.add(
+                                chat_memory.add(
                                     ChatMessage(
                                         role="tool",
                                         content=json.dumps(
