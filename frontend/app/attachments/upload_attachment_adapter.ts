@@ -38,6 +38,19 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       },
     } as PendingAttachment;
 
+    const successStatus = {
+      id: fid,
+      type: file.type.startsWith("image/") ? "image" : "document",
+      name: file.name,
+      contentType: file.type || "application/octet-stream",
+      file,
+      status: {
+        type: "running",
+        reason: "uploading",
+        progress: 100,
+      },
+    } as PendingAttachment;
+
     yield initialStatus;
 
     const maxSize = 10 * 1024 * 1024; // 10MB limit
@@ -70,18 +83,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       console.log("result", result);
 
       // 返回成功状态
-      yield {
-        id: fid,
-        type: file.type.startsWith("image/") ? "image" : "document",
-        name: file.name,
-        contentType: file.type || "application/octet-stream",
-        file,
-        status: {
-          type: "running",
-          reason: "uploading",
-          progress: 100,
-        },
-      };
+      yield successStatus;
       return;
     } catch (error) {
       // 返回失败状态
@@ -100,8 +102,9 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       contentType: attachment.contentType || "application/octet-stream",
       content: [
         {
-          type: "text",
-          text: attachment.id,
+          type: "file",
+          data: `https://${attachment.id}`,
+          mimeType: attachment.contentType || "application/octet-stream",
         },
       ],
       status: { type: "complete" },

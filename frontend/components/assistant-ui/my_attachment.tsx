@@ -226,6 +226,7 @@ export const ComposerAddAttachment: FC = () => {
         variant="ghost"
       >
         <PaperclipIcon />
+        上传附件
       </TooltipIconButton>
     </ComposerPrimitive.AddAttachment>
   );

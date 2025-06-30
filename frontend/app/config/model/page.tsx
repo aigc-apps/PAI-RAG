@@ -703,7 +703,7 @@ export default function ModelConfigPage() {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      {isLlmConfig(editingConfig) ? (
+                      {isLlmConfig(config) ? (
                         <button
                           onClick={() => removeModel(config.id, "llms")}
                           className="text-red-500 hover:text-red-700 p-1"
