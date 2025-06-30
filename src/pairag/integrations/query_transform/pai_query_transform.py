@@ -37,9 +37,6 @@ def messages_to_history_str(
 
         string_message = f"{role.value}: {content}"
 
-        additional_kwargs = message.additional_kwargs
-        if additional_kwargs:
-            string_message += f"\n{additional_kwargs}"
         string_messages.append(string_message)
 
     return "\n".join(string_messages)
