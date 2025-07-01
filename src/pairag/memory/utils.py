@@ -1,30 +1,23 @@
-from llama_index.core.utils import get_tokenizer
 from llama_index.core.llms import ChatMessage
-from typing import Optional, Callable, List
+from typing import List, Tuple
 
 
 def truncate(
     text: str,
     max_token: int,
     start_token: int = 0,
-    tokenizer: Optional[Callable[[str], List]] = None,
-) -> str:
-    tokenizer = tokenizer or get_tokenizer()
+) -> Tuple[str, int]:
+    if not text:
+        return text, 0
 
-    token_ids = tokenizer(text)[start_token:]
+    truncated_text = text[start_token:max_token]
 
-    if len(token_ids) <= max_token:
-        return text
-
-    truncated_ids = token_ids[:max_token]
-
-    encoding = tokenizer.func.__self__
-    truncated_text = encoding.decode(truncated_ids)
-
-    return truncated_text
+    return truncated_text, len(truncated_text)
 
 
 def get_message_context(msg: ChatMessage) -> str:
+    if not msg.content:
+        return ""
     if isinstance(msg.content, str):
         return msg.content
     else:
@@ -35,3 +28,35 @@ def get_message_context(msg: ChatMessage) -> str:
             text.append(item.text)
         text = "\n".join(text)
         return text
+
+
+def estimate_tokens_in_message(message: ChatMessage) -> str:
+    """
+    Estimate string length for a single message.
+
+    Args:
+        message (OpenAIMessage): The message to estimate the string length for.
+
+    Returns:
+        int: The estimated string length.
+
+    """
+    tokens = 0
+
+    if message.role:
+        tokens += len(message.role)
+
+    text = get_message_context(message)
+    tokens += len(text)
+
+    additional_kwargs = {**message.additional_kwargs}
+
+    if "tool_calls" in additional_kwargs:
+        for tool_call in additional_kwargs["tool_calls"]:
+            tokens += len(str(tool_call))
+
+    return tokens
+
+
+def get_last_n_msgs_skip_first(msgs: List[ChatMessage], n):
+    return msgs[1:][-n:]

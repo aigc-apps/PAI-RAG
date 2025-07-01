@@ -4,7 +4,8 @@ from collections import deque
 from llama_index.core.llms import ChatMessage, MessageRole
 from pairag.memory.base_memory import BaseMemory
 from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS
-from llama_index.core.utils import get_tokenizer
+from pairag.memory.utils import get_last_n_msgs_skip_first
+
 
 # 测试数据
 SYSTEM_MSG = ChatMessage(role=MessageRole.SYSTEM, content="system prompt")
@@ -46,18 +47,14 @@ class TestBaseMemory:
     def memory(self):
         return BaseMemory(max_tokens=100)
 
-    @pytest.fixture
-    def tokenizer(self):
-        return get_tokenizer()
-
     def test_initialization(self):
         """测试初始化逻辑"""
         memory = BaseMemory()
         assert memory.max_tokens == DEFAULT_MAX_INPUT_TOKENS
         assert isinstance(memory.messages, list)
         assert isinstance(memory.queue, deque)
-        assert memory.tokens_in_queue == 0
-        assert memory.history_token == 0
+        assert memory.queue_tokens_num == 0
+        assert memory.history_tokens_num == 0
 
     def test_from_messages_basic(self, memory):
         """测试基础消息处理"""
@@ -70,7 +67,8 @@ class TestBaseMemory:
 
     def test_from_messages_history_limit(self, memory):
         """测试历史消息截取逻辑"""
-        long_messages = [USER_MSG] * 20  # 20条消息
+        memory.max_tokens = 20000
+        long_messages = [SYSTEM_MSG] + [USER_MSG] * 20  # 20条消息
         memory.from_messages(long_messages)
         assert len(memory.history_messages) == 11  # 系统消息 + 最后10条
 
@@ -79,12 +77,11 @@ class TestBaseMemory:
         with patch.object(memory, "count_tokens", return_value=10):
             with pytest.raises(Exception) as exc_info:
                 memory.max_tokens = 2  # 设置较小的max_tokens
-                memory.from_messages([USER_MSG])
+                memory.from_messages([SYSTEM_MSG, USER_MSG])
             assert "exceed the maximum context length" in str(exc_info.value)
 
-    def test_add_normal_message(self, memory, tokenizer):
+    def test_add_normal_message(self, memory):
         """测试添加普通消息"""
-        memory.tokenizer = tokenizer
 
         # 添加普通消息
         msg = ChatMessage(role=MessageRole.ASSISTANT, content="test content")
@@ -92,11 +89,10 @@ class TestBaseMemory:
 
         assert msg in memory.messages
         assert len(memory.queue) == 1
-        assert memory.tokens_in_queue == 6
+        assert memory.queue_tokens_num == 21
 
-    def test_add_tool_message(self, memory, tokenizer):
+    def test_add_tool_message(self, memory):
         """测试添加工具消息"""
-        memory.tokenizer = tokenizer
         memory.add(TOOL_CALL_MSG)
 
         # 添加工具响应消息
@@ -104,9 +100,8 @@ class TestBaseMemory:
 
         assert len(memory.queue) == 2
 
-    def test_queue_truncation(self, memory, tokenizer):
+    def test_queue_truncation(self, memory):
         """测试队列pop逻辑"""
-        memory.tokenizer = tokenizer
         memory.max_tokens = 10  # 设置较小的max_tokens
 
         # 添加第一条消息
@@ -119,9 +114,8 @@ class TestBaseMemory:
 
         assert len(memory.queue) == 1  # 第一条被pop
 
-    def test_tool_call_pairing(self, memory, tokenizer):
+    def test_tool_call_pairing(self, memory):
         """测试工具调用/响应必须成对出现"""
-        memory.tokenizer = tokenizer
         memory.max_tokens = 10
 
         # 添加工具调用消息
@@ -131,20 +125,20 @@ class TestBaseMemory:
         memory.add(TOOL_RESPONSE_MSG)
 
         # 触发截断逻辑
-        while memory.tokens_in_queue > memory.max_tokens - memory.history_token:
+        while memory.queue_tokens_num > memory.max_tokens - memory.history_tokens_num:
             first_msg_info = memory.queue[0]
             first_msg_available_tokens = (
                 memory.max_tokens
-                - memory.history_token
-                - (memory.tokens_in_queue - first_msg_info.tokens_num)
+                - memory.history_tokens_num
+                - (memory.queue_tokens_num - first_msg_info.tokens_num)
             )
             if first_msg_available_tokens <= 0:
-                memory.tokens_in_queue -= first_msg_info.tokens_num
+                memory.queue_tokens_num -= first_msg_info.tokens_num
                 memory.queue.popleft()
 
                 # 验证不能单独弹出工具调用或响应
                 if memory.queue and memory.queue[0].message.role == MessageRole.TOOL:
-                    memory.tokens_in_queue -= memory.queue[0].tokens_num
+                    memory.queue_tokens_num -= memory.queue[0].tokens_num
                     memory.queue.popleft()
 
         assert len(memory.queue) % 2 == 0  # 确保成对存在
@@ -176,7 +170,7 @@ class TestBaseMemory:
 
     def test_truncate_tool_call(self, memory):
         """测试工具调用参数截断"""
-        truncated_msg = memory.truncate_message(TOOL_CALL_MSG, 5)
+        truncated_msg, token_num = memory.truncate_message(TOOL_CALL_MSG, 5)
 
         assert (
             truncated_msg.additional_kwargs["tool_calls"][0]["function"]["arguments"]
@@ -187,5 +181,14 @@ class TestBaseMemory:
     def test_truncate_normal_message(self, memory):
         """测试普通消息截断"""
         msg = ChatMessage(role=MessageRole.ASSISTANT, content="original long content")
-        truncated_msg = memory.truncate_message(msg, 2)
+        truncated_msg, token_num = memory.truncate_message(msg, 2)
         assert truncated_msg.content != msg.content
+
+    def test_get_last_n_msgs_skip_first(self):
+        """测试取跳过第一条消息"""
+
+        msg_list = [1, 2, 3, 4, 5]
+
+        new_msg_list = get_last_n_msgs_skip_first(msg_list, 7)
+
+        assert new_msg_list == [2, 3, 4, 5]
