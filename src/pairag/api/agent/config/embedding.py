@@ -39,7 +39,7 @@ async def create_embedding(
 
         return success_response(data=embedding, message="创建embedding模型成功。")
     except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add llm: {e.orig}")
+        logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
