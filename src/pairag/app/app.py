@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         from pairag.mcp.providers.llm_provider import llm_provider
         from pairag.mcp.providers.embedding_provider import embedding_provider
         from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
-
+        from pairag.mcp.providers.websearch_provider import websearch_provider
         await init_db()
         logger.info("Initialized databases for MCP.")
         await mcp_provider.refresh()
@@ -44,7 +44,8 @@ async def lifespan(app: FastAPI):
         logger.info("Initialized embedding models.")
         await knowledgebase_provider.refresh()
         logger.info("Initialized knowledgebases.")
-
+        await websearch_provider.refresh()
+        logger.info("Initialized websearch configs.")
 
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()

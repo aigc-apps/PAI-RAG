@@ -4,7 +4,6 @@ from loguru import logger
 from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
-from llama_index.core.tools import FunctionTool
 import json
 import time
 import os
@@ -149,12 +148,3 @@ async def aget_aliyun_search_result(query: str):
     )
     res = await search_client.aquery(query)
     return json.dumps(res, ensure_ascii=False)
-
-
-async def aget_aliyun_search_tool():
-    search_tool = FunctionTool.from_defaults(
-        async_fn=aget_aliyun_search_result,
-        name="search-web",
-        description="从阿里云搜索引擎中搜索给定查询的最新内容。",
-    )
-    return search_tool

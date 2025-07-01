@@ -67,20 +67,22 @@ export const Assistant = () => {
     console.log("selectedOptions updated:", selectedOptions);
   }, [selectedOptions]);
 
-  const headers = useMemo(() => {
+  const extra_body = useMemo(() => {
     const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
+    const mcp_servers = mcpOptions.map((opt) => opt.split(":")[1]);
     return {
-      "X-Model-Id": llmConfig.model_id,
-      "X-Options": selectedOptions
-        .filter((opt) => !opt.startsWith("mcp:"))
-        .join(","),
-      "X-MCP-NAMES": mcpOptions.map((opt) => opt.split(":")[1]).join(","),
+      model: llmConfig.model_id,
+      mcp_servers: mcp_servers,
+      enable_search: selectedOptions.includes("search"),
+      enable_thinking: selectedOptions.includes("thinking"),
+      enable_mcp: mcp_servers.length > 0,
     };
   }, [llmConfig.model_id, selectedOptions]);
 
   const runtime = useChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
-    headers: headers,
+    //api: "/api/chat",
+    body: extra_body,
   });
   const pathname = usePathname();
   console.log("pathname:", pathname);
