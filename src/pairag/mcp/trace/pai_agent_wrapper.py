@@ -1,15 +1,15 @@
 from functools import wraps
 import os
-import json
 import time
-from fastapi.responses import StreamingResponse
+from typing import cast
 from opentelemetry import trace
 from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
-from loguru import logger
 
+from pairag.mcp.models import ChatAgentRequest
+from loguru import logger
 
 tracer = trace.get_tracer(__name__, tracer_provider=trace.get_tracer_provider())
 
@@ -23,16 +23,6 @@ CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 STATUS_OK = Status(StatusCode.OK)
 
 
-def _get_final_chunk_content(chunk: str):
-    """return strip content if it's chunk from final call, empty otherwise"""
-    # NOTE: this check should be align with generate_stream() in chat.py
-    if chunk and chunk.startswith('0:"') and chunk.endswith('"\n'):
-        return chunk[3:-2]
-
-    # do not output if it's not chunks for final output
-    return ""
-
-
 def pai_agent_wrapper(func):
     """decorator to capture input & output string of entry point (handle_chat in our case)."""
 
@@ -42,21 +32,18 @@ def pai_agent_wrapper(func):
         if os.getenv("TRACING_ENABLED", "false") != "true":
             return await func(*args, **kwargs)
 
-        messages = kwargs.get("messages", [])
         try:
-            for message in reversed(messages):
-                if message.role == "user":
+            chat_request = kwargs.get("chat_request")
+            chat_request = cast(ChatAgentRequest, chat_request)
+            for message in reversed(chat_request.messages):
+                if message["role"] == "user":
                     request_text = ""
-                    for block in message.blocks:
-                        if block.block_type == "text":
-                            try:
-                                j = json.loads(block.text)
-                                request_text += j[0].get("text", "")
-                            except Exception:
-                                logger.warning(
-                                    f"Failed to extract request text, block.text: {block.text}"
-                                )
-                                request_text += block.text
+                    if isinstance(message["content"], str):
+                        request_text = message["content"]
+                    else:
+                        for message_part in message["content"]:
+                            if message_part["type"] == "text":
+                                request_text += message_part["text"]
                     break
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
@@ -70,41 +57,33 @@ def pai_agent_wrapper(func):
         token = attach(ctx)
 
         try:
-            response = await func(*args, **kwargs)
+            response_gen = await func(*args, **kwargs)
 
-            if isinstance(response, StreamingResponse):
-                original_body = response.body_iterator
+            async def wrapped_generator():
+                final_output = ""
+                first_token_time = None
+                try:
+                    is_error = False
+                    async for response in response_gen:
+                        if response.message.role == "assistant":
+                            final_output += response.delta
+                        first_token_time = first_token_time or time.time_ns()
+                        if response.message.additional_kwargs.get("failed"):
+                            is_error = True
+                        yield response
+                    if not is_error:
+                        span.set_status(STATUS_OK)
+                    else:
+                        span.set_status(Status(StatusCode.ERROR))
+                except Exception as stream_exc:
+                    span.record_exception(stream_exc)
+                    span.set_status(Status(StatusCode.ERROR, str(stream_exc)))
+                    raise
+                finally:
+                    span.set_attribute(OUTPUT_VALUE, final_output)
+                    span.end(end_time=first_token_time or time.time_ns())
 
-                async def wrapped_generator():
-                    final_output = ""
-                    first_token_time = None
-                    try:
-                        is_error = False
-                        async for chunk in original_body:
-                            final_output += _get_final_chunk_content(chunk)
-                            first_token_time = first_token_time or time.time_ns()
-                            if '"finishReason":"error"' in chunk:
-                                is_error = True
-                            yield chunk
-                        if not is_error:
-                            span.set_status(STATUS_OK)
-                        else:
-                            span.set_status(Status(StatusCode.ERROR))
-                    except Exception as stream_exc:
-                        span.record_exception(stream_exc)
-                        span.set_status(Status(StatusCode.ERROR, str(stream_exc)))
-                        raise
-                    finally:
-                        span.set_attribute(OUTPUT_VALUE, final_output)
-                        span.end(end_time=first_token_time or time.time_ns())
-
-                response.body_iterator = wrapped_generator()
-
-            else:
-                span.set_status(STATUS_OK)
-                span.end()
-
-            return response
+            return wrapped_generator()
 
         except Exception as e:
             span.record_exception(e)
