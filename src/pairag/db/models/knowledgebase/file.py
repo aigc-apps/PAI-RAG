@@ -9,7 +9,7 @@ class KnowledgebaseFileEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     knowledgebase: str = Field(default=None, foreign_key="pai_knowledgebase.name")
 
-    file_name: str = Field(default=None)
+    file_name: str = Field(default=None, unique=True)
     file_path: str = Field(default=None)
     file_type: str = Field(default=None)
     file_size: int = Field(default=None)
