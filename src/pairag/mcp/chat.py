@@ -72,7 +72,7 @@ async def generate_stream(
         chat_memory = BaseMemory()
         chat_memory.from_messages(messages)
         while step_count < max_steps:
-            messages = chat_memory.get_truncated_messages()
+            messages = chat_memory.get_context()
             response = await gen_stream_response(llm, messages, openai_tools)
             draft_tool_calls = []
             draft_tool_calls_index = -1

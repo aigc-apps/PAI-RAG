@@ -62,20 +62,17 @@ class TestBaseMemory:
     def test_from_messages_basic(self, memory):
         """测试基础消息处理"""
         messages = [SYSTEM_MSG, USER_MSG, ASSISTANT_MSG]
-        result = memory.from_messages(messages)
+        memory.from_messages(messages)
 
         assert len(memory.messages) == 3
         assert memory.messages == messages
         assert len(memory.history_messages) == 3
-        assert result == messages  # 验证返回值
 
     def test_from_messages_history_limit(self, memory):
         """测试历史消息截取逻辑"""
         long_messages = [USER_MSG] * 20  # 20条消息
-        result = memory.from_messages(long_messages)
-
-        assert len(result) == 11  # 系统消息 + 最后10条
-        assert len(memory.history_messages) == 11
+        memory.from_messages(long_messages)
+        assert len(memory.history_messages) == 11  # 系统消息 + 最后10条
 
     def test_from_messages_token_limit_exceeded(self, memory):
         """测试历史token超限时抛出异常"""
