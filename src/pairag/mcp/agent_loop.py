@@ -73,7 +73,6 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 
 async def astep_gen(
     llm: LLM,
-    messages: List[ChatMessage],
     tools: List[FunctionTool],
     tool_name_map: Dict[str, FunctionTool],
     memory: BaseMemory = None,
@@ -130,7 +129,6 @@ async def astep_gen(
                     "tool_call_id": tool_call.id,
                 },
             )
-            messages.extend([tool_call_message, tool_result_message])
             memory.add(tool_call_message)
             memory.add(tool_result_message)
 
@@ -196,7 +194,6 @@ class AgentLoop:
                 try:
                     step_gen = astep_gen(
                         llm=llm,
-                        messages=messages,
                         tools=tools,
                         tool_name_map=tool_name_map,
                         memory=memory,
