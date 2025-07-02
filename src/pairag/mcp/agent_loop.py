@@ -18,6 +18,7 @@ from pairag.mcp.providers.websearch_provider import websearch_provider
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 from llama_index.core.llms import LLM
 from pairag.mcp.constants import MAX_CHAT_STEPS
+from pairag.memory.base_memory import BaseMemory
 from llama_index.core.tools import FunctionTool, ToolOutput
 from tenacity import retry, stop_after_attempt, wait_fixed
 from llama_index.core.base.llms.types import (
@@ -72,10 +73,11 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 
 async def astep_gen(
     llm: LLM,
-    messages: List[ChatMessage],
     tools: List[FunctionTool],
     tool_name_map: Dict[str, FunctionTool],
+    memory: BaseMemory = None,
 ):
+    messages = memory.get_context()
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,
@@ -90,12 +92,21 @@ async def astep_gen(
         )
 
     tool_calls = []
+    response_context = ""
     async for response in response_gen:
         tool_calls = response.message.additional_kwargs.get("tool_calls")
         if response.delta:
             response.message.additional_kwargs.pop("tool_calls", None)
+            response_context += response.delta
             yield response
 
+    if response_context:
+        memory.add(
+            ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=response_context,
+            )
+        )
     if tool_calls:
         tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
         for tool_call in tool_calls:
@@ -118,7 +129,8 @@ async def astep_gen(
                     "tool_call_id": tool_call.id,
                 },
             )
-            messages.extend([tool_call_message, tool_result_message])
+            memory.add(tool_call_message)
+            memory.add(tool_result_message)
 
             yield ChatResponse(
                 message=tool_call_message,
@@ -167,6 +179,8 @@ class AgentLoop:
             {"role": "system", "content": system_prompt}
         ] + chat_request.messages
         messages = convert_to_chat_messages(input_messages)
+        memory = BaseMemory()
+        memory.from_messages(messages)
 
         max_steps = chat_request.max_steps or self.max_steps
 
@@ -180,9 +194,9 @@ class AgentLoop:
                 try:
                     step_gen = astep_gen(
                         llm=llm,
-                        messages=messages,
                         tools=tools,
                         tool_name_map=tool_name_map,
+                        memory=memory,
                     )
                     async for chunk in step_gen:
                         yield chunk
