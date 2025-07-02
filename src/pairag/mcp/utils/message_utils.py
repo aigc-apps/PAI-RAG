@@ -1,7 +1,14 @@
 import json
-from typing import Dict, List
-from llama_index.core.utils import resolve_binary
-from llama_index.core.llms import ChatMessage
+from typing import List
+from llama_index.core.base.llms.types import (
+    ChatMessage,
+    ImageBlock,
+    TextBlock,
+)
+from openai.types.chat.chat_completion_chunk import (
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 
 
 def to_chat_message(
@@ -11,76 +18,55 @@ def to_chat_message(
     assert "content" in message_dict
     role = message_dict["role"]
     content = message_dict.get("content")
-    contents = []
     tool_calls = []
-    if isinstance(content, list):
+    role = message_dict.get("role")
+    # NOTE: Azure OpenAI returns function calling messages without a content key
+    content = message_dict.get("content")
+    blocks = []
+    tool_call_index = 0
+    if isinstance(content, str):
+        return ChatMessage(role=role, content=content)
+    else:
+        # list
         for elem in content:
             t = elem.get("type")
             if t == "text":
-                contents.append({"type": t, "text": elem.get("text")})
+                blocks.append(TextBlock(text=elem.get("text")))
             elif t == "image_url":
-                img = elem["image_url"]["url"]
-                detail = elem["image_url"]["detail"]
+                img = elem.get("image_url").get("url")
+                detail = elem.get("image_url").get("detail", "auto")
                 if img.startswith("data:"):
-                    img_bytes = resolve_binary(raw_bytes=img, as_base64=True).read()
-                    img_str = img_bytes.decode("utf-8")
-                    image_url = f"base64,{img_str}"
+                    blocks.append(ImageBlock(image=img, detail=detail))
                 else:
-                    image_url = str(img)
-                contents.append(
-                    {
-                        "type": t,
-                        "image_url": {
-                            "url": image_url,
-                            "detail": detail or "auto",
-                        },
-                    }
-                )
+                    blocks.append(ImageBlock(url=img, detail=detail))
             elif t == "tool-call":
+                tool_call_id = elem.get("toolCallId")
+                tool_name = elem.get("toolName")
+                tool_argument = json.dumps(elem.get("args"), ensure_ascii=False)
                 tool_calls.append(
-                    {
-                        "id": elem["toolCallId"],
-                        "type": "function",
-                        "function": {
-                            "name": elem["toolName"],
-                            "arguments": json.dumps(elem["args"], ensure_ascii=False),
-                        },
-                    }
-                )
-            elif t == "tool-result":
-                call_id = elem["toolCallId"]
-                if call_id is None:
-                    raise ValueError(
-                        "tool_call_id or call_id is required in additional_kwargs for tool messages"
+                    ChoiceDeltaToolCall(
+                        index=tool_call_index,
+                        id=tool_call_id,
+                        type="function",
+                        function=ChoiceDeltaToolCallFunction(
+                            name=tool_name,
+                            arguments=tool_argument,
+                        ),
                     )
-                chat_message = ChatMessage(
-                    role=role,
-                    content=str(elem["result"]),
-                    tool_call_id=call_id,
                 )
-                return chat_message
-    elif isinstance(content, str) or isinstance(content, Dict):
-        if role == "system":
-            chat_message = ChatMessage(role=role, content=content)
-        else:
-            chat_message = ChatMessage(
-                role=role, content=json.dumps(content, ensure_ascii=False)
-            )
+                tool_call_index += 1
+            elif t == "tool-result":
+                blocks.append(TextBlock(text=elem.get("result")))
 
-        return chat_message
+        additional_kwargs = {}
+        if tool_calls:
+            additional_kwargs = {"tool_calls": tool_calls}
 
-    if tool_calls:
-        chat_message = ChatMessage(
+        return ChatMessage(
             role=role,
-            content="",
-            additional_kwargs={"tool_calls": tool_calls},
+            blocks=blocks,
+            additional_kwargs=additional_kwargs,
         )
-    else:
-        chat_message = ChatMessage(
-            role=role, content=json.dumps(content, ensure_ascii=False)
-        )
-
-    return chat_message
 
 
 def convert_to_chat_messages(messages: List[dict]):

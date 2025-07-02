@@ -4,6 +4,10 @@ from collections import deque
 from llama_index.core.llms import ChatMessage, MessageRole
 from pairag.memory.base_memory import BaseMemory
 from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS
+from openai.types.chat.chat_completion_chunk import (
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 from pairag.memory.utils import get_last_n_msgs_skip_first
 
 
@@ -11,29 +15,22 @@ from pairag.memory.utils import get_last_n_msgs_skip_first
 SYSTEM_MSG = ChatMessage(role=MessageRole.SYSTEM, content="system prompt")
 USER_MSG = ChatMessage(role=MessageRole.USER, content="user input")
 ASSISTANT_MSG = ChatMessage(role=MessageRole.ASSISTANT, content="assistant response")
+arguments = "已经成功获取了上海虹桥站（station_code: AOH）和杭州西站（station_code: HVU）的车站编码。接下来，我需要使用这些信息加上当前日期作为参数，调用12306-mcp--get-tickets接口来查询两个车站之间的高铁班次情况。为了确保查询到的是今天的班次信息，我将先通过12306-mcp--get-current-date接口获取今天的具体日期。"
+tool_calls = [
+    ChoiceDeltaToolCall(
+        index=1,
+        id="1",
+        type="function",
+        function=ChoiceDeltaToolCallFunction(name="test", arguments=str(arguments)),
+    )
+]
 
 # 工具调用消息
 TOOL_CALL_MSG = ChatMessage(
     role=MessageRole.ASSISTANT,
     content="",
     additional_kwargs={
-        "tool_calls": [
-            {
-                "id": "1",
-                "type": "function",
-                "function": {
-                    "name": "test_func",
-                    "arguments": {
-                        "id": "call_37d96e585ecd4e658962f0",
-                        "function": {
-                            "arguments": '{"thought": "已经成功获取了上海虹桥站（station_code: AOH）和杭州西站（station_code: HVU）的车站编码。接下来，我需要使用这些信息加上当前日期作为参数，调用12306-mcp--get-tickets接口来查询两个车站之间的高铁班次情况。为了确保查询到的是今天的班次信息，我将先通过12306-mcp--get-current-date接口获取今天的具体日期。", "plan": ["调用12306-mcp--get-current-date接口获取今天的确切日期", "利用确切日期、上海虹桥站和杭州西站的station_code作为参数，调用12306-mcp--get-tickets接口查询两个车站间的高铁班次"], "action": "调用12306-mcp--get-current-date接口获取今天的确切日期", "thought_number": 2}',
-                            "name": "think_and_planning",
-                        },
-                        "type": "function",
-                    },
-                },
-            }
-        ]
+        "tool_calls": tool_calls,
     },
 )
 
@@ -173,8 +170,8 @@ class TestBaseMemory:
         truncated_msg, token_num = memory.truncate_message(TOOL_CALL_MSG, 5)
 
         assert (
-            truncated_msg.additional_kwargs["tool_calls"][0]["function"]["arguments"]
-            != TOOL_CALL_MSG.additional_kwargs["tool_calls"][0]["function"]["arguments"]
+            truncated_msg.additional_kwargs["tool_calls"][0].function.arguments
+            != TOOL_CALL_MSG.additional_kwargs["tool_calls"][0].function.arguments
         )
         assert truncated_msg.role == MessageRole.ASSISTANT
 

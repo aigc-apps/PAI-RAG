@@ -70,6 +70,13 @@ class BaseMemory:
 
         tokens_num = self.count_tokens(msg)
         available_tokens = self.max_tokens - self.queue_tokens_num
+        # 按照msg token截断message
+        # 如果是tool,不能把preceeding message with "tool_calls" pop出queue,必须成对出现
+        max_message_tokens = self.max_tokens
+        if msg.role == MessageRole.TOOL:
+            max_message_tokens = max_message_tokens - self.queue[-1].tokens_num
+        if tokens_num > max_message_tokens:
+            msg, tokens_num = self.truncate_message(msg, max_tokens=max_message_tokens)
         # tokens余额足够,直接进入queue
         if tokens_num <= available_tokens:
             queue_message = QueueMessageItem(message=msg, tokens_num=tokens_num)
@@ -78,17 +85,11 @@ class BaseMemory:
         # tokens余额不足,需要FIFO truncate和pop
         else:
             available_tokens = self.max_tokens
-            # 如果是tool,不能把preceeding message with "tool_calls" pop出queue,必须成对出现
-            if msg.role == MessageRole.TOOL:
-                available_tokens = available_tokens - self.queue[-1].tokens_num
-            new_msg, new_tokens_num = self.truncate_message(
-                msg, max_tokens=available_tokens
-            )
-            queue_message = QueueMessageItem(message=new_msg, tokens_num=new_tokens_num)
-            tokens_to_pop = self.queue_tokens_num + new_tokens_num - self.max_tokens
+            queue_message = QueueMessageItem(message=msg, tokens_num=tokens_num)
+            tokens_to_pop = self.queue_tokens_num + tokens_num - self.max_tokens
             self.pop(tokens_to_pop)
             self.queue.append(queue_message)
-            self.queue_tokens_num += new_tokens_num
+            self.queue_tokens_num += tokens_num
 
     def pop(self, tokens_to_pop):
         while tokens_to_pop > 0 and self.queue:
@@ -141,11 +142,11 @@ class BaseMemory:
             tool_calls = copy.deepcopy(msg.additional_kwargs["tool_calls"])
             # 截断 arguments 字段
             for call in tool_calls:
-                if "arguments" in call["function"]:
-                    args = str(call["function"]["arguments"])
+                if call.function.arguments:
+                    args = str(call.function.arguments)
                     # 截断 arguments 字符串
                     truncated_args, estimated_arg_tokens = truncate(args, max_tokens)
-                    call["function"]["arguments"] = truncated_args
+                    call.function.arguments = truncated_args
                     max_tokens -= estimated_arg_tokens
                     if max_tokens <= 0:
                         break
