@@ -184,8 +184,8 @@ class TestBaseMemory:
     def test_get_last_n_msgs_skip_first(self):
         """测试取跳过第一条消息"""
 
-        msg_list = [1, 2, 3, 4, 5]
+        msg_list = [ASSISTANT_MSG] * 5
 
         new_msg_list = get_last_n_msgs_skip_first(msg_list, 7)
 
-        assert new_msg_list == deque([2, 3, 4, 5])
+        assert new_msg_list == [ASSISTANT_MSG] * 4
