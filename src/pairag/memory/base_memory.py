@@ -59,7 +59,7 @@ class BaseMemory:
             last_n_history_messages
             and last_n_history_messages[0].role == MessageRole.TOOL
         ):
-            del last_n_history_messages[0]
+            last_n_history_messages.popleft()
         for message in last_n_history_messages:
             new_msg, tokens_num = self.truncate_message(
                 message, max_tokens=DEFAULT_HISTORY_MESSAGES_INPUT_TOKENS

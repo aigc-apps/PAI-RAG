@@ -1,5 +1,6 @@
 from llama_index.core.llms import ChatMessage
-from typing import List, Tuple
+from collections import deque
+from typing import List, Tuple, Deque
 
 
 def truncate(
@@ -58,5 +59,5 @@ def estimate_tokens_in_message(message: ChatMessage) -> str:
     return tokens
 
 
-def get_last_n_msgs_skip_first(msgs: List[ChatMessage], n):
-    return msgs[1:][-n:]
+def get_last_n_msgs_skip_first(msgs: List[ChatMessage], n) -> Deque[ChatMessage]:
+    return deque(msgs[1:][-n:])
