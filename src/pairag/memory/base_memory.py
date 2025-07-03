@@ -54,12 +54,6 @@ class BaseMemory:
         last_n_history_messages = get_last_n_msgs_skip_first(
             msgs, DEFAULT_HISTORY_MESSAGES_COUNT
         )
-        # 如果第一个message是tool,"tool_calls" message必须在他前面, 成对出现。删除掉tool message
-        if (
-            last_n_history_messages
-            and last_n_history_messages[0].role == MessageRole.TOOL
-        ):
-            last_n_history_messages.popleft()
         for message in last_n_history_messages:
             new_msg, tokens_num = self.truncate_message(
                 message, max_tokens=DEFAULT_HISTORY_MESSAGES_INPUT_TOKENS
