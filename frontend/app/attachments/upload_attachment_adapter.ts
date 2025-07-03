@@ -100,13 +100,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       type: "document",
       name: attachment.name,
       contentType: attachment.contentType || "application/octet-stream",
-      content: [
-        {
-          type: "file",
-          data: `https://${attachment.id}`,
-          mimeType: attachment.contentType || "application/octet-stream",
-        },
-      ],
+      content: [],
       status: { type: "complete" },
     };
   }

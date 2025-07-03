@@ -14,7 +14,12 @@ class ChatAgentRequest(BaseModel):
     enable_mcp: Optional[bool] = False
     max_steps: Optional[int] = None
 
-    attachments: Optional[List[Dict[str, Any]]] = []  # attachments, list of dict?
+    enable_attachments: Optional[bool] = False  # 是否启用附件功能
+    attachments: Optional[
+        List[Dict[str, Any]]
+    ] = (
+        []
+    )  # Temporary design for attachments, list of dict with [id, name, type]. This may be revised in the future.
 
     # llm args
     temperature: Optional[float] = None

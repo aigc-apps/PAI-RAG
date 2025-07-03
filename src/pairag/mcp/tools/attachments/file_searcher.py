@@ -1,7 +1,9 @@
 import json
 from llama_index.core.tools import FunctionTool
+from typing import Annotated
 
-MOCK_FILE_CONTENT = """
+MOCK_FILE_CONTENT = [
+    """
 智能床硬件功能描述
 1.1	头部抬升
 痛点描述：
@@ -28,7 +30,9 @@ MOCK_FILE_CONTENT = """
 [3]床头抬高角度对机械通气患者胃食管反流与压疮的影响[J]. 广东医学
 使用产品类型：
  IBED4、IBED5、iQ3、iQ5、iQ7、iQ7 plus
-
+""",
+    """
+智能床硬件功能描述
 1.2 脚部抬升
 痛点描述：
 1、下肢酸胀、水肿、肌肉紧张
@@ -55,19 +59,25 @@ MOCK_FILE_CONTENT = """
 [4]体位减压治疗妊娠水肿90例疗效分析[J]. 中国医药导报
 使用产品类型：
 IBED4、IBED5、iQ3、iQ5、iQ7、iQ7 plus
-"""
+""",
+]
 
 
-async def aget_read_file_result(file_id: str):
-    """Get read file tool"""
-    data = {"file_id": file_id, "content": MOCK_FILE_CONTENT}
+async def aget_file_retrieve_results(
+    query_str: Annotated[
+        str,
+        "用户的问题",
+    ] = "",
+):
+    """Get retrieve file tool"""
+    data = {"query_str": query_str, "content": MOCK_FILE_CONTENT}
     return json.dumps(data, ensure_ascii=False)
 
 
-async def aget_read_file_tool():
-    read_file_tool = FunctionTool.from_defaults(
-        async_fn=aget_read_file_result,
-        name="read-file",
-        description="读取文件的内容。",
+async def aget_file_searcher():
+    retrieve_file_tool = FunctionTool.from_defaults(
+        async_fn=aget_file_retrieve_results,
+        name="search-file",
+        description="如果附件中并没有直接提供关于用户问题的相关信息，请使用该工具进一步搜索附件里的更多信息。",
     )
-    return read_file_tool
+    return retrieve_file_tool

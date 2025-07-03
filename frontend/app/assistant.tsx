@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+// import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
@@ -21,13 +21,8 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
-import {
-  CompositeAttachmentAdapter,
-  SimpleImageAttachmentAdapter,
-  SimpleTextAttachmentAdapter,
-} from "@assistant-ui/react";
 import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
-
+import { usePaiRuntime } from "./runtime/usePaiRuntime";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -86,9 +81,8 @@ export const Assistant = () => {
     };
   }, [llmConfig.model_id, selectedOptions]);
 
-  const runtime = useChatRuntime({
+  const runtime = usePaiRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
-    //api: "/api/chat",
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),

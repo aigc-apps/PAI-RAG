@@ -7,15 +7,22 @@ from pairag.mcp.prompts import (
     PROMPT_WITH_DEEP_RESEARCH,
     PROMPT_WITHOUT_DEEP_RESEARCH,
     PROMPT_WITHOUT_TOOLS,
+    PROMPT_WITH_ATTACHMENTS_AND_DEEP_THINKING,
+    PROMPT_WITH_ATTACHMENTS_AND_NO_DEEP_THINKING,
 )
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.mcp.utils.message_utils import convert_to_chat_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
+from pairag.mcp.tools.attachments.file_reader import aget_file_reader
+from pairag.mcp.tools.attachments.file_searcher import aget_file_searcher
 from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.mcp.providers.websearch_provider import websearch_provider
-from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
+from openai.types.chat.chat_completion_chunk import (
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 from llama_index.core.llms import LLM
 from pairag.mcp.constants import MAX_CHAT_STEPS
 from llama_index.core.tools import FunctionTool, ToolOutput
@@ -30,7 +37,7 @@ from pairag.integrations.trace.base import use_current_span
 from opentelemetry import trace
 
 
-def get_system_prompt(enable_search, enable_mcp, enable_thinking):
+def get_system_prompt(enable_search, enable_mcp, enable_thinking, enable_attachments):
     if enable_search or enable_mcp:
         if enable_thinking:
             system_prompt = PROMPT_WITH_DEEP_RESEARCH.format(
@@ -40,6 +47,16 @@ def get_system_prompt(enable_search, enable_mcp, enable_thinking):
             system_prompt = PROMPT_WITHOUT_DEEP_RESEARCH.format(
                 current_datetime=get_prompt_current_time_str()
             )
+    elif enable_attachments:
+        system_prompt = (
+            PROMPT_WITH_ATTACHMENTS_AND_DEEP_THINKING.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+            if enable_thinking
+            else PROMPT_WITH_ATTACHMENTS_AND_NO_DEEP_THINKING.format(
+                current_datetime=get_prompt_current_time_str()
+            )
+        )
     else:
         system_prompt = PROMPT_WITHOUT_TOOLS.format(
             current_datetime=get_prompt_current_time_str()
@@ -51,9 +68,16 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     mcp_tools = []
 
     # 获取思考工具
-    think_cache = []
-    think_tool = await aget_simple_think_tool(think_cache=think_cache)
-    mcp_tools.append(think_tool)
+    if chat_request.enable_thinking:
+        think_cache = []
+        think_tool = await aget_simple_think_tool(think_cache=think_cache)
+        mcp_tools.append(think_tool)
+
+    if chat_request.enable_attachments:
+        # 获取文件搜索工具
+        file_searcher_tool = await aget_file_searcher()
+        mcp_tools.append(file_searcher_tool)
+
     if chat_request.enable_search:
         websearch_tools = websearch_provider.get_search_tools()
         mcp_tools.extend(websearch_tools)
@@ -76,6 +100,7 @@ async def astep_gen(
     tools: List[FunctionTool],
     tool_name_map: Dict[str, FunctionTool],
 ):
+    logger.info(f"[Model] astep_gen messages: {messages}")
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,
@@ -161,6 +186,7 @@ class AgentLoop:
             enable_search=chat_request.enable_search,
             enable_mcp=chat_request.enable_mcp,
             enable_thinking=chat_request.enable_thinking,
+            enable_attachments=chat_request.enable_attachments,
         )
 
         input_messages = [
@@ -173,6 +199,51 @@ class AgentLoop:
         @use_current_span(trace.get_current_span())
         async def gen():
             cur_step = 1
+            if len(chat_request.attachments) > 0:
+                for attachment in chat_request.attachments:
+                    file_reader = await aget_file_reader()
+                    file_reader_fn_args = {
+                        "file_id": attachment.get("id"),
+                        "file_name": attachment.get("name", "未知附件"),
+                    }
+                    file_reader_tool_call = ChoiceDeltaToolCall(
+                        index=0,
+                        id=f"call_file_reader_{attachment.get('id')}",
+                        type="function",
+                        function=ChoiceDeltaToolCallFunction(
+                            name=file_reader.metadata.name,
+                            arguments=json.dumps(
+                                file_reader_fn_args, ensure_ascii=False
+                            ),
+                        ),
+                    )
+
+                    tool_result = await call_tool_with_retry(
+                        file_reader, file_reader_fn_args
+                    )
+
+                    tool_call_message = ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content="",
+                        additional_kwargs={"tool_calls": [file_reader_tool_call]},
+                    )
+                    tool_result_message = ChatMessage(
+                        role=MessageRole.TOOL,
+                        content=tool_result.content,
+                        additional_kwargs={
+                            "tool_call_id": file_reader_tool_call.id,
+                        },
+                    )
+                    messages.extend([tool_call_message, tool_result_message])
+
+                    yield ChatResponse(
+                        message=tool_call_message,
+                        delta="",
+                    )
+                    yield ChatResponse(
+                        message=tool_result_message,
+                        delta=tool_result.content,
+                    )
 
             while cur_step <= max_steps:
                 logger.info(f"Running step {cur_step}/{max_steps}.")
