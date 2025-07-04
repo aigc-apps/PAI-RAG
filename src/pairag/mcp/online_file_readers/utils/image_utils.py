@@ -35,7 +35,7 @@ def replace_markdown_images_with_oss_urls(
             return f"<!-- Upload error: {image_path} -->"
 
     # 正则匹配 Markdown 中的图片格式 ![](xxx)
-    pattern = r"!\$$(.*?)\$$"
+    pattern = r"!\[\]\((.*?)\)"
     result = re.sub(pattern, replace_image, markdown_text)
 
     return result
