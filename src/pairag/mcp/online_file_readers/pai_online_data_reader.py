@@ -12,7 +12,7 @@ from llama_index.core.readers import SimpleDirectoryReader
 from llama_index.core.schema import Document
 from llama_index.core.bridge.pydantic import Field
 from functools import partial
-from pairag.file.readers.pai.constants import ONLINE_ACCEPTABLE_DOC_TYPES
+from pairag.mcp.online_file_readers.constants import ONLINE_ACCEPTABLE_DOC_TYPES
 import logging
 from loguru import logger
 
