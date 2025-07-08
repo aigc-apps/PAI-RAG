@@ -86,6 +86,7 @@ openinference-instrumentation-openai = "^0.1.30"
 aiosqlite = "^0.21.0"
 alembic = "^1.16.2"
 llama-index-embeddings-openai-like = "^0.1.1"
+pymupdf4llm = "0.0.17"
 
 [tool.poetry.scripts]
 load_model = "pairag.utils.download_models:load_models"

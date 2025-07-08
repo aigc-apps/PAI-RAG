@@ -1,4 +1,4 @@
-from llama_index.core.llms import ChatMessage
+from llama_index.core.llms import ChatMessage, MessageRole
 from typing import List, Tuple
 
 
@@ -58,5 +58,8 @@ def estimate_tokens_in_message(message: ChatMessage) -> str:
     return tokens
 
 
-def get_last_n_msgs_skip_first(msgs: List[ChatMessage], n):
-    return msgs[1:][-n:]
+def get_last_n_msgs_skip_first(msgs: List[ChatMessage], n) -> List[ChatMessage]:
+    last_n_messages = msgs[1:][-n:]
+    if last_n_messages and last_n_messages[0].role == MessageRole.TOOL:
+        return last_n_messages[1:]
+    return last_n_messages
