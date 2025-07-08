@@ -57,7 +57,7 @@ async def aget_simple_think_tool(think_cache: List[ThoughtRecord] = []):
         ] = 1,
         action: Annotated[
             str,
-            "基于当前思考和规划，建议下一步采取的行动步骤，要求具体、可执行、可验证，可以是下一步需要调用的一个或多个工具，格式必须为字符串类型。",
+            "基于当前思考和规划，建议下一步采取的行动步骤，可以是下一步需要调用的一个或多个工具的名称及其需要的参数，格式必须为字符串类型，不要输出JSON。",
         ] = "",
         plan: Annotated[
             list[str],

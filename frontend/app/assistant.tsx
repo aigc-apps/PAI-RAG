@@ -22,7 +22,8 @@ import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
 import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
-import { usePaiRuntime } from "./runtime/usePaiRuntime";
+import { usePaiChatRuntime } from "./runtime/usePaiChatRuntime";
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -81,7 +82,7 @@ export const Assistant = () => {
     };
   }, [llmConfig.model_id, selectedOptions]);
 
-  const runtime = usePaiRuntime({
+  const runtime = usePaiChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
     body: extra_body,
     adapters: {

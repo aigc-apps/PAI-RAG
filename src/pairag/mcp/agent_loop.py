@@ -102,7 +102,6 @@ async def astep_gen(
     memory: BaseMemory = None,
 ):
     messages = memory.get_context()
-    logger.info(f"[Model] astep_gen messages: {messages}")
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,
@@ -120,6 +119,19 @@ async def astep_gen(
     response_context = ""
     async for response in response_gen:
         tool_calls = response.message.additional_kwargs.get("tool_calls")
+        if tool_calls:
+            tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
+            for tool_call in tool_calls:
+                async_tool_fn = tool_name_map[tool_call.function.name]
+                tool_call_message = ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content="",
+                    additional_kwargs={"tool_calls": [tool_call]},
+                )
+                yield ChatResponse(
+                    message=tool_call_message,
+                    delta="",
+                )
         if response.delta:
             response.message.additional_kwargs.pop("tool_calls", None)
             response_context += response.delta
@@ -157,10 +169,6 @@ async def astep_gen(
             memory.add(tool_call_message)
             memory.add(tool_result_message)
 
-            yield ChatResponse(
-                message=tool_call_message,
-                delta="",
-            )
             yield ChatResponse(
                 message=tool_result_message,
                 delta=tool_result.content,
