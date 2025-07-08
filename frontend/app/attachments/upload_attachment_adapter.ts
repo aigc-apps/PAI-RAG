@@ -14,7 +14,8 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
   }): AsyncGenerator<PendingAttachment, void> {
     // Validate file size
     const fid = crypto.randomUUID();
-    const initialStatus = {
+
+    yield {
       id: fid,
       type: file.type.startsWith("image/") ? "image" : "document",
       name: file.name,
@@ -26,35 +27,21 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         progress: 0,
       },
     } as PendingAttachment;
-    const errorStatus = {
-      id: fid,
-      type: file.type.startsWith("image/") ? "image" : "document",
-      name: file.name,
-      contentType: file.type || "application/octet-stream",
-      file,
-      status: {
-        type: "incomplete",
-        reason: "error",
-      },
-    } as PendingAttachment;
-    const successStatus = {
-      id: fid,
-      type: file.type.startsWith("image/") ? "image" : "document",
-      name: file.name,
-      contentType: file.type || "application/octet-stream",
-      file,
-      status: {
-        type: "running",
-        reason: "uploading",
-        progress: 100,
-      },
-    } as PendingAttachment;
-
-    yield initialStatus;
 
     const maxSize = 10 * 1024 * 1024; // 10MB limit
     if (file.size > maxSize) {
-      yield errorStatus;
+      yield {
+        id: fid,
+        type: file.type.startsWith("image/") ? "image" : "document",
+        name: file.name,
+        contentType: file.type || "application/octet-stream",
+        file,
+        status: {
+          type: "incomplete",
+          reason: "error",
+          error: new Error("File size exceeds 10MB limit"),
+        },
+      } as PendingAttachment;
       return;
     }
 
@@ -82,18 +69,43 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       console.log("result", result);
 
       // 返回成功状态
-      yield successStatus;
+      yield {
+        id: fid,
+        type: file.type.startsWith("image/") ? "image" : "document",
+        name: file.name,
+        contentType: file.type || "application/octet-stream",
+        file,
+        status: {
+          type: "running",
+          reason: "uploading",
+          progress: 100,
+        },
+      } as PendingAttachment;
       return;
     } catch (error) {
       // 返回失败状态
       console.log("error", error);
-      yield errorStatus;
+      yield {
+        id: fid,
+        type: file.type.startsWith("image/") ? "image" : "document",
+        name: file.name,
+        contentType: file.type || "application/octet-stream",
+        file,
+        status: {
+          type: "incomplete",
+          reason: "error",
+          error: new Error("上传失败，请稍后重试"),
+        },
+      } as PendingAttachment;
       return;
     }
   }
   public async send(
     attachment: PendingAttachment,
   ): Promise<CompleteAttachment> {
+    if (attachment.status.type === "incomplete") {
+      throw new Error("Attachment upload failed");
+    }
     return {
       id: attachment.id,
       type: "document",

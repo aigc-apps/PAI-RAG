@@ -44,8 +44,7 @@ async def upload_attachment_file(
 
         # TODO:
         # 1. 文件内容存储到数据库，以file_id为主键
-        # 2. 如果文件内容过长，需要进行截断存储
-        # 3. 对截断的大文件进行分块和索引存储
+        # 2. 文件进行切片和索引存储到向量数据库
         with open(f"{ATTACHMENTS_DIR}/{file_id}.txt", "wb") as f:
             f.write(documents[0].text.encode("utf-8"))
             logger.info(f"File {file_id}.txt saved to {ATTACHMENTS_DIR}")
