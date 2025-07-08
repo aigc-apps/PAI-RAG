@@ -474,47 +474,60 @@ export type ReadFileToolArgs = {
 export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
   toolName: "read-file",
   render: ({ args, status, result }) => {
-    if (!result) {
-      return null;
-    }
+    if (status.type === "running") {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <FileSearch className="size-4" /> 正在进行文件读取: {args.file_name}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return null;
+      }
 
-    const parsedResult = JSON.parse(result);
-    console.log("ReadFileToolUI 结果:", parsedResult);
-    console.log("ReadFileToolUI 参数:", args);
+      const parsedResult = JSON.parse(result);
+      console.log("ReadFileToolUI 结果:", parsedResult);
+      console.log("ReadFileToolUI 参数:", args);
 
-    return (
-      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="link"
-              className="flex items-center gap-2 px-4 text-blue-800"
-            >
-              <FileText className="size-4" /> 完成文件读取: {args.file_name}
-              (点击查看结果)
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right">
-            <SheetHeader>
-              <SheetTitle>文件读取结果</SheetTitle>
-              <SheetDescription>文件名：{args.file_name}</SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-              <div className="border-t border-dashed px-4 pt-2">
-                <p className="font-semibold">文件读取结果:</p>
-                <JsonCodeBlock
-                  jsonString={
-                    typeof parsedResult === "string"
-                      ? parsedResult
-                      : JSON.stringify(parsedResult, null, 2)
-                  }
-                />
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                <FileText className="size-4" /> 完成文件读取: {args.file_name}
+                (点击查看结果)
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>文件读取结果</SheetTitle>
+                <SheetDescription>文件名：{args.file_name}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="border-t border-dashed px-4 pt-2">
+                  <p className="font-semibold">文件读取结果:</p>
+                  <JsonCodeBlock
+                    jsonString={
+                      typeof parsedResult === "string"
+                        ? parsedResult
+                        : JSON.stringify(parsedResult, null, 2)
+                    }
+                  />
+                </div>
               </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    );
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
   },
 });
 
@@ -530,47 +543,60 @@ export const SearchFileToollUI = makeAssistantToolUI<
 >({
   toolName: "search-file",
   render: ({ args, status, result }) => {
-    if (!result) {
-      return null;
-    }
-
-    const parsedResult = JSON.parse(result);
-    console.log("SearchFileToollUI 结果:", parsedResult);
     console.log("SearchFileToollUI 参数:", args);
 
-    return (
-      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="link"
-              className="flex items-center gap-2 px-4 text-blue-800"
-            >
-              <FileSearch className="size-4" /> 完成文件搜索: {args.query_str}
-              (点击查看结果)
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right">
-            <SheetHeader>
-              <SheetTitle>文件搜索结果</SheetTitle>
-              <SheetDescription>搜索问题：{args.query_str}</SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-              <div className="border-t border-dashed px-4 pt-2">
-                <p className="font-semibold">文件搜索结果:</p>
-                <JsonCodeBlock
-                  jsonString={
-                    typeof parsedResult === "string"
-                      ? parsedResult
-                      : JSON.stringify(parsedResult, null, 2)
-                  }
-                />
+    if (status.type === "running") {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <FileSearch className="size-4" /> 正在进行文件搜索: {args.query_str}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return null;
+      }
+      const parsedResult = JSON.parse(result);
+      console.log("SearchFileToollUI 结果:", parsedResult);
+
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                <FileSearch className="size-4" /> 完成文件搜索: {args.query_str}
+                (点击查看结果)
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>文件搜索结果</SheetTitle>
+                <SheetDescription>搜索问题：{args.query_str}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="border-t border-dashed px-4 pt-2">
+                  <p className="font-semibold">文件搜索结果:</p>
+                  <JsonCodeBlock
+                    jsonString={
+                      typeof parsedResult === "string"
+                        ? parsedResult
+                        : JSON.stringify(parsedResult, null, 2)
+                    }
+                  />
+                </div>
               </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    );
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
   },
 });
 

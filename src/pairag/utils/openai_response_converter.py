@@ -45,9 +45,6 @@ class OpenAIChatCompletionChunkConverter:
                         },
                     ],
                 )
-                logger.info(
-                    f"Chunk: {self._make_json_chunk(chunk.model_dump(mode='json'))}"
-                )
                 yield self._make_json_chunk(chunk.model_dump(mode="json"))
             elif response.message.role == MessageRole.TOOL:
                 chunk = ChatCompletionChunk(
@@ -67,9 +64,6 @@ class OpenAIChatCompletionChunkConverter:
                             },
                         },
                     ],
-                )
-                logger.info(
-                    f"Chunk: {self._make_json_chunk(chunk.model_dump(mode='json'))}"
                 )
                 yield self._make_json_chunk(chunk.model_dump(mode="json"))
             else:
