@@ -24,7 +24,7 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { DialogContent as DialogPrimitiveContent } from "@radix-ui/react-dialog";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
 const useFileSrc = (file: File | undefined) => {
   const [src, setSrc] = useState<string | undefined>(undefined);
 
@@ -144,6 +144,7 @@ const AttachmentUI: FC = () => {
       ? (uploadStatus as { progress: number }).progress
       : 0;
   const isUploading = uploadStatus.type === "running" && progress < 100;
+  const isError = uploadStatus.type === "incomplete";
   console.log("isUploading", isUploading);
   return (
     <Tooltip>
@@ -158,7 +159,13 @@ const AttachmentUI: FC = () => {
                 </p>
                 <div className="flex felx-row items-center gap-2 py-1">
                   {/* <p className="text-muted-foreground text-xs">{typeLabel}</p> */}
-                  {isUploading ? (
+                  {isError ? (
+                    <>
+                      {/* 上传失败状态 */}
+                      <XCircle className="h-3 w-3 text-red-500" />
+                      <span className="text-red-500 text-xs">上传失败</span>
+                    </>
+                  ) : isUploading ? (
                     <>
                       {/* 上传中状态 */}
                       <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />

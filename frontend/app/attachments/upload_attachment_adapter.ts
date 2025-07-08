@@ -37,7 +37,6 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         reason: "error",
       },
     } as PendingAttachment;
-
     const successStatus = {
       id: fid,
       type: file.type.startsWith("image/") ? "image" : "document",

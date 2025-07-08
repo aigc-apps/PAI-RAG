@@ -162,7 +162,6 @@ export class MyModelAdapter implements ChatModelAdapter {
         if (line.startsWith("data:")) {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
-          console.log("chunk", chunk);
           const delta = chunk.choices[0]?.delta;
 
           if (delta?.role === "assistant" && delta?.content) {
