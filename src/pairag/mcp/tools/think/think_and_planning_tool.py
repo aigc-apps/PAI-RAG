@@ -3,7 +3,7 @@ import json
 from llama_index.core.tools import FunctionTool
 from loguru import logger
 from functools import partial
-from typing import Annotated, Optional, List, Dict
+from typing import Annotated, Optional, List
 
 
 class ThoughtRecord(BaseModel):
@@ -11,18 +11,6 @@ class ThoughtRecord(BaseModel):
     thought_number: int
     action: str
     plan: List[str]
-
-
-def _format_plan(plan: Dict) -> str:
-    """Format a plan for display."""
-    output = f"思考: {plan['thought']} \n\n"
-    output += "计划: \n"
-    for i, step in enumerate(plan["plan"]):
-        output += f"{i}. {step}\n"
-    output += "\n\n"
-    output += f"下一步行动: {plan['action']} \n\n"
-
-    return output
 
 
 def record_thought(
@@ -69,7 +57,7 @@ async def aget_simple_think_tool(think_cache: List[ThoughtRecord] = []):
         ] = 1,
         action: Annotated[
             str,
-            "基于当前思考和规划，建议下一步采取的行动步骤，要求具体、可执行、可验证，可以是下一步需要调用的一个或多个工具。",
+            "基于当前思考和规划，建议下一步采取的行动步骤，可以是下一步需要调用的一个或多个工具的名称及其需要的参数，格式必须为字符串类型，不要输出JSON。",
         ] = "",
         plan: Annotated[
             list[str],

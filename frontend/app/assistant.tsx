@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+// import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
@@ -12,7 +12,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import ModelConfigPage from "./config/llm/page";
+import ModelConfigPage from "./config/model/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
@@ -21,6 +21,9 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
+import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
+import { usePaiChatRuntime } from "./runtime/usePaiChatRuntime";
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -79,10 +82,12 @@ export const Assistant = () => {
     };
   }, [llmConfig.model_id, selectedOptions]);
 
-  const runtime = useChatRuntime({
+  const runtime = usePaiChatRuntime({
     api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
-    //api: "/api/chat",
     body: extra_body,
+    adapters: {
+      attachments: new UploadAttachmentAdapter(),
+    },
   });
   const pathname = usePathname();
   console.log("pathname:", pathname);

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Response
 from fastapi.responses import StreamingResponse
 from pairag.mcp.agent_loop import AgentLoop
 from pairag.mcp.models import ChatAgentRequest
-from pairag.mcp.stream_text import VercelAiDataStreamWriter
+from pairag.utils.openai_response_converter import OpenAIChatCompletionChunkConverter
 import traceback
 from loguru import logger
 
@@ -16,12 +16,12 @@ async def chat(chat_request: ChatAgentRequest):
     try:
         agent_loop = AgentLoop()
         async_response_gen = await agent_loop.arun(chat_request=chat_request)
-
-        data_stream_writer = VercelAiDataStreamWriter()
+        openai_converter = OpenAIChatCompletionChunkConverter(chat_request)
         return StreamingResponse(
-            data_stream_writer.astream_text(async_response_gen),
+            openai_converter.aconvert_to_openai_chat_completion_chunk(
+                async_response_gen
+            ),
             media_type="text/event-stream",
-            headers={"x-vercel-ai-data-stream": "v1"},
         )
 
     except Exception:
