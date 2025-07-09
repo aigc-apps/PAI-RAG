@@ -1,18 +1,62 @@
 from llama_index.core.llms import ChatMessage, MessageRole
-from typing import List, Tuple
+from typing import List, Tuple, Any
+from transformers import AutoTokenizer
+from pairag.utils.constants import DEFAULT_MODEL_DIR
+import os
+
+TOKENIZATION_MODEL = "Qwen3-32B-Tokenization"
+
+
+def get_tokenizer():
+    model_path = os.path.join(DEFAULT_MODEL_DIR, TOKENIZATION_MODEL)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    return tokenizer
+
+
+def estimate_tokens_in_text(
+    text: str,
+    tokenizer: Any = None,
+) -> int:
+    """
+    Estimate token length for a given text.
+
+    Args:
+        text (str): The text to estimate the tokens length for.
+
+    Returns:
+        int: The estimated tokens length.
+
+    """
+    if not text:
+        return 0
+    tokenizer = tokenizer or get_tokenizer()
+    result = tokenizer(text, return_offsets_mapping=True)
+    token_ids = result["input_ids"]
+    return len(token_ids)
 
 
 def truncate(
     text: str,
     max_token: int,
     start_token: int = 0,
+    tokenizer: Any = None,
 ) -> Tuple[str, int]:
     if not text:
         return text, 0
+    if start_token < 0 or max_token < start_token:
+        raise ValueError("start_token must be >= 0 and <= max_token")
 
-    truncated_text = text[start_token:max_token]
-
-    return truncated_text, len(truncated_text)
+    tokenizer = tokenizer or get_tokenizer()
+    result = tokenizer(text, return_offsets_mapping=True)
+    token_ids, offset_mapping = result["input_ids"], result["offset_mapping"]
+    start_token_offset_mapping_left = offset_mapping[start_token][0]
+    if max_token > len(token_ids):
+        text = text[start_token_offset_mapping_left:]
+        return text, len(token_ids[start_token:])
+    else:
+        last_token_offset_mapping_right = offset_mapping[max_token - 1][1]
+        text = text[start_token_offset_mapping_left:last_token_offset_mapping_right]
+        return text, len(token_ids[start_token:max_token])
 
 
 def get_message_context(msg: ChatMessage) -> str:
@@ -30,30 +74,30 @@ def get_message_context(msg: ChatMessage) -> str:
         return text
 
 
-def estimate_tokens_in_message(message: ChatMessage) -> str:
+def estimate_tokens_in_message(message: ChatMessage, tokenizer: Any = None) -> str:
     """
-    Estimate string length for a single message.
+    Estimate tokens length for a single message.
 
     Args:
-        message (OpenAIMessage): The message to estimate the string length for.
+        message (OpenAIMessage): The message to estimate the tokens length for.
 
     Returns:
-        int: The estimated string length.
+        int: The estimated tokens length.
 
     """
     tokens = 0
 
     if message.role:
-        tokens += len(message.role)
+        tokens += estimate_tokens_in_text(message.role, tokenizer)
 
     text = get_message_context(message)
-    tokens += len(text)
+    tokens += estimate_tokens_in_text(text, tokenizer)
 
     additional_kwargs = {**message.additional_kwargs}
 
     if "tool_calls" in additional_kwargs:
         for tool_call in additional_kwargs["tool_calls"]:
-            tokens += len(str(tool_call))
+            tokens += estimate_tokens_in_text(str(tool_call), tokenizer)
 
     return tokens
 

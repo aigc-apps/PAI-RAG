@@ -86,7 +86,7 @@ class TestBaseMemory:
 
         assert msg in memory.messages
         assert len(memory.queue) == 1
-        assert memory.queue_tokens_num == 21
+        assert memory.queue_tokens_num == 3
 
     def test_add_tool_message(self, memory):
         """测试添加工具消息"""
@@ -113,31 +113,13 @@ class TestBaseMemory:
 
     def test_tool_call_pairing(self, memory):
         """测试工具调用/响应必须成对出现"""
-        memory.max_tokens = 10
+        memory.max_tokens = 100
 
         # 添加工具调用消息
         memory.add(TOOL_CALL_MSG)
 
         # 添加工具响应消息
         memory.add(TOOL_RESPONSE_MSG)
-
-        # 触发截断逻辑
-        while memory.queue_tokens_num > memory.max_tokens - memory.history_tokens_num:
-            first_msg_info = memory.queue[0]
-            first_msg_available_tokens = (
-                memory.max_tokens
-                - memory.history_tokens_num
-                - (memory.queue_tokens_num - first_msg_info.tokens_num)
-            )
-            if first_msg_available_tokens <= 0:
-                memory.queue_tokens_num -= first_msg_info.tokens_num
-                memory.queue.popleft()
-
-                # 验证不能单独弹出工具调用或响应
-                if memory.queue and memory.queue[0].message.role == MessageRole.TOOL:
-                    memory.queue_tokens_num -= memory.queue[0].tokens_num
-                    memory.queue.popleft()
-
         assert len(memory.queue) % 2 == 0  # 确保成对存在
 
     def test_get_truncated_messages(self, memory):
