@@ -19,5 +19,7 @@ def add_config_router(app: FastAPI):
 
 def add_chat_router(app: FastAPI):
     from pairag.api.agent.chat import chat_agent_router
+    from pairag.api.agent.thread import thread_router
 
     app.include_router(chat_agent_router, prefix="/v1/agent/chat")
+    app.include_router(thread_router, prefix="/v1/chat/thread")
