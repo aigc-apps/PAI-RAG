@@ -43,6 +43,8 @@ def truncate(
 ) -> Tuple[str, int]:
     if not text:
         return text, 0
+    if max_token <= start_token:
+        return "", 0
     if start_token < 0 or max_token < start_token:
         raise ValueError("start_token must be >= 0 and <= max_token")
 
@@ -54,9 +56,10 @@ def truncate(
         text = text[start_token_offset_mapping_left:]
         return text, len(token_ids[start_token:])
     else:
+        # start_token大于等于0, 此时max_token大于start_token,大于等于1
         last_token_offset_mapping_right = offset_mapping[max_token - 1][1]
         text = text[start_token_offset_mapping_left:last_token_offset_mapping_right]
-        return text, len(token_ids[start_token:max_token])
+        return text, max_token - start_token
 
 
 def get_message_context(msg: ChatMessage) -> str:

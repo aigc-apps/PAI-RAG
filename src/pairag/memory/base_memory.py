@@ -52,9 +52,7 @@ class BaseMemory:
             raise Exception("The system message must be the first message.")
         else:
             self.history_messages.append(msgs[0])
-            self.history_tokens_num += estimate_tokens_in_message(
-                msgs[0], tokenizer=self.tokenizer
-            )
+            self.history_tokens_num += self.count_tokens(msgs[0])
         last_n_history_messages = get_last_n_msgs_skip_first(
             msgs, DEFAULT_HISTORY_MESSAGES_COUNT
         )
