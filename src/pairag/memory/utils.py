@@ -45,8 +45,7 @@ def truncate(
         return text, 0
     if max_token <= start_token:
         return "", 0
-    if start_token < 0 or max_token < start_token:
-        raise ValueError("start_token must be >= 0 and <= max_token")
+    assert start_token >= 0, "start_token must be >= 0"
 
     tokenizer = tokenizer or get_tokenizer()
     result = tokenizer(text, return_offsets_mapping=True)
