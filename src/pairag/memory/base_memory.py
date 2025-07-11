@@ -9,6 +9,7 @@ from pairag.memory.utils import (
     get_message_context,
     estimate_tokens_in_message,
     get_last_n_msgs_skip_first,
+    get_tokenizer,
 )
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.bridge.pydantic import Field, BaseModel
@@ -38,9 +39,10 @@ class BaseMemory:
         self.queue_tokens_num = 0
         self.history_messages = []
         self.history_tokens_num = 0
+        self.tokenizer = get_tokenizer()
 
     def count_tokens(self, msg: ChatMessage) -> int:
-        return estimate_tokens_in_message(msg)
+        return estimate_tokens_in_message(msg, tokenizer=self.tokenizer)
 
     def from_messages(self, msgs: List[ChatMessage]) -> List[ChatMessage]:
         if not msgs:
@@ -50,7 +52,7 @@ class BaseMemory:
             raise Exception("The system message must be the first message.")
         else:
             self.history_messages.append(msgs[0])
-            self.history_tokens_num += estimate_tokens_in_message(msgs[0])
+            self.history_tokens_num += self.count_tokens(msgs[0])
         last_n_history_messages = get_last_n_msgs_skip_first(
             msgs, DEFAULT_HISTORY_MESSAGES_COUNT
         )
@@ -63,7 +65,7 @@ class BaseMemory:
 
         if self.history_tokens_num > self.max_tokens:
             raise Exception(
-                "The input messages exceed the maximum context length ({self.max_tokens} tokens)"
+                f"The input messages exceed the maximum context length ({self.max_tokens} tokens)"
             )
 
         self.max_tokens = self.max_tokens - self.history_tokens_num
@@ -76,7 +78,10 @@ class BaseMemory:
         # 按照msg token截断message
         # 如果是tool,不能把preceeding message with "tool_calls" pop出queue,必须成对出现
         max_message_tokens = self.max_tokens
-        if msg.role == MessageRole.TOOL:
+        if (
+            msg.role == MessageRole.TOOL
+            and max_message_tokens - self.queue[-1].tokens_num > 0
+        ):
             max_message_tokens = max_message_tokens - self.queue[-1].tokens_num
         if tokens_num > max_message_tokens:
             msg, tokens_num = self.truncate_message(msg, max_tokens=max_message_tokens)
@@ -114,7 +119,7 @@ class BaseMemory:
                 logger.info(f"truncate first message {self.queue[0]}")
                 new_first_msg, new_first_tokens_num = self.truncate_message(
                     first_msg_info.message,
-                    max_tokens=self.queue[0].tokens_num - tokens_to_pop,
+                    max_tokens=first_msg_info.tokens_num - tokens_to_pop,
                 )
                 self.queue[0].tokens_num = new_first_tokens_num
                 self.queue[0].message = new_first_msg
@@ -148,7 +153,9 @@ class BaseMemory:
                 if call.function.arguments:
                     args = str(call.function.arguments)
                     # 截断 arguments 字符串
-                    truncated_args, estimated_arg_tokens = truncate(args, max_tokens)
+                    truncated_args, estimated_arg_tokens = truncate(
+                        args, max_tokens, tokenizer=self.tokenizer
+                    )
                     call.function.arguments = truncated_args
                     max_tokens -= estimated_arg_tokens
                     if max_tokens <= 0:
@@ -164,5 +171,7 @@ class BaseMemory:
         else:
             # 普通消息按 content 截断
             text = get_message_context(msg)
-            content, token = truncate(text, max_token=max_tokens)
+            content, token = truncate(
+                text, max_token=max_tokens, tokenizer=self.tokenizer
+            )
             return ChatMessage(role=msg.role, content=content), token
