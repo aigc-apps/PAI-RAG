@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from typing import List
 from loguru import logger
 from tenacity import (
     before_sleep_log,
@@ -21,6 +22,10 @@ def generate_text_md5(text):
     # Encode the file path string to bytes and update the hash
     text_md5.update(text.encode("utf-8"))
     return text_md5.hexdigest()
+
+
+def generate_bytes_md5(data: List[bytes]):
+    return hashlib.md5(data).hexdigest()
 
 
 # 读取文件的retry机制

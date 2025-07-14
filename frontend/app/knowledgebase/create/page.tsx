@@ -53,8 +53,6 @@ export default function KnowledgeBaseCreatePage({
       chunk_size: "512",
       chunk_overlap: "50",
     },
-    chunk_num: 0,
-    doc_num: 0,
     embedding_model: "BAAI/bge-m3",
     retrieval_config: {
       retrieval_mode: "vector",

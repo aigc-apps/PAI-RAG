@@ -8,11 +8,11 @@ class BaseFileStore(ABC):
     """
 
     @abstractmethod
-    def save(self, data: BinaryIO, file_path: str) -> None:
+    def save(self, file: BinaryIO, file_path: str) -> None:
         """
         将文件内容保存到指定路径。
 
-        :param data: 文件对象或二进制流
+        :param file: 文件对象或二进制流
         :param file_path: 存储路径（例如: 'folder/file.txt'）
         """
         pass

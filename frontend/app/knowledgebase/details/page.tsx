@@ -46,19 +46,16 @@ import * as Toast from "@radix-ui/react-toast";
 
 interface KnowledgeBaseFile {
   id: string;
-  name: string;
-  type: string;
-  size: string;
+  file_name: string;
+  file_size: string;
   status: string;
-  uploadedAt: string;
+  update_at: string;
 }
 
 interface KnowledgeBase {
   id: string;
   name: string;
   description: string;
-  doc_num: number;
-  chunk_num: number;
   chunk_config: {
     parser_type: string; // 切片类型
     separator: string; // 切片标识符
@@ -73,7 +70,19 @@ interface KnowledgeBase {
     rerank_model: string; // rerank模型名称
     vector_weight?: string; // 向量检索权重（仅 hybrid 时使用）
   };
-  files?: KnowledgeBaseFile[];
+}
+
+interface SearchRecord {
+  content: string;
+  title: string;
+  score: number;
+  metadata: {
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    file_extension: string;
+    images: string;
+  };
 }
 
 interface EmbeddingModel {
@@ -90,6 +99,9 @@ export default function KnowledgeBaseDetailPage({
   setActiveTab: (tab: string) => void;
 }) {
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库列表
+  const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
+  const [kbquery, setKbQuery] = useState(""); //查询
+  const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
@@ -103,6 +115,7 @@ export default function KnowledgeBaseDetailPage({
     variant: "default" as "default" | "destructive",
   });
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // 递归更新嵌套对象
   const updateNestedObject = (
     obj: Record<string, any>,
@@ -144,6 +157,7 @@ export default function KnowledgeBaseDetailPage({
     };
     fetchModelConfigs();
   }, []);
+
   const handleEditInputChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
@@ -174,8 +188,68 @@ export default function KnowledgeBaseDetailPage({
       console.log("当前编辑的知识库状态:", editknowledgebase);
     };
 
+  const handleQueryInputChange = (
+    e:
+      | React.ChangeEvent<HTMLInputElement>
+      | React.ChangeEvent<HTMLTextAreaElement>,
+  ) => {
+    const { id, value } = e.target;
+    setKbQuery(value);
+  };
+
+  const handleSearchSubmit = async () => {
+    console.log("handleSearchSubmit");
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const search_result = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/retrieval`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: kbquery,
+          knowledgebase_id: knowledgebase_id,
+        }),
+      },
+    );
+    if (!search_result.ok) throw new Error("搜索知识库失败");
+
+    const search_json = await search_result.json();
+    console.log("搜索知识库结果:", search_json);
+    setSearchRecords(search_json.data.records);
+  };
+
+  // sleep 函数定义
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  const fetchKbFiles = async () => {
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const files_res = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files`,
+    );
+    if (!files_res.ok) throw new Error("获取知识库文件列表失败");
+
+    const file_json_data = await files_res.json();
+    console.log("获取知识库文件reponse:", file_json_data);
+    setKbFiles(file_json_data.data);
+    console.log("知识库文件列表:", kbfiles);
+    const files_unfinished = file_json_data.data.some(
+      (file) => file.status != "succeeded" && file.status != "failed",
+    );
+    if (files_unfinished) {
+      console.log("存在未完成的文件，继续检查状态。");
+      await sleep(1000);
+      fetchKbFiles();
+    } else {
+      console.log("文件已上传完成。");
+    }
+  };
+
   useEffect(() => {
-    const fetchConfigs = async () => {
+    const fetchKbConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
@@ -184,28 +258,6 @@ export default function KnowledgeBaseDetailPage({
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
         const kb_data = json_data.data;
-
-        // TODO：获取每个知识库的文件列表
-        // // 并行获取每个知识库的文件列表
-        // const knowledgeBasesWithFiles = await Promise.all(
-        //   data.map(async (kb) => {
-        //     try {
-        //       // 模拟 API 请求：/v1/knowledgebases/${kb.id}/files
-        //       const files = await fetch(`http://localhost:${port}/v1/knowledgebases/${kb.id}/files`);
-        //       return { ...kb, files }; // 合并文件列表
-        //     } catch (err) {
-        //       console.error(`获取知识库 ${kb.id} 文件失败`, err);
-        //       return { ...kb, files: [] }; // 失败时返回空数组
-        //     }
-        //   })
-        // );
-
-        // const data = [
-        //     { id: '1', name: '产品文档库', description: '包含所有产品技术规格与使用指南' },
-        //     { id: '2', name: '技术白皮书', description: '深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计' },
-        //     { id: '3', name: '用户指南', description: '从入门到精通的全流程操作手册' },
-        //     { id: '4', name: 'API 文档', description: 'RESTful 接口规范与示例' }
-        // ]
 
         setKnowledgeBase(kb_data); // 更新状态
         console.log("知识库详情数据:", kb_data);
@@ -216,13 +268,13 @@ export default function KnowledgeBaseDetailPage({
         setKnowledgeBasesLoading(false);
       }
     };
-    fetchConfigs();
+    fetchKbConfigs();
+    fetchKbFiles();
   }, []);
 
   if (!knowledgebase) {
     return <div className="p-6">加载中...</div>;
   }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("更新知识库:", editknowledgebase);
@@ -254,6 +306,25 @@ export default function KnowledgeBaseDetailPage({
     }
   };
 
+  const handleDeleteFile = async (file_id: string) => {
+    setDeleting(true);
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
+      console.log("delete file result:", res.text());
+    } catch (error) {
+      console.error("删除失败:", error);
+    } finally {
+      setDeleting(false);
+      fetchKbFiles();
+    }
+  };
   const handleFileUpload = async (files: FileList | null) => {
     if (!files) return;
     setUploading(true);
@@ -280,24 +351,24 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      // 模拟知识库的文件上传
-      // const res = await fetch(
-      //   `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/upload`,
-      //   {
-      //     method: "POST",
-      //     body: formData,
-      //   },
-      // );
-      // const result = await response.json();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = {
-        status: "success",
-      };
-      console.log("上传成功:", result);
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      if (!res.ok) {
+        alert("上传失败");
+        return;
+      }
+      const upload_result = await res.json();
+      console.log("上传成功:", upload_result);
     } catch (error) {
       console.error("上传失败:", error);
     } finally {
       setUploading(false);
+      fetchKbFiles();
     }
   };
 
@@ -377,7 +448,7 @@ export default function KnowledgeBaseDetailPage({
                   />
                 </div>
 
-                {knowledgebase.files && knowledgebase.files.length > 0 ? (
+                {kbfiles && kbfiles.length > 0 ? (
                   <>
                     <h3 className="text-lg font-semibold mt-6 mb-3">
                       文件列表
@@ -387,7 +458,6 @@ export default function KnowledgeBaseDetailPage({
                         <TableHeader>
                           <TableRow>
                             <TableHead>文件名</TableHead>
-                            <TableHead>文件格式</TableHead>
                             <TableHead>文件大小</TableHead>
                             <TableHead>状态</TableHead>
                             <TableHead>上传时间</TableHead>
@@ -395,34 +465,48 @@ export default function KnowledgeBaseDetailPage({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {knowledgebase.files.map((file) => (
+                          {kbfiles.map((file) => (
                             <TableRow key={file.id}>
                               <TableCell>
                                 <Button
                                   variant="link"
                                   className="font-medium text-blue-600"
                                 >
-                                  {file.name}
+                                  {file.file_name}
                                 </Button>
                               </TableCell>
-                              <TableCell>{file.type}</TableCell>
-                              <TableCell>{file.size}</TableCell>
+                              <TableCell>{file.file_size}</TableCell>
                               <TableCell>
                                 {file.status === "pending" ? (
                                   <div className="flex items-center text-yellow-500">
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                    等待解析
+                                  </div>
+                                ) : file.status === "parsing" ? (
+                                  <div className="flex items-center text-green-500">
+                                    <CheckCircle className="mr-1 h-4 w-4" />
                                     解析中
                                   </div>
-                                ) : file.status === "done" ? (
+                                ) : file.status === "persisting" ? (
+                                  <div className="flex items-center text-green-500">
+                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                    索引中
+                                  </div>
+                                ) : file.status === "succeeded" ? (
                                   <div className="flex items-center text-green-500">
                                     <CheckCircle className="mr-1 h-4 w-4" />
                                     解析完成
+                                  </div>
+                                ) : file.status === "failed" ? (
+                                  <div className="flex items-center text-green-500">
+                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                    解析失败
                                   </div>
                                 ) : (
                                   <span>{file.status}</span> // 兜底显示原始状态
                                 )}
                               </TableCell>
-                              <TableCell>{file.uploadedAt}</TableCell>
+                              <TableCell>{file.update_at}</TableCell>
                               <TableCell>
                                 <PreviewButton
                                   kbId={knowledgebase_id}
@@ -437,8 +521,16 @@ export default function KnowledgeBaseDetailPage({
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
+                                  onClick={() => handleDeleteFile(file.id)}
                                 >
-                                  删除
+                                  {deleting ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      删除中...
+                                    </>
+                                  ) : (
+                                    <>删除文件</>
+                                  )}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -978,6 +1070,47 @@ export default function KnowledgeBaseDetailPage({
                 </Button>
               </CardFooter>
             </Card>
+          </TabsContent>
+          <TabsContent value="retrieval_test" className="py-4">
+            <Input
+              type="text"
+              id="search_query"
+              placeholder="请输入查询"
+              onChange={handleQueryInputChange}
+              className="col-span-3"
+            />
+            <Button
+              type="button"
+              className="col-span-1"
+              onClick={handleSearchSubmit}
+            >
+              查询
+            </Button>
+            {searchrecords.length == 0 && <h2>没有找到相关的切片。</h2>}
+            {searchrecords.length > 0 && (
+              <Table className="w-full table-fixed border bg-white rounded-md overflow-hidden">
+                <TableHeader className="bg-gray-100">
+                  <TableRow>
+                    <TableHead className="w-1/20">序号</TableHead>
+                    <TableHead className="w-1/20">得分</TableHead>
+                    <TableHead className="w-1/5">文件名</TableHead>
+                    <TableHead className="w-2/5">文本</TableHead>
+                    <TableHead className="w-3/10">元数据</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchrecords.map((record, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{i + 1} </TableCell>
+                      <TableCell>{record.score.toFixed(4)} </TableCell>
+                      <TableCell>{record.title} </TableCell>
+                      <TableCell>{record.content} </TableCell>
+                      <TableCell>{JSON.stringify(record.metadata)} </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </TabsContent>
         </Tabs>
         <Toast.Root

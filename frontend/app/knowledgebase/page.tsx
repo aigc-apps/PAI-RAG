@@ -110,7 +110,7 @@ export default function KnowledgeBase({
             <CardFooter className="mt-auto pt-0 flex justify-end">
               <Button
                 variant="link"
-                onClick={() => deleteKnowledgebase(base.name)}
+                onClick={() => deleteKnowledgebase(base.id)}
                 className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
               >
                 删除
@@ -120,7 +120,7 @@ export default function KnowledgeBase({
                 variant="link"
                 className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
                 onClick={() =>
-                  setActiveTab(`/knowledgebase/details/${base.name}`)
+                  setActiveTab(`/knowledgebase/details/${base.id}`)
                 }
               >
                 查看详情 <ChevronRight className="ml-1" size={16} />

@@ -1,7 +1,7 @@
 from io import BytesIO
 import os
 from typing import BinaryIO, Optional
-from pairag.store.file.base import BaseFileStore
+from pairag.mcp.rag.file.store.base import BaseFileStore
 from loguru import logger
 
 
@@ -19,11 +19,11 @@ class LocalFileStore(BaseFileStore):
     def get_url(self, file_path: str):
         return os.path.join(self.base_path, file_path)
 
-    def save(self, data: BinaryIO, file_path: str) -> None:
+    def save(self, file: BinaryIO, file_path: str) -> None:
         full_path = os.path.join(self.base_path, file_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "wb") as f:
-            f.write(data.read())
+            f.write(file.read())
         logger.info(f"Saved file to {full_path}.")
 
     def load(self, file_path: str) -> Optional[BinaryIO]:

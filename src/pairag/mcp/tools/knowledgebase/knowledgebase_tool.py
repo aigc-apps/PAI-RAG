@@ -2,19 +2,37 @@ from functools import partial
 import json
 from typing import List
 from llama_index.core.indices import VectorStoreIndex
-from llama_index.core.schema import BaseNode
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.core.tools import FunctionTool
 
-from pairag.db.models.knowledgebase.knowledgebase import KnowledgebaseEntity
-from pairag.common.knowledgebase.types import VectorIndexRetrievalType
+from pairag.db.models.knowledgebase.file import KbFileEntity
+from pairag.db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
+from pairag.common.knowledgebase.types import (
+    ChunkStatus,
+    FileStatus,
+    VectorIndexRetrievalType,
+)
+from pairag.mcp.providers.chunk_helper import (
+    read_file_from_db,
+    save_chunks_to_db_async,
+    update_chunk_status_async,
+    update_file_status_async,
+)
+from pairag.mcp.rag.file.models.file_item import FileItem
+from pairag.mcp.rag.file.store.file_store_helper import file_store
+from pairag.mcp.rag.file_parser import FileParser
+from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
 from pairag.mcp.tools.knowledgebase.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
 )
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
+from pairag.mcp.providers.llm_provider import llm_provider
+
 from loguru import logger
+
+from pairag.mcp.tools.search.aliyun_search_tool import NodeWithScore
 
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
@@ -29,81 +47,164 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 class PaiKnowledgebaseClient:
     def __init__(self):
         self.vector_connection = create_vector_db_connection_from_env()
+        self.vector_index_cache = {}
 
     def create_vector_index_from_knowledgebase(
         self,
-        knowledgebase: KnowledgebaseEntity,
+        knowledgebase: KbEntity,
     ) -> VectorStoreIndex:
-        embedding_config = embedding_provider.get_embedding_config(
-            knowledgebase.embedding_model
-        )
-        embed_model = embedding_provider.get_embedding_model(
-            knowledgebase.embedding_model
-        )
-        vector_store = create_vector_store(
-            knowledgebase.name, embedding_config.dimension, self.vector_connection
-        )
-        return VectorStoreIndex(vector_store=vector_store, embed_model=embed_model)
+        # TODO: 检查配置是否变化
+        if knowledgebase.id not in self.vector_index_cache:
+            embedding_config = embedding_provider.get_embedding_config(
+                knowledgebase.embedding_model
+            )
+            embed_model = embedding_provider.get_embedding_model(
+                knowledgebase.embedding_model
+            )
+            vector_store = create_vector_store(
+                knowledgebase.id, embedding_config.dimension, self.vector_connection
+            )
+            vector_index = VectorStoreIndex.from_vector_store(
+                vector_store=vector_store, embed_model=embed_model
+            )
+            self.vector_index_cache[knowledgebase.id] = vector_index
+            logger.info(f"Created vector index for knowledgebase {knowledgebase.id}.")
 
-    async def ainsert_nodes(
+        return self.vector_index_cache[knowledgebase.id]
+
+    def create_file_parser(self):
+        multimodal_llm = llm_provider.get_multimodal_llm()
+        image_caption_tool = None
+        if multimodal_llm:
+            image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+        file_parser = FileParser(
+            file_store=file_store,
+            image_caption_tool=image_caption_tool,
+            knowledgebase_provider=knowledgebase_provider,
+        )
+        return file_parser
+
+    # process file item, status -> processing
+    async def process_file_async(
         self,
-        nodes: List[BaseNode],
-        knowledgebase_name: str,
+        file_id: str,
     ):
-        logger.info(
-            f"Starting to insert {len(nodes)} into knowledgebase {knowledgebase_name}."
+        file_entity: KbFileEntity = await read_file_from_db(file_id)
+        file = file_store.load(file_entity.file_path)
+        file_item = FileItem(
+            id=file_entity.id,
+            file_path=file_entity.file_path,
+            file=file,
+            kb_id=file_entity.kb_id,
+            file_extension=file_entity.file_extension,
+            file_name=file_entity.file_name,
+            file_md5=file_entity.file_md5,
+            file_size=file_entity.file_size,
         )
-        knowledgebase = knowledgebase_provider.get_knowledgebase(knowledgebase_name)
+
+        kb_id = file_item.kb_id
+        logger.info(
+            f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
+        )
+        await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing)
+
+        try:
+            file_parser = self.create_file_parser()
+            nodes = file_parser.parse(file_item)
+
+            chunk_ids = await save_chunks_to_db_async(
+                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
+            )
+            await update_file_status_async(
+                file_id=file_item.id, status=FileStatus.persisting
+            )
+
+            logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
+            knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+            vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
+            await vector_index.ainsert_nodes(nodes)
+            logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
+            await update_chunk_status_async(
+                chunk_ids=chunk_ids, status=ChunkStatus.succeeded
+            )
+            await update_file_status_async(
+                file_id=file_item.id, status=FileStatus.succeeded
+            )
+
+            logger.info(
+                f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
+            )
+        except Exception as ex:
+            logger.exception(
+                f"Error adding file {file_item.file_name} to knowledgebase {kb_id}. {ex}"
+            )
+            await update_file_status_async(
+                file_id=file_item.id, status=FileStatus.failed
+            )
+
+    async def adelete_kb(
+        self,
+        kb_id: str,
+    ):
+        if kb_id in self.vector_index_cache:
+            del self.vector_index_cache[kb_id]
+
+    async def adelete_chunks_from_vectordb(
+        self,
+        kb_id: str,
+        node_ids: List[str],
+    ):
+        knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
         vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
-        vector_index.ainsert_nodes(nodes)
+        vector_index.delete_nodes(node_ids=node_ids)
         logger.info(
-            f"Finished inserting {len(nodes)} into knowledgebase {knowledgebase_name}."
+            f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
-        return
 
     async def aquery(
         self,
         query_str: str,
-        knowledgebase_name: str,
-    ) -> List[dict]:
-        logger.info(
-            f"Starting to query knowledgebase {knowledgebase_name} with query: {query_str}."
+        kb_id: str,
+    ) -> List[NodeWithScore]:
+        logger.info(f"Starting to query knowledgebase {kb_id} with query: {query_str}.")
+        knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+        retrieval_config = RetrievalConfig.model_validate(
+            knowledgebase.retrieval_config
         )
-        knowledgebase = knowledgebase_provider.get_knowledgebase(knowledgebase_name)
         vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
-        query_model = retrieval_type_to_search_mode(
-            knowledgebase.retrieval_config.retrieval_mode
-        )
+        query_model = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
         retriever = vector_index.as_retriever(
-            similarity_top_k=knowledgebase.retrieval_config.top_k,
+            similarity_top_k=retrieval_config.top_k,
             vector_store_query_mode=query_model,
-            alpha=knowledgebase.retrieval_config.vector_weight,
+            alpha=retrieval_config.vector_weight,
         )
         scored_nodes = await retriever.aretrieve(str_or_query_bundle=query_str)
         logger.info(f"Retrieved {len(scored_nodes)} nodes from vector index.")
 
-        if knowledgebase.retrieval_config.rerank_model:
+        if retrieval_config.rerank_model:
             # TODO 1: Get reranker from reranker_provider and rerank results.
             # TODO 2: Maybe we can double top_k when rerank model is given, otherwise reranking will be weak.
             pass
 
         result_nodes = [
-            node.to_dict()
+            node
             for node in scored_nodes
-            if node.score >= knowledgebase.retrieval_config.similarity_threshold
+            if node.score >= retrieval_config.similarity_threshold
         ]
         return result_nodes
 
 
-knowledgebase_client = PaiKnowledgebaseClient()
+kb_client = PaiKnowledgebaseClient()
 
 
 async def aget_knowledgebase_result(query: str, knowledgebase_name):
     """Get aliyun search tool"""
-    res = await knowledgebase_client.aquery(
+    result_nodes = await kb_client.aquery(
         query_str=query, knowledgebase_name=knowledgebase_name
     )
-    return json.dumps(res, ensure_ascii=False)
+
+    retrieval_result = [node.to_dict() for node in result_nodes]
+    return json.dumps(retrieval_result, ensure_ascii=False)
 
 
 async def aget_knowledgebase_tool(knowledgebase_name: str):
