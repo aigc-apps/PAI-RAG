@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/card";
 import { ChevronRight, Plus } from "lucide-react";
 
-interface KnowledgeBase {
+export interface KnowledgeBase {
   id: string;
   name: string;
   description: string;
 }
+
 export default function KnowledgeBase({
   setActiveTab,
 }: {
