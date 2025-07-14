@@ -4,7 +4,7 @@ import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
 } from "@assistant-ui/react";
-import { ArchiveIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, PlusIcon, TrashIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
@@ -19,26 +19,6 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
-  // const [error, setError] = useState(""); // 错误信息
-  // const addThread = async () => {
-  //   try {
-  //     const thread_data = {
-  //       user_id: "default",
-  //       description: "会话任务",
-  //     };
-  //     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-  //     const res = await fetch(`http://localhost:${port}/v1/chat/thread`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(thread_data),
-  //     });
-
-  //     if (!res.ok) throw new Error("新建对话失败");
-  //   } catch (err: any) {
-  //     setError(err || "新建对话失败，请重试"); // 显示错误信息
-  //   } finally {}
-  // };
-
   return (
     <ThreadListPrimitive.New asChild>
       <Button
@@ -63,7 +43,8 @@ const ThreadListItem: FC = () => {
       <ThreadListItemPrimitive.Trigger className="flex-grow px-3 py-2 text-start">
         <ThreadListItemTitle />
       </ThreadListItemPrimitive.Trigger>
-      <ThreadListItemArchive />
+      {/* <ThreadListItemArchive /> */}
+      <ThreadListItemDelete />
     </ThreadListItemPrimitive.Root>
   );
 };
@@ -71,7 +52,7 @@ const ThreadListItem: FC = () => {
 const ThreadListItemTitle: FC = () => {
   return (
     <p className="text-sm">
-      <ThreadListItemPrimitive.Title fallback="会话任务" />
+      <ThreadListItemPrimitive.Title fallback="新会话" />
     </p>
   );
 };
@@ -87,5 +68,19 @@ const ThreadListItemArchive: FC = () => {
         <ArchiveIcon />
       </TooltipIconButton>
     </ThreadListItemPrimitive.Archive>
+  );
+};
+
+const ThreadListItemDelete: FC = () => {
+  return (
+    <ThreadListItemPrimitive.Delete asChild>
+      <TooltipIconButton
+        className="hover:text-primary text-foreground ml-auto mr-3 size-4 p-0"
+        variant="ghost"
+        tooltip="Delete thread"
+      >
+        <TrashIcon />
+      </TooltipIconButton>
+    </ThreadListItemPrimitive.Delete>
   );
 };

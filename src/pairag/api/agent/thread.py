@@ -1,17 +1,19 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.db_context import get_session
 from loguru import logger
-from pairag.api.response_model import ResponseModel, success_response
-from pairag.db.models.thread import ThreadEntity, ThreadCreate
+from pairag.db.models.thread import ThreadEntity, ThreadCreate, ThreadRead
+from pairag.db.models.message import MessageEntity, MessageCreate, MessageRead
 from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.thread_provider import thread_provider
+from typing import List
+from sqlmodel import select
 
 thread_router = APIRouter()
 
 
-@thread_router.post("", response_model=ResponseModel[ThreadEntity])
+@thread_router.post("", response_model=ThreadRead)
 async def create_thread(
     thread: ThreadCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -21,7 +23,7 @@ async def create_thread(
         await session.commit()
         await session.refresh(thread)
         asyncio.create_task(thread_provider.refresh())
-        return success_response(data=thread, message="Thread创建成功。")
+        return thread
 
     except IntegrityError as e:
         logger.exception(f"创建Thread失败。\nIntegrityError:{e}")
@@ -38,3 +40,78 @@ async def create_thread(
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=f"Failed to add thread: {str(e)}")
+
+
+@thread_router.get("", response_model=List[ThreadRead])
+async def get_threads(
+    session: AsyncSession = Depends(get_session),
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+):
+    sql_results = await session.exec(select(ThreadEntity).offset(offset).limit(limit))
+    thread_entities = sql_results.all()
+    thread_models = [
+        ThreadRead.model_validate(
+            thread,
+        )
+        for thread in thread_entities
+    ]
+    return thread_models
+
+
+@thread_router.delete("/{thread_id}")
+async def delete_thread(
+    thread_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    thread = await session.get(ThreadEntity, thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail=f"THREAD {thread_id} not found.")
+    await session.delete(thread)
+    await session.commit()
+    asyncio.create_task(thread_provider.refresh())
+
+    logger.info(f"THREAD {thread_id} deleted.")
+    return {"message": f"THREAD {thread_id} deleted."}
+
+
+@thread_router.post("/{thread_id}/messages")
+async def create_thread_message(
+    message: MessageCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    thread_id = message.thread_id
+    thread = await session.get(ThreadEntity, thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail=f"THREAD {thread_id} not found.")
+
+    message_entity = MessageEntity.model_validate(message)
+
+    session.add(message_entity)
+    await session.commit()
+    await session.refresh(message_entity)
+
+    return message_entity
+
+
+@thread_router.get("/{thread_id}/messages", response_model=List[MessageRead])
+async def get_thread_messages(
+    thread_id: str,
+    session: AsyncSession = Depends(get_session),
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+):
+    sql_results = await session.exec(
+        select(MessageEntity)
+        .where(MessageEntity.thread_id == thread_id)
+        .offset(offset)
+        .limit(limit)
+    )
+    message_entities = sql_results.all()
+    message_models = [
+        MessageRead.model_validate(
+            message,
+        )
+        for message in message_entities
+    ]
+    return message_models

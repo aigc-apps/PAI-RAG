@@ -9,6 +9,11 @@ class ThreadCreate(SQLModel):
     title: str = Field(default=None)
 
 
+class ThreadRead(ThreadCreate):
+    id: str = Field(default=None, primary_key=True)
+    archived: bool = Field(default=False)
+
+
 class ThreadEntity(SQLModel, table=True):
     __tablename__ = "pai_thread"
 
