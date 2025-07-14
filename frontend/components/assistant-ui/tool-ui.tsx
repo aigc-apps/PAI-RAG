@@ -278,18 +278,17 @@ type SearchWebResult = {
   }[];
 };
 
-export const SearchWebToolUI = makeAssistantToolUI<
-  SearchWebArgs,
-  SearchWebResult
->({
+export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: "search-web",
   render: ({ args, status, result }) => {
     if (!result) {
       return null;
     }
+    console.log("SearchWebToolUI 结果:", result);
     console.log("SearchWebToolUI 参数:", args);
     console.log("SearchWebToolUI 状态:", status);
-    console.log("SearchWebToolUI 结果:", result);
+
+    const search_result = JSON.parse(result) as SearchWebResult;
     if (status.type == "running") {
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
@@ -313,12 +312,14 @@ export const SearchWebToolUI = makeAssistantToolUI<
           </SheetTrigger>
           <SheetContent side="right">
             <SheetHeader>
-              <SheetTitle>网页搜索结果 · {result?.result.length}</SheetTitle>
+              <SheetTitle>
+                网页搜索结果 · {search_result?.result.length}
+              </SheetTitle>
               <SheetDescription>{args.query}</SheetDescription>
             </SheetHeader>
             <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
               <div className="pl-6 pr-2">
-                {result?.result.map((item, index) => (
+                {search_result?.result.map((item, index) => (
                   <div
                     key={index}
                     className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"

@@ -1,5 +1,6 @@
 ### Web search configuration API ###
 
+import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
@@ -12,7 +13,7 @@ from pairag.db.models.websearch import (
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
-
+from pairag.mcp.providers.websearch_provider import websearch_provider
 from loguru import logger
 
 
@@ -50,12 +51,14 @@ async def add_search_config(
     try:
         await session.commit()
         await session.refresh(search_config)
+        asyncio.create_task(websearch_provider.refresh())
         return search_config
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add search config: {e.orig}")
         await session.rollback()
         raise
     except Exception as e:
+        logger.error(f"Failed to add search config: {str(e)}")
         await session.rollback()
         raise HTTPException(
             status_code=400, detail=f"Failed to add search config: {str(e)}"
