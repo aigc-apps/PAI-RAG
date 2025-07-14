@@ -42,7 +42,7 @@ class PptxReader(BaseReader):
                             self.file_store.get_url(save_image_name)
                         )
                         image_text = (
-                            f'<image src="{save_image_name}" alt="{image_alt_text}">'
+                            f'<img src="{save_image_name}" alt="{image_alt_text}">'
                         )
                         markdown.append(f"{image_text}\n\n")
                         images.append(save_image_name)

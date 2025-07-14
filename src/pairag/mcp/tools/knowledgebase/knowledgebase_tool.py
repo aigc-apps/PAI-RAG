@@ -1,5 +1,4 @@
 from functools import partial
-import json
 from typing import List
 from llama_index.core.indices import VectorStoreIndex
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
@@ -19,7 +18,6 @@ from pairag.mcp.providers.chunk_helper import (
     update_file_status_async,
 )
 from pairag.mcp.rag.file.models.file_item import FileItem
-from pairag.mcp.rag.file.store.file_store_helper import file_store
 from pairag.mcp.rag.file_parser import FileParser
 from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
 from pairag.mcp.tools.knowledgebase.vector_connection import (
@@ -29,10 +27,9 @@ from pairag.mcp.tools.knowledgebase.vector_connection import (
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.llm_provider import llm_provider
-
+from pairag.mcp.rag.file.store.file_store_helper import file_store
+from llama_index.core.schema import NodeWithScore
 from loguru import logger
-
-from pairag.mcp.tools.search.aliyun_search_tool import NodeWithScore
 
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
@@ -179,6 +176,14 @@ class PaiKnowledgebaseClient:
             alpha=retrieval_config.vector_weight,
         )
         scored_nodes = await retriever.aretrieve(str_or_query_bundle=query_str)
+        for node in scored_nodes:
+            images = node.metadata.get("images", [])
+            if images:
+                origin_text = node.node.text
+                for image_file in images:
+                    image_url = file_store.get_url(image_file)
+                    origin_text = origin_text.replace(image_file, image_url)
+                node.node.text = origin_text
         logger.info(f"Retrieved {len(scored_nodes)} nodes from vector index.")
 
         if retrieval_config.rerank_model:
@@ -197,21 +202,29 @@ class PaiKnowledgebaseClient:
 kb_client = PaiKnowledgebaseClient()
 
 
-async def aget_knowledgebase_result(query: str, knowledgebase_name):
+def get_node_content(i: int, score_node: NodeWithScore):
+    text = f"""
+    chunk {i+1}: i
+    file_name: {score_node.node.metadata.get("file_name", "")}
+    chunk_content: {score_node.node.text}
+    """
+
+    return text
+
+
+async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
     """Get aliyun search tool"""
-    result_nodes = await kb_client.aquery(
-        query_str=query, knowledgebase_name=knowledgebase_name
+    result_nodes = await kb_client.aquery(query_str=query, kb_id=kb_id)
+
+    retrieval_result = "\n---\n".join(
+        [get_node_content(i, node) for i, node in enumerate(result_nodes)]
     )
-
-    retrieval_result = [node.to_dict() for node in result_nodes]
-    return json.dumps(retrieval_result, ensure_ascii=False)
+    return retrieval_result
 
 
-async def aget_knowledgebase_tool(knowledgebase_name: str):
-    knowledgebase = knowledgebase_provider.get_knowledgebase(knowledgebase_name)
-    aquery_knowledgebase_func = partial(
-        aget_knowledgebase_result, knowledgebase_name=knowledgebase_name
-    )
+async def aget_knowledgebase_tool(kb_id: str):
+    knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+    aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id)
     search_knowledgebase_tool = FunctionTool.from_defaults(
         async_fn=aquery_knowledgebase_func,
         name="search-knowledgebase",

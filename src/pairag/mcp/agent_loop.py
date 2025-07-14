@@ -15,6 +15,7 @@ from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_too
 from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.mcp.providers.websearch_provider import websearch_provider
+from pairag.mcp.tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 from llama_index.core.llms import LLM
 from pairag.mcp.constants import MAX_CHAT_STEPS
@@ -63,7 +64,19 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
         mcp_tools.extend(mcp_provider.get_mcp_tools(chat_request.mcp_servers))
         logger.info(f"[Model] mcp_tools: {mcp_tools}")
 
+    mcp_tools.extend(await aget_kb_tools(chat_request))
     return mcp_tools
+
+
+async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
+    kb_tools = []
+
+    kb_ids = chat_request.kb_ids or []
+    for kb_id in kb_ids:
+        kb_tools.append(await aget_knowledgebase_tool(kb_id))
+
+    logger.info(f"Resolved {len(kb_tools)} knowledgebase tools.")
+    return kb_tools
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))

@@ -35,7 +35,7 @@ class ImageReader(BaseReader):
             image_alt_text = self.image_caption_tool.extract_url(
                 self.file_store.get_url(save_image_name)
             )
-            image_text = f'<image src="{save_image_name}" alt="{image_alt_text}">'
+            image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
 
             metadata = file_item.metadata()
             metadata["images"] = [save_image_name]

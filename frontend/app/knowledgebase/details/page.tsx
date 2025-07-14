@@ -420,6 +420,9 @@ export default function KnowledgeBaseDetailPage({
               <CardContent>
                 <div className="flex justify-between items-center mb-4">
                   <p className="text-muted-foreground mb-4">
+                    ID：{knowledgebase.id}
+                  </p>
+                  <p className="text-muted-foreground mb-4">
                     描述：{knowledgebase.description}
                   </p>
                   <Button

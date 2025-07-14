@@ -179,7 +179,7 @@ class DocxReader(BaseReader):
                                                         )
                                                     )
                                                 )
-                                                image_text = f'<image src="{save_image_name}" alt="{image_alt_text}">'
+                                                image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
                                                 markdown.append(f"{image_text}\n\n")
                                                 images.append(save_image_name)
 

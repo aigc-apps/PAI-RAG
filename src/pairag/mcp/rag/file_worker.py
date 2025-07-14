@@ -15,8 +15,8 @@ DEFAULT_BROKER = "redis://localhost:6379/0"
 
 app = Celery(
     "PAIRAG_WORKER",
-    broker=os.environ.get("PAIRAG_BROKER", DEFAULT_BROKER),
-    backend=os.environ.get("PAIRAG_BROKER", DEFAULT_BROKER),
+    broker=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
+    backend=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
 )
 
 

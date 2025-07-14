@@ -232,6 +232,8 @@ class MarkdownNodeParser(NodeParser):
 
         for node in nodes_with_progress:
             node_images = node.metadata.get("images", [])
+            print(f"Get {len(node_images)} images from document. Split into chunks.")
+
             if "images" in node.metadata:
                 del node.metadata[
                     "images"

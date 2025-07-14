@@ -266,7 +266,7 @@ async def delete_file(
 ):
     file_res = await session.exec(
         select(KbFileEntity).where(
-            KbFileEntity.id == file_id and KbFileEntity.kb_id == kb_id
+            KbFileEntity.id == file_id, KbFileEntity.kb_id == kb_id
         )
     )
     file_entity = file_res.first()
@@ -275,7 +275,7 @@ async def delete_file(
 
     chunks_res = await session.exec(
         select(KbChunkEntity).where(
-            KbChunkEntity.file_id == file_id and KbChunkEntity.kb_id == kb_id
+            KbChunkEntity.file_id == file_id, KbChunkEntity.kb_id == kb_id
         )
     )
     chunk_entities = chunks_res.all()
@@ -305,7 +305,7 @@ async def list_chunks(
 ):
     chunk_results = await session.exec(
         select(KbChunkEntity)
-        .where(KbChunkEntity.kb_id == kb_id and KbChunkEntity.file_id == file_id)
+        .where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id)
         .offset(offset)
         .limit(limit)
     )
