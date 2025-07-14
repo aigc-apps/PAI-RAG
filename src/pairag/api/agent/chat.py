@@ -5,6 +5,7 @@ from pairag.mcp.models import ChatAgentRequest
 from pairag.mcp.stream_text import VercelAiDataStreamWriter, AgentFinalAnswerWriter
 import traceback
 from loguru import logger
+import time
 
 
 chat_agent_router = APIRouter()
@@ -36,13 +37,19 @@ agent_answer_dump_router = APIRouter()
 async def get_final_answer(chat_request: ChatAgentRequest):
     logger.info(f"Chat agent body: {chat_request}")
     try:
+        start_time = time.time()
         agent_loop = AgentLoop()
         async_response_gen = await agent_loop.arun(chat_request=chat_request)
 
         final_answer_writer = AgentFinalAnswerWriter()
-        final_answer = await final_answer_writer.astream_text(async_response_gen)
-        return final_answer
-
+        final_answer, step = await final_answer_writer.astream_text(async_response_gen)
+        end_time = time.time()
+        run_time = end_time - start_time
+        final_answer_dict = dict()
+        final_answer_dict["answer"] = final_answer
+        final_answer_dict["step"] = step
+        final_answer_dict["run_time"] = round(run_time, 1)
+        return final_answer_dict
     except Exception:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
         return Response(content="Internal Server Error", status_code=500)

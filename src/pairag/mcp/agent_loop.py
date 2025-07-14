@@ -186,11 +186,12 @@ class AgentLoop:
 
         @use_current_span(trace.get_current_span())
         async def gen():
-            cur_step = 1
+            cur_step = 0
+            stop_flag = False
 
             while cur_step <= max_steps:
-                logger.info(f"Running step {cur_step}/{max_steps}.")
                 cur_step += 1
+                logger.info(f"Running step {cur_step}/{max_steps}.")
                 try:
                     step_gen = astep_gen(
                         llm=llm,
@@ -199,10 +200,14 @@ class AgentLoop:
                         memory=memory,
                     )
                     async for chunk in step_gen:
+                        chunk.message.additional_kwargs["step"] = cur_step
                         yield chunk
                         if chunk.message.additional_kwargs.get("STOP_FLAG"):
-                            cur_step = max_steps + 1
+                            stop_flag = True
                             break
+                    if stop_flag:
+                        logger.info("Reached stop flag, ending agent loop.")
+                        break
 
                 except (ValueError, TypeError, KeyError):
                     # 情况1: 参数错误
@@ -226,7 +231,7 @@ class AgentLoop:
                             content=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
                         ),
                         delta=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
-                        additional_kwargs={"failed": True},
+                        additional_kwargs={"failed": True, "step": cur_step},
                     )
                     break
 

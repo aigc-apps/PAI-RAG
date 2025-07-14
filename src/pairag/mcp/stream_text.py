@@ -60,6 +60,7 @@ class AgentFinalAnswerWriter:
     async def astream_text(self, async_response_gen: ChatResponseAsyncGen):
         logger.info("Start generating final answer.")
         final_answer = ""
+        step = 0
         async for response in async_response_gen:
             if response.message.role == MessageRole.ASSISTANT:
                 is_error_message = response.message.additional_kwargs.get(
@@ -73,5 +74,6 @@ class AgentFinalAnswerWriter:
                 ] = response.message.additional_kwargs.get("tool_calls", [])
                 if response.delta and not tool_calls:
                     final_answer += response.delta
+            step = response.message.additional_kwargs.get("step", step)
 
-        return final_answer
+        return final_answer, step
