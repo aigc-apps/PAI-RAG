@@ -16,7 +16,7 @@ async def init_dependencies(init_mcp_tools=False):
 
     if init_mcp_tools:
         from pairag.mcp.providers.mcp_tool_provider import mcp_provider
-        from pairag.mcp.providers import websearch_provider
+        from pairag.mcp.providers.websearch_provider import websearch_provider
 
         await mcp_provider.refresh()
         logger.info("Initialized mcp tools.")
