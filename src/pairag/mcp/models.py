@@ -9,6 +9,7 @@ class ChatAgentRequest(BaseModel):
     stream: Optional[bool] = False  # 流式输出
 
     mcp_servers: Optional[List[str]] = []
+    kb_ids: Optional[List[str]] = []
     enable_search: Optional[bool] = False
     enable_thinking: Optional[bool] = False
     enable_mcp: Optional[bool] = False

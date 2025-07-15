@@ -4,14 +4,15 @@ from typing import List
 from pydantic import BaseModel, ConfigDict
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.elasticsearch import ElasticsearchStore
-from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 
 from pairag.common.knowledgebase.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
+from pairag.mcp.tools.knowledgebase.faiss_vector_store import FaissVectorStore
 
-class VectorDbType(Enum, str):
+
+class VectorDbType(str, Enum):
     OPENSEARCH = "opensearch"
     ELASTICSEARCH = "elasticsearch"
     ANALYTICDB = "analyticdb"
@@ -30,14 +31,14 @@ class BaseVectorDbConnection(BaseModel):
 
 
 class ElasticSearchConnection(BaseVectorDbConnection):
-    type: VectorDbType.ELASTICSEARCH = VectorDbType.ELASTICSEARCH
+    type: VectorDbType = VectorDbType.ELASTICSEARCH
     url: str
     user: str = "elastic"
     password: str
 
 
 class MilvusConnection(BaseVectorDbConnection):
-    type: VectorDbType.MILVUS = VectorDbType.MILVUS
+    type: VectorDbType = VectorDbType.MILVUS
     host: str
     port: int = 19530
     database: str = "default"
@@ -46,14 +47,15 @@ class MilvusConnection(BaseVectorDbConnection):
 
 
 class FaissConnection(BaseVectorDbConnection):
-    type: VectorDbType.FAISS = VectorDbType.FAISS
+    type: VectorDbType = VectorDbType.FAISS
 
 
-def get_value_from_multiple_envs(env_names: List[str]):
+def get_value_from_multiple_envs(env_names: List[str], default=None):
     for env_name in env_names:
         value = os.getenv(env_name)
         if value:
             return value
+    return default
 
 
 VECTORDB_TYPE_KEYS = ["VECTOR_DB_TYPE", "PAIRAG_RAG__INDEX__VECTOR_STORE__type"]
@@ -81,7 +83,9 @@ MILVUS_DATABASE_KEYS = [
 
 
 def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
-    vector_db_type = get_value_from_multiple_envs(VECTORDB_TYPE_KEYS)
+    vector_db_type = get_value_from_multiple_envs(
+        VECTORDB_TYPE_KEYS, default="faiss"
+    ).lower()
 
     if vector_db_type == VectorDbType.ELASTICSEARCH:
         es_url = get_value_from_multiple_envs(ELASTICSEARCH_URL_KEYS)
@@ -108,7 +112,7 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
 
 
 def create_vector_store(
-    knowledgebase_name: str,
+    kb_id: str,
     dimension: int,
     vector_db_connection: BaseVectorDbConnection,
 ) -> BasePydanticVectorStore:
@@ -118,13 +122,11 @@ def create_vector_store(
         )
         token = f"{vector_db_connection.user}:{vector_db_connection.password}"
 
-        logger.info(
-            f"Creating Milvus vector store for {knowledgebase_name} with url: {milvus_url}."
-        )
+        logger.info(f"Creating Milvus vector store for {kb_id} with url: {milvus_url}.")
         return MilvusVectorStore(
             uri=milvus_url,
             token=token,
-            collection_name=knowledgebase_name,
+            collection_name=kb_id,
             dim=dimension,
             enable_sparse=True,
             similarity_metric="cosine",
@@ -132,26 +134,22 @@ def create_vector_store(
         )
     elif isinstance(vector_db_connection, ElasticSearchConnection):
         logger.info(
-            f"Creating ElasticsearchStore for {knowledgebase_name} with url {vector_db_connection.url}."
+            f"Creating ElasticsearchStore for {kb_id} with url {vector_db_connection.url}."
         )
         return ElasticsearchStore(
             es_url=vector_db_connection.url,
-            index_name=knowledgebase_name,
+            index_name=kb_id,
             es_user=vector_db_connection.user,
             es_password=vector_db_connection.password,
             dim=dimension,
         )
     elif isinstance(vector_db_connection, FaissConnection):
-        persist_dir = os.path.join(
-            DEFAULT_KNOWLEDGEBASE_PATH, knowledgebase_name, ".index"
-        )
-        logger.info(
-            f"Creating FaissVectorStore for {knowledgebase_name} with path {persist_dir}."
-        )
+        persist_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, kb_id, ".index")
+        logger.info(f"Creating FaissVectorStore for {kb_id} with path {persist_dir}.")
 
-        os.makedirs(persist_dir, exist_ok=True)
         return FaissVectorStore.from_persist_dir(
             persist_dir=persist_dir,
+            dimension=dimension,
         )
     else:
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")

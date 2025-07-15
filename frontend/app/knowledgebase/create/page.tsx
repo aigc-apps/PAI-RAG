@@ -53,8 +53,6 @@ export default function KnowledgeBaseCreatePage({
       chunk_size: "512",
       chunk_overlap: "50",
     },
-    chunk_num: 0,
-    doc_num: 0,
     embedding_model: "BAAI/bge-m3",
     retrieval_config: {
       retrieval_mode: "vector",
@@ -102,7 +100,8 @@ export default function KnowledgeBaseCreatePage({
     );
 
     if (!res.ok) throw new Error("添加 知识库 失败");
-    setActiveTab(`/knowledgebase/details/${formData.name}`);
+    const jsondata = await res.json();
+    setActiveTab(`/knowledgebase/details/${jsondata.data.id}`);
   };
 
   return (

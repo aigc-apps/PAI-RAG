@@ -24,7 +24,7 @@ def get_sync_db_engine():
         )
         return create_engine(
             local_db_url,
-            echo=True,  # 输出执行的 SQL 语句
+            echo=False,  # 输出执行的 SQL 语句
             connect_args={"check_same_thread": False},  # SQLite 特有参数
         )
     else:

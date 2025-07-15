@@ -37,17 +37,15 @@ class KnowledgebaseCreate(SQLModel):
     name: str = Field(default=None)
     description: str = Field(default=None)
     embedding_model: str = Field(default=None)
-    doc_num: int | None = Field(default=None)
-    chunk_num: int | None = Field(default=None)
     chunk_config: ChunkConfig | None = Field(default=None)
     retrieval_config: RetrievalConfig | None = Field(default=None)
 
 
 # table entity
-class KnowledgebaseEntity(SQLModel, table=True):
+class KbEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase"
 
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
     description: str = Field(default=None)
 
@@ -61,8 +59,6 @@ class KnowledgebaseEntity(SQLModel, table=True):
     )
 
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL)
-    doc_num: int = Field(default=0)
-    chunk_num: int = Field(default=0)
 
     chunk_config: dict = Field(
         default=lambda: ChunkConfig(), sa_column=Column("chunk_config", JSON)

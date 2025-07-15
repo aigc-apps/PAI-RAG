@@ -1,14 +1,17 @@
 ### Knowledgebase configuration API ###
-
+from datetime import datetime, timezone
 import asyncio
 from typing import List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
+from pairag.db.models.knowledgebase.chunk import KbChunkEntity
+from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.db.models.knowledgebase.knowledgebase import (
     ChunkConfig,
-    KnowledgebaseEntity,
+    KbEntity,
     KnowledgebaseCreate,
     RetrievalConfig,
 )
@@ -17,13 +20,50 @@ from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
+from pairag.mcp.rag.file.store.file_store_helper import file_store
 from pairag.api.response_model import ResponseModel, success_response, error_response
+from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
+
+from pairag.mcp.rag.file.models.file_item import FileItem
 
 knowledgebase_router = APIRouter()
 
 
-@knowledgebase_router.post("", response_model=ResponseModel[KnowledgebaseEntity])
+@knowledgebase_router.post(
+    "/retrieval", response_model=ResponseModel[NewRetrievalResponse]
+)
+async def retrieval(
+    retrieval_request: RetrievalRequest, session: AsyncSession = Depends(get_session)
+):
+    knowledgebase = await session.get(KbEntity, retrieval_request.knowledgebase_id)
+    if knowledgebase is None:
+        return error_response(
+            code=404, message=f"找不到知识库{retrieval_request.knowledgebase_id}"
+        )
+
+    node_results = await kb_client.aquery(
+        query_str=retrieval_request.query,
+        kb_id=retrieval_request.knowledgebase_id,
+    )
+    logger.info(
+        f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledgebase_id}."
+    )
+
+    records = [
+        DocRecord(
+            content=score_node.node.get_content(),
+            score=score_node.score,
+            title=score_node.node.metadata.get("file_name", "null"),
+            metadata=score_node.node.metadata,
+        )
+        for score_node in node_results
+    ]
+
+    return success_response(data=NewRetrievalResponse(records=records), message="查询成功。")
+
+
+@knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
     kb: KnowledgebaseCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -32,12 +72,10 @@ async def create_knowledgebase(
         # 验证embedding合法
         _ = embedding_provider.get_embedding_config(kb.embedding_model)
 
-        kb.doc_num = 0
-        kb.chunk_num = 0
         kb.chunk_config = (kb.chunk_config or ChunkConfig()).model_dump()
         kb.retrieval_config = (kb.retrieval_config or RetrievalConfig()).model_dump()
 
-        knowledgebase = KnowledgebaseEntity.model_validate(kb)
+        knowledgebase = KbEntity.model_validate(kb)
         session.add(knowledgebase)
         await session.commit()
         await session.refresh(knowledgebase)
@@ -68,14 +106,14 @@ async def create_knowledgebase(
         )
 
 
-@knowledgebase_router.get("", response_model=ResponseModel[List[KnowledgebaseEntity]])
+@knowledgebase_router.get("", response_model=ResponseModel[List[KbEntity]])
 async def list_knowledgebases(
     session: AsyncSession = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
     knowledgebase_results = await session.exec(
-        select(KnowledgebaseEntity).offset(offset).limit(limit)
+        select(KbEntity).offset(offset).limit(limit)
     )
     knowledgebases = knowledgebase_results.all()
     logger.info(f"Listing knowledgebases: get {len(knowledgebases)} in total.")
@@ -83,44 +121,34 @@ async def list_knowledgebases(
     return success_response(data=knowledgebases, message="查询知识库成功。")
 
 
-@knowledgebase_router.get(
-    "/{kb_name}", response_model=ResponseModel[KnowledgebaseEntity]
-)
-async def read_knowledgebase(
-    kb_name: str, session: AsyncSession = Depends(get_session)
-):
-    statement = select(KnowledgebaseEntity).where(KnowledgebaseEntity.name == kb_name)
-    knowledgebase = (await session.exec(statement)).first()
+@knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
+async def read_knowledgebase(kb_id: str, session: AsyncSession = Depends(get_session)):
+    knowledgebase = await session.get(KbEntity, kb_id)
 
     if not knowledgebase:
         return JSONResponse(
-            content=error_response(code=404, message=f"查询知识库失败: 知识库'{kb_name}'不存在。"),
+            content=error_response(code=404, message=f"查询知识库失败: 知识库'{kb_id}'不存在。"),
             status_code=404,
         )
 
     return success_response(data=knowledgebase, message="查询知识库成功。")
 
 
-@knowledgebase_router.patch(
-    "/{kb_name}", response_model=ResponseModel[KnowledgebaseEntity]
-)
+@knowledgebase_router.patch("/{kb_id}", response_model=ResponseModel[KbEntity])
 async def update_knowledgebase(
-    kb_name: str,
+    kb_id: str,
     new_kb: KnowledgebaseCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    statement = select(KnowledgebaseEntity).where(KnowledgebaseEntity.name == kb_name)
-    knowledgebase = (await session.exec(statement)).first()
+    knowledgebase = await session.get(KbEntity, kb_id)
     if not knowledgebase:
         return JSONResponse(
-            content=error_response(code=404, message=f"更新知识库失败: 知识库'{kb_name}'不存在。"),
+            content=error_response(code=404, message=f"更新知识库失败: 知识库'{kb_id}'不存在。"),
             status_code=404,
         )
 
     knowledgebase.name = new_kb.name or knowledgebase.name
     knowledgebase.description = new_kb.description or knowledgebase.description
-    knowledgebase.doc_num = new_kb.doc_num or knowledgebase.doc_num
-    knowledgebase.chunk_num = new_kb.chunk_num or knowledgebase.chunk_num
     knowledgebase.embedding_model = (
         new_kb.embedding_model or knowledgebase.embedding_model
     )
@@ -135,22 +163,21 @@ async def update_knowledgebase(
 
     asyncio.create_task(knowledgebase_provider.refresh())
 
-    logger.info(f"Knowledgebase {kb_name} updated to {knowledgebase}.")
+    logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
 
     return success_response(data=knowledgebase, message="更新知识库成功。")
 
 
-@knowledgebase_router.delete("/{kb_name}")
+@knowledgebase_router.delete("/{kb_id}")
 async def delete_knowledgebase(
-    kb_name: str,
+    kb_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    statement = select(KnowledgebaseEntity).where(KnowledgebaseEntity.name == kb_name)
-    knowledgebase = (await session.exec(statement)).first()
+    knowledgebase = await session.get(KbEntity, kb_id)
 
     if not knowledgebase:
         return JSONResponse(
-            content=error_response(code=404, message=f"删除知识库失败: 知识库'{kb_name}'不存在。"),
+            content=error_response(code=404, message=f"删除知识库失败: 知识库'{kb_id}'不存在。"),
             status_code=404,
         )
 
@@ -159,6 +186,138 @@ async def delete_knowledgebase(
 
     asyncio.create_task(mcp_provider.refresh())
 
-    logger.info(f"Knowledgebase {knowledgebase} has been deleted.")
+    logger.info(f"Knowledgebase {kb_id} has been deleted.")
 
-    return success_response(message=f"知识库'{kb_name}'删除成功。")
+    return success_response(message=f"知识库'{kb_id}'删除成功。")
+
+
+@knowledgebase_router.post("/{kb_id}/files")
+async def upload_files(
+    kb_id: str,
+    files: List[UploadFile] = File(...),
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Uploading files to {kb_id}")
+    import pairag.mcp.rag.file_worker as worker
+
+    """新知识库上传文件"""
+    if kb_id not in knowledgebase_provider.knowledgebase_map:
+        raise ValueError(f"Knowledgebase '{kb_id}' not found.")
+
+    if not files:
+        raise ValueError("No files provided.")
+
+    file_names = []
+    file_entities = []
+    for file in files:
+        file_name = file.filename
+        destination_file_path = f"{kb_id}/docs/{file_name}"
+        file_store.save(
+            file=file.file,
+            file_path=destination_file_path,
+        )
+        file_item = FileItem.from_file(
+            file=file.file,
+            file_path=destination_file_path,
+            kb_id=kb_id,
+        )
+        file_entity = (
+            await session.exec(
+                select(KbFileEntity).where(
+                    KbFileEntity.kb_id == kb_id,
+                    KbFileEntity.file_name == file_item.file_name,
+                )
+            )
+        ).first()
+        if not file_entity:
+            file_entity = file_item.to_file_entity()
+        else:
+            file_entity.file_md5 = file_item.file_md5
+            file_entity.file_size = file_item.file_size
+            file_entity.update_at = datetime.now(timezone.utc)
+        session.add(file_entity)
+        await session.commit()
+        logger.info(f"Saved file {file_entity} successfully.")
+        worker.process_file.delay(file_entity.id)
+        logger.info(f"Queued {file_entity.id} job successfully.")
+        file_names.append(file.filename)
+        file_entities.append(file_entity)
+
+    return success_response(data=file_entities, message="文件上传成功")
+
+
+@knowledgebase_router.get("/{kb_id}/files")
+async def list_files(
+    kb_id: str,
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    file_results = await session.exec(
+        select(KbFileEntity)
+        .where(KbFileEntity.kb_id == kb_id)
+        .order_by(KbFileEntity.update_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    file_entities = file_results.all()
+    logger.info(f"Listing files: get {len(file_entities)} in total.")
+
+    return success_response(data=file_entities, message="查询知识库文件成功。")
+
+
+@knowledgebase_router.delete("/{kb_id}/files/{file_id}")
+async def delete_file(
+    kb_id: str,
+    file_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    file_res = await session.exec(
+        select(KbFileEntity).where(
+            KbFileEntity.id == file_id, KbFileEntity.kb_id == kb_id
+        )
+    )
+    file_entity = file_res.first()
+    if file_entity is None:
+        return error_response(code=404, message=f"没有在知识库{kb_id}中找到文件{file_id}。")
+
+    chunks_res = await session.exec(
+        select(KbChunkEntity).where(
+            KbChunkEntity.file_id == file_id, KbChunkEntity.kb_id == kb_id
+        )
+    )
+    chunk_entities = chunks_res.all()
+
+    node_ids = [chunk_entity.id for chunk_entity in chunk_entities]
+    await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=node_ids)
+
+    await session.delete(file_entity)
+    for chunk_entity in chunk_entities:
+        await session.delete(chunk_entity)
+
+    await session.commit()
+    logger.info(
+        f"Delete file {file_id}@{kb_id}: deleted {len(chunk_entities)} chunks in total."
+    )
+
+    return success_response(data=node_ids, message="删除知识库文件成功。")
+
+
+@knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")
+async def list_chunks(
+    kb_id: str,
+    file_id: str,
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    chunk_results = await session.exec(
+        select(KbChunkEntity)
+        .where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id)
+        .offset(offset)
+        .limit(limit)
+    )
+    chunk_entities = chunk_results.all()
+    logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
+
+    return success_response(data=chunk_entities, message="查询文件切片成功。")

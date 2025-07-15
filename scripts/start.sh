@@ -18,6 +18,40 @@ do
    esac
 done
 
+
+# 定义清理函数（在退出或信号捕获时调用）
+cleanup() {
+    local exit_code=$?
+    echo "Cleaning up..."
+
+    pkill -9 -f 'celery -A pairag'
+    echo "celery job stopped."
+
+    echo "Script exited with code $exit_code."
+    exit "$exit_code"
+}
+
+# 捕获信号（SIGTERM, SIGINT, EXIT）
+trap cleanup EXIT TERM INT
+
+# 检查Redis服务是否已经在运行
+if pgrep redis-server > /dev/null
+then
+   echo "Redis is already running."
+else
+   redis-server &
+   echo "Starting redis server."
+fi
+
+echo "Starting celery workers..."
+
+celery -A pairag.mcp.rag.file_worker worker --loglevel=info &
+
+echo "Celery is started."
+
+
+echo "Starting web server..."
+
 workers="${workers:-1}"
 port="${port:-8680}"
 
