@@ -45,10 +45,14 @@ async def get_final_answer(chat_request: ChatAgentRequest):
         final_answer, step = await final_answer_writer.astream_text(async_response_gen)
         end_time = time.time()
         run_time = end_time - start_time
-        final_answer_dict = dict()
-        final_answer_dict["answer"] = final_answer
-        final_answer_dict["step"] = step
-        final_answer_dict["run_time"] = round(run_time, 1)
+        logger.info(
+            f"Final answer: {final_answer}, Step: {step}, Run time: {run_time:.1f}s"
+        )
+        final_answer_dict = {
+            "answer": final_answer,
+            "step": step,
+            "run_time": round(run_time, 1),
+        }
         return final_answer_dict
     except Exception:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
