@@ -70,12 +70,16 @@ export const Assistant = () => {
   const extra_body = useMemo(() => {
     const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
     const mcp_servers = mcpOptions.map((opt) => opt.split(":")[1]);
+    const kbOptions = selectedOptions.filter((opt) => opt.startsWith("kb:"));
+    const kb_ids = kbOptions.map((opt) => opt.split(":")[1]);
+
     return {
       model: llmConfig.model_id,
       mcp_servers: mcp_servers,
       enable_search: selectedOptions.includes("search"),
       enable_thinking: selectedOptions.includes("thinking"),
       enable_mcp: mcp_servers.length > 0,
+      kb_ids: kb_ids,
     };
   }, [llmConfig.model_id, selectedOptions]);
 

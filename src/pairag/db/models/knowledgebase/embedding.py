@@ -30,5 +30,5 @@ class EmbeddingModelRead(EmbeddingModel):
 class EmbeddingModelEntity(EmbeddingModel, table=True):
     __tablename__ = "pai_embedding_model"
 
-    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    id: str = Field(default_factory=lambda x: uuid.uuid4().hex, primary_key=True)
     encrypted_api_key: str | None = Field(default=None)

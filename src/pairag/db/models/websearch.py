@@ -20,6 +20,6 @@ class WebSearchConfigCreate(WebSearchConfig):
 class WebSearchConfigEntity(WebSearchConfig, table=True):
     __tablename__ = "pai_websearch_config"
 
-    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)
     encrypted_access_key_id: str = Field(default=None)
     encrypted_access_key_secret: str = Field(default=None)

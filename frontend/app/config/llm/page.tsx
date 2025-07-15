@@ -68,6 +68,7 @@ interface LlmConfig {
   base_url: string;
   max_context: number;
   enabled: boolean;
+  vision_support: boolean;
 }
 
 interface EmbConfig {
@@ -114,7 +115,7 @@ export default function ModelConfigPage() {
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key: "sk-xxxxxx",
     enabled: true,
-    dimension: 1024, // 默认向量维度
+    dimension: null, // 默认向量维度
     embed_batch_size: 10, // 默认向量Batch大小
   });
 
@@ -158,6 +159,10 @@ export default function ModelConfigPage() {
     const { id, value } = e.target;
     setAddFormData((prev) => ({ ...prev, [id]: value }));
   };
+  const handleVisionSupportChange = (checked) => {
+    console.log("Vision support开关: ", checked);
+    setAddFormData((prev) => ({ ...prev, vision_support: checked }));
+  };
   const addModel = async () => {
     try {
       const newModel = {
@@ -177,6 +182,7 @@ export default function ModelConfigPage() {
           enabled: newModel.enabled,
           api_key: newModel.api_key,
           source: newModel.source,
+          vision_support: newModel.vision_support,
           max_context: 0,
         };
         console.log("newLlmModel:", newLlmModel);
@@ -277,6 +283,7 @@ export default function ModelConfigPage() {
 
   const removeModel = async (id: string, model_type: string) => {
     try {
+      console.log("removeModel: id: ", id, "model_type: ", model_type);
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(
         `http://localhost:${port}/v1/config/${model_type}/${id}`,
@@ -703,7 +710,7 @@ export default function ModelConfigPage() {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      {isLlmConfig(editingConfig) ? (
+                      {isLlmConfig(config) ? (
                         <button
                           onClick={() => removeModel(config.id, "llms")}
                           className="text-red-500 hover:text-red-700 p-1"
@@ -857,6 +864,19 @@ export default function ModelConfigPage() {
                     placeholder="model"
                     onChange={handleInputChange}
                     className="col-span-3"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="vision_support" className="text-right">
+                    多模态模型
+                  </Label>
+                  <Switch
+                    id="vision_support"
+                    onCheckedChange={(checked) =>
+                      handleVisionSupportChange(checked)
+                    }
                   />
                 </div>
               </div>
