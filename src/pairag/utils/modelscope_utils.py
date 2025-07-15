@@ -38,11 +38,13 @@ def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
     data["device-mode"] = infer_cuda_device()
 
     if "models-dir" in data:
-        data["models-dir"] = os.path.join(str(model_dir), "PDF-Extract-Kit-1.0/models")
+        data["models-dir"] = os.path.join(
+            str(model_dir), "Ceceliachenen/PDF-Extract-Kit-1.0/models"
+        )
     if "layoutreader-model-dir" in data:
         data["layoutreader-model-dir"] = os.path.join(
             str(model_dir),
-            "PDF-Extract-Kit-1.0/models/layoutreader",
+            "Ceceliachenen/PDF-Extract-Kit-1.0/models/layoutreader",
         )
 
     # 将修改后的内容写入destination_path
