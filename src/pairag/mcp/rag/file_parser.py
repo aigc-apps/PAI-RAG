@@ -6,7 +6,6 @@ from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core.node_parser import SentenceSplitter
 
 from pairag.db.models.knowledgebase.knowledgebase import ChunkConfig, KbEntity
-from pairag.mcp.providers.knowledgebase_provider import KnowledgebaseProvider
 from pairag.mcp.rag.file.file_utils import ensure_file_type_is_supported
 from pairag.mcp.rag.file.models.file_item import FileItem
 from pairag.mcp.rag.file.readers.base import BaseReader
@@ -52,7 +51,7 @@ class FileParser:
     def __init__(
         self,
         file_store: BaseFileStore,
-        knowledgebase_provider: KnowledgebaseProvider,
+        knowledgebase: KbEntity,
         image_caption_tool: ImageCaptionTool = None,
     ):
         self.file_store = file_store
@@ -90,7 +89,7 @@ class FileParser:
             ),
             ".txt": TextReader(),
         }
-        self.knowledgebase_provider = knowledgebase_provider
+        self.knowledgebase = knowledgebase
 
     # 读取文件解析为Document列表
     def read_file(self, file_item: FileItem) -> List[Document]:
@@ -165,50 +164,7 @@ class FileParser:
         return splitted_nodes
 
     def parse(self, file_item: FileItem) -> List[BaseNode]:
-        knowledgebase = self.knowledgebase_provider.get_knowledgebase(file_item.kb_id)
         docs = self.read_file(file_item)
-        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
+        chunk_config = ChunkConfig.model_validate(self.knowledgebase.chunk_config)
         nodes = self.split_docs(docs, chunk_config=chunk_config)
         return nodes
-
-
-if __name__ == "__main__":
-    from pairag.integrations.llms.pai.open_ai_alike_multi_modal import (
-        OpenAIAlikeMultiModal,
-    )
-    from pairag.mcp.rag.file.store.oss_store import OssFileStore
-    import os
-
-    knowledgebase_provider = KnowledgebaseProvider()
-    knowledgebase_provider.knowledgebase_map = {
-        "test": KbEntity(
-            id="test",
-            name="test",
-            chunk_config=ChunkConfig(
-                chunk_size=1000,
-                chunk_overlap=50,
-            ),
-        )
-    }
-    pdf_file = "/Users/feiyue/Documents/test_files/舒福德产品说明书.pdf"
-    pdf_file_item = FileItem.from_path(pdf_file, knowledgebase_id="test")
-    multimodal_llm = OpenAIAlikeMultiModal(
-        api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        api_key=os.environ["DASHSCOPE_API_KEY"],
-        model="qwen-vl-max",
-        is_chat_model=True,
-    )
-    image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
-    oss_store = OssFileStore(bucket="pai-rag", endpoint="oss-cn-hangzhou.aliyuncs.com")
-    file_parser = FileParser(
-        file_store=oss_store,
-        image_caption_tool=image_caption_tool,
-        knowledgebase_provider=knowledgebase_provider,
-    )
-    chunks = file_parser.parse(pdf_file_item)
-    for i, chunk in enumerate(chunks):
-        print("==== CHUNK ", i)
-        print(chunk.text)
-        print(chunk.metadata)
-        print("-----")
-    print("finished.")

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -98,6 +98,7 @@ export default function KnowledgeBaseDetailPage({
   knowledgebase_id: string;
   setActiveTab: (tab: string) => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库列表
   const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
   const [kbquery, setKbQuery] = useState(""); //查询
@@ -326,7 +327,11 @@ export default function KnowledgeBaseDetailPage({
     }
   };
   const handleFileUpload = async (files: FileList | null) => {
-    if (!files) return;
+    console.log("##handleFileUpload", files);
+    if (!files) {
+      alert("文件列表为空！");
+      return;
+    }
     setUploading(true);
 
     // 文件校验 (Demo功能，后续调整优化)
@@ -368,6 +373,11 @@ export default function KnowledgeBaseDetailPage({
       console.error("上传失败:", error);
     } finally {
       setUploading(false);
+      // 清空文件选择框
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // 清空 input 的值
+      }
+
       fetchKbFiles();
     }
   };
@@ -447,6 +457,7 @@ export default function KnowledgeBaseDetailPage({
                     id="file-upload"
                     type="file"
                     className="hidden"
+                    ref={fileInputRef}
                     onChange={(e) => handleFileUpload(e.target.files)}
                   />
                 </div>

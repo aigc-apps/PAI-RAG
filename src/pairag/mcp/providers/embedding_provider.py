@@ -16,7 +16,7 @@ from pairag.utils.modelscope_utils import download_model_to_directory
 def create_embedding_model(embedding_config: EmbeddingModelEntity) -> BaseEmbedding:
     if embedding_config.type == EmbeddingType.OPENAI_LIKE:
         logger.info(
-            f"Creating OpenAI like embedding model  {embedding_config.model_name}"
+            f"Creating OpenAI like embedding model  {embedding_config.model_name} with {embedding_config}."
         )
         return OpenAILikeEmbedding(
             api_key=decrypt_key(embedding_config.encrypted_api_key),

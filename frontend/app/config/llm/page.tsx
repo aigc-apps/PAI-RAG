@@ -115,7 +115,7 @@ export default function ModelConfigPage() {
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key: "sk-xxxxxx",
     enabled: true,
-    dimension: 1024, // 默认向量维度
+    dimension: null, // 默认向量维度
     embed_batch_size: 10, // 默认向量Batch大小
   });
 

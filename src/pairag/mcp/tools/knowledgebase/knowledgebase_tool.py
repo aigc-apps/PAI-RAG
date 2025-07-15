@@ -52,14 +52,12 @@ class PaiKnowledgebaseClient:
     ) -> VectorStoreIndex:
         # TODO: 检查配置是否变化
         if knowledgebase.id not in self.vector_index_cache:
-            embedding_config = embedding_provider.get_embedding_config(
-                knowledgebase.embedding_model
-            )
             embed_model = embedding_provider.get_embedding_model(
                 knowledgebase.embedding_model
             )
+            vector_dimension = len(embed_model.get_text_embedding("0"))
             vector_store = create_vector_store(
-                knowledgebase.id, embedding_config.dimension, self.vector_connection
+                knowledgebase.id, vector_dimension, self.vector_connection
             )
             vector_index = VectorStoreIndex.from_vector_store(
                 vector_store=vector_store, embed_model=embed_model
@@ -69,7 +67,7 @@ class PaiKnowledgebaseClient:
 
         return self.vector_index_cache[knowledgebase.id]
 
-    def create_file_parser(self):
+    def create_file_parser(self, knowledgebase: KbEntity):
         multimodal_llm = llm_provider.get_multimodal_llm()
         image_caption_tool = None
         if multimodal_llm:
@@ -77,7 +75,7 @@ class PaiKnowledgebaseClient:
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
-            knowledgebase_provider=knowledgebase_provider,
+            knowledgebase=knowledgebase,
         )
         return file_parser
 
@@ -100,13 +98,16 @@ class PaiKnowledgebaseClient:
         )
 
         kb_id = file_item.kb_id
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(
+            knowledgebase_id=kb_id
+        )
         logger.info(
             f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
         )
         await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing)
 
         try:
-            file_parser = self.create_file_parser()
+            file_parser = self.create_file_parser(knowledgebase)
             nodes = file_parser.parse(file_item)
 
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
@@ -117,7 +118,6 @@ class PaiKnowledgebaseClient:
             )
 
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
-            knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
             vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
             if old_chunk_ids:
                 vector_index.delete_nodes(node_ids=old_chunk_ids)
@@ -155,7 +155,7 @@ class PaiKnowledgebaseClient:
         kb_id: str,
         node_ids: List[str],
     ):
-        knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
         vector_index.delete_nodes(node_ids=node_ids)
         logger.info(
@@ -168,7 +168,7 @@ class PaiKnowledgebaseClient:
         kb_id: str,
     ) -> List[NodeWithScore]:
         logger.info(f"Starting to query knowledgebase {kb_id} with query: {query_str}.")
-        knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
@@ -227,7 +227,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
 
 
 async def aget_knowledgebase_tool(kb_id: str):
-    knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
+    knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
     aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id)
     search_knowledgebase_tool = FunctionTool.from_defaults(
         async_fn=aquery_knowledgebase_func,

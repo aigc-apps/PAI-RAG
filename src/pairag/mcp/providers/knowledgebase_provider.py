@@ -7,6 +7,12 @@ from loguru import logger
 
 
 @with_async_db_session
+async def fetch_knowledgebases_by_id(session: AsyncSession, kb_id: str) -> KbEntity:
+    kb = await session.get(KbEntity, kb_id)
+    return kb
+
+
+@with_async_db_session
 async def fetch_knowledgebases(session: AsyncSession) -> List[KbEntity]:
     logger.info("[KnowledgebaseProvider] Start fetching knowledgebases.")
     sql_results = await session.exec(select(KbEntity))
@@ -35,10 +41,13 @@ class KnowledgebaseProvider:
             f"[KnowledgebaseProvider] refreshed {len(self.knowledgebase_map)} knowledgebases."
         )
 
-    def get_knowledgebase(self, knowledgebase_id: str) -> KbEntity:
-        assert (
-            knowledgebase_id in self.knowledgebase_map
-        ), f"Knowledgebase {knowledgebase_id} not found."
+    async def aget_knowledgebase(self, knowledgebase_id: str) -> KbEntity:
+        if knowledgebase_id not in self.knowledgebase_map:
+            kb = await fetch_knowledgebases_by_id(knowledgebase_id)
+            if kb is None:
+                raise ValueError(f"Knowledgebase {knowledgebase_id} not found.")
+
+            return kb
         return self.knowledgebase_map[knowledgebase_id]
 
     def get_knowledgebase_by_name(self, knowledgebase_name: str) -> KbEntity:
