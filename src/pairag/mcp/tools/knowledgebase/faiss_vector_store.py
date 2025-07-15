@@ -232,7 +232,7 @@ class FaissVectorStore(BasePydanticVectorStore):
             id_file.write(json.dumps(self.faiss_id_map))
         self.last_mtime = os.path.getmtime(self.faiss_id_path)
 
-        self.inverted_id_map = {v: k for k, v in self.faiss_id_map.items()}
+        self.inverted_id_map = {v["faiss_id"]: k for k, v in self.faiss_id_map.items()}
         logger.info(f"Deleted {num_deleted} nodes from FAISS vector store.")
 
     def delete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:
