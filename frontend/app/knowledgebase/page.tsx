@@ -47,11 +47,11 @@ export default function KnowledgeBase({
     fetchConfigs();
   }, []);
 
-  const deleteKnowledgebase = async (kb_name: string) => {
+  const deleteKnowledgebase = async (kb_id: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(
-        `http://localhost:${port}/v1/config/knowledgebases/${kb_name}`,
+        `http://localhost:${port}/v1/config/knowledgebases/${kb_id}`,
         {
           method: "DELETE",
           headers: {
@@ -67,9 +67,7 @@ export default function KnowledgeBase({
       // 显示成功提示（可选）
 
       // 删除成功后更新本地状态
-      setKnowledgeBases((prev) =>
-        prev.filter((config) => config.name !== kb_name),
-      );
+      setKnowledgeBases((prev) => prev.filter((config) => config.id !== kb_id));
     } catch (err: any) {}
     // 显示错误提示
   };

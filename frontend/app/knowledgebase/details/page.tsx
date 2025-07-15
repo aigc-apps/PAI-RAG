@@ -498,7 +498,7 @@ export default function KnowledgeBaseDetailPage({
                                 ) : file.status === "succeeded" ? (
                                   <div className="flex items-center text-green-500">
                                     <CheckCircle className="mr-1 h-4 w-4" />
-                                    解析完成
+                                    解析成功
                                   </div>
                                 ) : file.status === "failed" ? (
                                   <div className="flex items-center text-green-500">

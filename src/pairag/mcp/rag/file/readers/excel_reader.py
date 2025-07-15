@@ -18,7 +18,7 @@ class ExcelReader(BaseReader):
         """
         Read a Excel file and return a list of Documents.
         """
-        df = self._read_file(file_item.file)
+        df = self._read_file(file_item)
         text_list = [
             "\n".join([f"{k}:{v}" for k, v in record.items()])
             for record in df.to_dict("records")

@@ -1,6 +1,7 @@
 from typing import List
 from loguru import logger
-from sqlmodel import update
+from sqlalchemy import delete
+from sqlmodel import select, update
 from pairag.db.models.knowledgebase.chunk import (
     KbChunkEntity,
     create_chunk_from_text_node,
@@ -58,13 +59,29 @@ async def save_chunks_to_db_async(
     chunk_records: List[KbChunkEntity] = [
         create_chunk_from_text_node(kb_id, file_id, chunk) for chunk in chunk_nodes
     ]
+    select_statement = select(KbChunkEntity).where(
+        KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+    )
+    existing_chunks = (await session.exec(select_statement)).all()
+    existing_chunk_ids = [chunk.id for chunk in existing_chunks]
+
+    # 构造 DELETE 语句
+    del_statement = delete(KbChunkEntity).where(
+        KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+    )
+
+    # 执行删除操作
+    await session.exec(del_statement)
+    logger.info(
+        f"[KnowledgebaseProvider] Deleted {len(existing_chunks)} chunks for file {file_id}."
+    )
 
     session.add_all(chunk_records)
     await session.commit()
 
-    chunk_ids = [record.id for record in chunk_records]
+    new_chunk_ids = [record.id for record in chunk_records]
     logger.info(f"[FileHelper] saved {len(chunk_records)} chunks.")
-    return chunk_ids
+    return existing_chunk_ids, new_chunk_ids
 
 
 @with_async_db_session

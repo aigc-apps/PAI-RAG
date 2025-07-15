@@ -1,6 +1,7 @@
 import hashlib
 from typing import Any, BinaryIO, Dict, List
 import os
+import uuid
 
 from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.mcp.rag.file.file_utils import ensure_file_type_is_supported
@@ -41,7 +42,7 @@ class FileItem:
         file.seek(0)
         file_data = file.read()
         file_md5 = hashlib.md5(file_data).hexdigest()
-        id = hashlib.md5(file_name.encode("utf-8")).hexdigest()
+        id = uuid.uuid4().hex
         file_size = len(file_data)
         return cls(
             id=id,

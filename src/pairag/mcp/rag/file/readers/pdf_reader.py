@@ -31,12 +31,16 @@ class MineruPdfReader(BaseReader):
     def __init__(
         self, file_store: BaseFileStore, image_caption_tool: ImageCaptionTool = None
     ):
-        init_mineru_config()
+        self.need_init_mineru = True
         self.file_store = file_store
         self.image_caption_tool = image_caption_tool
         logger.info("MineruPdfReader inited.")
 
     def read(self, file_item: FileItem) -> List[Document]:
+        if self.need_init_mineru:
+            init_mineru_config()
+            self.need_init_mineru = False
+
         with tempfile.TemporaryDirectory() as temp_dir:
             local_image_dir = os.path.join(temp_dir, IMAGE_OUTPUT_PREFIX)
             os.makedirs(local_image_dir, exist_ok=True)

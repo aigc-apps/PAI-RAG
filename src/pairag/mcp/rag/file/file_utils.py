@@ -8,6 +8,7 @@ SUPPORTED_FILE_EXT = [
     ".docx",
     ".pptx",
     ".xlsx",
+    ".xls",
     ".html",
     ".jsonl",
     ".jpg",

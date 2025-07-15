@@ -95,7 +95,9 @@ class FaissVectorStore(BasePydanticVectorStore):
         self.faiss_index_path = faiss_index_path
         self.inverted_id_map = {v["faiss_id"]: k for k, v in faiss_id_map.items()}
 
-        self.last_mtime = os.path.getmtime(self.faiss_id_path)
+        self.last_mtime = -1
+        if os.path.exists(self.faiss_id_path):
+            self.last_mtime = os.path.getmtime(self.faiss_id_path)
         self._monitor_thread = threading.Thread(target=self._monitor_loop)
         self._monitor_thread.daemon = True
         self._monitor_thread.start()
@@ -103,7 +105,9 @@ class FaissVectorStore(BasePydanticVectorStore):
     def _monitor_loop(self):
         while True:
             try:
-                current_mtime = os.path.getmtime(self.faiss_id_path)
+                current_mtime = -1
+                if os.path.exists(self.faiss_id_path):
+                    current_mtime = os.path.getmtime(self.faiss_id_path)
                 if current_mtime > self.last_mtime:
                     import faiss
 
@@ -195,11 +199,11 @@ class FaissVectorStore(BasePydanticVectorStore):
             self.inverted_id_map[new_id] = node.id_
 
         faiss.write_index(self._faiss_index, self.faiss_index_path)
-        self.last_mtime = os.path.getmtime(self.faiss_index_path)
 
         with open(self.faiss_id_path, "w") as id_file:
             id_file.write(json.dumps(self.faiss_id_map))
 
+        self.last_mtime = os.path.getmtime(self.faiss_id_path)
         logger.info(f"Saved {len(nodes)} chunks to FAISS successfully.")
         return new_ids
 
@@ -219,7 +223,6 @@ class FaissVectorStore(BasePydanticVectorStore):
 
         num_deleted = self._faiss_index.remove_ids(np.array(ids_to_delete))
         faiss.write_index(self._faiss_index, self.faiss_index_path)
-        self.last_mtime = os.path.getmtime(self.faiss_index_path)
 
         for node_id in node_ids:
             if node_id in self.faiss_id_map:
@@ -227,6 +230,9 @@ class FaissVectorStore(BasePydanticVectorStore):
 
         with open(self.faiss_id_path, "w") as id_file:
             id_file.write(json.dumps(self.faiss_id_map))
+        self.last_mtime = os.path.getmtime(self.faiss_id_path)
+
+        self.inverted_id_map = {v: k for k, v in self.faiss_id_map.items()}
         logger.info(f"Deleted {num_deleted} nodes from FAISS vector store.")
 
     def delete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:

@@ -197,6 +197,7 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     session: AsyncSession = Depends(get_session),
 ):
+    logger.info(f"Uploading files to {kb_id}")
     import pairag.mcp.rag.file_worker as worker
 
     """新知识库上传文件"""
@@ -220,7 +221,14 @@ async def upload_files(
             file_path=destination_file_path,
             kb_id=kb_id,
         )
-        file_entity = await session.get(KbFileEntity, file_item.id)
+        file_entity = (
+            await session.exec(
+                select(KbFileEntity).where(
+                    KbFileEntity.kb_id == kb_id,
+                    KbFileEntity.file_name == file_item.file_name,
+                )
+            )
+        ).first()
         if not file_entity:
             file_entity = file_item.to_file_entity()
         else:

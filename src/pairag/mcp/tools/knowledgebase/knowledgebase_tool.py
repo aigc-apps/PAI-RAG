@@ -109,7 +109,7 @@ class PaiKnowledgebaseClient:
             file_parser = self.create_file_parser()
             nodes = file_parser.parse(file_item)
 
-            chunk_ids = await save_chunks_to_db_async(
+            old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
                 kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
             )
             await update_file_status_async(
@@ -119,10 +119,14 @@ class PaiKnowledgebaseClient:
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
             knowledgebase = knowledgebase_provider.get_knowledgebase(kb_id)
             vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
+            if old_chunk_ids:
+                vector_index.delete_nodes(node_ids=old_chunk_ids)
+                logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
             await vector_index.ainsert_nodes(nodes)
+            logger.info(f"Inserted {len(old_chunk_ids)} into vector store.")
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(
-                chunk_ids=chunk_ids, status=ChunkStatus.succeeded
+                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded
             )
             await update_file_status_async(
                 file_id=file_item.id, status=FileStatus.succeeded
