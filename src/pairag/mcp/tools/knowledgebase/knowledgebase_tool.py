@@ -204,7 +204,7 @@ kb_client = PaiKnowledgebaseClient()
 
 def get_node_content(i: int, score_node: NodeWithScore):
     text = f"""
-    chunk {i+1}: i
+    ## chunk {i+1}
     file_name: {score_node.node.metadata.get("file_name", "")}
     chunk_content: {score_node.node.text}
     """
