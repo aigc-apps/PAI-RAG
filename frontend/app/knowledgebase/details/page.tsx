@@ -25,7 +25,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -428,12 +428,16 @@ export default function KnowledgeBaseDetailPage({
                 <CardTitle>知识库：{knowledgebase.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
                   <p className="text-muted-foreground mb-4">
                     ID：{knowledgebase.id}
                   </p>
                   <p className="text-muted-foreground mb-4">
                     描述：{knowledgebase.description}
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                    jsonl, jpg, jpeg, png{" "}
                   </p>
                   <Button
                     onClick={() =>
@@ -485,6 +489,11 @@ export default function KnowledgeBaseDetailPage({
                                 <Button
                                   variant="link"
                                   className="font-medium text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
                                   {file.file_name}
                                 </Button>
@@ -497,13 +506,13 @@ export default function KnowledgeBaseDetailPage({
                                     等待解析
                                   </div>
                                 ) : file.status === "parsing" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                     解析中
                                   </div>
                                 ) : file.status === "persisting" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                     索引中
                                   </div>
                                 ) : file.status === "succeeded" ? (
@@ -512,8 +521,8 @@ export default function KnowledgeBaseDetailPage({
                                     解析成功
                                   </div>
                                 ) : file.status === "failed" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-red-500">
+                                    <XCircle className="mr-1 h-4 w-4" />
                                     解析失败
                                   </div>
                                 ) : (
@@ -529,8 +538,13 @@ export default function KnowledgeBaseDetailPage({
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
-                                  查看切片
+                                  查看切片列表
                                 </Button>
                                 <Button
                                   variant="link"
