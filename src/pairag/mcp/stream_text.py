@@ -54,3 +54,26 @@ class VercelAiDataStreamWriter:
                 raise ValueError(f"Unknown role: {response.message.role}")
 
         logger.info("Finished generating chunks.")
+
+
+class AgentFinalAnswerWriter:
+    async def astream_text(self, async_response_gen: ChatResponseAsyncGen):
+        logger.info("Start generating final answer.")
+        final_answer = ""
+        step = 0
+        async for response in async_response_gen:
+            if response.message.role == MessageRole.ASSISTANT:
+                is_error_message = response.message.additional_kwargs.get(
+                    "failed", False
+                )
+                if is_error_message:
+                    continue
+
+                tool_calls: List[
+                    ChoiceDeltaToolCall
+                ] = response.message.additional_kwargs.get("tool_calls", [])
+                if response.delta and not tool_calls:
+                    final_answer += response.delta
+            step = response.message.additional_kwargs.get("step", step)
+
+        return final_answer, step
