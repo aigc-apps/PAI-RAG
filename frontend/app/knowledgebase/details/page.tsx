@@ -43,12 +43,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 import { ScanSearch, TextSearch, SearchCode, PlusIcon } from "lucide-react";
 import * as Toast from "@radix-ui/react-toast";
+import { formatFileSize, formatBeijingTime } from "../utils/utils";
 
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
   file_size: string;
   status: string;
+  created_at: string;
   update_at: string;
 }
 
@@ -238,7 +240,7 @@ export default function KnowledgeBaseDetailPage({
     setKbFiles(file_json_data.data);
     console.log("知识库文件列表:", kbfiles);
     const files_unfinished = file_json_data.data.some(
-      (file) => file.status != "succeeded" && file.status != "failed",
+      (file: any) => file.status != "succeeded" && file.status != "failed",
     );
     if (files_unfinished) {
       console.log("存在未完成的文件，继续检查状态。");
@@ -477,8 +479,9 @@ export default function KnowledgeBaseDetailPage({
                           <TableRow>
                             <TableHead>文件名</TableHead>
                             <TableHead>文件大小</TableHead>
-                            <TableHead>状态</TableHead>
                             <TableHead>上传时间</TableHead>
+                            <TableHead>更新时间</TableHead>
+                            <TableHead>状态</TableHead>
                             <TableHead>操作</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -498,7 +501,15 @@ export default function KnowledgeBaseDetailPage({
                                   {file.file_name}
                                 </Button>
                               </TableCell>
-                              <TableCell>{file.file_size}</TableCell>
+                              <TableCell>
+                                {formatFileSize(Number(file.file_size))}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.created_at)}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.update_at)}
+                              </TableCell>
                               <TableCell>
                                 {file.status === "pending" ? (
                                   <div className="flex items-center text-yellow-500">
@@ -529,7 +540,6 @@ export default function KnowledgeBaseDetailPage({
                                   <span>{file.status}</span> // 兜底显示原始状态
                                 )}
                               </TableCell>
-                              <TableCell>{file.update_at}</TableCell>
                               <TableCell>
                                 <PreviewButton
                                   kbId={knowledgebase_id}
