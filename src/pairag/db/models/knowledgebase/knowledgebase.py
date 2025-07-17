@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 import re
+from typing import List
 import uuid
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime
+from sqlalchemy import Column, JSON, DateTime, Enum
 from pairag.common.knowledgebase.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
@@ -33,12 +34,23 @@ class RetrievalConfig(SQLModel):
     rerank_model: str = Field(default=None)
 
 
+class MetadataValueType(str, Enum):
+    STRING = "string"
+    NUMBER = "number"
+
+
+class MetadataConfig(SQLModel):
+    name: str = Field(default=None)
+    value_type: str = Field(default=MetadataValueType.STRING)
+
+
 class KnowledgebaseCreate(SQLModel):
     name: str = Field(default=None)
     description: str = Field(default=None)
     embedding_model: str = Field(default=None)
     chunk_config: ChunkConfig | None = Field(default=None)
     retrieval_config: RetrievalConfig | None = Field(default=None)
+    metadata_configs: List[MetadataConfig] | None = Field(default=[])
 
 
 # table entity
@@ -65,6 +77,9 @@ class KbEntity(SQLModel, table=True):
     )
     retrieval_config: dict = Field(
         default=lambda: RetrievalConfig(), sa_column=Column("retrieval_config", JSON)
+    )
+    metadata_configs: List[dict] = Field(
+        default=[], sa_column=Column("metadata_config", JSON)
     )
 
     @field_validator("name")

@@ -34,7 +34,7 @@ def upload_file(input_files, index_name="default"):
         task_status = "pending"
 
         for file_name in file_names_added:
-            while True and i < 40:
+            while True and i < 100: # 重试100次
                 response = client.get(
                     f"/api/v1/knowledgebases/{index_name}/files/{file_name}",
                 )
@@ -68,6 +68,8 @@ def setup_app():
                         "model": "qwen-max",
                         "api_key": os.environ.get("DASHSCOPE_API_KEY", "abc"),
                         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                        "context_window": 32768,
+                        "max-tokens": 4000
                     }
                 ],
                 "trace": {

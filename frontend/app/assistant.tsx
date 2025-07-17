@@ -92,6 +92,7 @@ export const Assistant = () => {
   const pathname = usePathname();
   console.log("pathname:", pathname);
   const [activeTab, setActiveTab] = useState(pathname);
+
   console.log("activeTab:", activeTab);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
