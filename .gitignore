@@ -234,3 +234,6 @@ tmp
 .next
 node_modules
 config.json
+
+# redis
+.rdb
