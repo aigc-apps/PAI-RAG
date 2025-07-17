@@ -30,7 +30,6 @@ GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 
 STATUS_OK = Status(StatusCode.OK)
-STATUS_ERROR = Status(StatusCode.ERROR)
 
 
 def pai_query_wrapper() -> Callable:
@@ -71,8 +70,8 @@ def pai_query_wrapper() -> Callable:
 
                 try:
                     f_return_val = await f(_self, request, **kwargs)
-                except BaseException:
-                    otel_span.set_status(STATUS_ERROR)
+                except BaseException as e:
+                    otel_span.set_status(Status(StatusCode.ERROR, str(e)))
                     otel_span.end()
                     detach(token)
                     raise
@@ -105,11 +104,11 @@ def pai_query_wrapper() -> Callable:
                             otel_span.set_attribute(OUTPUT_VALUE, full_content)
                             # error response content, e.g., content_filer exception message
                             if full_content.startswith("Error code: "):
-                                otel_span.set_status(STATUS_ERROR)
+                                otel_span.set_status(Status(StatusCode.ERROR, full_content))
                             else:
                                 otel_span.set_status(STATUS_OK)
-                        except BaseException:
-                            otel_span.set_status(STATUS_ERROR)
+                        except BaseException as e:
+                            otel_span.set_status(Status(StatusCode.ERROR, str(e)))
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
@@ -153,8 +152,8 @@ def pai_query_wrapper() -> Callable:
                     otel_span.set_attribute(GEN_AI_SPAN_KIND, CHAIN)
 
                     f_return_val = f(_self, request, **kwargs)
-                except BaseException:
-                    otel_span.set_status(STATUS_ERROR)
+                except BaseException as e:
+                    otel_span.set_status(Status(StatusCode.ERROR, str(e)))
                     otel_span.end()
                     detach(token)
                     raise
@@ -176,11 +175,11 @@ def pai_query_wrapper() -> Callable:
                             otel_span.set_attribute(OUTPUT_VALUE, full_content)
                             # error response content, e.g., content_filer exception message
                             if full_content.startswith("Error code: "):
-                                otel_span.set_status(STATUS_ERROR)
+                                otel_span.set_status(Status(StatusCode.ERROR, full_content))
                             else:
                                 otel_span.set_status(STATUS_OK)
-                        except BaseException:
-                            otel_span.set_status(STATUS_ERROR)
+                        except BaseException as e:
+                            otel_span.set_status(Status(StatusCode.ERROR, str(e)))
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())
