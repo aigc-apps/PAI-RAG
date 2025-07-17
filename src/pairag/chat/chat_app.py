@@ -20,7 +20,7 @@ from loguru import logger
 from enum import Enum
 from pairag.integrations.trace.base import init_instrument
 from openai.types.create_embedding_response import CreateEmbeddingResponse
-
+from pairag.integrations.trace import context as trace_context
 
 DEFAULT_RAG_INDEX_FILE = "localdata/default_rag_indexes.json"
 
@@ -50,6 +50,8 @@ class ChatApp:
 
     async def astream_chat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
+        # set user attributes here
+        # trace_context.set_context_var(ARMS_FILED_NAME, per_request_user_value)
         return await chat_flow.astream_chat(chat_request)
 
     async def aknowledgebase_retrieval(
