@@ -1,14 +1,12 @@
 """Beautiful Soup Web scraper."""
 
 import asyncio
-import nest_asyncio
 from loguru import logger
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import httpx
 from llama_index.core.bridge.pydantic import PrivateAttr
-from llama_index.core.readers.base import BasePydanticReader
 from llama_index.core.schema import Document
 
 
@@ -148,17 +146,16 @@ async def fetch_url(url):
             logger.warning(f"Fetch {url} failed. Skipping")
 
 
-def fetch_multiple(urls):
+async def afetch_multiple(urls):
     """
     Concurrently fetches a list of URLs.
     """
-    nest_asyncio.apply()
     tasks = [fetch_url(url) for url in urls]
-    results = asyncio.run(asyncio.gather(*tasks))
+    results = await asyncio.gather(*tasks)
     return results
 
 
-class ParallelBeautifulSoupWebReader(BasePydanticReader):
+class ParallelBeautifulSoupWebReader:
     """BeautifulSoup web page reader.
 
     Reads pages from the web.
@@ -174,7 +171,6 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
     _website_extractor: Dict[str, Callable] = PrivateAttr()
 
     def __init__(self, website_extractor: Optional[Dict[str, Callable]] = None) -> None:
-        super().__init__()
         self._website_extractor = website_extractor or DEFAULT_WEBSITE_EXTRACTOR
 
     @classmethod
@@ -182,7 +178,7 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
         """Get the name identifier of the class."""
         return "BeautifulSoupWebReader"
 
-    def load_data(
+    async def aload_urls(
         self,
         urls: List[str],
         custom_hostname: Optional[str] = None,
@@ -205,7 +201,7 @@ class ParallelBeautifulSoupWebReader(BasePydanticReader):
         from bs4 import BeautifulSoup
 
         documents = []
-        pages = fetch_multiple(urls)
+        pages = await afetch_multiple(urls)
         for i, page in enumerate(pages):
             if not page:
                 continue

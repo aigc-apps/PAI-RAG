@@ -26,8 +26,9 @@ from pairag.mcp.rag.file.store.file_store_helper import file_store
 from pairag.api.response_model import ResponseModel, success_response, error_response
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
-
+import re
 from pairag.mcp.rag.file.models.file_item import FileItem
+from pairag.mcp.utils.metadata_utils import ensure_metadata_configs_is_valid
 
 knowledgebase_router = APIRouter()
 add_pagination(knowledgebase_router)
@@ -71,11 +72,17 @@ async def create_knowledgebase(
 ):
     try:
         assert kb.embedding_model, "需要提供Embedding模型才能创建知识库。"
+        ensure_metadata_configs_is_valid(kb.metadata_configs)
         # 验证embedding合法
         _ = embedding_provider.get_embedding_config(kb.embedding_model)
 
         kb.chunk_config = (kb.chunk_config or ChunkConfig()).model_dump()
         kb.retrieval_config = (kb.retrieval_config or RetrievalConfig()).model_dump()
+
+        if kb.metadata_configs:
+            kb.metadata_configs = [
+                metadata_config.model_dump() for metadata_config in kb.metadata_configs
+            ]
 
         knowledgebase = KbEntity.model_validate(kb)
         session.add(knowledgebase)
@@ -149,25 +156,36 @@ async def update_knowledgebase(
             status_code=404,
         )
 
-    knowledgebase.name = new_kb.name or knowledgebase.name
-    knowledgebase.description = new_kb.description or knowledgebase.description
-    knowledgebase.embedding_model = (
-        new_kb.embedding_model or knowledgebase.embedding_model
-    )
-    if new_kb.chunk_config:
-        knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
-    if new_kb.retrieval_config:
-        knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
+    try:
+        ensure_metadata_configs_is_valid(new_kb.metadata_configs)
 
-    session.add(knowledgebase)
-    await session.commit()
-    await session.refresh(knowledgebase)
+        knowledgebase.name = new_kb.name or knowledgebase.name
+        knowledgebase.description = new_kb.description or knowledgebase.description
+        knowledgebase.embedding_model = (
+            new_kb.embedding_model or knowledgebase.embedding_model
+        )
+        if new_kb.chunk_config:
+            knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
+        if new_kb.retrieval_config:
+            knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
+        if new_kb.metadata_configs:
+            knowledgebase.metadata_configs = [
+                metadata_config.model_dump()
+                for metadata_config in new_kb.metadata_configs
+            ]
 
-    asyncio.create_task(knowledgebase_provider.refresh())
+        session.add(knowledgebase)
+        await session.commit()
+        await session.refresh(knowledgebase)
 
-    logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
+        asyncio.create_task(knowledgebase_provider.refresh())
 
-    return success_response(data=knowledgebase, message="更新知识库成功。")
+        logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
+
+        return success_response(data=knowledgebase, message="更新知识库成功。")
+    except Exception as ex:
+        logger.error(f"Failed to update knowledgebase {kb_id}: {ex}")
+        return error_response(message=f"更新知识库失败：{ex}")
 
 
 @knowledgebase_router.delete("/{kb_id}")
@@ -261,6 +279,32 @@ async def list_files(
     return paginated_result
 
 
+@knowledgebase_router.get(
+    "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
+)
+async def get_kb_file(
+    kb_id: str,
+    file_id: str,
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    file_results = await session.exec(
+        select(KbFileEntity)
+        .where(KbFileEntity.kb_id == kb_id)
+        .where(KbFileEntity.id == file_id)
+        .order_by(KbFileEntity.update_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    file_entities = file_results.all()
+    assert len(file_entities) <= 1
+    logger.info(f"Get kb files: get {len(file_entities)} in total.")
+    file_url = file_store.get_url(file_entities[0].file_path)
+    file_entities[0].file_metadata["file_url"] = file_url
+    return success_response(data=file_entities[0], message="查询知识库文件成功。")
+
+
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}")
 async def delete_file(
     kb_id: str,
@@ -313,6 +357,25 @@ async def list_chunks(
         .limit(limit)
     )
     chunk_entities = chunk_results.all()
+    for chunk_entity in chunk_entities:
+        images = chunk_entity.chunk_metadata.get("images", [])
+        chunk_entity.chunk_metadata["images_info"] = []
+        if images:
+            origin_text = chunk_entity.text
+            for image_file in images:
+                image_url = file_store.get_url(image_file)
+                pattern = rf'<img src="{re.escape(image_file)}" alt="([^"]*)"'
+                match = re.search(pattern, origin_text)
+                if match:
+                    chunk_entity.chunk_metadata["images_info"].append(
+                        {"url": image_url, "desc": match.group(1)}
+                    )
+                else:
+                    chunk_entity.chunk_metadata["images_info"].append(
+                        {"url": image_url, "desc": "null"}
+                    )
+                origin_text = re.sub(r"<img[^>]*>", "", origin_text)
+            chunk_entity.text = origin_text
     logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
 
     return success_response(data=chunk_entities, message="查询文件切片成功。")
