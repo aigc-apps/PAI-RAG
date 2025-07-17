@@ -8,10 +8,21 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import { Loader2 } from "lucide-react";
+import { MarkdownViewer } from "@/app/knowledgebase/details/viewer/markdown-viewer";
+import { JsonlViewer } from "@/app/knowledgebase/details/viewer/jsonl-viewer";
+import { HtmlViewer } from "@/app/knowledgebase/details/viewer/html-viewer";
+
+interface KnowledgeBaseFile {
+  id: string;
+  file_name: string;
+  file_size: string;
+  file_extension: string;
+  file_metadata: {
+    file_url: string;
+  };
+  update_at: string;
+}
 
 export function PreviewButton({
   kbId,
@@ -21,25 +32,25 @@ export function PreviewButton({
   fileId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [content, setContent] = useState("");
+  const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // 文件详情
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const loadContent = async () => {
     setLoading(true);
     try {
-      // // 调用preview接口获取内容
-      // const response = await fetch(`/api/knowledgebases/{kb_name}/files/${fileId}/preview`);
-      // if (!response.ok) throw new Error("加载失败");
-      // const text = await response.text();
-      console.log("加载文件内容", kbId, fileId);
-      // 模拟加载内容
-      const text =
-        '# 系统文档指南\n\n## 简介\n\n这是使用现代样式渲染的 Markdown 文档示例。以下展示了各种格式的渲染效果：\n\n### 标题层级\n\n#### 三级标题下的四级标题\n\n- 支持无序列表\n\n- 支持有序列表\n\n1. 嵌套有序列表\n\n2. 第二项\n\n**强调文本** 和 `行内代码` 示例\n\n```python\n\n# 代码块示例\n\ndef hello():\n\nprint("现代 Markdown 样式")';
-      setContent(text);
-    } catch (err) {
-      setError("无法加载文件内容");
-      console.error(err);
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
+      );
+      if (!res.ok) throw new Error("获取知识库文件失败");
+      const json_data = await res.json();
+      const kb_file_data = json_data.data;
+
+      setKbFile(kb_file_data); // 更新状态
+      console.log("知识库文件详情数据:", kb_file_data);
+    } catch (err: any) {
+      setError(err || "加载失败");
     } finally {
       setLoading(false);
     }
@@ -47,48 +58,67 @@ export function PreviewButton({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {/* <DialogTrigger asChild>
-        <Button
-          variant="link"
-          className="text-sm text-blue-600 p-0"
-          onClick={loadContent}
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "预览"
-          )}
-        </Button>
-      </DialogTrigger> */}
       <DialogTrigger asChild>
         <Button
           variant="link"
           className="text-sm text-blue-600 p-0"
           onClick={loadContent}
         >
-          预览
+          文件预览
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Markdown 预览</DialogTitle>
-          <DialogDescription>
-            预览文件markdown格式的解析内容。
-          </DialogDescription>
+      <DialogContent className="flex flex-col h-[calc(100%-10rem)] !max-w-[calc(100%-20rem)]">
+        <DialogHeader className="flex-none h-1/10">
+          <DialogTitle>{kbfile?.file_name}</DialogTitle>
+          <DialogDescription>文件预览</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="grid gap-2 py-2 max-h-[600px] max-w-[800px]">
-          {error ? (
-            <div className="text-red-500">{error}</div>
-          ) : loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
+        <div className="flex-grow overflow-y-auto">
+          {kbfile?.file_extension === ".pdf" ? (
+            <iframe
+              src={kbfile?.file_metadata.file_url}
+              width="100%"
+              height="100%"
+              title="PDF预览"
+            ></iframe>
+          ) : kbfile?.file_extension === ".jpg" ||
+            kbfile?.file_extension === ".png" ||
+            kbfile?.file_extension === ".jpeg" ? (
+            <img
+              src={kbfile?.file_metadata.file_url}
+              width="100%"
+              height="100%"
+              title="图片预览"
+            ></img>
+          ) : kbfile?.file_extension === ".docx" ||
+            kbfile?.file_extension === ".xlsx" ||
+            kbfile?.file_extension === ".pptx" ? (
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                String(kbfile?.file_metadata.file_url),
+              )}`}
+              width="100%"
+              height="100%"
+              title="文件预览"
+            />
+          ) : kbfile?.file_extension === ".md" ||
+            kbfile?.file_extension === ".txt" ? (
+            <MarkdownViewer file_url={kbfile?.file_metadata.file_url} />
+          ) : kbfile?.file_extension === ".jsonl" ? (
+            <JsonlViewer file_url={kbfile?.file_metadata.file_url} />
+          ) : kbfile?.file_extension === ".html" ? (
+            <HtmlViewer file_url={kbfile?.file_metadata.file_url} />
           ) : (
-            <div className="markdown-content">
-              <ReactMarkdown>{content}</ReactMarkdown>
+            <div>
+              暂不支持此格式文件的在线预览，请直接下载查看
+              <a
+                href={kbfile?.file_metadata.file_url}
+                className="text-blue-500 hover:underline"
+              >
+                下载文件
+              </a>
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
