@@ -9,7 +9,7 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
-from pairag.db.models.knowledgebase.chunk import KbChunkEntity
+from pairag.db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel
 from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.db.models.knowledgebase.knowledgebase import (
     ChunkConfig,
@@ -65,7 +65,6 @@ async def retrieval(
 
     return success_response(data=NewRetrievalResponse(records=records), message="查询成功。")
 
-
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
     kb: KnowledgebaseCreate, session: AsyncSession = Depends(get_session)
@@ -115,19 +114,14 @@ async def create_knowledgebase(
         )
 
 
-@knowledgebase_router.get("", response_model=ResponseModel[List[KbEntity]])
+@knowledgebase_router.get("", response_model=Page[KbEntity])
 async def list_knowledgebases(
+    params: Params = Depends(),
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
-    knowledgebase_results = await session.exec(
-        select(KbEntity).offset(offset).limit(limit)
-    )
-    knowledgebases = knowledgebase_results.all()
-    logger.info(f"Listing knowledgebases: get {len(knowledgebases)} in total.")
-
-    return success_response(data=knowledgebases, message="查询知识库成功。")
+    sql_query = (select(KbEntity))
+    paginated_result = await paginate(session, sql_query, params)
+    return paginated_result
 
 
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
@@ -342,21 +336,19 @@ async def delete_file(
     return success_response(data=node_ids, message="删除知识库文件成功。")
 
 
-@knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")
+@knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks", response_model=Page[KbChunkEntity])
 async def list_chunks(
     kb_id: str,
     file_id: str,
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    params: Params = Depends(),
     session: AsyncSession = Depends(get_session),
 ):
-    chunk_results = await session.exec(
+    sql_query = (
         select(KbChunkEntity)
         .where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id)
-        .offset(offset)
-        .limit(limit)
     )
-    chunk_entities = chunk_results.all()
+    chunk_results = await paginate(session, sql_query, params)
+    chunk_entities = chunk_results.items
     for chunk_entity in chunk_entities:
         images = chunk_entity.chunk_metadata.get("images", [])
         chunk_entity.chunk_metadata["images_info"] = []
@@ -378,4 +370,38 @@ async def list_chunks(
             chunk_entity.text = origin_text
     logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
 
-    return success_response(data=chunk_entities, message="查询文件切片成功。")
+    return chunk_results
+
+
+@knowledgebase_router.patch("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
+async def update_chunk(
+    kb_id: str,
+    file_id: str,
+    chunk_id: str,
+    update_kb_chunk: KbChunkModel,
+    session: AsyncSession = Depends(get_session),
+):
+    sql_results = await session.exec(
+        select(KbChunkEntity)
+        .where(
+            KbChunkEntity.id == chunk_id,
+            KbChunkEntity.kb_id == kb_id,
+            KbChunkEntity.file_id == file_id,
+        ))
+    kb_chunk_entities = sql_results.all()
+    if len(kb_chunk_entities) != 1:
+        return JSONResponse(
+            content=error_response(code=404, message=f"更新知识库切片失败: 切片'{chunk_id}'不存在 或 有误。"),
+            status_code=404,
+        )
+    try:
+        kb_chunk = kb_chunk_entities[0]
+        kb_chunk.text = update_kb_chunk.text
+        kb_chunk.active = update_kb_chunk.active
+        session.add(kb_chunk)
+        await session.commit()
+        await session.refresh(kb_chunk)
+        return success_response(data=kb_chunk, message="更新知识库切片成功。")
+    except Exception as ex:
+        logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {ex}")
+        return error_response(message=f"更新知识库切片失败：{ex}")

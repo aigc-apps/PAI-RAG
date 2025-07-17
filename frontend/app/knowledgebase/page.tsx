@@ -10,6 +10,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { ChevronRight, Plus } from "lucide-react";
+import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 
 export interface KnowledgeBase {
   id: string;
@@ -25,18 +26,22 @@ export default function KnowledgeBase({
   const [knowledgebases, setKnowledgeBases] = useState(Array<KnowledgeBase>); // 知识库列表
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const kbSizePerPage = 6;
 
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
-          `http://localhost:${port}/v1/config/knowledgebases`,
+          `http://localhost:${port}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
-        const data = json_data.data;
+        const data = json_data.items;
         setKnowledgeBases(data || []); // 更新状态
+        setTotalPages(json_data.pages);
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
       } finally {
@@ -45,8 +50,12 @@ export default function KnowledgeBase({
     };
 
     fetchConfigs();
-  }, []);
+  }, [page]);
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
+  };
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -73,9 +82,9 @@ export default function KnowledgeBase({
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex flex-col h-screen p-6 space-y-6">
       {/* 顶部标题栏 */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center h-1/10">
         <h1 className="text-2xl font-bold">知识库</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
@@ -87,46 +96,58 @@ export default function KnowledgeBase({
       </div>
 
       {/* 卡片容器 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-        {knowledgebases.map((base) => (
-          <Card
-            key={base.id}
-            className="flex flex-col border rounded-lg shadow-sm h-full"
-          >
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">{base.name}</CardTitle>
-            </CardHeader>
-            {base.description && (
-              <CardContent className="pt-0">
-                <p className="text-xs text-muted-foreground">
-                  {base.description
-                    ? base.description.slice(0, 50) +
-                      (base.description.length > 50 ? "..." : "")
-                    : ""}
-                </p>
-              </CardContent>
-            )}
-            <CardFooter className="mt-auto pt-0 flex justify-end">
-              <Button
-                variant="link"
-                onClick={() => deleteKnowledgebase(base.id)}
-                className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
-              >
-                删除
-              </Button>
+      <div className="h-4/5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+          {knowledgebases.map((base) => (
+            <Card
+              key={base.id}
+              className="flex flex-col border rounded-lg shadow-sm h-full"
+            >
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">
+                  {base.name}
+                </CardTitle>
+              </CardHeader>
+              {base.description && (
+                <CardContent className="pt-0">
+                  <p className="text-xs text-muted-foreground">
+                    {base.description
+                      ? base.description.slice(0, 50) +
+                        (base.description.length > 50 ? "..." : "")
+                      : ""}
+                  </p>
+                </CardContent>
+              )}
+              <CardFooter className="mt-auto pt-0 flex justify-end">
+                <Button
+                  variant="link"
+                  onClick={() => deleteKnowledgebase(base.id)}
+                  className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
+                >
+                  删除
+                </Button>
 
-              <Button
-                variant="link"
-                className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
-                onClick={() =>
-                  setActiveTab(`/knowledgebase/details/${base.id}`)
-                }
-              >
-                查看详情 <ChevronRight className="ml-1" size={16} />
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+                <Button
+                  variant="link"
+                  className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
+                  onClick={() =>
+                    setActiveTab(`/knowledgebase/details/${base.id}`)
+                  }
+                >
+                  查看详情 <ChevronRight className="ml-1" size={16} />
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      </div>
+      {/* 分页组件 */}
+      <div className="flex justify-center items-center h-1/10">
+        <PaginationComponent
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

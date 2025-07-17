@@ -6,13 +6,7 @@ from llama_index.core.schema import TextNode
 from pairag.common.knowledgebase.types import ChunkStatus
 
 
-class KbChunkEntity(SQLModel, table=True):
-    __tablename__ = "pai_knowledgebase_chunk"
-    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
-    # ref
-    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
-    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
-
+class KbChunkModel(SQLModel):
     text: str = Field(default=None)
     chunk_metadata: dict = Field(default={}, sa_column=Column("chunk_metadata", JSON))
 
@@ -20,6 +14,14 @@ class KbChunkEntity(SQLModel, table=True):
     active: bool = Field(
         default=True
     )  # active和status独立控制，status是处理状态，active是由用户控制是否显示在知识库
+
+
+class KbChunkEntity(KbChunkModel, table=True):
+    __tablename__ = "pai_knowledgebase_chunk"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
+    # ref
+    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
+    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
