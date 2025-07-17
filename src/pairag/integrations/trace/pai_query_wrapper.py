@@ -20,6 +20,7 @@ from opentelemetry.context import attach, detach
 from opentelemetry import trace
 from opentelemetry.trace.status import Status, StatusCode
 from pairag.chat.utils.message_utils import extract_openai_message_content
+from pairag.integrations.trace import context as trace_context
 
 tracer = trace.get_tracer(__name__, tracer_provider=trace.get_tracer_provider())
 
@@ -59,6 +60,10 @@ def pai_query_wrapper() -> Callable:
                 context = trace.set_span_in_context(otel_span)
                 token = attach(context)
 
+                for k, v in trace_context.get_context_vars().items():
+                    if v:
+                        otel_span.set_attribute(k, v)
+
                 if request.messages:
                     # set latest input as input value
                     otel_span.set_attribute(
@@ -69,7 +74,6 @@ def pai_query_wrapper() -> Callable:
                     INPUT_QUERY, request.model_dump_json(exclude_defaults=True)
                 )
                 otel_span.set_attribute(GEN_AI_SPAN_KIND, CHAIN)
-
                 try:
                     f_return_val = await f(_self, request, **kwargs)
                 except BaseException:
@@ -151,6 +155,10 @@ def pai_query_wrapper() -> Callable:
                 token = attach(context)
 
                 try:
+                    for k, v in trace_context.get_context_vars().items():
+                        if v:
+                            otel_span.set_attribute(k, v)
+
                     if request.messages:
                         otel_span.set_attribute(
                             INPUT_VALUE, request.messages[-1].blocks[0].text

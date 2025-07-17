@@ -21,6 +21,7 @@ from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
 
 from pairag.integrations.trace.reloadable_exporter import ReloadableOTLPSpanExporter
+from pairag.integrations.trace import context as trace_context
 from pairag.integrations.trace.trace_config import TraceConfig
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 
@@ -45,6 +46,9 @@ def init_instrument(config: TraceConfig):
         trace_config = config
         logger.info("Tracing is DISABLED.")
         return
+
+    if config.user_args:
+        trace_context.init_custom_context(config.user_args.values())
 
     grpc_endpoint = config.endpoint
     token = config.token
