@@ -7,6 +7,7 @@ import os
 import asyncio
 import threading
 from fastapi import FastAPI
+from fastapi_pagination import add_pagination
 # setup models
 from pairag.utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
@@ -56,6 +57,7 @@ def configure(app: FastAPI):
         from pairag.api.agent.routers import add_chat_router, add_config_router
         add_config_router(app)
         add_chat_router(app)
+        add_pagination(app)
 
     chat_service.initialize()
     add_middlewares(app)

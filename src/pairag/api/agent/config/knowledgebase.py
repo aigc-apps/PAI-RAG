@@ -4,6 +4,8 @@ import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi_pagination import Page, Params, add_pagination
+from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
@@ -28,7 +30,7 @@ from loguru import logger
 from pairag.mcp.rag.file.models.file_item import FileItem
 
 knowledgebase_router = APIRouter()
-
+add_pagination(knowledgebase_router)
 
 @knowledgebase_router.post(
     "/retrieval", response_model=ResponseModel[NewRetrievalResponse]
@@ -246,24 +248,17 @@ async def upload_files(
     return success_response(data=file_entities, message="文件上传成功")
 
 
-@knowledgebase_router.get("/{kb_id}/files")
+@knowledgebase_router.get("/{kb_id}/files", response_model=Page[KbFileEntity])
 async def list_files(
     kb_id: str,
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    params: Params = Depends(),
     session: AsyncSession = Depends(get_session),
-):
-    file_results = await session.exec(
-        select(KbFileEntity)
+) :
+    sql_query = (select(KbFileEntity)
         .where(KbFileEntity.kb_id == kb_id)
-        .order_by(KbFileEntity.update_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    file_entities = file_results.all()
-    logger.info(f"Listing files: get {len(file_entities)} in total.")
-
-    return success_response(data=file_entities, message="查询知识库文件成功。")
+        .order_by(KbFileEntity.update_at.desc()))
+    paginated_result = await paginate(session, sql_query, params)
+    return paginated_result
 
 
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}")
