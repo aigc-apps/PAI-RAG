@@ -21,6 +21,7 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -91,6 +92,7 @@ export const Assistant = () => {
   const pathname = usePathname();
   console.log("pathname:", pathname);
   const [activeTab, setActiveTab] = useState(pathname);
+
   console.log("activeTab:", activeTab);
   return (
     <AssistantRuntimeProvider runtime={runtime}>

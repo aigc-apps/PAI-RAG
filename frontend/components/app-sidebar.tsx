@@ -40,7 +40,7 @@ export function AppSidebar({
           <Avatar>
             <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
           </Avatar>
-          <span className="text-lg font-medium">Agent Workspace</span>
+          <span className="text-lg font-medium">PAI-RAG</span>
         </div>
       </SidebarHeader>
       <SidebarContent>

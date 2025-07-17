@@ -26,6 +26,7 @@ from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
 
 from pairag.mcp.rag.file.models.file_item import FileItem
+from pairag.mcp.utils.metadata_utils import ensure_metadata_configs_is_valid
 
 knowledgebase_router = APIRouter()
 
@@ -69,11 +70,17 @@ async def create_knowledgebase(
 ):
     try:
         assert kb.embedding_model, "需要提供Embedding模型才能创建知识库。"
+        ensure_metadata_configs_is_valid(kb.metadata_configs)
         # 验证embedding合法
         _ = embedding_provider.get_embedding_config(kb.embedding_model)
 
         kb.chunk_config = (kb.chunk_config or ChunkConfig()).model_dump()
         kb.retrieval_config = (kb.retrieval_config or RetrievalConfig()).model_dump()
+
+        if kb.metadata_configs:
+            kb.metadata_configs = [
+                metadata_config.model_dump() for metadata_config in kb.metadata_configs
+            ]
 
         knowledgebase = KbEntity.model_validate(kb)
         session.add(knowledgebase)
@@ -147,25 +154,36 @@ async def update_knowledgebase(
             status_code=404,
         )
 
-    knowledgebase.name = new_kb.name or knowledgebase.name
-    knowledgebase.description = new_kb.description or knowledgebase.description
-    knowledgebase.embedding_model = (
-        new_kb.embedding_model or knowledgebase.embedding_model
-    )
-    if new_kb.chunk_config:
-        knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
-    if new_kb.retrieval_config:
-        knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
+    try:
+        ensure_metadata_configs_is_valid(new_kb.metadata_configs)
 
-    session.add(knowledgebase)
-    await session.commit()
-    await session.refresh(knowledgebase)
+        knowledgebase.name = new_kb.name or knowledgebase.name
+        knowledgebase.description = new_kb.description or knowledgebase.description
+        knowledgebase.embedding_model = (
+            new_kb.embedding_model or knowledgebase.embedding_model
+        )
+        if new_kb.chunk_config:
+            knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
+        if new_kb.retrieval_config:
+            knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
+        if new_kb.metadata_configs:
+            knowledgebase.metadata_configs = [
+                metadata_config.model_dump()
+                for metadata_config in new_kb.metadata_configs
+            ]
 
-    asyncio.create_task(knowledgebase_provider.refresh())
+        session.add(knowledgebase)
+        await session.commit()
+        await session.refresh(knowledgebase)
 
-    logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
+        asyncio.create_task(knowledgebase_provider.refresh())
 
-    return success_response(data=knowledgebase, message="更新知识库成功。")
+        logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
+
+        return success_response(data=knowledgebase, message="更新知识库成功。")
+    except Exception as ex:
+        logger.error(f"Failed to update knowledgebase {kb_id}: {ex}")
+        return error_response(message=f"更新知识库失败：{ex}")
 
 
 @knowledgebase_router.delete("/{kb_id}")
