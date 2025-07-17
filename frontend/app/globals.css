@@ -117,12 +117,12 @@
 .markdown-content {
   font-family: "Segoe UI", system-ui, sans-serif;
   line-height: 1.8;
-  color: #2d3748;
+  color: #101317;
 }
 
 .markdown-content h1,
 .markdown-content h2,
-.markdown-content h3 {
+.markdown-content h3 .markdown-content h4 .markdown-content h5 {
   position: relative;
   padding-bottom: 0.3em;
   margin-top: 0.3em;
@@ -139,11 +139,21 @@
 }
 
 .markdown-content h2 {
-  font-size: 1.7rem;
+  font-size: 2rem;
   color: #2d3748;
 }
 
 .markdown-content h3 {
+  font-size: 1.8rem;
+  color: #4a5568;
+}
+
+.markdown-content h4 {
+  font-size: 1.6rem;
+  color: #4a5568;
+}
+
+.markdown-content h5 {
   font-size: 1.4rem;
   color: #4a5568;
 }

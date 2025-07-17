@@ -25,7 +25,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -43,12 +43,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 import { ScanSearch, TextSearch, SearchCode, PlusIcon } from "lucide-react";
 import * as Toast from "@radix-ui/react-toast";
+import { formatFileSize, formatBeijingTime } from "../utils/utils";
 
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
   file_size: string;
   status: string;
+  created_at: string;
   update_at: string;
 }
 
@@ -238,7 +240,7 @@ export default function KnowledgeBaseDetailPage({
     setKbFiles(file_json_data.data);
     console.log("知识库文件列表:", kbfiles);
     const files_unfinished = file_json_data.data.some(
-      (file) => file.status != "succeeded" && file.status != "failed",
+      (file: any) => file.status != "succeeded" && file.status != "failed",
     );
     if (files_unfinished) {
       console.log("存在未完成的文件，继续检查状态。");
@@ -428,12 +430,16 @@ export default function KnowledgeBaseDetailPage({
                 <CardTitle>知识库：{knowledgebase.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
                   <p className="text-muted-foreground mb-4">
                     ID：{knowledgebase.id}
                   </p>
                   <p className="text-muted-foreground mb-4">
                     描述：{knowledgebase.description}
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                    jsonl, jpg, jpeg, png{" "}
                   </p>
                   <Button
                     onClick={() =>
@@ -473,8 +479,9 @@ export default function KnowledgeBaseDetailPage({
                           <TableRow>
                             <TableHead>文件名</TableHead>
                             <TableHead>文件大小</TableHead>
-                            <TableHead>状态</TableHead>
                             <TableHead>上传时间</TableHead>
+                            <TableHead>更新时间</TableHead>
+                            <TableHead>状态</TableHead>
                             <TableHead>操作</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -485,11 +492,24 @@ export default function KnowledgeBaseDetailPage({
                                 <Button
                                   variant="link"
                                   className="font-medium text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
                                   {file.file_name}
                                 </Button>
                               </TableCell>
-                              <TableCell>{file.file_size}</TableCell>
+                              <TableCell>
+                                {formatFileSize(Number(file.file_size))}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.created_at)}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.update_at)}
+                              </TableCell>
                               <TableCell>
                                 {file.status === "pending" ? (
                                   <div className="flex items-center text-yellow-500">
@@ -497,13 +517,13 @@ export default function KnowledgeBaseDetailPage({
                                     等待解析
                                   </div>
                                 ) : file.status === "parsing" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                     解析中
                                   </div>
                                 ) : file.status === "persisting" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                     索引中
                                   </div>
                                 ) : file.status === "succeeded" ? (
@@ -512,15 +532,14 @@ export default function KnowledgeBaseDetailPage({
                                     解析成功
                                   </div>
                                 ) : file.status === "failed" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                  <div className="flex items-center text-red-500">
+                                    <XCircle className="mr-1 h-4 w-4" />
                                     解析失败
                                   </div>
                                 ) : (
                                   <span>{file.status}</span> // 兜底显示原始状态
                                 )}
                               </TableCell>
-                              <TableCell>{file.update_at}</TableCell>
                               <TableCell>
                                 <PreviewButton
                                   kbId={knowledgebase_id}
@@ -529,8 +548,13 @@ export default function KnowledgeBaseDetailPage({
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
-                                  查看切片
+                                  查看切片列表
                                 </Button>
                                 <Button
                                   variant="link"
