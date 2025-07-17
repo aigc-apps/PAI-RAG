@@ -21,6 +21,7 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
+import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -143,6 +144,17 @@ export const Assistant = () => {
               </header>
               <KnowledgeBaseDetailPage
                 knowledgebase_id={activeTab.split("/")[3]}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          )}
+          {activeTab.startsWith("/knowledgebase/chunks") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBaseFileChunksPage
+                knowledgebase_file_id={activeTab.split("/")[3]}
                 setActiveTab={setActiveTab}
               />
             </div>

@@ -24,7 +24,7 @@ from pairag.mcp.rag.file.store.file_store_helper import file_store
 from pairag.api.response_model import ResponseModel, success_response, error_response
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
-
+import re
 from pairag.mcp.rag.file.models.file_item import FileItem
 
 knowledgebase_router = APIRouter()
@@ -266,6 +266,32 @@ async def list_files(
     return success_response(data=file_entities, message="查询知识库文件成功。")
 
 
+@knowledgebase_router.get(
+    "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
+)
+async def get_kb_file(
+    kb_id: str,
+    file_id: str,
+    offset: int = 0,
+    limit: int = Query(default=10, lte=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    file_results = await session.exec(
+        select(KbFileEntity)
+        .where(KbFileEntity.kb_id == kb_id)
+        .where(KbFileEntity.id == file_id)
+        .order_by(KbFileEntity.update_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    file_entities = file_results.all()
+    assert len(file_entities) <= 1
+    logger.info(f"Get kb files: get {len(file_entities)} in total.")
+    file_url = file_store.get_url(file_entities[0].file_path)
+    file_entities[0].file_metadata["file_url"] = file_url
+    return success_response(data=file_entities[0], message="查询知识库文件成功。")
+
+
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}")
 async def delete_file(
     kb_id: str,
@@ -318,6 +344,25 @@ async def list_chunks(
         .limit(limit)
     )
     chunk_entities = chunk_results.all()
+    for chunk_entity in chunk_entities:
+        images = chunk_entity.chunk_metadata.get("images", [])
+        chunk_entity.chunk_metadata["images_info"] = []
+        if images:
+            origin_text = chunk_entity.text
+            for image_file in images:
+                image_url = file_store.get_url(image_file)
+                pattern = rf'<img src="{re.escape(image_file)}" alt="([^"]*)"'
+                match = re.search(pattern, origin_text)
+                if match:
+                    chunk_entity.chunk_metadata["images_info"].append(
+                        {"url": image_url, "desc": match.group(1)}
+                    )
+                else:
+                    chunk_entity.chunk_metadata["images_info"].append(
+                        {"url": image_url, "desc": "null"}
+                    )
+                origin_text = re.sub(r"<img[^>]*>", "", origin_text)
+            chunk_entity.text = origin_text
     logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
 
     return success_response(data=chunk_entities, message="查询文件切片成功。")
