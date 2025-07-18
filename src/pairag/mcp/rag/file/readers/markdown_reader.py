@@ -110,7 +110,7 @@ class MarkdownReader(BaseReader):
         docs = []
         metadata = file_item.metadata()
         metadata["images"] = images
-        doc = Document(text=md_content, extra_info=metadata)
+        doc = Document(id_=file_item.id, text=md_content, extra_info=metadata)
         docs.append(doc)
         logger.info(
             f"[PaiMarkdownReader] successfully loaded {len(docs)} nodes from {file_item.file_name}."

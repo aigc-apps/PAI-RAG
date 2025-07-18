@@ -1,8 +1,20 @@
 from datetime import datetime, timezone
+from typing import List
 import uuid
+from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime, UniqueConstraint
 from pairag.common.knowledgebase.types import FileStatus
+
+
+class MetadataEntry(BaseModel):
+    metadata_id: str
+    name: str
+    value: str | int | float
+
+
+class MetadataEntryData(BaseModel):
+    entries: List[MetadataEntry]
 
 
 class KbFileEntity(SQLModel, table=True):

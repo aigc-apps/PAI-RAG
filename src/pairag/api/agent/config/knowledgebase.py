@@ -26,7 +26,6 @@ from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
 import re
 from pairag.mcp.rag.file.models.file_item import FileItem
-from pairag.mcp.utils.metadata_utils import ensure_metadata_configs_is_valid
 
 knowledgebase_router = APIRouter()
 
@@ -44,8 +43,10 @@ async def retrieval(
         )
 
     node_results = await kb_client.aquery(
-        query_str=retrieval_request.query,
-        kb_id=retrieval_request.knowledgebase_id,
+        query=retrieval_request.query,
+        knowledge_id=retrieval_request.knowledgebase_id,
+        retrieval_setting=retrieval_request.retrieval_setting,
+        metadata_condition=retrieval_request.metadata_condition,
     )
     logger.info(
         f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledgebase_id}."
@@ -70,17 +71,11 @@ async def create_knowledgebase(
 ):
     try:
         assert kb.embedding_model, "需要提供Embedding模型才能创建知识库。"
-        ensure_metadata_configs_is_valid(kb.metadata_configs)
         # 验证embedding合法
         _ = embedding_provider.get_embedding_config(kb.embedding_model)
 
         kb.chunk_config = (kb.chunk_config or ChunkConfig()).model_dump()
         kb.retrieval_config = (kb.retrieval_config or RetrievalConfig()).model_dump()
-
-        if kb.metadata_configs:
-            kb.metadata_configs = [
-                metadata_config.model_dump() for metadata_config in kb.metadata_configs
-            ]
 
         knowledgebase = KbEntity.model_validate(kb)
         session.add(knowledgebase)
@@ -155,8 +150,6 @@ async def update_knowledgebase(
         )
 
     try:
-        ensure_metadata_configs_is_valid(new_kb.metadata_configs)
-
         knowledgebase.name = new_kb.name or knowledgebase.name
         knowledgebase.description = new_kb.description or knowledgebase.description
         knowledgebase.embedding_model = (
@@ -166,11 +159,6 @@ async def update_knowledgebase(
             knowledgebase.chunk_config = new_kb.chunk_config.model_dump()
         if new_kb.retrieval_config:
             knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
-        if new_kb.metadata_configs:
-            knowledgebase.metadata_configs = [
-                metadata_config.model_dump()
-                for metadata_config in new_kb.metadata_configs
-            ]
 
         session.add(knowledgebase)
         await session.commit()
