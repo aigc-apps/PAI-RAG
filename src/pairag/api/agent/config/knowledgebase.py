@@ -366,7 +366,7 @@ async def list_chunks(
                     chunk_entity.chunk_metadata["images_info"].append(
                         {"url": image_url, "desc": "null"}
                     )
-                origin_text = re.sub(r"<img[^>]*>", "", origin_text)
+                # origin_text = re.sub(r"<img[^>]*>", "", origin_text)
             chunk_entity.text = origin_text
     logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
 

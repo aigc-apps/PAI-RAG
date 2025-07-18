@@ -119,7 +119,7 @@ export default function KnowledgeBaseFileChunksPage({
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editText, setEditText] = useState("");
-  const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
+  const [selectedChunk, setSelectedChunk] = useState<KbFileChunk | null>(null);
 
   useEffect(() => {
     const fetchKbConfigs = async () => {
@@ -191,8 +191,7 @@ export default function KnowledgeBaseFileChunksPage({
   };
 
   const handleActivateToggle = async (chunk: KbFileChunk) => {
-    const newActiveState = !chunk.active;
-    chunk.active = newActiveState;
+    chunk.active = !chunk.active;
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
 
@@ -204,37 +203,35 @@ export default function KnowledgeBaseFileChunksPage({
 
     if (!res.ok) throw new Error(`修改 ${chunk.id} 配置失败`);
     setKbFileChunks((prev) =>
-      prev.map((c) =>
-        c.id === chunk.id ? { ...c, active: newActiveState } : c,
-      ),
+      prev.map((c) => (c.id === chunk.id ? { ...c, active: chunk.active } : c)),
     );
   };
 
   const handleEditClick = (chunk: KbFileChunk) => {
-    setSelectedChunkId(chunk.id);
+    setSelectedChunk(chunk);
     setEditText(chunk.text);
     setIsEditOpen(true);
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedChunkId) return;
-
+    if (!selectedChunk) return;
+    selectedChunk.text = editText;
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunkId}`;
+    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunk.id}`;
 
     try {
       const response = await fetch(url, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: editText }),
+        body: JSON.stringify(selectedChunk),
       });
 
       if (!response.ok) throw new Error("更新失败");
 
       // 更新本地状态
       setKbFileChunks((prev) =>
-        prev.map((chunk) =>
-          chunk.id === selectedChunkId ? { ...chunk, text: editText } : chunk,
+        prev.map((c) =>
+          c.id === selectedChunk.id ? { ...c, text: selectedChunk.text } : c,
         ),
       );
       setIsEditOpen(false);
@@ -312,7 +309,7 @@ export default function KnowledgeBaseFileChunksPage({
               <p>切片列表加载失败</p>
             </div>
           ) : kbfilechunks.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">暂无模型</h3>
+            <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
           ) : (
             <div className="gap-6 p-4 w-full">
               <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -323,7 +320,6 @@ export default function KnowledgeBaseFileChunksPage({
                         <Badge className={activeMap[String(chunk.active)]}>
                           {chunk.active ? "已激活" : "未激活"}
                         </Badge>
-                        {/* TODO: 修改切片的状态（是否激活） */}
                         <Switch
                           checked={chunk.active}
                           className="ml-auto rounded-full transition-color"
