@@ -40,3 +40,10 @@ def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode):
         text=node.text,
         chunk_metadata=node.metadata,
     )
+
+def create_text_node_from_chunk(chunk: KbChunkEntity):
+    return TextNode(
+        id_ = chunk.id,
+        text = chunk.text,
+        metadata = chunk.chunk_metadata
+    )

@@ -39,9 +39,9 @@ export default function KnowledgeBase({
         );
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
-        const data = json_data.items;
+        const data = json_data.data.items;
         setKnowledgeBases(data || []); // 更新状态
-        setTotalPages(json_data.pages);
+        setTotalPages(json_data.data.pagination.total_pages);
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
       } finally {

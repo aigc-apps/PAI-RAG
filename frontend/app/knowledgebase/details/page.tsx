@@ -34,6 +34,9 @@ import * as Toast from "@radix-ui/react-toast";
 import { KbConfig, KbConfigCard } from "../kbconfig";
 import { formatFileSize, formatBeijingTime } from "../utils/utils";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
+import { Badge } from "@/components/ui/badge";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -42,6 +45,11 @@ interface KnowledgeBaseFile {
   status: string;
   created_at: string;
   update_at: string;
+}
+
+interface ImageInfo {
+  url: string;
+  desc: string;
 }
 
 interface SearchRecord {
@@ -53,7 +61,8 @@ interface SearchRecord {
     file_name: string;
     file_size: number;
     file_extension: string;
-    images: string;
+    images: string[];
+    images_info: Array<ImageInfo>;
   };
 }
 
@@ -180,10 +189,11 @@ export default function KnowledgeBaseDetailPage({
 
       const file_json_data = await files_res.json();
       console.log("获取知识库文件reponse:", file_json_data);
-      setTotalPages(file_json_data.pages);
-      setKbFiles(file_json_data.items);
+      const data = file_json_data.data.items;
+      setKbFiles(data || []);
+      setTotalPages(file_json_data.data.pagination.total_pages);
 
-      const kb_files = file_json_data.items as KnowledgeBaseFile[];
+      const kb_files = file_json_data.data.items as KnowledgeBaseFile[];
       const files_unfinished = kb_files.some(
         (file) => file.status !== "succeeded" && file.status !== "failed",
       );
@@ -545,6 +555,11 @@ export default function KnowledgeBaseDetailPage({
                     id="search_query"
                     placeholder="请输入查询内容"
                     onChange={handleQueryInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearchSubmit();
+                      }
+                    }}
                     className="w-full"
                   />
                 </div>
@@ -563,58 +578,62 @@ export default function KnowledgeBaseDetailPage({
                   <p className="mt-2 text-sm">尝试调整搜索条件</p>
                 </div>
               )}
-              {/* 搜索结果表格 */}
-              {searchrecords.length > 0 && (
-                <Card className="mb-6 px-10">
-                  <CardContent className="p-0">
-                    <ScrollArea className="h-[650px]">
-                      <Table className="w-full border-collapse">
-                        <TableHeader className="sticky top-0 bg-gray-100 z-10">
-                          <TableRow>
-                            <TableHead className="min-w-[5%]">序号</TableHead>
-                            <TableHead className="min-w-[10%]">得分</TableHead>
-                            <TableHead className="min-w-[10%]">
-                              文件名
-                            </TableHead>
-                            <TableHead className="min-w-[45%]">文本</TableHead>
-                            <TableHead className="min-w-[30%]">
-                              元数据
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {searchrecords.map((record, i) => (
-                            <TableRow
-                              key={i}
-                              className="hover:bg-gray-50 transition-colors"
-                            >
-                              <TableCell className="font-medium">
-                                {i + 1}
-                              </TableCell>
-                              <TableCell>{record.score.toFixed(4)}</TableCell>
-                              <TableCell className="font-semibold">
-                                {record.title}
-                              </TableCell>
-                              <TableCell
-                                className="max-w-xs truncate"
-                                title={record.content}
+              <div className="gap-6 p-4 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {searchrecords.map((chunk, i) => (
+                    <Card key={i} className="flex flex-col max-h-80">
+                      <CardHeader>
+                        <CardTitle className="flex justify-start">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                              {i + 1}
+                            </Badge>
+                            <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                              分数: {chunk.score.toFixed(4)}
+                            </Badge>
+                            <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                              {chunk.title}
+                            </Badge>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex-grow overflow-y-auto">
+                        <ScrollArea className="h-full pr-4">
+                          <div className="text-gray-600 whitespace-pre-wrap">
+                            {chunk.content}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                      <CardFooter className="shrink-0 gap-2">
+                        {chunk.metadata?.images_info?.length > 0 && (
+                          <div className="flex gap-2 mt-4">
+                            {chunk.metadata.images_info.map((meta, index) => (
+                              <PhotoProvider
+                                key={index}
+                                maskOpacity={0.8}
+                                overlayRender={({}) => {
+                                  return (
+                                    <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                      <div>图片描述：{meta.desc}</div>
+                                    </div>
+                                  );
+                                }}
                               >
-                                {record.content}
-                              </TableCell>
-                              <TableCell
-                                className="max-w-xs truncate"
-                                title={JSON.stringify(record.metadata)}
-                              >
-                                {JSON.stringify(record.metadata)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              )}
+                                <PhotoView key={index} src={meta.url}>
+                                  <img
+                                    src={meta.url}
+                                    className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                  />
+                                </PhotoView>
+                              </PhotoProvider>
+                            ))}
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

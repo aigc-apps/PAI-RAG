@@ -5,7 +5,9 @@ from pydantic import BaseModel, ConfigDict
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.elasticsearch import ElasticsearchStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
-
+from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
+    BGEM3SparseEmbeddingFunction,
+)
 from pairag.common.knowledgebase.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
@@ -131,6 +133,9 @@ def create_vector_store(
             enable_sparse=True,
             similarity_metric="cosine",
             hybrid_ranker="WeightedRanker",
+            sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
+            hybrid_ranker_params={"weights": [0.5, 0.5]},
+            db_name=vector_db_connection.database,
         )
     elif isinstance(vector_db_connection, ElasticSearchConnection):
         logger.info(
