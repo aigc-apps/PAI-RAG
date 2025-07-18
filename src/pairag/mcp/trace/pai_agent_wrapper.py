@@ -9,6 +9,8 @@ from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 
 from pairag.mcp.models import ChatAgentRequest
+from pairag.integrations.trace import context as trace_context
+
 from loguru import logger
 
 tracer = trace.get_tracer(__name__, tracer_provider=trace.get_tracer_provider())
@@ -52,6 +54,9 @@ def pai_agent_wrapper(func):
         span = tracer.start_span(func.__qualname__)
         span.set_attribute(INPUT_VALUE, request_text)
         span.set_attribute(GEN_AI_SPAN_KIND, CHAIN)
+        for k, v in trace_context.get_context_vars():
+            if v:
+                span.set_attribute(k, v)
 
         ctx = set_span_in_context(span)
         token = attach(ctx)
