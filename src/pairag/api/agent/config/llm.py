@@ -1,14 +1,14 @@
 import asyncio
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.llm_provider import llm_provider
-
+from pairag.api.agent.utils.paginate import get_pagination_meta
+from pairag.api.response_model import PagedResult, success_response
 from loguru import logger
 
 ### LLM Configuration API ###
@@ -81,13 +81,20 @@ async def get_llm_groups(
     return {"groups": list(grouped_results.values())}
 
 
-@llm_router.get("", response_model=List[LlmModelRead])
+@llm_router.get("")
 async def get_llms(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
-    sql_results = await session.exec(select(LlmModelEntity).offset(offset).limit(limit))
+    total_results = await session.exec(
+        select(func.count()).select_from(
+            select(LlmModelEntity)
+        )
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    sql_results = await session.exec(select(LlmModelEntity).offset(pagination.offset).limit(size))
     llm_entities = sql_results.all()
     llm_models = [
         LlmModelRead.model_validate(
@@ -97,7 +104,15 @@ async def get_llms(
         for llm in llm_entities
     ]
 
-    return llm_models
+    return success_response(
+        data=PagedResult(
+            items=llm_models,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取LLM模型列表成功")
 
 
 @llm_router.get("/{llm_id}", response_model=LlmModelRead)
