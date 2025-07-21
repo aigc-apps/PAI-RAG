@@ -190,6 +190,7 @@ class FaissVectorStore(BasePydanticVectorStore):
             new_id = str(self._faiss_index.ntotal)
             self._faiss_index.add(text_embedding_np)
             new_ids.append(new_id)
+            # TODO: update node
             self.faiss_id_map[node.id_] = {
                 "id": node.id_,
                 "metadata": node.metadata,

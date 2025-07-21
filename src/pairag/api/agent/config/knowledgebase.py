@@ -4,10 +4,10 @@ import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
-from pairag.db.models.knowledgebase.chunk import KbChunkEntity
+from pairag.db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel, create_text_node_from_chunk
 from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.db.models.knowledgebase.knowledgebase import (
     ChunkConfig,
@@ -21,15 +21,14 @@ from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.rag.file.store.file_store_helper import file_store
-from pairag.api.response_model import ResponseModel, success_response, error_response
+from pairag.api.response_model import ResponseModel, PagedResult, success_response, error_response
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
 import re
 from pairag.mcp.rag.file.models.file_item import FileItem
+from pairag.api.agent.utils.paginate import get_pagination_meta
 
 knowledgebase_router = APIRouter()
-
-
 @knowledgebase_router.post(
     "/retrieval", response_model=ResponseModel[NewRetrievalResponse]
 )
@@ -51,19 +50,19 @@ async def retrieval(
     logger.info(
         f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledgebase_id}."
     )
-
-    records = [
-        DocRecord(
+    records = []
+    for score_node in node_results:
+        origin_text = score_node.node.get_content()
+        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        matches = re.findall(pattern, origin_text)
+        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for src, alt in matches]
+        records.append(DocRecord(
             content=score_node.node.get_content(),
             score=score_node.score,
             title=score_node.node.metadata.get("file_name", "null"),
             metadata=score_node.node.metadata,
-        )
-        for score_node in node_results
-    ]
-
+        ))
     return success_response(data=NewRetrievalResponse(records=records), message="查询成功。")
-
 
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
@@ -108,19 +107,35 @@ async def create_knowledgebase(
         )
 
 
-@knowledgebase_router.get("", response_model=ResponseModel[List[KbEntity]])
+@knowledgebase_router.get("")
 async def list_knowledgebases(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
-    knowledgebase_results = await session.exec(
-        select(KbEntity).offset(offset).limit(limit)
+    total_results = await session.exec(
+        select(func.count()).select_from(KbEntity)
     )
-    knowledgebases = knowledgebase_results.all()
-    logger.info(f"Listing knowledgebases: get {len(knowledgebases)} in total.")
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    kb_results = await session.exec(
+        select(KbEntity)
+        .order_by(KbEntity.created_at.desc())
+        .offset(pagination.offset)
+        .limit(size)
+    )
+    kb_entities = kb_results.all()
 
-    return success_response(data=knowledgebases, message="查询知识库成功。")
+    return success_response(
+        data=PagedResult(
+            items=kb_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取知识库列表成功",
+    )
 
 
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
@@ -255,21 +270,34 @@ async def upload_files(
 @knowledgebase_router.get("/{kb_id}/files")
 async def list_files(
     kb_id: str,
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-):
+) :
+    total_results = await session.exec(
+        select(func.count())
+        .select_from(select(KbFileEntity).where(KbFileEntity.kb_id == kb_id))
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
     file_results = await session.exec(
         select(KbFileEntity)
         .where(KbFileEntity.kb_id == kb_id)
         .order_by(KbFileEntity.update_at.desc())
-        .offset(offset)
-        .limit(limit)
+        .offset(pagination.offset)
+        .limit(size)
     )
     file_entities = file_results.all()
-    logger.info(f"Listing files: get {len(file_entities)} in total.")
 
-    return success_response(data=file_entities, message="查询知识库文件成功。")
+    return success_response(
+        data=PagedResult(
+            items=file_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取文件列表成功")
 
 
 @knowledgebase_router.get(
@@ -339,36 +367,85 @@ async def delete_file(
 async def list_chunks(
     kb_id: str,
     file_id: str,
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
 ):
+
+    total_results = await session.exec(
+        select(func.count()).select_from(
+            select(KbChunkEntity).where(
+                KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+            )
+        )
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
     chunk_results = await session.exec(
         select(KbChunkEntity)
         .where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id)
-        .offset(offset)
-        .limit(limit)
+        .offset(pagination.offset)
+        .limit(size)
     )
     chunk_entities = chunk_results.all()
     for chunk_entity in chunk_entities:
-        images = chunk_entity.chunk_metadata.get("images", [])
-        chunk_entity.chunk_metadata["images_info"] = []
-        if images:
-            origin_text = chunk_entity.text
-            for image_file in images:
-                image_url = file_store.get_url(image_file)
-                pattern = rf'<img src="{re.escape(image_file)}" alt="([^"]*)"'
-                match = re.search(pattern, origin_text)
-                if match:
-                    chunk_entity.chunk_metadata["images_info"].append(
-                        {"url": image_url, "desc": match.group(1)}
-                    )
-                else:
-                    chunk_entity.chunk_metadata["images_info"].append(
-                        {"url": image_url, "desc": "null"}
-                    )
-                origin_text = re.sub(r"<img[^>]*>", "", origin_text)
-            chunk_entity.text = origin_text
-    logger.info(f"Listing chunks: get {len(chunk_entities)} in total.")
+        origin_text = chunk_entity.text
+        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        matches = re.findall(pattern, origin_text)
+        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for src, alt in matches]
+    return success_response(
+        data=PagedResult(
+            items=chunk_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取切片列表成功")
 
-    return success_response(data=chunk_entities, message="查询文件切片成功。")
+@knowledgebase_router.patch("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
+async def update_chunk(
+    kb_id: str,
+    file_id: str,
+    chunk_id: str,
+    update_kb_chunk: KbChunkModel,
+    session: AsyncSession = Depends(get_session),
+):
+    sql_results = await session.exec(
+        select(KbChunkEntity)
+        .where(
+            KbChunkEntity.id == chunk_id,
+            KbChunkEntity.kb_id == kb_id,
+            KbChunkEntity.file_id == file_id,
+        ))
+    kb_chunk_entities = sql_results.all()
+    if len(kb_chunk_entities) != 1:
+        return JSONResponse(
+            content=error_response(code=404, message=f"更新知识库切片失败: 切片'{chunk_id}'不存在 或 有误。"),
+            status_code=404,
+        )
+    try:
+        kb_chunk = kb_chunk_entities[0]
+        # 更新chunk text
+        if kb_chunk.text != update_kb_chunk.text:
+            kb_chunk.text = update_kb_chunk.text
+            node = create_text_node_from_chunk(kb_chunk)
+            await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
+            await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
+            logger.info(f"Update chunk text for {kb_chunk.id}")
+        # 更新chunk active 若false : delete; 若true : insert
+        if kb_chunk.active != update_kb_chunk.active:
+            if not update_kb_chunk.active:
+                await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
+            else:
+                node = create_text_node_from_chunk(kb_chunk)
+                await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
+            kb_chunk.active = update_kb_chunk.active
+            logger.info(f"Update chunk active to {kb_chunk.active} for {kb_chunk.id}")
+        session.add(kb_chunk)
+        await session.commit()
+        await session.refresh(kb_chunk)
+        return success_response(data=kb_chunk, message="更新知识库切片成功。")
+    except Exception as ex:
+        logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {ex}")
+        return error_response(message=f"更新知识库切片失败：{ex}")

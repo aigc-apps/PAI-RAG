@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -63,6 +63,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -76,6 +79,11 @@ interface KnowledgeBaseFile {
   };
 }
 
+interface ImageInfo {
+  url: string;
+  desc: string;
+}
+
 interface SearchRecord {
   content: string;
   title: string;
@@ -85,7 +93,8 @@ interface SearchRecord {
     file_name: string;
     file_size: number;
     file_extension: string;
-    images: string;
+    images: string[];
+    images_info: Array<ImageInfo>;
   };
 }
 
@@ -106,6 +115,10 @@ export default function KnowledgeBaseDetailPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [knowledgebase, setKnowledgeBase] = useState<KbConfig>(); // 知识库列表
   const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
+  const [page, setPage] = useState(1);
+  const pageRef = useRef(page);
+  const [totalPages, setTotalPages] = useState(1);
+  const fileSizePerPage = 8;
   const [kbquery, setKbQuery] = useState(""); //查询
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
@@ -212,10 +225,9 @@ export default function KnowledgeBaseDetailPage({
     setSearchRecords(search_json.data.records);
   };
 
-  // sleep 函数定义
-  function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
 
   const fetchKbMetadata = async () => {
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -230,28 +242,45 @@ export default function KnowledgeBaseDetailPage({
     setMetadataConfigs(metadata_data);
   };
 
-  const fetchKbFiles = async () => {
+  const fetchKbFiles = useCallback(async () => {
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-    const files_res = await fetch(
-      `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files`,
-    );
-    if (!files_res.ok) throw new Error("获取知识库文件列表失败");
+    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
-    const file_json_data = await files_res.json();
-    console.log("获取知识库文件reponse:", file_json_data);
-    setKbFiles(file_json_data.data);
-    console.log("知识库文件列表:", kbfiles);
-    const kb_files = file_json_data.data as KnowledgeBaseFile[];
-    const files_unfinished = kb_files.some(
-      (file) => file.status != "succeeded" && file.status != "failed",
-    );
-    if (files_unfinished) {
-      console.log("存在未完成的文件，继续检查状态。");
-      await sleep(1000);
-      fetchKbFiles();
-    } else {
-      console.log("文件已上传完成。");
+    try {
+      const files_res = await fetch(url);
+      if (!files_res.ok) throw new Error("获取知识库文件列表失败");
+
+      const file_json_data = await files_res.json();
+      console.log("获取知识库文件reponse:", file_json_data);
+      const data = file_json_data.data.items;
+      setKbFiles(data || []);
+      setTotalPages(file_json_data.data.pages);
+
+      const kb_files = data as KnowledgeBaseFile[];
+      const files_unfinished = kb_files.some(
+        (file) => file.status !== "succeeded" && file.status !== "failed",
+      );
+
+      if (files_unfinished) {
+        console.log("存在未完成的文件，继续检查状态。");
+        setTimeout(() => {
+          fetchKbFiles(); // 依赖 ref 获取最新 page
+        }, 3000);
+      } else {
+        console.log("文件已上传完成。");
+      }
+    } catch (err) {
+      console.error("获取知识库文件失败:", err);
     }
+  }, [knowledgebase_id]);
+
+  useEffect(() => {
+    fetchKbFiles();
+  }, [fetchKbFiles, page]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
   };
 
   useEffect(() => {
@@ -274,7 +303,6 @@ export default function KnowledgeBaseDetailPage({
       }
     };
     fetchKbConfigs();
-    fetchKbFiles();
     fetchKbMetadata();
   }, []);
 
@@ -439,7 +467,7 @@ export default function KnowledgeBaseDetailPage({
       if (fileInputRef.current) {
         fileInputRef.current.value = ""; // 清空 input 的值
       }
-
+      setPage(1);
       fetchKbFiles();
     }
   };
@@ -586,8 +614,8 @@ export default function KnowledgeBaseDetailPage({
                     <h3 className="text-lg font-semibold mt-6 mb-3">
                       文件列表
                     </h3>
-                    <ScrollArea className="h-[400px] rounded-md border">
-                      <Table>
+                    <ScrollArea className="h-[480px] rounded-md border overflow-x-auto">
+                      <Table className="min-w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>文件名</TableHead>
@@ -894,6 +922,13 @@ export default function KnowledgeBaseDetailPage({
                   <p className="text-muted-foreground">暂无文件</p>
                 )}
               </CardContent>
+              <CardFooter>
+                <PaginationComponent
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </CardFooter>
             </Card>
           </TabsContent>
           <TabsContent value="settings" className="py-4">
@@ -906,45 +941,95 @@ export default function KnowledgeBaseDetailPage({
             ></KbConfigCard>
           </TabsContent>
           <TabsContent value="retrieval_test" className="py-4">
-            <Input
-              type="text"
-              id="search_query"
-              placeholder="请输入查询"
-              onChange={handleQueryInputChange}
-              className="col-span-3"
-            />
-            <Button
-              type="button"
-              className="col-span-1"
-              onClick={handleSearchSubmit}
-            >
-              查询
-            </Button>
-            {searchrecords.length == 0 && <h2>没有找到相关的切片。</h2>}
-            {searchrecords.length > 0 && (
-              <Table className="w-full table-fixed border bg-white rounded-md overflow-hidden">
-                <TableHeader className="bg-gray-100">
-                  <TableRow>
-                    <TableHead className="w-1/20">序号</TableHead>
-                    <TableHead className="w-1/20">得分</TableHead>
-                    <TableHead className="w-1/5">文件名</TableHead>
-                    <TableHead className="w-2/5">文本</TableHead>
-                    <TableHead className="w-3/10">元数据</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {searchrecords.map((record, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{i + 1} </TableCell>
-                      <TableCell>{record.score.toFixed(4)} </TableCell>
-                      <TableCell>{record.title} </TableCell>
-                      <TableCell>{record.content} </TableCell>
-                      <TableCell>{JSON.stringify(record.metadata)} </TableCell>
-                    </TableRow>
+            <div className="space-y-4">
+              {/* 搜索框和按钮 */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                <div className="flex-1 min-w-[200px] max-w-[1000px]">
+                  <Input
+                    type="text"
+                    id="search_query"
+                    placeholder="请输入查询内容"
+                    onChange={handleQueryInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearchSubmit();
+                      }
+                    }}
+                    className="w-full"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleSearchSubmit}
+                  className="whitespace-nowrap"
+                >
+                  查询
+                </Button>
+              </div>
+              {/* 搜索结果提示 */}
+              {searchrecords.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <h2>没有找到相关的切片</h2>
+                  <p className="mt-2 text-sm">尝试调整搜索条件</p>
+                </div>
+              )}
+              <div className="gap-6 p-4 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {searchrecords.map((chunk, i) => (
+                    <Card key={i} className="flex flex-col max-h-80">
+                      <CardHeader>
+                        <CardTitle className="flex justify-start">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                              {i + 1}
+                            </Badge>
+                            <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                              分数: {chunk.score.toFixed(4)}
+                            </Badge>
+                            <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                              {chunk.title}
+                            </Badge>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex-grow overflow-y-auto">
+                        <ScrollArea className="h-full pr-4">
+                          <div className="text-gray-600 whitespace-pre-wrap">
+                            {chunk.content}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                      <CardFooter className="shrink-0 gap-2">
+                        {chunk.metadata?.images_info?.length > 0 && (
+                          <div className="flex gap-2 mt-4">
+                            {chunk.metadata.images_info.map((meta, index) => (
+                              <PhotoProvider
+                                key={index}
+                                maskOpacity={0.8}
+                                overlayRender={({}) => {
+                                  return (
+                                    <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                      <div>图片描述：{meta.desc}</div>
+                                    </div>
+                                  );
+                                }}
+                              >
+                                <PhotoView key={index} src={meta.url}>
+                                  <img
+                                    src={meta.url}
+                                    className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                  />
+                                </PhotoView>
+                              </PhotoProvider>
+                            ))}
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
-            )}
+                </div>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
         <Toast.Root

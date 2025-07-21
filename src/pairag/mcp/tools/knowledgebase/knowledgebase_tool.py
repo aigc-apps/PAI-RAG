@@ -187,6 +187,17 @@ class PaiKnowledgebaseClient:
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
 
+    async def ainsert_chunks_to_vectordb(
+        self,
+        kb_id: str,
+        nodes,
+    ):
+        logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
+        vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
+        await vector_index.ainsert_nodes(nodes)
+        logger.info(f"Finished inserting {len(nodes)} into vector store.")
+
     async def aquery(
         self,
         query,
