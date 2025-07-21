@@ -22,6 +22,15 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
+import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface KnowledgeBase {
   id: string;
@@ -61,6 +70,8 @@ interface ImageInfo {
 
 interface KbFileChunk {
   id: string;
+  file_id: string;
+  kb_id: string;
   text: string;
   chunk_metadata: {
     images_info: Array<ImageInfo>;
@@ -102,7 +113,13 @@ export default function KnowledgeBaseFileChunksPage({
   const [kbfilechunksloading, setKbFileChunksLoading] = useState(true); // 文件加载状态
   const [kbfilechunkserror, setKbFilChunksError] = useState(""); // 文件错误信息
 
-  const [isZoomed, setIsZoomed] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const chunksSizePerPage = 8;
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [selectedChunk, setSelectedChunk] = useState<KbFileChunk | null>(null);
 
   useEffect(() => {
     const fetchKbConfigs = async () => {
@@ -146,13 +163,13 @@ export default function KnowledgeBaseFileChunksPage({
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
-          `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks`,
+          `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取知识库文件切片列表失败");
         const json_data = await res.json();
-        const kb_file_chunks_data = json_data.data;
-
-        setKbFileChunks(kb_file_chunks_data); // 更新状态
+        const kb_file_chunks_data = json_data.data.items;
+        setTotalPages(json_data.data.pages);
+        setKbFileChunks(kb_file_chunks_data || []); // 更新状态
         console.log("知识库文件切片列表详情数据:", kb_file_chunks_data);
       } catch (err: any) {
         setKbFilChunksError(err || "加载失败");
@@ -163,13 +180,70 @@ export default function KnowledgeBaseFileChunksPage({
     fetchKbConfigs();
     fetchKbFile();
     fetchKbFileChunks();
-  }, []);
+  }, [page]);
   if (!knowledgebase || !kbfile) {
     return <div className="p-6">加载中...</div>;
   }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
+  };
+
+  const handleActivateToggle = async (chunk: KbFileChunk) => {
+    chunk.active = !chunk.active;
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chunk), // 包装为数组
+    });
+
+    if (!res.ok) throw new Error(`修改 ${chunk.id} 配置失败`);
+    setKbFileChunks((prev) =>
+      prev.map((c) => (c.id === chunk.id ? { ...c, active: chunk.active } : c)),
+    );
+  };
+
+  const handleEditClick = (chunk: KbFileChunk) => {
+    setSelectedChunk(chunk);
+    setEditText(chunk.text);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedChunk) return;
+    selectedChunk.text = editText;
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunk.id}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selectedChunk),
+      });
+
+      if (!response.ok) throw new Error("更新失败");
+
+      // 更新本地状态
+      setKbFileChunks((prev) =>
+        prev.map((c) =>
+          c.id === selectedChunk.id ? { ...c, text: selectedChunk.text } : c,
+        ),
+      );
+      setIsEditOpen(false);
+    } catch (err) {
+      console.error("编辑失败:", err);
+      // 可添加错误提示（如 toast）
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen">
-      <div className="flex-none">
+      <div className="flex-none h-1/10">
         <div className="p-2 space-y-2">
           <div className="mb-2 flex items-center gap-2">
             {/* 面包屑导航 */}
@@ -224,7 +298,7 @@ export default function KnowledgeBaseFileChunksPage({
         </div>
       </div>
       {/* 可滚动内容区域 */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto h-4/5">
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           {kbfilechunksloading ? (
             <div className="py-12 text-center">
@@ -235,7 +309,7 @@ export default function KnowledgeBaseFileChunksPage({
               <p>切片列表加载失败</p>
             </div>
           ) : kbfilechunks.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">暂无模型</h3>
+            <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
           ) : (
             <div className="gap-6 p-4 w-full">
               <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -246,15 +320,14 @@ export default function KnowledgeBaseFileChunksPage({
                         <Badge className={activeMap[String(chunk.active)]}>
                           {chunk.active ? "已激活" : "未激活"}
                         </Badge>
-                        {/* TODO: 修改切片的状态（是否激活） */}
                         <Switch
                           checked={chunk.active}
                           className="ml-auto rounded-full transition-color"
-                          // onCheckedChange={() => handleActivateToggle(chunk.active)}
+                          onCheckedChange={() => handleActivateToggle(chunk)}
                         />
                         <button
                           className="text-black-500 hover:text-black-700 px-2"
-                          // onClick={() => handleEditClick(config)}
+                          onClick={() => handleEditClick(chunk)}
                         >
                           <Edit className="w-5 h-5" />
                         </button>
@@ -293,6 +366,36 @@ export default function KnowledgeBaseFileChunksPage({
           )}
         </div>
       </div>
+      <div className="flex justify-center items-center h-1/10">
+        <PaginationComponent
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      </div>
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>编辑切片内容</DialogTitle>
+            <DialogDescription>修改文本并保存</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="block mb-2 text-sm font-medium">文本内容</label>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full h-40 p-2 border rounded-md"
+              placeholder="请输入新内容"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveEdit}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

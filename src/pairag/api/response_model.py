@@ -10,6 +10,12 @@ class ResponseModel(BaseModel, Generic[T]):
     message: str
     data: Optional[T] = None
 
+class PagedResult(BaseModel, Generic[T]):
+    items: Optional[T] = None
+    total: int
+    pages: int
+    page: int
+    size: int
 
 def to_dict(obj):
     if isinstance(obj, BaseModel):
