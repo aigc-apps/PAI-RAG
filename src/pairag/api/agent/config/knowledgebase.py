@@ -21,7 +21,7 @@ from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.rag.file.store.file_store_helper import file_store
-from pairag.api.response_model import ResponseModel, success_response, error_response
+from pairag.api.response_model import ResponseModel, PagedResult, success_response, error_response
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from loguru import logger
 import re
@@ -132,14 +132,15 @@ async def list_knowledgebases(
     kb_entities = kb_results.all()
 
     return success_response(
-        data={
-            "items": kb_entities,
-            "total": pagination.total,
-            "pages": pagination.pages,
-            "page": pagination.page,
-            "size": pagination.size
-        },
-        message="获取知识库列表成功")
+        data=PagedResult(
+            items=kb_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取知识库列表成功",
+    )
 
 
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
@@ -301,13 +302,13 @@ async def list_files(
     file_entities = file_results.all()
 
     return success_response(
-        data={
-            "items": file_entities,
-            "total": pagination.total,
-            "pages": pagination.pages,
-            "page": pagination.page,
-            "size": pagination.size
-        },
+        data=PagedResult(
+            items=file_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
         message="获取文件列表成功")
 
 
@@ -405,13 +406,13 @@ async def list_chunks(
         matches = re.findall(pattern, origin_text)
         chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for src, alt in matches]
     return success_response(
-        data={
-            "items": chunk_entities,
-            "total": pagination.total,
-            "pages": pagination.pages,
-            "page": pagination.page,
-            "size": pagination.size
-        },
+        data=PagedResult(
+            items=chunk_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
         message="获取切片列表成功")
 
 @knowledgebase_router.patch("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
