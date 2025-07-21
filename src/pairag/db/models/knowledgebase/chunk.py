@@ -4,6 +4,7 @@ from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
 from llama_index.core.schema import TextNode
 from pairag.common.knowledgebase.types import ChunkStatus
+from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 
 
 class KbChunkModel(SQLModel):
@@ -45,5 +46,10 @@ def create_text_node_from_chunk(chunk: KbChunkEntity):
     return TextNode(
         id_ = chunk.id,
         text = chunk.text,
-        metadata = chunk.chunk_metadata
+        metadata = chunk.chunk_metadata,
+        relationships = {
+            NodeRelationship.SOURCE:RelatedNodeInfo(
+                node_id=chunk.file_id, metadata={}
+            )
+        }
     )

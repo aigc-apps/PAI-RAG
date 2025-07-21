@@ -12,7 +12,10 @@ from pairag.common.knowledgebase.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
 from pairag.mcp.tools.knowledgebase.faiss_vector_store import FaissVectorStore
-
+from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
+    SparseEmbeddingFunctionType,
+)
+from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
 
 class VectorDbType(str, Enum):
     OPENSEARCH = "opensearch"
@@ -46,6 +49,9 @@ class MilvusConnection(BaseVectorDbConnection):
     database: str = "default"
     user: str = "root"
     password: str = ""
+    sparse_embedding_type: SparseEmbeddingFunctionType = (
+        SparseEmbeddingFunctionType.bge_m3
+    )
 
 
 class FaissConnection(BaseVectorDbConnection):
@@ -123,6 +129,10 @@ def create_vector_store(
             f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}"
         )
         token = f"{vector_db_connection.user}:{vector_db_connection.password}"
+        if vector_db_connection.sparse_embedding_type == SparseEmbeddingFunctionType.bge_m3:
+            sparse_embedding_function = BGEM3SparseEmbeddingFunction()
+        else:
+            sparse_embedding_function = BM25BuiltInFunction()
 
         logger.info(f"Creating Milvus vector store for {kb_id} with url: {milvus_url}.")
         return MilvusVectorStore(
@@ -133,8 +143,9 @@ def create_vector_store(
             enable_sparse=True,
             similarity_metric="cosine",
             hybrid_ranker="WeightedRanker",
-            sparse_embedding_function=BGEM3SparseEmbeddingFunction(),
+            # TODO: add weighted reranker config
             hybrid_ranker_params={"weights": [0.5, 0.5]},
+            sparse_embedding_function=sparse_embedding_function,
             db_name=vector_db_connection.database,
         )
     elif isinstance(vector_db_connection, ElasticSearchConnection):

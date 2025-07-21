@@ -428,23 +428,21 @@ async def update_chunk(
         )
     try:
         kb_chunk = kb_chunk_entities[0]
-        # 更新chunk content
+        # 更新chunk text
         if kb_chunk.text != update_kb_chunk.text:
             kb_chunk.text = update_kb_chunk.text
             node = create_text_node_from_chunk(kb_chunk)
+            await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
             await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
             logger.info(f"Update chunk text for {kb_chunk.id}")
         # 更新chunk active 若false : delete; 若true : insert
         if kb_chunk.active != update_kb_chunk.active:
-            # 若false : delete from vector store
             if not update_kb_chunk.active:
                 await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
-            # 若true : insert into vector store
             else:
                 node = create_text_node_from_chunk(kb_chunk)
                 await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
-            # 更新 chunk active状态
-            kb_chunk.active != update_kb_chunk.active
+            kb_chunk.active = update_kb_chunk.active
             logger.info(f"Update chunk active to {kb_chunk.active} for {kb_chunk.id}")
         session.add(kb_chunk)
         await session.commit()
