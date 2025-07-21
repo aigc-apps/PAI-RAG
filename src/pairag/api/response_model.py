@@ -18,6 +18,8 @@ def to_dict(obj):
         return {k: to_dict(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [to_dict(v) for v in obj]
+    else:
+        return obj
 
 
 def success_response(code=200, data=None, message="操作成功"):

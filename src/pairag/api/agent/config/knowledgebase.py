@@ -134,7 +134,10 @@ async def list_knowledgebases(
     return success_response(
         data={
             "items": kb_entities,
-            "pagination": pagination
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "page": pagination.page,
+            "size": pagination.size
         },
         message="获取知识库列表成功")
 
@@ -300,7 +303,10 @@ async def list_files(
     return success_response(
         data={
             "items": file_entities,
-            "pagination": pagination
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "page": pagination.page,
+            "size": pagination.size
         },
         message="获取文件列表成功")
 
@@ -401,7 +407,10 @@ async def list_chunks(
     return success_response(
         data={
             "items": chunk_entities,
-            "pagination": pagination
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "page": pagination.page,
+            "size": pagination.size
         },
         message="获取切片列表成功")
 

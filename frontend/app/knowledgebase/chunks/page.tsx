@@ -168,7 +168,7 @@ export default function KnowledgeBaseFileChunksPage({
         if (!res.ok) throw new Error("获取知识库文件切片列表失败");
         const json_data = await res.json();
         const kb_file_chunks_data = json_data.data.items;
-        setTotalPages(json_data.data.pagination.total_pages);
+        setTotalPages(json_data.data.pages);
         setKbFileChunks(kb_file_chunks_data || []); // 更新状态
         console.log("知识库文件切片列表详情数据:", kb_file_chunks_data);
       } catch (err: any) {

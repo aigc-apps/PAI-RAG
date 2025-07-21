@@ -191,9 +191,9 @@ export default function KnowledgeBaseDetailPage({
       console.log("获取知识库文件reponse:", file_json_data);
       const data = file_json_data.data.items;
       setKbFiles(data || []);
-      setTotalPages(file_json_data.data.pagination.total_pages);
+      setTotalPages(file_json_data.data.pages);
 
-      const kb_files = file_json_data.data.items as KnowledgeBaseFile[];
+      const kb_files = data as KnowledgeBaseFile[];
       const files_unfinished = kb_files.some(
         (file) => file.status !== "succeeded" && file.status !== "failed",
       );

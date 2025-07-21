@@ -41,7 +41,7 @@ export default function KnowledgeBase({
         const json_data = await res.json();
         const data = json_data.data.items;
         setKnowledgeBases(data || []); // 更新状态
-        setTotalPages(json_data.data.pagination.total_pages);
+        setTotalPages(json_data.data.pages);
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
       } finally {
