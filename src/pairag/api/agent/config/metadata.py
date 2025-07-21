@@ -2,7 +2,7 @@
 import asyncio
 import traceback
 from typing import List
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,16 +12,28 @@ from sqlalchemy.exc import IntegrityError
 from pairag.db.models.knowledgebase.metadata import FileMetadataEntity, KbMetadataEntity
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.api.response_model import ResponseModel, success_response, error_response
+from pairag.api.agent.config.knowledgebase import knowledgebase_router
 from loguru import logger
 
-metadata_router = APIRouter()
+
+DEFAULT_METADATA_KEYS = [
+    "file_name",
+    "file_path",
+    "file_size",
+    "file_extension",
+    "file_url",
+    "doc_id",
+  ]
 
 
-@metadata_router.post("", response_model=ResponseModel[KbMetadataEntity])
-async def create_kb_metadata(
-    metadata_entity: KbMetadataEntity, session: AsyncSession = Depends(get_session)
+@knowledgebase_router.post("/{kb_id}/metadata", response_model=ResponseModel[KbMetadataEntity])
+async def set_kb_metadata(
+    kb_id: str,
+    metadata_entity: KbMetadataEntity,
+    session: AsyncSession = Depends(get_session),
 ):
     try:
+        assert metadata_entity.kb_id == kb_id, "metadata body中的kb_id不一致"
         session.add(metadata_entity)
         await session.commit()
         await session.refresh(metadata_entity)
@@ -51,7 +63,7 @@ async def create_kb_metadata(
             status_code=400,
         )
 
-@metadata_router.get("/{kb_id}", response_model=ResponseModel[List[KbMetadataEntity]])
+@knowledgebase_router.get("/{kb_id}/metadata", response_model=ResponseModel[List[KbMetadataEntity]])
 async def list_metadata(
     kb_id: str,
     offset: int = 0,
@@ -67,13 +79,18 @@ async def list_metadata(
     return success_response(data=metadata_list, message="查询元数据成功。")
 
 
-@metadata_router.patch("/{metadata_id}", response_model=ResponseModel[List[KbMetadataEntity]])
+@knowledgebase_router.patch("/{kb_id}/metadata/{metadata_id}", response_model=ResponseModel[List[KbMetadataEntity]])
 async def update_metadata(
+    kb_id: str,
     metadata_id: str,
     new_metadata_entity: KbMetadataEntity,
     session: AsyncSession = Depends(get_session),
 ):
-    metadata_entity = await session.get(KbMetadataEntity, metadata_id)
+    metadata_entity = (await session.exec(
+        select(KbMetadataEntity)
+        .where(KbMetadataEntity.id == metadata_id)
+        .where(KbMetadataEntity.kb_id == kb_id)
+    )).first()
     if metadata_entity is None:
         return JSONResponse(
             content=error_response(code=400, message=f"更新元数据失败: 元数据'{metadata_id}'不存在。"),
@@ -94,12 +111,17 @@ async def update_metadata(
     return success_response(data=metadata_entity, message="更新元数据成功。")
 
 
-@metadata_router.delete("/{metadata_id}", response_model=ResponseModel[List[KbMetadataEntity]])
+@knowledgebase_router.delete("/{kb_id}/metadata/{metadata_id}", response_model=ResponseModel[KbMetadataEntity])
 async def delete_metadata(
+    kb_id: str,
     metadata_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    metadata_entity = await session.get(KbMetadataEntity, metadata_id)
+    metadata_entity = (await session.exec(
+        select(KbMetadataEntity)
+        .where(KbMetadataEntity.id == metadata_id)
+        .where(KbMetadataEntity.kb_id == kb_id)
+    )).first()
     if metadata_entity is None:
         return JSONResponse(
             content=error_response(code=400, message=f"删除元数据失败: 元数据'{metadata_entity.id}'不存在。"),
@@ -111,6 +133,7 @@ async def delete_metadata(
         await session.delete(metadata_entity)
         await session.commit()
         logger.info(f"删除元数据成功: {metadata_entity.id}.")
+        return success_response(data=metadata_entity, message="删除元数据成功.")
     except Exception:
         logger.exception(f"删除元数据 {metadata_id} 失败: {traceback.format_exc()}.")
         return JSONResponse(
@@ -119,13 +142,14 @@ async def delete_metadata(
         )
 
 
-@metadata_router.post("/knowledgebase/{kb_id}/file/{file_id}/metadata", response_model=ResponseModel[KbFileEntity])
+@knowledgebase_router.post("/{kb_id}/files/{file_id}/metadata", response_model=ResponseModel[KbFileEntity])
 async def set_file_metadata(
     kb_id: str,
     file_id: str,
     entry_data: MetadataEntryData,
     session: AsyncSession = Depends(get_session)
 ):
+    logger.info(f"Updating metadata {entry_data} for {file_id}.")
     try:
         file_entity = (await session.exec(
             select(KbFileEntity)
@@ -134,6 +158,10 @@ async def set_file_metadata(
         )).first()
         if file_entity is None:
             return error_response(404, f"文件{file_id}不存在。")
+
+        valid_entries = [
+           entry for entry in entry_data.entries if entry.name not in DEFAULT_METADATA_KEYS
+        ]
 
         file_metadata_entities = (
             await session.exec(
@@ -147,8 +175,8 @@ async def set_file_metadata(
         ])
 
         new_metadata_ids = set()
-        new_metadata = {}
-        for entry in entry_data.entries:
+        new_metadata = {k: v for k, v in file_entity.file_metadata.items() if k in DEFAULT_METADATA_KEYS}
+        for entry in valid_entries:
             new_metadata[entry.name] = entry.value
 
             new_metadata_ids.add(entry.metadata_id)
@@ -162,11 +190,18 @@ async def set_file_metadata(
                     )
                 )
 
+        ids_to_delete = new_metadata_ids - eixsting_metadata_ids
+        for entity in file_metadata_entities:
+            if entity.id in ids_to_delete:
+                await session.delete(entity)
+
+        print(new_metadata, file_entity.file_metadata)
         file_entity.file_metadata = new_metadata
+
         session.add(file_entity)
         await session.commit()
         await session.refresh(file_entity)
-        logger.info(f"File meta {file_entity.id} updated to {new_metadata}.")
+        logger.info(f"File meta {file_entity.id} updated to {file_entity.file_metadata}.")
 
         return success_response(data=file_entity, message="文件元数据更新成功。")
 

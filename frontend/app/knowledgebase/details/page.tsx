@@ -25,14 +25,44 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Trash2Icon,
+  AlertCircleIcon,
+} from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { PlusIcon } from "lucide-react";
 import * as Toast from "@radix-ui/react-toast";
-import { KbConfig, KbConfigCard } from "../kbconfig";
+import { KbConfig, KbConfigCard, MetadataConfig } from "../kbconfig";
 import { formatFileSize, formatBeijingTime } from "../utils/utils";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -41,6 +71,9 @@ interface KnowledgeBaseFile {
   status: string;
   created_at: string;
   update_at: string;
+  file_metadata: {
+    [key: string]: any;
+  };
 }
 
 interface SearchRecord {
@@ -62,6 +95,7 @@ interface EmbeddingModel {
   model_name: string;
   type: string;
 }
+
 export default function KnowledgeBaseDetailPage({
   knowledgebase_id,
   setActiveTab,
@@ -87,6 +121,23 @@ export default function KnowledgeBaseDetailPage({
   });
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
+    {},
+  );
+  const [metadataConfigs, setMetadataConfigs] = useState<MetadataConfig[]>([]);
+  const [metadataEditError, setMetadataEditError] = useState<string>("");
+  const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
+    [],
+  );
+  const default_metadata_keys = [
+    "file_name",
+    "file_path",
+    "file_size",
+    "file_extension",
+    "file_url",
+    "doc_id",
+  ];
   // 递归更新嵌套对象
   const updateNestedObject = (
     obj: Record<string, any>,
@@ -166,6 +217,19 @@ export default function KnowledgeBaseDetailPage({
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  const fetchKbMetadata = async () => {
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+
+    const res = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+    );
+    if (!res.ok) throw new Error("获取知识库元数据失败");
+    const metadata_json = await res.json();
+    const metadata_data = metadata_json.data as MetadataConfig[];
+    console.log("知识库元数据: ", metadata_data);
+    setMetadataConfigs(metadata_data);
+  };
+
   const fetchKbFiles = async () => {
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const files_res = await fetch(
@@ -211,6 +275,7 @@ export default function KnowledgeBaseDetailPage({
     };
     fetchKbConfigs();
     fetchKbFiles();
+    fetchKbMetadata();
   }, []);
 
   if (!knowledgebase) {
@@ -246,6 +311,83 @@ export default function KnowledgeBaseDetailPage({
       fetchKbFiles();
     }
   };
+
+  const selectMetadataKey = async (metadata_key: string) => {
+    setMetadataEditError("");
+    const emptyKeys = Object.keys(editingMetadata).filter(
+      (key) => editingMetadata[key] === "",
+    );
+    if (emptyKeys.length > 1) throw new Error(`有多于一个新建项。`);
+    else if (emptyKeys.length === 0) return;
+    else {
+      editingMetadata[metadata_key] = editingMetadata[""];
+      delete editingMetadata[""];
+      const updatedUsableKeys = availableMetadataKeys.filter(
+        (name) => name !== metadata_key,
+      );
+      setAvailableMetadataKeys(updatedUsableKeys);
+      console.log("selected keys for metadata: ", editingMetadata);
+      setEditingMetadata({ ...editingMetadata });
+    }
+  };
+
+  const handleOpenMetadata = async (file_id: string) => {
+    setMetadataEditError("");
+    setIsEditingMetadata(false);
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const file_res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+      );
+      if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
+      const file_json = await file_res.json();
+      setEditingMetadata(file_json.data.file_metadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in file_json.data.file_metadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+    } catch (err) {
+      console.error("获取文件失败:", err);
+    }
+  };
+
+  const handAddFileMetadata = () => {
+    if (availableMetadataKeys.length === 0) {
+      setMetadataEditError(
+        "没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。",
+      );
+      return;
+    }
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (!hasEmptyEntry) {
+      editingMetadata[""] = "";
+      setEditingMetadata({ ...editingMetadata });
+      setMetadataEditError("");
+    } else {
+      console.log("已经有一个待添加的项目了。");
+      setMetadataEditError("");
+    }
+  };
+
+  const handleDeleteMetadata = (name: string) => {
+    console.log("删除metadata:", name, editingMetadata);
+    if (name in editingMetadata) {
+      delete editingMetadata[name];
+      setEditingMetadata(editingMetadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in editingMetadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+
+      setMetadataEditError("");
+      console.log("已删除metadata:", name, editingMetadata);
+    }
+  };
+
   const handleFileUpload = async (files: FileList | null) => {
     console.log("##handleFileUpload", files);
     if (!files) {
@@ -299,6 +441,59 @@ export default function KnowledgeBaseDetailPage({
       }
 
       fetchKbFiles();
+    }
+  };
+
+  const get_metadata_id = (name: string) => {
+    console.log("get id", metadataConfigs, name);
+    return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
+  };
+
+  const saveEditMetadata = async (file_id: string) => {
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (hasEmptyEntry) {
+      setMetadataEditError("无法保存空的元数据名称。");
+      return;
+    }
+
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const metadata_enties = Object.keys(editingMetadata)
+        .filter((name) => !default_metadata_keys.includes(name))
+        .map((name) => ({
+          name: name,
+          metadata_id: get_metadata_id(name),
+          value: editingMetadata[name],
+        }));
+      const bodyData = {
+        entries: metadata_enties,
+      };
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        {
+          method: "POST",
+          body: JSON.stringify(bodyData),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!res.ok) throw Error("保存metadata失败");
+      const file_result = (await res.json()).data as KnowledgeBaseFile;
+      let updated_kbfiles = kbfiles;
+      const target_file_index = updated_kbfiles.findIndex(
+        (file) => file.id === file_id,
+      );
+      updated_kbfiles[target_file_index] = file_result;
+      setKbFiles(updated_kbfiles);
+      console.log("更新文件成功：", updated_kbfiles);
+      setIsEditingMetadata(false);
+    } catch (error: any) {
+      console.log("保存metadata失败", error);
+    } finally {
+      setMetadataEditError("");
     }
   };
 
@@ -463,6 +658,206 @@ export default function KnowledgeBaseDetailPage({
                                   kbId={knowledgebase_id}
                                   fileId={file.id}
                                 />
+                                <Sheet>
+                                  <SheetTrigger asChild>
+                                    <Button
+                                      variant="link"
+                                      className="text-sm text-blue-600"
+                                      onClick={() =>
+                                        handleOpenMetadata(file.id)
+                                      }
+                                    >
+                                      元数据
+                                    </Button>
+                                  </SheetTrigger>
+                                  <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
+                                    <SheetHeader>
+                                      {isEditingMetadata ? (
+                                        <SheetTitle>编辑元数据</SheetTitle>
+                                      ) : (
+                                        <SheetTitle>查看元数据</SheetTitle>
+                                      )}
+                                    </SheetHeader>
+                                    <div className="grid flex-1 auto-rows-min gap-4 px-4">
+                                      <div className="space-y-1 text-xs">
+                                        <Label htmlFor="sheet-default-meta">
+                                          默认
+                                        </Label>
+                                        {Object.keys(editingMetadata)
+                                          .filter((key) =>
+                                            default_metadata_keys.includes(key),
+                                          )
+                                          .map((key) => (
+                                            <div
+                                              className="flex items-start space-x-2"
+                                              key={key}
+                                            >
+                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                {key}
+                                              </div>
+                                              <div className="max-w-xs shrink-0">
+                                                <div className="system-xs-regular py-1 text-text-secondary truncate">
+                                                  {editingMetadata[key]}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                      <div className="space-y-1 text-xs">
+                                        {isEditingMetadata ? (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                            <Button
+                                              variant="outline"
+                                              className="w-3 h-3"
+                                              onClick={handAddFileMetadata}
+                                            >
+                                              <PlusIcon className="h-3 w-3" />
+                                            </Button>
+                                          </Label>
+                                        ) : (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                          </Label>
+                                        )}
+                                        {isEditingMetadata
+                                          ? Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  {key !== "" ? (
+                                                    <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                      {key}
+                                                    </div>
+                                                  ) : (
+                                                    <Select
+                                                      onValueChange={(value) =>
+                                                        selectMetadataKey(value)
+                                                      }
+                                                      defaultOpen={true}
+                                                    >
+                                                      <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
+                                                        <SelectValue placeholder="选择元数据名称" />
+                                                      </SelectTrigger>
+                                                      <SelectContent className="w-[88px] text-xs">
+                                                        <SelectGroup>
+                                                          {availableMetadataKeys.map(
+                                                            (m_key) => (
+                                                              <SelectItem
+                                                                key={m_key}
+                                                                value={m_key}
+                                                              >
+                                                                {m_key}
+                                                              </SelectItem>
+                                                            ),
+                                                          )}
+                                                        </SelectGroup>
+                                                      </SelectContent>
+                                                    </Select>
+                                                  )}
+                                                  <div className="flex space-x-2 max-w-xs shrink-0">
+                                                    <Input
+                                                      type="string"
+                                                      className="w-280 border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
+                                                      value={
+                                                        editingMetadata[key]
+                                                      }
+                                                      onChange={(e) => {
+                                                        setEditingMetadata({
+                                                          ...editingMetadata,
+                                                          [key]: e.target.value,
+                                                        });
+                                                      }}
+                                                    />
+                                                    <Button
+                                                      variant="outline"
+                                                      className="w-3 h-3"
+                                                      onClick={() =>
+                                                        handleDeleteMetadata(
+                                                          key,
+                                                        )
+                                                      }
+                                                    >
+                                                      <Trash2Icon className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              ))
+                                          : Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                    {key}
+                                                  </div>
+                                                  <div className="max-w-xs shrink-0">
+                                                    <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                                      {editingMetadata[key]}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                      </div>
+                                    </div>
+                                    <SheetFooter>
+                                      {metadataEditError !== "" && (
+                                        <Alert variant="destructive">
+                                          <AlertCircleIcon />
+                                          <AlertDescription>
+                                            <p>{metadataEditError}</p>
+                                          </AlertDescription>
+                                        </Alert>
+                                      )}
+                                      {isEditingMetadata ? (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            saveEditMetadata(file.id)
+                                          }
+                                        >
+                                          保存
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            setIsEditingMetadata(true)
+                                          }
+                                        >
+                                          编辑
+                                        </Button>
+                                      )}
+
+                                      <SheetClose asChild>
+                                        <Button
+                                          variant="outline"
+                                          onClick={() =>
+                                            setIsEditingMetadata(false)
+                                          }
+                                        >
+                                          Close
+                                        </Button>
+                                      </SheetClose>
+                                    </SheetFooter>
+                                  </SheetContent>
+                                </Sheet>
+
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
@@ -505,6 +900,7 @@ export default function KnowledgeBaseDetailPage({
             <KbConfigCard
               isCreate={false}
               kbConfig={knowledgebase}
+              metadataConfigs={metadataConfigs}
               onSaveSuccess={handleSaveSuccess}
               onCancel={() => {}}
             ></KbConfigCard>

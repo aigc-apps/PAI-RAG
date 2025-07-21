@@ -121,7 +121,6 @@ async def query_file_ids_with_metadata_filter(
         where_clause = and_(*filters)
     else:
         where_clause = or_(*filters)
-    print(where_clause)
     file_entities = (await session.exec(
         select(KbFileEntity)
         .where(where_clause))).all()

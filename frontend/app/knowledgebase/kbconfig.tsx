@@ -66,6 +66,7 @@ interface EmbeddingModel {
 
 // 元数据配置
 export interface MetadataConfig {
+  id: string;
   name: string;
   value_type: string;
   description: string;
@@ -89,11 +90,11 @@ export interface KbConfig {
     rerank_model: string; // rerank模型名称
     vector_weight?: number; // 向量检索权重（仅 hybrid 时使用）
   };
-  metadata_configs?: MetadataConfig[];
 }
 
 interface KbConfigProps {
   kbConfig: KbConfig;
+  metadataConfigs: MetadataConfig[];
   isCreate: boolean;
   onSaveSuccess: (kb: KbConfig) => void;
   onCancel: () => void;
@@ -102,6 +103,7 @@ interface KbConfigProps {
 // 知识库配置卡片
 export const KbConfigCard: FC<KbConfigProps> = ({
   kbConfig,
+  metadataConfigs,
   isCreate,
   onSaveSuccess,
   onCancel,
@@ -117,6 +119,8 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
   const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存KB错误信息
+  const [metadata_configs, setMetadataConfigs] =
+    useState<MetadataConfig[]>(metadataConfigs);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
@@ -163,26 +167,34 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     }
   };
 
-  function handleRemoveMetadataEntry(name: string) {
-    if (kb.metadata_configs != null) {
-      const updated_metadata_configs = kb.metadata_configs.filter(
-        (config: any) => config.name !== name,
-      );
-      setKb((prev) => ({
-        ...prev,
-        metadata_configs: updated_metadata_configs,
-      }));
+  const handleRemoveMetadataEntry = async (id: string) => {
+    if (metadata_configs != null) {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const metadata_url = `http://localhost:${port}/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
+      try {
+        const res = await fetch(metadata_url, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error(`删除metadata失败: ${await res.text()}`);
 
-      console.log("删除的元数据：", name);
+        const updated_metadata_configs = metadata_configs.filter(
+          (config: any) => config.id !== id,
+        );
+        setMetadataConfigs(updated_metadata_configs);
+
+        console.log("删除的元数据：", id);
+      } catch (err: any) {
+        console.log("删除元数据失败。", err.message);
+      }
     }
-  }
+  };
 
-  function handleAddMetadataConfig() {
+  const handleAddMetadataConfig = async () => {
     if (!metadataName) {
       setMetadataError("必须填入元数据名称。");
       return;
     }
-    let updated_metadata_configs = kb.metadata_configs || [];
+    let updated_metadata_configs = metadata_configs || [];
 
     if (
       updated_metadata_configs.some((config) => config.name === metadataName)
@@ -190,21 +202,37 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       setMetadataError(`元数据名称 '${metadataName}' 已经存在.`);
       return;
     }
-    updated_metadata_configs.push({
-      name: metadataName,
-      value_type: metadataValueType,
-      description: metadataDesc,
-    });
 
-    setmetadataName("");
-    setMetadataError("");
-    setMetadataValueType("string");
-    setMetadataDesc("");
-    setMetadataOpen(false);
-    setKb((prev) => ({ ...prev, metadata_configs: updated_metadata_configs }));
-
-    console.log("添加元数据成功.");
-  }
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const metadata_url = `http://localhost:${port}/v1/config/knowledgebases/${kb.id}/metadata`;
+    try {
+      const res = await fetch(metadata_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kb_id: kb.id,
+          name: metadataName,
+          value_type: metadataValueType,
+          description: metadataDesc,
+        }), // 包装为数组
+      });
+      if (!res.ok) throw new Error(`保存metadata失败: ${await res.text()}`);
+      const new_metadata_json = await res.json();
+      const new_metadata = new_metadata_json.data as MetadataConfig;
+      updated_metadata_configs.push(new_metadata);
+      setMetadataConfigs(updated_metadata_configs);
+      console.log("添加元数据成功.");
+    } catch (err: any) {
+      console.log("保存知识库失败", err.message);
+      setSaveErrorMsg(err.message);
+    } finally {
+      setmetadataName("");
+      setMetadataError("");
+      setMetadataValueType("string");
+      setMetadataDesc("");
+      setMetadataOpen(false);
+    }
+  };
 
   function handleCancelMetadataConfig() {
     setmetadataName("");
@@ -584,12 +612,12 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 <div className="grid space-y-2">
                   <div className="w-full">
                     <Table className="w-full">
-                      {kb.metadata_configs === null ||
-                      kb.metadata_configs?.length == 0 ? (
+                      {metadata_configs === null ||
+                      metadata_configs.length == 0 ? (
                         <TableCaption>尚未配置元数据信息</TableCaption>
                       ) : (
                         <TableCaption>
-                          已添加{kb.metadata_configs?.length}条元数据信息。{" "}
+                          已添加{metadata_configs.length}条元数据信息。{" "}
                         </TableCaption>
                       )}
                       <TableHeader>
@@ -705,7 +733,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {kb.metadata_configs?.map((item, index) => (
+                        {metadata_configs?.map((item, index) => (
                           <TableRow key={index}>
                             <TableCell className="font-medium">
                               {item.name}
@@ -718,7 +746,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                                 size="icon"
                                 className="size-8"
                                 onClick={() =>
-                                  handleRemoveMetadataEntry(item.name)
+                                  handleRemoveMetadataEntry(item.id)
                                 }
                               >
                                 <Trash2Icon />
