@@ -12,9 +12,13 @@ class KbChunkModel(SQLModel):
     chunk_metadata: dict = Field(default={}, sa_column=Column("chunk_metadata", JSON))
 
     status: ChunkStatus = Field(default=ChunkStatus.pending)
+
+    # active和status独立控制，status是处理状态，active是由用户控制是否显示在知识库
+    # active 设为false，即从向量库删除对应chunk.
+    # active 设为true，即添加对应chunk to vector store.
     active: bool = Field(
         default=True
-    )  # active和status独立控制，status是处理状态，active是由用户控制是否显示在知识库
+    )
 
 
 class KbChunkEntity(KbChunkModel, table=True):

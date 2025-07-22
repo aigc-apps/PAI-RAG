@@ -25,18 +25,62 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Trash2Icon,
+  AlertCircleIcon,
+  SearchIcon,
+} from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, FilterIcon } from "lucide-react";
 import * as Toast from "@radix-ui/react-toast";
-import { KbConfig, KbConfigCard } from "../kbconfig";
+import { KbConfig, KbConfigCard, MetadataConfig } from "../kbconfig";
 import { formatFileSize, formatBeijingTime } from "../utils/utils";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
-import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DatetimeInput } from "../datetime";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -45,6 +89,9 @@ interface KnowledgeBaseFile {
   status: string;
   created_at: string;
   update_at: string;
+  file_metadata: {
+    [key: string]: any;
+  };
 }
 
 interface ImageInfo {
@@ -72,6 +119,13 @@ interface EmbeddingModel {
   model_name: string;
   type: string;
 }
+
+interface MetadataCondition {
+  name: string;
+  comparison_operator: string;
+  value: string | number;
+}
+
 export default function KnowledgeBaseDetailPage({
   knowledgebase_id,
   setActiveTab,
@@ -88,6 +142,12 @@ export default function KnowledgeBaseDetailPage({
   const fileSizePerPage = 8;
   const [kbquery, setKbQuery] = useState(""); //查询
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
+  const [searching, setSearching] = useState(false);
+  const [logicalOperator, setLogicalOperator] = useState<string>("and");
+  const [metadataConditions, setMetadataConditions] = useState<
+    MetadataCondition[]
+  >([]);
+
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
@@ -101,27 +161,44 @@ export default function KnowledgeBaseDetailPage({
   });
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // 递归更新嵌套对象
-  const updateNestedObject = (
-    obj: Record<string, any>,
-    keys: string[],
-    val: any,
-  ): any => {
-    const [currentKey, ...rest] = keys;
-    const value = Array.isArray(val) ? val[0] : val;
-
-    if (rest.length === 0) {
-      return {
-        ...obj,
-        [currentKey]: value,
-      };
-    }
-
-    return {
-      ...obj,
-      [currentKey]: updateNestedObject(obj[currentKey], rest, value),
-    };
-  };
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
+    {},
+  );
+  const [metadataConfigs, setMetadataConfigs] = useState<MetadataConfig[]>([]);
+  const [metadataValueTypes, setMetadataValueTypes] = useState<{
+    [k: string]: any;
+  }>({});
+  const [metadataEditError, setMetadataEditError] = useState<string>("");
+  const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
+    [],
+  );
+  const default_comparator = [
+    "contains",
+    "not contains",
+    "start with",
+    "end with",
+    "is",
+    "is not",
+    "empty",
+    "not empty",
+    "=",
+    "≠",
+    ">",
+    "<",
+    "≥",
+    "≤",
+    "before",
+    "after",
+  ];
+  const default_metadata_keys = [
+    "file_name",
+    "file_path",
+    "file_size",
+    "file_extension",
+    "file_url",
+    "doc_id",
+  ];
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
@@ -153,6 +230,7 @@ export default function KnowledgeBaseDetailPage({
   };
 
   const handleSearchSubmit = async () => {
+    setSearching(true);
     console.log("handleSearchSubmit");
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const search_result = await fetch(
@@ -165,6 +243,10 @@ export default function KnowledgeBaseDetailPage({
         body: JSON.stringify({
           query: kbquery,
           knowledgebase_id: knowledgebase_id,
+          metadata_condition: {
+            conditions: metadataConditions,
+            logical_operator: logicalOperator,
+          },
         }),
       },
     );
@@ -173,11 +255,31 @@ export default function KnowledgeBaseDetailPage({
     const search_json = await search_result.json();
     console.log("搜索知识库结果:", search_json);
     setSearchRecords(search_json.data.records);
+    setSearching(false);
   };
 
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
+
+  const fetchKbMetadata = async () => {
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+
+    const res = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+    );
+    if (!res.ok) throw new Error("获取知识库元数据失败");
+    const metadata_json = await res.json();
+    const metadata_data = metadata_json.data as MetadataConfig[];
+    const valueTypes = Object.fromEntries(
+      metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
+    ) as { [key: string]: string };
+
+    console.log("知识库元数据: ", metadata_data, valueTypes);
+
+    setMetadataValueTypes({ ...valueTypes, "": "string" });
+    setMetadataConfigs(metadata_data);
+  };
 
   const fetchKbFiles = useCallback(async () => {
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -240,6 +342,7 @@ export default function KnowledgeBaseDetailPage({
       }
     };
     fetchKbConfigs();
+    fetchKbMetadata();
   }, []);
 
   if (!knowledgebase) {
@@ -275,6 +378,83 @@ export default function KnowledgeBaseDetailPage({
       fetchKbFiles();
     }
   };
+
+  const selectMetadataKey = async (metadata_key: string) => {
+    setMetadataEditError("");
+    const emptyKeys = Object.keys(editingMetadata).filter(
+      (key) => editingMetadata[key] === "",
+    );
+    if (emptyKeys.length > 1) throw new Error(`有多于一个新建项。`);
+    else if (emptyKeys.length === 0) return;
+    else {
+      editingMetadata[metadata_key] = editingMetadata[""];
+      delete editingMetadata[""];
+      const updatedUsableKeys = availableMetadataKeys.filter(
+        (name) => name !== metadata_key,
+      );
+      setAvailableMetadataKeys(updatedUsableKeys);
+      console.log("selected keys for metadata: ", editingMetadata);
+      setEditingMetadata({ ...editingMetadata });
+    }
+  };
+
+  const handleOpenMetadata = async (file_id: string) => {
+    setMetadataEditError("");
+    setIsEditingMetadata(false);
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const file_res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+      );
+      if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
+      const file_json = await file_res.json();
+      setEditingMetadata(file_json.data.file_metadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in file_json.data.file_metadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+    } catch (err) {
+      console.error("获取文件失败:", err);
+    }
+  };
+
+  const handAddFileMetadata = () => {
+    if (availableMetadataKeys.length === 0) {
+      setMetadataEditError(
+        "没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。",
+      );
+      return;
+    }
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (!hasEmptyEntry) {
+      editingMetadata[""] = "";
+      setEditingMetadata({ ...editingMetadata });
+      setMetadataEditError("");
+    } else {
+      console.log("已经有一个待添加的项目了。");
+      setMetadataEditError("");
+    }
+  };
+
+  const handleDeleteMetadata = (name: string) => {
+    console.log("删除metadata:", name, editingMetadata);
+    if (name in editingMetadata) {
+      delete editingMetadata[name];
+      setEditingMetadata(editingMetadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in editingMetadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+
+      setMetadataEditError("");
+      console.log("已删除metadata:", name, editingMetadata);
+    }
+  };
+
   const handleFileUpload = async (files: FileList | null) => {
     console.log("##handleFileUpload", files);
     if (!files) {
@@ -329,6 +509,122 @@ export default function KnowledgeBaseDetailPage({
       setPage(1);
       fetchKbFiles();
     }
+  };
+
+  const get_metadata_id = (name: string) => {
+    console.log("get id", metadataConfigs, name);
+    return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
+  };
+
+  const saveEditMetadata = async (file_id: string) => {
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (hasEmptyEntry) {
+      setMetadataEditError("无法保存空的元数据名称。");
+      return;
+    }
+
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const metadata_enties = Object.keys(editingMetadata)
+        .filter((name) => !default_metadata_keys.includes(name))
+        .map((name) => ({
+          name: name,
+          metadata_id: get_metadata_id(name),
+          value: editingMetadata[name],
+        }));
+      const bodyData = {
+        entries: metadata_enties,
+      };
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        {
+          method: "POST",
+          body: JSON.stringify(bodyData),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!res.ok) throw Error("保存metadata失败");
+      const file_result = (await res.json()).data as KnowledgeBaseFile;
+      let updated_kbfiles = kbfiles;
+      const target_file_index = updated_kbfiles.findIndex(
+        (file) => file.id === file_id,
+      );
+      updated_kbfiles[target_file_index] = file_result;
+      setKbFiles(updated_kbfiles);
+      console.log("更新文件成功：", updated_kbfiles);
+      setIsEditingMetadata(false);
+    } catch (error: any) {
+      console.log("保存metadata失败", error);
+    } finally {
+      setMetadataEditError("");
+    }
+  };
+
+  const addCondition = () => {
+    const newCondition = {
+      name: "",
+      comparison_operator: "",
+      value: "",
+    };
+    setMetadataConditions([...metadataConditions, newCondition]);
+  };
+
+  const deleteCondition = (i: number) => {
+    const newConditionArray = metadataConditions.filter((v, idx) => idx !== i);
+    setMetadataConditions(newConditionArray);
+  };
+
+  const setConditionName = (i: number, name: string) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        if (metadataValueTypes[name] === "datetime") {
+          return {
+            name: name,
+            value: new Date().getTime(),
+            comparison_operator: condition.comparison_operator,
+          };
+        }
+        return {
+          name: name,
+          value: condition.value,
+          comparison_operator: condition.comparison_operator,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
+  };
+
+  const setConditionValue = (i: number, value: string | number) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        return {
+          name: condition.name,
+          value: value,
+          comparison_operator: condition.comparison_operator,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
+  };
+
+  const setConditionOp = (i: number, op: string) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        return {
+          name: condition.name,
+          value: condition.value,
+          comparison_operator: op,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
   };
 
   return (
@@ -492,6 +788,240 @@ export default function KnowledgeBaseDetailPage({
                                   kbId={knowledgebase_id}
                                   fileId={file.id}
                                 />
+                                <Sheet>
+                                  <SheetTrigger asChild>
+                                    <Button
+                                      variant="link"
+                                      className="text-sm text-blue-600"
+                                      onClick={() =>
+                                        handleOpenMetadata(file.id)
+                                      }
+                                    >
+                                      元数据
+                                    </Button>
+                                  </SheetTrigger>
+                                  <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
+                                    <SheetHeader>
+                                      {isEditingMetadata ? (
+                                        <SheetTitle>编辑元数据</SheetTitle>
+                                      ) : (
+                                        <SheetTitle>查看元数据</SheetTitle>
+                                      )}
+                                    </SheetHeader>
+                                    <div className="grid flex-1 auto-rows-min gap-2 px-4">
+                                      <div className="space-y-1 text-xs">
+                                        {isEditingMetadata ? (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                            <Button
+                                              variant="secondary"
+                                              className="w-16 h-5"
+                                              onClick={handAddFileMetadata}
+                                            >
+                                              <PlusIcon className="h-3 w-3" />
+                                              添加
+                                            </Button>
+                                          </Label>
+                                        ) : (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                          </Label>
+                                        )}
+                                        {Object.keys(editingMetadata).filter(
+                                          (key: string) =>
+                                            !default_metadata_keys.includes(
+                                              key,
+                                            ),
+                                        ).length === 0 && (
+                                          <p>
+                                            当前没有配置自定义元数据，点击编辑添加。
+                                          </p>
+                                        )}
+                                        {isEditingMetadata
+                                          ? Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  {key !== "" ? (
+                                                    <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                      {key}
+                                                    </div>
+                                                  ) : (
+                                                    <Select
+                                                      onValueChange={(value) =>
+                                                        selectMetadataKey(value)
+                                                      }
+                                                      defaultOpen={true}
+                                                    >
+                                                      <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
+                                                        <SelectValue placeholder="选择元数据名称" />
+                                                      </SelectTrigger>
+                                                      <SelectContent className="w-[88px] text-xs">
+                                                        <SelectGroup>
+                                                          {availableMetadataKeys.map(
+                                                            (m_key) => (
+                                                              <SelectItem
+                                                                key={m_key}
+                                                                value={m_key}
+                                                              >
+                                                                {m_key}
+                                                              </SelectItem>
+                                                            ),
+                                                          )}
+                                                        </SelectGroup>
+                                                      </SelectContent>
+                                                    </Select>
+                                                  )}
+                                                  <div className="flex space-x-2 max-w-xs shrink-0">
+                                                    {metadataValueTypes[key] !==
+                                                    "datetime" ? (
+                                                      <Input
+                                                        type={
+                                                          metadataValueTypes[
+                                                            key
+                                                          ]
+                                                        }
+                                                        className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
+                                                        value={
+                                                          editingMetadata[key]
+                                                        }
+                                                        onChange={(e) => {
+                                                          setEditingMetadata({
+                                                            ...editingMetadata,
+                                                            [key]:
+                                                              e.target.value,
+                                                          });
+                                                        }}
+                                                      />
+                                                    ) : (
+                                                      <DatetimeInput
+                                                        value={
+                                                          editingMetadata[key]
+                                                        }
+                                                        width="md"
+                                                        onValueChange={(
+                                                          value,
+                                                        ) => {
+                                                          setEditingMetadata({
+                                                            ...editingMetadata,
+                                                            [key]: value,
+                                                          });
+                                                        }}
+                                                      />
+                                                    )}
+                                                    <Button
+                                                      variant="outline"
+                                                      className="w-3 h-3"
+                                                      onClick={() =>
+                                                        handleDeleteMetadata(
+                                                          key,
+                                                        )
+                                                      }
+                                                    >
+                                                      <Trash2Icon className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              ))
+                                          : Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                    {key}
+                                                  </div>
+                                                  <div className="max-w-xs shrink-0">
+                                                    <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                                      {editingMetadata[key]}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                      </div>
+                                      <div className="text-xs">
+                                        <Label htmlFor="sheet-custom-meta">
+                                          内置元数据
+                                        </Label>
+                                        {Object.keys(editingMetadata)
+                                          .filter((key) =>
+                                            default_metadata_keys.includes(key),
+                                          )
+                                          .map((key) => (
+                                            <div
+                                              className="flex items-start space-x-2"
+                                              key={key}
+                                            >
+                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                {key}
+                                              </div>
+                                              <div className="max-w-xs shrink-0">
+                                                <div className="system-xs-regular py-1 text-text-secondary truncate">
+                                                  {editingMetadata[key]}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                    <SheetFooter>
+                                      {metadataEditError !== "" && (
+                                        <Alert variant="destructive">
+                                          <AlertCircleIcon />
+                                          <AlertDescription>
+                                            <p>{metadataEditError}</p>
+                                          </AlertDescription>
+                                        </Alert>
+                                      )}
+                                      {isEditingMetadata ? (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            saveEditMetadata(file.id)
+                                          }
+                                        >
+                                          保存
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            setIsEditingMetadata(true)
+                                          }
+                                        >
+                                          编辑
+                                        </Button>
+                                      )}
+
+                                      <SheetClose asChild>
+                                        <Button
+                                          variant="outline"
+                                          onClick={() =>
+                                            setIsEditingMetadata(false)
+                                          }
+                                        >
+                                          Close
+                                        </Button>
+                                      </SheetClose>
+                                    </SheetFooter>
+                                  </SheetContent>
+                                </Sheet>
+
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
@@ -541,6 +1071,7 @@ export default function KnowledgeBaseDetailPage({
             <KbConfigCard
               isCreate={false}
               kbConfig={knowledgebase}
+              metadataConfigs={metadataConfigs}
               onSaveSuccess={handleSaveSuccess}
               onCancel={() => {}}
             ></KbConfigCard>
@@ -549,7 +1080,7 @@ export default function KnowledgeBaseDetailPage({
             <div className="space-y-4">
               {/* 搜索框和按钮 */}
               <div className="flex flex-wrap gap-2 mb-6">
-                <div className="flex-1 min-w-[200px] max-w-[1000px]">
+                <div className="flex-1 min-w-[200px] max-w-[640px]">
                   <Input
                     type="text"
                     id="search_query"
@@ -563,77 +1094,216 @@ export default function KnowledgeBaseDetailPage({
                     className="w-full"
                   />
                 </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline">
+                      <FilterIcon />
+                      元数据
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[450px]">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <RadioGroup
+                          value={logicalOperator}
+                          onValueChange={(value) => setLogicalOperator(value)}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <p className="text-muted-foreground text-sm">
+                              逻辑操作符
+                            </p>
+
+                            <RadioGroupItem value="and" id="r1" />
+                            <Label htmlFor="r1">AND</Label>
+                            <RadioGroupItem value="or" id="r2" />
+                            <Label htmlFor="r2">OR</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="space-y-2">
+                          {metadataConditions.map((condition, i) => (
+                            <div
+                              className="flex items-center space-x-2"
+                              key={i}
+                            >
+                              <div>
+                                <Select
+                                  value={condition.name}
+                                  onValueChange={(value) => {
+                                    setConditionName(i, value);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                    <SelectValue placeholder="名称" />
+                                  </SelectTrigger>
+                                  <SelectContent className="text-xs">
+                                    <SelectGroup>
+                                      {metadataConfigs.map((metadata) => (
+                                        <SelectItem
+                                          key={metadata.name}
+                                          value={metadata.name}
+                                        >
+                                          {metadata.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Select
+                                  value={condition.comparison_operator}
+                                  onValueChange={(value) => {
+                                    setConditionOp(i, value);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                    <SelectValue placeholder="规则" />
+                                  </SelectTrigger>
+                                  <SelectContent className="w-[80px] text-xs">
+                                    <SelectGroup>
+                                      {default_comparator.map((op) => (
+                                        <SelectItem key={op} value={op}>
+                                          {op}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                {metadataValueTypes[condition.name] ===
+                                "datetime" ? (
+                                  <DatetimeInput
+                                    value={
+                                      typeof condition.value === "number"
+                                        ? condition.value
+                                        : parseFloat(condition.value)
+                                    }
+                                    width="sm"
+                                    onValueChange={(value) => {
+                                      setConditionValue(i, value);
+                                    }}
+                                  />
+                                ) : (
+                                  <Input
+                                    className="w-128px"
+                                    value={condition.value.toString()}
+                                    onChange={(e) =>
+                                      setConditionValue(i, e.target.value)
+                                    }
+                                  />
+                                )}
+                              </div>
+                              <div>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    deleteCondition(i);
+                                  }}
+                                  className="w-6"
+                                >
+                                  <Trash2Icon className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={addCondition}
+                          className="h-6 text-xs"
+                        >
+                          新增过滤规则
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   type="button"
                   onClick={handleSearchSubmit}
                   className="whitespace-nowrap"
                 >
-                  查询
+                  <SearchIcon />
+                  开始查询
                 </Button>
               </div>
               {/* 搜索结果提示 */}
-              {searchrecords.length === 0 && (
+              {searching && (
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[250px]" />
+                    <Skeleton className="h-4 w-[200px]" />
+                  </div>
+                </div>
+              )}
+              {!searching && searchrecords.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <h2>没有找到相关的切片</h2>
                   <p className="mt-2 text-sm">尝试调整搜索条件</p>
                 </div>
               )}
-              <div className="gap-6 p-4 w-full">
-                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {searchrecords.map((chunk, i) => (
-                    <Card key={i} className="flex flex-col max-h-80">
-                      <CardHeader>
-                        <CardTitle className="flex justify-start">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
-                              {i + 1}
-                            </Badge>
-                            <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
-                              分数: {chunk.score.toFixed(4)}
-                            </Badge>
-                            <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
-                              {chunk.title}
-                            </Badge>
-                          </div>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex-grow overflow-y-auto">
-                        <ScrollArea className="h-full pr-4">
-                          <div className="text-gray-600 whitespace-pre-wrap">
-                            {chunk.content}
-                          </div>
-                        </ScrollArea>
-                      </CardContent>
-                      <CardFooter className="shrink-0 gap-2">
-                        {chunk.metadata?.images_info?.length > 0 && (
-                          <div className="flex gap-2 mt-4">
-                            {chunk.metadata.images_info.map((meta, index) => (
-                              <PhotoProvider
-                                key={index}
-                                maskOpacity={0.8}
-                                overlayRender={({}) => {
-                                  return (
-                                    <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                      <div>图片描述：{meta.desc}</div>
-                                    </div>
-                                  );
-                                }}
-                              >
-                                <PhotoView key={index} src={meta.url}>
-                                  <img
-                                    src={meta.url}
-                                    className="w-10 h-10 object-cover rounded-md cursor-pointer"
-                                  />
-                                </PhotoView>
-                              </PhotoProvider>
-                            ))}
-                          </div>
-                        )}
-                      </CardFooter>
-                    </Card>
-                  ))}
+              {!searching && (
+                <div className="gap-6 p-4 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {searchrecords.map((chunk, i) => (
+                      <Card key={i} className="flex flex-col max-h-80">
+                        <CardHeader>
+                          <CardTitle className="flex justify-start">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                                {i + 1}
+                              </Badge>
+                              <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                                分数: {chunk.score.toFixed(4)}
+                              </Badge>
+                              <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                                {chunk.title}
+                              </Badge>
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-grow overflow-y-auto">
+                          <ScrollArea className="h-full pr-4">
+                            <div className="text-gray-600 whitespace-pre-wrap">
+                              {chunk.content}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                        <CardFooter className="shrink-0 gap-2">
+                          {chunk.metadata?.images_info?.length > 0 && (
+                            <div className="flex gap-2 mt-4">
+                              {chunk.metadata.images_info.map((meta, index) => (
+                                <PhotoProvider
+                                  key={index}
+                                  maskOpacity={0.8}
+                                  overlayRender={({}) => {
+                                    return (
+                                      <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                        <div>图片描述：{meta.desc}</div>
+                                      </div>
+                                    );
+                                  }}
+                                >
+                                  <PhotoView key={index} src={meta.url}>
+                                    <img
+                                      src={meta.url}
+                                      className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                    />
+                                  </PhotoView>
+                                </PhotoProvider>
+                              ))}
+                            </div>
+                          )}
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

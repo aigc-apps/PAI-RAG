@@ -37,7 +37,6 @@ export default function KnowledgeBaseCreatePage({
       rerank_model: "",
       vector_weight: 0.7,
     },
-    metadata_configs: [] as MetadataConfig[],
   };
 
   const [createErrorMsg, setCreateErrorMsg] = useState("");
@@ -96,6 +95,7 @@ export default function KnowledgeBaseCreatePage({
       <div className="flex-1 overflow-y-auto">
         <KbConfigCard
           kbConfig={kbConfig}
+          metadataConfigs={[]}
           isCreate={true}
           onSaveSuccess={handleCreateSuccess}
           onCancel={handleCancel}
