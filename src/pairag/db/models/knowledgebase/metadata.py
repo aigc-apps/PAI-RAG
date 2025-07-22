@@ -9,6 +9,7 @@ from sqlalchemy import Column, DateTime, Enum, UniqueConstraint
 class MetadataValueType(str, Enum):
     STRING = "string"
     NUMBER = "number"
+    DATETIME = "datetime"
 
 
 class KbMetadataEntity(SQLModel, table=True):

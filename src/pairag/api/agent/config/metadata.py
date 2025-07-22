@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models.knowledgebase.file import KbFileEntity, MetadataEntryData
 from pairag.db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
-from pairag.db.models.knowledgebase.metadata import FileMetadataEntity, KbMetadataEntity
+from pairag.db.models.knowledgebase.metadata import FileMetadataEntity, KbMetadataEntity, MetadataValueType
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.api.response_model import ResponseModel, success_response, error_response
 from pairag.api.agent.config.knowledgebase import knowledgebase_router
@@ -151,6 +151,11 @@ async def set_file_metadata(
 ):
     logger.info(f"Updating metadata {entry_data} for {file_id}.")
     try:
+        metadata_results = await session.exec(
+            select(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id)
+        )
+        value_type_map = { metadata.name: metadata.value_type for metadata in metadata_results.all() }
+
         file_entity = (await session.exec(
             select(KbFileEntity)
             .where(KbFileEntity.kb_id == kb_id)
@@ -160,7 +165,7 @@ async def set_file_metadata(
             return error_response(404, f"文件{file_id}不存在。")
 
         valid_entries = [
-           entry for entry in entry_data.entries if entry.name not in DEFAULT_METADATA_KEYS
+           entry for entry in entry_data.entries if entry.name not in DEFAULT_METADATA_KEYS and entry.name in value_type_map
         ]
 
         file_metadata_entities = (
@@ -177,7 +182,11 @@ async def set_file_metadata(
         new_metadata_ids = set()
         new_metadata = {k: v for k, v in file_entity.file_metadata.items() if k in DEFAULT_METADATA_KEYS}
         for entry in valid_entries:
-            new_metadata[entry.name] = entry.value
+            value_type = value_type_map[entry.name]
+            if value_type == MetadataValueType.NUMBER or value_type == MetadataValueType.DATETIME:
+                new_metadata[entry.name] = float(entry.value)
+            else:
+                new_metadata[entry.name] = entry.value
 
             new_metadata_ids.add(entry.metadata_id)
             # 新增的metadata key，需要更新到文件-metadata表

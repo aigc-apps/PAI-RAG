@@ -685,6 +685,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                                           <SelectItem value="number">
                                             Number
                                           </SelectItem>
+                                          <SelectItem value="datetime">
+                                            DateTime
+                                          </SelectItem>
                                         </SelectGroup>
                                       </SelectContent>
                                     </Select>

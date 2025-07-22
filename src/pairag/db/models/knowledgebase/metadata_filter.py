@@ -56,15 +56,15 @@ class MetadataFilteringCondition(BaseModel):
 def _build_metadata_condition_(
     condition: Condition,
 ) -> tuple[str, list[str]]:
-
-    if condition.value is None or condition.value == "":
+    if (condition.comparison_operator not in ["empty", "not empty"] and
+        (condition.value is None or condition.value == "")):
         return None
 
     match condition.comparison_operator:
         case "contains":
             condition_filter = KbFileEntity.file_metadata[condition.name].like(f"%{condition.value}%")
         case "not contains":
-            condition_filter = KbFileEntity.file_metadata[condition.name].like(f"%{condition.value}%")
+            condition_filter = ~KbFileEntity.file_metadata[condition.name].like(f"%{condition.value}%")
         case "start with":
             condition_filter = KbFileEntity.file_metadata[condition.name].like(f'"{condition.value}%')
         case "end with":
@@ -82,9 +82,9 @@ def _build_metadata_condition_(
             else:
                 condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) != condition.value
         case "empty":
-            condition_filter = KbFileEntity.file_metadata[condition.name].is_(None)
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().is_(None)
         case "not empty":
-            condition_filter = KbFileEntity.file_metadata[condition.name].isnot(None)
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().isnot(None)
         case "before" | "<":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) < condition.value
         case "after" | ">":
@@ -110,20 +110,29 @@ async def query_file_ids_with_metadata_filter(
 
     # 为了简化实现复杂度，把metadata设定在file这一层
     # TODO: possible limitations: IN clause长度过长导致执行速度慢/超出限制？
-    filters = [and_(KbFileEntity.active, KbFileEntity.kb_id == kb_id)]
+    filters = []
 
     for condition in metadata_filter.conditions:
         condition_filter = _build_metadata_condition_(condition)
         if condition_filter is not None:
             filters.append(condition_filter)
 
-    if metadata_filter.logical_operator.lower() == "and":
-        where_clause = and_(*filters)
+    if len(filters) == 0:
+        file_entities = (await session.exec(
+            select(KbFileEntity)
+            .where(KbFileEntity.active)
+            .where(KbFileEntity.kb_id == kb_id))).all()
     else:
-        where_clause = or_(*filters)
-    file_entities = (await session.exec(
-        select(KbFileEntity)
-        .where(where_clause))).all()
+        if metadata_filter.logical_operator.lower() == "and":
+            where_clause = and_(*filters)
+        else:
+            where_clause = or_(*filters)
+        file_entities = (await session.exec(
+            select(KbFileEntity)
+            .where(KbFileEntity.active)
+            .where(KbFileEntity.kb_id == kb_id)
+            .where(where_clause))).all()
+
     file_ids = [entity.id for entity in file_entities]
     return file_ids
 

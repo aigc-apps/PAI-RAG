@@ -187,6 +187,7 @@ class PaiKnowledgebaseClient:
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
 
+
     async def ainsert_chunks_to_vectordb(
         self,
         kb_id: str,
@@ -194,9 +195,10 @@ class PaiKnowledgebaseClient:
     ):
         logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
-        vector_index = self.create_vector_index_from_knowledgebase(knowledgebase)
-        await vector_index.ainsert_nodes(nodes)
+        vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
+        await vector_store.async_add(nodes)
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
+
 
     async def aquery(
         self,
@@ -219,6 +221,10 @@ class PaiKnowledgebaseClient:
         query_embedding = await embed_model.aget_query_embedding(query)
         document_ids = await query_file_ids_with_metadata_filter(kb_id=knowledge_id, metadata_filter=metadata_condition)
         logger.info(f"Successfully filtered {len(document_ids)} files with metadata filter: {document_ids}.")
+
+        if metadata_condition and len(metadata_condition.conditions) > 0 and not document_ids:
+            # fail fast as no docs filtered.
+            return []
 
         top_k = retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
