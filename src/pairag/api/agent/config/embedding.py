@@ -1,13 +1,11 @@
 ### Embedding configuration API ###
 
 import asyncio
-from typing import List
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models.knowledgebase.embedding import (
-    EmbeddingModel,
     EmbeddingModelCreate,
     EmbeddingModelEntity,
     EmbeddingModelRead,
@@ -16,13 +14,15 @@ from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.embedding_provider import embedding_provider
-from pairag.api.response_model import ResponseModel, success_response, error_response
+from pairag.api.response_model import PagedResult, ResponseModel, success_response, error_response
+from pairag.api.agent.utils.paginate import get_pagination_meta
+
 from loguru import logger
 
 embedding_router = APIRouter()
 
 
-@embedding_router.post("", response_model=ResponseModel[EmbeddingModel])
+@embedding_router.post("", response_model=ResponseModel[EmbeddingModelRead])
 async def create_embedding(
     embedding_create: EmbeddingModelCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -62,28 +62,36 @@ async def create_embedding(
         )
 
 
-@embedding_router.get(
-    "",
-    response_model=ResponseModel[List[EmbeddingModelRead]]
-    | ResponseModel[EmbeddingModelRead],
-)
+@embedding_router.get("")
 async def get_embeddings(
-    session: AsyncSession = Depends(get_session),
     model_name: str = None,
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
+    session: AsyncSession = Depends(get_session),
 ):
     if not model_name:
-        sql_results = await session.exec(
-            select(EmbeddingModelEntity).offset(offset).limit(limit)
+        total_results = await session.exec(
+            select(func.count()).select_from(
+                select(EmbeddingModelEntity)
+            )
         )
+        total_num = total_results.one_or_none()
+        pagination = get_pagination_meta(page, size, total_num)
+        sql_results = await session.exec(select(EmbeddingModelEntity).offset(pagination.offset).limit(size))
         embedding_entities = sql_results.all()
         embedding_models = [
             EmbeddingModelRead.model_validate(embedding)
             for embedding in embedding_entities
         ]
 
-        return success_response(data=embedding_models, message="查询embedding模型列表成功")
+        return success_response(
+            data=PagedResult(
+                items=embedding_models,
+                total=pagination.total,
+                pages=pagination.pages,
+                page=pagination.page,
+                size=pagination.size,
+            ),message="查询embedding模型列表成功")
     else:
         statement = select(EmbeddingModelEntity).where(
             EmbeddingModelEntity.model_name == model_name

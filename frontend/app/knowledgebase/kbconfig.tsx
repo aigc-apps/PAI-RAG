@@ -126,7 +126,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           fetch(`http://localhost:${port}/v1/config/embeddings`),
         ]);
 
-        const embData = (await embRes.json())?.data || [];
+        const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {

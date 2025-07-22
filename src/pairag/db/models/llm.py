@@ -22,7 +22,7 @@ class LlmModelRead(LlmModel):
 
 
 # table entity
-class LlmModelEntity(LlmModel, table=True):
+class LlmModelEntity(LlmModelRead, table=True):
     __tablename__ = "pai_llm_model"
 
     id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)

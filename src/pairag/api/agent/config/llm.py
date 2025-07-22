@@ -8,8 +8,9 @@ from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.api.agent.utils.paginate import get_pagination_meta
-from pairag.api.response_model import PagedResult, success_response
+from pairag.api.response_model import PagedResult, success_response, error_response, ResponseModel
 from loguru import logger
+from fastapi.responses import JSONResponse
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
@@ -21,7 +22,7 @@ llm_url_group_map = {
 }
 
 
-@llm_router.post("", response_model=LlmModelRead)
+@llm_router.post("", response_model=ResponseModel[LlmModelRead])
 async def create_llm(
     llm_data: LlmModelCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -29,30 +30,33 @@ async def create_llm(
     llm = LlmModelEntity.model_validate(
         llm_data, update={"encrypted_api_key": encrypted_api_key}
     )
-
+    llm.source = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
     session.add(llm)
     try:
         await session.commit()
         await session.refresh(llm)
         asyncio.create_task(llm_provider.refresh())
 
-        return llm
+        return success_response(data=llm, message="LLM创建成功。")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add llm: {e.orig}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            raise HTTPException(
-                status_code=400, detail=f"Model_id {llm_data.model_id} already exists."
+            return JSONResponse(
+                content=error_response(code=400, message=f"Model_id {llm_data.model_id} already exists."),
+                status_code=400,
             )
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to add llm config: {str(e)}"
+            return JSONResponse(
+                content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
+                status_code=400,
             )
     except Exception as e:
         await session.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add llm config: {str(e)}"
+        return JSONResponse(
+            content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
+            status_code=400,
         )
 
 
@@ -124,7 +128,7 @@ async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     return llm
 
 
-@llm_router.patch("/{llm_id}", response_model=LlmModelRead)
+@llm_router.patch("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def update_llm(
     llm_id: str,
     update_llm: LlmModelCreate,
@@ -132,8 +136,12 @@ async def update_llm(
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
-        raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
+        return JSONResponse(
+            content=error_response(code=404, message=f"Failed to update llm config {llm_id}"),
+            status_code=400,
+        )
     logger.info(f"update_llm {update_llm}.")
+    llm.model_id = update_llm.model_id or llm.model_id
     llm.base_url = update_llm.base_url or llm.base_url
     llm.context_window = update_llm.context_window or llm.context_window
     llm.model = update_llm.model or llm.model
@@ -150,7 +158,7 @@ async def update_llm(
 
     asyncio.create_task(llm_provider.refresh())
 
-    return llm
+    return success_response(data=llm, message="LLM更新成功。")
 
 
 @llm_router.delete("/{llm_id}")
