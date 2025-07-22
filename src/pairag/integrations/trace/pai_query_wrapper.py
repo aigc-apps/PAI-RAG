@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 from contextlib import contextmanager
 from typing import (
@@ -85,22 +86,29 @@ def pai_query_wrapper() -> Callable:
                         try:
                             ctx = trace.set_span_in_context(otel_span)
                             t = attach(ctx)
-                            async for x in f_return_val:
-                                try:
-                                    if x.startswith("data: "):
-                                        chunk = ChatCompletionChunk.model_validate_json(
-                                            x[6:]
+                            async with contextlib.aclosing(f_return_val) as agen:
+                                async for x in agen:
+                                    try:
+                                        if x.startswith("data: "):
+                                            chunk = (
+                                                ChatCompletionChunk.model_validate_json(
+                                                    x[6:]
+                                                )
+                                            )
+                                        else:
+                                            chunk = (
+                                                ChatCompletionChunk.model_validate_json(
+                                                    x
+                                                )
+                                            )
+                                        full_content += chunk.choices[0].delta.content
+                                        if not end_time:
+                                            end_time = time.time_ns()
+                                    except ValueError as e:
+                                        logger.error(
+                                            "Invalid JSON or data structure:", e
                                         )
-                                    else:
-                                        chunk = ChatCompletionChunk.model_validate_json(
-                                            x
-                                        )
-                                    full_content += chunk.choices[0].delta.content
-                                    if not end_time:
-                                        end_time = time.time_ns()
-                                except ValueError as e:
-                                    logger.error("Invalid JSON or data structure:", e)
-                                yield x
+                                    yield x
 
                             otel_span.set_attribute(OUTPUT_VALUE, full_content)
                             # error response content, e.g., content_filer exception message
