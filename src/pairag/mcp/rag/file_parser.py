@@ -149,6 +149,7 @@ class FileParser:
 
             for chunk in chunks:
                 chunk.metadata = doc_node.metadata
+                chunk.metadata["doc_id"] = doc_node.id_
                 chunk.relationships = {
                             NodeRelationship.SOURCE: RelatedNodeInfo(
                                 node_id=doc_node.id_, metadata={}

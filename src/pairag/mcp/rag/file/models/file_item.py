@@ -75,7 +75,6 @@ class FileItem:
             "file_name": self.file_name,
             "file_size": self.file_size,
             "file_extension": self.file_extension,
-            "doc_id": self.id,
         }
 
     def get_data(self) -> List[bytes]:

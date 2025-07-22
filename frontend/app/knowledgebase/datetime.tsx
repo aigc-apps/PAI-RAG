@@ -78,7 +78,7 @@ export const DatetimeInput: FC<DatetimeProps> = ({
           <Button
             variant="outline"
             id="date-picker"
-            className="w-[128px] h-6 justify-between text-xs"
+            className="w-[180px] justify-between text-xs"
           >
             {date ? (
               format(date, "yyyy-MM-dd HH:mm:ss")
