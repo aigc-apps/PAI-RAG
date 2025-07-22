@@ -21,7 +21,7 @@ class JsonReader(BaseReader):
         ]
 
         metadata = file_item.metadata()
-        docs = [Document(text=text, metadata=metadata) for text in text_list]
+        docs = [Document(id_=file_item.id, text=text, metadata=metadata) for text in text_list]
         logger.info(
             f"Successfully read {len(docs)} documents from {file_item.file_name}"
         )

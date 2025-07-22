@@ -99,14 +99,20 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
         es_url = get_value_from_multiple_envs(ELASTICSEARCH_URL_KEYS)
         es_user = get_value_from_multiple_envs(ELASTICSEARCH_USER_KEYS)
         es_password = get_value_from_multiple_envs(ELASTICSEARCH_PASSWORD_KEYS)
+        logger.info(f"Created ElasticSearchConnection with url: {es_url}.")
         return ElasticSearchConnection(url=es_url, user=es_user, password=es_password)
-
     elif vector_db_type == VectorDbType.MILVUS:
         host = get_value_from_multiple_envs(MILVUS_HOST_KEYS)
         port = get_value_from_multiple_envs(MILVUS_PORT_KEYS)
         user = get_value_from_multiple_envs(MILVUS_USER_KEYS)
         password = get_value_from_multiple_envs(MILVUS_PASSWORD_KEYS)
         database = get_value_from_multiple_envs(MILVUS_DATABASE_KEYS)
+        assert host, "Milvus host不能为空。"
+        assert user, "Milvus user不能为空。"
+        assert password, "Milvus password不能为空。"
+        assert database, "Milvus database不能为空。"
+
+        logger.info(f"Created MilvusConnection with host: {host} port: {port}, database: {database}.")
         return MilvusConnection(
             host=host,
             port=port,
@@ -126,7 +132,7 @@ def create_vector_store(
 ) -> BasePydanticVectorStore:
     if isinstance(vector_db_connection, MilvusConnection):
         milvus_url = (
-            f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}"
+            f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}/{vector_db_connection.database}"
         )
         token = f"{vector_db_connection.user}:{vector_db_connection.password}"
         if vector_db_connection.sparse_embedding_type == SparseEmbeddingFunctionType.bge_m3:

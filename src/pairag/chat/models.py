@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Any, List, Dict, Optional, AsyncGenerator, Generator, Union
 from openai.types.chat import ChatCompletionMessageParam
 from llama_index.core.schema import NodeWithScore
+from pairag.db.models.knowledgebase.metadata_filter import MetadataFilteringCondition
 from pairag.integrations.query_transform.pai_query_transform import IntentResult
 
 
@@ -12,10 +13,16 @@ class ContextDoc(BaseModel):
     image_url: str | None = None  # 图片链接
 
 
+class RetrievalSetting(BaseModel):
+    top_k: Optional[int] = None
+    score_threshold: Optional[float] = 0.4
+
+
 class RetrievalRequest(BaseModel):
     knowledgebase_id: Optional[str] = "default"  # 知识库名称（index_name）
     query: str  # 查询内容
-    retrieval_settings: Optional[Dict] = None
+    retrieval_setting: Optional[RetrievalSetting] = None
+    metadata_condition: Optional[MetadataFilteringCondition] = None
     # ["retrieval_mode", "similarity_top_k", "vector_weight", "keyword_weight", "reranker_type", "similarity_threshold", "reranker_similarity_threshold", "reranker_model", "reranker_similarity_top_k"]
 
 

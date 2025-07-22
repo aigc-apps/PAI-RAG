@@ -85,6 +85,7 @@ class MineruPdfReader(BaseReader):
             metadata["images"] = list(saved_image_map.values())
             return [
                 Document(
+                    id_=file_item.id,
                     text=md_content,
                     metadata=metadata,
                 )

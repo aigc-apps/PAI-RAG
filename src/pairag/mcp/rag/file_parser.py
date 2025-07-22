@@ -24,6 +24,7 @@ from pairag.mcp.rag.file.store.base import BaseFileStore
 from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
 
 
+IMAGE_DOC_TYPES = set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"])
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl"])
 DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", ".pptx"])
 DEFAULT_EXCLUDED_METADATA_KEYS = [
@@ -104,25 +105,26 @@ class FileParser:
         splitted_nodes: List[BaseNode] = []
 
         for doc_node in docs:
-            logger.info(f"Start splitting document: {doc_node.metadata['file_name']}")
+            logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
 
             chunks = []
             doc_type = doc_node.metadata["file_extension"]
-            if doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
-                # 表格格式文档
-                metadata = doc_node.metadata
-
+            if doc_type in IMAGE_DOC_TYPES:
                 node_id = uuid.uuid4().hex
                 chunks.append(
                     TextNode(
                         id_=node_id,
                         text=doc_node.text,
-                        metadata=metadata,
-                        relationships={
-                            NodeRelationship.SOURCE: RelatedNodeInfo(
-                                node_id=doc_node.node_id, metadata={}
-                            ),
-                        },
+                    )
+                )
+
+            elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
+                # 表格格式文档
+                node_id = uuid.uuid4().hex
+                chunks.append(
+                    TextNode(
+                        id_=node_id,
+                        text=doc_node.text,
                     )
                 )
             else:
@@ -131,6 +133,7 @@ class FileParser:
                     chunk_size=chunk_config.chunk_size,
                     chunk_overlap=chunk_config.chunk_overlap,
                     paragraph_separator=chunk_config.separator,
+                    include_metadata=False,
                 )
                 if doc_type in DOC_TYPES_CONVERT_TO_MD:
                     # markdown格式(pdf, md, html, doc 等)
@@ -144,6 +147,14 @@ class FileParser:
                     # txt格式等纯文本
                     chunks = parser.get_nodes_from_documents([doc_node])
 
+            for chunk in chunks:
+                chunk.metadata = doc_node.metadata
+                chunk.metadata["doc_id"] = doc_node.id_
+                chunk.relationships = {
+                            NodeRelationship.SOURCE: RelatedNodeInfo(
+                                node_id=doc_node.id_, metadata={}
+                            ),
+                        }
             splitted_nodes.extend(chunks)
             logger.info(
                 f"Finished split document into {len(chunks)} chunks: {doc_node.metadata['file_name']}"

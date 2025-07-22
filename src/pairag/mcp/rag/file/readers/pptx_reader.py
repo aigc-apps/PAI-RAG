@@ -154,7 +154,7 @@ class PptxReader(BaseReader):
             metadata = file_item.metadata()
             metadata["images"] = images
 
-            docs = [Document(text=markdown_content, metadata=metadata)]
+            docs = [Document(id_=file_item.id, text=markdown_content, metadata=metadata)]
             logger.info(f"Successfully read {file_item.file_name}.")
 
             return docs
