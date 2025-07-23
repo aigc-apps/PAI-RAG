@@ -34,6 +34,7 @@ export default function KnowledgeBaseCreatePage({
       retrieval_mode: "vector",
       top_k: 5,
       similarity_threshold: 0.4,
+      enable_rerank: false,
       rerank_model: "",
       vector_weight: 0.7,
     },

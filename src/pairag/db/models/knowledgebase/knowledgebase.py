@@ -30,6 +30,7 @@ class RetrievalConfig(SQLModel):
     top_k: int = Field(default=DEFAULT_SIMILARITY_TOP_K)
     similarity_threshold: float = Field(default=DEFAULT_SIMILARITY_THRESHOLD)
     vector_weight: float = Field(default=0.5)
+    enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default=None)
 
 
@@ -45,6 +46,7 @@ class KnowledgebaseCreate(SQLModel):
 class KbEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase"
 
+    # Note: "kb" is used as a prefix to ensure a valid collection name (in Milvus).
     id: str = Field(default_factory=lambda: "kb" + uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
     description: str = Field(default=None)

@@ -1,6 +1,8 @@
 import json
-import requests
 from typing import List, Dict, Any, Optional
+from llama_index.core.vector_stores.types import VectorStoreQueryResult
+import aiohttp
+import asyncio
 
 class OpenAICompatibleReranker:
     """
@@ -36,7 +38,7 @@ class OpenAICompatibleReranker:
         if api_key:
             self.headers["Authorization"] = api_key
 
-    def rerank(
+    async def rerank(
         self,
         query: str,
         documents: List[str],
@@ -65,7 +67,6 @@ class OpenAICompatibleReranker:
             raise ValueError("查询内容不能为空")
         if not documents:
             raise ValueError("文档列表不能为空")
-
         # 构造请求数据
         payload = {
             "model": model or self.model,
@@ -76,50 +77,90 @@ class OpenAICompatibleReranker:
         if top_n is not None:
             payload["top_n"] = top_n
 
-        # 发送请求
+        # 发送异步请求
         try:
-            response = requests.post(
-                f"{self.base_url}/v1/rerank",
-                headers=self.headers,
-                json=payload,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
-
-        except requests.exceptions.RequestException as e:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/v1/rerank",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=self.timeout
+                ) as response:
+                    response.raise_for_status()
+                    return await response.json()
+        except aiohttp.ClientError as e:
             raise RuntimeError(f"API请求失败: {str(e)}") from e
-
-        # 处理响应
-        try:
-            return response.json()
         except json.JSONDecodeError as e:
             raise RuntimeError(f"响应解析失败: {str(e)}") from e
 
-# 示例用法
-if __name__ == "__main__":
-    # 创建客户端实例
+    async def vector_store_rerank(
+        self,
+        query: str,
+        result: VectorStoreQueryResult,
+        top_n: Optional[int] = None,
+        model: Optional[str] = None,
+    ) -> VectorStoreQueryResult:
+        """
+        执行vector store query result重排序
+
+        Args:
+            query: 查询语句
+            result: 需要排序的vector store query result
+            top_n: 返回的最相关node数量
+            model: 覆盖默认模型
+
+        Returns:
+            API响应结果
+
+        Raises:
+            ValueError: 参数验证失败时
+            requests.exceptions.RequestException: 网络请求相关异常
+            RuntimeError: API返回错误时
+        """
+        # 参数验证
+        if not query:
+            raise ValueError("查询内容不能为空")
+        if not result:
+            raise ValueError("VectorStoreQueryResult列表不能为空")
+
+        origin_nodes = result.nodes
+        documents=[node.text for node in origin_nodes]
+        response_data = await self.rerank(query, documents, model, top_n)
+
+        try:
+            return_nodes = []
+            return_similarities = []
+            for result in response_data["results"]:
+                node = origin_nodes[result["index"]]
+                node.metadata["rerank"] = True
+                return_nodes.append(node)
+                return_similarities.append(result["relevance_score"])
+            return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"响应解析失败: {str(e)}") from e
+
+
+async def test_rerank():
     reranker = OpenAICompatibleReranker(
-        base_url="http://xxx.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/qwen3_reranker",
+        base_url="http:/demo.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/qwen3_reranker",
         model="Qwen3-Reranker-4B",
         timeout=60,
         api_key="=="
     )
 
     try:
-        # 执行重排序
-        result = reranker.rerank(
+        result = await reranker.rerank(
             query="中国首都是哪儿?",
             documents=[
-                "中国首都是北京。",
                 "美国首都是华盛顿。",
+                "中国首都是北京。",
                 "今天是星期五。",
             ],
             top_n=3
         )
-
-        # 格式化输出结果
-        print("重排序结果:")
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-
+        print("重排序结果:", result)
     except Exception as e:
         print(f"发生错误: {str(e)}")
+
+if __name__ == "__main__":
+    asyncio.run(test_rerank())
