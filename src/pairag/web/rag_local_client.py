@@ -1,5 +1,6 @@
 import json
 import shutil
+import traceback
 from typing import Any, Dict, List
 import pandas as pd
 import os
@@ -217,8 +218,11 @@ class RagLocalClient:
                 yield self._format_rag_response_v1_chat_completions(result)
             else:
                 async for r in response:
-                    if r.startswith("data: "):
-                        chunk = json.loads(r[6:])
+                    if not r:
+                        continue
+
+                    try:
+                        chunk = json.loads(r)
                         result = {
                             "delta": chunk["choices"][0]["delta"]["content"],
                             "docs": chunk.get("citation_details", []),
@@ -229,6 +233,11 @@ class RagLocalClient:
                             yield self._format_rag_response_v1_chat_completions(result)
                         else:
                             yield self._format_rag_response(result)
+                    except Exception:
+                        logger.warning(
+                            f"Failed to parse response: `{r}`, error: {traceback.format_exc()}"
+                        )
+                        pass
         except Exception as e:
             raise RagApiError(code=500, msg=str(e))
 

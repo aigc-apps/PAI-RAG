@@ -119,7 +119,7 @@ def get_token_usage(
 
 
 def _make_json_chunk(data: Any):
-    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+    return json.dumps(data, ensure_ascii=False)
 
 
 def make_completion_response(
