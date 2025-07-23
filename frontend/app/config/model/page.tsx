@@ -4,6 +4,7 @@ import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LlmConfigPage from "@/app/config/model/llm/page";
 import EmbConfigPage from "@/app/config/model/embedding/page";
+import RerankerConfigPage from "@/app/config/model/reranker/page";
 
 export default function ModelConfigPage() {
   return (
@@ -25,12 +26,18 @@ export default function ModelConfigPage() {
                 <TabsTrigger value="embeddings" className="p-4">
                   Embedding
                 </TabsTrigger>
+                <TabsTrigger value="rerankers" className="p-4">
+                  Reranker
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="llms" className="py-4">
                 <LlmConfigPage />
               </TabsContent>
               <TabsContent value="embeddings" className="py-4">
                 <EmbConfigPage />
+              </TabsContent>
+              <TabsContent value="rerankers" className="py-4">
+                <RerankerConfigPage />
               </TabsContent>
             </Tabs>
           </div>

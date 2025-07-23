@@ -11,8 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { AlertCircleIcon } from "lucide-react";
 
 // 定义组件 props
 interface EmbeddingModelDialogProps {
@@ -49,20 +50,32 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   useEffect(() => {
     setEmb(embConfig);
   }, [isAdd, embConfig]);
-  // 提交处理
+
+  useEffect(() => {
+    setSaveErrorMsg("");
+  }, [emb]);
+
   const handleSubmit = async () => {
     setSaveErrorMsg("");
-    console.log("handleSubmit emb", emb);
-
-    console.log("cd handleSubmit");
-    console.log("isAdd", isAdd);
+    if (
+      !emb.model_id ||
+      (isAdd && !emb.api_key) ||
+      !emb.endpoint ||
+      !emb.model_name ||
+      !emb.dimension ||
+      !emb.type ||
+      !emb.embed_batch_size
+    ) {
+      setSaveErrorMsg("请必须填写完整的模型信息");
+      return;
+    }
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const submit_url = isAdd
       ? `http://localhost:${port}/v1/config/embeddings`
       : `http://localhost:${port}/v1/config/embeddings/${emb.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
     if (emb.api_key === "******") emb.api_key = "";
-    console.log(" updateMethod", isAdd, updateMethod, submit_url, emb);
+    console.log("updateMethod", isAdd, updateMethod, submit_url, emb);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
@@ -70,21 +83,15 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         body: JSON.stringify(emb),
       });
 
-      if (!res.ok) throw new Error(`请求失败: ${await res.text()}`);
-      const jsondata = await res.json();
-      console.log("jsondata", jsondata);
-      if (isAdd) {
-        console.log("新增模式 onSaveSuccess", jsondata.data as EmbConfig);
-        onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
-        console.log("新增模式回调已触发"); // 确认是否执行到此处
-      } else {
-        console.log("编辑模式 onSaveSuccess", jsondata.data as EmbConfig);
-        onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
-        console.log("编辑模式回调已触发"); // 确认是否执行到此处
+      if (!res.ok) {
+        setSaveErrorMsg(`${updateMethod} 请求失败, 请检查填写信息`);
+        return;
       }
+      const jsondata = await res.json();
+      onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
       setIsOpen(false);
     } catch (err: any) {
-      setSaveErrorMsg(err.message);
+      setSaveErrorMsg(`${updateMethod} 请求失败`);
     } finally {
     }
   };
@@ -93,7 +100,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   const handleDialogClose = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-      setError(null); // 关闭时清除错误信息
+      setError(null);
+      setSaveErrorMsg("");
     }
   };
 
@@ -260,7 +268,13 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex flex-col gap-4">
+          {saveErrorMsg !== "" && (
+            <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
+              <AlertCircleIcon className="h-4 w-4 !text-destructive" />
+              <AlertTitle>{saveErrorMsg}</AlertTitle>
+            </Alert>
+          )}
           <Button onClick={handleSubmit}>{isAdd ? "新增" : "保存"}</Button>
         </DialogFooter>
       </DialogContent>

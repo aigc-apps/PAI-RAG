@@ -64,6 +64,12 @@ interface EmbeddingModel {
   type: string;
 }
 
+interface RerankerModel {
+  id: string;
+  model_id: string;
+  model_name: string;
+}
+
 // 元数据配置
 export interface MetadataConfig {
   id: string;
@@ -116,6 +122,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [metadataDesc, setMetadataDesc] = useState("");
   const [metadataError, setMetadataError] = useState("");
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
   const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存KB错误信息
@@ -139,7 +146,24 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         setModelLoading(false);
       }
     };
+    const fetchRerankerModelConfigs = async () => {
+      try {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const [rerankerRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/rerankers`),
+        ]);
+
+        const rerankerData = (await rerankerRes.json())?.data.items || [];
+        console.log("rerankerData", rerankerData);
+        setRerankerModels([...rerankerData]);
+      } catch (err: any) {
+        setModelError(err || "加载失败");
+      } finally {
+        setModelLoading(false);
+      }
+    };
     fetchModelConfigs();
+    fetchRerankerModelConfigs();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -546,13 +570,14 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                                   <SelectItem value="none">
                                     NO RERANK
                                   </SelectItem>
-                                  <SelectItem value="BAAI/bge-reranker-base">
-                                    BAAI/bge-reranker-base
-                                  </SelectItem>
-                                  <SelectItem value="BAAI/bge-reranker-large">
-                                    BAAI/bge-reranker-large
-                                  </SelectItem>
-                                  <SelectItem value="qwen3">qwen3</SelectItem>
+                                  {rerankermodels.map((model) => (
+                                    <SelectItem
+                                      key={model.id}
+                                      value={model.model_name}
+                                    >
+                                      {model.model_name}
+                                    </SelectItem>
+                                  ))}
                                 </SelectGroup>
                               </SelectContent>
                             </Select>

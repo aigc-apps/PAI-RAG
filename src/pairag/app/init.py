@@ -25,12 +25,15 @@ async def init_dependencies(init_mcp_tools=False):
 
     from pairag.mcp.providers.llm_provider import llm_provider
     from pairag.mcp.providers.embedding_provider import embedding_provider
+    from pairag.mcp.providers.reranker_provider import reranker_provider
     from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 
     await llm_provider.refresh()
     logger.info("Initialized llm models.")
     await embedding_provider.refresh()
     logger.info("Initialized embedding models.")
+    await reranker_provider.refresh()
+    logger.info("Initialized reranker models.")
     await knowledgebase_provider.refresh()
     logger.info("Initialized knowledgebases.")
 

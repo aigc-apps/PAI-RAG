@@ -1,4 +1,4 @@
-// LLMModelDialog.tsx
+// RerankerModelDialog.tsx
 import { useState, useEffect, FC } from "react";
 import {
   Dialog,
@@ -11,74 +11,69 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
 
 // 定义组件 props
-interface LLMModelDialogProps {
+interface RerankerModelDialogProps {
   isAdd: boolean;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  llmConfig: LlmConfig;
-  onSaveSuccess: (llm: LlmConfig) => void;
+  rerankerConfig: RerankerConfig;
+  onSaveSuccess: (reranker: RerankerConfig) => void;
 }
 
-// 模型数据类型
-interface LlmConfig {
+interface RerankerConfig {
   id: string;
   model_id: string;
-  source: string;
-  model: string;
+  model_name: string;
   api_key: string;
   base_url: string;
-  max_context: number;
-  enabled: boolean;
-  vision_support: boolean;
 }
 
-export const LLMModelDialog: FC<LLMModelDialogProps> = ({
+export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
   isAdd,
   isOpen,
   setIsOpen,
-  llmConfig,
+  rerankerConfig,
   onSaveSuccess,
 }) => {
-  const [llm, setLlm] = useState<LlmConfig>(llmConfig);
+  const [reranker, setReranker] = useState<RerankerConfig>(rerankerConfig);
   const [error, setError] = useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存错误信息
 
   useEffect(() => {
-    setLlm(llmConfig);
-  }, [isAdd, llmConfig]);
+    setReranker(rerankerConfig);
+  }, [isAdd, rerankerConfig]);
 
   useEffect(() => {
     setSaveErrorMsg("");
-  }, [llm]);
+  }, [reranker]);
 
   const handleSubmit = async () => {
     setSaveErrorMsg("");
+    console.log("reranker", reranker);
     if (
-      !llm.model ||
-      (isAdd && !llm.api_key) ||
-      !llm.base_url ||
-      !llm.model_id
+      !reranker.model_id ||
+      (isAdd && !reranker.api_key) ||
+      !reranker.model_name ||
+      !reranker.base_url
     ) {
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
     }
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const submit_url = isAdd
-      ? `http://localhost:${port}/v1/config/llms`
-      : `http://localhost:${port}/v1/config/llms/${llm.id}`;
+      ? `http://localhost:${port}/v1/config/rerankers`
+      : `http://localhost:${port}/v1/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
-    if (llm.api_key === "******") llm.api_key = "";
-    console.log("updateMethod", isAdd, updateMethod, submit_url, llm);
+    if (reranker.api_key === "******") reranker.api_key = "";
+    console.log("updateMethod", isAdd, updateMethod, submit_url, reranker);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(llm),
+        body: JSON.stringify(reranker),
       });
 
       if (!res.ok) {
@@ -86,7 +81,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         return;
       }
       const jsondata = await res.json();
-      onSaveSuccess(jsondata.data as LlmConfig); // 触发回调
+      onSaveSuccess(jsondata.data as RerankerConfig); // 触发回调
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
@@ -121,9 +116,26 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
             <Input
               id="model_id"
               placeholder="model_id"
-              value={llm?.model_id ?? ""}
+              value={reranker?.model_id ?? ""}
               onChange={(e) =>
-                setLlm((prev) => ({ ...prev, model_id: e.target.value }))
+                setReranker((prev) => ({ ...prev, model_id: e.target.value }))
+              }
+              className="col-span-3"
+            />
+          </div>
+        </div>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="model_name" className="text-right">
+              模型名称
+              <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="model_name"
+              placeholder="model_name"
+              value={reranker?.model_name ?? ""}
+              onChange={(e) =>
+                setReranker((prev) => ({ ...prev, model_name: e.target.value }))
               }
               className="col-span-3"
             />
@@ -132,7 +144,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         <div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="base_url" className="text-right">
-              Endpoint URL
+              Base URL
               <span className="text-destructive">*</span>
             </Label>
             <div className="col-span-3">
@@ -140,19 +152,12 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="base_url"
                 list="base_url_options"
                 placeholder="输入或选择模型base_url"
-                value={llm?.base_url ?? ""}
+                value={reranker?.base_url ?? ""}
                 onChange={(e) =>
-                  setLlm((prev) => ({ ...prev, base_url: e.target.value }))
+                  setReranker((prev) => ({ ...prev, base_url: e.target.value }))
                 }
                 className="w-full border border-gray-300 rounded-md p-2 text-sm"
               />
-              <datalist id="base_url_options">
-                <option value="https://api.openai.com/v1">OpenAI</option>
-                <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                  通义千问
-                </option>
-                {/* 添加更多预设选项 */}
-              </datalist>
             </div>
           </div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
@@ -165,9 +170,9 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={llm?.api_key ?? ""}
+                value={reranker?.api_key ?? ""}
                 onChange={(e) =>
-                  setLlm((prev) => ({ ...prev, api_key: e.target.value }))
+                  setReranker((prev) => ({ ...prev, api_key: e.target.value }))
                 }
                 className="col-span-3"
               />
@@ -176,44 +181,13 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={llm?.api_key || "******"}
+                value={reranker?.api_key || "******"}
                 onChange={(e) =>
-                  setLlm((prev) => ({ ...prev, api_key: e.target.value }))
+                  setReranker((prev) => ({ ...prev, api_key: e.target.value }))
                 }
                 className="col-span-3"
               />
             )}
-          </div>
-        </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="model" className="text-right">
-              模型名称
-              <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="model"
-              placeholder="model"
-              value={llm?.model ?? ""}
-              onChange={(e) =>
-                setLlm((prev) => ({ ...prev, model: e.target.value }))
-              }
-              className="col-span-3"
-            />
-          </div>
-        </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="vision_support" className="text-right">
-              多模态模型
-            </Label>
-            <Switch
-              id="vision_support"
-              checked={llm?.vision_support ?? false}
-              onCheckedChange={(checked) =>
-                setLlm((prev) => ({ ...prev, vision_support: checked }))
-              }
-            />
           </div>
         </div>
 

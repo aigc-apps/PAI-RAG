@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TrashIcon, Edit } from "lucide-react";
+import { TrashIcon, Edit, AlertCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { LLMModelDialog } from "@/app/config/model/llm/modelDialog";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface LlmConfig {
   id: string;
@@ -43,6 +44,7 @@ export default function LlmConfigPage() {
   const [llmconfigs, setLlmConfigs] = useState<LlmConfig[]>([]); // 存储 LLM 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
+  const [errorMsg, setErrorMsg] = useState(""); // 删除或更新时的错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -92,6 +94,7 @@ export default function LlmConfigPage() {
   };
 
   const handleActivateToggle = async (llm: LlmConfig) => {
+    setErrorMsg("");
     llm.enabled = !llm.enabled;
     const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
     const url = `http://localhost:${port}/v1/config/llms/${llm.id}`;
@@ -102,13 +105,17 @@ export default function LlmConfigPage() {
       body: JSON.stringify(llm), // 包装为数组
     });
 
-    if (!res.ok) throw new Error(`修改 ${llm.id} 配置失败`);
+    if (!res.ok) {
+      setErrorMsg("修改状态失败");
+      return;
+    }
     setLlmConfigs((prev) =>
       prev.map((c) => (c.id === llm.id ? { ...c, enabled: llm.enabled } : c)),
     );
   };
 
   const removeModel = async (id: string, model_type: string) => {
+    setErrorMsg("");
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -123,14 +130,17 @@ export default function LlmConfigPage() {
       );
 
       if (!res.ok) {
-        throw new Error(`${model_type}删除失败，请检查网络或配置`);
+        setErrorMsg(`${model_type}删除失败，请检查网络或配置`);
+        return;
       }
 
       // 删除成功后更新本地状态
       if (model_type === "llms") {
         setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
       }
-    } catch (err: any) {}
+    } catch (err: any) {
+      setErrorMsg("删除失败，请检查网络或配置");
+    }
   };
 
   return (
@@ -202,8 +212,10 @@ export default function LlmConfigPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <p>{llm.model_id}</p>
-                  <p className="text-muted-foreground py-4">{llm.base_url}</p>
+                  <p className="truncate">{llm.model_id}</p>
+                  <p className="truncate text-muted-foreground py-4">
+                    {llm.base_url}
+                  </p>
                 </CardContent>
                 <CardFooter className="mt-auto pt-0 flex justify-end">
                   <Button
@@ -243,6 +255,16 @@ export default function LlmConfigPage() {
           </h3>
         </div>
       )}
+      <div className="block w-full">
+        {errorMsg !== "" && (
+          <Alert variant="destructive">
+            <AlertCircleIcon />
+            <AlertDescription>
+              <p>{errorMsg}</p>
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
     </div>
   );
 }

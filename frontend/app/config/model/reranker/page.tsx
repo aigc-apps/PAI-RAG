@@ -11,34 +11,29 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { EmbeddingModelDialog } from "@/app/config/model/embedding/modelDialog";
+import { RerankerModelDialog } from "@/app/config/model/reranker/modelDialog";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface EmbConfig {
+interface RerankerConfig {
   id: string;
   model_id: string;
   model_name: string;
-  type: string;
   api_key: string;
-  endpoint: string;
-  dimension: number;
-  embed_batch_size: number;
+  base_url: string;
 }
 
-const newembconfig: EmbConfig = {
+const newrerankerconfig: RerankerConfig = {
   id: "",
   model_id: "",
   model_name: "",
-  type: "",
   api_key: "",
-  endpoint: "",
-  dimension: 0,
-  embed_batch_size: 0,
+  base_url: "",
 };
-export default function EmbConfigPage() {
-  const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig); // 存储 Embedding 配置
-  const [embconfigs, setEmbConfigs] = useState<EmbConfig[]>([]); // 存储 Embedding 配置
+export default function RerankerConfigPage() {
+  const [editRerankerConfig, setEditRerankerConfig] =
+    useState<RerankerConfig>(newrerankerconfig); // 存储 Reranker 配置
+  const [rerankerconfigs, setRerankerConfigs] = useState<RerankerConfig[]>([]); // 存储 Reranker 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
   const [errorMsg, setErrorMsg] = useState(""); // 删除时的错误信息
@@ -55,12 +50,12 @@ export default function EmbConfigPage() {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
-          `http://localhost:${port}/v1/config/embeddings?page=${page}&size=${modelSizePerPage}`,
+          `http://localhost:${port}/v1/config/rerankers?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取Embedding模型列表失败");
+        if (!res.ok) throw new Error("获取Reranker模型列表失败");
         const json_data = await res.json();
         const data = json_data.data.items;
-        setEmbConfigs(data); // 合并
+        setRerankerConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
         setModelError(err || "加载失败");
@@ -69,20 +64,20 @@ export default function EmbConfigPage() {
       }
     };
     fetchModelConfigs();
-  }, [page, embconfigs.length]);
+  }, [page, rerankerconfigs.length]);
 
-  const handleCreateSuccess = (llmConfig: EmbConfig) => {
-    setEmbConfigs((prev) => [...prev, llmConfig]); // 追加新 Embedding 配置
-    console.log("创建Embedding成功", llmConfig);
-    setEditEmbConfig(newembconfig);
+  const handleCreateSuccess = (llmConfig: RerankerConfig) => {
+    setRerankerConfigs((prev) => [...prev, llmConfig]); // 追加新 Reranker 配置
+    console.log("创建Reranker成功", llmConfig);
+    setEditRerankerConfig(newrerankerconfig);
   };
 
-  const handleSaveSuccess = (llmConfig: EmbConfig) => {
-    setEmbConfigs((prev) =>
+  const handleSaveSuccess = (llmConfig: RerankerConfig) => {
+    setRerankerConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log("编辑Embedding成功", llmConfig);
-    setEditEmbConfig(newembconfig);
+    console.log("编辑Reranker成功", llmConfig);
+    setEditRerankerConfig(newrerankerconfig);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -111,8 +106,8 @@ export default function EmbConfigPage() {
       }
 
       // 删除成功后更新本地状态
-      if (model_type === "embeddings") {
-        setEmbConfigs((prev) => prev.filter((config) => config.id !== id));
+      if (model_type === "rerankers") {
+        setRerankerConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
       setErrorMsg("删除失败，请检查网络或配置");
@@ -125,64 +120,58 @@ export default function EmbConfigPage() {
         <Button
           onClick={() => {
             setIsCreateOpen(true);
-            setEditEmbConfig(newembconfig);
+            setEditRerankerConfig(newrerankerconfig);
           }}
         >
-          添加Embedding模型
+          添加Reranker模型
         </Button>
-        <EmbeddingModelDialog
+        <RerankerModelDialog
           isAdd={isCreateOpen ? true : false}
           isOpen={isEditOpen || isCreateOpen}
           setIsOpen={(open: boolean) => {
             if (!open) {
-              setEditEmbConfig(newembconfig); // 关闭时清空编辑数据
+              setEditRerankerConfig(newrerankerconfig); // 关闭时清空编辑数据
             }
             setIsEditOpen(open);
             setIsCreateOpen(open);
           }}
-          embConfig={editEmbConfig || newembconfig}
-          onSaveSuccess={(emb: EmbConfig) => {
+          rerankerConfig={editRerankerConfig || newrerankerconfig}
+          onSaveSuccess={(reranker: RerankerConfig) => {
             if (isCreateOpen) {
-              handleCreateSuccess(emb);
+              handleCreateSuccess(reranker);
             } else {
-              handleSaveSuccess(emb);
+              handleSaveSuccess(reranker);
             }
           }}
         />
       </div>
-      {embconfigs.length > 0 ? (
+      {rerankerconfigs.length > 0 ? (
         <div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {embconfigs.map((emb) => (
+            {rerankerconfigs.map((reranker) => (
               <Card
-                key={emb.id}
+                key={reranker.id}
                 className="flex flex-col border rounded-lg shadow-sm h-full"
               >
                 <CardHeader>
                   <CardTitle className="text-sm font-medium">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <Badge className="bg-blue-100 text-blue-800">
-                        {emb.type}
-                      </Badge>
                       <Badge className="bg-red-100 text-red-800">
-                        {emb.model_name}
-                      </Badge>
-                      <Badge className="bg-green-100 text-green-800">
-                        {String(emb.dimension)}
+                        {reranker.model_name}
                       </Badge>
                     </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <p className="truncate">{emb.model_id}</p>
+                  <p className="truncate">{reranker.model_id}</p>
                   <p className="truncate text-muted-foreground py-4">
-                    {emb.endpoint}
+                    {reranker.base_url}
                   </p>
                 </CardContent>
                 <CardFooter className="mt-auto pt-0 flex justify-end">
                   <Button
                     variant="link"
-                    onClick={() => removeModel(emb.id, "embeddings")}
+                    onClick={() => removeModel(reranker.id, "rerankers")}
                     className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
                   >
                     <TrashIcon className="ml-1" size={16} />
@@ -192,7 +181,7 @@ export default function EmbConfigPage() {
                     variant="link"
                     className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
                     onClick={() => {
-                      setEditEmbConfig(emb);
+                      setEditRerankerConfig(reranker);
                       setIsEditOpen(true);
                     }}
                   >
