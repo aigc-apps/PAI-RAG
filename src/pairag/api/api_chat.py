@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
 from openai.types.create_embedding_response import CreateEmbeddingResponse
+from sse_starlette import EventSourceResponse
 from pairag.chat.models import ChatCompletionRequest, EmbeddingInput
 from pairag.core.chat_service import chat_service
 
@@ -34,7 +34,7 @@ async def chat_completions(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_chat(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )
@@ -57,7 +57,7 @@ async def chat_knowledgebase(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_knowledgebase_atomic(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )
@@ -70,7 +70,7 @@ async def chat_web(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_web_atomic(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )
@@ -83,7 +83,7 @@ async def chat_llm(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_llm_atomic(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )
@@ -96,7 +96,7 @@ async def chat_news_agent(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_news_agent_atomic(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )

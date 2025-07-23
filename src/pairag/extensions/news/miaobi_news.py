@@ -26,7 +26,8 @@ from llama_index.core.instrumentation.events.query import QueryEndEvent
 from llama_index.core.instrumentation.span import active_span_id
 
 from llama_index.core.llms.llm import LLM
-from llama_index.core.llms.callbacks import llm_chat_callback, llm_completion_callback
+from llama_index.core.llms.callbacks import llm_completion_callback
+from pairag.integrations.llms.openai.callback import llm_chat_callback
 
 from alibabacloud_aimiaobi20230801.client import Client as AimiaobiClient
 from alibabacloud_tea_openapi.models import Config

@@ -6,6 +6,7 @@ from pairag.integrations.query_transform.intent_models import (
     ChatToolType,
     IntentResult,
 )
+from pairag.utils.constants import try_get_int_env
 from pairag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
@@ -22,8 +23,11 @@ from openai.types.completion_usage import CompletionUsage
 from pairag.utils.time_utils import get_prompt_current_time_str
 
 
+DEFAULT_MAX_MESSAGE_LENGTH = try_get_int_env("DEFAULT_MAX_MESSAGE_LENGTH", 1200)
+
+
 def messages_to_history_str(
-    messages: Sequence[ChatMessage], max_length: int = 1000
+    messages: Sequence[ChatMessage], max_length: int = DEFAULT_MAX_MESSAGE_LENGTH
 ) -> str:
     """Convert messages to a history string."""
     string_messages = []

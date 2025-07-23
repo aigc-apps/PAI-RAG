@@ -76,9 +76,13 @@ def change_chat_page_model_list(model_id):
         data_analysis_model_id = rag_config.data_analysis.model_id
     else:
         data_analysis_model_id = model_choices[0]
+
+    rewrite_model_id = rag_config.query_rewrite.model_id
+    if not rewrite_model_id:
+        rewrite_model_id = new_model_id
     return [
         gr.update(choices=model_choices, value=new_model_id),
-        gr.update(choices=model_choices, value=new_model_id),
+        gr.update(choices=model_choices, value=rewrite_model_id),
         gr.update(choices=model_choices, value=data_analysis_model_id),
     ]
 

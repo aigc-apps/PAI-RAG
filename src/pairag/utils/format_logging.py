@@ -1,7 +1,10 @@
 import logging
 import sys
+import uuid
+from opentelemetry import trace
 from loguru import logger
-from asgi_correlation_id.context import correlation_id
+
+from pairag.chat.chat_context import get_context
 
 
 class InterceptHandler(logging.Handler):
@@ -26,26 +29,33 @@ class InterceptHandler(logging.Handler):
         ).log(level, record.getMessage())
 
 
+def get_current_trace_args() -> dict:
+    user_args = {}
+    current_span = trace.get_current_span()
+
+    if current_span is not None:
+        trace_number = current_span.get_span_context().trace_id
+        if trace_number > 0:
+            user_args["trace_id"] = uuid.UUID(int=trace_number).hex
+
+    context_args = get_context()
+    user_args.update(**context_args)
+    return user_args
+
+
 # 自定义日志格式，加入 request_id
 def formatter(record):
-    record["extra"]["request_id"] = correlation_id.get()
-    if record["extra"].get("request_id", None):
-        return (
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{process}</level> | "
-            "<level>{extra[request_id]} |</level> "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-            "- <level>{message}</level>\n"
-        )
-    else:
-        return (
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{process}</level> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-            "- <level>{message}</level>\n"
-        )
+    formatter_part_1 = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{process}</level> | "
+    )
+    formatter_part_2 = "<level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>\n"
+    user_args = get_current_trace_args()
+    trace_template_str = ""
+    for k, v in user_args.items():
+        if v:
+            record["extra"][k] = f"{k} {v}"
+            trace_template_str += f"<cyan>{{extra[{k}]}}</cyan> | "
+    return formatter_part_1 + trace_template_str + formatter_part_2
 
 
 def format_logging():

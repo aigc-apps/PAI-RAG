@@ -148,6 +148,7 @@ def update_llms(selected_model_id):
         else DEFAULT_CONTEXT_WINDOW,
         "max_tokens": llm_config.max_tokens if llm_config else DEFAULT_MAX_TOKENS,
         "vision_support": llm_config.vision_support if llm_config else False,
+        "temperature": llm_config.temperature if llm_config else 0.1,
         "is_reasoning_model": llm_config.is_reasoning_model if llm_config else False,
         "extra_body_str": llm_config.extra_body_str if llm_config else "{}",
     }
@@ -164,6 +165,7 @@ def update_llms(selected_model_id):
         gr.update(value=initial_values["max_tokens"]),
         gr.update(value=initial_values["vision_support"]),
         gr.update(value=initial_values["is_reasoning_model"]),
+        gr.update(value=initial_values["temperature"]),
         gr.update(value=initial_values["extra_body_str"]),
     ]
 
@@ -178,6 +180,7 @@ def save_new_llm(
     max_tokens,
     vision_support,
     is_reasoning_model,
+    temperature,
     extra_body_str,
 ):
     try:
@@ -224,6 +227,7 @@ def save_new_llm(
         existing_model.max_tokens = max_tokens
         existing_model.vision_support = vision_support
         existing_model.is_reasoning_model = is_reasoning_model
+        existing_model.temperature = temperature
         existing_model.extra_body_str = extra_body_str
         rag_config.llms[model_index] = existing_model
 
@@ -238,6 +242,7 @@ def save_new_llm(
             "max_tokens": max_tokens,
             "vision_support": vision_support,
             "is_reasoning_model": is_reasoning_model,
+            "temperature": temperature,
             "extra_body_str": extra_body_str,
         }
         new_llm = OpenAICompatibleLlmConfig(**new_llm_config)
@@ -246,7 +251,9 @@ def save_new_llm(
 
     update_dict = {}
     update_dict["llms"] = rag_config.llms
+    print(update_dict)
     rag_client.patch_config(update_dict)
+    gr.Success(f"Update llm {model_id} successfully.", duration=1)
 
     new_choices = [
         llm.model_id if llm.model_id else llm.model for llm in rag_config.llms
@@ -410,12 +417,8 @@ def save_config(input_elements: List[Any]):
             update_dict[element.elem_id] = value
         rag_client.patch_config(update_dict)
         return [
-            gr.update(
-                value=input_oss_ak_sk(value_ak), type="text" if value_ak else "password"
-            ),
-            gr.update(
-                value=input_oss_ak_sk(value_sk), type="text" if value_sk else "password"
-            ),
+            gr.update(value=value_ak),
+            gr.update(value=value_sk),
             gr.update(
                 value=f"[{datetime.datetime.now()}] OSS Snapshot configuration saved successfully!",
                 visible=True,
@@ -423,10 +426,6 @@ def save_config(input_elements: List[Any]):
         ]
     except RagApiError as api_error:
         raise gr.Error(f"HTTP {api_error.code} Error: {api_error.msg}")
-
-
-def input_oss_ak_sk(input):
-    return (input[:2] + "*" * (len(input) - 4) + input[-2:]) if input else input
 
 
 def save_pmt_cfg_func(input_elements: List[Any]):
@@ -463,6 +462,15 @@ def save_trace_cfg(input_elements: List[Any]):
     try:
         update_dict = {}
         for element, value in input_elements.items():
+            if element.elem_id == "trace_args_mapping_str":
+                try:
+                    mapping_str = value or "{}"
+                    _ = json.loads(mapping_str)
+                except json.JSONDecodeError:
+                    raise gr.Error(
+                        f"Invalid JSON format in trace_args_mapping_str '{mapping_str}'."
+                    )
+
             update_dict[element.elem_id] = value
         rag_client.patch_config(update_dict)
 

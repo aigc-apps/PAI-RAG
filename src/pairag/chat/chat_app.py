@@ -1,10 +1,10 @@
+from pairag.chat.chat_context import set_context
 from pairag.chat.chat_flow import ChatFlow
 from pairag.core.rag_config import RagConfig
 from pairag.integrations.query_transform.intent_models import IntentResult
 from pairag.knowledgebase.rag_knowledgebase import knowledgebase_manager
 from pairag.core.rag_module import (
     resolve_data_analysis_loader,
-    resolve_index_retriever_from_retrieval_settings,
     resolve_vector_index,
 )
 
@@ -37,21 +37,38 @@ class ChatApp:
     def __init__(self, config: RagConfig):
         self.config = config
         init_instrument(self.config.trace)
+        self.trace_key_maps = self.config.trace.user_args or {}
 
         _ = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
 
     def refresh(self, config: RagConfig):
         self.config = config
         init_instrument(self.config.trace)
+        self.trace_key_maps = self.config.trace.user_args or {}
 
     async def achat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
+        trace_args = chat_request.trace_args or {}
+        set_context(trace_args)
+
+        for trace_key, trace_value in trace_args.items():
+            telementry_key = self.trace_key_maps.get(trace_key)
+            if telementry_key:
+                trace_context.set_context_var(telementry_key, trace_value)
+
         return await chat_flow.achat(chat_request)
 
     async def astream_chat(self, chat_request: ChatCompletionRequest):
         chat_flow = ChatFlow(self.config)
         # set user attributes here
-        # trace_context.set_context_var(ARMS_FILED_NAME, per_request_user_value)
+        trace_args = chat_request.trace_args or {}
+        set_context(trace_args)
+
+        for trace_key, trace_value in trace_args.items():
+            telementry_key = self.trace_key_maps.get(trace_key)
+            if telementry_key:
+                trace_context.set_context_var(telementry_key, trace_value)
+
         return await chat_flow.astream_chat(chat_request)
 
     async def aknowledgebase_retrieval(

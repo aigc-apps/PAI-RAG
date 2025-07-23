@@ -76,6 +76,7 @@ async def watch_knowledgebase_changes():
     ):
         # change_type: 1 add, 2 modified, 3 delete.
         change_count = 0
+        logger.info(f"Start processing changes {changes}.")
         for change_type, file_path in changes:
             change_count += 1
             if change_count % 10 == 0:
@@ -86,27 +87,29 @@ async def watch_knowledgebase_changes():
                 knowledgebase, change_docs = knowledgebase_manager.get_change_files(
                     file_path, is_delete=is_delete
                 )
+                logger.info(f"Get changed docs {change_docs}.")
+
+                if knowledgebase and len(change_docs) > 0:
+                    file_changes = [
+                        FileChange(
+                            task_id=doc.doc_id,
+                            operation=change_type,
+                            file_name=doc.file_name,
+                            file_hash=doc.file_hash,
+                            knowledgebase=knowledgebase,
+                        )
+                        for doc in change_docs
+                    ]
+                    job_manager.submit_job(file_changes)
+                    logger.info(
+                        f"changes enqueued. {knowledgebase}, {file_changes}, {change_type}"
+                    )
+
             except Exception:
                 logger.error(
                     f"Error when watching knowledgebase changes: {file_path}. Details:{traceback.format_exc()}"
                 )
                 continue
-            if knowledgebase and len(change_docs) > 0:
-                file_changes = [
-                    FileChange(
-                        task_id=doc.doc_id,
-                        operation=change_type,
-                        file_name=doc.file_name,
-                        file_hash=doc.file_hash,
-                        knowledgebase=knowledgebase,
-                    )
-                    for doc in change_docs
-                ]
-                job_manager.submit_job(file_changes)
-                logger.info(
-                    f"changes enqueued. {knowledgebase}, {file_changes}, {change_type}"
-                )
-
         await asyncio.sleep(1)
 
 

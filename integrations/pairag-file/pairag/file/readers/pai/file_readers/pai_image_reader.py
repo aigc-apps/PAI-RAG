@@ -43,6 +43,9 @@ class PaiImageReader(BaseReader):
         image_url = self.image_store.upload_image(
             image_from_url(file_path), doc_name="image_docs"
         )
+        if image_url is None:
+            return []
+
         if extra_info is None:
             extra_info = {}
         extra_info["file_path"] = str(file_path)

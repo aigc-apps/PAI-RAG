@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import os
 from contextlib import contextmanager
+import traceback
 from typing import (
     Any,
     AsyncGenerator,
@@ -115,13 +116,22 @@ def pai_query_wrapper() -> Callable:
                                     yield x
 
                             otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                            otel_span.set_attribute("finish_reason", "stop")
                             # error response content, e.g., content_filer exception message
                             if full_content.startswith("Error code: "):
                                 otel_span.set_status(STATUS_ERROR)
                             else:
                                 otel_span.set_status(STATUS_OK)
+                        except asyncio.CancelledError:
+                            otel_span.set_attribute(OUTPUT_VALUE, full_content)
+                            otel_span.set_attribute("finish_reason", "cancel")
+                            otel_span.set_status(StatusCode.OK)
                         except BaseException:
+                            otel_span.set_attribute(OUTPUT_VALUE, full_content)
                             otel_span.set_status(STATUS_ERROR)
+                            otel_span.set_attribute(
+                                "finish_reason", f"error: {traceback.format_exc()}"
+                            )
                             raise
                         finally:
                             otel_span.end(end_time=end_time or time.time_ns())

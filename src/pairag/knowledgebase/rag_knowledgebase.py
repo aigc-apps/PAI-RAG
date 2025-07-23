@@ -386,13 +386,6 @@ class KnowledgeBaseManager:
                             doc_id=file_path_md5,
                             file_hash=file_content_md5,
                         )
-                        if index_name in self._doc_store_map:
-                            _doc_map = self._doc_store_map[index_name].doc_map
-                            if (
-                                file_path in _doc_map
-                                and _doc_map[file_path].file_hash == file_content_md5
-                            ):
-                                return index_name, []
                         return index_name, [doc]
                     else:
                         return index_name, []

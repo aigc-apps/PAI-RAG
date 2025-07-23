@@ -1,11 +1,9 @@
-from enum import Enum
-
 import asyncio
 import time
 import traceback
 from typing import Any, AsyncGenerator, List
+import uuid
 
-from openai import APIError
 from pairag.chat.models import ChatResponseWrapper
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -29,9 +27,11 @@ from loguru import logger
 from pairag.integrations.query_transform.intent_models import ChatIntentType
 from asgi_correlation_id import correlation_id
 
+DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
+
 
 def chat_id_generator() -> str:
-    return correlation_id.get()
+    return correlation_id.get() or uuid.uuid4().hex
 
 
 def parse_citations_from_source_nodes(
@@ -241,9 +241,7 @@ async def make_completion_chunk_response(
                         "citation_details"
                     ] = citation_details
                 if chat_response.delta:
-                    logger.info(
-                        f"[{chat_id}] Start get first token {time.time() - start_time}"
-                    )
+                    logger.info(f"Start get first token {time.time() - start_time}")
 
                 is_first_chunk = False
 
@@ -305,7 +303,10 @@ async def make_completion_chunk_response(
         )
         yield _make_json_chunk(data=last_chunk.model_dump(mode="json"))
         logger.info(f"Finished streaming: {full_content}")
-    except APIError as exception:
+    except asyncio.CancelledError:
+        logger.warning(f"Streaming cancelled: {full_content}")
+        raise
+    except Exception:
         logger.error(f"Streaming failed: {traceback.format_exc()}")
         chunk = ChatCompletionChunk(
             id=chat_id,
@@ -316,7 +317,7 @@ async def make_completion_chunk_response(
                     index=chunk_id,
                     delta=chat_completion_chunk.ChoiceDelta(
                         role=MessageRole.ASSISTANT.value,
-                        content=exception.message,
+                        content=DEFAULT_ERROR_RESPONSE,
                     ),
                     finish_reason="stop",
                 )
@@ -324,11 +325,8 @@ async def make_completion_chunk_response(
             object="chat.completion.chunk",
         )
         yield _make_json_chunk(data=chunk.model_dump(mode="json"))
-    except asyncio.CancelledError:
-        logger.warning(f"Streaming cancelled: {chat_id} {full_content}")
-    except Exception as exception:
-        logger.info(f"Streaming failed: {exception}")
-        raise exception
+
+        raise
 
 
 def response_from_text(text: str):
@@ -358,15 +356,3 @@ def response_gen_from_text(text: str):
         response=text_gen(),
         additional_kwargs={},
     )
-
-
-class SseVersion(int, Enum):
-    V0 = 0  # Backward compatibility
-    V1 = 1  # New V1 version
-
-
-def _event_chunk_wrapper(chunk_content, sse_version: SseVersion = SseVersion.V1):
-    if sse_version == sse_version.V1:
-        return f"data: {chunk_content}\n\n"
-    else:
-        return f"{chunk_content}\n"

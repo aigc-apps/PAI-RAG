@@ -186,6 +186,7 @@ class ViewModel(BaseModel):
     telemetry_endpoint: str = None
     telemetry_token: str = None
     telemetry_enabled: bool = None
+    trace_args_mapping_str: str = None
 
     def update(self, update_paras: Dict[str, Any]):
         attr_set = set(dir(self))
@@ -327,6 +328,7 @@ class ViewModel(BaseModel):
         view_model.telemetry_endpoint = config.trace.endpoint
         view_model.telemetry_token = config.trace.token
         view_model.telemetry_enabled = config.trace.enabled
+        view_model.trace_args_mapping_str = json.dumps(config.trace.user_args)
 
         return view_model
 
@@ -464,6 +466,7 @@ class ViewModel(BaseModel):
         config["trace"]["endpoint"] = self.telemetry_endpoint
         config["trace"]["token"] = self.telemetry_token
         config["trace"]["enabled"] = self.telemetry_enabled
+        config["trace"]["user_args"] = json.loads(self.trace_args_mapping_str)
 
         return _transform_to_dict(config)
 
@@ -570,16 +573,12 @@ class ViewModel(BaseModel):
         settings["use_oss_col"] = {"visible": self.use_oss}
 
         settings["oss_ak"] = {
-            "value": (self.oss_ak[:2] + "*" * (len(self.oss_ak) - 4) + self.oss_ak[-2:])
-            if self.oss_ak
-            else self.oss_ak,
-            "type": "text" if self.oss_ak else "password",
+            "value": self.oss_ak if self.oss_ak else self.oss_ak,
+            "type": "text",
         }
         settings["oss_sk"] = {
-            "value": (self.oss_sk[:2] + "*" * (len(self.oss_sk) - 4) + self.oss_sk[-2:])
-            if self.oss_sk
-            else self.oss_sk,
-            "type": "text" if self.oss_sk else "password",
+            "value": self.oss_sk if self.oss_sk else self.oss_sk,
+            "type": "password",
         }
         settings["oss_endpoint"] = {"value": self.oss_endpoint}
         settings["oss_bucket"] = {"value": self.oss_bucket}
@@ -735,6 +734,9 @@ class ViewModel(BaseModel):
         settings["telemetry_endpoint"] = {"value": self.telemetry_endpoint}
         settings["telemetry_token"] = {"value": self.telemetry_token}
         settings["telemetry_enabled"] = {"value": self.telemetry_enabled}
+        settings["trace_args_mapping_str"] = {
+            "value": self.trace_args_mapping_str or "{}",
+        }
 
         settings["llm_model_name"] = {
             "value": self.llms[0].model if self.llms else "",
@@ -760,7 +762,11 @@ class ViewModel(BaseModel):
         settings["llm_reasoning_support"] = {
             "value": self.llms[0].is_reasoning_model if self.llms else "",
         }
+        settings["llm_model_temperature"] = {
+            "value": self.llms[0].temperature if self.llms else 0.1,
+        }
         settings["llm_extra_kwargs_str"] = {
             "value": self.llms[0].extra_body_str if self.llms else "",
         }
+
         return settings

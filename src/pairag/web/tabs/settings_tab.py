@@ -123,6 +123,17 @@ def create_setting_tab() -> Dict[str, Any]:
                                     container=True,  # 让复选框有背景容器
                                     scale=1,
                                 )
+                                llm_model_temperature = gr.Slider(
+                                    minimum=0,
+                                    maximum=2,
+                                    step=0.01,
+                                    value=rag_config.llms[0].temperature
+                                    if rag_config.llms
+                                    else 0.1,
+                                    elem_id="llm_model_temperature",
+                                    label="温度",
+                                )
+
                                 llm_extra_kwargs_str = gr.Code(
                                     label="LLM其他推理参数(extra_body字典)",
                                     elem_id="llm_extra_kwargs_str",
@@ -153,6 +164,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
+                            llm_model_temperature,
                             llm_extra_kwargs_str,
                         ],
                     )
@@ -169,6 +181,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
+                            llm_model_temperature,
                             llm_extra_kwargs_str,
                         ],
                         outputs=[llm_model, delete_btn],
@@ -190,6 +203,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             llm_model_max_tokens,
                             llm_vision_support,
                             llm_reasoning_support,
+                            llm_model_temperature,
                             llm_extra_kwargs_str,
                         ]
                     )
@@ -259,6 +273,7 @@ def create_setting_tab() -> Dict[str, Any]:
                             guardrail_ak = gr.Textbox(
                                 label="AccessKey ID",
                                 elem_id="guardrail_ak",
+                                type="password",
                             )
                             guardrail_sk = gr.Textbox(
                                 label="AccessKey Secret",
@@ -514,6 +529,14 @@ def create_setting_tab() -> Dict[str, Any]:
                 elem_id="telemetry_enabled",
                 container=False,
             )
+            trace_args_mapping_str = gr.Code(
+                label='Trace args 映射字典，格式为json字符串，如：{"uid": "gen_ai.user.id"}',
+                elem_id="trace_args_mapping_str",
+                value="{}",
+                interactive=True,
+                language="json",
+            )
+
             save_trace_btn = gr.Button(
                 value="保存OpenTelemetry信息",
                 elem_id="save_trace_btn",
@@ -526,6 +549,7 @@ def create_setting_tab() -> Dict[str, Any]:
                 telemetry_endpoint,
                 telemetry_token,
                 telemetry_enabled,
+                trace_args_mapping_str,
             ]
             save_trace_btn.click(
                 fn=ev_listeners.save_trace_cfg,

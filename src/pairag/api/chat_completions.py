@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from sse_starlette import EventSourceResponse
 from pairag.chat.models import ChatCompletionRequest
 from pairag.core.chat_service import chat_service
 
@@ -28,7 +28,7 @@ async def chat_completions(request: ChatCompletionRequest):
         return response
     else:
         response = await chat_service.astream_chat(request)
-        return StreamingResponse(
+        return EventSourceResponse(
             response,
             media_type="text/event-stream",
         )

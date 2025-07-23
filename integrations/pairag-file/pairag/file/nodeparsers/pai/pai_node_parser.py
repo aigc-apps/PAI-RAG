@@ -164,14 +164,14 @@ class PaiNodeParser(TransformComponent):
             if isinstance(doc_node, ImageDocument):
                 # 图片格式文档
                 # 图片仅有一张，直接使用doc_id作为node_id
-                node_id = doc_node.doc_id
+                node_id = f"img{doc_node.node_id}"
                 image_text = self._extract_image_info(doc_node.metadata["file_path"])
                 metadata = doc_node.metadata
                 metadata["image_url"] = doc_node.image_url
                 chunks.append(
                     TextNode(
                         id_=node_id,
-                        text=image_text,
+                        text=f"\n<图片>\n图片链接: {doc_node.image_url}\n图片描述: {image_text}\n</图片>\n",
                         metadata=metadata,
                         relationships={
                             NodeRelationship.SOURCE: RelatedNodeInfo(

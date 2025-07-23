@@ -49,6 +49,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     intent: Optional[IntentResult] = None  # 意图
+    trace_args: Optional[Dict] = None
 
     class Config:
         extra = "allow"  # allow extra fields

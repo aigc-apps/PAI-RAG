@@ -1,7 +1,7 @@
 import os
 from typing import Sequence, List, Union
 from urllib.parse import urljoin
-from llama_index.llms.openai_like import OpenAILike
+from pairag.integrations.llms.openai.openai_like import OpenAILike
 from pairag.integrations.llms.pai.llm_config import (
     OpenAICompatibleLlmConfig,
 )
