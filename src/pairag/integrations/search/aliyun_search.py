@@ -8,7 +8,6 @@ from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
 
 from pairag.integrations.search.bing_search import DEFAULT_SEARCH_COUNT
-from pairag.integrations.search.bs4_reader import ParallelBeautifulSoupWebReader
 from pairag.integrations.search.search_config import (
     DEFAULT_ALIYUN_SEARCH_ENDPOINT,
 )
@@ -39,7 +38,6 @@ class AliyunSearchTool(BaseRetriever):
         config.endpoint = endpoint
         self.Client = Client(config)
         self.time_range = time_range
-        self.html_reader = ParallelBeautifulSoupWebReader()
 
     async def _search_aliyun_single_page(self, query: str, page: int = 1):
         request = models.GenericSearchRequest(

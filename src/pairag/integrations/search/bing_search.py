@@ -75,7 +75,7 @@ class BingSearchTool(BaseRetriever):
 
             logger.info(f"Get {len(urls)} url links using Bing Search.")
 
-            docs = self.html_reader.load_data(urls, include_url_in_text=False)
+            docs = await self.html_reader.aload_urls(urls, include_url_in_text=False)
             for doc in docs:
                 if doc.text_resource.text is None or len(doc.text_resource.text) < len(
                     url2snippets[doc.metadata["URL"]]

@@ -23,6 +23,7 @@ import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
 import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
 import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
+import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -72,12 +73,16 @@ export const Assistant = () => {
   const extra_body = useMemo(() => {
     const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
     const mcp_servers = mcpOptions.map((opt) => opt.split(":")[1]);
+    const kbOptions = selectedOptions.filter((opt) => opt.startsWith("kb:"));
+    const kb_ids = kbOptions.map((opt) => opt.split(":")[1]);
+
     return {
       model: llmConfig.model_id,
       mcp_servers: mcp_servers,
       enable_search: selectedOptions.includes("search"),
       enable_thinking: selectedOptions.includes("thinking"),
       enable_mcp: mcp_servers.length > 0,
+      kb_ids: kb_ids,
     };
   }, [llmConfig.model_id, selectedOptions]);
 
@@ -91,6 +96,7 @@ export const Assistant = () => {
   const pathname = usePathname();
   console.log("pathname:", pathname);
   const [activeTab, setActiveTab] = useState(pathname);
+
   console.log("activeTab:", activeTab);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -147,7 +153,18 @@ export const Assistant = () => {
               />
             </div>
           )}
-          {activeTab === "/config/llm" && (
+          {activeTab.startsWith("/knowledgebase/chunks") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBaseFileChunksPage
+                knowledgebase_file_id={activeTab.split("/")[3]}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          )}
+          {activeTab === "/config/model" && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />

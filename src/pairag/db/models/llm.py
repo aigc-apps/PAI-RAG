@@ -9,6 +9,7 @@ class LlmModel(SQLModel):
     temperature: float = Field(default=0.1)
     model_id: str = Field(default=None, unique=True)
     enabled: bool = Field(default=True)
+    vision_support: bool = Field(default=False)
 
 
 class LlmModelCreate(LlmModel):
@@ -21,8 +22,8 @@ class LlmModelRead(LlmModel):
 
 
 # table entity
-class LlmModelEntity(LlmModel, table=True):
+class LlmModelEntity(LlmModelRead, table=True):
     __tablename__ = "pai_llm_model"
 
-    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)
     encrypted_api_key: str = Field(default=None)

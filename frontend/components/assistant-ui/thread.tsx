@@ -24,7 +24,7 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 // import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { ToolFallback } from "@/components/ui/custom-tool-fallback";
-import { Brain, Search, Wrench } from "lucide-react";
+import { Brain, Search, Wrench, LibraryBig } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { McpModal, McpEntry } from "@/app/config/mcp/mcpmodal";
 import {
@@ -32,6 +32,7 @@ import {
   ComposerAddAttachment,
 } from "@/components/assistant-ui/my_attachment";
 import { UserMessageAttachments } from "@/components/assistant-ui/my_attachment";
+import { KbModal, KbSelection } from "@/app/knowledgebase/kbmodal";
 
 export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
   onToggleChange,
@@ -42,6 +43,11 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpError, setMcpError] = useState<string | null>(null);
+
+  const [kbConfigs, setKbConfigs] = useState<KbSelection[]>([]);
+  const [isKbModalOpen, setIsKbModalOpen] = useState(false);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
 
   // 获取MCP配置
   useEffect(() => {
@@ -75,10 +81,60 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       } finally {
         setMcpLoading(false);
       }
+
+      try {
+        setKbLoading(true);
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const res = await fetch(
+          `http://localhost:${port}/v1/config/knowledgebases`,
+        );
+        if (!res.ok) throw new Error("获取知识库配置失败");
+        const json_res = await res.json();
+        console.log("Load kb.", json_res);
+
+        const configs = json_res.data.map(
+          (cfg: any) =>
+            new KbSelection(
+              cfg.id,
+              cfg.name,
+              cfg.description,
+              cfg.active ?? false,
+            ),
+        );
+        console.log("all kb configs: ", configs);
+        setKbConfigs(configs);
+      } catch (err: any) {
+        setKbError(err.message || "加载知识库失败");
+      } finally {
+        setKbLoading(false);
+      }
     };
 
     fetchConfigs();
   }, []);
+
+  const handleKbUpdate = (
+    updatedConfigs: KbSelection[],
+    newOptions: string[],
+  ) => {
+    console.log("handleKbUpdate", updatedConfigs, newOptions);
+    const hasActiveKb = updatedConfigs.some((cfg) => cfg.active);
+    const hasKb = newOptions.includes("kb");
+
+    let updatedOptions = [...newOptions];
+    if (hasActiveKb && hasKb) {
+      const activeKbs = updatedConfigs.filter((cfg) => cfg.active);
+
+      updatedOptions = [
+        ...updatedOptions.filter((opt) => !opt.startsWith("kb:")), // 移除旧的 kb:id
+        ...activeKbs.map((kb) => `kb:${kb.id}`), // 添加所有激活的 kb:id
+      ];
+    }
+    // 6. 更新本地状态
+    setActiveTools(updatedOptions);
+    // 7. 同步到父组件
+    onToggleChange?.(updatedOptions);
+  };
 
   const handleMcpAndToolUpdate = (
     updatedConfigs: McpEntry[],
@@ -133,6 +189,9 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
   const handleOpenMcpModal = () => {
     setIsModalOpen(true);
   };
+  const handleOpenKbModal = () => {
+    setIsKbModalOpen(true);
+  };
 
   return (
     <>
@@ -161,9 +220,12 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
             <ThreadScrollToBottom />
             <Composer
               onToggleChange={handleMcpAndToolUpdate}
+              onKbToggleChange={handleKbUpdate}
               value={activeTools}
               mcpConfigs={mcpConfigs}
               onOpenMcpModal={handleOpenMcpModal}
+              kbConfigs={kbConfigs}
+              onOpenKbModal={handleOpenKbModal}
             />{" "}
             {/* 传递回调 */}
           </div>
@@ -180,6 +242,18 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
         onClose={() => setIsModalOpen(false)}
         isLoading={mcpLoading}
         error={mcpError}
+      />
+      <KbModal
+        kbConfigs={kbConfigs}
+        isOpen={isKbModalOpen}
+        onSave={(updatedKbConfigs) => {
+          // 传入当前的 activeTools 作为 newOptions
+          handleKbUpdate(updatedKbConfigs, activeTools);
+          setIsKbModalOpen(false);
+        }}
+        onClose={() => setIsKbModalOpen(false)}
+        isLoading={kbLoading}
+        error={kbError}
       />
     </>
   );
@@ -241,16 +315,25 @@ const ThreadWelcomeSuggestions: FC = () => {
 
 interface ComposerProps {
   onToggleChange?: (updatedConfigs: McpEntry[], options: string[]) => void;
+  onKbToggleChange?: (
+    updatedKbConfigs: KbSelection[],
+    options: string[],
+  ) => void;
   value?: string[];
   mcpConfigs?: McpEntry[]; // 新增
   onOpenMcpModal?: () => void; // 新增
+  kbConfigs: KbSelection[];
+  onOpenKbModal: () => void;
 }
 
 const Composer: FC<ComposerProps> = ({
   onToggleChange,
+  onKbToggleChange,
   value,
   mcpConfigs = [], // 默认值
   onOpenMcpModal,
+  kbConfigs = [],
+  onOpenKbModal,
 }) => {
   const [prevMcpValue, setPrevMcpValue] = useState<string[]>(value || []);
   return (
@@ -306,6 +389,16 @@ const Composer: FC<ComposerProps> = ({
               }}
             >
               <Wrench /> MCP
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="kb"
+              aria-label="Toggle kb"
+              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              onClick={() => {
+                onOpenKbModal?.();
+              }}
+            >
+              <LibraryBig /> 知识库
             </ToggleGroupItem>
           </ToggleGroup>
         </div>

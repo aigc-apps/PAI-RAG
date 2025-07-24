@@ -1,5 +1,6 @@
 # init trace
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
@@ -22,6 +23,8 @@ from pairag.app.feature_flags import is_feature_enabled, FeatureFlags
 from loguru import logger
 
 format_logging()
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,6 +52,8 @@ async def lifespan(app: FastAPI):
         logger.info("Initialized websearch configs.")
         await thread_provider.refresh()
         logger.info("Initialized thread and message lists.")
+        from pairag.app.init import init_dependencies
+        await init_dependencies(init_mcp_tools=True)
 
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()

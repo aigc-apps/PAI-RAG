@@ -23,7 +23,9 @@ modelscope_id_map = {
 
 def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
     # 获取配置文件目录
-    current_dir_path = Path(__file__).parent
+    download_model_to_directory("PDF-Extract-Kit-1.0", model_dir=model_dir)
+
+    current_dir_path = Path(__file__).parent.parent.parent.parent
     source_path = os.path.join(current_dir_path, "magic-pdf.template.json")
 
     logger.info(f"Start to loading minerU config file from {source_path}.")
@@ -36,11 +38,13 @@ def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
     data["device-mode"] = infer_cuda_device()
 
     if "models-dir" in data:
-        data["models-dir"] = os.path.join(str(model_dir), "PDF-Extract-Kit-1.0/models")
+        data["models-dir"] = os.path.join(
+            str(model_dir), "Ceceliachenen/PDF-Extract-Kit-1.0/models"
+        )
     if "layoutreader-model-dir" in data:
         data["layoutreader-model-dir"] = os.path.join(
             str(model_dir),
-            "PDF-Extract-Kit-1.0/models/layoutreader",
+            "Ceceliachenen/PDF-Extract-Kit-1.0/models/layoutreader",
         )
 
     # 将修改后的内容写入destination_path

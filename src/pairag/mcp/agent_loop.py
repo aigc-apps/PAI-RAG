@@ -23,6 +23,7 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
     ChoiceDeltaToolCallFunction,
 )
+from pairag.mcp.tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from llama_index.core.llms import LLM
 from pairag.mcp.constants import MAX_CHAT_STEPS
 from pairag.memory.base_memory import BaseMemory
@@ -87,7 +88,19 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
         mcp_tools.extend(mcp_provider.get_mcp_tools(chat_request.mcp_servers))
         logger.info(f"[Model] mcp_tools: {mcp_tools}")
 
+    mcp_tools.extend(await aget_kb_tools(chat_request))
     return mcp_tools
+
+
+async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
+    kb_tools = []
+
+    kb_ids = chat_request.kb_ids or []
+    for kb_id in kb_ids:
+        kb_tools.append(await aget_knowledgebase_tool(kb_id))
+
+    logger.info(f"Resolved {len(kb_tools)} knowledgebase tools.")
+    return kb_tools
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -220,7 +233,8 @@ class AgentLoop:
 
         @use_current_span(trace.get_current_span())
         async def gen():
-            cur_step = 1
+            cur_step = 0
+            stop_flag = False
             if len(chat_request.attachments) > 0:
                 for attachment in chat_request.attachments:
                     file_reader = await aget_file_reader()
@@ -269,8 +283,8 @@ class AgentLoop:
                     )
 
             while cur_step <= max_steps:
-                logger.info(f"Running step {cur_step}/{max_steps}.")
                 cur_step += 1
+                logger.info(f"Running step {cur_step}/{max_steps}.")
                 try:
                     step_gen = astep_gen(
                         llm=llm,
@@ -279,10 +293,14 @@ class AgentLoop:
                         memory=memory,
                     )
                     async for chunk in step_gen:
+                        chunk.message.additional_kwargs["step"] = cur_step
                         yield chunk
                         if chunk.message.additional_kwargs.get("STOP_FLAG"):
-                            cur_step = max_steps + 1
+                            stop_flag = True
                             break
+                    if stop_flag:
+                        logger.info("Reached stop flag, ending agent loop.")
+                        break
 
                 except (ValueError, TypeError, KeyError):
                     # 情况1: 参数错误
@@ -306,7 +324,7 @@ class AgentLoop:
                             content=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
                         ),
                         delta=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
-                        additional_kwargs={"failed": True},
+                        additional_kwargs={"failed": True, "step": cur_step},
                     )
                     break
 

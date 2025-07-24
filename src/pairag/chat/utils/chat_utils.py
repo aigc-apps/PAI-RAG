@@ -327,8 +327,10 @@ async def make_completion_chunk_response(
         yield _make_json_chunk(data=chunk.model_dump(mode="json"))
     except asyncio.CancelledError:
         logger.warning(f"Streaming cancelled: {chat_id} {full_content}")
+    except GeneratorExit:
+        logger.warning(f"Streaming exited by generator exit:  {chat_id} {full_content} {traceback.format_exc()}")
     except Exception as exception:
-        logger.info(f"Streaming failed: {exception}")
+        logger.info(f"Streaming failed: {traceback.format_exc()}")
         raise exception
 
 

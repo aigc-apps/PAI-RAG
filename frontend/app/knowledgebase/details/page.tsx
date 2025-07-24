@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,55 +25,93 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Trash2Icon,
+  AlertCircleIcon,
+  SearchIcon,
+} from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { PlusIcon, FilterIcon } from "lucide-react";
+import * as Toast from "@radix-ui/react-toast";
+import { KbConfig, KbConfigCard, MetadataConfig } from "../kbconfig";
+import { formatFileSize, formatBeijingTime } from "../utils/utils";
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Slider } from "@/components/ui/slider";
-import { ScanSearch, TextSearch, SearchCode, PlusIcon } from "lucide-react";
-import * as Toast from "@radix-ui/react-toast";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DatetimeInput } from "../datetime";
 
 interface KnowledgeBaseFile {
   id: string;
-  name: string;
-  type: string;
-  size: string;
+  file_name: string;
+  file_size: string;
   status: string;
-  uploadedAt: string;
+  created_at: string;
+  update_at: string;
+  file_metadata: {
+    [key: string]: any;
+  };
 }
 
-interface KnowledgeBase {
-  id: string;
-  name: string;
-  description: string;
-  doc_num: number;
-  chunk_num: number;
-  chunk_config: {
-    parser_type: string; // 切片类型
-    separator: string; // 切片标识符
-    chunk_size: string; // 切片大小
-    chunk_overlap: string; // 切片重叠大小
+interface ImageInfo {
+  url: string;
+  desc: string;
+}
+
+interface SearchRecord {
+  content: string;
+  title: string;
+  score: number;
+  metadata: {
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    file_extension: string;
+    images: string[];
+    images_info: Array<ImageInfo>;
+    rerank: boolean;
   };
-  embedding_model: string; //向量模型名称
-  retrieval_config: {
-    retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
-    top_k: number; // Top-K 值
-    similarity_threshold: string; // 相似度分数阈值
-    rerank_model: string; // rerank模型名称
-    vector_weight?: string; // 向量检索权重（仅 hybrid 时使用）
-  };
-  files?: KnowledgeBaseFile[];
 }
 
 interface EmbeddingModel {
@@ -82,6 +120,13 @@ interface EmbeddingModel {
   model_name: string;
   type: string;
 }
+
+interface MetadataCondition {
+  name: string;
+  comparison_operator: string;
+  value: string | number;
+}
+
 export default function KnowledgeBaseDetailPage({
   knowledgebase_id,
   setActiveTab,
@@ -89,13 +134,26 @@ export default function KnowledgeBaseDetailPage({
   knowledgebase_id: string;
   setActiveTab: (tab: string) => void;
 }) {
-  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库列表
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [knowledgebase, setKnowledgeBase] = useState<KbConfig>(); // 知识库列表
+  const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
+  const [page, setPage] = useState(1);
+  const pageRef = useRef(page);
+  const [totalPages, setTotalPages] = useState(1);
+  const fileSizePerPage = 8;
+  const [kbquery, setKbQuery] = useState(""); //查询
+  const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
+  const [searching, setSearching] = useState(false);
+  const [logicalOperator, setLogicalOperator] = useState<string>("and");
+  const [metadataConditions, setMetadataConditions] = useState<
+    MetadataCondition[]
+  >([]);
+
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
-  const [editknowledgebase, setEditKnowledgeBase] = useState<KnowledgeBase>(); // 编辑的知识库
   const [toastState, setToastState] = useState({
     open: false,
     title: "",
@@ -103,27 +161,45 @@ export default function KnowledgeBaseDetailPage({
     variant: "default" as "default" | "destructive",
   });
   const [uploading, setUploading] = useState(false);
-  // 递归更新嵌套对象
-  const updateNestedObject = (
-    obj: Record<string, any>,
-    keys: string[],
-    val: any,
-  ): any => {
-    const [currentKey, ...rest] = keys;
-    const value = Array.isArray(val) ? val[0] : val;
-
-    if (rest.length === 0) {
-      return {
-        ...obj,
-        [currentKey]: value,
-      };
-    }
-
-    return {
-      ...obj,
-      [currentKey]: updateNestedObject(obj[currentKey], rest, value),
-    };
-  };
+  const [deleting, setDeleting] = useState(false);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
+    {},
+  );
+  const [metadataConfigs, setMetadataConfigs] = useState<MetadataConfig[]>([]);
+  const [metadataValueTypes, setMetadataValueTypes] = useState<{
+    [k: string]: any;
+  }>({});
+  const [metadataEditError, setMetadataEditError] = useState<string>("");
+  const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
+    [],
+  );
+  const default_comparator = [
+    "contains",
+    "not contains",
+    "start with",
+    "end with",
+    "is",
+    "is not",
+    "empty",
+    "not empty",
+    "=",
+    "≠",
+    ">",
+    "<",
+    "≥",
+    "≤",
+    "before",
+    "after",
+  ];
+  const default_metadata_keys = [
+    "file_name",
+    "file_path",
+    "file_size",
+    "file_extension",
+    "file_url",
+    "doc_id",
+  ];
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
@@ -133,7 +209,7 @@ export default function KnowledgeBaseDetailPage({
           fetch(`http://localhost:${port}/v1/config/embeddings`),
         ]);
 
-        const embData = (await embRes.json())?.data || [];
+        const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {
@@ -144,38 +220,111 @@ export default function KnowledgeBaseDetailPage({
     };
     fetchModelConfigs();
   }, []);
-  const handleEditInputChange = (
+
+  const handleQueryInputChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
       | React.ChangeEvent<HTMLTextAreaElement>,
   ) => {
     const { id, value } = e.target;
-    setEditKnowledgeBase((prev) => {
-      if (!prev) return prev;
-      const path = id.split(".");
-      return {
-        ...prev,
-        ...updateNestedObject(prev, path, value),
-      };
-    });
-    console.log("编辑输入变化:", id, value);
-    console.log("当前编辑的知识库状态:", editknowledgebase);
+    setKbQuery(value);
   };
 
-  const handleEditFieldChange =
-    (fieldPath: string) => (value: string | boolean | number[]) => {
-      setEditKnowledgeBase((prev) => {
-        if (!prev) return prev;
+  const handleSearchSubmit = async () => {
+    setSearching(true);
+    console.log("handleSearchSubmit");
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const search_result = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/retrieval`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: kbquery,
+          knowledgebase_id: knowledgebase_id,
+          metadata_condition: {
+            conditions: metadataConditions,
+            logical_operator: logicalOperator,
+          },
+        }),
+      },
+    );
+    if (!search_result.ok) throw new Error("搜索知识库失败");
 
-        const path = fieldPath.split(".");
-
-        return updateNestedObject(prev, path, value);
-      });
-      console.log("当前编辑的知识库状态:", editknowledgebase);
-    };
+    const search_json = await search_result.json();
+    console.log("搜索知识库结果:", search_json);
+    setSearchRecords(search_json.data.records);
+    setSearching(false);
+  };
 
   useEffect(() => {
-    const fetchConfigs = async () => {
+    pageRef.current = page;
+  }, [page]);
+
+  const fetchKbMetadata = async () => {
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+
+    const res = await fetch(
+      `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+    );
+    if (!res.ok) throw new Error("获取知识库元数据失败");
+    const metadata_json = await res.json();
+    const metadata_data = metadata_json.data as MetadataConfig[];
+    const valueTypes = Object.fromEntries(
+      metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
+    ) as { [key: string]: string };
+
+    console.log("知识库元数据: ", metadata_data, valueTypes);
+
+    setMetadataValueTypes({ ...valueTypes, "": "string" });
+    setMetadataConfigs(metadata_data);
+  };
+
+  const fetchKbFiles = useCallback(async () => {
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const url = `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+
+    try {
+      const files_res = await fetch(url);
+      if (!files_res.ok) throw new Error("获取知识库文件列表失败");
+
+      const file_json_data = await files_res.json();
+      console.log("获取知识库文件reponse:", file_json_data);
+      const data = file_json_data.data.items;
+      setKbFiles(data || []);
+      setTotalPages(file_json_data.data.pages);
+
+      const kb_files = data as KnowledgeBaseFile[];
+      const files_unfinished = kb_files.some(
+        (file) => file.status !== "succeeded" && file.status !== "failed",
+      );
+
+      if (files_unfinished) {
+        console.log("存在未完成的文件，继续检查状态。");
+        setTimeout(() => {
+          fetchKbFiles(); // 依赖 ref 获取最新 page
+        }, 3000);
+      } else {
+        console.log("文件已上传完成。");
+      }
+    } catch (err) {
+      console.error("获取知识库文件失败:", err);
+    }
+  }, [knowledgebase_id]);
+
+  useEffect(() => {
+    fetchKbFiles();
+  }, [fetchKbFiles, page]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
+  };
+
+  useEffect(() => {
+    const fetchKbConfigs = async () => {
       try {
         const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
         const res = await fetch(
@@ -185,77 +334,134 @@ export default function KnowledgeBaseDetailPage({
         const json_data = await res.json();
         const kb_data = json_data.data;
 
-        // TODO：获取每个知识库的文件列表
-        // // 并行获取每个知识库的文件列表
-        // const knowledgeBasesWithFiles = await Promise.all(
-        //   data.map(async (kb) => {
-        //     try {
-        //       // 模拟 API 请求：/v1/knowledgebases/${kb.id}/files
-        //       const files = await fetch(`http://localhost:${port}/v1/knowledgebases/${kb.id}/files`);
-        //       return { ...kb, files }; // 合并文件列表
-        //     } catch (err) {
-        //       console.error(`获取知识库 ${kb.id} 文件失败`, err);
-        //       return { ...kb, files: [] }; // 失败时返回空数组
-        //     }
-        //   })
-        // );
-
-        // const data = [
-        //     { id: '1', name: '产品文档库', description: '包含所有产品技术规格与使用指南' },
-        //     { id: '2', name: '技术白皮书', description: '深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计,深度解析核心算法与架构设计' },
-        //     { id: '3', name: '用户指南', description: '从入门到精通的全流程操作手册' },
-        //     { id: '4', name: 'API 文档', description: 'RESTful 接口规范与示例' }
-        // ]
-
         setKnowledgeBase(kb_data); // 更新状态
         console.log("知识库详情数据:", kb_data);
-        setEditKnowledgeBase(kb_data || undefined); // 设置编辑的知识库
       } catch (err: any) {
         setKnowledgeBasesError(err || "加载失败");
       } finally {
         setKnowledgeBasesLoading(false);
       }
     };
-    fetchConfigs();
+    fetchKbConfigs();
+    fetchKbMetadata();
   }, []);
 
   if (!knowledgebase) {
     return <div className="p-6">加载中...</div>;
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("更新知识库:", editknowledgebase);
+  const handleSaveSuccess = (kb: KbConfig) => {
+    setToastState({
+      open: true,
+      title: `知识库${knowledgebase_id} 配置已修改`,
+      description: "修改的模型配置已成功保存",
+      variant: "default",
+    });
+    console.log(`update ${knowledgebase_id}`);
+  };
+
+  const handleDeleteFile = async (file_id: string) => {
+    setDeleting(true);
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(
-        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}`,
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editknowledgebase), // 包装为数组
+          method: "DELETE",
         },
       );
-      if (!res.ok) throw new Error(`修改 ${knowledgebase_id} 配置失败`);
-      setToastState({
-        open: true,
-        title: `知识库${knowledgebase_id} 配置已修改`,
-        description: "修改的模型配置已成功保存",
-        variant: "default",
-      });
-      console.log(`update ${knowledgebase_id}`, editknowledgebase);
-    } catch (err: any) {
-      setToastState({
-        open: true,
-        title: "知识库配置修改失败",
-        description: err.message || "请检查网络或重试",
-        variant: "destructive",
-      });
+      if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
+      console.log("delete file result:", res.text());
+    } catch (error) {
+      console.error("删除失败:", error);
+    } finally {
+      setDeleting(false);
+      fetchKbFiles();
+    }
+  };
+
+  const selectMetadataKey = async (metadata_key: string) => {
+    setMetadataEditError("");
+    const emptyKeys = Object.keys(editingMetadata).filter(
+      (key) => editingMetadata[key] === "",
+    );
+    if (emptyKeys.length > 1) throw new Error(`有多于一个新建项。`);
+    else if (emptyKeys.length === 0) return;
+    else {
+      editingMetadata[metadata_key] = editingMetadata[""];
+      delete editingMetadata[""];
+      const updatedUsableKeys = availableMetadataKeys.filter(
+        (name) => name !== metadata_key,
+      );
+      setAvailableMetadataKeys(updatedUsableKeys);
+      console.log("selected keys for metadata: ", editingMetadata);
+      setEditingMetadata({ ...editingMetadata });
+    }
+  };
+
+  const handleOpenMetadata = async (file_id: string) => {
+    setMetadataEditError("");
+    setIsEditingMetadata(false);
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const file_res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+      );
+      if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
+      const file_json = await file_res.json();
+      setEditingMetadata(file_json.data.file_metadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in file_json.data.file_metadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+    } catch (err) {
+      console.error("获取文件失败:", err);
+    }
+  };
+
+  const handAddFileMetadata = () => {
+    if (availableMetadataKeys.length === 0) {
+      setMetadataEditError(
+        "没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。",
+      );
+      return;
+    }
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (!hasEmptyEntry) {
+      editingMetadata[""] = "";
+      setEditingMetadata({ ...editingMetadata });
+      setMetadataEditError("");
+    } else {
+      console.log("已经有一个待添加的项目了。");
+      setMetadataEditError("");
+    }
+  };
+
+  const handleDeleteMetadata = (name: string) => {
+    console.log("删除metadata:", name, editingMetadata);
+    if (name in editingMetadata) {
+      delete editingMetadata[name];
+      setEditingMetadata(editingMetadata);
+      const usable_metadata_keys = metadataConfigs
+        .map((metadata) => metadata.name)
+        .filter((name) => !(name in editingMetadata));
+      setAvailableMetadataKeys(usable_metadata_keys);
+      console.log("可用的metadata名称：", availableMetadataKeys);
+
+      setMetadataEditError("");
+      console.log("已删除metadata:", name, editingMetadata);
     }
   };
 
   const handleFileUpload = async (files: FileList | null) => {
-    if (!files) return;
+    console.log("##handleFileUpload", files);
+    if (!files) {
+      alert("文件列表为空！");
+      return;
+    }
     setUploading(true);
 
     // 文件校验 (Demo功能，后续调整优化)
@@ -280,25 +486,146 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      // 模拟知识库的文件上传
-      // const res = await fetch(
-      //   `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/upload`,
-      //   {
-      //     method: "POST",
-      //     body: formData,
-      //   },
-      // );
-      // const result = await response.json();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = {
-        status: "success",
-      };
-      console.log("上传成功:", result);
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      if (!res.ok) {
+        alert("上传失败");
+        return;
+      }
+      const upload_result = await res.json();
+      console.log("上传成功:", upload_result);
     } catch (error) {
       console.error("上传失败:", error);
     } finally {
       setUploading(false);
+      // 清空文件选择框
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // 清空 input 的值
+      }
+      setPage(1);
+      fetchKbFiles();
     }
+  };
+
+  const get_metadata_id = (name: string) => {
+    console.log("get id", metadataConfigs, name);
+    return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
+  };
+
+  const saveEditMetadata = async (file_id: string) => {
+    const hasEmptyEntry = Object.keys(editingMetadata).some(
+      (key) => editingMetadata[key] === "",
+    );
+    if (hasEmptyEntry) {
+      setMetadataEditError("无法保存空的元数据名称。");
+      return;
+    }
+
+    try {
+      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const metadata_enties = Object.keys(editingMetadata)
+        .filter((name) => !default_metadata_keys.includes(name))
+        .map((name) => ({
+          name: name,
+          metadata_id: get_metadata_id(name),
+          value: editingMetadata[name],
+        }));
+      const bodyData = {
+        entries: metadata_enties,
+      };
+      const res = await fetch(
+        `http://localhost:${port}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        {
+          method: "POST",
+          body: JSON.stringify(bodyData),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!res.ok) throw Error("保存metadata失败");
+      const file_result = (await res.json()).data as KnowledgeBaseFile;
+      let updated_kbfiles = kbfiles;
+      const target_file_index = updated_kbfiles.findIndex(
+        (file) => file.id === file_id,
+      );
+      updated_kbfiles[target_file_index] = file_result;
+      setKbFiles(updated_kbfiles);
+      console.log("更新文件成功：", updated_kbfiles);
+      setIsEditingMetadata(false);
+    } catch (error: any) {
+      console.log("保存metadata失败", error);
+    } finally {
+      setMetadataEditError("");
+    }
+  };
+
+  const addCondition = () => {
+    const newCondition = {
+      name: "",
+      comparison_operator: "",
+      value: "",
+    };
+    setMetadataConditions([...metadataConditions, newCondition]);
+  };
+
+  const deleteCondition = (i: number) => {
+    const newConditionArray = metadataConditions.filter((v, idx) => idx !== i);
+    setMetadataConditions(newConditionArray);
+  };
+
+  const setConditionName = (i: number, name: string) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        if (metadataValueTypes[name] === "datetime") {
+          return {
+            name: name,
+            value: new Date().getTime(),
+            comparison_operator: condition.comparison_operator,
+          };
+        }
+        return {
+          name: name,
+          value: condition.value,
+          comparison_operator: condition.comparison_operator,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
+  };
+
+  const setConditionValue = (i: number, value: string | number) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        return {
+          name: condition.name,
+          value: value,
+          comparison_operator: condition.comparison_operator,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
+  };
+
+  const setConditionOp = (i: number, op: string) => {
+    const newConditions = metadataConditions.map((condition, idx) => {
+      if (idx === i) {
+        return {
+          name: condition.name,
+          value: condition.value,
+          comparison_operator: op,
+        };
+      }
+      return condition;
+    });
+    setMetadataConditions(newConditions);
   };
 
   return (
@@ -347,9 +674,16 @@ export default function KnowledgeBaseDetailPage({
                 <CardTitle>知识库：{knowledgebase.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-muted-foreground mb-4">
+                    ID：{knowledgebase.id}
+                  </p>
                   <p className="text-muted-foreground mb-4">
                     描述：{knowledgebase.description}
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                    jsonl, jpg, jpeg, png{" "}
                   </p>
                   <Button
                     onClick={() =>
@@ -373,72 +707,346 @@ export default function KnowledgeBaseDetailPage({
                     id="file-upload"
                     type="file"
                     className="hidden"
+                    ref={fileInputRef}
                     onChange={(e) => handleFileUpload(e.target.files)}
                   />
                 </div>
 
-                {knowledgebase.files && knowledgebase.files.length > 0 ? (
+                {kbfiles && kbfiles.length > 0 ? (
                   <>
                     <h3 className="text-lg font-semibold mt-6 mb-3">
                       文件列表
                     </h3>
-                    <ScrollArea className="h-[400px] rounded-md border">
-                      <Table>
+                    <ScrollArea className="h-[480px] rounded-md border overflow-x-auto">
+                      <Table className="min-w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>文件名</TableHead>
-                            <TableHead>文件格式</TableHead>
                             <TableHead>文件大小</TableHead>
-                            <TableHead>状态</TableHead>
                             <TableHead>上传时间</TableHead>
+                            <TableHead>更新时间</TableHead>
+                            <TableHead>状态</TableHead>
                             <TableHead>操作</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {knowledgebase.files.map((file) => (
+                          {kbfiles.map((file) => (
                             <TableRow key={file.id}>
                               <TableCell>
                                 <Button
                                   variant="link"
                                   className="font-medium text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
-                                  {file.name}
+                                  {file.file_name}
                                 </Button>
                               </TableCell>
-                              <TableCell>{file.type}</TableCell>
-                              <TableCell>{file.size}</TableCell>
+                              <TableCell>
+                                {formatFileSize(Number(file.file_size))}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.created_at)}
+                              </TableCell>
+                              <TableCell>
+                                {formatBeijingTime(file.update_at)}
+                              </TableCell>
                               <TableCell>
                                 {file.status === "pending" ? (
                                   <div className="flex items-center text-yellow-500">
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                    等待解析
+                                  </div>
+                                ) : file.status === "parsing" ? (
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                     解析中
                                   </div>
-                                ) : file.status === "done" ? (
+                                ) : file.status === "persisting" ? (
+                                  <div className="flex items-center text-blue-500">
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                    索引中
+                                  </div>
+                                ) : file.status === "succeeded" ? (
                                   <div className="flex items-center text-green-500">
                                     <CheckCircle className="mr-1 h-4 w-4" />
-                                    解析完成
+                                    解析成功
+                                  </div>
+                                ) : file.status === "failed" ? (
+                                  <div className="flex items-center text-red-500">
+                                    <XCircle className="mr-1 h-4 w-4" />
+                                    解析失败
                                   </div>
                                 ) : (
                                   <span>{file.status}</span> // 兜底显示原始状态
                                 )}
                               </TableCell>
-                              <TableCell>{file.uploadedAt}</TableCell>
                               <TableCell>
                                 <PreviewButton
                                   kbId={knowledgebase_id}
                                   fileId={file.id}
                                 />
+                                <Sheet>
+                                  <SheetTrigger asChild>
+                                    <Button
+                                      variant="link"
+                                      className="text-sm text-blue-600"
+                                      onClick={() =>
+                                        handleOpenMetadata(file.id)
+                                      }
+                                    >
+                                      元数据
+                                    </Button>
+                                  </SheetTrigger>
+                                  <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
+                                    <SheetHeader>
+                                      {isEditingMetadata ? (
+                                        <SheetTitle>编辑元数据</SheetTitle>
+                                      ) : (
+                                        <SheetTitle>查看元数据</SheetTitle>
+                                      )}
+                                    </SheetHeader>
+                                    <div className="grid flex-1 auto-rows-min gap-2 px-4">
+                                      <div className="space-y-1 text-xs">
+                                        {isEditingMetadata ? (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                            <Button
+                                              variant="secondary"
+                                              className="w-16 h-5"
+                                              onClick={handAddFileMetadata}
+                                            >
+                                              <PlusIcon className="h-3 w-3" />
+                                              添加
+                                            </Button>
+                                          </Label>
+                                        ) : (
+                                          <Label htmlFor="sheet-custom-meta">
+                                            自定义
+                                          </Label>
+                                        )}
+                                        {Object.keys(editingMetadata).filter(
+                                          (key: string) =>
+                                            !default_metadata_keys.includes(
+                                              key,
+                                            ),
+                                        ).length === 0 && (
+                                          <p>
+                                            当前没有配置自定义元数据，点击编辑添加。
+                                          </p>
+                                        )}
+                                        {isEditingMetadata
+                                          ? Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  {key !== "" ? (
+                                                    <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                      {key}
+                                                    </div>
+                                                  ) : (
+                                                    <Select
+                                                      onValueChange={(value) =>
+                                                        selectMetadataKey(value)
+                                                      }
+                                                      defaultOpen={true}
+                                                    >
+                                                      <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
+                                                        <SelectValue placeholder="选择元数据名称" />
+                                                      </SelectTrigger>
+                                                      <SelectContent className="w-[88px] text-xs">
+                                                        <SelectGroup>
+                                                          {availableMetadataKeys.map(
+                                                            (m_key) => (
+                                                              <SelectItem
+                                                                key={m_key}
+                                                                value={m_key}
+                                                              >
+                                                                {m_key}
+                                                              </SelectItem>
+                                                            ),
+                                                          )}
+                                                        </SelectGroup>
+                                                      </SelectContent>
+                                                    </Select>
+                                                  )}
+                                                  <div className="flex space-x-2 max-w-xs shrink-0">
+                                                    {metadataValueTypes[key] !==
+                                                    "datetime" ? (
+                                                      <Input
+                                                        type={
+                                                          metadataValueTypes[
+                                                            key
+                                                          ]
+                                                        }
+                                                        className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
+                                                        value={
+                                                          editingMetadata[key]
+                                                        }
+                                                        onChange={(e) => {
+                                                          setEditingMetadata({
+                                                            ...editingMetadata,
+                                                            [key]:
+                                                              e.target.value,
+                                                          });
+                                                        }}
+                                                      />
+                                                    ) : (
+                                                      <DatetimeInput
+                                                        value={
+                                                          editingMetadata[key]
+                                                        }
+                                                        width="md"
+                                                        onValueChange={(
+                                                          value,
+                                                        ) => {
+                                                          setEditingMetadata({
+                                                            ...editingMetadata,
+                                                            [key]: value,
+                                                          });
+                                                        }}
+                                                      />
+                                                    )}
+                                                    <Button
+                                                      variant="outline"
+                                                      className="w-3 h-3"
+                                                      onClick={() =>
+                                                        handleDeleteMetadata(
+                                                          key,
+                                                        )
+                                                      }
+                                                    >
+                                                      <Trash2Icon className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              ))
+                                          : Object.keys(editingMetadata)
+                                              .filter(
+                                                (key: string) =>
+                                                  !default_metadata_keys.includes(
+                                                    key,
+                                                  ),
+                                              )
+                                              .map((key: string) => (
+                                                <div
+                                                  className="flex items-start space-x-2"
+                                                  key={key}
+                                                >
+                                                  <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                    {key}
+                                                  </div>
+                                                  <div className="max-w-xs shrink-0">
+                                                    <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                                      {editingMetadata[key]}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                      </div>
+                                      <div className="text-xs">
+                                        <Label htmlFor="sheet-custom-meta">
+                                          内置元数据
+                                        </Label>
+                                        {Object.keys(editingMetadata)
+                                          .filter((key) =>
+                                            default_metadata_keys.includes(key),
+                                          )
+                                          .map((key) => (
+                                            <div
+                                              className="flex items-start space-x-2"
+                                              key={key}
+                                            >
+                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                {key}
+                                              </div>
+                                              <div className="max-w-xs shrink-0">
+                                                <div className="system-xs-regular py-1 text-text-secondary truncate">
+                                                  {editingMetadata[key]}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                    <SheetFooter>
+                                      {metadataEditError !== "" && (
+                                        <Alert variant="destructive">
+                                          <AlertCircleIcon />
+                                          <AlertDescription>
+                                            <p>{metadataEditError}</p>
+                                          </AlertDescription>
+                                        </Alert>
+                                      )}
+                                      {isEditingMetadata ? (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            saveEditMetadata(file.id)
+                                          }
+                                        >
+                                          保存
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            setIsEditingMetadata(true)
+                                          }
+                                        >
+                                          编辑
+                                        </Button>
+                                      )}
+
+                                      <SheetClose asChild>
+                                        <Button
+                                          variant="outline"
+                                          onClick={() =>
+                                            setIsEditingMetadata(false)
+                                          }
+                                        >
+                                          Close
+                                        </Button>
+                                      </SheetClose>
+                                    </SheetFooter>
+                                  </SheetContent>
+                                </Sheet>
+
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
+                                  onClick={() =>
+                                    setActiveTab(
+                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                    )
+                                  }
                                 >
-                                  查看切片
+                                  查看切片列表
                                 </Button>
                                 <Button
                                   variant="link"
                                   className="text-sm text-blue-600"
+                                  onClick={() => handleDeleteFile(file.id)}
                                 >
-                                  删除
+                                  {deleting ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      删除中...
+                                    </>
+                                  ) : (
+                                    <>删除文件</>
+                                  )}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -451,533 +1059,258 @@ export default function KnowledgeBaseDetailPage({
                   <p className="text-muted-foreground">暂无文件</p>
                 )}
               </CardContent>
+              <CardFooter>
+                <PaginationComponent
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </CardFooter>
             </Card>
           </TabsContent>
           <TabsContent value="settings" className="py-4">
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>知识库配置编辑</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {/* 基础信息 */}
-                <div className="space-y-2 p-4 pt-0 border-b">
-                  <h3 className="font-semibold pb-2">基础信息</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">
-                      知识库名称 <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="name"
-                      value={editknowledgebase?.name}
-                      onChange={handleEditInputChange}
-                      placeholder="请输入知识库名称"
-                      required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      例如："产品文档库"、"技术白皮书"
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">描述</Label>
-                    <Textarea
-                      id="description"
-                      value={editknowledgebase?.description}
-                      onChange={handleEditInputChange}
-                      placeholder="描述知识库内容（可选）"
-                      rows={3}
-                    />
-                  </div>
+            <KbConfigCard
+              isCreate={false}
+              kbConfig={knowledgebase}
+              metadataConfigs={metadataConfigs}
+              onSaveSuccess={handleSaveSuccess}
+              onCancel={() => {}}
+            ></KbConfigCard>
+          </TabsContent>
+          <TabsContent value="retrieval_test" className="py-4">
+            <div className="space-y-4">
+              {/* 搜索框和按钮 */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                <div className="flex-1 min-w-[200px] max-w-[640px]">
+                  <Input
+                    type="text"
+                    id="search_query"
+                    placeholder="请输入查询内容"
+                    onChange={handleQueryInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearchSubmit();
+                      }
+                    }}
+                    className="w-full"
+                  />
                 </div>
-
-                {/* 切片配置 */}
-                <div className="space-y-2 p-4 border-b">
-                  <h3 className="font-semibold pb-2">文档切片配置</h3>
-                  <div className="grid grid-cols-4 gap-8">
-                    <div className="space-y-2 col-span-1">
-                      <Label htmlFor="parserType">
-                        切片类型 (parser_type){" "}
-                        <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={
-                          editknowledgebase?.chunk_config.parser_type || "Token"
-                        }
-                        onValueChange={handleEditFieldChange(
-                          "chunk_config.parser_type",
-                        )}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="请选择切片类型" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="Token">Token</SelectItem>
-                            <SelectItem value="Sentence">Sentence</SelectItem>
-                            <SelectItem value="Paragraph">Paragraph</SelectItem>
-                            <SelectItem value="Semantic">Semantic</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-sm text-muted-foreground">
-                        推荐值：Sentence
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 col-span-1">
-                      <Label htmlFor="separator">
-                        切片标识符 (separator){" "}
-                        <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        type="text"
-                        id="chunk_config.separator"
-                        value={editknowledgebase?.chunk_config.separator}
-                        onChange={handleEditInputChange}
-                        required
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        推荐值：\n\n
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-8">
-                    <div className="space-y-2">
-                      <Label htmlFor="chunkSize">
-                        切片大小 (chunk_size){" "}
-                        <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        type="number"
-                        id="chunk_config.chunk_size"
-                        value={editknowledgebase?.chunk_config.chunk_size}
-                        onChange={handleEditInputChange}
-                        min="100"
-                        max="1000"
-                        required
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        推荐值：512
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="chunkOverlap">
-                        切片重叠大小 (chunk_overlap)
-                      </Label>
-                      <Input
-                        type="number"
-                        id="chunk_config.chunk_overlap"
-                        value={editknowledgebase?.chunk_config.chunk_overlap}
-                        onChange={handleEditInputChange}
-                        min="0"
-                        max="200"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        推荐值：50
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 索引及检索配置 */}
-                <div className="space-y-2 p-4 border-b">
-                  <h3 className="font-semibold pb-2">索引及检索设置</h3>
-                  <div className="grid grid-cols-6 space-y-2">
-                    <Label htmlFor="embeddingModel" className="col-span-1">
-                      向量模型 (embedding_model){" "}
-                      <span className="text-destructive">*</span>
-                    </Label>
-                    <div className="col-span-2">
-                      <Select
-                        value={
-                          editknowledgebase?.embedding_model || "BAAI/bge-m3"
-                        }
-                        onValueChange={handleEditFieldChange("embedding_model")}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="请选择向量类型" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {embeddingmodels.map((model) => (
-                              <SelectItem
-                                key={model.id}
-                                value={model.model_name}
-                              >
-                                {model.model_name}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-6 space-y-2">
-                    <Label className="col-span-1">检索设置</Label>
-                    <div className="col-span-3 ">
-                      <div className="space-y-2 pt-4 pb-2">
-                        <ToggleGroup
-                          type="single"
-                          value={
-                            editknowledgebase?.retrieval_config.retrieval_mode
-                          }
-                          onValueChange={handleEditFieldChange(
-                            "retrieval_config.retrieval_mode",
-                          )}
-                          variant="outline"
-                          className="flex gap-x-4 overflow-visible"
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline">
+                      <FilterIcon />
+                      元数据
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[450px]">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <RadioGroup
+                          value={logicalOperator}
+                          onValueChange={(value) => setLogicalOperator(value)}
                         >
-                          <ToggleGroupItem
-                            value="vector"
-                            aria-label="向量检索"
-                            className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                          >
-                            <ScanSearch />
-                            向量检索
-                          </ToggleGroupItem>
-                          <ToggleGroupItem
-                            value="fulltext"
-                            aria-label="全文检索"
-                            className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                          >
-                            <TextSearch />
-                            全文检索
-                          </ToggleGroupItem>
-                          <ToggleGroupItem
-                            value="hybrid"
-                            aria-label="混合检索"
-                            className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                          >
-                            <SearchCode />
-                            混合检索
-                          </ToggleGroupItem>
-                        </ToggleGroup>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-muted-foreground text-sm">
+                              逻辑操作符
+                            </p>
+
+                            <RadioGroupItem value="and" id="r1" />
+                            <Label htmlFor="r1">AND</Label>
+                            <RadioGroupItem value="or" id="r2" />
+                            <Label htmlFor="r2">OR</Label>
+                          </div>
+                        </RadioGroup>
                       </div>
-                      {/* 动态参数配置区域 */}
-                      <div className="space-y-4 pt-2">
-                        {editknowledgebase?.retrieval_config.retrieval_mode ===
-                          "vector" && (
-                          <div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="topk" className="col-span-1">
-                                Top-K 值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.top_k"
-                                value={
-                                  editknowledgebase?.retrieval_config.top_k
-                                }
-                                onChange={handleEditInputChange}
-                                min="1"
-                                max="100"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：5-20，最大支持100条结果
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="threshold" className="col-span-1">
-                                向量相似度分数阈值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.similarity_threshold"
-                                value={
-                                  editknowledgebase?.retrieval_config
-                                    .similarity_threshold
-                                }
-                                onChange={handleEditInputChange}
-                                step="0.05"
-                                min="0"
-                                max="1"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：0.8
-                              </p>
-                            </div>
-                            <Label
-                              htmlFor="embeddingModel"
-                              className="col-span-1"
+                      <div className="grid gap-2">
+                        <div className="space-y-2">
+                          {metadataConditions.map((condition, i) => (
+                            <div
+                              className="flex items-center space-x-2"
+                              key={i}
                             >
-                              重排序模型 (rerank_model){" "}
-                              <span className="text-destructive">*</span>
-                            </Label>
-                            <div className="col-span-2">
-                              <Select
-                                defaultValue={
-                                  editknowledgebase.retrieval_config
-                                    .rerank_model
-                                }
-                                onValueChange={handleEditFieldChange(
-                                  "retrieval_config.rerank_model",
-                                )}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="请选择重排序模型" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectGroup>
-                                    <SelectItem value="none">
-                                      NO RERANK
-                                    </SelectItem>
-                                    <SelectItem value="BAAI/bge-reranker-base">
-                                      BAAI/bge-reranker-base
-                                    </SelectItem>
-                                    <SelectItem value="BAAI/bge-reranker-large">
-                                      BAAI/bge-reranker-large
-                                    </SelectItem>
-                                    <SelectItem value="qwen3">qwen3</SelectItem>
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="col-span-1 text-sm text-muted-foreground">
-                              <p className="pt-2 pl-6">
-                                推荐值： BAAI/bge-reranker-base
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                        {editknowledgebase?.retrieval_config.retrieval_mode ===
-                          "fulltext" && (
-                          <div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="topk" className="col-span-1">
-                                Top-K 值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.top_k"
-                                value={
-                                  editknowledgebase?.retrieval_config.top_k
-                                }
-                                onChange={handleEditInputChange}
-                                min="1"
-                                max="100"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：5-20，最大支持100条结果
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="threshold" className="col-span-1">
-                                全文相似度分数阈值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.similarity_threshold"
-                                value={
-                                  editknowledgebase?.retrieval_config
-                                    .similarity_threshold
-                                }
-                                onChange={handleEditInputChange}
-                                step="0.05"
-                                min="0"
-                                max="1"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：0.8
-                              </p>
-                            </div>
-                            <div className="flex items-start gap-3 pt-2">
-                              <Label
-                                htmlFor="embeddingModel"
-                                className="col-span-1"
-                              >
-                                重排序模型 (rerank_model){" "}
-                                <span className="text-destructive">*</span>
-                              </Label>
-                              <div className="col-span-2">
+                              <div>
                                 <Select
-                                  defaultValue={
-                                    editknowledgebase.retrieval_config
-                                      .rerank_model
-                                  }
-                                  onValueChange={handleEditFieldChange(
-                                    "retrieval_config.rerank_model",
-                                  )}
+                                  value={condition.name}
+                                  onValueChange={(value) => {
+                                    setConditionName(i, value);
+                                  }}
                                 >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="请选择重排序模型" />
+                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                    <SelectValue placeholder="名称" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="text-xs">
                                     <SelectGroup>
-                                      <SelectItem value="none">
-                                        NO RERANK
-                                      </SelectItem>
-                                      <SelectItem value="BAAI/bge-reranker-base">
-                                        BAAI/bge-reranker-base
-                                      </SelectItem>
-                                      <SelectItem value="BAAI/bge-reranker-large">
-                                        BAAI/bge-reranker-large
-                                      </SelectItem>
-                                      <SelectItem value="qwen3">
-                                        qwen3
-                                      </SelectItem>
+                                      {metadataConfigs.map((metadata) => (
+                                        <SelectItem
+                                          key={metadata.name}
+                                          value={metadata.name}
+                                        >
+                                          {metadata.name}
+                                        </SelectItem>
+                                      ))}
                                     </SelectGroup>
                                   </SelectContent>
                                 </Select>
                               </div>
-
-                              <div className="col-span-1 text-sm text-muted-foreground">
-                                <p className="pt-2 pl-6">
-                                  推荐值： BAAI/bge-reranker-base
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {editknowledgebase?.retrieval_config.retrieval_mode ===
-                          "hybrid" && (
-                          <div className="space-y-6">
-                            <div className="grid grid-cols-5 gap-4 pt-2">
-                              <Label
-                                htmlFor="embeddingWeight"
-                                className="col-span-1"
-                              >
-                                向量检索权重
-                              </Label>
-                              <Slider
-                                id="retrieval_config.vector_weight"
-                                min={0}
-                                max={1}
-                                step={0.1}
-                                value={[
-                                  parseFloat(
-                                    String(
-                                      editknowledgebase?.retrieval_config
-                                        .vector_weight,
-                                    ),
-                                  ),
-                                ]}
-                                onValueChange={handleEditFieldChange(
-                                  "retrieval_config.vector_weight",
-                                )}
-                                className="col-span-2"
-                              />
-                              <span className="w-12 text-right text-sm font-medium col-span-1">
-                                {
-                                  editknowledgebase?.retrieval_config
-                                    .vector_weight
-                                }
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="topk" className="col-span-1">
-                                Top-K 值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.top_k"
-                                value={
-                                  editknowledgebase?.retrieval_config.top_k
-                                }
-                                onChange={handleEditInputChange}
-                                min="1"
-                                max="100"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：5-20，最大支持100条结果
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-5 space-y-4 ">
-                              <Label htmlFor="threshold" className="col-span-1">
-                                混合相似度分数阈值
-                              </Label>
-                              <Input
-                                type="number"
-                                id="retrieval_config.similarity_threshold"
-                                value={
-                                  editknowledgebase?.retrieval_config
-                                    .similarity_threshold
-                                }
-                                onChange={handleEditInputChange}
-                                step="0.05"
-                                min="0"
-                                max="1"
-                                required
-                                className="col-span-2 w-full"
-                              />
-                              <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                                推荐值：0.8
-                              </p>
-                            </div>
-                            <div className="flex items-start gap-3 pt-2">
-                              <Label
-                                htmlFor="embeddingModel"
-                                className="col-span-1"
-                              >
-                                重排序模型 (rerank_model){" "}
-                                <span className="text-destructive">*</span>
-                              </Label>
-                              <div className="col-span-2">
+                              <div>
                                 <Select
-                                  defaultValue={
-                                    editknowledgebase.retrieval_config
-                                      .rerank_model
-                                  }
-                                  onValueChange={handleEditFieldChange(
-                                    "retrieval_config.rerank_model",
-                                  )}
+                                  value={condition.comparison_operator}
+                                  onValueChange={(value) => {
+                                    setConditionOp(i, value);
+                                  }}
                                 >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="请选择重排序模型" />
+                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                    <SelectValue placeholder="规则" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="w-[80px] text-xs">
                                     <SelectGroup>
-                                      <SelectItem value="none">
-                                        NO RERANK
-                                      </SelectItem>
-                                      <SelectItem value="BAAI/bge-reranker-base">
-                                        BAAI/bge-reranker-base
-                                      </SelectItem>
-                                      <SelectItem value="BAAI/bge-reranker-large">
-                                        BAAI/bge-reranker-large
-                                      </SelectItem>
-                                      <SelectItem value="qwen3">
-                                        qwen3
-                                      </SelectItem>
+                                      {default_comparator.map((op) => (
+                                        <SelectItem key={op} value={op}>
+                                          {op}
+                                        </SelectItem>
+                                      ))}
                                     </SelectGroup>
                                   </SelectContent>
                                 </Select>
                               </div>
-
-                              <div className="col-span-1 text-sm text-muted-foreground">
-                                <p className="pt-2 pl-6">
-                                  推荐值： BAAI/bge-reranker-base
-                                </p>
+                              <div>
+                                {metadataValueTypes[condition.name] ===
+                                "datetime" ? (
+                                  <DatetimeInput
+                                    value={
+                                      typeof condition.value === "number"
+                                        ? condition.value
+                                        : parseFloat(condition.value)
+                                    }
+                                    width="sm"
+                                    onValueChange={(value) => {
+                                      setConditionValue(i, value);
+                                    }}
+                                  />
+                                ) : (
+                                  <Input
+                                    className="w-128px"
+                                    value={condition.value.toString()}
+                                    onChange={(e) =>
+                                      setConditionValue(i, e.target.value)
+                                    }
+                                  />
+                                )}
+                              </div>
+                              <div>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    deleteCondition(i);
+                                  }}
+                                  className="w-6"
+                                >
+                                  <Trash2Icon className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          ))}
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={addCondition}
+                          className="h-6 text-xs"
+                        >
+                          新增过滤规则
+                        </Button>
                       </div>
                     </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  type="button"
+                  onClick={handleSearchSubmit}
+                  className="whitespace-nowrap"
+                >
+                  <SearchIcon />
+                  开始查询
+                </Button>
+              </div>
+              {/* 搜索结果提示 */}
+              {searching && (
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[250px]" />
+                    <Skeleton className="h-4 w-[200px]" />
                   </div>
                 </div>
-              </CardContent>
-              <CardFooter className="flex justify-center space-x-6">
-                <Button
-                  type="submit"
-                  className="px-10 py-3 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
-                  onClick={handleSubmit}
-                >
-                  保存设置
-                </Button>
-              </CardFooter>
-            </Card>
+              )}
+              {!searching && searchrecords.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <h2>没有找到相关的切片</h2>
+                  <p className="mt-2 text-sm">尝试调整搜索条件</p>
+                </div>
+              )}
+              {!searching && (
+                <div className="gap-6 p-4 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {searchrecords.map((chunk, i) => (
+                      <Card key={i} className="flex flex-col max-h-80">
+                        <CardHeader>
+                          <CardTitle className="flex justify-start">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                                {i + 1}
+                              </Badge>
+                              <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                                分数: {chunk.score.toFixed(4)}
+                              </Badge>
+                              <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                                {chunk.title}
+                              </Badge>
+                              {chunk.metadata.rerank && (
+                                <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full">
+                                  Rerank
+                                </Badge>
+                              )}
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-grow overflow-y-auto">
+                          <ScrollArea className="h-full pr-4">
+                            <div className="text-gray-600 whitespace-pre-wrap">
+                              {chunk.content}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                        <CardFooter className="shrink-0 gap-2">
+                          {chunk.metadata?.images_info?.length > 0 && (
+                            <div className="flex gap-2 mt-4">
+                              {chunk.metadata.images_info.map((meta, index) => (
+                                <PhotoProvider
+                                  key={index}
+                                  maskOpacity={0.8}
+                                  overlayRender={({}) => {
+                                    return (
+                                      <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                        <div>图片描述：{meta.desc}</div>
+                                      </div>
+                                    );
+                                  }}
+                                >
+                                  <PhotoView key={index} src={meta.url}>
+                                    <img
+                                      src={meta.url}
+                                      className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                    />
+                                  </PhotoView>
+                                </PhotoProvider>
+                              ))}
+                            </div>
+                          )}
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
         <Toast.Root
