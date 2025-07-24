@@ -17,6 +17,7 @@ class EmbeddingModel(SQLModel):
     type: EmbeddingType = Field(default=EmbeddingType.LOCAL)
     embed_batch_size: int = Field(default=10)
     model_id: str = Field(default=None, unique=True)
+    is_ready: bool = Field(default=False) # 是否已经加载完成，用于本地模型下载
 
 
 class EmbeddingModelCreate(EmbeddingModel):

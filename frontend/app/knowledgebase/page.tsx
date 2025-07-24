@@ -33,9 +33,10 @@ export default function KnowledgeBase({
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
         const res = await fetch(
-          `http://localhost:${port}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
+          `${API_BASE}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
@@ -58,16 +59,14 @@ export default function KnowledgeBase({
   };
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(
-        `http://localhost:${port}/v1/config/knowledgebases/${kb_id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/config/knowledgebases/${kb_id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+      });
 
       if (!res.ok) {
         throw new Error("删除失败，请检查网络或配置");

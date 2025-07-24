@@ -130,10 +130,11 @@ export default function ModelConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
         const [llmRes, embRes] = await Promise.all([
-          fetch(`http://localhost:${port}/v1/config/llms`),
-          fetch(`http://localhost:${port}/v1/config/embeddings`),
+          fetch(`${API_BASE}/v1/config/llms`),
+          fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
 
         const llmData = await llmRes.json();
@@ -171,7 +172,8 @@ export default function ModelConfigPage() {
       console.log("newModel:", newModel);
       console.log("selectModelType:", selectedModelType);
       console.log("selectEmbeddingModelType:", selectedEmbeddingModelType);
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
 
       if (selectedModelType === "llm") {
         const newLlmModel: LlmConfig = {
@@ -186,7 +188,7 @@ export default function ModelConfigPage() {
           max_context: 0,
         };
         console.log("newLlmModel:", newLlmModel);
-        const res = await fetch(`http://localhost:${port}/v1/config/llms`, {
+        const res = await fetch(`${API_BASE}/v1/config/llms`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newLlmModel), // 包装为数组
@@ -205,14 +207,11 @@ export default function ModelConfigPage() {
           model_id: newModel.model_id,
         };
         console.log("newEmbModel:", newEmbModel);
-        const res = await fetch(
-          `http://localhost:${port}/v1/config/embeddings`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newEmbModel), // 包装为数组
-          },
-        );
+        const res = await fetch(`${API_BASE}/v1/config/embeddings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newEmbModel), // 包装为数组
+        });
         if (!res.ok) throw new Error("添加 Embedding 模型配置失败");
         setModelConfigs((prev) => [...prev, newEmbModel]); // 追加新 Embedding 配置
       }
@@ -244,9 +243,10 @@ export default function ModelConfigPage() {
       if (editingConfig.api_key === "******") editingConfig.api_key = "";
       console.log("editingConfig", editingConfig);
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
       const res = await fetch(
-        `http://localhost:${port}/v1/config/${model_type}/${editingConfig.id}`,
+        `${API_BASE}/v1/config/${model_type}/${editingConfig.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -284,16 +284,14 @@ export default function ModelConfigPage() {
   const removeModel = async (id: string, model_type: string) => {
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(
-        `http://localhost:${port}/v1/config/${model_type}/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+      });
 
       if (!res.ok) {
         throw new Error(`${model_type}删除失败，请检查网络或配置`);
@@ -331,7 +329,7 @@ export default function ModelConfigPage() {
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8097;
       const res = await fetch(
-        `http://localhost:${port}/v1/config/llms/${updatedConfig.id}`,
+        `${API_BASE}/v1/config/llms/${updatedConfig.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

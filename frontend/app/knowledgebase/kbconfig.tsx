@@ -125,9 +125,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
         const [embRes] = await Promise.all([
-          fetch(`http://localhost:${port}/v1/config/embeddings`),
+          fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
 
         const embData = (await embRes.json())?.data || [];
@@ -145,10 +146,11 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("保存知识库结果:", kb);
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
     const submit_url = isCreate
-      ? `http://localhost:${port}/v1/config/knowledgebases`
-      : `http://localhost:${port}/v1/config/knowledgebases/${kb.id}`;
+      ? `${API_BASE}/v1/config/knowledgebases`
+      : `${API_BASE}/v1/config/knowledgebases/${kb.id}`;
     const updateMethod = isCreate ? "POST" : "PATCH";
     try {
       const res = await fetch(submit_url, {
@@ -169,8 +171,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
   const handleRemoveMetadataEntry = async (id: string) => {
     if (metadata_configs != null) {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const metadata_url = `http://localhost:${port}/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
       try {
         const res = await fetch(metadata_url, {
           method: "DELETE",
@@ -203,8 +206,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       return;
     }
 
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-    const metadata_url = `http://localhost:${port}/v1/config/knowledgebases/${kb.id}/metadata`;
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+    const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata`;
     try {
       const res = await fetch(metadata_url, {
         method: "POST",

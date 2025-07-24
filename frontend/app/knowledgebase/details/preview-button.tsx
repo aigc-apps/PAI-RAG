@@ -39,9 +39,10 @@ export function PreviewButton({
   const loadContent = async () => {
     setLoading(true);
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
       const res = await fetch(
-        `http://localhost:${port}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
+        `${API_BASE}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
       );
       if (!res.ok) throw new Error("获取知识库文件失败");
       const json_data = await res.json();
