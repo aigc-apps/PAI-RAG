@@ -47,6 +47,7 @@ interface KnowledgeBase {
     retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
     top_k: number; // Top-K 值
     similarity_threshold: string; // 相似度分数阈值
+    enable_rerank: boolean;
     rerank_model: string; // rerank模型名称
     vector_weight?: string; // 向量检索权重（仅 hybrid 时使用）
   };

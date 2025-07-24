@@ -56,12 +56,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EmbeddingModel {
   id: string;
   model_id: string;
   model_name: string;
   type: string;
+}
+
+interface RerankerModel {
+  id: string;
+  model_id: string;
+  model_name: string;
 }
 
 // 元数据配置
@@ -87,7 +94,8 @@ export interface KbConfig {
     retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
     top_k: number; // Top-K 值
     similarity_threshold: number; // 相似度分数阈值
-    rerank_model: string; // rerank模型名称
+    enable_rerank: boolean;
+    rerank_model?: string; // rerank模型名称
     vector_weight?: number; // 向量检索权重（仅 hybrid 时使用）
   };
 }
@@ -116,6 +124,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [metadataDesc, setMetadataDesc] = useState("");
   const [metadataError, setMetadataError] = useState("");
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(""); // 错误信息
   const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存KB错误信息
@@ -130,7 +139,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           fetch(`http://localhost:${port}/v1/config/embeddings`),
         ]);
 
-        const embData = (await embRes.json())?.data || [];
+        const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {
@@ -139,7 +148,24 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         setModelLoading(false);
       }
     };
+    const fetchRerankerModelConfigs = async () => {
+      try {
+        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const [rerankerRes] = await Promise.all([
+          fetch(`http://localhost:${port}/v1/config/rerankers`),
+        ]);
+
+        const rerankerData = (await rerankerRes.json())?.data.items || [];
+        console.log("rerankerData", rerankerData);
+        setRerankerModels([...rerankerData]);
+      } catch (err: any) {
+        setModelError(err || "加载失败");
+      } finally {
+        setModelLoading(false);
+      }
+    };
     fetchModelConfigs();
+    fetchRerankerModelConfigs();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -517,53 +543,69 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                             推荐值：0.4
                           </p>
                         </div>
-                        <div className="grid grid-cols-6 space-y-2">
-                          <Label
-                            htmlFor="embeddingModel"
-                            className="col-span-1"
+                        <div className="grid grid-cols-5 space-y-2">
+                          <label
+                            htmlFor="terms"
+                            className="col-span-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                           >
-                            重排序模型 (rerank_model){" "}
-                            <span className="text-destructive">*</span>
-                          </Label>
-                          <div className="col-span-2">
-                            <Select
-                              defaultValue={kb.retrieval_config.rerank_model}
-                              onValueChange={(value) => {
-                                setKb((prev) => ({
-                                  ...prev,
-                                  retrieval_config: {
-                                    ...prev.retrieval_config,
-                                    rerank_model: value,
-                                  },
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="请选择重排序模型" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectGroup>
-                                  <SelectItem value="none">
-                                    NO RERANK
-                                  </SelectItem>
-                                  <SelectItem value="BAAI/bge-reranker-base">
-                                    BAAI/bge-reranker-base
-                                  </SelectItem>
-                                  <SelectItem value="BAAI/bge-reranker-large">
-                                    BAAI/bge-reranker-large
-                                  </SelectItem>
-                                  <SelectItem value="qwen3">qwen3</SelectItem>
-                                </SelectGroup>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="col-span-1 text-sm text-muted-foreground">
-                            <p className="pt-2 pl-6">
-                              推荐值： BAAI/bge-reranker-base
-                            </p>
-                          </div>
+                            开启重排序
+                          </label>
+                          <Checkbox
+                            id="terms"
+                            className="col-span-1"
+                            checked={kb.retrieval_config.enable_rerank ?? false}
+                            onCheckedChange={(checked) => {
+                              setKb((prev) => ({
+                                ...prev,
+                                retrieval_config: {
+                                  ...prev.retrieval_config,
+                                  enable_rerank: Boolean(checked),
+                                },
+                              }));
+                            }}
+                          />
                         </div>
+                        {kb.retrieval_config.enable_rerank && (
+                          <div className="grid grid-cols-5 space-y-2 py-6">
+                            <Label
+                              htmlFor="embeddingModel"
+                              className="col-span-1"
+                            >
+                              重排序模型 (rerank_model){" "}
+                              <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="col-span-2">
+                              <Select
+                                defaultValue={kb.retrieval_config.rerank_model}
+                                onValueChange={(value) => {
+                                  setKb((prev) => ({
+                                    ...prev,
+                                    retrieval_config: {
+                                      ...prev.retrieval_config,
+                                      rerank_model: value,
+                                    },
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="请选择重排序模型" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {rerankermodels.map((model) => (
+                                      <SelectItem
+                                        key={model.id}
+                                        value={model.model_name}
+                                      >
+                                        {model.model_name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       {indexType === "hybrid" && (
                         <div className="space-y-6">

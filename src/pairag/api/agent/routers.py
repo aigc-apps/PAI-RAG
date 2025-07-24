@@ -7,6 +7,7 @@ def add_config_router(app: FastAPI):
     from pairag.api.agent.config.websearch import websearch_router
     from pairag.api.agent.config.trace import trace_router
     from pairag.api.agent.config.embedding import embedding_router
+    from pairag.api.agent.config.reranker import reranker_router
     from pairag.api.agent.config.metadata import knowledgebase_router
 
     app.include_router(llm_router, prefix="/v1/config/llms")
@@ -14,6 +15,7 @@ def add_config_router(app: FastAPI):
     app.include_router(websearch_router, prefix="/v1/config/websearch")
     app.include_router(trace_router, prefix="/v1/config/trace")
     app.include_router(embedding_router, prefix="/v1/config/embeddings")
+    app.include_router(reranker_router, prefix="/v1/config/rerankers")
     app.include_router(knowledgebase_router, prefix="/v1/config/knowledgebases")
 
 
