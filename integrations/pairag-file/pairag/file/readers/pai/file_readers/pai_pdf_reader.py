@@ -179,7 +179,10 @@ class PaiPDFReader(BaseReader):
                                         and not self.is_url(span.get("image_path", ""))
                                         and self.image_store
                                     ):
-                                        image = image_from_url(span.get("image_path"))
+                                        image_path = join_path(
+                                            img_buket_path, span["image_path"]
+                                        )
+                                        image = image_from_url(image_path)
                                         oss_url = self.image_store.upload_image(
                                             image, pdf_name
                                         )
