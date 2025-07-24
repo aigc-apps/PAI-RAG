@@ -184,6 +184,10 @@ class KnowledgeBaseManager:
         if not name or name == "default_index":
             return self._knowledgebase_map.knowledgebases[DEFAULT_KNOWLEDGEBASE_NAME]
 
+        if name not in self._knowledgebase_map.knowledgebases:
+            logger.warning(f"Knowledgebase `{name}` not found. Use `default` instead.")
+            return self._knowledgebase_map.knowledgebases[DEFAULT_KNOWLEDGEBASE_NAME]
+
         return self._knowledgebase_map.knowledgebases[name]
 
     def add_knowledgebase(self, knowledgebase: KnowledgeBase):

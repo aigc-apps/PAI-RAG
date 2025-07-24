@@ -6,7 +6,7 @@ from pairag.core.models.errors import UserInputError, ServiceError
 async def _user_input_exception_handler(request: Request, exception: UserInputError):
     return JSONResponse(
         status_code=400,
-        content={"message": f"Failed to process request input: {exception.msg}"},
+        content={"message": f"请求出错: {exception.msg}"},
     )
 
 

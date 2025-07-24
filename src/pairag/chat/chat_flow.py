@@ -92,7 +92,8 @@ class ChatFlow:
         potential_intents = [ChatToolType.CHAT_LLM]
 
         tool_switches = {
-            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase,
+            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase
+            or chat_request.index_name,
             ChatToolType.SEARCH_WEB: chat_request.search_web,
             ChatToolType.CHAT_DB: chat_request.chat_db,
             ChatToolType.CHAT_NEWS: chat_request.chat_news,
@@ -212,6 +213,9 @@ class ChatFlow:
         stream: bool = True,
     ) -> ChatResponseWrapper:
         news_tool = resolve_news_tool(self.config)
+        if not news_tool:
+            raise ValueError("抱歉，无法查询新闻信息。请检查新闻工具配置。")
+
         if stream:
             response_gen = await news_tool.astream_chat(messages=[], prompt=query_str)
             response_wrapper = ChatResponseWrapper(response=response_gen)
@@ -228,6 +232,8 @@ class ChatFlow:
         stream: bool = True,
     ) -> ChatResponseWrapper:
         news_tool = resolve_news_tool(self.config)
+        if not news_tool:
+            raise ValueError("抱歉，无法查询新闻信息。请检查新闻工具配置。")
 
         if not stream:
             response_wrapper = await news_tool.achat_llm(query_str=query_str)

@@ -85,8 +85,4 @@ class MiaobiNewsConfig(BaseModel):
     news_role: str = DEFAULT_NEWS_ROLE_SETTING
 
     def is_enabled(self) -> bool:
-        return (
-            self.access_key_id is not None
-            and self.access_key_secret is not None
-            and self.workspace_id is not None
-        )
+        return self.access_key_id and self.access_key_secret and self.workspace_id

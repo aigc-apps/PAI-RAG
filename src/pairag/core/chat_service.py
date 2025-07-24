@@ -74,14 +74,14 @@ class ChatService:
             return await self.app.achat(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
-            raise UserInputError(f"Chat failed: {ex}")
+            raise UserInputError(f"{ex}")
 
     async def astream_chat(self, query):
         try:
             return await self.app.astream_chat(query)
         except Exception as ex:
             logger.error(traceback.format_exc())
-            raise UserInputError(f"Stream chat failed: {ex}")
+            raise UserInputError(f"{ex}")
 
     async def aquery_retrieval(self, question: str, knowledgebase: str = None):
         try:
