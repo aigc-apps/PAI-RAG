@@ -41,7 +41,8 @@ export const Assistant = () => {
         const res = await fetch(`http://localhost:${port}/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
-        if (data.length > 0) setLlmConfig(data[0]);
+        const llms = data.data.items;
+        if (llms.length > 0) setLlmConfig(llms[0]);
       } catch (error) {
         console.error("拉取 LLM 配置失败:", error);
       }

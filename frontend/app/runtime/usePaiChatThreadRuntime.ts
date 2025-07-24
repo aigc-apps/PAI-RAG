@@ -67,7 +67,6 @@ function AddOrMergeToolCall(
   eventQueue: Array<{ type: string; data: any }>,
   toolCall: any,
 ): void {
-  console.log("Current eventQueue:", eventQueue);
   const existingIndex = eventQueue.findIndex(
     (item) => item.type === "tool-call" && item.data.id === toolCall.id,
   );
@@ -83,7 +82,6 @@ function AddOrMergeToolCall(
       data: toolCall,
     });
   }
-  console.log("Updated eventQueue:", eventQueue);
 }
 
 export class MyModelAdapter implements ChatModelAdapter {
@@ -102,7 +100,6 @@ export class MyModelAdapter implements ChatModelAdapter {
 
     const headers = new Headers(headersValue);
     headers.set("Content-Type", "application/json");
-    console.log("messages", messages);
     const enableAttachments = messages.some(
       (m) => (m.attachments ?? []).length > 0,
     );
@@ -202,7 +199,6 @@ export class MyModelAdapter implements ChatModelAdapter {
           }
           if (delta?.tool_calls) {
             for (const toolCall of delta.tool_calls) {
-              console.log("toolCall", toolCall);
               const toolCallId = toolCall.id;
               if (!currentToolCallMap[toolCallId]) {
                 currentToolCallMap[toolCallId] = {
@@ -238,7 +234,6 @@ export class MyModelAdapter implements ChatModelAdapter {
           }
           if (delta?.role === "tool") {
             // 处理工具调用结果
-            console.log("Tool call result:", delta);
             const keys = Object.keys(currentToolCallMap);
             const lastKey = keys[keys.length - 1];
             if (currentToolCallMap[lastKey]) {
@@ -298,7 +293,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       const res = await fetch(`http://localhost:${port}/v1/agent/threads`);
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
-      console.log("response", response);
       return {
         threads: response.map((t: any) => ({
           status: t.archived ? "archived" : "regular",
@@ -313,7 +307,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
   async initialize(threadId: string) {
     isInitializing = true;
-    console.log("initialize", isInitializing, threadId);
 
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -342,12 +335,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       const data = await response.json();
       initializedThreadId = data.id;
       isInitializing = false;
-      console.log(
-        "initialize data",
-        isInitializing,
-        initializedThreadId,
-        data.id,
-      );
       return {
         remoteId: data.id,
         externalId: data.id,
@@ -365,10 +352,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async archive(remoteId) {},
   async unarchive(remoteId) {},
   async delete(remoteId) {
-    // Delete thread and its messages
-    // await db.messages.deleteByThreadId(remoteId);
-    // await db.threads.delete(remoteId);
-    console.log("delete", remoteId);
     try {
       const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
       const res = await fetch(
@@ -426,7 +409,6 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
           () => ({
             async load() {
               if (!remoteId) return { headId: null, messages: [] };
-              console.log("remoteId", remoteId);
               // 模拟从后端获取数据
               try {
                 const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
@@ -436,7 +418,6 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
 
                 if (!res.ok) throw new Error("获取配置失败");
                 const messages = await res.json();
-                console.log("response messages", messages);
                 if (messages.length === 0) {
                   return { headId: null, messages: [] };
                 }
@@ -444,11 +425,11 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
                   messages.map((m: any) => ({
                     role: m.role as ThreadMessage["role"],
                     content: m.content,
+                    attachments: m.attachments,
                     id: m.id,
                     createdAt: new Date(m.createdAt),
                   })),
                 );
-                console.log(response);
                 return response;
               } catch (error) {
                 console.error("Error fetching threads:", error);
@@ -456,8 +437,6 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
               }
             },
             async append(message) {
-              console.log("cd append message");
-
               if (!remoteId) {
                 console.warn("Cannot save message - thread not initialized");
                 while (isInitializing) {
@@ -475,10 +454,6 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
                 console.error("Thread initialized failed.");
                 return;
               }
-              console.log(
-                "start appending messages for thread ",
-                remoteThreadId,
-              );
               try {
                 const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
                 const url = `http://localhost:${port}/v1/agent/threads/${remoteThreadId}/messages`;
@@ -490,10 +465,8 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
                   body: JSON.stringify({
                     thread_id: remoteThreadId,
                     role: message.message.role,
-                    content:
-                      message.message.content[0].type === "text"
-                        ? message.message.content[0].text
-                        : "null",
+                    attachments: message.message.attachments,
+                    content: message.message.content,
                   }),
                 });
 
@@ -502,7 +475,6 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
                     `Failed to create thread: ${response.statusText}`,
                   );
                 }
-                console.log("response", response);
               } catch (error) {
                 console.error("Error creating thread:", error);
                 throw error;

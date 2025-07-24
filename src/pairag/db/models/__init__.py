@@ -7,8 +7,6 @@ from pairag.db.models.knowledgebase.knowledgebase import (
     RetrievalConfig,
     ChunkConfig,
 )
-from pairag.db.models.knowledgebase.file import KnowledgebaseFileEntity
-from pairag.db.models.knowledgebase.chunk import KnowledgebaseChunkEntity
 from pairag.db.models.thread import ThreadEntity
 from pairag.db.models.message import MessageEntity
 from pairag.db.models.knowledgebase.file import KbFileEntity
