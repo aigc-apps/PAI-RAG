@@ -1,5 +1,6 @@
 ### Knowledgebase configuration API ###
 from datetime import datetime, timezone
+import traceback
 from typing import List
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -104,11 +105,11 @@ async def create_knowledgebase(
                 content=error_response(code=400, message=f"创建知识库失败: {e}."),
                 status_code=400,
             )
-    except Exception as e:
-        logger.exception(f"创建知识库失败。\nException:{e}")
+    except Exception:
+        logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
         await session.rollback()
         return JSONResponse(
-            content=error_response(code=400, message=f"创建知识库失败: {e}."),
+            content=error_response(code=400, message=f"创建知识库失败: {traceback.format_exc()}."),
             status_code=400,
         )
 
@@ -195,9 +196,9 @@ async def update_knowledgebase(
         logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
 
         return success_response(data=knowledgebase, message="更新知识库成功。")
-    except Exception as ex:
-        logger.error(f"Failed to update knowledgebase {kb_id}: {ex}")
-        return error_response(message=f"更新知识库失败：{ex}")
+    except Exception:
+        logger.error(f"Failed to update knowledgebase {kb_id}: {traceback.format_exc()}")
+        return error_response(message=f"更新知识库失败：{traceback.format_exc()}")
 
 
 @knowledgebase_router.delete("/{kb_id}")

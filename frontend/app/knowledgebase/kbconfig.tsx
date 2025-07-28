@@ -406,8 +406,8 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       <SelectContent>
                         <SelectGroup>
                           {embeddingmodels.map((model) => (
-                            <SelectItem key={model.id} value={model.model_name}>
-                              {model.model_name}
+                            <SelectItem key={model.id} value={model.model_id}>
+                              {model.model_id}
                             </SelectItem>
                           ))}
                         </SelectGroup>

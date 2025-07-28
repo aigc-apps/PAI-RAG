@@ -1,3 +1,4 @@
+import traceback
 from typing import Dict, Optional, Type
 from sqlmodel import Field, SQLModel
 from llama_index.llms.openai_like import OpenAILike
@@ -15,6 +16,25 @@ class LlmProvider(BaseConfigProvider):
         super()._load_entries(entries)
         for entry_id, entry in self.config_map.items():
             self.model_id_to_entry_id[entry.model_id] = entry_id
+
+    def add(self, entry: LlmModelEntity):
+        super().add(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def update(self, entry: LlmModelEntity):
+        super().update(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.model_id_to_entry_id.items():
+                if v == entry_id:
+                    del self.model_id_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
+
 
     def _create_instance(self, config: LlmModelEntity):
         return OpenAILike(

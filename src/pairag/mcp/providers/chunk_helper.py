@@ -31,7 +31,7 @@ async def set_embedding_model_ready(
     embedding_model.is_ready = True
     session.add(embedding_model)
     await session.commit()
-    session.refresh(embedding_model)
+    await session.refresh(embedding_model)
 
     await config_change_manager.notify_change_async(
         event_source=ChangeEventSource.EMBEDDING,

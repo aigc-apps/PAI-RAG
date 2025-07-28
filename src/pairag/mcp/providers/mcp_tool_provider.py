@@ -1,3 +1,4 @@
+import traceback
 from typing import Dict, List, Type
 from sqlmodel import Field, SQLModel, select
 from pairag.db.encrypt_utils import decrypt_key
@@ -62,6 +63,25 @@ async def create_mcp_tools(mcp_server_configs: List[McpServerEntity]):
 class McpToolProvider(BaseConfigProvider):
     name_to_entry_id: Dict[str, str] = Field(default={})
     entity_class: Type[SQLModel] = McpServerEntity
+
+    def add(self, entry: McpServerEntity):
+        super().add(entry)
+        self.name_to_entry_id[entry.name] = entry.id
+
+    def update(self, entry: McpServerEntity):
+        super().update(entry)
+        self.name_to_entry_id[entry.name] = entry.id
+
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.name_to_entry_id.items():
+                if v == entry_id:
+                    del self.name_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
+
 
     def _load_entries(self, entries):
         super()._load_entries(entries)

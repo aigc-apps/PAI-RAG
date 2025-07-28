@@ -1,3 +1,4 @@
+import traceback
 from typing import Dict, Type
 
 from sqlmodel import SQLModel
@@ -17,6 +18,24 @@ class EmbeddingProvider(BaseConfigProvider):
     config_map: Dict[str, EmbeddingModelEntity] = Field(default={})
     model_id_to_entry_id: Dict[str, str] = Field(default={})
     entity_class: Type[SQLModel] = EmbeddingModelEntity
+
+    def add(self, entry: EmbeddingModelEntity):
+        super().add(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def update(self, entry: EmbeddingModelEntity):
+        super().update(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.model_id_to_entry_id.items():
+                if v == entry_id:
+                    del self.model_id_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
 
     def _load_entries(self, entries):
         super()._load_entries(entries)
@@ -51,7 +70,7 @@ class EmbeddingProvider(BaseConfigProvider):
             raise ValueError(f"Unknown embedding type: {config.type}.")
 
     def get_embedding_model(self, model_id: str):
-        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found."
+        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found. {self.model_id_to_entry_id}"
         entry_id = self.model_id_to_entry_id[model_id]
         if self.config_map[entry_id].is_ready:
             return self.get_instance(entry_id)
@@ -59,7 +78,7 @@ class EmbeddingProvider(BaseConfigProvider):
             raise ValueError("Embedding model is still downloading.")
 
     def get_embedding_config(self, model_id: str):
-        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found."
+        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found. {self.model_id_to_entry_id}"
         entry_id = self.model_id_to_entry_id[model_id]
         return self.config_map[entry_id]
 
