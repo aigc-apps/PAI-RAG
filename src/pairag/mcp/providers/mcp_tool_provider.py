@@ -1,5 +1,5 @@
-from typing import Dict, List
-from sqlmodel import Field, select
+from typing import Dict, List, Type
+from sqlmodel import Field, SQLModel, select
 from pairag.db.encrypt_utils import decrypt_key
 from pairag.db.models.mcp import McpServerCreate, McpServerEntity
 from pairag.db.db_context import with_async_db_session
@@ -61,6 +61,7 @@ async def create_mcp_tools(mcp_server_configs: List[McpServerEntity]):
 
 class McpToolProvider(BaseConfigProvider):
     name_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = McpServerEntity
 
     def _load_entries(self, entries):
         super()._load_entries(entries)

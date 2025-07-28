@@ -2,6 +2,7 @@ from typing import List
 from loguru import logger
 from sqlalchemy import delete
 from sqlmodel import select, update
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.knowledgebase.chunk import (
     KbChunkEntity,
     create_chunk_from_text_node,
@@ -10,7 +11,33 @@ from pairag.db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
 from llama_index.core.schema import TextNode
 from pairag.common.knowledgebase.types import FileStatus, ChunkStatus
+from pairag.db.models.knowledgebase.embedding import EmbeddingModelEntity
 from pairag.db.models.knowledgebase.file import KbFileEntity
+from pairag.mcp.providers.config_change_manager import config_change_manager
+
+
+@with_async_db_session
+async def set_embedding_model_ready(
+    session: AsyncSession,
+    model_id: str,
+):
+    embedding_model = await session.get(EmbeddingModelEntity, model_id)
+    if embedding_model is None:
+        raise ValueError(
+            status_code=404,
+            detail=f"Embedding model {model_id} not found.",
+        )
+
+    embedding_model.is_ready = True
+    session.add(embedding_model)
+    await session.commit()
+    session.refresh(embedding_model)
+
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.EMBEDDING,
+        source_id=model_id,
+        event_type=ChangeEventType.UPDATE
+    )
 
 
 @with_async_db_session

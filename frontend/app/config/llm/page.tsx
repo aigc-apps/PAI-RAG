@@ -80,6 +80,7 @@ interface EmbConfig {
   endpoint: string;
   dimension: number;
   embed_batch_size: number;
+  is_ready: boolean;
 }
 
 // 联合类型
@@ -204,6 +205,7 @@ export default function ModelConfigPage() {
           type: selectedEmbeddingModelType,
           api_key: newModel.api_key,
           embed_batch_size: newModel.embed_batch_size,
+          is_ready: selectedEmbeddingModelType !== "local",
           model_id: newModel.model_id,
         };
         console.log("newEmbModel:", newEmbModel);

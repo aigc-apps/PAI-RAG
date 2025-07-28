@@ -1,11 +1,17 @@
 import os
+from typing import Type
+
+from sqlmodel import SQLModel
 from pairag.db.encrypt_utils import decrypt_key
+from pairag.db.models.websearch import WebSearchConfigEntity
 from pairag.mcp.providers.base_provider import BaseConfigProvider
 from pairag.mcp.tools.search.aliyun_search_tool import aget_aliyun_search_result
 from llama_index.core.tools import FunctionTool
 
 
 class WebSearchProvider(BaseConfigProvider):
+    entity_class: Type[SQLModel] = WebSearchConfigEntity
+
     def _load_entries(self, entries):
         super()._load_entries(entries)
         if len(entries) > 0:

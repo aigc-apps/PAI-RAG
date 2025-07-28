@@ -1,5 +1,5 @@
-from typing import Dict
-from sqlmodel import Field
+from typing import Dict, Type
+from sqlmodel import Field, SQLModel
 from pairag.db.models.knowledgebase.knowledgebase import KbEntity
 from pairag.db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -13,6 +13,7 @@ async def fetch_knowledgebases_by_id(session: AsyncSession, kb_id: str) -> KbEnt
 
 class KnowledgebaseProvider(BaseConfigProvider):
     name_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = KbEntity
 
     def _load_entries(self, entries):
         super()._load_entries(entries)

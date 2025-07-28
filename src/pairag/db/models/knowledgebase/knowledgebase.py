@@ -45,7 +45,7 @@ class KnowledgebaseCreate(SQLModel):
 class KbEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase"
 
-    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    id: str = Field(default_factory=lambda: "kb" + uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
     description: str = Field(default=None)
 

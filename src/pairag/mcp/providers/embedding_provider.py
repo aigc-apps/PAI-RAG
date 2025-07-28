@@ -1,4 +1,6 @@
-from typing import Dict
+from typing import Dict, Type
+
+from sqlmodel import SQLModel
 from pairag.db.encrypt_utils import decrypt_key
 from pairag.db.models.knowledgebase.embedding import EmbeddingModelEntity, EmbeddingType
 from llama_index.core.embeddings import BaseEmbedding
@@ -14,6 +16,7 @@ from loguru import logger
 class EmbeddingProvider(BaseConfigProvider):
     config_map: Dict[str, EmbeddingModelEntity] = Field(default={})
     model_id_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = EmbeddingModelEntity
 
     def _load_entries(self, entries):
         super()._load_entries(entries)

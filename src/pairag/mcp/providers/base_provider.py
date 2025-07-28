@@ -14,9 +14,12 @@ DEFAULT_ID_FIELD = "id"
 
 class BaseConfigProvider(BaseModel):
     config_map: Dict[str, BaseModel] = Field(default={})
-    instance_map: LruCache = Field(default=None)
+    instance_map: Any = Field(default=None)
+    entity_class: Type[SQLModel] = Field(default=None)
+
 
     def __init__(self, entries: List[BaseModel] = []):
+        super().__init__()
         self.config_map = {}
         self.instance_map = LruCache(maxsize=MAX_OBJECT_CACHE_SIZE)
         self._load_entries(entries)
@@ -29,8 +32,8 @@ class BaseConfigProvider(BaseModel):
                 raise ValueError(f"{DEFAULT_ID_FIELD} attribute not found in object {entry}.")
 
     @with_async_db_session
-    async def full_load_from_db_async(self, session: AsyncSession, entity_class: Type[SQLModel]):
-        entries = (await session.exec(select(entity_class))).all()
+    async def full_load_from_db_async(self, session: AsyncSession):
+        entries = (await session.exec(select(self.entity_class))).all()
         self._load_entries(entries)
 
     @with_async_db_session
@@ -42,9 +45,13 @@ class BaseConfigProvider(BaseModel):
     ):
         if event_type == ChangeEventType.DELETE:
             self.delete(source_id)
-        elif event_type == ChangeEventType.UPDATE or event_type == ChangeEventType.ADD:
-            entity = await session.refresh(self.config_map[source_id])
+        elif event_type == ChangeEventType.UPDATE:
+            entity = await session.get(self.entity_class, source_id)
+            await session.refresh(entity)
             self.update(entity)
+        elif event_type == ChangeEventType.ADD:
+            entity = await session.get(self.entity_class, source_id)
+            self.add(entity)
         else:
             raise ValueError(f"Invalid event type: {event_type}")
 
@@ -62,7 +69,7 @@ class BaseConfigProvider(BaseModel):
 
     def delete(self, entry_id: str):
         if entry_id not in self.config_map:
-            logger.warning(f"`{entry_id}` not found in config_map.")
+            logger.warning(f"`{entry_id}` not found in config_map. {self.config_map}")
             return
 
         del self.config_map[entry_id]

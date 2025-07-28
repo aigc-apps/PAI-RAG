@@ -91,7 +91,7 @@ class PaiKnowledgebaseClient:
         file_id: str,
     ):
         logger.info(f"[WORKER] processing file {file_id} in background.")
-        file_entity: KbFileEntity = await read_file_from_db(file_id)
+        file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
 
         file = file_store.load(file_entity.file_path)

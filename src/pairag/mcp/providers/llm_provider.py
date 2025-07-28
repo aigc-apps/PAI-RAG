@@ -1,17 +1,31 @@
-from typing import Dict, Optional
-from sqlmodel import Field
+from typing import Dict, Optional, Type
+from sqlmodel import Field, SQLModel
 from llama_index.llms.openai_like import OpenAILike
 from loguru import logger
+from pairag.db.encrypt_utils import decrypt_key
 from pairag.mcp.providers.base_provider import BaseConfigProvider
+from pairag.db.models.llm import LlmModelEntity
 
 
 class LlmProvider(BaseConfigProvider):
     model_id_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = LlmModelEntity
 
     def _load_entries(self, entries):
         super()._load_entries(entries)
         for entry_id, entry in self.config_map.items():
             self.model_id_to_entry_id[entry.model_id] = entry_id
+
+    def _create_instance(self, config: LlmModelEntity):
+        return OpenAILike(
+                model=config.model,
+                api_base=config.base_url,
+                api_key=decrypt_key(config.encrypted_api_key),
+                temperature=config.temperature,
+                max_tokens=config.context_window,
+                is_chat_model=True,
+                is_function_calling_model=True,
+            )
 
     def get_llm_model(self, model_id: str) -> OpenAILike:
         assert model_id in self.model_id_to_entry_id, f"Model {model_id} not found."

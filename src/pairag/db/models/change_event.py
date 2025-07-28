@@ -21,9 +21,9 @@ class ChangeEventSource(str, Enum):
 
 
 
-class ChangeEvent(SQLModel):
+class ChangeEvent(SQLModel, table=True):
     __tablename__ = "pai_config_change_event"
-    id: str = Field(default_factory=lambda x: uuid.uuid4().hex, primary_key=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     source_id: str = Field(default=None)
     event_type: ChangeEventType = Field(default=ChangeEventType.ADD)
     event_source: ChangeEventSource = Field(default=ChangeEventSource.KNOWLEDGEBASE)
