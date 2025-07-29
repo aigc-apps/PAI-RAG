@@ -124,6 +124,7 @@ async def step_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
         yield chunk
         if chunk.message.additional_kwargs.get("STOP_FLAG"):
             state.stop_flag = True
+            break
 
 async def astep_gen(
     llm: LLM,
