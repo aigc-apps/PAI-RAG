@@ -8,10 +8,10 @@ from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
 )
-from pairag.common.knowledgebase.constants import DEFAULT_KNOWLEDGEBASE_PATH
 from loguru import logger
 
-from pairag.mcp.tools.knowledgebase.faiss_vector_store import FaissVectorStore
+from pairag.mcp.tools.knowledgebase.local_chroma_service import DEFAULT_CHROMA_PORT
+from pairag.mcp.tools.knowledgebase.local_vector_store import LocalChromaVectorStore
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     SparseEmbeddingFunctionType,
 )
@@ -25,8 +25,8 @@ class VectorDbType(str, Enum):
     HOLOGRES = "hologres"
     TABLESTORE = "tablestore"
     MILVUS = "milvus"
-    FAISS = "faiss"
     DASHVECTOR = "dashvector"
+    LOCAL = "local"
 
 
 class BaseVectorDbConnection(BaseModel):
@@ -54,8 +54,8 @@ class MilvusConnection(BaseVectorDbConnection):
     )
 
 
-class FaissConnection(BaseVectorDbConnection):
-    type: VectorDbType = VectorDbType.FAISS
+class LocalConnection(BaseVectorDbConnection):
+    type: VectorDbType = VectorDbType.LOCAL
 
 
 def get_value_from_multiple_envs(env_names: List[str], default=None):
@@ -121,8 +121,9 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
             database=database,
         )
 
-    elif vector_db_type == VectorDbType.FAISS:
-        return FaissConnection()
+    elif vector_db_type == VectorDbType.LOCAL:
+        return LocalConnection()
+
 
 
 def create_vector_store(
@@ -165,13 +166,12 @@ def create_vector_store(
             es_password=vector_db_connection.password,
             dim=dimension,
         )
-    elif isinstance(vector_db_connection, FaissConnection):
-        persist_dir = os.path.join(DEFAULT_KNOWLEDGEBASE_PATH, kb_id, ".index")
-        logger.info(f"Creating FaissVectorStore for {kb_id} with path {persist_dir}.")
-
-        return FaissVectorStore.from_persist_dir(
-            persist_dir=persist_dir,
-            dimension=dimension,
+    elif isinstance(vector_db_connection, LocalConnection):
+        logger.info(f"Creating LocalVectorStore for {kb_id} with port {DEFAULT_CHROMA_PORT}.")
+        return LocalChromaVectorStore(
+            collection_name=kb_id,
+            host="localhost",
+            port=DEFAULT_CHROMA_PORT,
         )
     else:
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")

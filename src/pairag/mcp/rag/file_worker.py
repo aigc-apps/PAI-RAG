@@ -1,5 +1,12 @@
 import dotenv
 dotenv.load_dotenv()
+# Fix for macOS fork issues (like with ChromaDB)
+# this forces the application to use spawn instead of fork
+import os
+os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+if os.name != "nt":
+    from billiard import context
+    context._force_start_method("spawn")
 
 from celery import Celery
 import os

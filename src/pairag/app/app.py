@@ -1,6 +1,8 @@
 # init trace
 from dotenv import load_dotenv
 
+from pairag.mcp.tools.knowledgebase.local_chroma_service import LocalChromaService
+
 load_dotenv()
 
 import os
@@ -36,9 +38,13 @@ async def lifespan(app: FastAPI):
     daemon_thread = threading.Thread(target=job_manager.execute_job, daemon=True)
     daemon_thread.start()
 
+    chroma_service = LocalChromaService()
+    chroma_service.start()
+
     asyncio.create_task(startup_event())
     yield
 
+    chroma_service.stop()
     logger.info("Application shutting down...")
 
 

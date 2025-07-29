@@ -1251,10 +1251,13 @@ export default function KnowledgeBaseDetailPage({
                 <div className="gap-6 p-4 w-full">
                   <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {searchrecords.map((chunk, i) => (
-                      <Card key={i} className="flex flex-col max-h-80">
-                        <CardHeader>
+                      <Card
+                        key={i}
+                        className="flex flex-col max-h-80 gap-0 pb-0 py-4"
+                      >
+                        <CardHeader className="gap-1 pb-0 ">
                           <CardTitle className="flex justify-start">
-                            <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
                                 {i + 1}
                               </Badge>
@@ -1272,12 +1275,10 @@ export default function KnowledgeBaseDetailPage({
                             </div>
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-grow overflow-y-auto">
-                          <ScrollArea className="h-full pr-4">
-                            <div className="text-gray-600 whitespace-pre-wrap">
-                              {chunk.content}
-                            </div>
-                          </ScrollArea>
+                        <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
+                          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
+                            {chunk.content}
+                          </div>
                         </CardContent>
                         <CardFooter className="shrink-0 gap-2">
                           {chunk.metadata?.images_info?.length > 0 && (

@@ -249,7 +249,9 @@ class PaiKnowledgebaseClient:
         )
 
         query_result = await vector_store.aquery(vector_query)
-        if retrieval_config.enable_rerank:
+        logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+
+        if retrieval_config.enable_rerank and len(query_result.nodes) > reranker_top_k:
             raranker_model = reranker_provider.get_reranker_model(
                 retrieval_config.rerank_model
             )
@@ -257,6 +259,7 @@ class PaiKnowledgebaseClient:
                 query=query,
                 result=query_result,
                 top_n=reranker_top_k)
+            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
@@ -269,7 +272,7 @@ class PaiKnowledgebaseClient:
                         origin_text = origin_text.replace(image_file, image_url)
                     node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
-        logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
+        logger.info(f"Get {len(result_nodes)} nodes above given threshold {similarity_threshold}.")
         return result_nodes
 
 
