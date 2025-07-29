@@ -14,7 +14,7 @@ async def aget_file_content_from_db(session: AsyncSession, file_id: str):
         )
     )
     processed_file_entity = file_res.first()
-    content =  processed_file_entity.file_content.decode('utf-8', errors='ignore')
+    content =  processed_file_entity.file_content
     if processed_file_entity.file_content_length > 200:
         content =  content[0:1000] + " \n\n 文件内容太长，已经被截断。如果需要更多信息，请使用【文件检索】工具。"
     return content

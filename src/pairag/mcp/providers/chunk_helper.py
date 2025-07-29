@@ -53,7 +53,7 @@ async def update_file_status_async(
     if is_attachment:
         file = await session.get(AttachmentFileEntity, file_id)
         if documents:
-            file.file_content = documents[0].text.encode("utf-8")
+            file.file_content = documents[0].text
             file.file_content_length = len(documents[0].text)
     else:
         file = await session.get(KbFileEntity, file_id)

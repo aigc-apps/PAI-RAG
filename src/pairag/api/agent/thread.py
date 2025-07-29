@@ -65,6 +65,10 @@ async def delete_thread(
     thread_id: str,
     session: AsyncSession = Depends(get_session),
 ):
+    try:
+        await thread_provider.delete_related_attachments(thread_id)
+    except Exception as e:
+        logger.error(f"[ThreadProvider] Failed to delete related attachments in messages: {e}")
     thread = await session.get(ThreadEntity, thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail=f"Conversation {thread_id} not found.")
