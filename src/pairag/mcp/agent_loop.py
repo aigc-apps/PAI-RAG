@@ -111,6 +111,7 @@ async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, No
         yield chunk
         if chunk.message.additional_kwargs.get("STOP_FLAG"):
             state.stop_flag = True
+            break
 
 async def step_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
     async for chunk in astep_gen(
