@@ -631,8 +631,8 @@ export default function KnowledgeBaseDetailPage({
   return (
     <div className="flex flex-col h-screen">
       <div className="flex-none">
-        <div className="p-2 space-y-2">
-          <div className="mb-6 flex items-center gap-2">
+        <div className="p-2 space-y-2 mb-4">
+          <div className="gap-2 flex items-center">
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -653,13 +653,15 @@ export default function KnowledgeBaseDetailPage({
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          <div className="gap-2 text-xs">ID：{knowledgebase.id}</div>
+          <div className="gap-2 text-xs">描述：{knowledgebase.description}</div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4">
+      <div className="flex-1 overflow-y-auto px-2">
         <Tabs defaultValue="details">
           <TabsList className="py-4 bg-muted rounded-lg flex-none">
             <TabsTrigger value="details" className="p-4">
-              文件列表
+              文件管理
             </TabsTrigger>
             <TabsTrigger value="settings" className="p-4">
               知识库设置
@@ -671,52 +673,44 @@ export default function KnowledgeBaseDetailPage({
           <TabsContent value="details" className="py-4">
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>知识库：{knowledgebase.name}</CardTitle>
+                <CardTitle>
+                  <div className="flex justify-between items-center">
+                    <Button
+                      onClick={() =>
+                        document.getElementById("file-upload")?.click()
+                      }
+                      disabled={uploading} // 上传时禁用按钮
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          上传中...
+                        </>
+                      ) : (
+                        <>
+                          上传文件
+                          <PlusIcon className="mr-2 h-6 w-6" />
+                        </>
+                      )}
+                    </Button>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                      jsonl, jpg, jpeg, png{" "}
+                    </div>
+                  </div>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-center">
-                  <p className="text-muted-foreground mb-4">
-                    ID：{knowledgebase.id}
-                  </p>
-                  <p className="text-muted-foreground mb-4">
-                    描述：{knowledgebase.description}
-                  </p>
-                  <p className="text-muted-foreground mb-4">
-                    支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
-                    jsonl, jpg, jpeg, png{" "}
-                  </p>
-                  <Button
-                    onClick={() =>
-                      document.getElementById("file-upload")?.click()
-                    }
-                    disabled={uploading} // 上传时禁用按钮
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        上传中...
-                      </>
-                    ) : (
-                      <>
-                        <PlusIcon className="mr-2 h-4 w-4" />
-                        上传文件
-                      </>
-                    )}
-                  </Button>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    className="hidden"
-                    ref={fileInputRef}
-                    onChange={(e) => handleFileUpload(e.target.files)}
-                  />
-                </div>
-
                 {kbfiles && kbfiles.length > 0 ? (
                   <>
-                    <h3 className="text-lg font-semibold mt-6 mb-3">
-                      文件列表
-                    </h3>
+                    <h3 className="text-lg font-semibold mb-3">文件列表</h3>
                     <ScrollArea className="h-[480px] rounded-md border overflow-x-auto">
                       <Table className="min-w-full">
                         <TableHeader>
@@ -1032,7 +1026,7 @@ export default function KnowledgeBaseDetailPage({
                                     )
                                   }
                                 >
-                                  查看切片列表
+                                  查看切片
                                 </Button>
                                 <Button
                                   variant="link"
@@ -1045,7 +1039,7 @@ export default function KnowledgeBaseDetailPage({
                                       删除中...
                                     </>
                                   ) : (
-                                    <>删除文件</>
+                                    <>删除</>
                                   )}
                                 </Button>
                               </TableCell>

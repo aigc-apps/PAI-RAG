@@ -144,7 +144,6 @@ class PaiKnowledgebaseClient:
                 nodes[i].embedding = embeddings[i]
 
             await vector_store.async_add(nodes)
-            logger.info(f"Inserted {len(old_chunk_ids)} into vector store.")
 
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(
