@@ -27,20 +27,20 @@ async def create_thread(
         return thread
 
     except IntegrityError as e:
-        logger.exception(f"创建Thread失败。\nIntegrityError:{e}")
+        logger.exception(f"Failed to add conversation: {e}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
             raise HTTPException(
-                status_code=400, detail=f"Thread {thread} already exists."
+                status_code=400, detail=f"Conversation {thread} already exists."
             )
         else:
             raise HTTPException(
-                status_code=400, detail=f"Failed to add thread: {str(e)}"
+                status_code=400, detail=f"Failed to add conversation: {str(e)}"
             )
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=400, detail=f"Failed to add thread: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to add conversation: {str(e)}")
 
 
 @thread_router.get("", response_model=List[ThreadRead])
@@ -67,13 +67,13 @@ async def delete_thread(
 ):
     thread = await session.get(ThreadEntity, thread_id)
     if not thread:
-        raise HTTPException(status_code=404, detail=f"THREAD {thread_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Conversation {thread_id} not found.")
     await session.delete(thread)
     await session.commit()
     asyncio.create_task(thread_provider.refresh())
 
-    logger.info(f"THREAD {thread_id} deleted.")
-    return {"message": f"THREAD {thread_id} deleted."}
+    logger.info(f"Conversation {thread_id} deleted.")
+    return {"message": f"Conversation {thread_id} deleted."}
 
 
 @thread_router.post("/{thread_id}/messages")
@@ -84,7 +84,7 @@ async def create_thread_message(
     thread_id = message.thread_id
     thread = await session.get(ThreadEntity, thread_id)
     if not thread:
-        raise HTTPException(status_code=404, detail=f"THREAD {thread_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Conversation {thread_id} not found.")
 
     message_entity = MessageEntity.model_validate(message)
 
@@ -111,14 +111,10 @@ async def create_thread_message(
 async def get_thread_messages(
     thread_id: str,
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
     sql_results = await session.exec(
         select(MessageEntity)
         .where(MessageEntity.thread_id == thread_id)
-        .offset(offset)
-        .limit(limit)
     )
     message_entities = sql_results.all()
     message_models = [

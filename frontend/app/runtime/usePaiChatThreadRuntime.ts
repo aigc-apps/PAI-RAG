@@ -288,7 +288,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: "default_user",
+          user_id: "PAI-RAG Assistant",
           title: `会话 - ${formattedTime}`, // 动态插入时间
           archived: false,
         }),

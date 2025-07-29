@@ -18,8 +18,10 @@ from pairag.db.models.attachment.file import AttachmentFileEntity
 from pairag.api.response_model import success_response, error_response
 from pairag.common.knowledgebase.types import FileStatus
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
-
-
+from sqlmodel import select
+from pairag.db.models.knowledgebase.embedding import (
+    EmbeddingModelEntity,
+)
 
 attachments_router = APIRouter()
 ATTACHMENTS_DIR = "localdata/attachments"
@@ -35,11 +37,14 @@ async def upload_attachment_file(
     file_id: str = Form(...), file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
 ):
     knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")
+    embedding_results = await session.exec(select(EmbeddingModelEntity))
+    embedding_entities = embedding_results.all()
+    assert len(embedding_entities) > 0, "No embedding model found"
     if not knowledgebase:
         kb = KnowledgebaseCreate(
             name="default_attachments",
             description="附件知识库",
-            embedding_model="text-embedding-v4"
+            embedding_model=embedding_entities[0].model_name,
         )
         kb.chunk_config = (ChunkConfig()).model_dump()
         kb.retrieval_config = (RetrievalConfig()).model_dump()

@@ -5,7 +5,7 @@ from sqlalchemy import Column, DateTime
 
 
 class ThreadCreate(SQLModel):
-    user_id: str = Field(default="default_user")
+    user_id: str = Field(default="PAI-RAG Assistant")
     title: str = Field(default=None)
 
 
@@ -17,8 +17,8 @@ class ThreadRead(ThreadCreate):
 class ThreadEntity(SQLModel, table=True):
     __tablename__ = "pai_thread"
 
-    id: str = Field(default_factory=lambda x: str(uuid.uuid4()), primary_key=True)
-    user_id: str = Field(default="default_user", nullable=False)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
+    user_id: str = Field(default="PAI-RAG Assistant", nullable=False)
     title: str = Field(default=None)
 
     created_at: datetime = Field(
