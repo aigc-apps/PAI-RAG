@@ -1,7 +1,6 @@
 import traceback
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
@@ -10,8 +9,10 @@ from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.mcp.providers.llm_provider import llm_provider
-
+from pairag.api.agent.utils.paginate import get_pagination_meta
+from pairag.api.response_model import PagedResult, success_response, error_response, ResponseModel
 from loguru import logger
+from fastapi.responses import JSONResponse
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
@@ -23,7 +24,7 @@ llm_url_group_map = {
 }
 
 
-@llm_router.post("", response_model=LlmModelRead)
+@llm_router.post("", response_model=ResponseModel[LlmModelRead])
 async def create_llm(
     llm_data: LlmModelCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -31,7 +32,7 @@ async def create_llm(
     llm = LlmModelEntity.model_validate(
         llm_data, update={"encrypted_api_key": encrypted_api_key}
     )
-
+    llm.source = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
     session.add(llm)
     try:
         llm_provider.add(llm)
@@ -43,24 +44,27 @@ async def create_llm(
             event_type=ChangeEventType.ADD,
         )
 
-        return llm
+        return success_response(data=llm, message="LLM创建成功。")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add llm: {e.orig}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            raise HTTPException(
-                status_code=400, detail=f"Model_id {llm_data.model_id} already exists."
+            return JSONResponse(
+                content=error_response(code=400, message=f"Model_id {llm_data.model_id} already exists."),
+                status_code=400,
             )
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to add llm config: {str(e)}"
+            return JSONResponse(
+                content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
+                status_code=400,
             )
     except Exception as e:
         logger.error(f"Failed to add llm config: {traceback.format_exc()}")
         await session.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add llm config: {str(e)}"
+        return JSONResponse(
+            content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
+            status_code=400,
         )
 
 
@@ -89,13 +93,20 @@ async def get_llm_groups(
     return {"groups": list(grouped_results.values())}
 
 
-@llm_router.get("", response_model=List[LlmModelRead])
+@llm_router.get("")
 async def get_llms(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
-    sql_results = await session.exec(select(LlmModelEntity).offset(offset).limit(limit))
+    total_results = await session.exec(
+        select(func.count()).select_from(
+            select(LlmModelEntity)
+        )
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    sql_results = await session.exec(select(LlmModelEntity).offset(pagination.offset).limit(size))
     llm_entities = sql_results.all()
     llm_models = [
         LlmModelRead.model_validate(
@@ -105,7 +116,15 @@ async def get_llms(
         for llm in llm_entities
     ]
 
-    return llm_models
+    return success_response(
+        data=PagedResult(
+            items=llm_models,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取LLM模型列表成功")
 
 
 @llm_router.get("/{llm_id}", response_model=LlmModelRead)
@@ -117,7 +136,7 @@ async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     return llm
 
 
-@llm_router.patch("/{llm_id}", response_model=LlmModelRead)
+@llm_router.patch("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def update_llm(
     llm_id: str,
     update_llm: LlmModelCreate,
@@ -125,8 +144,12 @@ async def update_llm(
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
-        raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
+        return JSONResponse(
+            content=error_response(code=404, message=f"Failed to update llm config {llm_id}"),
+            status_code=400,
+        )
     logger.info(f"update_llm {update_llm}.")
+    llm.model_id = update_llm.model_id or llm.model_id
     llm.base_url = update_llm.base_url or llm.base_url
     llm.context_window = update_llm.context_window or llm.context_window
     llm.model = update_llm.model or llm.model
@@ -151,7 +174,7 @@ async def update_llm(
 
 
 
-    return llm
+    return success_response(data=llm, message="LLM更新成功。")
 
 
 @llm_router.delete("/{llm_id}")

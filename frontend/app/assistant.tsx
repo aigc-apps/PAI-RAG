@@ -12,7 +12,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import ModelConfigPage from "./config/llm/page";
+import ModelConfigPage from "./config/model/page";
 import McpConfig from "./config/mcp/page";
 import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
@@ -165,7 +165,7 @@ export const Assistant = () => {
               />
             </div>
           )}
-          {activeTab === "/config/llm" && (
+          {activeTab === "/config/model" && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />

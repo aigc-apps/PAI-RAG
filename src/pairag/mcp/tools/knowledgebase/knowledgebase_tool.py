@@ -28,6 +28,7 @@ from pairag.mcp.tools.knowledgebase.vector_connection import (
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.providers.embedding_provider import embedding_provider
+from pairag.mcp.providers.reranker_provider import reranker_provider
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.mcp.rag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
@@ -212,12 +213,15 @@ class PaiKnowledgebaseClient:
         retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
+        logger.info(f"Get retrieval config: {retrieval_config}.")
+
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
         query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
         embed_model = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
+
         query_embedding = await embed_model.aget_query_embedding(query)
         document_ids = await query_file_ids_with_metadata_filter(kb_id=knowledge_id, metadata_filter=metadata_condition)
         logger.info(f"Successfully filtered {len(document_ids)} files with metadata filter: {document_ids}.")
@@ -227,15 +231,21 @@ class PaiKnowledgebaseClient:
             return []
 
         top_k = retrieval_config.top_k
+        import pdb
+        pdb.set_trace()
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
+        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
+        if retrieval_config.enable_rerank:
+            reranker_top_k = top_k
+            top_k = 2 * top_k
         similarity_threshold = retrieval_config.similarity_threshold
         if retrieval_setting and retrieval_setting.score_threshold is not None:
             similarity_threshold = retrieval_setting.score_threshold
 
         vector_query = VectorStoreQuery(
             query_embedding=query_embedding,
-            similarity_top_k= top_k,
+            similarity_top_k=top_k,
             doc_ids=document_ids,
             query_str=query,
             mode=query_mode,
@@ -243,6 +253,14 @@ class PaiKnowledgebaseClient:
         )
 
         query_result = await vector_store.aquery(vector_query)
+        if retrieval_config.enable_rerank:
+            raranker_model = reranker_provider.get_reranker_model(
+                retrieval_config.rerank_model
+            )
+            query_result = await raranker_model.vector_store_rerank(
+                query=query,
+                result=query_result,
+                top_n=reranker_top_k)
 
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
@@ -255,14 +273,7 @@ class PaiKnowledgebaseClient:
                         origin_text = origin_text.replace(image_file, image_url)
                     node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
-
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
-
-        if retrieval_config.rerank_model:
-            # TODO 1: Get reranker from reranker_provider and rerank results.
-            # TODO 2: Maybe we can double top_k when rerank model is given, otherwise reranking will be weak.
-            pass
-
         return result_nodes
 
 

@@ -34,10 +34,13 @@ class ConfigChangeManager:
         if not self.worker_mode:
             from pairag.mcp.providers.mcp_tool_provider import mcp_provider
             from pairag.mcp.providers.websearch_provider import websearch_provider
+            from pairag.mcp.providers.reranker_provider import reranker_provider
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
             await websearch_provider.full_load_from_db_async()
             logger.info("Initialized websearch configs.")
+            await reranker_provider.full_load_from_db_async()
+            logger.info("Initialized reranker configs.")
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -123,6 +126,9 @@ class ConfigChangeManager:
             case ChangeEventSource.WEBSEARCH:
                 from pairag.mcp.providers.websearch_provider import websearch_provider
                 return websearch_provider
+            case ChangeEventSource.RERANK:
+                from pairag.mcp.providers.reranker_provider import reranker_provider
+                return reranker_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

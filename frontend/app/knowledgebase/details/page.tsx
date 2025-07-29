@@ -110,6 +110,7 @@ interface SearchRecord {
     file_extension: string;
     images: string[];
     images_info: Array<ImageInfo>;
+    rerank: boolean;
   };
 }
 
@@ -209,7 +210,7 @@ export default function KnowledgeBaseDetailPage({
           fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
 
-        const embData = (await embRes.json())?.data || [];
+        const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {
@@ -1272,6 +1273,11 @@ export default function KnowledgeBaseDetailPage({
                               <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
                                 {chunk.title}
                               </Badge>
+                              {chunk.metadata.rerank && (
+                                <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full">
+                                  Rerank
+                                </Badge>
+                              )}
                             </div>
                           </CardTitle>
                         </CardHeader>
