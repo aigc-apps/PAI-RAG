@@ -53,7 +53,7 @@ def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, ena
     if not tools_prompt:
         tools_prompt.append(WITHOUT_TOOLS_PROMPT)
     system_prompt = SYSTEM_PROMPT.format(
-        current_datetime=get_prompt_current_time_str(), system_role="Agent", tools_prompt="\n\n".join(tools_prompt)
+        tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
     return system_prompt
 
