@@ -19,6 +19,7 @@ from pairag.mcp.rag.file.readers.markdown_reader import MarkdownReader
 from pairag.mcp.rag.file.readers.pdf_reader import MineruPdfReader
 from pairag.mcp.rag.file.readers.pptx_reader import PptxReader
 from pairag.mcp.rag.file.readers.text_reader import TextReader
+from pairag.mcp.rag.file.readers.online_pdf_reader import OnlinePdfReader
 from pairag.mcp.rag.file.splitters.pai_markdown_parser import MarkdownNodeParser
 from pairag.mcp.rag.file.store.base import BaseFileStore
 from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
@@ -54,42 +55,57 @@ class FileParser:
         file_store: BaseFileStore,
         knowledgebase: KbEntity,
         image_caption_tool: ImageCaptionTool = None,
+        is_attachment: bool = False,
     ):
         self.file_store = file_store
-        self.file_readers: Dict[str, BaseReader] = {
-            ".md": MarkdownReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".pdf": MineruPdfReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".html": HtmlReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".htm": HtmlReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".docx": DocxReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".pptx": PptxReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".jsonl": JsonReader(),
-            ".csv": CsvReader(),
-            ".xlsx": ExcelReader(),
-            ".xls": ExcelReader(),
-            ".jpg": ImageReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".png": ImageReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".jpeg": ImageReader(
-                file_store=file_store, image_caption_tool=image_caption_tool
-            ),
-            ".txt": TextReader(),
-        }
+        if is_attachment:
+            self.file_readers = {
+                ".docx": DocxReader(
+                    file_store=file_store
+                ),
+                ".pdf": OnlinePdfReader(
+                    file_store=file_store
+                ),
+                ".md": MarkdownReader(
+                    file_store=file_store
+                ),
+                ".txt": TextReader(),
+            }
+        else:
+            self.file_readers: Dict[str, BaseReader] = {
+                ".md": MarkdownReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".pdf": MineruPdfReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".html": HtmlReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".htm": HtmlReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".docx": DocxReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".pptx": PptxReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".jsonl": JsonReader(),
+                ".csv": CsvReader(),
+                ".xlsx": ExcelReader(),
+                ".xls": ExcelReader(),
+                ".jpg": ImageReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".png": ImageReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".jpeg": ImageReader(
+                    file_store=file_store, image_caption_tool=image_caption_tool
+                ),
+                ".txt": TextReader(),
+            }
         self.knowledgebase = knowledgebase
 
     # 读取文件解析为Document列表
@@ -174,8 +190,8 @@ class FileParser:
 
         return splitted_nodes
 
-    def parse(self, file_item: FileItem) -> List[BaseNode]:
+    def parse(self, file_item: FileItem):
         docs = self.read_file(file_item)
         chunk_config = ChunkConfig.model_validate(self.knowledgebase.chunk_config)
         nodes = self.split_docs(docs, chunk_config=chunk_config)
-        return nodes
+        return docs, nodes

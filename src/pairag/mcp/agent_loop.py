@@ -77,7 +77,11 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
 
     if chat_request.enable_attachments:
         # 获取文件搜索工具
-        file_searcher_tool = await aget_file_searcher()
+        attachments = []
+        for message in chat_request.messages:
+            if message.get("role") == "user" and len(message.get("attachments", [])) > 0:
+                attachments.extend(message.get("attachments", []))
+        file_searcher_tool = await aget_file_searcher(attachments=attachments)
         mcp_tools.append(file_searcher_tool)
 
     if chat_request.enable_search:
@@ -235,8 +239,9 @@ class AgentLoop:
         async def gen():
             cur_step = 0
             stop_flag = False
-            if len(chat_request.attachments) > 0:
-                for attachment in chat_request.attachments:
+            if chat_request.messages[-1].get("attachments", []) != []:
+                attachments = chat_request.messages[-1].get("attachments", [])
+                for attachment in attachments:
                     file_reader = await aget_file_reader()
                     file_reader_fn_args = {
                         "file_id": attachment.get("id"),

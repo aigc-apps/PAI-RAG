@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from pairag.mcp.providers.thread_provider import thread_provider
 from typing import List
 from sqlmodel import select
+from pairag.db.models.attachment.file import AttachmentFileEntity
 
 thread_router = APIRouter()
 
@@ -90,6 +91,18 @@ async def create_thread_message(
     session.add(message_entity)
     await session.commit()
     await session.refresh(message_entity)
+
+    for attachment in message.attachments:
+        file_res = await session.exec(
+            select(AttachmentFileEntity).where(
+                AttachmentFileEntity.frontend_file_id == attachment.get("id")
+            )
+        )
+        attachment_file_entity = file_res.first()
+        attachment_file_entity.message_id = message_entity.id
+        session.add(attachment_file_entity)
+        await session.commit()
+    await session.flush()
 
     return message_entity
 

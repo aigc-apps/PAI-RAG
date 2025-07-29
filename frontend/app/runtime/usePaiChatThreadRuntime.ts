@@ -3,23 +3,9 @@ import {
   ChatModelRunOptions,
   ThreadMessage,
   ChatModelRunResult,
-  ThreadUserMessage,
-  TextContentPart,
 } from "@assistant-ui/react";
-import {
-  FC,
-  PropsWithChildren,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
-import {
-  AssistantRuntime,
-  INTERNAL,
-  useLocalRuntime,
-  ExportedMessageRepository,
-} from "@assistant-ui/react";
+import { useMemo } from "react";
+import { INTERNAL, ExportedMessageRepository } from "@assistant-ui/react";
 
 import { EdgeRuntimeOptions } from "@assistant-ui/react-edge";
 const { splitLocalRuntimeOptions } = INTERNAL;
@@ -28,12 +14,10 @@ import {
   useLocalThreadRuntime,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
   useThreadListItem,
-  AssistantRuntimeProvider,
   type unstable_RemoteThreadListAdapter,
   type ThreadHistoryAdapter,
 } from "@assistant-ui/react";
 import { RuntimeAdapterProvider } from "@assistant-ui/react";
-import { Anybody } from "next/font/google";
 type HeadersValue = Record<string, string> | Headers;
 
 export type EdgeModelAdapterOptions = {
@@ -104,30 +88,13 @@ export class MyModelAdapter implements ChatModelAdapter {
       (m) => (m.attachments ?? []).length > 0,
     );
 
-    const lastMsg = messages[messages.length - 1];
-    const extractedAttachments =
-      lastMsg.attachments?.map((attachment) => ({
-        id: attachment.id,
-        type: attachment.type,
-        name: attachment.name,
-      })) ?? [];
-    const newLastMessage = {
-      role: "user",
-      id: lastMsg.id,
-      content: lastMsg.content,
-      metadata: lastMsg.metadata,
-      createdAt: lastMsg.createdAt,
-      status: lastMsg.status,
-    };
-    const formattedMessages = [...messages.slice(0, -1), newLastMessage];
-
     const result = await fetch(this.options.api, {
       method: "POST",
       headers,
       credentials: this.options.credentials ?? "same-origin",
       body: JSON.stringify({
         system: context.system,
-        messages: formattedMessages,
+        messages: messages,
         tools: [],
         runConfig,
         ...context.callSettings,
@@ -135,7 +102,6 @@ export class MyModelAdapter implements ChatModelAdapter {
 
         ...this.options.body,
         enable_attachments: enableAttachments,
-        attachments: extractedAttachments,
       }),
       signal: abortSignal,
     });

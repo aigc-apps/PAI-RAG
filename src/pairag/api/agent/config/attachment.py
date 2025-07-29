@@ -1,11 +1,25 @@
 ### Embedding configuration API ###
-
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException
-from fastapi.responses import JSONResponse
-from pairag.mcp.online_file_readers.pai_online_data_reader import PaiOnlineDataReader
-from pairag.mcp.online_file_readers.constants import ONLINE_ACCEPTABLE_DOC_TYPES
-from loguru import logger
 import os
+import asyncio
+from fastapi import APIRouter, File, UploadFile, Form, Depends
+from pairag.mcp.online_file_readers.pai_online_data_reader import PaiOnlineDataReader
+from pairag.db.models.knowledgebase.knowledgebase import (
+    ChunkConfig,
+    KbEntity,
+    KnowledgebaseCreate,
+    RetrievalConfig,
+)
+from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.db.db_context import get_session
+from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
+from pairag.mcp.rag.file.store.file_store_helper import file_store
+from pairag.mcp.rag.file.models.file_item import FileItem
+from pairag.db.models.attachment.file import AttachmentFileEntity
+from pairag.api.response_model import success_response, error_response
+from pairag.common.knowledgebase.types import FileStatus
+from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
+
+
 
 attachments_router = APIRouter()
 ATTACHMENTS_DIR = "localdata/attachments"
@@ -18,45 +32,40 @@ data_reader = PaiOnlineDataReader()
 
 @attachments_router.post("/upload")
 async def upload_attachment_file(
-    file_id: str = Form(...), file: UploadFile = File(...)
+    file_id: str = Form(...), file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
 ):
-    # 获取文件扩展名
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    if file_extension not in ONLINE_ACCEPTABLE_DOC_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Only .txt, .pdf, .docx, .md are allowed.",
+    knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")
+    if not knowledgebase:
+        kb = KnowledgebaseCreate(
+            name="default_attachments",
+            description="附件知识库",
+            embedding_model="text-embedding-v4"
         )
+        kb.chunk_config = (ChunkConfig()).model_dump()
+        kb.retrieval_config = (RetrievalConfig()).model_dump()
+        knowledgebase = KbEntity.model_validate(kb)
+        session.add(knowledgebase)
+        await session.commit()
+        await session.refresh(knowledgebase)
+        asyncio.create_task(knowledgebase_provider.refresh())
 
-    try:
-        # 保存文件到临时目录
-        temp_file_path = f"{ATTACHMENTS_TMP_DIR}/{file.filename}"
-        with open(temp_file_path, "wb") as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            logger.info(f"File {file.filename} saved to {temp_file_path}")
-
-        documents = data_reader.load_data(file_path_or_directory=temp_file_path)
-
-        logger.info(f"documents: {len(documents)} {documents}")
-
-        # tmp process: 对解析后的文件直接存储到本地，以file_id命名
-
-        # TODO:
-        # 1. 文件内容存储到数据库，以file_id为主键
-        # 2. 文件进行切片和索引存储到向量数据库
-        with open(f"{ATTACHMENTS_DIR}/{file_id}.txt", "wb") as f:
-            f.write(documents[0].text.encode("utf-8"))
-            logger.info(f"File {file_id}.txt saved to {ATTACHMENTS_DIR}")
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "file_id": file_id,
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "status": "success",
-            },
-        )
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    file_name = file.filename
+    destination_file_path = f"{knowledgebase.name}/docs/{file_name}"
+    file_store.save(
+        file=file.file,
+        file_path=destination_file_path,
+    )
+    file_item = FileItem.from_file(
+        file=file.file,
+        file_path=destination_file_path,
+        kb_id=knowledgebase.id,
+    )
+    file_entity : AttachmentFileEntity = file_item.to_attachment_file_entity(file_id)
+    session.add(file_entity)
+    await session.commit()
+    await kb_client.process_file_async(file_entity.id, True)
+    await session.refresh(file_entity)
+    if file_entity.status == FileStatus.succeeded:
+        return success_response(data=file_entity, message="文件上传成功")
+    else:
+        return error_response(data=file_entity, message="文件上传失败")

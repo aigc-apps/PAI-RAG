@@ -67,6 +67,9 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       // 解析响应
       const result = await response.json();
       console.log("result", result);
+      if (result.code != 200) {
+        throw new Error("上传失败");
+      }
 
       // 返回成功状态
       yield {

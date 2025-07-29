@@ -1,4 +1,4 @@
-from typing import Dict, Union, List, Any, Optional
+from typing import Union, List, Any, Optional
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
@@ -16,11 +16,6 @@ class ChatAgentRequest(BaseModel):
     max_steps: Optional[int] = None
 
     enable_attachments: Optional[bool] = False  # 是否启用附件功能
-    attachments: Optional[
-        List[Dict[str, Any]]
-    ] = (
-        []
-    )  # Temporary design for attachments, list of dict with [id, name, type]. This may be revised in the future.
 
     # llm args
     temperature: Optional[float] = None
