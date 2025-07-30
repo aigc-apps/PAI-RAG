@@ -33,7 +33,7 @@ export const TooltipIconButton = forwardRef<
           <span className="sr-only">{tooltip}</span>
         </Button>
       </TooltipTrigger>
-      <TooltipContent side={side}>{tooltip}</TooltipContent>
+      {/* <TooltipContent side={side}>{tooltip}</TooltipContent> */}
     </Tooltip>
   );
 });

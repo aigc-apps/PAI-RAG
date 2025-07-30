@@ -7,7 +7,7 @@ from pairag.common.knowledgebase.types import ChunkStatus
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 
 
-class KbChunkModel(SQLModel):
+class AttachmentChunkModel(SQLModel):
     text: str = Field(default=None)
     chunk_metadata: dict = Field(default={}, sa_column=Column("chunk_metadata", JSON))
 
@@ -20,33 +20,32 @@ class KbChunkModel(SQLModel):
         default=True
     )
 
-
-class KbChunkEntity(KbChunkModel, table=True):
-    __tablename__ = "pai_knowledgebase_chunk"
+class AttachmentChunkEntity(AttachmentChunkModel, table=True):
+    __tablename__ = "pai_attachment_chunk"
     id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
     # ref
-    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
-    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
+    file_id: str = Field(default=None, foreign_key="pai_attachment_file.id", ondelete="CASCADE")
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
     )
 
 
-def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode):
-    return KbChunkEntity(
+
+def create_attachment_chunk_from_text_node(file_id: str, node: TextNode):
+    return AttachmentChunkEntity(
         id=node.id_,
-        knowledgebase_id=kb_id,
         file_id=file_id,
-        kb_id=kb_id,
         text=node.text,
         chunk_metadata=node.metadata,
     )
 
-def create_text_node_from_chunk(chunk: KbChunkEntity):
+def create_text_node_from_attachment_chunk(chunk: AttachmentChunkEntity):
     return TextNode(
         id_ = chunk.id,
         text = chunk.text,

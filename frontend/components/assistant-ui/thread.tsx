@@ -27,6 +27,11 @@ import { ToolFallback } from "@/components/ui/custom-tool-fallback";
 import { Brain, Search, Wrench, LibraryBig } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { McpModal, McpEntry } from "@/app/config/mcp/mcpmodal";
+import {
+  ComposerAttachments,
+  ComposerAddAttachment,
+} from "@/components/assistant-ui/my_attachment";
+import { UserMessageAttachments } from "@/components/assistant-ui/my_attachment";
 import { KbModal, KbSelection } from "@/app/knowledgebase/kbmodal";
 
 export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
@@ -337,6 +342,10 @@ const Composer: FC<ComposerProps> = ({
       className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
     >
       {/* 第一行：输入框 */}
+      <div>
+        <ComposerAttachments />
+        <ComposerAddAttachment />
+      </div>
       <ComposerPrimitive.Input
         rows={1}
         autoFocus
@@ -352,11 +361,6 @@ const Composer: FC<ComposerProps> = ({
             variant="outline"
             className="flex gap-x-4 overflow-visible"
             onValueChange={(newValue) => {
-              // 仅当 "mcp" 被新增时打开模态框
-              // const isMcpAdded = newValue.includes("mcp") && !prevMcpValue.includes("mcp");
-              // if (isMcpAdded) {
-              //   onOpenMcpModal?.();
-              // }
               onToggleChange?.(mcpConfigs, newValue);
               setPrevMcpValue(newValue);
             }}
@@ -414,9 +418,9 @@ const ComposerAction: FC = () => {
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
           <TooltipIconButton
-            tooltip="Send"
+            tooltip="发送"
             variant="default"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+            className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
           >
             <SendHorizontalIcon />
           </TooltipIconButton>
@@ -425,9 +429,9 @@ const ComposerAction: FC = () => {
       <ThreadPrimitive.If running>
         <ComposerPrimitive.Cancel asChild>
           <TooltipIconButton
-            tooltip="Cancel"
+            tooltip="取消"
             variant="default"
-            className="my-2.5 size-8 p-2 transition-opacity ease-in"
+            className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
           >
             <CircleStopIcon />
           </TooltipIconButton>
@@ -442,6 +446,7 @@ const UserMessage: FC = () => {
     <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
       <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+        <UserMessageAttachments />
         <MessagePrimitive.Content />
       </div>
 
@@ -495,7 +500,7 @@ const AssistantMessage: FC = () => {
 
       <AssistantActionBar />
 
-      <BranchPicker className="col-start-2 row-start-2 -ml-2 mr-2" />
+      <BranchPicker className="flex flex-row gap-x-6 col-start-2 row-start-2 mr-10" />
     </MessagePrimitive.Root>
   );
 };
@@ -506,7 +511,7 @@ const AssistantActionBar: FC = () => {
       hideWhenRunning
       autohide="not-last"
       autohideFloat="single-branch"
-      className="text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="flex flex-row items-center gap-x-10  text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="Copy">

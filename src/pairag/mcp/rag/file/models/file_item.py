@@ -4,6 +4,7 @@ import os
 import uuid
 
 from pairag.db.models.knowledgebase.file import KbFileEntity
+from pairag.db.models.attachment.file import AttachmentFileEntity
 from pairag.mcp.rag.file.file_utils import ensure_file_type_is_supported
 
 
@@ -91,4 +92,20 @@ class FileItem:
             file_path=self.file_path,
             file_md5=self.file_md5,
             file_metadata=self.metadata(),
+        )
+
+    def to_attachment_file_entity(self, frontend_file_id) -> AttachmentFileEntity:
+        return AttachmentFileEntity(
+            id=self.id,
+            kb_id=self.kb_id,
+            message_id="",
+            file_content="",
+            file_content_length=0,
+            file_name=self.file_name,
+            file_size=self.file_size,
+            file_extension=self.file_extension,
+            file_path=self.file_path,
+            file_md5=self.file_md5,
+            file_metadata=self.metadata(),
+            frontend_file_id=frontend_file_id
         )

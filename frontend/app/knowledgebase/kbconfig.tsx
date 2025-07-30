@@ -151,9 +151,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     };
     const fetchRerankerModelConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
         const [rerankerRes] = await Promise.all([
-          fetch(`http://localhost:${port}/v1/config/rerankers`),
+          fetch(`${API_BASE}/v1/config/rerankers`),
         ]);
 
         const rerankerData = (await rerankerRes.json())?.data.items || [];

@@ -62,9 +62,7 @@ export default function ModelSelector({
       }
     };
 
-    if (open) {
-      fetchModels();
-    }
+    fetchModels();
   }, [open]);
 
   return (

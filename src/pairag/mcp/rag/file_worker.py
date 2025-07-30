@@ -40,11 +40,11 @@ async def init_worker():
         logger.info("FileWorker already initialized.")
 
 @app.task(name="process_file")
-def process_file(file_id: str):
+def process_file(file_id: str, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(init_worker())
     logger.info(f"Processing file {file_id}.")
-    loop.run_until_complete(kb_client.process_file_async(file_id))
+    loop.run_until_complete(kb_client.process_file_async(file_id, is_attachment))
     logger.info(f"Processed file {file_id} successfully.")
 
 @app.task(name="download_model")

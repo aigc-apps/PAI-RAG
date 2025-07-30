@@ -14,7 +14,6 @@ from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 
-
 class ConfigChangeManager:
     def __init__(self, worker_mode: bool = False):
         self.last_change_dt = None # 表示状态未初始化，不会扫描ChangeEvent表
@@ -25,7 +24,7 @@ class ConfigChangeManager:
         if self.initialized:
             return
 
-        current_dt = datetime.now(timezone.utc)
+        current_dt = datetime.now(timezone.utc).replace(tzinfo=None)
         from pairag.db.db_context import init_db
 
         await init_db()
