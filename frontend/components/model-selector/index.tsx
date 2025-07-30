@@ -47,10 +47,9 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        const res = await fetch(
-          `http://localhost:${port}/v1/config/llms/groups`,
-        );
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        const res = await fetch(`${API_BASE}/v1/config/llms/groups`);
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();
         console.log("model data: ", data);

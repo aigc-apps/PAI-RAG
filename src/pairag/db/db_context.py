@@ -93,6 +93,7 @@ def with_async_db_session(func):
             async_engine, class_=AsyncSession, expire_on_commit=False
         )
         async with AsyncSessionLocal() as session:
-            return await func(session, *args, **kwargs)
+            kwargs["session"] = session
+            return await func(*args, **kwargs)
 
     return wrapper

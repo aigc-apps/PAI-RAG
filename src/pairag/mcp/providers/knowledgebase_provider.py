@@ -1,10 +1,11 @@
-from typing import Dict, List
-from sqlmodel import select
+import traceback
+from typing import Dict, Type
+from loguru import logger
+from sqlmodel import Field, SQLModel
 from pairag.db.models.knowledgebase.knowledgebase import KbEntity
 from pairag.db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
-from loguru import logger
-
+from pairag.mcp.providers.base_provider import BaseConfigProvider
 
 @with_async_db_session
 async def fetch_knowledgebases_by_id(session: AsyncSession, kb_id: str) -> KbEntity:
@@ -12,49 +13,48 @@ async def fetch_knowledgebases_by_id(session: AsyncSession, kb_id: str) -> KbEnt
     return kb
 
 
-@with_async_db_session
-async def fetch_knowledgebases(session: AsyncSession) -> List[KbEntity]:
-    logger.info("[KnowledgebaseProvider] Start fetching knowledgebases.")
-    sql_results = await session.exec(select(KbEntity))
-    knowledgebase_results = sql_results.all()
+class KnowledgebaseProvider(BaseConfigProvider):
+    name_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = KbEntity
 
-    logger.info(
-        f"[KnowledgebaseProvider] fetched {len(knowledgebase_results)} knowledges."
-    )
-    return knowledgebase_results
+    def add(self, entry: KbEntity):
+        super().add(entry)
+        self.name_to_entry_id[entry.name] = entry.id
 
+    def update(self, entry: KbEntity):
+        super().update(entry)
+        self.name_to_entry_id[entry.name] = entry.id
 
-class KnowledgebaseProvider:
-    def __init__(self):
-        self.knowledgebase_map: Dict[str, KbEntity] = {}
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.name_to_entry_id.items():
+                if v == entry_id:
+                    del self.name_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
 
-    async def refresh(self):
-        logger.info("[KnowledgebaseProvider] Start refreshing knowledgebases.")
-        knowledgebases = await fetch_knowledgebases()
-        self.knowledgebase_map = {
-            knowledgebase.id: knowledgebase for knowledgebase in knowledgebases
-        }
-        self.knowledgebase_name_map = {
-            knowledgebase.name: knowledgebase for knowledgebase in knowledgebases
-        }
-        logger.info(
-            f"[KnowledgebaseProvider] refreshed {len(self.knowledgebase_map)} knowledgebases."
-        )
+    def _load_entries(self, entries):
+        super()._load_entries(entries)
+        for entry_id, entry in self.config_map.items():
+            self.name_to_entry_id[entry.name] = entry_id
 
     async def aget_knowledgebase(self, knowledgebase_id: str) -> KbEntity:
-        if knowledgebase_id not in self.knowledgebase_map:
-            kb = await fetch_knowledgebases_by_id(knowledgebase_id)
+        if knowledgebase_id not in self.config_map:
+            kb = await fetch_knowledgebases_by_id(kb_id=knowledgebase_id)
             if kb is None:
                 raise ValueError(f"Knowledgebase {knowledgebase_id} not found.")
 
+            self._load_entries([kb])
             return kb
-        return self.knowledgebase_map[knowledgebase_id]
+        return self.config_map[knowledgebase_id]
 
     def get_knowledgebase_by_name(self, knowledgebase_name: str) -> KbEntity:
         assert (
-            knowledgebase_name in self.knowledgebase_name_map
+            knowledgebase_name in self.name_to_entry_id
         ), f"Knowledgebase '{knowledgebase_name}' not found."
-        return self.knowledgebase_name_map[knowledgebase_name]
+        return self.config_map[self.name_to_entry_id[knowledgebase_name]]
 
 
 knowledgebase_provider = KnowledgebaseProvider()

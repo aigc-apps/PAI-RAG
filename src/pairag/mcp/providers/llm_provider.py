@@ -1,54 +1,60 @@
-from typing import Dict, List, Optional
-from sqlmodel import select
-from pairag.db.encrypt_utils import decrypt_key
-from pairag.db.models.llm import LlmModelEntity
-from pairag.db.db_context import with_async_db_session
-from sqlmodel.ext.asyncio.session import AsyncSession
+import traceback
+from typing import Dict, Optional, Type
+from sqlmodel import Field, SQLModel
 from llama_index.llms.openai_like import OpenAILike
 from loguru import logger
+from pairag.db.encrypt_utils import decrypt_key
+from pairag.mcp.providers.base_provider import BaseConfigProvider
+from pairag.db.models.llm import LlmModelEntity
 
 
-@with_async_db_session
-async def fetch_llm_models(session: AsyncSession):
-    logger.info("[LlmProvider] Start fetching llm model.")
-    sql_results = await session.exec(select(LlmModelEntity))
-    llm_results = sql_results.all()
+class LlmProvider(BaseConfigProvider):
+    model_id_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = LlmModelEntity
 
-    logger.info(f"[LlmProvider] fetched {len(llm_results)} llm models.")
+    def _load_entries(self, entries):
+        super()._load_entries(entries)
+        for entry_id, entry in self.config_map.items():
+            self.model_id_to_entry_id[entry.model_id] = entry_id
 
-    return llm_results
+    def add(self, entry: LlmModelEntity):
+        super().add(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def update(self, entry: LlmModelEntity):
+        super().update(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
+
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.model_id_to_entry_id.items():
+                if v == entry_id:
+                    del self.model_id_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
 
 
-class LlmProvider:
-    def __init__(self):
-        self.llm_models_map: Dict[str, OpenAILike] = {}
-        self.llm_configs: List[LlmModelEntity] = []
-
-    async def refresh(self):
-        logger.info("[LlmProvider] Start refreshing llm models.")
-        self.llm_configs = await fetch_llm_models()
-        self.llm_models_map = {
-            llm.model_id: OpenAILike(
-                model=llm.model,
-                api_base=llm.base_url,
-                api_key=decrypt_key(llm.encrypted_api_key),
-                temperature=llm.temperature,
-                max_tokens=llm.context_window,
+    def _create_instance(self, config: LlmModelEntity):
+        return OpenAILike(
+                model=config.model,
+                api_base=config.base_url,
+                api_key=decrypt_key(config.encrypted_api_key),
+                temperature=config.temperature,
+                max_tokens=config.context_window,
                 is_chat_model=True,
                 is_function_calling_model=True,
             )
-            for llm in self.llm_configs
-        }
-        logger.info(f"[LlmProvider]refreshed {len(self.llm_models_map)} llm models.")
 
     def get_llm_model(self, model_id: str) -> OpenAILike:
-        assert model_id in self.llm_models_map, f"Model {model_id} not found."
-        return self.llm_models_map[model_id]
+        assert model_id in self.model_id_to_entry_id, f"Model {model_id} not found."
+        return self.get_instance(self.model_id_to_entry_id[model_id])
 
     # 获取多模态大模型，如果没找到，直接返回None
     def get_multimodal_llm(self, model_id: str | None = None) -> Optional[OpenAILike]:
         if model_id is None:
-            for llm in self.llm_configs:
+            for llm in self.config_map.values():
                 if llm.vision_support:
                     logger.info(f"[LLMProvider] found multimodal llm {llm.model_id}.")
                     return self.get_llm_model(llm.model_id)
@@ -57,8 +63,7 @@ class LlmProvider:
             )
             return None
         else:
-            assert model_id in self.llm_models_map, f"Model {model_id} not found."
-            return self.llm_models_map[model_id]
+            return self.get_llm_model(llm.model_id)
 
 
 llm_provider = LlmProvider()

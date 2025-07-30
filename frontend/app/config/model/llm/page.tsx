@@ -56,9 +56,10 @@ export default function LlmConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
         const res = await fetch(
-          `http://localhost:${port}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
+          `${API_BASE}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取LLM模型列表失败");
         const json_data = await res.json();
@@ -96,8 +97,9 @@ export default function LlmConfigPage() {
   const handleActivateToggle = async (llm: LlmConfig) => {
     setErrorMsg("");
     llm.enabled = !llm.enabled;
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-    const url = `http://localhost:${port}/v1/config/llms/${llm.id}`;
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+    const url = `${API_BASE}/v1/config/llms/${llm.id}`;
 
     const res = await fetch(url, {
       method: "PATCH",
@@ -118,16 +120,14 @@ export default function LlmConfigPage() {
     setErrorMsg("");
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(
-        `http://localhost:${port}/v1/config/${model_type}/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+      });
 
       if (!res.ok) {
         setErrorMsg(`${model_type}删除失败，请检查网络或配置`);
