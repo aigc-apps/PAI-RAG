@@ -260,7 +260,7 @@ class PaiKnowledgebaseClient:
         query_result = await vector_store.aquery(vector_query)
         logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
 
-        if retrieval_config.enable_rerank and len(query_result.nodes) > 0:
+        if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
                 retrieval_config.rerank_model
             )
