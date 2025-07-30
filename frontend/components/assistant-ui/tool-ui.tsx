@@ -3,8 +3,7 @@ import { GlobeIcon } from "@radix-ui/react-icons";
 import type { FC } from "react";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import React, { useState, useEffect } from "react";
-import { CarIcon } from "lucide-react"; // 可以使用你喜欢的图标库
-import { Search } from "lucide-react";
+import { CarIcon, Search, FileSearch, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -14,6 +13,20 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+
+const JsonCodeBlock = ({
+  jsonString,
+}: {
+  jsonString: string | null | undefined;
+}) => {
+  return (
+    <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
+      <code className="language-json whitespace-pre-wrap break-words">
+        {jsonString ?? ""}
+      </code>
+    </pre>
+  );
+};
 
 export type MapsGeoArgs = {
   address: string;
@@ -281,82 +294,91 @@ type SearchWebResult = {
 export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: "search-web",
   render: ({ args, status, result }) => {
-    if (!result) {
-      return null;
-    }
-    console.log("SearchWebToolUI 结果:", result);
     console.log("SearchWebToolUI 参数:", args);
     console.log("SearchWebToolUI 状态:", status);
 
-    const search_result = JSON.parse(result) as SearchWebResult;
-    if (status.type == "running") {
+    if (status.type === "running") {
       return (
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-          <GlobeIcon className="h-4 w-4 animate-pulse" />
-          <span>正在搜索网页...{args.query}</span>
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <Search className="size-4" /> 正在搜索网页中: {args.query}{" "}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>未能获取搜索结果</span>
+          </div>
+        );
+      }
+      const search_result = JSON.parse(result) as SearchWebResult;
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                {" "}
+                <Search className="size-4" /> 完成网页搜索: {args.query}{" "}
+                (点击查看结果){" "}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>
+                  网页搜索结果 · {search_result?.result.length}
+                </SheetTitle>
+                <SheetDescription>{args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="pl-6 pr-2">
+                  {search_result?.result.map((item, index) => (
+                    <div
+                      key={index}
+                      className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
+                    >
+                      <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
+                        {/* Logo与标题行 */}
+                        <div className="flex items-center gap-1">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                            <img
+                              src={item.metadata["host_logo"]}
+                              alt={item.metadata["host_name"]}
+                              className="w-5 h-5 object-cover rounded-sm"
+                            />
+                          </div>
+
+                          {/* 标题链接 */}
+                          <a
+                            href={item.metadata["file_url"]}
+                            className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
+                          >
+                            {item.metadata["file_name"]}
+                          </a>
+                        </div>
+
+                        {/* 内容区域 */}
+                        <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
+                          {item.text}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       );
     }
-    return (
-      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="link"
-              className="flex items-center gap-2 px-4 text-blue-800"
-            >
-              {" "}
-              <Search className="size-4" /> 完成网页搜索: {args.query}{" "}
-              (点击查看结果){" "}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right">
-            <SheetHeader>
-              <SheetTitle>
-                网页搜索结果 · {search_result?.result.length}
-              </SheetTitle>
-              <SheetDescription>{args.query}</SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-              <div className="pl-6 pr-2">
-                {search_result?.result.map((item, index) => (
-                  <div
-                    key={index}
-                    className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
-                  >
-                    <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
-                      {/* Logo与标题行 */}
-                      <div className="flex items-center gap-1">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
-                          <img
-                            src={item.metadata["host_logo"]}
-                            alt={item.metadata["host_name"]}
-                            className="w-5 h-5 object-cover rounded-sm"
-                          />
-                        </div>
-
-                        {/* 标题链接 */}
-                        <a
-                          href={item.metadata["file_url"]}
-                          className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
-                        >
-                          {item.metadata["file_name"]}
-                        </a>
-                      </div>
-
-                      {/* 内容区域 */}
-                      <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
-                        {item.text}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    );
   },
 });
 
@@ -376,40 +398,205 @@ type ThinkResult = {
 export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
   toolName: "think-and-planning",
   render: ({ args, status, result }) => {
-    if (!result) {
-      return null;
-    }
     console.log("think args:", args);
-    return (
-      <div
-        className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
-        role="button"
-      >
-        {/* 条件渲染头部内容：仅当 thought_number 为 1 时显示 */}
-        {args.thought_number === 1 && (
+    console.log("think status:", status);
+    console.log("think result:", result);
+    if (status.type === "running") {
+      return (
+        <div
+          className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
+          role="button"
+        >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xl" aria-hidden="true">
               🧠
             </span>
-            <span className="font-semibold">思考中... </span>
+            <span className="font-semibold">正在思考和规划中... </span>
           </div>
-        )}
-        <div className="text-sm mt-2">
-          <div className="mb-2">
-            <strong>思考内容：</strong> {args.thought}
-          </div>
-          <div className="mb-2">
-            <strong>计划详情：</strong> {args.plan}
-          </div>
-          <div className="mb-2">
-            <strong>下一步计划行动：</strong> {args.action}
-          </div>
-          <div className="text-xs text-gray-500">
-            思考次数：{args.thought_number} / {args.thought_number}
+          <div className="text-sm mt-2">
+            <div className="mb-2">
+              <strong>思考内容：</strong> {args.thought}
+            </div>
+            <div className="mb-2">
+              <strong>计划详情：</strong> {args.plan}
+            </div>
+            <div className="mb-2">
+              <strong>下一步计划行动：</strong> {args.action}
+            </div>
+            <div className="text-xs text-gray-500">
+              思考次数：{args.thought_number} / {args.thought_number}
+            </div>
           </div>
         </div>
-      </div>
-    );
+      );
+    } else if (status.type === "complete") {
+      return (
+        <div
+          className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
+          role="button"
+        >
+          {/* 条件渲染头部内容：仅当 thought_number 为 1 时显示 */}
+          {args.thought_number === 1 && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl" aria-hidden="true">
+                🧠
+              </span>
+              <span className="font-semibold">思考和规划结果 </span>
+            </div>
+          )}
+          <div className="text-sm mt-2">
+            <div className="mb-2">
+              <strong>思考内容：</strong> {args.thought}
+            </div>
+            <div className="mb-2">
+              <strong>计划详情：</strong> {args.plan}
+            </div>
+            <div className="mb-2">
+              <strong>下一步计划行动：</strong> {args.action}
+            </div>
+            <div className="text-xs text-gray-500">
+              思考次数：{args.thought_number} / {args.thought_number}
+            </div>
+          </div>
+        </div>
+      );
+    }
+  },
+});
+
+/* Read File Tool UI */
+
+export type ReadFileToolArgs = {
+  file_id: string;
+  file_name: string;
+};
+
+export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
+  toolName: "read-file",
+  render: ({ args, status, result }) => {
+    if (status.type === "running") {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <FileSearch className="size-4" /> 正在进行文件读取: {args.file_name}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return null;
+      }
+
+      const parsedResult = JSON.parse(result);
+      console.log("ReadFileToolUI 结果:", parsedResult);
+      console.log("ReadFileToolUI 参数:", args);
+
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                <FileText className="size-4" /> 完成文件读取: {args.file_name}
+                (点击查看结果)
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>文件读取结果</SheetTitle>
+                <SheetDescription>文件名：{args.file_name}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="border-t border-dashed px-4 pt-2">
+                  <p className="font-semibold">文件读取结果:</p>
+                  <JsonCodeBlock
+                    jsonString={
+                      typeof parsedResult === "string"
+                        ? parsedResult
+                        : JSON.stringify(parsedResult, null, 2)
+                    }
+                  />
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
+/* Search File Tool UI */
+
+export type SearchFileToolArgs = {
+  query_str: string;
+};
+
+export const SearchFileToollUI = makeAssistantToolUI<
+  SearchFileToolArgs,
+  string
+>({
+  toolName: "search-file",
+  render: ({ args, status, result }) => {
+    console.log("SearchFileToollUI 参数:", args);
+
+    if (status.type === "running") {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <FileSearch className="size-4" /> 正在进行文件搜索: {args.query_str}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return null;
+      }
+      const parsedResult = JSON.parse(result);
+      console.log("SearchFileToollUI 结果:", parsedResult);
+
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                <FileSearch className="size-4" /> 完成文件搜索: {args.query_str}
+                (点击查看结果)
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>文件搜索结果</SheetTitle>
+                <SheetDescription>搜索问题：{args.query_str}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="border-t border-dashed px-4 pt-2">
+                  <p className="font-semibold">文件搜索结果:</p>
+                  <JsonCodeBlock
+                    jsonString={
+                      typeof parsedResult === "string"
+                        ? parsedResult
+                        : JSON.stringify(parsedResult, null, 2)
+                    }
+                  />
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
   },
 });
 
@@ -420,6 +607,8 @@ const ToolUIWrapper: FC = () => {
       {/* <MapsDirectionDrivingToolUI /> */}
       <SearchWebToolUI />
       <ThinkToolUI />
+      <ReadFileToollUI />
+      <SearchFileToollUI />
     </>
   );
 };

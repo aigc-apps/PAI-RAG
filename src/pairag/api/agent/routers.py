@@ -7,6 +7,7 @@ def add_config_router(app: FastAPI):
     from pairag.api.agent.config.websearch import websearch_router
     from pairag.api.agent.config.trace import trace_router
     from pairag.api.agent.config.embedding import embedding_router
+    from pairag.api.agent.config.attachment import attachments_router
     from pairag.api.agent.config.reranker import reranker_router
     from pairag.api.agent.config.metadata import knowledgebase_router
 
@@ -17,11 +18,15 @@ def add_config_router(app: FastAPI):
     app.include_router(embedding_router, prefix="/v1/config/embeddings")
     app.include_router(reranker_router, prefix="/v1/config/rerankers")
     app.include_router(knowledgebase_router, prefix="/v1/config/knowledgebases")
+    app.include_router(attachments_router, prefix="/v1/config/attachments")
 
 
 def add_chat_router(app: FastAPI):
     from pairag.api.agent.chat import chat_agent_router
-    from pairag.api.agent.chat import agent_answer_dump_router
+    from pairag.api.agent.thread import thread_router
 
     app.include_router(chat_agent_router, prefix="/v1/agent/chat")
+    app.include_router(thread_router, prefix="/v1/agent/threads")
+    from pairag.api.agent.chat import agent_answer_dump_router
+
     app.include_router(agent_answer_dump_router, prefix="/v1/agent/chat_final_answer")

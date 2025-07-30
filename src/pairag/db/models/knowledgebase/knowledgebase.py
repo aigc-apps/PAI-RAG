@@ -31,7 +31,7 @@ class RetrievalConfig(SQLModel):
     similarity_threshold: float = Field(default=DEFAULT_SIMILARITY_THRESHOLD)
     vector_weight: float = Field(default=0.5)
     enable_rerank: bool = Field(default=False)
-    rerank_model: str = Field(default=None)
+    rerank_model: str = Field(default="")
 
 
 class KnowledgebaseCreate(SQLModel):

@@ -29,7 +29,8 @@ class ChangeEvent(SQLModel, table=True):
     event_source: ChangeEventSource = Field(default=ChangeEventSource.KNOWLEDGEBASE)
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
     )
 
 

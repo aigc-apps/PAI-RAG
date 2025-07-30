@@ -5,6 +5,7 @@ from llama_index.core.tools import FunctionTool
 
 from pairag.chat.models import RetrievalSetting
 from pairag.db.models.knowledgebase.file import KbFileEntity
+from pairag.db.models.attachment.file import AttachmentFileEntity
 from pairag.db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
 from pairag.common.knowledgebase.types import (
     ChunkStatus,
@@ -67,7 +68,7 @@ class PaiKnowledgebaseClient:
 
         return self.vector_store_cache[kb_key]
 
-    def create_file_parser(self, knowledgebase: KbEntity):
+    def create_file_parser(self, knowledgebase: KbEntity, is_attachment: bool = False):
         multimodal_llm = llm_provider.get_multimodal_llm()
         image_caption_tool = None
         if multimodal_llm:
@@ -76,6 +77,7 @@ class PaiKnowledgebaseClient:
             file_store=file_store,
             image_caption_tool=image_caption_tool,
             knowledgebase=knowledgebase,
+            is_attachment=is_attachment
         )
         return file_parser
 
@@ -90,9 +92,14 @@ class PaiKnowledgebaseClient:
     async def process_file_async(
         self,
         file_id: str,
+        is_attachment: bool = False,
     ):
-        logger.info(f"[WORKER] processing file {file_id} in background.")
-        file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
+        logger.info(f"[WORKER] processing file {file_id} in background. Is attachment: {is_attachment}")
+        if is_attachment:
+            file_entity: AttachmentFileEntity = await read_file_from_db(file_id=file_id, is_attachment=is_attachment)
+        else:
+            file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
+
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
 
         file = file_store.load(file_entity.file_path)
@@ -114,17 +121,18 @@ class PaiKnowledgebaseClient:
         logger.info(
             f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
         )
-        await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing)
+        await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
 
         try:
-            file_parser = self.create_file_parser(knowledgebase)
-            nodes = file_parser.parse(file_item)
+            file_parser = self.create_file_parser(knowledgebase, is_attachment)
+            documents, nodes = file_parser.parse(file_item)
 
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
-                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
+                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes, is_attachment=is_attachment
             )
+
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.persisting
+                file_id=file_item.id, status=FileStatus.persisting, is_attachment=is_attachment, documents=documents
             )
 
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
@@ -148,10 +156,10 @@ class PaiKnowledgebaseClient:
 
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(
-                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded
+                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded, is_attachment=is_attachment
             )
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.succeeded
+                file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
             )
 
             logger.info(
@@ -162,7 +170,7 @@ class PaiKnowledgebaseClient:
                 f"Error adding file {file_item.file_name} to knowledgebase {kb_id}. {ex}"
             )
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.failed
+                file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment
             )
 
     async def adelete_kb(
@@ -233,6 +241,76 @@ class PaiKnowledgebaseClient:
         top_k = retrieval_config.top_k
         import pdb
         pdb.set_trace()
+        if retrieval_setting and retrieval_setting.top_k is not None:
+            top_k = retrieval_setting.top_k
+        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
+        if retrieval_config.enable_rerank:
+            reranker_top_k = top_k
+            top_k = 2 * top_k
+        similarity_threshold = retrieval_config.similarity_threshold
+        if retrieval_setting and retrieval_setting.score_threshold is not None:
+            similarity_threshold = retrieval_setting.score_threshold
+
+        vector_query = VectorStoreQuery(
+            query_embedding=query_embedding,
+            similarity_top_k=top_k,
+            doc_ids=document_ids,
+            query_str=query,
+            mode=query_mode,
+            alpha=retrieval_config.vector_weight,
+        )
+
+        query_result = await vector_store.aquery(vector_query)
+        if retrieval_config.enable_rerank:
+            raranker_model = reranker_provider.get_reranker_model(
+                retrieval_config.rerank_model
+            )
+            query_result = await raranker_model.vector_store_rerank(
+                query=query,
+                result=query_result,
+                top_n=reranker_top_k)
+
+        result_nodes = []
+        for i, node in enumerate(query_result.nodes):
+            if query_result.similarities[i] >= similarity_threshold:
+                images = node.metadata.get("images", [])
+                if images:
+                    origin_text = node.text
+                    for image_file in images:
+                        image_url = file_store.get_url(image_file)
+                        origin_text = origin_text.replace(image_file, image_url)
+                    node.text = origin_text
+                result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
+        logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
+        return result_nodes
+
+    async def aquery_for_attachments(
+        self,
+        query,
+        knowledge_id: str,
+        retrieval_setting: Optional[RetrievalSetting] = None,
+        document_ids: List[str] = None,
+    ) -> List[NodeWithScore]:
+        if not document_ids:
+            # fail fast as no attachment docs filtered.
+            return []
+
+        logger.info(f"Starting to query knowledgebase {knowledge_id} with query: {query}.")
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(knowledge_id)
+        retrieval_config = RetrievalConfig.model_validate(
+            knowledgebase.retrieval_config
+        )
+        vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
+        query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
+
+        embed_model = embedding_provider.get_embedding_model(
+            knowledgebase.embedding_model
+        )
+
+        query_embedding = await embed_model.aget_query_embedding(query)
+
+
+        top_k = retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
         # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.

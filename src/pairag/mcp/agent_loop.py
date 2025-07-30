@@ -8,16 +8,22 @@ from pairag.mcp.prompts import (
     SYSTEM_PROMPT,
     SEARCH_WEB_TOOL_PROMPT,
     THINKING_TOOL_PROMPT,
+    ATTACHMENTS_TOOL_PROMPT
 )
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.mcp.utils.message_utils import convert_to_chat_messages
 from pairag.mcp.utils.time_utils import get_prompt_current_time_str
 from pairag.mcp.tools.think.think_and_planning_tool import aget_simple_think_tool
+from pairag.mcp.tools.attachments.file_reader import aget_file_reader
+from pairag.mcp.tools.attachments.file_searcher import aget_file_searcher
 from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.mcp.providers.websearch_provider import websearch_provider
+from openai.types.chat.chat_completion_chunk import (
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
-from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 from llama_index.core.llms import LLM
 from pairag.mcp.constants import MAX_CHAT_STEPS
 from pairag.memory.base_memory import BaseMemory
@@ -42,8 +48,7 @@ class AgentState(BaseModel):
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-
-def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False):
+def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False, enable_attachments: bool = False):
     tools_prompt = []
     if enable_thinking:
         tools_prompt.append(THINKING_TOOL_PROMPT)
@@ -52,6 +57,8 @@ def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, ena
         current_datetime=get_prompt_current_time_str()))
     if not tools_prompt:
         tools_prompt.append(WITHOUT_TOOLS_PROMPT)
+    if enable_attachments:
+        tools_prompt.append(ATTACHMENTS_TOOL_PROMPT)
     system_prompt = SYSTEM_PROMPT.format(
         tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
@@ -61,6 +68,14 @@ def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, ena
 async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     mcp_tools = []
 
+    if chat_request.enable_attachments:
+        # 获取文件搜索工具
+        attachments = []
+        for message in chat_request.messages:
+            if message.get("role") == "user" and len(message.get("attachments", [])) > 0:
+                attachments.extend(message.get("attachments", []))
+        file_searcher_tool = await aget_file_searcher(attachments=attachments)
+        mcp_tools.append(file_searcher_tool)
     # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
@@ -113,12 +128,13 @@ async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, No
             state.stop_flag = True
             break
 
-async def step_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
+async def step_agent(state: AgentState, attachments: List[dict]) -> AsyncGenerator[ChatResponse, None]:
     async for chunk in astep_gen(
         llm=state.llm,
         tools=state.tools,
         tool_name_map=state.tool_name_map,
         memory=state.memory,
+        attachments=attachments
     ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
@@ -131,7 +147,54 @@ async def astep_gen(
     tools: List[FunctionTool]= None,
     tool_name_map: Dict[str, FunctionTool]= None,
     memory: BaseMemory = None,
+    attachments: List[dict] = None
 ):
+    if attachments and len(attachments) > 0:
+        for attachment in attachments:
+            file_reader = await aget_file_reader()
+            file_reader_fn_args = {
+                "file_id": attachment.get("id"),
+                "file_name": attachment.get("name", "未知附件"),
+            }
+            file_reader_tool_call = ChoiceDeltaToolCall(
+                index=0,
+                id=f"call_file_reader_{attachment.get('id')}",
+                type="function",
+                function=ChoiceDeltaToolCallFunction(
+                    name=file_reader.metadata.name,
+                    arguments=json.dumps(
+                        file_reader_fn_args, ensure_ascii=False
+                    ),
+                ),
+            )
+
+            tool_result = await call_tool_with_retry(
+                file_reader, file_reader_fn_args
+            )
+
+            tool_call_message = ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content="",
+                additional_kwargs={"tool_calls": [file_reader_tool_call]},
+            )
+            tool_result_message = ChatMessage(
+                role=MessageRole.TOOL,
+                content=tool_result.content,
+                additional_kwargs={
+                    "tool_call_id": file_reader_tool_call.id,
+                },
+            )
+            memory.add(tool_call_message)
+            memory.add(tool_result_message)
+
+            yield ChatResponse(
+                message=tool_call_message,
+                delta="",
+            )
+            yield ChatResponse(
+                message=tool_result_message,
+                delta=tool_result.content,
+            )
     messages = memory.get_context()
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
@@ -150,6 +213,19 @@ async def astep_gen(
     response_context = ""
     async for response in response_gen:
         tool_calls = response.message.additional_kwargs.get("tool_calls")
+        if tool_calls:
+            tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
+            for tool_call in tool_calls:
+                async_tool_fn = tool_name_map[tool_call.function.name]
+                tool_call_message = ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content="",
+                    additional_kwargs={"tool_calls": [tool_call]},
+                )
+                yield ChatResponse(
+                    message=tool_call_message,
+                    delta="",
+                )
         if response.delta:
             response.message.additional_kwargs.pop("tool_calls", None)
             response_context += response.delta
@@ -188,10 +264,6 @@ async def astep_gen(
             memory.add(tool_result_message)
 
             yield ChatResponse(
-                message=tool_call_message,
-                delta="",
-            )
-            yield ChatResponse(
                 message=tool_result_message,
                 delta=tool_result.content,
             )
@@ -228,6 +300,7 @@ class AgentLoop:
             enable_search=chat_request.enable_search,
             enable_mcp=chat_request.enable_mcp,
             enable_thinking=chat_request.enable_thinking,
+            enable_attachments=chat_request.enable_attachments,
         )
 
         input_messages = [
@@ -253,10 +326,11 @@ class AgentLoop:
             )
             while state.step < max_steps:
                 state.step += 1
+                attachments = chat_request.messages[-1].get("attachments", [])
                 logger.info(f"Running step {state.step}/{max_steps}.")
                 try:
                     # 执行单步并更新状态
-                    async for chunk in step_agent(state):
+                    async for chunk in step_agent(state, attachments):
                         yield chunk
                         if state.stop_flag:
                             break

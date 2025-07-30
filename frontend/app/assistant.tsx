@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
@@ -21,6 +20,8 @@ import KnowledgeBase from "./knowledgebase/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
+import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
+import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
 import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
 export const Assistant = () => {
   // LLM 配置状态
@@ -44,7 +45,8 @@ export const Assistant = () => {
         const res = await fetch(`${API_BASE}/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
-        if (data.length > 0) setLlmConfig(data[0]);
+        const llms = data.data.items;
+        if (llms.length > 0) setLlmConfig(llms[0]);
       } catch (error) {
         console.error("拉取 LLM 配置失败:", error);
       }
@@ -86,13 +88,16 @@ export const Assistant = () => {
       enable_thinking: selectedOptions.includes("thinking"),
       enable_mcp: mcp_servers.length > 0,
       kb_ids: kb_ids,
+      streamn: true,
     };
   }, [llmConfig.model_id, selectedOptions]);
-
-  const runtime = useChatRuntime({
-    api: `http://localhost:${process.env.NEXT_PUBLIC_BACKEND_PORT}/v1/agent/chat`,
-    //api: "/api/chat",
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+  const runtime = usePaiChatThreadRuntime({
+    api: `${API_BASE}/v1/agent/chat`,
     body: extra_body,
+    adapters: {
+      attachments: new UploadAttachmentAdapter(),
+    },
   });
   const pathname = usePathname();
   console.log("pathname:", pathname);
