@@ -28,6 +28,9 @@ class BasicMCPClient:
         self.headers = headers
         self.timeout = timeout
         self.sse_read_timeout = sse_read_timeout
+        self._session = None
+        self._session_context = None
+
 
     @asynccontextmanager
     async def _run_session(self):
@@ -50,10 +53,17 @@ class BasicMCPClient:
                     await session.initialize()
                     yield session
 
+    async def create_session(self):
+        """确保会话持久化存在"""
+        if self._session is None:
+            self._session_context = self._run_session()
+            self._session = await self._session_context.__aenter__()
+        return self._session
+
     async def call_tool(self, tool_name: str, arguments: dict):
-        async with self._run_session() as session:
-            return await session.call_tool(tool_name, arguments)
+        session = await self.create_session()
+        return await session.call_tool(tool_name, arguments)
 
     async def list_tools(self):
-        async with self._run_session() as session:
-            return await session.list_tools()
+        session = await self.create_session()
+        return await session.list_tools()
