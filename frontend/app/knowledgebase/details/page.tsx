@@ -638,10 +638,10 @@ export default function KnowledgeBaseDetailPage({
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen w-full">
       <div className="flex-none">
-        <div className="p-2 space-y-2 mb-4">
-          <div className="gap-2 flex items-center">
+        <div className="p-4 flex">
+          <div className="gap-1 flex items-center">
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -662,8 +662,16 @@ export default function KnowledgeBaseDetailPage({
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-          <div className="gap-2 text-xs">ID：{knowledgebase.id}</div>
-          <div className="gap-2 text-xs">描述：{knowledgebase.description}</div>
+          <div className="max-w-120 ml-auto ">
+            <div className="gap-3 text-xs">
+              <span className="font-medium">ID: </span>
+              {knowledgebase.id}
+            </div>
+            <div className="gap-3 text-xs truncate">
+              <span className="font-medium">描述: </span>
+              {knowledgebase.description}
+            </div>
+          </div>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2">
@@ -718,357 +726,343 @@ export default function KnowledgeBaseDetailPage({
               </CardHeader>
               <CardContent>
                 {kbfiles && kbfiles.length > 0 ? (
-                  <>
-                    <h3 className="text-lg font-semibold mb-3">文件列表</h3>
-                    <ScrollArea className="h-[480px] rounded-md border overflow-x-auto">
-                      <Table className="min-w-full">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>文件名</TableHead>
-                            <TableHead>文件大小</TableHead>
-                            <TableHead>上传时间</TableHead>
-                            <TableHead>更新时间</TableHead>
-                            <TableHead>状态</TableHead>
-                            <TableHead>操作</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {kbfiles.map((file) => (
-                            <TableRow key={file.id}>
-                              <TableCell>
-                                <Button
-                                  variant="link"
-                                  className="font-medium text-blue-600"
-                                  onClick={() =>
-                                    setActiveTab(
-                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
-                                    )
-                                  }
-                                >
-                                  {file.file_name}
-                                </Button>
-                              </TableCell>
-                              <TableCell>
-                                {formatFileSize(Number(file.file_size))}
-                              </TableCell>
-                              <TableCell>
-                                {formatBeijingTime(file.created_at)}
-                              </TableCell>
-                              <TableCell>
-                                {formatBeijingTime(file.update_at)}
-                              </TableCell>
-                              <TableCell>
-                                {file.status === "pending" ? (
-                                  <div className="flex items-center text-yellow-500">
-                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                    等待解析
-                                  </div>
-                                ) : file.status === "parsing" ? (
-                                  <div className="flex items-center text-blue-500">
-                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                    解析中
-                                  </div>
-                                ) : file.status === "persisting" ? (
-                                  <div className="flex items-center text-blue-500">
-                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                    索引中
-                                  </div>
-                                ) : file.status === "succeeded" ? (
-                                  <div className="flex items-center text-green-500">
-                                    <CheckCircle className="mr-1 h-4 w-4" />
-                                    解析成功
-                                  </div>
-                                ) : file.status === "failed" ? (
-                                  <div className="flex items-center text-red-500">
-                                    <XCircle className="mr-1 h-4 w-4" />
-                                    解析失败
-                                  </div>
-                                ) : (
-                                  <span>{file.status}</span> // 兜底显示原始状态
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <PreviewButton
-                                  kbId={knowledgebase_id}
-                                  fileId={file.id}
-                                />
-                                <Sheet>
-                                  <SheetTrigger asChild>
-                                    <Button
-                                      variant="link"
-                                      className="text-sm text-blue-600"
-                                      onClick={() =>
-                                        handleOpenMetadata(file.id)
-                                      }
-                                    >
-                                      元数据
-                                    </Button>
-                                  </SheetTrigger>
-                                  <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
-                                    <SheetHeader>
+                  <div>
+                    <Table className="min-w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>文件名</TableHead>
+                          <TableHead>文件大小</TableHead>
+                          <TableHead>上传时间</TableHead>
+                          <TableHead>更新时间</TableHead>
+                          <TableHead>状态</TableHead>
+                          <TableHead>操作</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {kbfiles.map((file) => (
+                          <TableRow key={file.id}>
+                            <TableCell>
+                              <Button
+                                variant="link"
+                                className="font-medium text-blue-600"
+                                onClick={() =>
+                                  setActiveTab(
+                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  )
+                                }
+                              >
+                                {file.file_name}
+                              </Button>
+                            </TableCell>
+                            <TableCell>
+                              {formatFileSize(Number(file.file_size))}
+                            </TableCell>
+                            <TableCell>
+                              {formatBeijingTime(file.created_at)}
+                            </TableCell>
+                            <TableCell>
+                              {formatBeijingTime(file.update_at)}
+                            </TableCell>
+                            <TableCell>
+                              {file.status === "pending" ? (
+                                <div className="flex items-center text-yellow-500">
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                  等待解析
+                                </div>
+                              ) : file.status === "parsing" ? (
+                                <div className="flex items-center text-blue-500">
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                  解析中
+                                </div>
+                              ) : file.status === "persisting" ? (
+                                <div className="flex items-center text-blue-500">
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                  索引中
+                                </div>
+                              ) : file.status === "succeeded" ? (
+                                <div className="flex items-center text-green-500">
+                                  <CheckCircle className="mr-1 h-4 w-4" />
+                                  解析成功
+                                </div>
+                              ) : file.status === "failed" ? (
+                                <div className="flex items-center text-red-500">
+                                  <XCircle className="mr-1 h-4 w-4" />
+                                  解析失败
+                                </div>
+                              ) : (
+                                <span>{file.status}</span> // 兜底显示原始状态
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <PreviewButton
+                                kbId={knowledgebase_id}
+                                fileId={file.id}
+                              />
+                              <Sheet>
+                                <SheetTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    className="text-sm text-blue-600"
+                                    onClick={() => handleOpenMetadata(file.id)}
+                                  >
+                                    元数据
+                                  </Button>
+                                </SheetTrigger>
+                                <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
+                                  <SheetHeader>
+                                    {isEditingMetadata ? (
+                                      <SheetTitle>编辑元数据</SheetTitle>
+                                    ) : (
+                                      <SheetTitle>查看元数据</SheetTitle>
+                                    )}
+                                  </SheetHeader>
+                                  <div className="grid flex-1 auto-rows-min gap-2 px-4">
+                                    <div className="space-y-1 text-xs">
                                       {isEditingMetadata ? (
-                                        <SheetTitle>编辑元数据</SheetTitle>
+                                        <Label htmlFor="sheet-custom-meta">
+                                          自定义
+                                          <Button
+                                            variant="secondary"
+                                            className="w-16 h-5"
+                                            onClick={handAddFileMetadata}
+                                          >
+                                            <PlusIcon className="h-3 w-3" />
+                                            添加
+                                          </Button>
+                                        </Label>
                                       ) : (
-                                        <SheetTitle>查看元数据</SheetTitle>
+                                        <Label htmlFor="sheet-custom-meta">
+                                          自定义
+                                        </Label>
                                       )}
-                                    </SheetHeader>
-                                    <div className="grid flex-1 auto-rows-min gap-2 px-4">
-                                      <div className="space-y-1 text-xs">
-                                        {isEditingMetadata ? (
-                                          <Label htmlFor="sheet-custom-meta">
-                                            自定义
-                                            <Button
-                                              variant="secondary"
-                                              className="w-16 h-5"
-                                              onClick={handAddFileMetadata}
-                                            >
-                                              <PlusIcon className="h-3 w-3" />
-                                              添加
-                                            </Button>
-                                          </Label>
-                                        ) : (
-                                          <Label htmlFor="sheet-custom-meta">
-                                            自定义
-                                          </Label>
-                                        )}
-                                        {Object.keys(editingMetadata).filter(
-                                          (key: string) =>
-                                            !default_metadata_keys.includes(
-                                              key,
-                                            ),
-                                        ).length === 0 && (
-                                          <p>
-                                            当前没有配置自定义元数据，点击编辑添加。
-                                          </p>
-                                        )}
-                                        {isEditingMetadata
-                                          ? Object.keys(editingMetadata)
-                                              .filter(
-                                                (key: string) =>
-                                                  !default_metadata_keys.includes(
-                                                    key,
-                                                  ),
-                                              )
-                                              .map((key: string) => (
-                                                <div
-                                                  className="flex items-start space-x-2"
-                                                  key={key}
-                                                >
-                                                  {key !== "" ? (
-                                                    <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                      {key}
-                                                    </div>
-                                                  ) : (
-                                                    <Select
-                                                      onValueChange={(value) =>
-                                                        selectMetadataKey(value)
-                                                      }
-                                                      defaultOpen={true}
-                                                    >
-                                                      <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
-                                                        <SelectValue placeholder="选择元数据名称" />
-                                                      </SelectTrigger>
-                                                      <SelectContent className="w-[88px] text-xs">
-                                                        <SelectGroup>
-                                                          {availableMetadataKeys.map(
-                                                            (m_key) => (
-                                                              <SelectItem
-                                                                key={m_key}
-                                                                value={m_key}
-                                                              >
-                                                                {m_key}
-                                                              </SelectItem>
-                                                            ),
-                                                          )}
-                                                        </SelectGroup>
-                                                      </SelectContent>
-                                                    </Select>
-                                                  )}
-                                                  <div className="flex space-x-2 max-w-xs shrink-0">
-                                                    {metadataValueTypes[key] !==
-                                                    "datetime" ? (
-                                                      <Input
-                                                        type={
-                                                          metadataValueTypes[
-                                                            key
-                                                          ]
-                                                        }
-                                                        className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
-                                                        value={
-                                                          editingMetadata[key]
-                                                        }
-                                                        onChange={(e) => {
-                                                          setEditingMetadata({
-                                                            ...editingMetadata,
-                                                            [key]:
-                                                              e.target.value,
-                                                          });
-                                                        }}
-                                                      />
-                                                    ) : (
-                                                      <DatetimeInput
-                                                        value={
-                                                          editingMetadata[key]
-                                                        }
-                                                        width="md"
-                                                        onValueChange={(
-                                                          value,
-                                                        ) => {
-                                                          setEditingMetadata({
-                                                            ...editingMetadata,
-                                                            [key]: value,
-                                                          });
-                                                        }}
-                                                      />
-                                                    )}
-                                                    <Button
-                                                      variant="outline"
-                                                      className="w-3 h-3"
-                                                      onClick={() =>
-                                                        handleDeleteMetadata(
-                                                          key,
-                                                        )
-                                                      }
-                                                    >
-                                                      <Trash2Icon className="h-3 w-3" />
-                                                    </Button>
-                                                  </div>
-                                                </div>
-                                              ))
-                                          : Object.keys(editingMetadata)
-                                              .filter(
-                                                (key: string) =>
-                                                  !default_metadata_keys.includes(
-                                                    key,
-                                                  ),
-                                              )
-                                              .map((key: string) => (
-                                                <div
-                                                  className="flex items-start space-x-2"
-                                                  key={key}
-                                                >
+                                      {Object.keys(editingMetadata).filter(
+                                        (key: string) =>
+                                          !default_metadata_keys.includes(key),
+                                      ).length === 0 && (
+                                        <p>
+                                          当前没有配置自定义元数据，点击编辑添加。
+                                        </p>
+                                      )}
+                                      {isEditingMetadata
+                                        ? Object.keys(editingMetadata)
+                                            .filter(
+                                              (key: string) =>
+                                                !default_metadata_keys.includes(
+                                                  key,
+                                                ),
+                                            )
+                                            .map((key: string) => (
+                                              <div
+                                                className="flex items-start space-x-2"
+                                                key={key}
+                                              >
+                                                {key !== "" ? (
                                                   <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
                                                     {key}
                                                   </div>
-                                                  <div className="max-w-xs shrink-0">
-                                                    <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
-                                                      {editingMetadata[key]}
-                                                    </div>
+                                                ) : (
+                                                  <Select
+                                                    onValueChange={(value) =>
+                                                      selectMetadataKey(value)
+                                                    }
+                                                    defaultOpen={true}
+                                                  >
+                                                    <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
+                                                      <SelectValue placeholder="选择元数据名称" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="w-[88px] text-xs">
+                                                      <SelectGroup>
+                                                        {availableMetadataKeys.map(
+                                                          (m_key) => (
+                                                            <SelectItem
+                                                              key={m_key}
+                                                              value={m_key}
+                                                            >
+                                                              {m_key}
+                                                            </SelectItem>
+                                                          ),
+                                                        )}
+                                                      </SelectGroup>
+                                                    </SelectContent>
+                                                  </Select>
+                                                )}
+                                                <div className="flex space-x-2 max-w-xs shrink-0">
+                                                  {metadataValueTypes[key] !==
+                                                  "datetime" ? (
+                                                    <Input
+                                                      type={
+                                                        metadataValueTypes[key]
+                                                      }
+                                                      className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
+                                                      value={
+                                                        editingMetadata[key]
+                                                      }
+                                                      onChange={(e) => {
+                                                        setEditingMetadata({
+                                                          ...editingMetadata,
+                                                          [key]: e.target.value,
+                                                        });
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    <DatetimeInput
+                                                      value={
+                                                        editingMetadata[key]
+                                                      }
+                                                      width="md"
+                                                      onValueChange={(
+                                                        value,
+                                                      ) => {
+                                                        setEditingMetadata({
+                                                          ...editingMetadata,
+                                                          [key]: value,
+                                                        });
+                                                      }}
+                                                    />
+                                                  )}
+                                                  <Button
+                                                    variant="outline"
+                                                    className="w-3 h-3"
+                                                    onClick={() =>
+                                                      handleDeleteMetadata(key)
+                                                    }
+                                                  >
+                                                    <Trash2Icon className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            ))
+                                        : Object.keys(editingMetadata)
+                                            .filter(
+                                              (key: string) =>
+                                                !default_metadata_keys.includes(
+                                                  key,
+                                                ),
+                                            )
+                                            .map((key: string) => (
+                                              <div
+                                                className="flex items-start space-x-2"
+                                                key={key}
+                                              >
+                                                <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                  {key}
+                                                </div>
+                                                <div className="max-w-xs shrink-0">
+                                                  <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                                    {editingMetadata[key]}
                                                   </div>
                                                 </div>
-                                              ))}
-                                      </div>
-                                      <div className="text-xs">
-                                        <Label htmlFor="sheet-custom-meta">
-                                          内置元数据
-                                        </Label>
-                                        {Object.keys(editingMetadata)
-                                          .filter((key) =>
-                                            default_metadata_keys.includes(key),
-                                          )
-                                          .map((key) => (
-                                            <div
-                                              className="flex items-start space-x-2"
-                                              key={key}
-                                            >
-                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                {key}
                                               </div>
-                                              <div className="max-w-xs shrink-0">
-                                                <div className="system-xs-regular py-1 text-text-secondary truncate">
-                                                  {editingMetadata[key]}
-                                                </div>
+                                            ))}
+                                    </div>
+                                    <div className="text-xs">
+                                      <Label htmlFor="sheet-custom-meta">
+                                        内置元数据
+                                      </Label>
+                                      {Object.keys(editingMetadata)
+                                        .filter((key) =>
+                                          default_metadata_keys.includes(key),
+                                        )
+                                        .map((key) => (
+                                          <div
+                                            className="flex items-start space-x-2"
+                                            key={key}
+                                          >
+                                            <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                              {key}
+                                            </div>
+                                            <div className="max-w-xs shrink-0">
+                                              <div className="system-xs-regular py-1 text-text-secondary truncate">
+                                                {editingMetadata[key]}
                                               </div>
                                             </div>
-                                          ))}
-                                      </div>
+                                          </div>
+                                        ))}
                                     </div>
-                                    <SheetFooter>
-                                      {metadataEditError !== "" && (
-                                        <Alert variant="destructive">
-                                          <AlertCircleIcon />
-                                          <AlertDescription>
-                                            <p>{metadataEditError}</p>
-                                          </AlertDescription>
-                                        </Alert>
-                                      )}
-                                      {isEditingMetadata ? (
-                                        <Button
-                                          type="button"
-                                          onClick={() =>
-                                            saveEditMetadata(file.id)
-                                          }
-                                        >
-                                          保存
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          type="button"
-                                          onClick={() =>
-                                            setIsEditingMetadata(true)
-                                          }
-                                        >
-                                          编辑
-                                        </Button>
-                                      )}
+                                  </div>
+                                  <SheetFooter>
+                                    {metadataEditError !== "" && (
+                                      <Alert variant="destructive">
+                                        <AlertCircleIcon />
+                                        <AlertDescription>
+                                          <p>{metadataEditError}</p>
+                                        </AlertDescription>
+                                      </Alert>
+                                    )}
+                                    {isEditingMetadata ? (
+                                      <Button
+                                        type="button"
+                                        onClick={() =>
+                                          saveEditMetadata(file.id)
+                                        }
+                                      >
+                                        保存
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        onClick={() =>
+                                          setIsEditingMetadata(true)
+                                        }
+                                      >
+                                        编辑
+                                      </Button>
+                                    )}
 
-                                      <SheetClose asChild>
-                                        <Button
-                                          variant="outline"
-                                          onClick={() =>
-                                            setIsEditingMetadata(false)
-                                          }
-                                        >
-                                          Close
-                                        </Button>
-                                      </SheetClose>
-                                    </SheetFooter>
-                                  </SheetContent>
-                                </Sheet>
+                                    <SheetClose asChild>
+                                      <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                          setIsEditingMetadata(false)
+                                        }
+                                      >
+                                        Close
+                                      </Button>
+                                    </SheetClose>
+                                  </SheetFooter>
+                                </SheetContent>
+                              </Sheet>
 
-                                <Button
-                                  variant="link"
-                                  className="text-sm text-blue-600"
-                                  onClick={() =>
-                                    setActiveTab(
-                                      `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
-                                    )
-                                  }
-                                >
-                                  查看切片
-                                </Button>
-                                <Button
-                                  variant="link"
-                                  className="text-sm text-blue-600"
-                                  onClick={() => handleDeleteFile(file.id)}
-                                >
-                                  {deleting ? (
-                                    <>
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      删除中...
-                                    </>
-                                  ) : (
-                                    <>删除</>
-                                  )}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  </>
+                              <Button
+                                variant="link"
+                                className="text-sm text-blue-600"
+                                onClick={() =>
+                                  setActiveTab(
+                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  )
+                                }
+                              >
+                                查看切片
+                              </Button>
+                              <Button
+                                variant="link"
+                                className="text-sm text-blue-600"
+                                onClick={() => handleDeleteFile(file.id)}
+                              >
+                                {deleting ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    删除中...
+                                  </>
+                                ) : (
+                                  <>删除</>
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 ) : (
-                  <p className="text-muted-foreground">暂无文件</p>
+                  <p className="text-muted-foreground mx-auto">暂无文件</p>
                 )}
-              </CardContent>
-              <CardFooter>
                 <PaginationComponent
                   currentPage={page}
                   totalPages={totalPages}
                   onPageChange={handlePageChange}
                 />
-              </CardFooter>
+              </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="settings" className="py-4">
@@ -1256,7 +1250,7 @@ export default function KnowledgeBaseDetailPage({
                     {searchrecords.map((chunk, i) => (
                       <Card
                         key={i}
-                        className="flex flex-col max-h-80 gap-0 pb-0 py-4"
+                        className="flex flex-col max-h-64 gap-0 pb-0 py-4"
                       >
                         <CardHeader className="gap-1 pb-0 ">
                           <CardTitle className="flex justify-start">
