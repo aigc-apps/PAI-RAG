@@ -255,8 +255,9 @@ function delay(ms: any) {
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/agent/threads`);
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/agent/threads`);
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
       return {
@@ -275,8 +276,9 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     isInitializing = true;
 
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const url = `http://localhost:${port}/v1/agent/threads`;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const url = `${API_BASE}/v1/agent/threads`;
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
         now.getMonth() + 1,
@@ -319,16 +321,14 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async unarchive(remoteId) {},
   async delete(remoteId) {
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(
-        `http://localhost:${port}/v1/agent/threads/${remoteId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/agent/threads/${remoteId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+      });
       if (!res.ok) {
         throw new Error("删除失败，请检查网络或配置");
       }
@@ -377,9 +377,10 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
               if (!remoteId) return { headId: null, messages: [] };
               // 模拟从后端获取数据
               try {
-                const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+                const API_BASE =
+                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
                 const res = await fetch(
-                  `http://localhost:${port}/v1/agent/threads/${remoteId}/messages`,
+                  `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
                 );
 
                 if (!res.ok) throw new Error("获取配置失败");
@@ -421,8 +422,9 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
                 return;
               }
               try {
-                const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-                const url = `http://localhost:${port}/v1/agent/threads/${remoteThreadId}/messages`;
+                const API_BASE =
+                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+                const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
 
                 console.log("append message", message);
                 const response = await fetch(url, {

@@ -1,9 +1,9 @@
-from typing import Dict
-from sqlmodel import select
+import traceback
+from typing import Dict, Type
+from sqlmodel import Field, SQLModel
 from pairag.db.encrypt_utils import decrypt_key
 from pairag.db.models.knowledgebase.reranker import RerankerModelEntity
-from pairag.db.db_context import with_async_db_session
-from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.mcp.providers.base_provider import BaseConfigProvider
 from pairag.mcp.rag.model.reranker import OpenAICompatibleReranker
 from loguru import logger
 
@@ -19,51 +19,42 @@ def create_reranker_model(reranker_config: RerankerModelEntity) -> OpenAICompati
     )
 
 
-@with_async_db_session
-async def fetch_reranker_models(session: AsyncSession):
-    logger.info("[RerankerProvider] Start fetching reranker models.")
-    sql_results = await session.exec(select(RerankerModelEntity))
-    reranker_results = sql_results.all()
+class RerankerProvider(BaseConfigProvider):
+    model_id_to_entry_id: Dict[str, str] = Field(default={})
+    entity_class: Type[SQLModel] = RerankerModelEntity
 
-    reranker_config_map = {
-        reranker.model_name: reranker for reranker in reranker_results
-    }
-    logger.info(
-        f"[RerankerProvider] fetched {len(reranker_results)} reranker models."
-    )
-    reranker_models_map = {
-        reranker_config.model_name: create_reranker_model(reranker_config)
-        for reranker_config in reranker_results
-    }
-    return reranker_config_map, reranker_models_map
+    def add(self, entry: RerankerModelEntity):
+        super().add(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
 
+    def update(self, entry: RerankerModelEntity):
+        super().update(entry)
+        self.model_id_to_entry_id[entry.model_id] = entry.id
 
-class RerankerProvider:
-    def __init__(self):
-        self.reranker_config_map: Dict[str, RerankerModelEntity] = {}
-        self.reranker_models_map: Dict[str, OpenAICompatibleReranker] = {}
+    def delete(self, entry_id: str):
+        super().delete(entry_id)
+        try:
+            for k, v in self.model_id_to_entry_id.items():
+                if v == entry_id:
+                    del self.model_id_to_entry_id[k]
+                    break
+        except Exception:
+            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
 
-    async def refresh(self):
-        logger.info("[RerankerProvider] Start refreshing reranker models.")
-        (
-            self.reranker_config_map,
-            self.reranker_models_map,
-        ) = await fetch_reranker_models()
-        logger.info(
-            f"[RerankerProvider]refreshed {len(self.reranker_models_map)} reranker models."
-        )
+    def _load_entries(self, entries):
+        super()._load_entries(entries)
+        for entry_id, entry in self.config_map.items():
+            self.model_id_to_entry_id[entry.model_id] = entry_id
 
-    def get_reranker_config(self, model_name: str) -> RerankerModelEntity:
+    def _create_instance(self, config):
+        return create_reranker_model(config)
+
+    def get_reranker_model(self, model_id: str) -> OpenAICompatibleReranker:
+        id = self.model_id_to_entry_id.get(model_id)
         assert (
-            model_name in self.reranker_config_map
-        ), f"Reranker model '{model_name}' not found"
-        return self.reranker_config_map[model_name]
-
-    def get_reranker_model(self, model_name: str) -> OpenAICompatibleReranker:
-        assert (
-            model_name in self.reranker_models_map
-        ), f"Reranker model '{model_name}' not found"
-        return self.reranker_models_map[model_name]
+            id in self.config_map
+        ), f"Reranker model '{id}' not found"
+        return self.get_instance(id)
 
 
 reranker_provider = RerankerProvider()

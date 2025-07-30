@@ -1,6 +1,4 @@
 ### Embedding configuration API ###
-import os
-import asyncio
 from fastapi import APIRouter, File, UploadFile, Form, Depends
 from pairag.mcp.online_file_readers.pai_online_data_reader import PaiOnlineDataReader
 from pairag.db.models.knowledgebase.knowledgebase import (
@@ -22,13 +20,10 @@ from sqlmodel import select
 from pairag.db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
 )
+from pairag.mcp.providers.config_change_manager import config_change_manager
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 
 attachments_router = APIRouter()
-ATTACHMENTS_DIR = "localdata/attachments"
-ATTACHMENTS_TMP_DIR = "localdata/attachments/tmp"
-os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
-os.makedirs(ATTACHMENTS_TMP_DIR, exist_ok=True)
-
 data_reader = PaiOnlineDataReader()
 
 
@@ -44,7 +39,7 @@ async def upload_attachment_file(
         kb = KnowledgebaseCreate(
             name="default_attachments",
             description="附件知识库",
-            embedding_model=embedding_entities[0].model_name,
+            embedding_model=embedding_entities[0].model_id,
         )
         kb.chunk_config = (ChunkConfig()).model_dump()
         kb.retrieval_config = (RetrievalConfig()).model_dump()
@@ -52,7 +47,11 @@ async def upload_attachment_file(
         session.add(knowledgebase)
         await session.commit()
         await session.refresh(knowledgebase)
-        asyncio.create_task(knowledgebase_provider.refresh())
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.KNOWLEDGEBASE,
+            event_type=ChangeEventType.ADD,
+            source_id=knowledgebase.id,
+        )
 
     file_name = file.filename
     destination_file_path = f"{knowledgebase.name}/docs/{file_name}"

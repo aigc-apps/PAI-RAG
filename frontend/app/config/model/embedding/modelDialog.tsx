@@ -34,6 +34,7 @@ interface EmbConfig {
   endpoint: string;
   dimension: number;
   embed_batch_size: number;
+  is_ready: boolean;
 }
 
 export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
@@ -69,10 +70,11 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
     }
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
     const submit_url = isAdd
-      ? `http://localhost:${port}/v1/config/embeddings`
-      : `http://localhost:${port}/v1/config/embeddings/${emb.id}`;
+      ? `${API_BASE}/v1/config/embeddings`
+      : `${API_BASE}/v1/config/embeddings/${emb.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
     if (emb.api_key === "******") emb.api_key = "";
     console.log("updateMethod", isAdd, updateMethod, submit_url, emb);
@@ -131,7 +133,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             />
           </div>
         </div>
-        <div>
+        {emb?.type === "openai_like" && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="endpoint" className="text-right">
               Endpoint URL
@@ -157,6 +159,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               </datalist>
             </div>
           </div>
+        )}
+        {emb?.type === "openai_like" && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="api_key" className="text-right">
               API Key
@@ -186,7 +190,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               />
             )}
           </div>
-        </div>
+        )}
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_name" className="text-right">

@@ -51,14 +51,12 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       formData.append("file_id", fid);
       formData.append("file", file); // 将文件加入 FormData
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const response = await fetch(
-        `http://localhost:${port}/v1/config/attachments/upload`,
-        {
-          method: "POST",
-          body: formData, // 自动设置 content-type 为 multipart/form-data
-        },
-      );
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const response = await fetch(`${API_BASE}/v1/config/attachments/upload`, {
+        method: "POST",
+        body: formData, // 自动设置 content-type 为 multipart/form-data
+      });
 
       if (!response.ok) {
         throw new Error("上传失败");

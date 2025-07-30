@@ -21,7 +21,7 @@ async def aget_file_content_from_db(session: AsyncSession, file_id: str):
 
 async def aget_file_content(file_id: str, file_name: str = None):
     """Get read file tool"""
-    content = await aget_file_content_from_db(file_id)
+    content = await aget_file_content_from_db(file_id=file_id)
     return json.dumps({"data": content}, ensure_ascii=False)
 
 

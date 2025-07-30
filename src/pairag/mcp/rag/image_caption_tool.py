@@ -1,3 +1,5 @@
+import traceback
+from typing import List
 from llama_index.core.base.llms.types import (
     ChatMessage,
     MessageRole,
@@ -30,12 +32,21 @@ class ImageCaptionTool:
 
         self.multimodal_llm = multimodal_llm
 
+    def _get_result(self, messages: List[ChatMessage]) -> str:
+        try:
+            response: ChatResponse = self.multimodal_llm.chat(messages)
+            return response.message.content
+        except Exception:
+            logger.error(f"解析图片出错: {traceback.format_exc()}")
+            raise
+
     def extract_url(self, image_url: str, context_str=None) -> str:
         """
         Run the image captioning model on the given image URL.
         image_url: 图片链接
         context_str: 上下文描述。
         """
+        logger.info(f"[图像解析] 正在解析图片: {image_url}")
         prompt = caption_prompt_str
         if context_str:
             prompt += context_prompt_str.format(context_str=context_str)
@@ -55,53 +66,7 @@ class ImageCaptionTool:
                 ],
             ),
         ]
-        response: ChatResponse = self.multimodal_llm.chat(messages)
-        logger.info(f"[图像解析]上下文介绍: {context_str} \n图片描述: {response.message.content}")
+        result = self._get_result(messages)
+        logger.info(f"[图像解析] 图片链接: {image_url} \n图片描述: {result}")
 
-        return response.message.content
-
-    async def aextract_path(self, local_image_path: str) -> str:
-        """
-        Run the image captioning model on the given local image path.
-        """
-        messages = [
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=[
-                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
-                ],
-            ),
-            ChatMessage(
-                role=MessageRole.USER,
-                content=[
-                    TextBlock(text="请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"),
-                    ImageBlock(path=local_image_path),
-                ],
-            ),
-        ]
-
-        response: ChatResponse = await self.multimodal_llm.achat(messages)
-        return response.message.content
-
-    def extract_path(self, local_image_path: str) -> str:
-        """
-        Run the image captioning model on the given local image path.
-        """
-        messages = [
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=[
-                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
-                ],
-            ),
-            ChatMessage(
-                role=MessageRole.USER,
-                content=[
-                    TextBlock(text="请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。"),
-                    ImageBlock(path=local_image_path),
-                ],
-            ),
-        ]
-
-        response: ChatResponse = self.multimodal_llm.chat(messages)
-        return response.message.content
+        return result

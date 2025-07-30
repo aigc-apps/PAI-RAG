@@ -135,8 +135,9 @@ export default function McpConfig() {
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        const res = await fetch(`http://localhost:${port}/v1/config/mcps`);
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        const res = await fetch(`${API_BASE}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
         setMcpConfigs(data || []); // 更新状态
@@ -192,8 +193,9 @@ export default function McpConfig() {
         ...addFormData,
       };
       mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/mcps`, {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/config/mcps`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mcp_data), // 包装为数组
@@ -236,9 +238,10 @@ export default function McpConfig() {
     try {
       if (!editingConfig) return;
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
       const res = await fetch(
-        `http://localhost:${port}/v1/config/mcps/${editingConfig.id}`,
+        `${API_BASE}/v1/config/mcps/${editingConfig.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -274,8 +277,9 @@ export default function McpConfig() {
   };
   const removeMCP = async (id: string) => {
     try {
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-      const res = await fetch(`http://localhost:${port}/v1/config/mcps/${id}`, {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      const res = await fetch(`${API_BASE}/v1/config/mcps/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

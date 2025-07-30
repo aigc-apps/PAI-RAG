@@ -50,7 +50,7 @@ async def aget_file_retrieve_results(
 ):
     """Get retrieve file tool"""
     file_ids = [attachment["id"] for attachment in attachments]
-    results = await aget_file_retrieve_results_from_vector_store(file_ids, query_str)
+    results = await aget_file_retrieve_results_from_vector_store(file_ids=file_ids, query_str=query_str)
     data = {"query_str": query_str, "content": results}
     return json.dumps(data, ensure_ascii=False)
 

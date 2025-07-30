@@ -96,9 +96,10 @@ class PaiKnowledgebaseClient:
     ):
         logger.info(f"[WORKER] processing file {file_id} in background. Is attachment: {is_attachment}")
         if is_attachment:
-            file_entity: AttachmentFileEntity = await read_file_from_db(file_id, is_attachment)
+            file_entity: AttachmentFileEntity = await read_file_from_db(file_id=file_id, is_attachment=is_attachment)
         else:
-            file_entity: KbFileEntity = await read_file_from_db(file_id)
+            file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
+
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
 
         file = file_store.load(file_entity.file_path)
@@ -220,6 +221,8 @@ class PaiKnowledgebaseClient:
         retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
+        logger.info(f"Get retrieval config: {retrieval_config}.")
+
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
         query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
@@ -236,6 +239,8 @@ class PaiKnowledgebaseClient:
             return []
 
         top_k = retrieval_config.top_k
+        import pdb
+        pdb.set_trace()
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
         # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.

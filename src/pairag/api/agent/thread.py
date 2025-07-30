@@ -1,4 +1,3 @@
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.db_context import get_session
@@ -6,11 +5,9 @@ from loguru import logger
 from pairag.db.models.thread import ThreadEntity, ThreadCreate, ThreadRead
 from pairag.db.models.message import MessageEntity, MessageCreate, MessageRead
 from sqlalchemy.exc import IntegrityError
-from pairag.mcp.providers.thread_provider import thread_provider
 from typing import List
 from sqlmodel import select
 from pairag.db.models.attachment.file import AttachmentFileEntity
-
 thread_router = APIRouter()
 
 
@@ -23,7 +20,6 @@ async def create_thread(
         session.add(thread)
         await session.commit()
         await session.refresh(thread)
-        asyncio.create_task(thread_provider.refresh())
         return thread
 
     except IntegrityError as e:
@@ -58,15 +54,36 @@ async def get_threads(
         for thread in thread_entities
     ]
     return thread_models
-
-
+async def delete_related_attachments_in_messages(session: AsyncSession, thread_id: str):
+    logger.info("[thread] Start deleting related attachments in messages.")
+    sql_results = await session.exec(
+        select(MessageEntity)
+        .where(MessageEntity.thread_id == thread_id)
+    )
+    message_entities = sql_results.all()
+    message_models = [
+        MessageRead.model_validate(
+            message,
+        )
+        for message in message_entities
+    ]
+    message_ids = [message.id for message in message_models]
+    file_sql_results = await session.exec(
+        select(AttachmentFileEntity)
+        .where(AttachmentFileEntity.message_id.in_(message_ids))
+    )
+    attachment_file_entities = file_sql_results.all()
+    for attachment_file_entity in attachment_file_entities:
+        await session.delete(attachment_file_entity)
+        await session.commit()
+    logger.info("[thread] Deleted related attachments in messages successfully.")
 @thread_router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        await thread_provider.delete_related_attachments(thread_id)
+        await delete_related_attachments_in_messages(session, thread_id)
     except Exception as e:
         logger.error(f"[ThreadProvider] Failed to delete related attachments in messages: {e}")
     thread = await session.get(ThreadEntity, thread_id)
@@ -74,7 +91,6 @@ async def delete_thread(
         raise HTTPException(status_code=404, detail=f"Conversation {thread_id} not found.")
     await session.delete(thread)
     await session.commit()
-    asyncio.create_task(thread_provider.refresh())
 
     logger.info(f"Conversation {thread_id} deleted.")
     return {"message": f"Conversation {thread_id} deleted."}
