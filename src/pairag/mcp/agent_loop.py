@@ -1,12 +1,13 @@
 import json
 import traceback
-from typing import Dict, List, cast
+from typing import Dict, List, cast, AsyncGenerator
 from loguru import logger
 from pairag.mcp.models import ChatAgentRequest
 from pairag.mcp.prompts import (
-    PROMPT_WITH_DEEP_RESEARCH,
-    PROMPT_WITHOUT_DEEP_RESEARCH,
-    PROMPT_WITHOUT_TOOLS,
+    WITHOUT_TOOLS_PROMPT,
+    SYSTEM_PROMPT,
+    SEARCH_WEB_TOOL_PROMPT,
+    THINKING_TOOL_PROMPT,
 )
 from pairag.mcp.trace.pai_agent_wrapper import pai_agent_wrapper
 from pairag.mcp.utils.message_utils import convert_to_chat_messages
@@ -28,24 +29,32 @@ from llama_index.core.base.llms.types import (
     ChatResponseAsyncGen,
     ChatResponse,
 )
+from llama_index.core.bridge.pydantic import Field, BaseModel, ConfigDict
 from pairag.integrations.trace.base import use_current_span
 from opentelemetry import trace
 
+class AgentState(BaseModel):
+    llm: LLM = Field(description="llm")
+    step: int = Field(description="step", default=0)
+    stop_flag: bool = Field(description="whether stop", default=False)
+    memory: BaseMemory = Field(description="memory", default=None)
+    tools: List[Dict] = Field(description="tools", default=None)
+    tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-def get_system_prompt(enable_search, enable_mcp, enable_thinking):
-    if enable_search or enable_mcp:
-        if enable_thinking:
-            system_prompt = PROMPT_WITH_DEEP_RESEARCH.format(
-                current_datetime=get_prompt_current_time_str()
+
+def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False):
+    tools_prompt = []
+    if enable_thinking:
+        tools_prompt.append(THINKING_TOOL_PROMPT)
+    if enable_search:
+        tools_prompt.append(SEARCH_WEB_TOOL_PROMPT.format(
+        current_datetime=get_prompt_current_time_str()))
+    if not tools_prompt:
+        tools_prompt.append(WITHOUT_TOOLS_PROMPT)
+    system_prompt = SYSTEM_PROMPT.format(
+        tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
-        else:
-            system_prompt = PROMPT_WITHOUT_DEEP_RESEARCH.format(
-                current_datetime=get_prompt_current_time_str()
-            )
-    else:
-        system_prompt = PROMPT_WITHOUT_TOOLS.format(
-            current_datetime=get_prompt_current_time_str()
-        )
     return system_prompt
 
 
@@ -55,7 +64,8 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
-    mcp_tools.append(think_tool)
+    if chat_request.enable_thinking:
+        mcp_tools.append(think_tool)
     if chat_request.enable_search:
         websearch_tools = websearch_provider.get_search_tools()
         mcp_tools.extend(websearch_tools)
@@ -83,11 +93,43 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
     return await async_fn.acall(**fn_args)
 
+async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
+    history_memory_without_sys_prompt =  state.memory.get_context()[1:]
+    synthesize_prompt = get_system_prompt()
+    new_messages = []
+    new_messages.append(ChatMessage(role=MessageRole.SYSTEM, content=synthesize_prompt))
+    new_messages.extend(history_memory_without_sys_prompt)
+    sythesize_memory = BaseMemory()
+    sythesize_memory.from_messages(new_messages)
+    state.memory = sythesize_memory
+
+    async for chunk in astep_gen(
+            llm=state.llm,
+            memory=state.memory,
+        ):
+        chunk.message.additional_kwargs["step"] = state.step
+        yield chunk
+        if chunk.message.additional_kwargs.get("STOP_FLAG"):
+            state.stop_flag = True
+            break
+
+async def step_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
+    async for chunk in astep_gen(
+        llm=state.llm,
+        tools=state.tools,
+        tool_name_map=state.tool_name_map,
+        memory=state.memory,
+    ):
+        chunk.message.additional_kwargs["step"] = state.step
+        yield chunk
+        if chunk.message.additional_kwargs.get("STOP_FLAG"):
+            state.stop_flag = True
+            break
 
 async def astep_gen(
     llm: LLM,
-    tools: List[FunctionTool],
-    tool_name_map: Dict[str, FunctionTool],
+    tools: List[FunctionTool]= None,
+    tool_name_map: Dict[str, FunctionTool]= None,
     memory: BaseMemory = None,
 ):
     messages = memory.get_context()
@@ -194,33 +236,34 @@ class AgentLoop:
         messages = convert_to_chat_messages(input_messages)
         memory = BaseMemory()
         memory.from_messages(messages)
+        if not chat_request.enable_thinking:
+            chat_request.max_steps = 1
 
         max_steps = chat_request.max_steps or self.max_steps
 
         @use_current_span(trace.get_current_span())
         async def gen():
-            cur_step = 0
-            stop_flag = False
-
-            while cur_step <= max_steps:
-                cur_step += 1
-                logger.info(f"Running step {cur_step}/{max_steps}.")
+            state = AgentState(
+                llm=llm,
+                step=0,
+                stop_flag=False,
+                memory=memory,
+                tools=tools,
+                tool_name_map=tool_name_map,
+            )
+            while state.step < max_steps:
+                state.step += 1
+                logger.info(f"Running step {state.step}/{max_steps}.")
                 try:
-                    step_gen = astep_gen(
-                        llm=llm,
-                        tools=tools,
-                        tool_name_map=tool_name_map,
-                        memory=memory,
-                    )
-                    async for chunk in step_gen:
-                        chunk.message.additional_kwargs["step"] = cur_step
+                    # 执行单步并更新状态
+                    async for chunk in step_agent(state):
                         yield chunk
-                        if chunk.message.additional_kwargs.get("STOP_FLAG"):
-                            stop_flag = True
+                        if state.stop_flag:
                             break
-                    if stop_flag:
+                    if state.stop_flag:
                         logger.info("Reached stop flag, ending agent loop.")
                         break
+
 
                 except (ValueError, TypeError, KeyError):
                     # 情况1: 参数错误
@@ -244,8 +287,14 @@ class AgentLoop:
                             content=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
                         ),
                         delta=f"工具调用失败，请检查你的工具配置是否正确。\n{e}",
-                        additional_kwargs={"failed": True, "step": cur_step},
+                        additional_kwargs={"failed": True, "step": state.step},
                     )
                     break
+
+            if not state.stop_flag:
+                logger.info(f"Running step {state.step}/{max_steps}.")
+                logger.info("Reached maximum steps, ending conversation.")
+                async for chunk in synthesize_agent(state):
+                    yield chunk
 
         return gen()

@@ -29,6 +29,15 @@ cleanup() {
 
     echo "Script exited with code $exit_code."
     exit "$exit_code"
+
+   echo "Cleaning up frontend process..."
+    if kill -0 $FRONTEND_PID 2>/dev/null; then
+        kill $FRONTEND_PID
+        echo "frontend process stopped"
+    else
+        echo "frontend process already stopped"
+    fi
+
 }
 
 # 捕获信号（SIGTERM, SIGINT, EXIT）
@@ -50,7 +59,15 @@ celery -A pairag.mcp.rag.file_worker worker --loglevel=info -c 4 &
 echo "Celery is started."
 
 
-echo "Starting web server..."
+echo "starting web"
+cd frontend/
+npm install && npm run dev -- --port 3000 &
+FRONTEND_PID=$!
+echo "frontend is started with pid $FRONTEND_PID."
+
+cd ..
+
+echo "Starting api server..."
 
 workers="${workers:-1}"
 port="${port:-8680}"

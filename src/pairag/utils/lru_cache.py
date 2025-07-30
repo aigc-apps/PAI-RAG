@@ -27,6 +27,9 @@ class LruCache:
             self.cache.move_to_end(key)
             return value
 
+    def delete(self, key):
+        self.cache.pop(key, None)
+
     def put(self, key, value, ttl=DEFAULT_EXPIRATION_TIME):
         with self.lock:
             if key in self.cache:

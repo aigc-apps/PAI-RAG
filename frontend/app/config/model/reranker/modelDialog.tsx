@@ -62,10 +62,11 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
     }
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
     const submit_url = isAdd
-      ? `http://localhost:${port}/v1/config/rerankers`
-      : `http://localhost:${port}/v1/config/rerankers/${reranker.id}`;
+      ? `${API_BASE}/v1/config/rerankers`
+      : `${API_BASE}/v1/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
     if (reranker.api_key === "******") reranker.api_key = "";
     console.log("updateMethod", isAdd, updateMethod, submit_url, reranker);

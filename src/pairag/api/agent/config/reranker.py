@@ -1,10 +1,10 @@
 ### Reranker configuration API ###
 
-import asyncio
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.knowledgebase.reranker import (
     RerankerModelCreate,
     RerankerModelEntity,
@@ -13,7 +13,7 @@ from pairag.db.models.knowledgebase.reranker import (
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
-from pairag.mcp.providers.reranker_provider import reranker_provider
+from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.api.response_model import PagedResult, ResponseModel, success_response, error_response
 from pairag.api.agent.utils.paginate import get_pagination_meta
 
@@ -35,7 +35,11 @@ async def create_reranker(
     try:
         await session.commit()
         await session.refresh(reranker)
-        asyncio.create_task(reranker_provider.refresh())
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.RERANK,
+            source_id=reranker.id,
+            event_type=ChangeEventType.ADD
+        )
 
         return success_response(data=reranker, message="创建reranker模型成功。")
     except IntegrityError as e:
@@ -138,7 +142,11 @@ async def update_reranker(
     await session.commit()
     await session.refresh(reranker_model)
 
-    asyncio.create_task(reranker_provider.refresh())
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.RERANK,
+        source_id=reranker_model.id,
+        event_type=ChangeEventType.UPDATE
+    )
     logger.info(f"Reranker {reranker_id} updated to {reranker_model}.")
 
     return success_response(data=reranker_model, message="Reranker模型更新成功。")
@@ -159,7 +167,11 @@ async def delete_reranker(
         )
     await session.delete(reranker_model)
     await session.commit()
-    asyncio.create_task(reranker_provider.refresh())
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.RERANK,
+        source_id=reranker_id,
+        event_type=ChangeEventType.DELETE
+    )
 
     logger.info(f"Reranker {reranker_id} deleted.")
     return success_response(message=f"Reranker模型{reranker_id}删除成功。")

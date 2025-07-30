@@ -34,9 +34,14 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        console.log("assistant BACKEND_PORT", port);
-        const res = await fetch(`http://localhost:${port}/v1/config/llms`);
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        console.log(
+          "assistant NEXT_PUBLIC_API_BASE",
+          process.env.NEXT_PUBLIC_API_BASE,
+          API_BASE,
+        );
+        const res = await fetch(`${API_BASE}/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
         if (data.length > 0) setLlmConfig(data[0]);

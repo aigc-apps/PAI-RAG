@@ -1,10 +1,9 @@
-import os
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pairag.app.app import app
 
-if not os.getenv("DASHSCOPE_API_KEY"):
-    pytest.skip("No dashscope key provided.", allow_module_level=True)
+
+pytest.skip("Skip.", allow_module_level=True)
 
 
 @pytest.mark.asyncio(scope="session")

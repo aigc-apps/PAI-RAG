@@ -1,12 +1,13 @@
 ### Knowledgebase configuration API ###
 from datetime import datetime, timezone
-import asyncio
+import traceback
 from typing import List
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel, create_text_node_from_chunk
 from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.db.models.knowledgebase.knowledgebase import (
@@ -17,7 +18,7 @@ from pairag.db.models.knowledgebase.knowledgebase import (
 )
 from pairag.db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
-from pairag.mcp.providers.mcp_tool_provider import mcp_provider
+from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.mcp.rag.file.store.file_store_helper import file_store
@@ -78,10 +79,16 @@ async def create_knowledgebase(
         kb.retrieval_config = (kb.retrieval_config or RetrievalConfig()).model_dump()
 
         knowledgebase = KbEntity.model_validate(kb)
+        knowledgebase_provider.add(knowledgebase)
         session.add(knowledgebase)
         await session.commit()
         await session.refresh(knowledgebase)
-        asyncio.create_task(knowledgebase_provider.refresh())
+
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.KNOWLEDGEBASE,
+            event_type=ChangeEventType.ADD,
+            source_id=knowledgebase.id,
+        )
         return success_response(data=knowledgebase, message="知识库创建成功。")
 
     except IntegrityError as e:
@@ -99,11 +106,11 @@ async def create_knowledgebase(
                 content=error_response(code=400, message=f"创建知识库失败: {e}."),
                 status_code=400,
             )
-    except Exception as e:
-        logger.exception(f"创建知识库失败。\nException:{e}")
+    except Exception:
+        logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
         await session.rollback()
         return JSONResponse(
-            content=error_response(code=400, message=f"创建知识库失败: {e}."),
+            content=error_response(code=400, message=f"创建知识库失败: {traceback.format_exc()}."),
             status_code=400,
         )
 
@@ -176,18 +183,23 @@ async def update_knowledgebase(
         if new_kb.retrieval_config:
             knowledgebase.retrieval_config = new_kb.retrieval_config.model_dump()
 
+        knowledgebase_provider.update(knowledgebase)
         session.add(knowledgebase)
         await session.commit()
         await session.refresh(knowledgebase)
 
-        asyncio.create_task(knowledgebase_provider.refresh())
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.KNOWLEDGEBASE,
+            event_type=ChangeEventType.UPDATE,
+            source_id=knowledgebase.id,
+        )
 
         logger.info(f"Knowledgebase {kb_id} updated to {knowledgebase}.")
 
         return success_response(data=knowledgebase, message="更新知识库成功。")
-    except Exception as ex:
-        logger.error(f"Failed to update knowledgebase {kb_id}: {ex}")
-        return error_response(message=f"更新知识库失败：{ex}")
+    except Exception:
+        logger.error(f"Failed to update knowledgebase {kb_id}: {traceback.format_exc()}")
+        return error_response(message=f"更新知识库失败：{traceback.format_exc()}")
 
 
 @knowledgebase_router.delete("/{kb_id}")
@@ -203,10 +215,15 @@ async def delete_knowledgebase(
             status_code=404,
         )
 
+    knowledgebase_provider.delete(kb_id)
     await session.delete(knowledgebase)
     await session.commit()
 
-    asyncio.create_task(mcp_provider.refresh())
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.KNOWLEDGEBASE,
+        event_type=ChangeEventType.DELETE,
+        source_id=knowledgebase.id,
+    )
 
     logger.info(f"Knowledgebase {kb_id} has been deleted.")
 
@@ -222,12 +239,12 @@ async def upload_files(
     logger.info(f"Uploading files to {kb_id}")
     import pairag.mcp.rag.file_worker as worker
 
-    """新知识库上传文件"""
-    if kb_id not in knowledgebase_provider.knowledgebase_map:
-        raise ValueError(f"Knowledgebase '{kb_id}' not found.")
-
     if not files:
         raise ValueError("No files provided.")
+
+    knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
+    if knowledgebase is None:
+        raise ValueError(f"Knowledgebase {kb_id} not found.")
 
     file_names = []
     file_entities = []

@@ -29,14 +29,12 @@ export default function SearchConfig() {
         setIsLoading(true);
         setError("");
 
-        const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
-        const res = await fetch(
-          `http://localhost:${port}/v1/config/websearch`,
-          {
-            method: "GET",
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        const API_BASE =
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        const res = await fetch(`${API_BASE}/v1/config/websearch`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
 
         if (!res.ok) throw new Error("加载配置失败");
 
@@ -69,11 +67,12 @@ export default function SearchConfig() {
       setIsLoading(true);
       setError("");
 
-      const port = process.env.NEXT_PUBLIC_BACKEND_PORT || 8680;
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
       var update_ak = aliyunAK === "******" ? "" : aliyunAK;
       var update_sk = aliyunSK === "******" ? "" : aliyunSK;
 
-      const res = await fetch(`http://localhost:${port}/v1/config/websearch`, {
+      const res = await fetch(`${API_BASE}/v1/config/websearch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
 

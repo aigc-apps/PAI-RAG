@@ -1,11 +1,13 @@
-import asyncio
+import traceback
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
+from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.mcp.providers.llm_provider import llm_provider
 from pairag.api.agent.utils.paginate import get_pagination_meta
 from pairag.api.response_model import PagedResult, success_response, error_response, ResponseModel
@@ -33,9 +35,14 @@ async def create_llm(
     llm.source = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
     session.add(llm)
     try:
+        llm_provider.add(llm)
         await session.commit()
         await session.refresh(llm)
-        asyncio.create_task(llm_provider.refresh())
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.LLM,
+            source_id=llm.id,
+            event_type=ChangeEventType.ADD,
+        )
 
         return success_response(data=llm, message="LLM创建成功。")
     except IntegrityError as e:
@@ -53,6 +60,7 @@ async def create_llm(
                 status_code=400,
             )
     except Exception as e:
+        logger.error(f"Failed to add llm config: {traceback.format_exc()}")
         await session.rollback()
         return JSONResponse(
             content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
@@ -153,10 +161,18 @@ async def update_llm(
 
     logger.info(f"Updating LLM {llm_id} to {llm}.")
     session.add(llm)
+
+    llm_provider.update(llm)
     await session.commit()
     await session.refresh(llm)
 
-    asyncio.create_task(llm_provider.refresh())
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.LLM,
+        source_id=llm.id,
+        event_type=ChangeEventType.UPDATE,
+    )
+
+
 
     return success_response(data=llm, message="LLM更新成功。")
 
@@ -169,9 +185,16 @@ async def delete_llm(
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
         raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
+
+    llm_provider.delete(llm_id)
     await session.delete(llm)
     await session.commit()
-    asyncio.create_task(llm_provider.refresh())
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.LLM,
+        source_id=llm_id,
+        event_type=ChangeEventType.DELETE,
+    )
+
 
     logger.info(f"LLM {llm_id} deleted.")
     return {"message": f"LLM {llm_id} deleted."}
