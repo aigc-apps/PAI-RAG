@@ -525,7 +525,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
         _mode_must_match_retrieval_strategy(query.mode, self.retrieval_strategy)
 
         if query.doc_ids:
-            filter = [{"bool": {"must": [{"terms": {"metadata.doc_id.keyword": query.doc_ids}}]}}]
+            filter = [{"bool": {"must": [{"terms": {"metadata.doc_id": query.doc_ids}}]}}]
         elif query.filters is not None and len(query.filters.legacy_filters()) > 0:
             filter = [_to_elasticsearch_filter(query.filters, metadata_keyword_suffix)]
         else:

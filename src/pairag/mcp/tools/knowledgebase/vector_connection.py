@@ -3,7 +3,6 @@ import os
 from typing import List
 from pydantic import BaseModel, ConfigDict
 from llama_index.vector_stores.milvus import MilvusVectorStore
-from llama_index.vector_stores.elasticsearch import ElasticsearchStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
@@ -12,6 +11,7 @@ from loguru import logger
 
 from pairag.mcp.tools.knowledgebase.local_chroma_service import DEFAULT_CHROMA_PORT
 from pairag.mcp.tools.knowledgebase.local_vector_store import LocalChromaVectorStore
+from pairag.mcp.tools.knowledgebase.elasticsearch_vector_store import ElasticsearchStore
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     SparseEmbeddingFunctionType,
 )
