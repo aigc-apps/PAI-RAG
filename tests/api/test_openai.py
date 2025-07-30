@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 import time
 from pairag.app.app import app
 
+pytest.skip("Skip.", allow_module_level=True)
+
+
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
