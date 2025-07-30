@@ -152,7 +152,6 @@ class StructuredNodeParser(BaseModel):
         return tree_nodes_group
 
     def traverse_tree(self, tree_node, doc_node, ref_doc, nodes_list, title_stack):
-        print("###", title_stack, tree_node)
         if tree_node.category == "title":
             while title_stack and title_stack[-1].level >= tree_node.level:
                 title_stack.pop()
