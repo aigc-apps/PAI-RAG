@@ -64,7 +64,10 @@ class PaiOssStore:
 
     def _make_url(self):
         base_endpoint = (
-            self.endpoint.replace("https://", "").replace("http://", "").strip("/")
+            self.endpoint.replace("https://", "")
+            .replace("http://", "")
+            .replace("-internal.aliyuncs.com", ".aliyuncs.com")
+            .strip("/")
         )
         return f"https://{self.bucket_name}.{base_endpoint}/"
 
