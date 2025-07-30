@@ -35,10 +35,10 @@ class KbFileEntity(SQLModel, table=True):
     active: bool = Field(default=True)
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
     )
     update_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
     )
 
     file_metadata: dict = Field(default={}, sa_column=Column("file_metadata", JSON))

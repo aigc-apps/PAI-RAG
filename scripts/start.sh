@@ -61,7 +61,7 @@ echo "Celery is started."
 
 echo "starting web"
 cd frontend/
-npm install && npm run dev -- --port 3018 &
+npm install && npm run dev -- --port 3000 &
 FRONTEND_PID=$!
 echo "frontend is started with pid $FRONTEND_PID."
 

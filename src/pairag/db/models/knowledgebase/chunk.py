@@ -29,10 +29,10 @@ class KbChunkEntity(KbChunkModel, table=True):
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
 
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
     )
 
 
