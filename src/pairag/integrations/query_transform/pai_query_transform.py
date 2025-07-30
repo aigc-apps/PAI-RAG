@@ -10,6 +10,7 @@ from pairag.utils.constants import try_get_int_env
 from pairag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     CHAT_LLM_REWRITE_PROMPT_ZH,
+    REWRITE_ONLY_PROMPT_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
     NL2SQL_REWRITE_PROMPT_ZH,
     NEWS_REWRITE_PROMPT_ZH,
@@ -23,7 +24,7 @@ from openai.types.completion_usage import CompletionUsage
 from pairag.utils.time_utils import get_prompt_current_time_str
 
 
-DEFAULT_MAX_MESSAGE_LENGTH = try_get_int_env("DEFAULT_MAX_MESSAGE_LENGTH", 1200)
+DEFAULT_MAX_MESSAGE_LENGTH = try_get_int_env("DEFAULT_MAX_MESSAGE_LENGTH", 5000)
 
 
 def messages_to_history_str(
@@ -55,6 +56,7 @@ class OpenAICompatibleQueryTransform:
     def __init__(
         self,
         llm: Optional[LLMType] = None,
+        rewrite_only_promt: str = REWRITE_ONLY_PROMPT_ZH,
         base_transform_prompt: str = REWRITE_PROMPT_ROLE_ZH,
         llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH,
         knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
@@ -66,7 +68,7 @@ class OpenAICompatibleQueryTransform:
 
         self._llm = llm
         self._base_transform_prompt = PromptTemplate(template=base_transform_prompt)
-
+        self._rewrite_only_prompt = PromptTemplate(template=rewrite_only_promt)
         self._tool_prompts = {
             ChatToolType.CHAT_LLM: llm_tool_prompt_str,
             ChatToolType.CHAT_DB: db_tool_prompt_str,
@@ -88,6 +90,60 @@ class OpenAICompatibleQueryTransform:
                 cur_date=current_datetime,  # backward compatibility
                 current_datetime=current_datetime,
             )
+        )
+
+    def get_prompt_for_rewrite(self, query_str: str, chat_history: str):
+        current_datetime = get_prompt_current_time_str()
+        return PromptTemplate(
+            template=self._rewrite_only_prompt.format(
+                chat_history=chat_history,
+                query_str=query_str,
+                cur_date=current_datetime,  # backward compatibility
+                current_datetime=current_datetime,
+            )
+        )
+
+    async def arewrite(
+        self,
+        intent: ChatIntentType = ChatIntentType.CHAT_LLM,
+        chat_messages: List[ChatMessage] = [],
+        chat_history_str: str = None,
+    ) -> IntentResult:
+        query_str = chat_messages[-1].content
+        rewrite_prompt = self.get_prompt_for_rewrite(
+            chat_history=chat_history_str,
+            query_str=query_str,
+        )
+
+        logger.debug(
+            f"Chat history: {chat_history_str} \n rewrite_prompt: {rewrite_prompt}"
+        )
+        messages = self._llm._get_messages(rewrite_prompt)
+        chat_response = await self._llm.achat(messages=messages)
+
+        transformed_query_str = chat_response.message.content
+
+        logger.debug(f"Transformed query [{query_str}] --> [{transformed_query_str}]")
+        # 修复thought输出
+        transformed_query_str = re.sub(
+            r"<think>.*?</think>\n*", "", transformed_query_str, flags=re.DOTALL
+        )
+        transformed_query_str = transformed_query_str.replace("<think>", "").replace(
+            "</think>", ""
+        )
+        query_json = parse_json_from_code_block_str(transformed_query_str)
+        new_query_str = query_json.get("query", query_str)
+
+        return IntentResult(
+            intent=intent,
+            query_str=new_query_str,
+            token_usage=CompletionUsage(
+                prompt_tokens=chat_response.additional_kwargs.get("prompt_tokens", 0),
+                completion_tokens=chat_response.additional_kwargs.get(
+                    "completion_tokens", 0
+                ),
+                total_tokens=chat_response.additional_kwargs.get("total_tokens", 0),
+            ),
         )
 
     async def arun(
@@ -120,7 +176,7 @@ class OpenAICompatibleQueryTransform:
             "</think>", ""
         )
         query_json = parse_json_from_code_block_str(transformed_query_str)
-        intent = query_json.get("intent", ChatIntentType.CHAT_KNOWLEDGEBASE)
+        intent = query_json.get("intent", ChatIntentType.CHAT_LLM)
         new_query_str = query_json.get("query", query_str)
 
         return IntentResult(

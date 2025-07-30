@@ -8,6 +8,7 @@ from pairag.utils.prompt_template import (
     KNOWLEDGEBASE_REWRITE_PROMPT_ZH,
     NEWS_REWRITE_PROMPT_ZH,
     NL2SQL_REWRITE_PROMPT_ZH,
+    REWRITE_ONLY_PROMPT_ZH,
     REWRITE_PROMPT_ROLE_ZH,
     WEBSEARCH_REWRITE_PROMPT_ZH,
 )
@@ -24,6 +25,7 @@ class ChatConfig(BaseModel):
 class QueryRewriteConfig(BaseModel):
     enabled: bool = True
     base_prompt_template_str: str = REWRITE_PROMPT_ROLE_ZH
+    rewrite_only_prompt_str: str = REWRITE_ONLY_PROMPT_ZH
     llm_tool_prompt_str: str = CHAT_LLM_REWRITE_PROMPT_ZH
     knowledge_tool_prompt_str: str = KNOWLEDGEBASE_REWRITE_PROMPT_ZH
     websearch_tool_prompt_str: str = WEBSEARCH_REWRITE_PROMPT_ZH

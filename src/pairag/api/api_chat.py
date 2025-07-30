@@ -47,61 +47,6 @@ async def aembed(
     return await chat_service.aembed(embedding_input)
 
 
-### 原子能力API ###
-
-
-@router_chat.post("/knowledgebase/v1/chat/completions")
-async def chat_knowledgebase(request: ChatCompletionRequest):
-    if not request.stream:
-        response = await chat_service.achat_knowledgebase_atomic(request)
-        return response
-    else:
-        response = await chat_service.astream_knowledgebase_atomic(request)
-        return EventSourceResponse(
-            response,
-            media_type="text/event-stream",
-        )
-
-
-@router_chat.post("/web/v1/chat/completions")
-async def chat_web(request: ChatCompletionRequest):
-    if not request.stream:
-        response = await chat_service.achat_web_atomic(request)
-        return response
-    else:
-        response = await chat_service.astream_web_atomic(request)
-        return EventSourceResponse(
-            response,
-            media_type="text/event-stream",
-        )
-
-
-@router_chat.post("/llm/v1/chat/completions")
-async def chat_llm(request: ChatCompletionRequest):
-    if not request.stream:
-        response = await chat_service.achat_llm_atomic(request)
-        return response
-    else:
-        response = await chat_service.astream_llm_atomic(request)
-        return EventSourceResponse(
-            response,
-            media_type="text/event-stream",
-        )
-
-
-@router_chat.post("/news/v1/chat/completions")
-async def chat_news_agent(request: ChatCompletionRequest):
-    if not request.stream:
-        response = await chat_service.achat_news_agent_atomic(request)
-        return response
-    else:
-        response = await chat_service.astream_news_agent_atomic(request)
-        return EventSourceResponse(
-            response,
-            media_type="text/event-stream",
-        )
-
-
 @router_chat.post("/intent")
 async def recognize_intent(request: ChatCompletionRequest):
     return await chat_service.arecognize_intent(request)

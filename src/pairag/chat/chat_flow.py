@@ -83,6 +83,34 @@ class ChatFlow:
         self.config = config
 
     @dispatcher.span
+    async def _rewrite_query(
+        self,
+        chat_request: ChatCompletionRequest,
+        chat_history_str: str,
+    ) -> IntentResult:
+        if chat_request.intent == ChatIntentType.CHAT_LLM:
+            return IntentResult(
+                intent=ChatIntentType.CHAT_LLM,
+                query=chat_request.messages[-1].content,
+            )
+        else:
+            query_transform = resolve_openai_query_transform(self.config)
+            if query_transform is not None:
+                intent_result = await query_transform.arewrite(
+                    intent=chat_request.intent,
+                    chat_messages=chat_request.messages,
+                    chat_history_str=chat_history_str,
+                )
+                return intent_result
+
+            else:
+                logger.info("No query transform found, using default intent.")
+                return IntentResult(
+                    intent=chat_request.intent,
+                    query_str=chat_request.messages[-1].content,
+                )
+
+    @dispatcher.span
     async def _recognize_intent(
         self,
         chat_request: ChatCompletionRequest,
@@ -333,7 +361,7 @@ class ChatFlow:
             ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)
         )
 
-        messages = prompt_messages + messages
+        messages = prompt_messages + messages[-7:]
 
         if stream:
             response_gen = await llm.astream_chat(messages, **llm_kwargs)
@@ -397,10 +425,17 @@ class ChatFlow:
 
         original_user_message = chat_request.messages[-1].content
         llm_kwargs = self._get_llm_kwargs(chat_request=chat_request)
-        # 意图识别
-        intent_result = await self._recognize_intent(
-            chat_request, chat_history_str=chat_history_str
-        )
+        if chat_request.intent is None:
+            # 意图识别
+            intent_result = await self._recognize_intent(
+                chat_request, chat_history_str=chat_history_str
+            )
+        else:
+            # 直接改写
+            intent_result = await self._rewrite_query(
+                chat_request, chat_history_str=chat_history_str
+            )
+
         logger.info(
             f"[{chat_id}] Intent recognized: {intent_result.intent}, query: {intent_result.query_str}, elapsed time: {time.time() - start_time}s. Token usage: {intent_result.token_usage}"
         )
@@ -509,35 +544,6 @@ class ChatFlow:
             return_reference=False,
         )
 
-    @dispatcher.span
-    async def achat_news_agent_atomic(
-        self,
-        chat_request: ChatCompletionRequest,
-    ) -> ChatResponseWrapper:
-        logger.info(f"achat_news_agent_atomic: {chat_request}")
-        chat_id = chat_id_generator()
-
-        if chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
-            response_wrapper = await self.achat_news(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-        else:
-            response_wrapper = await self.achat_news_llm(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-            response_wrapper.intent_result = IntentResult(
-                intent=ChatIntentType.CHAT_NEWS_LLM
-            )
-
-        return make_completion_response(
-            chat_id=chat_id,
-            model=chat_request.model,
-            response_wrapper=response_wrapper,
-            return_reference=False,
-        )
-
     @pai_query_wrapper()
     async def astream_llm_atomic(
         self,
@@ -553,38 +559,6 @@ class ChatFlow:
         response_wrapper = ChatResponseWrapper(response=response)
         response_wrapper.intent_result = chat_request.intent
 
-        return make_completion_chunk_response(
-            chat_id=chat_id,
-            model=chat_request.model,
-            response_wrapper=response_wrapper,
-            start_time=start_time,
-            return_reference=False,
-        )
-
-    @pai_query_wrapper()
-    async def astream_news_agent_atomic(
-        self,
-        chat_request: ChatCompletionRequest,
-    ) -> ChatResponseWrapper:
-        logger.info(f"astream_news_agent_atomic: {chat_request}")
-        start_time = time.time()
-        chat_id = chat_id_generator()
-
-        if chat_request.intent.intent == ChatIntentType.CHAT_NEWS:
-            response_wrapper = await self.achat_news(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-        else:
-            response_wrapper = await self.achat_news_llm(
-                query_str=chat_request.intent.query_str,
-                stream=chat_request.stream,
-            )
-            response_wrapper.intent_result = IntentResult(
-                intent=ChatIntentType.CHAT_NEWS_LLM
-            )
-
-        response_wrapper.intent_result = chat_request.intent
         return make_completion_chunk_response(
             chat_id=chat_id,
             model=chat_request.model,

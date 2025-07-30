@@ -289,6 +289,7 @@ def resolve_openai_query_transform(
         OpenAICompatibleQueryTransform,
         llm=llm,
         base_transform_prompt=config.query_rewrite.base_prompt_template_str,
+        rewrite_only_promt=config.query_rewrite.rewrite_only_prompt_str,
         llm_tool_prompt_str=config.query_rewrite.llm_tool_prompt_str,
         knowledge_tool_prompt_str=config.query_rewrite.knowledge_tool_prompt_str,
         websearch_tool_prompt_str=config.query_rewrite.websearch_tool_prompt_str,

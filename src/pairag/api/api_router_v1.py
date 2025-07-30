@@ -177,6 +177,9 @@ async def add_file_to_knowledgebase(name: str, files: List[UploadFile] = File(..
             "docs",
             file_name,
         )
+        save_file_dir = os.path.dirname(save_file_name)
+        os.makedirs(save_file_dir, exist_ok=True)
+
         with open(save_file_name, "wb") as f:
             f.write(file_data)
         logger.info(f"File {file_name} has been save to {save_file_name}.")
@@ -234,7 +237,7 @@ async def add_oss_file_to_knowledgebase(
     return {"message": "Oss files have been successfully uploaded."}
 
 
-@router_v1.get("/knowledgebases/{name}/files/{file_name}")
+@router_v1.get("/knowledgebases/{name}/files/{file_name:path}")
 async def get_file_from_knowledgebase(name: str, file_name: str):
     """新知识库查询文件上传状态"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:
@@ -246,7 +249,7 @@ async def get_file_from_knowledgebase(name: str, file_name: str):
     return job_manager.get_file_upload_status(name, file_name)
 
 
-@router_v1.delete("/knowledgebases/{name}/files/{file_name}")
+@router_v1.delete("/knowledgebases/{name}/files/{file_name:path}")
 async def delete_file_from_knowledgebase(name: str, file_name: str):
     """新知识库删除文件"""
     if name not in knowledgebase_manager._knowledgebase_map.knowledgebases:

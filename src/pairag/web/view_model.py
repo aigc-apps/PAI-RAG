@@ -147,6 +147,7 @@ class ViewModel(BaseModel):
 
     enable_query_transform: bool = True
     rewrite_base_prompt: str = None
+    rewrite_only_prompt: str = None
     rewrite_llm_prompt: str = None
     rewrite_knowledgebase_prompt: str = None
     rewrite_agent_prompt: str = None
@@ -219,6 +220,7 @@ class ViewModel(BaseModel):
 
         view_model.enable_query_transform = config.query_rewrite.enabled
         view_model.rewrite_base_prompt = config.query_rewrite.base_prompt_template_str
+        view_model.rewrite_only_prompt = config.query_rewrite.rewrite_only_prompt_str
         view_model.rewrite_llm_prompt = config.query_rewrite.llm_tool_prompt_str
         view_model.rewrite_knowledgebase_prompt = (
             config.query_rewrite.knowledge_tool_prompt_str
@@ -403,6 +405,7 @@ class ViewModel(BaseModel):
         config["synthesizer"]["system_role_template"] = self.system_role_template
 
         config["query_rewrite"]["base_prompt_template_str"] = self.rewrite_base_prompt
+        config["query_rewrite"]["rewrite_only_prompt_str"] = self.rewrite_only_prompt
         config["query_rewrite"]["llm_tool_prompt_str"] = self.rewrite_llm_prompt
         config["query_rewrite"][
             "knowledge_tool_prompt_str"
@@ -560,6 +563,8 @@ class ViewModel(BaseModel):
             "value": self.data_analysis_model_id,
         }
         settings["rewrite_base_prompt"] = {"value": self.rewrite_base_prompt}
+        settings["rewrite_only_prompt"] = {"value": self.rewrite_only_prompt}
+
         settings["rewrite_agent_prompt"] = {"value": self.rewrite_agent_prompt}
         settings["rewrite_db_prompt"] = {"value": self.rewrite_db_prompt}
         settings["rewrite_knowledgebase_prompt"] = {

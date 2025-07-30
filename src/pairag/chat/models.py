@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Any, List, Dict, Optional, AsyncGenerator, Generator, Union
 from openai.types.chat import ChatCompletionMessageParam
 from llama_index.core.schema import NodeWithScore
+from pairag.integrations.query_transform.intent_models import ChatIntentType
 from pairag.integrations.query_transform.pai_query_transform import IntentResult
 
 
@@ -48,7 +49,7 @@ class ChatCompletionRequest(BaseModel):
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
-    intent: Optional[IntentResult] = None  # 意图
+    intent: Optional[ChatIntentType] = None  # 意图
     trace_args: Optional[Dict] = None
 
     class Config:

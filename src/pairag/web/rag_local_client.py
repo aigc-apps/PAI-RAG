@@ -1,6 +1,4 @@
-import json
 import shutil
-import traceback
 from typing import Any, Dict, List
 import pandas as pd
 import os
@@ -8,11 +6,7 @@ import re
 import markdown
 import html
 from loguru import logger
-from openai.types.chat import (
-    ChatCompletion,
-)
 from pairag.chat.models import (
-    ChatCompletionRequest,
     RetrievalRequest,
 )
 from pairag.web.view_model import ViewModel
@@ -51,7 +45,7 @@ def get_ts():
 
 
 DEFAULT_CLIENT_TIME_OUT = 120
-DEFAULT_LOCAL_URL = "http://127.0.0.1:8680/"
+DEFAULT_BACKEND_URL = os.environ.get("DEFAULT_BACKEND_URL", "http://localhost:8680/v1")
 
 
 class RagLocalClient:
@@ -188,28 +182,30 @@ class RagLocalClient:
         chat_db: bool = False,
         chat_news: bool = False,
     ):
-        query = ChatCompletionRequest(
-            model=chat_model_id,
-            messages=chat_messages,
-            temperature=temperature,
-            stream=stream,
-            index_name=index_name,
-            citation=citation,
-            return_reference=return_reference,
-            chat_knowledgebase=chat_knowledgebase,
-            search_web=search_web,
-            chat_llm=chat_llm,
-            chat_db=chat_db,
-            chat_news=chat_news,
-        )
+        import openai
 
-        try:
-            if stream:
-                response = await chat_service.astream_chat(query)
-            else:
-                response = await chat_service.achat(query)
-
-            if isinstance(response, ChatCompletion):
+        async with openai.AsyncClient(
+            base_url=DEFAULT_BACKEND_URL,
+            api_key="123",
+            timeout=20,
+        ) as client:
+            response = await client.chat.completions.create(
+                model=chat_model_id,
+                messages=chat_messages,
+                temperature=temperature,
+                stream=stream,
+                extra_body={
+                    "index_name": index_name,
+                    "chat_llm": chat_llm,
+                    "chat_db": chat_db,
+                    "chat_news": chat_news,
+                    "chat_knowledgebase": chat_knowledgebase,
+                    "search_web": search_web,
+                    "citation": citation,
+                    "return_reference": return_reference,
+                },
+            )
+            if not stream:
                 result = {
                     "delta": response.choices[0].message.content,
                     "docs": response.citation_details,
@@ -217,29 +213,19 @@ class RagLocalClient:
                 }
                 yield self._format_rag_response_v1_chat_completions(result)
             else:
-                async for r in response:
-                    if not r:
-                        continue
-
-                    try:
-                        chunk = json.loads(r)
-                        result = {
-                            "delta": chunk["choices"][0]["delta"]["content"],
-                            "docs": chunk.get("citation_details", []),
-                            "is_finished": chunk["choices"][0]["finish_reason"]
-                            == "stop",
-                        }
-                        if chat_knowledgebase or search_web:
-                            yield self._format_rag_response_v1_chat_completions(result)
-                        else:
-                            yield self._format_rag_response(result)
-                    except Exception:
-                        logger.warning(
-                            f"Failed to parse response: `{r}`, error: {traceback.format_exc()}"
-                        )
-                        pass
-        except Exception as e:
-            raise RagApiError(code=500, msg=str(e))
+                docs = []
+                async for chunk in response:
+                    if hasattr(chunk, "citation_details") and chunk.citation_details:
+                        docs = chunk.citation_details
+                    result = {
+                        "delta": chunk.choices[0].delta.content,
+                        "is_finished": chunk.choices[0].finish_reason == "stop",
+                        "docs": docs,
+                    }
+                    if chat_knowledgebase or search_web:
+                        yield self._format_rag_response_v1_chat_completions(result)
+                    else:
+                        yield self._format_rag_response(result)
 
     def get_upload_history(self, knowledgebase_name):
         return job_manager.get_job_history(name=knowledgebase_name)

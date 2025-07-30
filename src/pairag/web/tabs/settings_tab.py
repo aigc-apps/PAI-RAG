@@ -444,6 +444,14 @@ def create_setting_tab() -> Dict[str, Any]:
                                 lines=10,
                                 interactive=True,
                             )
+                        with gr.Tab(label="其他改写"):
+                            rewrite_only_prompt = gr.Textbox(
+                                label="其他改写",
+                                value="",
+                                elem_id="rewrite_only_prompt",
+                                lines=10,
+                                interactive=True,
+                            )
                 with gr.Row():
                     with gr.Column():
                         save_query_transform_btn = gr.Button(
@@ -459,6 +467,7 @@ def create_setting_tab() -> Dict[str, Any]:
                         enable_query_transform,
                         query_rewrite_model_id,
                         rewrite_base_prompt,
+                        rewrite_only_prompt,
                         rewrite_llm_prompt,
                         rewrite_knowledgebase_prompt,
                         rewrite_agent_prompt,
@@ -490,6 +499,7 @@ def create_setting_tab() -> Dict[str, Any]:
                     enable_query_transform,
                     query_rewrite_model_id,
                     rewrite_base_prompt,
+                    rewrite_only_prompt,
                     rewrite_llm_prompt,
                     rewrite_knowledgebase_prompt,
                     rewrite_agent_prompt,
