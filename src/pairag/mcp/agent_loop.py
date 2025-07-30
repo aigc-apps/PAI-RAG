@@ -76,7 +76,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
                 attachments.extend(message.get("attachments", []))
         file_searcher_tool = await aget_file_searcher(attachments=attachments)
         mcp_tools.append(file_searcher_tool)
-
+    # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
     if chat_request.enable_thinking:
@@ -316,59 +316,6 @@ class AgentLoop:
 
         @use_current_span(trace.get_current_span())
         async def gen():
-            # cur_step = 0
-            # stop_flag = False
-            # if chat_request.messages[-1].get("attachments", []) != []:
-            #     attachments = chat_request.messages[-1].get("attachments", [])
-            #     for attachment in attachments:
-            #         file_reader = await aget_file_reader()
-            #         file_reader_fn_args = {
-            #             "file_id": attachment.get("id"),
-            #             "file_name": attachment.get("name", "未知附件"),
-            #         }
-            #         file_reader_tool_call = ChoiceDeltaToolCall(
-            #             index=0,
-            #             id=f"call_file_reader_{attachment.get('id')}",
-            #             type="function",
-            #             function=ChoiceDeltaToolCallFunction(
-            #                 name=file_reader.metadata.name,
-            #                 arguments=json.dumps(
-            #                     file_reader_fn_args, ensure_ascii=False
-            #                 ),
-            #             ),
-            #         )
-
-            #         tool_result = await call_tool_with_retry(
-            #             file_reader, file_reader_fn_args
-            #         )
-
-            #         tool_call_message = ChatMessage(
-            #             role=MessageRole.ASSISTANT,
-            #             content="",
-            #             additional_kwargs={"tool_calls": [file_reader_tool_call]},
-            #         )
-            #         tool_result_message = ChatMessage(
-            #             role=MessageRole.TOOL,
-            #             content=tool_result.content,
-            #             additional_kwargs={
-            #                 "tool_call_id": file_reader_tool_call.id,
-            #             },
-            #         )
-            #         memory.add(tool_call_message)
-            #         memory.add(tool_result_message)
-
-            #         yield ChatResponse(
-            #             message=tool_call_message,
-            #             delta="",
-            #         )
-            #         yield ChatResponse(
-            #             message=tool_result_message,
-            #             delta=tool_result.content,
-            #         )
-
-            # while cur_step <= max_steps:
-            #     cur_step += 1
-            #     logger.info(f"Running step {cur_step}/{max_steps}.")
             state = AgentState(
                 llm=llm,
                 step=0,

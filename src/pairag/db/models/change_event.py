@@ -18,7 +18,6 @@ class ChangeEventSource(str, Enum):
     MCP = "mcp"
     TRACE = "trace"
     WEBSEARCH = "websearch"
-    THREAD = "thread"
 
 
 

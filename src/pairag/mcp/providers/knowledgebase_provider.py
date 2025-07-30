@@ -51,7 +51,6 @@ class KnowledgebaseProvider(BaseConfigProvider):
         return self.config_map[knowledgebase_id]
 
     def get_knowledgebase_by_name(self, knowledgebase_name: str) -> KbEntity:
-        print('self.name_to_entry_id', self.name_to_entry_id)
         if knowledgebase_name not in self.name_to_entry_id:
             logger.info(f"Knowledgebase '{knowledgebase_name}' not found.")
             return None
