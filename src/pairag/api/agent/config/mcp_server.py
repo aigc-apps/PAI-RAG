@@ -1,14 +1,15 @@
 ### MCP Configuration API ###
 
-import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.mcp import McpServerRead, McpServerCreate, McpServerEntity
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
+from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.mcp.providers.mcp_tool_provider import mcp_provider
 
 from loguru import logger
@@ -31,7 +32,12 @@ async def create_mcp(
     try:
         await session.commit()
         await session.refresh(mcp)
-        asyncio.create_task(mcp_provider.refresh())
+        mcp_provider.add(mcp)
+        config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.MCP,
+            source_id=mcp.id,
+            event_type=ChangeEventType.ADD,
+        )
         return mcp
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add mcp: {e.orig}")
@@ -97,7 +103,12 @@ async def update_mcp(
     await session.commit()
     await session.refresh(mcp)
 
-    asyncio.create_task(mcp_provider.refresh())
+    mcp_provider.update(mcp)
+    config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.MCP,
+        source_id=mcp.id,
+        event_type=ChangeEventType.UPDATE,
+    )
 
     logger.info(f"MCP {mcp_id} updated to {mcp}.")
 
@@ -116,7 +127,12 @@ async def delete_mcp(
     await session.delete(mcp)
     await session.commit()
 
-    asyncio.create_task(mcp_provider.refresh())
+    mcp_provider.delete(mcp_id)
+    config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.MCP,
+        source_id=mcp_id,
+        event_type=ChangeEventType.DELETE,
+    )
 
     logger.info(f"MCP {mcp_id} has been deleted.")
 

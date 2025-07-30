@@ -50,8 +50,17 @@ class MilvusConnection(BaseVectorDbConnection):
     user: str = "root"
     password: str = ""
     sparse_embedding_type: SparseEmbeddingFunctionType = (
-        SparseEmbeddingFunctionType.bge_m3
+        SparseEmbeddingFunctionType.bm25
     )
+
+
+class PostgresqlConnection(BaseVectorDbConnection):
+    type: VectorDbType = VectorDbType.POSTGRESQL
+    host: str
+    port: int = 5432
+    database: str
+    user: str
+    password: str
 
 
 class LocalConnection(BaseVectorDbConnection):
@@ -88,6 +97,9 @@ MILVUS_DATABASE_KEYS = [
     "MILVUS_DATABASE",
     "PAIRAG_RAG__INDEX__VECTOR_STORE__database",
 ]
+MILVUS_SPARSE_EMBEDDING_TYPE_KEYS = [
+    "MILVUS_SAPARSE_TYPE",
+]
 
 
 def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
@@ -99,6 +111,10 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
         es_url = get_value_from_multiple_envs(ELASTICSEARCH_URL_KEYS)
         es_user = get_value_from_multiple_envs(ELASTICSEARCH_USER_KEYS)
         es_password = get_value_from_multiple_envs(ELASTICSEARCH_PASSWORD_KEYS)
+        assert es_url, "elastic search url不能为空。"
+        assert es_user, "elastic search user不能为空。"
+        assert es_password, "elastic password不能为空。"
+
         logger.info(f"Created ElasticSearchConnection with url: {es_url}.")
         return ElasticSearchConnection(url=es_url, user=es_user, password=es_password)
     elif vector_db_type == VectorDbType.MILVUS:
@@ -107,18 +123,21 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
         user = get_value_from_multiple_envs(MILVUS_USER_KEYS)
         password = get_value_from_multiple_envs(MILVUS_PASSWORD_KEYS)
         database = get_value_from_multiple_envs(MILVUS_DATABASE_KEYS)
+        sparse_type = get_value_from_multiple_envs(MILVUS_SPARSE_EMBEDDING_TYPE_KEYS)
+
         assert host, "Milvus host不能为空。"
         assert user, "Milvus user不能为空。"
         assert password, "Milvus password不能为空。"
         assert database, "Milvus database不能为空。"
 
-        logger.info(f"Created MilvusConnection with host: {host} port: {port}, database: {database}.")
+        logger.info(f"Created MilvusConnection with host: {host} port: {port}, database: {database}, sparse index: {sparse_type}.")
         return MilvusConnection(
             host=host,
             port=port,
             user=user,
             password=password,
             database=database,
+            sparse_embedding_type=sparse_type,
         )
 
     elif vector_db_type == VectorDbType.LOCAL:
