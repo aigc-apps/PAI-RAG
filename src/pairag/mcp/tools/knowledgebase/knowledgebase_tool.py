@@ -230,8 +230,6 @@ class PaiKnowledgebaseClient:
             return []
 
         top_k = retrieval_config.top_k
-        import pdb
-        pdb.set_trace()
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
         # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
