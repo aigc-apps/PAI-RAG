@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-// import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import ModelSelector from "@/components/model-selector/index";
 import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
