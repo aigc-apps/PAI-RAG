@@ -81,9 +81,9 @@ class FileItem:
         self.file.seek(0)
         return self.file.read()
 
-    def to_file_entity(self, frontend_file_id=None) -> KbFileEntity:
+    def to_file_entity(self, file_id=None) -> KbFileEntity:
         return KbFileEntity(
-            id=self.id,
+            id=file_id or self.id,
             kb_id=self.kb_id,
             file_name=self.file_name,
             file_size=self.file_size,
@@ -94,5 +94,4 @@ class FileItem:
             message_id="",
             file_content="",
             file_content_length=0,
-            frontend_file_id=frontend_file_id
         )

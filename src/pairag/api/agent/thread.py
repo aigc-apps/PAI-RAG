@@ -113,12 +113,7 @@ async def create_thread_message(
     await session.refresh(message_entity)
 
     for attachment in message.attachments:
-        file_res = await session.exec(
-            select(KbFileEntity).where(
-                KbFileEntity.frontend_file_id == attachment.get("id")
-            )
-        )
-        attachment_file_entity = file_res.first()
+        attachment_file_entity = await session.get(KbFileEntity, attachment.get("id"))
         attachment_file_entity.message_id = message_entity.id
         session.add(attachment_file_entity)
         await session.commit()

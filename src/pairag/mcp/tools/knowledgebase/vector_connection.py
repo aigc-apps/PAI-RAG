@@ -17,6 +17,8 @@ from pairag.mcp.tools.knowledgebase.elasticsearch_vector_store import Elasticsea
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     SparseEmbeddingFunctionType,
 )
+from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
+
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
 
 class VectorDbType(str, Enum):
@@ -214,6 +216,10 @@ def create_vector_store(
             es_user=vector_db_connection.user,
             es_password=vector_db_connection.password,
             dim=dimension,
+            retrieval_strategy=AsyncDenseVectorStrategy(
+                hybrid=True, rrf={"window_size": 50}
+            ),
+
         )
     elif isinstance(vector_db_connection, PostgresqlConnection):
         logger.info(

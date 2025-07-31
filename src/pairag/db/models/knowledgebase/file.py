@@ -23,11 +23,10 @@ class KbFileEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase_file"
     id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
-    # for attachment files, we need to store the message_id, file_content and frontend_file_id
+    # for attachment files, we need to store the message_id, file_content and file_content_length
     message_id: str = Field(default=None)
     file_content: str = Field(default=None)
     file_content_length: int = Field(default=0)
-    frontend_file_id: str = Field(default=None)
 
     file_name: str = Field(default=None)
     file_path: str = Field(default=None)

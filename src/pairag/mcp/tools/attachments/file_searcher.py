@@ -14,7 +14,7 @@ import re
 async def aget_file_retrieve_results_from_vector_store(session: AsyncSession, file_ids: List[str], query_str: str):
     file_res = await session.exec(
         select(KbFileEntity).where(
-            KbFileEntity.frontend_file_id.in_(file_ids)
+            KbFileEntity.id.in_(file_ids)
         )
     )
     processed_file_entities = file_res.all()
