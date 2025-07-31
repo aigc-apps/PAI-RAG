@@ -1,25 +1,20 @@
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[project]
+name = "pairag"
+version = "1.7.1"
+requires-python = ">=3.11,<3.13"
 
 [tool.poetry]
-name = "pairag"
-version = "2.0.0"
-description = "Open source RAG framework built on Aliyun PAI"
-authors = []
-readme = "README.md"
 packages = [
-  {include = "api", from = "backend"},
-  {include = "app", from = "backend"},
-  {include = "chat", from = "backend"},
-  {include = "common", from = "backend"},
-  {include = "config", from = "backend"},
-  {include = "db", from = "backend"},
-  {include = "extensions", from = "backend"},
-  {include = "memory", from = "backend"},
-  {include = "rag", from = "backend"},
-  {include = "tools", from = "backend"},
-  {include = "utils", from = "backend"}
+  {include = "db"},
+  {include = "rag"},
+  {include = "app"},
+  {include = "api"},
+  {include = "config"},
+  {include = "common"},
+  {include = "alembic"},
+  {include = "extensions"},
+  {include = "memory"},
+  {include = "chat"}
 ]
 
 [tool.poetry.dependencies]
@@ -27,12 +22,11 @@ python = ">=3.11.0,<3.12"
 fastapi = "0.115.2"
 uvicorn = "^0.29.0"
 llama-index-core = "^0.12.12"
-llama-index-llms-openai = "^0.3.0"
+llama-index-llms-openai = "0.3.44"
 llama-index-vector-stores-analyticdb = "^0.3.0"
 llama-index-vector-stores-elasticsearch = "^0.4.0"
 llama-index-vector-stores-milvus = "0.8.1"
 llama-index-embeddings-huggingface = "^0.4.0"
-llama-index-multi-modal-llms-openai = "^0.5.0"
 llama-index-vector-stores-alibabacloud-opensearch = "^0.3.0"
 pydantic = "^2.7.0"
 pytest = "^8.1.1"
@@ -81,6 +75,18 @@ celery = "^5.5.3"
 dashvector = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/dashvector-1.0.19.1-py3-none-any.whl"}
 chromadb = "^1.0.15"
 llama-index-vector-stores-postgres = "^0.5.4"
+llama-index-llms-openai-like = "0.3.0"
+chardet = "^5.2.0"
+python-docx = "^1.2.0"
+mistletoe = "^1.4.0"
+html2text = "^2025.4.15"
+magic-pdf = {version = "1.3.10", extras = ["full"]}
+python-pptx = "^1.0.2"
+openpyxl = "^3.1.5"
+xlrd = "^2.0.2"
+markdown = "^3.8.2"
+docx2txt = "^0.9"
+redis = "^6.2.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

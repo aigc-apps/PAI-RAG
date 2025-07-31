@@ -34,6 +34,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          cd backend
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry env activate
@@ -44,11 +45,13 @@ jobs:
       - name: Run Linter
         shell: bash
         run: |
+          cd backend
           poetry run pip install pre-commit
           poetry run make lint
 
       - name: Run Tests
         run: |
+          cd backend
           poetry run make coveragetest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
