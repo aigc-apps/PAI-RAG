@@ -14,6 +14,17 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // 定义组件 props
 interface EmbeddingModelDialogProps {
@@ -35,6 +46,7 @@ interface EmbConfig {
   dimension: number;
   embed_batch_size: number;
   is_ready: boolean;
+  is_default: boolean;
 }
 
 export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
@@ -60,12 +72,11 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     setSaveErrorMsg("");
     if (
       !emb.model_id ||
-      (isAdd && !emb.api_key) ||
-      !emb.endpoint ||
       !emb.model_name ||
       !emb.dimension ||
       !emb.type ||
-      !emb.embed_batch_size
+      !emb.embed_batch_size ||
+      (isAdd && emb.type === "openai_like" && (!emb.endpoint || !emb.api_key))
     ) {
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
@@ -106,6 +117,12 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       setSaveErrorMsg("");
     }
   };
+
+  // 管理确认对话框的打开状态
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // 临时存储用户选择的目标状态
+  const [pendingState, setPendingState] = useState<boolean | null>(null);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
@@ -271,6 +288,66 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             />
           </div>
         </div>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-4 items-center gap-4 py-2">
+            <Label htmlFor="embed_batch_size" className="text-right">
+              默认向量模型
+            </Label>
+            <Switch
+              checked={emb.is_default}
+              className="justify-start rounded-full transition-color"
+              // onCheckedChange={(checked) => {
+              //   const isChecked = checked === true;
+              //   console.log('isChecked', isChecked);
+              //   setEmb({
+              //     ...emb,
+              //     is_default: isChecked,
+              //   })
+              // }}
+              onCheckedChange={(checked) => {
+                // 1. 捕获目标状态
+                const targetState = checked;
+
+                // 2. 如果已经是目标状态，不执行操作
+                if (emb.is_default === targetState) return;
+
+                // 3. 设置临时状态并打开确认对话框
+                setPendingState(targetState);
+                setIsDialogOpen(true);
+              }}
+            />
+          </div>
+        </div>
+        {/* 确认对话框 */}
+        <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认更改默认向量模型？</AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingState
+                  ? "将此模型设为默认后，之前上传的附件都将被清空。"
+                  : "取消设为默认后，必须重新指定一个新的默认向量模型。"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  // 4. 确认时更新状态
+                  setEmb({
+                    ...emb,
+                    is_default: pendingState,
+                  });
+
+                  // 5. 清理临时状态
+                  setIsDialogOpen(false);
+                }}
+              >
+                确认更改
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <DialogFooter className="flex flex-col gap-4">
           {saveErrorMsg !== "" && (

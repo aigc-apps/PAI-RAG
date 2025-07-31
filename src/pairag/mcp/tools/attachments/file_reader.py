@@ -4,13 +4,13 @@ from sqlmodel import select
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.db_context import with_async_db_session
-from pairag.db.models.attachment.file import AttachmentFileEntity
+from pairag.db.models.knowledgebase.file import KbFileEntity
 
 @with_async_db_session
 async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     file_res = await session.exec(
-        select(AttachmentFileEntity).where(
-            AttachmentFileEntity.frontend_file_id == file_id
+        select(KbFileEntity).where(
+            KbFileEntity.frontend_file_id == file_id
         )
     )
     processed_file_entity = file_res.first()

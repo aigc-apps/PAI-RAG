@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TrashIcon, Edit, AlertCircleIcon } from "lucide-react";
+import {
+  TrashIcon,
+  Edit,
+  AlertCircleIcon,
+  Loader2,
+  CheckCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,6 +31,7 @@ interface EmbConfig {
   dimension: number;
   embed_batch_size: number;
   is_ready: boolean;
+  is_default: boolean;
 }
 
 const newembconfig: EmbConfig = {
@@ -37,6 +44,7 @@ const newembconfig: EmbConfig = {
   dimension: 0,
   embed_batch_size: 0,
   is_ready: false,
+  is_default: false,
 };
 export default function EmbConfigPage() {
   const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig); // 存储 Embedding 配置
@@ -72,7 +80,7 @@ export default function EmbConfigPage() {
       }
     };
     fetchModelConfigs();
-  }, [page, embconfigs.length]);
+  }, [page, embconfigs.length, isEditOpen]);
 
   const handleCreateSuccess = (llmConfig: EmbConfig) => {
     setEmbConfigs((prev) => [...prev, llmConfig]); // 追加新 Embedding 配置
@@ -163,15 +171,49 @@ export default function EmbConfigPage() {
                 <CardHeader>
                   <CardTitle className="text-sm font-medium">
                     <div className="flex items-center gap-3 flex-wrap">
+                      {emb.is_default && (
+                        <Badge className="bg-red-100 text-red-800">默认</Badge>
+                      )}
+                      <Badge className="bg-yellow-100 text-yellow-800">
+                        {emb.model_name}
+                      </Badge>
+                      {/* <Badge className="bg-yellow-100 text-yellow-800">
+                        {String(emb.dimension)}
+                      </Badge> */}
                       <Badge className="bg-blue-100 text-blue-800">
                         {emb.type}
                       </Badge>
-                      <Badge className="bg-red-100 text-red-800">
-                        {emb.model_name}
-                      </Badge>
-                      <Badge className="bg-green-100 text-green-800">
-                        {String(emb.dimension)}
-                      </Badge>
+                      {emb.type === "local" ? (
+                        <Badge
+                          className={
+                            emb.is_ready
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }
+                        >
+                          {emb.is_ready ? (
+                            <span className="inline-flex items-center">
+                              {" "}
+                              可用{" "}
+                              <CheckCircle className="h-3 w-3 text-green-500" />{" "}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center">
+                              {" "}
+                              下载中{" "}
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            </span>
+                          )}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-green-100 text-green-800">
+                          <span className="inline-flex items-center">
+                            {" "}
+                            可用{" "}
+                            <CheckCircle className="h-3 w-3 text-green-500" />{" "}
+                          </span>
+                        </Badge>
+                      )}
                     </div>
                   </CardTitle>
                 </CardHeader>
