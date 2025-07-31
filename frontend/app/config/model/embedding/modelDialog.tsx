@@ -296,22 +296,9 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             <Switch
               checked={emb.is_default}
               className="justify-start rounded-full transition-color"
-              // onCheckedChange={(checked) => {
-              //   const isChecked = checked === true;
-              //   console.log('isChecked', isChecked);
-              //   setEmb({
-              //     ...emb,
-              //     is_default: isChecked,
-              //   })
-              // }}
               onCheckedChange={(checked) => {
-                // 1. 捕获目标状态
                 const targetState = checked;
-
-                // 2. 如果已经是目标状态，不执行操作
                 if (emb.is_default === targetState) return;
-
-                // 3. 设置临时状态并打开确认对话框
                 setPendingState(targetState);
                 setIsDialogOpen(true);
               }}
@@ -333,13 +320,10 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  // 4. 确认时更新状态
                   setEmb({
                     ...emb,
                     is_default: pendingState,
                   });
-
-                  // 5. 清理临时状态
                   setIsDialogOpen(false);
                 }}
               >
