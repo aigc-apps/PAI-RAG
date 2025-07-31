@@ -1,6 +1,8 @@
 # init trace
 from dotenv import load_dotenv
 
+from pairag.mcp.tools.knowledgebase.local_chroma_service import LocalChromaService
+
 load_dotenv()
 
 import os
@@ -21,11 +23,13 @@ format_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
+    chroma_service = LocalChromaService()
+    chroma_service.start()
     await config_change_manager.init_configuration()
-
     asyncio.create_task(config_change_manager.monitor_changes_async())
     yield
 
+    chroma_service.stop()
     logger.info("Application shutting down...")
 
 

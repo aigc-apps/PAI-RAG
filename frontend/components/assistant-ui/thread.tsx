@@ -92,7 +92,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
         const json_res = await res.json();
         console.log("Load kb.", json_res);
 
-        const configs = json_res.data.map(
+        const configs = json_res.data.items.map(
           (cfg: any) =>
             new KbSelection(
               cfg.id,

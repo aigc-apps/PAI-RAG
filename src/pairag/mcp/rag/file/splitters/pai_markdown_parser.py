@@ -13,6 +13,7 @@ from llama_index.core.schema import (
     NodeRelationship,
     MetadataMode,
 )
+from loguru import logger
 from pairag.file.nodeparsers.utils.pai_markdown_tree import (
     build_markdown_tree,
     TreeNode,
@@ -70,18 +71,14 @@ class StructuredNodeParser(BaseModel):
     ) -> str:
         if not node.children:
             return node.content
-
-        for i, child in enumerate(node.children):
+        for child in node.children:
             child_content = self._format_tree_nodes(
                 child,
                 doc_node,
                 ref_doc,
                 nodes_list,
             )
-            if i == 0:
-                node.content += child_content
-            else:
-                node.content += f"\n{child_content}"
+            node.content += f"{child_content}\n"
 
         return node.content
 
@@ -232,7 +229,7 @@ class MarkdownNodeParser(NodeParser):
 
         for node in nodes_with_progress:
             node_images = node.metadata.get("images", [])
-            print(f"Get {len(node_images)} images from document. Split into chunks.")
+            logger.info(f"Get {len(node_images)} images from document. Split into chunks.")
 
             if "images" in node.metadata:
                 del node.metadata[
@@ -240,6 +237,7 @@ class MarkdownNodeParser(NodeParser):
                 ]  # remove images from metadata in case chunks get it
             text = node.get_content(metadata_mode=MetadataMode.NONE)
             ast_root = build_markdown_tree(text)
+
             chunks = parser.get_nodes_from_tree(ast_root, node)
 
             for chunk in chunks:

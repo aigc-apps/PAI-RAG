@@ -1,5 +1,4 @@
 ### Knowledgebase configuration API ###
-import asyncio
 import traceback
 from typing import List
 from fastapi import Depends, Query
@@ -10,7 +9,6 @@ from pairag.db.models.knowledgebase.file import KbFileEntity, MetadataEntryData
 from pairag.db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from pairag.db.models.knowledgebase.metadata import FileMetadataEntity, KbMetadataEntity, MetadataValueType
-from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.api.response_model import ResponseModel, success_response, error_response
 from pairag.api.agent.config.knowledgebase import knowledgebase_router
 from loguru import logger
@@ -37,7 +35,6 @@ async def set_kb_metadata(
         session.add(metadata_entity)
         await session.commit()
         await session.refresh(metadata_entity)
-        asyncio.create_task(knowledgebase_provider.refresh())
         return success_response(data=metadata_entity, message="元数据创建成功。")
 
     except IntegrityError as e:

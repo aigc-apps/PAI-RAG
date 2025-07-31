@@ -4,6 +4,13 @@ import dotenv
 from pairag.mcp.providers.chunk_helper import set_embedding_model_ready
 from pairag.utils.modelscope_utils import download_model_to_directory
 dotenv.load_dotenv()
+# Fix for macOS fork issues (like with ChromaDB)
+# this forces the application to use spawn instead of fork
+import os
+os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+if os.name != "nt":
+    from billiard import context
+    context._force_start_method("spawn")
 
 from celery import Celery
 import os
