@@ -34,6 +34,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          cd backend
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry env activate

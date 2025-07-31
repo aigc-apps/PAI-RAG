@@ -10,8 +10,7 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN poetry install \
-  && poetry run pip install magic-pdf[full]==1.3.10 \
+RUN cd backend && poetry install \
   && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
   && rm -rf $POETRY_CACHE_DIR
 
@@ -19,14 +18,11 @@ FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential nodejs npm
+RUN cd frontend && npm install
 
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
-
-
-ADD https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/sdwebui/filebrowser /bin/filebrowser
-RUN chmod u+x /bin/filebrowser
 
 # setup paddleocr dependencies
 RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \

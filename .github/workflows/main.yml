@@ -34,11 +34,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          cd backend
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry env activate
           poetry install
-          poetry run pip install magic-pdf[full]==1.3.10
           poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
 
       - name: Run Linter
@@ -63,7 +63,7 @@ jobs:
       - name: Get Cover
         uses: orgoro/coverage@v3.1
         with:
-          coverageFile: localdata/test_output/coverage_report.xml
+          coverageFile: backend/localdata/test_output/coverage_report.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           thresholdAll: 0.4 # Total coverage threshold
           #thresholdNew: 0.9 # New files coverage threshold

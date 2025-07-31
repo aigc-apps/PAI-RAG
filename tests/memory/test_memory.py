@@ -2,14 +2,14 @@ import pytest
 from unittest.mock import patch
 from collections import deque
 from llama_index.core.llms import ChatMessage, MessageRole
-from pairag.memory.base_memory import BaseMemory
-from pairag.mcp.constants import DEFAULT_MAX_INPUT_TOKENS
+from memory.base_memory import BaseMemory
+from common.chat.constants import DEFAULT_MAX_INPUT_TOKENS
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
     ChoiceDeltaToolCallFunction,
 )
-from pairag.memory.utils import get_last_n_msgs_skip_first
-from pairag.utils.modelscope_utils import download_model_to_directory
+from memory.utils import get_last_n_msgs_skip_first
+from utils.modelscope_utils import download_model_to_directory
 
 
 # 测试数据
