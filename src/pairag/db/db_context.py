@@ -32,7 +32,7 @@ def get_sync_db_engine():
         encoded_db_password = quote_plus(db_password)
 
         db_url = f"postgresql+asyncpg://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
-        engine = create_engine(db_url)
+        engine = create_engine(db_url, echo=False)
         logger.info(f"created sql engine with {db_user}@{db_host}:{db_port}/{db_name}")
 
         return engine
@@ -53,7 +53,7 @@ def get_async_db_angine():
         )
         return create_async_engine(
             local_db_url,
-            echo=True,  # 输出执行的 SQL 语句
+            echo=False,  # 输出执行的 SQL 语句
             connect_args={"check_same_thread": False},  # SQLite 特有参数
         )
     else:
@@ -61,7 +61,7 @@ def get_async_db_angine():
         encoded_db_password = quote_plus(db_password)
 
         db_url = f"postgresql+asyncpg://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
-        async_engine = create_async_engine(db_url)
+        async_engine = create_async_engine(db_url, echo=False)
         logger.info(
             f"created async engine with {db_user}@{db_host}:{db_port}/{db_name}"
         )
