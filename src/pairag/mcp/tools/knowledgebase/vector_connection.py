@@ -1,8 +1,10 @@
 from enum import Enum
 import os
 from typing import List
+from urllib.parse import quote_plus
 from pydantic import BaseModel, ConfigDict
 from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.knowledgebase.index.pai.utils.sparse_embed_function import (
     BGEM3SparseEmbeddingFunction,
@@ -101,6 +103,12 @@ MILVUS_SPARSE_EMBEDDING_TYPE_KEYS = [
     "MILVUS_SAPARSE_TYPE",
 ]
 
+POSTGRES_HOST_KEYS = ["POSTGRES_HOST", "PAIRAG_RAG__INDEX__VECTOR_STORE__host"]
+POSTGRES_PORT_KEYS = ["POSTGRES_PORT", "PAIRAG_RAG__INDEX__VECTOR_STORE__port"]
+POSTGRES_DATABASE_KEYS = ["POSTGRES_DATABASE", "PAIRAG_RAG__INDEX__VECTOR_STORE__database"]
+POSTGRES_USER_KEYS = ["POSTGRES_USER", "PAIRAG_RAG__INDEX__VECTOR_STORE__username"]
+POSTGRES_PASSWORD_KEYS = ["POSTGRES_PASSWORD", "PAIRAG_RAG__INDEX__VECTOR_STORE__password"]
+
 
 def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
     vector_db_type = get_value_from_multiple_envs(
@@ -139,9 +147,31 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
             database=database,
             sparse_embedding_type=sparse_type,
         )
+    elif vector_db_type == VectorDbType.POSTGRESQL:
+        host = get_value_from_multiple_envs(POSTGRES_HOST_KEYS)
+        port = get_value_from_multiple_envs(POSTGRES_PORT_KEYS, 5432)
+        user = get_value_from_multiple_envs(POSTGRES_USER_KEYS)
+        password = get_value_from_multiple_envs(POSTGRES_PASSWORD_KEYS)
+        database = get_value_from_multiple_envs(POSTGRES_DATABASE_KEYS)
 
+        assert host, "Postgres host不能为空。"
+        assert user, "Postgres user不能为空。"
+        assert password, "Postgres password不能为空。"
+        assert database, "Postgres database不能为空。"
+
+        logger.info(f"Created PostgresqlConnection with host:{host} port:{port} database:{database} user:{user}.")
+        return PostgresqlConnection(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+        )
     elif vector_db_type == VectorDbType.LOCAL:
+        logger.info("Created local vector db connection.")
         return LocalConnection()
+    else:
+        raise ValueError(f"Unknown vector db type: {vector_db_type}")
 
 
 
@@ -185,6 +215,25 @@ def create_vector_store(
             es_password=vector_db_connection.password,
             dim=dimension,
         )
+    elif isinstance(vector_db_connection, PostgresqlConnection):
+        logger.info(
+            f"Creating PostgresqlStore for {kb_id} with url {vector_db_connection.host} {vector_db_connection.database}."
+        )
+        conn_str = (
+            f"postgresql+psycopg2://{vector_db_connection.user}:{quote_plus(vector_db_connection.password)}@{vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}"
+        )
+        async_conn_str = (
+            f"postgresql+asyncpg://{vector_db_connection.user}:{quote_plus(vector_db_connection.password)}@{vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}"
+        )
+        return PGVectorStore(
+            connection_string=conn_str,
+            async_connection_string=async_conn_str,
+            schema_name="public",
+            table_name=kb_id,
+            embed_dim=dimension,
+            hybrid_search=True,
+            text_search_config="jiebacfg",
+        )
     elif isinstance(vector_db_connection, LocalConnection):
         logger.info(f"Creating LocalVectorStore for {kb_id} with port {DEFAULT_CHROMA_PORT}.")
         return LocalChromaVectorStore(
@@ -194,3 +243,19 @@ def create_vector_store(
         )
     else:
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")
+
+
+def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:
+    """
+    Check if the vector store supports filtering by docid.
+
+    Args:
+        vector_store (BasePydanticVectorStore): The vector store to check.
+
+    Returns:
+        bool: True if the vector store supports filtering by docid, False otherwise.
+    """
+    if isinstance(vector_store, PGVectorStore):
+        return False
+    else:
+        return True

@@ -4396,6 +4396,24 @@ llama-index-core = ">=0.12.0,<0.13.0"
 pymilvus = ">=2.5.2,<3.0.0"
 
 [[package]]
+name = "llama-index-vector-stores-postgres"
+version = "0.5.4"
+description = "llama-index vector_stores postgres integration"
+optional = false
+python-versions = "<4.0,>=3.9"
+files = [
+    {file = "llama_index_vector_stores_postgres-0.5.4-py3-none-any.whl", hash = "sha256:40fa6757c7ddccc1a23f5413f6676e339583c5bfb3364dbf7e371aab5d94ed07"},
+    {file = "llama_index_vector_stores_postgres-0.5.4.tar.gz", hash = "sha256:df6f05ffd7c148e4d3663ab386cf059a76fb59b3c9b34110add97fc154a16e2a"},
+]
+
+[package.dependencies]
+asyncpg = ">=0.29.0,<1.0.0"
+llama-index-core = ">=0.12.6,<0.13"
+pgvector = ">=0.3.6,<1.0.0"
+psycopg2-binary = ">=2.9.9,<3.0.0"
+sqlalchemy = {version = ">=1.4.49,<2.1", extras = ["asyncio"]}
+
+[[package]]
 name = "llama-index-vector-stores-tablestore"
 version = "0.2.2"
 description = "llama-index vector_stores tablestore integration"
@@ -5967,12 +5985,12 @@ files = [
 
 [[package]]
 name = "pairag-file"
-version = "1.2.7"
+version = "1.2.11"
 description = "PAI-RAG file processing library."
 optional = false
 python-versions = ">=3.11.0,<3.12"
 files = [
-    {file = "pairag_file-1.2.7-py3-none-any.whl", hash = "sha256:5547b84f9bff5c2426061e0b4222213d18252420fc90a2997d839c59b3b8abbe"},
+    {file = "pairag_file-1.2.11-py3-none-any.whl", hash = "sha256:7b79cf2e261a5ebb0db8c67134adfaa6c7b913d26710048a54c37e387b20e93c"},
 ]
 
 [package.dependencies]
@@ -6006,7 +6024,7 @@ xlrd = ">=2.0.1,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.7-py3-none-any.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.11-py3-none-any.whl"
 
 [[package]]
 name = "pandas"
@@ -10409,4 +10427,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "156990dbaded2df0da05dc30612965a0cf810997129c5ec49c3a17498b79964b"
+content-hash = "8c4cdd78a2b444477f7269d873bc2abefacbbb0770f3c249d0fdd98cf3cc8246"

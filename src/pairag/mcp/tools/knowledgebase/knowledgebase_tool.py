@@ -1,6 +1,6 @@
 from functools import partial
 from typing import List, Optional
-from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery
+from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
 from pairag.chat.models import RetrievalSetting
@@ -25,6 +25,7 @@ from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
 from pairag.mcp.tools.knowledgebase.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
+    is_docid_filter_supported,
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
@@ -248,14 +249,39 @@ class PaiKnowledgebaseClient:
         if retrieval_setting and retrieval_setting.score_threshold is not None:
             similarity_threshold = retrieval_setting.score_threshold
 
-        vector_query = VectorStoreQuery(
-            query_embedding=query_embedding,
-            similarity_top_k=top_k,
-            doc_ids=document_ids,
-            query_str=query,
-            mode=query_mode,
-            alpha=retrieval_config.vector_weight,
-        )
+        # 直接按doc_id过滤
+        if is_docid_filter_supported(vector_store=vector_store):
+            logger.info("Using doc_id as filters.")
+            vector_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                doc_ids=document_ids,
+                query_str=query,
+                mode=query_mode,
+                alpha=retrieval_config.vector_weight,
+            )
+        else:
+            # 使用llama_index filters 过滤
+            metadata_filters = MetadataFilters(
+                condition=FilterCondition.AND,
+                filters=[
+                    MetadataFilter(
+                        key="doc_id",
+                        value=document_ids,
+                        operator=FilterOperator.IN,
+                    )
+                ],
+            )
+            logger.info(f"Using metadata filters {metadata_filters}.")
+
+            vector_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                query_str=query,
+                mode=query_mode,
+                alpha=retrieval_config.vector_weight,
+                filters=metadata_filters,
+            )
 
         query_result = await vector_store.aquery(vector_query)
         logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")

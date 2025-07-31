@@ -78,7 +78,7 @@ llama-index-vector-stores-dashvector = "^0.3.0"
 llama-index-multi-modal-llms-dashscope = "^0.3.0"
 jieba = "^0.42.1"
 opentelemetry-sdk = "^1.33.1"
-pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.7-py3-none-any.whl"}
+pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.11-py3-none-any.whl"}
 sqlmodel = "^0.0.24"
 mcp = "^1.9.3"
 llama-index-tools-mcp = "^0.2.5"
@@ -90,6 +90,7 @@ pymupdf4llm = "0.0.17"
 celery = "^5.5.3"
 dashvector = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/dashvector-1.0.19.1-py3-none-any.whl"}
 chromadb = "^1.0.15"
+llama-index-vector-stores-postgres = "^0.5.4"
 
 [tool.poetry.scripts]
 load_model = "pairag.utils.download_models:load_models"
