@@ -113,7 +113,7 @@ start_api() {
 start_worker() {
   echo "👉 启动 Celery Worker"
   # 示例：python worker.py
-  celery -A app.worker worker --loglevel=info -c 4 &
+  celery -A app.worker worker --loglevel=info -c $WORKER_INSTANCE_COUNT &
   echo "Celery已启动."
 }
 
