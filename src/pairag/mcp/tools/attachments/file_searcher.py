@@ -6,15 +6,15 @@ from loguru import logger
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pairag.db.db_context import with_async_db_session
-from pairag.db.models.attachment.file import AttachmentFileEntity
+from pairag.db.models.knowledgebase.file import KbFileEntity
 from pairag.mcp.tools.knowledgebase.knowledgebase_tool import kb_client
 from pairag.chat.models import RetrievalSetting
 import re
 @with_async_db_session
 async def aget_file_retrieve_results_from_vector_store(session: AsyncSession, file_ids: List[str], query_str: str):
     file_res = await session.exec(
-        select(AttachmentFileEntity).where(
-            AttachmentFileEntity.frontend_file_id.in_(file_ids)
+        select(KbFileEntity).where(
+            KbFileEntity.id.in_(file_ids)
         )
     )
     processed_file_entities = file_res.all()

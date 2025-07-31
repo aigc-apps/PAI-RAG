@@ -18,6 +18,7 @@ from pairag.mcp.providers.embedding_provider import embedding_provider
 from pairag.api.response_model import PagedResult, ResponseModel, success_response, error_response
 from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.api.agent.utils.paginate import get_pagination_meta
+from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
 
 from loguru import logger
 
@@ -118,14 +119,58 @@ async def get_embeddings(
         return success_response(data=embedding_model, message="查询embedding模型成功。")
 
 
+async def change_default_embedding_model_and_update_threads(
+    session: AsyncSession = Depends(get_session),
+) -> ResponseModel[EmbeddingModelRead]:
+    logger.info("Setting new default embedding model.")
+    sql_result = await session.exec(
+        select(EmbeddingModelEntity)
+        .where(EmbeddingModelEntity.is_default == True) # noqa: E712
+    )
+    old_default_entities = sql_result.all()
+    assert len(old_default_entities) <= 1, "Only one default embedding model allowed."
+    if len(old_default_entities) > 0:
+        old_default_embedding = old_default_entities[0]
+        old_default_embedding.is_default = False
+        embedding_provider.update(old_default_embedding)
+        session.add(old_default_embedding)
+        await session.commit()
+        await session.refresh(old_default_embedding)
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.EMBEDDING,
+            source_id=old_default_embedding.id,
+            event_type=ChangeEventType.UPDATE,
+        )
+        logger.info(f"Removing default embedding model {old_default_embedding.id}.")
+    else:
+        logger.info("No default embedding model found.")
+
+    # delete default attachment knowledgebase using old default embedding model
+    knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")
+    if knowledgebase:
+        knowledgebase_provider.delete(knowledgebase.id)
+        await session.delete(knowledgebase)
+        await session.commit()
+
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.KNOWLEDGEBASE,
+            event_type=ChangeEventType.DELETE,
+            source_id=knowledgebase.id,
+        )
+
+        logger.info(f"Default attachment knowledgebase using old default embedding model {knowledgebase.id} has been deleted.")
+    else:
+        logger.info("Default attachment knowledgebase not found.")
 @embedding_router.patch("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
 async def update_embedding(
     emb_id: str,
     new_embedding: EmbeddingModelCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    embedding_model = await session.get(EmbeddingModelEntity, emb_id)
+    if new_embedding.is_default:
+        await change_default_embedding_model_and_update_threads(session=session)
 
+    embedding_model = await session.get(EmbeddingModelEntity, emb_id)
     if not embedding_model:
         return JSONResponse(
             content=error_response(
@@ -140,6 +185,7 @@ async def update_embedding(
     embedding_model.type = new_embedding.type
     embedding_model.endpoint = new_embedding.endpoint or embedding_model.endpoint
     embedding_model.is_ready = new_embedding.is_ready
+    embedding_model.is_default = new_embedding.is_default
     embedding_model.encrypted_api_key = (
         encrypt_key(new_embedding.api_key)
         if new_embedding.api_key

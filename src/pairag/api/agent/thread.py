@@ -7,7 +7,7 @@ from pairag.db.models.message import MessageEntity, MessageCreate, MessageRead
 from sqlalchemy.exc import IntegrityError
 from typing import List
 from sqlmodel import select
-from pairag.db.models.attachment.file import AttachmentFileEntity
+from pairag.db.models.knowledgebase.file import KbFileEntity
 thread_router = APIRouter()
 
 
@@ -69,8 +69,8 @@ async def delete_related_attachments_in_messages(session: AsyncSession, thread_i
     ]
     message_ids = [message.id for message in message_models]
     file_sql_results = await session.exec(
-        select(AttachmentFileEntity)
-        .where(AttachmentFileEntity.message_id.in_(message_ids))
+        select(KbFileEntity)
+        .where(KbFileEntity.message_id.in_(message_ids))
     )
     attachment_file_entities = file_sql_results.all()
     for attachment_file_entity in attachment_file_entities:
@@ -113,12 +113,7 @@ async def create_thread_message(
     await session.refresh(message_entity)
 
     for attachment in message.attachments:
-        file_res = await session.exec(
-            select(AttachmentFileEntity).where(
-                AttachmentFileEntity.frontend_file_id == attachment.get("id")
-            )
-        )
-        attachment_file_entity = file_res.first()
+        attachment_file_entity = await session.get(KbFileEntity, attachment.get("id"))
         attachment_file_entity.message_id = message_entity.id
         session.add(attachment_file_entity)
         await session.commit()
