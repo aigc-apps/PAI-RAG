@@ -45,13 +45,11 @@ jobs:
       - name: Run Linter
         shell: bash
         run: |
-          cd backend
           poetry run pip install pre-commit
           poetry run make lint
 
       - name: Run Tests
         run: |
-          cd backend
           poetry run make coveragetest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.TESTDASHSCOPEKEY }}
