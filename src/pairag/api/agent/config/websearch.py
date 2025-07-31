@@ -1,10 +1,10 @@
 ### Web search configuration API ###
 
-import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from pairag.db.models.change_event import ChangeEventSource, ChangeEventType
 from pairag.db.models.websearch import (
     WebSearchConfigRead,
     WebSearchConfigCreate,
@@ -13,6 +13,7 @@ from pairag.db.models.websearch import (
 from pairag.db.db_context import get_session
 from pairag.db.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
+from pairag.mcp.providers.config_change_manager import config_change_manager
 from pairag.mcp.providers.websearch_provider import websearch_provider
 from loguru import logger
 
@@ -51,7 +52,13 @@ async def add_search_config(
     try:
         await session.commit()
         await session.refresh(search_config)
-        asyncio.create_task(websearch_provider.refresh())
+        websearch_provider.update(search_config)
+        config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.WEBSEARCH,
+            source_id=search_config.id,
+            event_type=ChangeEventType.UPDATE,
+        )
+
         return search_config
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add search config: {e.orig}")

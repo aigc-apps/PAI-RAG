@@ -54,7 +54,7 @@ fi
 
 echo "Starting celery workers..."
 
-celery -A pairag.mcp.rag.file_worker worker --loglevel=info &
+celery -A pairag.mcp.rag.file_worker worker --loglevel=info -c 4 &
 
 echo "Celery is started."
 

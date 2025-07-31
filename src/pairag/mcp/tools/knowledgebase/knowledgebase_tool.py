@@ -1,6 +1,6 @@
 from functools import partial
 from typing import List, Optional
-from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery
+from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
 from pairag.chat.models import RetrievalSetting
@@ -25,6 +25,7 @@ from pairag.mcp.rag.image_caption_tool import ImageCaptionTool
 from pairag.mcp.tools.knowledgebase.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
+    is_docid_filter_supported,
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from pairag.mcp.providers.knowledgebase_provider import knowledgebase_provider
@@ -152,7 +153,6 @@ class PaiKnowledgebaseClient:
                 nodes[i].embedding = embeddings[i]
 
             await vector_store.async_add(nodes)
-            logger.info(f"Inserted {len(old_chunk_ids)} into vector store.")
 
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(
@@ -239,8 +239,6 @@ class PaiKnowledgebaseClient:
             return []
 
         top_k = retrieval_config.top_k
-        import pdb
-        pdb.set_trace()
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
         # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
@@ -251,17 +249,44 @@ class PaiKnowledgebaseClient:
         if retrieval_setting and retrieval_setting.score_threshold is not None:
             similarity_threshold = retrieval_setting.score_threshold
 
-        vector_query = VectorStoreQuery(
-            query_embedding=query_embedding,
-            similarity_top_k=top_k,
-            doc_ids=document_ids,
-            query_str=query,
-            mode=query_mode,
-            alpha=retrieval_config.vector_weight,
-        )
+        # 直接按doc_id过滤
+        if is_docid_filter_supported(vector_store=vector_store):
+            logger.info("Using doc_id as filters.")
+            vector_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                doc_ids=document_ids,
+                query_str=query,
+                mode=query_mode,
+                alpha=retrieval_config.vector_weight,
+            )
+        else:
+            # 使用llama_index filters 过滤
+            metadata_filters = MetadataFilters(
+                condition=FilterCondition.AND,
+                filters=[
+                    MetadataFilter(
+                        key="doc_id",
+                        value=document_ids,
+                        operator=FilterOperator.IN,
+                    )
+                ],
+            )
+            logger.info(f"Using metadata filters {metadata_filters}.")
+
+            vector_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                query_str=query,
+                mode=query_mode,
+                alpha=retrieval_config.vector_weight,
+                filters=metadata_filters,
+            )
 
         query_result = await vector_store.aquery(vector_query)
-        if retrieval_config.enable_rerank:
+        logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+
+        if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
                 retrieval_config.rerank_model
             )
@@ -269,6 +294,7 @@ class PaiKnowledgebaseClient:
                 query=query,
                 result=query_result,
                 top_n=reranker_top_k)
+            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
@@ -281,7 +307,7 @@ class PaiKnowledgebaseClient:
                         origin_text = origin_text.replace(image_file, image_url)
                     node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
-        logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
+        logger.info(f"Get {len(result_nodes)} nodes above given threshold {similarity_threshold}.")
         return result_nodes
 
     async def aquery_for_attachments(

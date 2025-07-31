@@ -9,7 +9,7 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Plus, BookTextIcon } from "lucide-react";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 
 export interface KnowledgeBase {
@@ -100,24 +100,22 @@ export default function KnowledgeBase({
           {knowledgebases.map((base) => (
             <Card
               key={base.id}
-              className="flex flex-col border rounded-lg shadow-sm h-full"
+              className="flex flex-col border rounded-lg shadow-sm h-full gap-4 py-4"
             >
               <CardHeader>
-                <CardTitle className="text-sm font-medium">
-                  {base.name}
+                <CardTitle className="text-lg flex gap-2">
+                  <BookTextIcon className="h-7" /> {base.name}
                 </CardTitle>
               </CardHeader>
-              {base.description && (
-                <CardContent className="pt-0">
-                  <p className="text-xs text-muted-foreground">
-                    {base.description
-                      ? base.description.slice(0, 50) +
-                        (base.description.length > 50 ? "..." : "")
-                      : ""}
-                  </p>
-                </CardContent>
-              )}
-              <CardFooter className="mt-auto pt-0 flex justify-end">
+
+              <CardContent className="pt-0">
+                <p className="text-md text-muted-foreground line-clamp-3">
+                  {base.description
+                    ? base.description
+                    : "暂时还没有描述，可以去设置页面添加哦。"}
+                </p>
+              </CardContent>
+              <CardFooter className="mt-auto pt-0 flex justify-end pt-3 px-2">
                 <Button
                   variant="link"
                   onClick={() => deleteKnowledgebase(base.id)}
@@ -128,12 +126,12 @@ export default function KnowledgeBase({
 
                 <Button
                   variant="link"
-                  className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
+                  className="text-md text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
                   onClick={() =>
                     setActiveTab(`/knowledgebase/details/${base.id}`)
                   }
                 >
-                  查看详情 <ChevronRight className="ml-1" size={16} />
+                  查看详情 <ChevronRight className="ml-1" size={20} />
                 </Button>
               </CardFooter>
             </Card>
