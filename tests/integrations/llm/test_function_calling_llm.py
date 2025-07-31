@@ -1,6 +1,6 @@
 from llama_index.core.tools import FunctionTool
-from pairag.integrations.llms.pai.pai_llm import PaiLlm
-from pairag.integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
+from integrations.llms.pai.pai_llm import PaiLlm
+from integrations.llms.pai.llm_config import OpenAICompatibleLlmConfig
 import os
 
 

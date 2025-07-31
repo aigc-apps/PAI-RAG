@@ -6,7 +6,7 @@ from llama_index.llms.dashscope import DashScope
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core import Settings
 
-from pairag.integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
+from integrations.data_analysis.nl2pandas_retriever import PandasQueryRetriever
 
 
 dashscope_key = os.environ.get("DASHSCOPE_API_KEY")

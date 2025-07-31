@@ -1,3 +1,0 @@
-DEFAULT_NODE_SOURCE_FIELD = "source"
-DEFAULT_MODIFIED_AT_FIELD = "modified_at"
-DEFAULT_MD5_FIELD = "document_md5"

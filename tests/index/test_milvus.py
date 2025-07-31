@@ -3,8 +3,8 @@ import pytest
 from dotenv import load_dotenv
 from llama_index.embeddings.dashscope import DashScopeEmbedding
 from llama_index.core.schema import TextNode
-from pairag.knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
-from pairag.knowledgebase.index.pai.vector_store_config import MilvusVectorStoreConfig
+from knowledgebase.index.pai.pai_vector_index import PaiVectorStoreIndex
+from knowledgebase.index.pai.vector_store_config import MilvusVectorStoreConfig
 
 
 # 构造 mock_nodes

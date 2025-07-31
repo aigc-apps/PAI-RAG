@@ -2,12 +2,12 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from pairag.db.db_context import get_sync_db_engine
+from db.db_context import get_sync_db_engine
 from alembic import context
 
 # Import SQLModel and your models
 from sqlmodel import SQLModel
-from pairag.db.models import (
+from db.models import (
     McpServerEntity,
     LlmModelEntity,
     WebSearchConfigEntity,

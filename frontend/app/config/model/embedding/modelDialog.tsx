@@ -58,14 +58,20 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 
   const handleSubmit = async () => {
     setSaveErrorMsg("");
+    const is_api_model = emb.type != "local";
     if (
-      !emb.model_id ||
-      (isAdd && !emb.api_key) ||
-      !emb.endpoint ||
-      !emb.model_name ||
-      !emb.dimension ||
-      !emb.type ||
-      !emb.embed_batch_size
+      is_api_model &&
+      (!emb.model_id ||
+        (isAdd && !emb.api_key) ||
+        !emb.endpoint ||
+        !emb.model_name ||
+        !emb.type)
+    ) {
+      setSaveErrorMsg("请必须填写完整的模型信息");
+      return;
+    } else if (
+      !is_api_model &&
+      (!emb.model_id || !emb.model_name || !emb.dimension || !emb.type)
     ) {
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;

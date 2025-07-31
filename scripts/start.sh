@@ -24,7 +24,7 @@ cleanup() {
     local exit_code=$?
     echo "Cleaning up..."
 
-    pkill -9 -f 'celery -A pairag'
+    pkill -9 -f 'celery -A app.worker'
     echo "celery job stopped."
 
     echo "Script exited with code $exit_code."
@@ -52,20 +52,21 @@ else
    echo "Starting redis server."
 fi
 
-echo "Starting celery workers..."
-
-celery -A pairag.mcp.rag.file_worker worker --loglevel=info -c 4 &
-
-echo "Celery is started."
-
 
 echo "starting web"
 cd frontend/
 npm install && npm run dev -- --port 3000 &
 FRONTEND_PID=$!
 echo "frontend is started with pid $FRONTEND_PID."
-
 cd ..
+
+
+echo "Starting celery workers..."
+
+cd backend/
+celery -A app.worker worker --loglevel=info -c 4 &
+echo "Celery is started."
+
 
 echo "Starting api server..."
 
@@ -74,4 +75,5 @@ port="${port:-8680}"
 
 echo "Starting gunicorn with $workers workers on port $port..."
 
-gunicorn -w $workers -b "0.0.0.0:${port}" -c scripts/gunicorn.conf.py src.pairag.app.app:app --timeout 600
+
+gunicorn -w $workers -b "0.0.0.0:${port}" -c ../scripts/gunicorn.conf.py app.app:app --timeout 600

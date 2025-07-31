@@ -1,6 +1,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
-from pairag.app.app import app
+from app.app import app
 
 pytest.skip("Skip.", allow_module_level=True)
 

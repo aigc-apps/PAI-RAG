@@ -1,5 +1,5 @@
 import pytest
-from pairag.mcp.online_file_readers.pai_online_data_reader import PaiOnlineDataReader
+from rag.file.online_file_readers.pai_online_data_reader import PaiOnlineDataReader
 
 
 class TestPaiOnlineDataReader:

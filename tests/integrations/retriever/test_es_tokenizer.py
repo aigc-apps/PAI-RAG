@@ -7,7 +7,7 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQuery,
     VectorStoreQueryResult,
 )
-from pairag.integrations.vector_stores.elasticsearch.my_elasticsearch import (
+from integrations.vector_stores.elasticsearch.my_elasticsearch import (
     MyElasticsearchStore,
 )
 
