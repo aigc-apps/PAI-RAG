@@ -11,7 +11,9 @@ from loguru import logger
 from rag.vector_store.local_chroma_service import DEFAULT_CHROMA_PORT
 from rag.vector_store.local import LocalChromaVectorStore
 from rag.vector_store.elasticsearch import ElasticsearchStore
+from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
+
 
 class VectorDbType(str, Enum):
     OPENSEARCH = "opensearch"
@@ -200,6 +202,10 @@ def create_vector_store(
             es_user=vector_db_connection.user,
             es_password=vector_db_connection.password,
             dim=dimension,
+            retrieval_strategy=AsyncDenseVectorStrategy(
+                hybrid=True, rrf={"window_size": 50}
+            ),
+
         )
     elif isinstance(vector_db_connection, PostgresqlConnection):
         logger.info(

@@ -13,11 +13,6 @@ from llama_index.core.schema import TextNode
 from common.knowledgebase.types import FileStatus, ChunkStatus
 from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.attachment.file import AttachmentFileEntity
-from db.models.attachment.chunk import (
-    AttachmentChunkEntity,
-    create_attachment_chunk_from_text_node
-)
 from llama_index.core.schema import Document
 from config.providers.config_change_manager import config_change_manager
 
@@ -50,12 +45,8 @@ async def set_embedding_model_ready(
 async def read_file_from_db(
     session: AsyncSession,
     file_id: str,
-    is_attachment: bool = False
 ):
-    if is_attachment:
-        file_entity = await session.get(AttachmentFileEntity, file_id)
-    else:
-        file_entity = await session.get(KbFileEntity, file_id)
+    file_entity = await session.get(KbFileEntity, file_id)
     assert file_entity is not None, f"File {file_id} not found."
     return file_entity
 
@@ -79,13 +70,11 @@ async def update_file_status_async(
     is_attachment: bool = False,
     documents: List[Document] = None,
 ):
-    if is_attachment:
-        file = await session.get(AttachmentFileEntity, file_id)
-        if documents:
-            file.file_content = documents[0].text
-            file.file_content_length = len(documents[0].text)
-    else:
-        file = await session.get(KbFileEntity, file_id)
+    file = await session.get(KbFileEntity, file_id)
+    if is_attachment and documents:
+        file.file_content = documents[0].text
+        file.file_content_length = len(documents[0].text)
+
     file.status = status
     file.failed_reason = failed_reason
     session.add(file)
@@ -97,16 +86,10 @@ async def save_chunks_to_db_async(
     kb_id: str,
     file_id: str,
     chunk_nodes: List[TextNode],
-    is_attachment: bool = False,
 ):
-    if is_attachment:
-        return await save_attachment_chunks_to_db_async(
-            file_id=file_id, chunk_nodes=chunk_nodes
-        )
-    else:
-        return await save_kb_chunks_to_db_async(
-            kb_id=kb_id, file_id=file_id, chunk_nodes=chunk_nodes
-        )
+    return await save_kb_chunks_to_db_async(
+        kb_id=kb_id, file_id=file_id, chunk_nodes=chunk_nodes
+    )
 @with_async_db_session
 async def save_kb_chunks_to_db_async(
     session: AsyncSession,
@@ -143,58 +126,17 @@ async def save_kb_chunks_to_db_async(
     return existing_chunk_ids, new_chunk_ids
 
 @with_async_db_session
-async def save_attachment_chunks_to_db_async(
-    session: AsyncSession,
-    file_id: str,
-    chunk_nodes: List[TextNode],
-):
-    logger.info(f"[KnowledgebaseProvider] Start saving {len(chunk_nodes)} attachment chunks.")
-    chunk_records: List[AttachmentChunkEntity] = [
-        create_attachment_chunk_from_text_node(file_id, chunk) for chunk in chunk_nodes
-    ]
-    select_statement = select(AttachmentChunkEntity).where(
-        AttachmentChunkEntity.file_id == file_id
-    )
-    existing_chunks = (await session.exec(select_statement)).all()
-    existing_chunk_ids = [chunk.id for chunk in existing_chunks]
-
-    # 构造 DELETE 语句
-    del_statement = delete(AttachmentChunkEntity).where(
-        AttachmentChunkEntity.file_id == file_id
-    )
-
-    # 执行删除操作
-    await session.exec(del_statement)
-    logger.info(
-        f"[KnowledgebaseProvider] Deleted {len(existing_chunks)} attachment chunks for file {file_id}."
-    )
-
-    session.add_all(chunk_records)
-    await session.commit()
-
-    new_chunk_ids = [record.id for record in chunk_records]
-    logger.info(f"[FileHelper] saved {len(chunk_records)} attachment chunks.")
-    return existing_chunk_ids, new_chunk_ids
-@with_async_db_session
 async def update_chunk_status_async(
     session: AsyncSession,
     chunk_ids: List[str],
     status: ChunkStatus,
-    is_attachment: bool = False,
 ) -> None:
     logger.info(f"[FileHelper] updating chunk {chunk_ids} status to {status}.")
-    if is_attachment:
-        await session.exec(
-        update(AttachmentChunkEntity)
-        .where(AttachmentChunkEntity.id.in_(chunk_ids))
+    await session.exec(
+        update(KbChunkEntity)
+        .where(KbChunkEntity.id.in_(chunk_ids))
         .values(status=status.value)
     )
-    else:
-        await session.exec(
-            update(KbChunkEntity)
-            .where(KbChunkEntity.id.in_(chunk_ids))
-            .values(status=status.value)
-        )
     await session.commit()
     logger.info(
         f"[FileHelper] successfully updated chunk {chunk_ids} status to {status}."

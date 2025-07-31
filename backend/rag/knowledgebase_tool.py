@@ -5,7 +5,6 @@ from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.attachment.file import AttachmentFileEntity
 from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
 from common.knowledgebase.types import (
     ChunkStatus,
@@ -96,10 +95,7 @@ class PaiKnowledgebaseClient:
         is_attachment: bool = False,
     ):
         logger.info(f"[WORKER] processing file {file_id} in background. Is attachment: {is_attachment}")
-        if is_attachment:
-            file_entity: AttachmentFileEntity = await read_file_from_db(file_id=file_id, is_attachment=is_attachment)
-        else:
-            file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
+        file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
 
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
 
@@ -129,7 +125,7 @@ class PaiKnowledgebaseClient:
             documents, nodes = file_parser.parse(file_item)
 
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
-                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes, is_attachment=is_attachment
+                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
             )
 
             await update_file_status_async(
@@ -156,7 +152,7 @@ class PaiKnowledgebaseClient:
 
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(
-                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded, is_attachment=is_attachment
+                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded
             )
             await update_file_status_async(
                 file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment

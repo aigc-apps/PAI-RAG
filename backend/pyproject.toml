@@ -4,6 +4,10 @@ version = "1.7.1"
 requires-python = ">=3.11,<3.13"
 
 [tool.poetry]
+name = "pairag"
+version = "2.0.0"
+description = "A short description of your project"
+authors = ["Your Name <you@example.com>"]
 packages = [
   {include = "db"},
   {include = "rag"},
@@ -18,7 +22,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11.0,<3.12"
+python = ">=3.11.0,<3.13"
 fastapi = "0.115.2"
 uvicorn = "^0.29.0"
 llama-index-core = "^0.12.12"

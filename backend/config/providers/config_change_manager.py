@@ -13,6 +13,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
+from db.models.knowledgebase.embedding import (
+    EmbeddingModelCreate,
+    EmbeddingModelEntity,
+    EmbeddingType,
+)
+from sqlalchemy.exc import IntegrityError
+
 
 class ConfigChangeManager:
     def __init__(self, worker_mode: bool = False):
@@ -43,6 +50,7 @@ class ConfigChangeManager:
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
+        await self.create_default_embedding_model()
         await embedding_provider.full_load_from_db_async()
         logger.info("Initialized embedding models.")
         await knowledgebase_provider.full_load_from_db_async()
@@ -51,6 +59,40 @@ class ConfigChangeManager:
         self.initialized = True
         self.last_change_dt = current_dt
         logger.info(f"ConfigManager inited with worker_mode {self.worker_mode}, timestamp {self.last_change_dt}")
+
+    @with_async_db_session
+    async def create_default_embedding_model(self, session: AsyncSession):
+        sql_results = await session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == "default_embedding_model"))
+        embedding_entities = sql_results.all()
+        if len(embedding_entities) > 0:
+            logger.info("Default embedding model already exists.")
+            return
+        logger.info("Creating default embedding model.")
+        embedding_model = EmbeddingModelCreate(
+            model_id="default_embedding_model",
+            type=EmbeddingType.LOCAL,
+            dimension=1024,
+            embed_batch_size=10,
+            is_ready=False,
+            is_default=True,
+        )
+        default_embedding_model = EmbeddingModelEntity.model_validate(embedding_model)
+        try:
+            embedding_provider.add(default_embedding_model)
+            session.add(default_embedding_model)
+            await session.commit()
+            await session.refresh(default_embedding_model)
+            await self.notify_change_async(
+                event_source=ChangeEventSource.EMBEDDING,
+                source_id=default_embedding_model.id,
+                event_type=ChangeEventType.ADD
+            )
+            logger.info("Default embedding model added to database. Starting worker to download model...")
+            import app.worker as worker
+            worker.download_model.delay(model_id=default_embedding_model.id, model_name=default_embedding_model.model_name)
+        except IntegrityError as e:
+            logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
+            await session.rollback()
 
     @with_async_db_session
     async def notify_change_async(

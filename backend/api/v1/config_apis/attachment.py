@@ -11,7 +11,7 @@ from db.db_context import get_session
 from config.providers.knowledgebase_provider import knowledgebase_provider
 from rag.file.store.file_store_helper import file_store
 from rag.file.models.file_item import FileItem
-from db.models.attachment.file import AttachmentFileEntity
+from db.models.knowledgebase.file import KbFileEntity
 from api.response_model import success_response, error_response
 from common.knowledgebase.types import FileStatus
 from rag.knowledgebase_tool import kb_client
@@ -21,6 +21,7 @@ from db.models.knowledgebase.embedding import (
 )
 from config.providers.config_change_manager import config_change_manager
 from db.models.change_event import ChangeEventSource, ChangeEventType
+from loguru import logger
 
 attachments_router = APIRouter()
 
@@ -30,14 +31,22 @@ async def upload_attachment_file(
     file_id: str = Form(...), file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
 ):
     knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")
-    embedding_results = await session.exec(select(EmbeddingModelEntity))
-    embedding_entities = embedding_results.all()
-    assert len(embedding_entities) > 0, "No embedding model found"
+    default_embedding_results = await session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.is_default == True)) # noqa: E712
+    default_embedding_entities = default_embedding_results.all()
+    if len(default_embedding_entities) > 0:
+        default_embedding_entity = default_embedding_entities[0]
+        logger.info(f"Default embedding model found, and using {default_embedding_entity.model_id} for attachment knowledgebase.")
+    else:
+        all_embedding_results = await session.exec(select(EmbeddingModelEntity))
+        all_embedding_entities = all_embedding_results.all()
+        default_embedding_entity = all_embedding_entities[0]
+        logger.info(f"No default embedding model was found, and using {default_embedding_entity.model_id} for attachment knowledgebase.")
+
     if not knowledgebase:
         kb = KnowledgebaseCreate(
             name="default_attachments",
             description="附件知识库",
-            embedding_model=embedding_entities[0].model_id,
+            embedding_model=default_embedding_entity.model_id,
         )
         kb.chunk_config = (ChunkConfig()).model_dump()
         kb.retrieval_config = (RetrievalConfig()).model_dump()
@@ -62,7 +71,7 @@ async def upload_attachment_file(
         file_path=destination_file_path,
         kb_id=knowledgebase.id,
     )
-    file_entity : AttachmentFileEntity = file_item.to_attachment_file_entity(file_id)
+    file_entity : KbFileEntity = file_item.to_file_entity(file_id)
     session.add(file_entity)
     await session.commit()
     await kb_client.process_file_async(file_entity.id, True)
