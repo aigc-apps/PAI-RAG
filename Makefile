@@ -14,7 +14,7 @@ test:	## Run tests via pytest.
 	pytest tests -s
 
 coveragetest:       ## Tests with coverage report
-	pytest --cov-report xml:localdata/test_output/coverage_report.xml tests -s
+	pytest --cov-report xml:localdata/test_output/coverage_report.xml --cov backend tests -s
 
 watch-docs:	## Build and watch documentation.
 	sphinx-autobuild docs/ docs/_build/html --open-browser --watch $(GIT_ROOT)/llama_index/

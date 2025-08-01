@@ -14,15 +14,13 @@ Before you begin, make sure you have the following requirements:
 2. Install dependencies
 
 ```bash
-cd backend
 poetry install
-cd ..
 ```
 
 3. Start locally
 
 ```bash
-./scripts/start.sh --frontend-port=8680 --backend-port=8688
+./scripts/start.sh --frontend-port 8680 --backend-port 8688
 ```
 
 Open http://localhost:8680 in your browser.

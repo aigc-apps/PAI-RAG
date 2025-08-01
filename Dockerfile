@@ -10,7 +10,7 @@ ENV POETRY_NO_INTERACTION=1 \
 WORKDIR /app
 COPY . .
 
-RUN cd backend && poetry install \
+RUN poetry install \
   && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
   && rm -rf $POETRY_CACHE_DIR
 
@@ -41,4 +41,4 @@ WORKDIR /app
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 COPY . .
-CMD ["./scripts/start.sh", "-w", "1"]
+CMD ["./scripts/start.sh"]
