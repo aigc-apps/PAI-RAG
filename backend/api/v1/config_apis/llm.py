@@ -1,5 +1,5 @@
 import traceback
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -12,7 +12,6 @@ from config.providers.llm_provider import llm_provider
 from api.v1.utils.paginate import get_pagination_meta
 from api.response_model import PagedResult, success_response, error_response, ResponseModel
 from loguru import logger
-from fastapi.responses import JSONResponse
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
@@ -50,22 +49,14 @@ async def create_llm(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                content=error_response(code=400, message=f"Model_id {llm_data.model_id} already exists."),
-                status_code=400,
-            )
+            return error_response(code=400, message=f"模型id {llm_data.model_id} 已经存在.")
         else:
-            return JSONResponse(
-                content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
-                status_code=400,
-            )
+            return error_response(code=400, message=f"模型创建失败: {e}")
     except Exception as e:
         logger.error(f"Failed to add llm config: {traceback.format_exc()}")
         await session.rollback()
-        return JSONResponse(
-            content=error_response(code=400, message=f"Failed to add llm config: {str(e)}"),
-            status_code=400,
-        )
+        return error_response(code=400, message=f"模型创建失败: {e}")
+
 
 
 @llm_router.get("/groups")
@@ -127,13 +118,14 @@ async def get_llms(
         message="获取LLM模型列表成功")
 
 
-@llm_router.get("/{llm_id}", response_model=LlmModelRead)
+@llm_router.get("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     llm = await session.get(LlmModelEntity, llm_id)
+    print("### llm:", llm)
     if not llm:
-        raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
+        return error_response(code=404, message=f"没有找到ID为'{llm_id}'的大模型配置。")
 
-    return llm
+    return success_response(data=llm, message="获取LLM模型成功")
 
 
 @llm_router.patch("/{llm_id}", response_model=ResponseModel[LlmModelRead])
@@ -144,10 +136,8 @@ async def update_llm(
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
-        return JSONResponse(
-            content=error_response(code=404, message=f"Failed to update llm config {llm_id}"),
-            status_code=400,
-        )
+        return error_response(code=404, message=f"LLM'{llm_id}'不存在。")
+
     logger.info(f"update_llm {update_llm}.")
     llm.model_id = update_llm.model_id or llm.model_id
     llm.base_url = update_llm.base_url or llm.base_url
@@ -172,8 +162,6 @@ async def update_llm(
         event_type=ChangeEventType.UPDATE,
     )
 
-
-
     return success_response(data=llm, message="LLM更新成功。")
 
 
@@ -184,7 +172,7 @@ async def delete_llm(
 ):
     llm = await session.get(LlmModelEntity, llm_id)
     if not llm:
-        raise HTTPException(status_code=404, detail=f"LLM {llm_id} not found.")
+        return error_response(code=404, message=f"LLM'{llm_id}'不存在。")
 
     llm_provider.delete(llm_id)
     await session.delete(llm)
@@ -195,6 +183,5 @@ async def delete_llm(
         event_type=ChangeEventType.DELETE,
     )
 
-
-    logger.info(f"LLM {llm_id} deleted.")
-    return {"message": f"LLM {llm_id} deleted."}
+    logger.info(f"模型ID {llm_id} 删除成功。")
+    return success_response(code=200, message=f"大模型ID '{llm_id}' 删除成功。")
