@@ -63,7 +63,7 @@ jobs:
       - name: Get Cover
         uses: orgoro/coverage@v3.1
         with:
-          coverageFile: backend/localdata/test_output/coverage_report.xml
+          coverageFile: localdata/test_output/coverage_report.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           thresholdAll: 0.4 # Total coverage threshold
           #thresholdNew: 0.9 # New files coverage threshold

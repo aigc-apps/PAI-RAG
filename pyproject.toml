@@ -9,16 +9,15 @@ version = "2.0.0"
 description = "A short description of your project"
 authors = ["Your Name <you@example.com>"]
 packages = [
-  {include = "db"},
-  {include = "rag"},
-  {include = "app"},
-  {include = "api"},
-  {include = "config"},
-  {include = "common"},
-  {include = "alembic"},
-  {include = "extensions"},
-  {include = "memory"},
-  {include = "chat"}
+  {include = "db", from = "backend"},
+  {include = "rag", from = "backend"},
+  {include = "app", from = "backend"},
+  {include = "api", from = "backend"},
+  {include = "config", from = "backend"},
+  {include = "common", from = "backend"},
+  {include = "extensions", from = "backend"},
+  {include = "memory", from = "backend"},
+  {include = "chat", from = "backend"}
 ]
 
 [tool.poetry.dependencies]
