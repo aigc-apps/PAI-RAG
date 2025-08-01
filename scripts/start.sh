@@ -105,7 +105,7 @@ start_frontend() {
 start_api() {
   echo "👉 启动 API 实例 on port $BACKEND_PORT"
   # 示例：uvicorn app:app --port $port
-  gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.app:app --timeout 600
+  gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.main:app --timeout 600
   API_PIDS[$instance]=$!
 }
 

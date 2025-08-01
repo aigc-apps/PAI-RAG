@@ -32,6 +32,11 @@ jobs:
           # Optional - x64 or x86 architecture, defaults to x64
           architecture: "x64"
 
+      - name: Set up redis-server
+        uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: "7.x"
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel

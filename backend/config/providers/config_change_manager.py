@@ -35,7 +35,7 @@ class ConfigChangeManager:
         from db.db_context import init_db
 
         await init_db()
-        logger.info("Initialized databases for MCP.")
+        logger.info("Initialized database tables.")
 
         if not self.worker_mode:
             from config.providers.mcp_tool_provider import mcp_provider
