@@ -39,7 +39,7 @@ TOOL_RESPONSE_MSG = ChatMessage(
     role=MessageRole.TOOL, content='{"result": "tool_response"}', tool_call_id="1"
 )
 
-download_model_to_directory("Ceceliachenen/tokenization")
+download_model_to_directory("Ceceliachenen/Qwen3-32B-Tokenization")
 
 
 class TestBaseMemory:
