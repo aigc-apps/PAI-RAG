@@ -34,12 +34,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cd backend
           python -m pip install --upgrade pip setuptools wheel
           pip install poetry
           poetry env activate
           poetry install
-          poetry run pip install magic-pdf[full]==1.3.10
           poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
 
       - name: Run Linter
