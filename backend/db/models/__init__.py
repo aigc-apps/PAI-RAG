@@ -11,3 +11,4 @@ from db.models.thread import ThreadEntity
 from db.models.message import MessageEntity
 from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.chunk import KbChunkEntity
+from db.models.prompt import PromptModelEntity
