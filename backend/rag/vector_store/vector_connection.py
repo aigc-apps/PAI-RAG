@@ -105,7 +105,7 @@ POSTGRES_PASSWORD_KEYS = ["POSTGRES_PASSWORD", "PAIRAG_RAG__INDEX__VECTOR_STORE_
 
 def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
     vector_db_type = get_value_from_multiple_envs(
-        VECTORDB_TYPE_KEYS, default="faiss"
+        VECTORDB_TYPE_KEYS, default="local"
     ).lower()
 
     if vector_db_type == VectorDbType.ELASTICSEARCH:
