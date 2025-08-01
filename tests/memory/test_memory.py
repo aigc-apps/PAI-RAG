@@ -9,7 +9,6 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 from memory.utils import get_last_n_msgs_skip_first
-from utils.modelscope_utils import download_model_to_directory
 
 
 # 测试数据
@@ -38,9 +37,6 @@ TOOL_CALL_MSG = ChatMessage(
 TOOL_RESPONSE_MSG = ChatMessage(
     role=MessageRole.TOOL, content='{"result": "tool_response"}', tool_call_id="1"
 )
-
-download_model_to_directory("Ceceliachenen/Qwen3-32B-Tokenization")
-
 
 class TestBaseMemory:
     @pytest.fixture

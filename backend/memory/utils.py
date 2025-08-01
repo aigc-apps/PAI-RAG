@@ -1,15 +1,12 @@
 from llama_index.core.llms import ChatMessage, MessageRole
 from typing import List, Tuple, Any
 from transformers import AutoTokenizer
-from utils.constants import DEFAULT_MODEL_DIR
-import os
 
-TOKENIZATION_MODEL = "Qwen3-32B-Tokenization"
+TOKENIZATION_MODEL = "resources/tokenizer/Qwen3-32B-Tokenizer"
 
 
 def get_tokenizer():
-    model_path = os.path.join(DEFAULT_MODEL_DIR, TOKENIZATION_MODEL)
-    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True)
     return tokenizer
 
 
