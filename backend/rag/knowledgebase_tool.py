@@ -1,4 +1,5 @@
 from functools import partial
+import traceback
 from typing import List, Optional
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
@@ -68,7 +69,7 @@ class PaiKnowledgebaseClient:
 
         return self.vector_store_cache[kb_key]
 
-    def create_file_parser(self, knowledgebase: KbEntity, is_attachment: bool = False):
+    def create_file_parser(self, knowledgebase: KbEntity):
         multimodal_llm = llm_provider.get_multimodal_llm()
         image_caption_tool = None
         if multimodal_llm:
@@ -77,7 +78,6 @@ class PaiKnowledgebaseClient:
             file_store=file_store,
             image_caption_tool=image_caption_tool,
             knowledgebase=knowledgebase,
-            is_attachment=is_attachment
         )
         return file_parser
 
@@ -121,8 +121,8 @@ class PaiKnowledgebaseClient:
         await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
 
         try:
-            file_parser = self.create_file_parser(knowledgebase, is_attachment)
-            documents, nodes = file_parser.parse(file_item)
+            file_parser = self.create_file_parser(knowledgebase)
+            documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
 
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
                 kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
@@ -161,9 +161,9 @@ class PaiKnowledgebaseClient:
             logger.info(
                 f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
             )
-        except Exception as ex:
+        except Exception:
             logger.exception(
-                f"Error adding file {file_item.file_name} to knowledgebase {kb_id}. {ex}"
+                f"Error adding file {file_item.file_name} to knowledgebase {kb_id}. {traceback.format_exc()}"
             )
             await update_file_status_async(
                 file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment

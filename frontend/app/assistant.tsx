@@ -93,7 +93,7 @@ export const Assistant = () => {
   }, [llmConfig.model_id, selectedOptions]);
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
   const runtime = usePaiChatThreadRuntime({
-    api: `${API_BASE}/v1/agent/chat`,
+    api: `${API_BASE}/v1/chat/completions`,
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),
