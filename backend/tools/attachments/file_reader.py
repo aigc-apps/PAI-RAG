@@ -9,7 +9,7 @@ from rag.file.store.file_store_helper import file_store
 @with_async_db_session
 async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     processed_file_entity = await session.get(KbFileEntity, file_id)
-    if processed_file_entity.file_extension in ["jpeg", "png", "jpg"]:
+    if processed_file_entity.file_extension in [".jpeg", ".png", ".jpg"]:
         return file_store.get_url(processed_file_entity.file_path)
     content =  processed_file_entity.file_content
     if processed_file_entity.file_content_length > 200:
