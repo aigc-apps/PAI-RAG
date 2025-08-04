@@ -1,28 +1,24 @@
-### Trace configuration API ###
-
 ### Prompt configuration API ###
 
 from fastapi import APIRouter, Depends
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.prompt import PromptModel, PromptModelEntity
+from db.models.prompt import PromptModelEntity
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from config.providers.config_change_manager import config_change_manager
 from config.providers.prompt_provider import prompt_provider
-from api.response_model import success_response, error_response
-from fastapi.responses import JSONResponse
+from api.response_model import success_response, error_response, ResponseModel
 
 from loguru import logger
 
 
 prompt_router = APIRouter()
 
-
-@prompt_router.post("", response_model=PromptModel)
+@prompt_router.post("", response_model=ResponseModel[PromptModelEntity])
 async def set_prompt_config(
-    new_prompt_config: PromptModel,
+    new_prompt_config: PromptModelEntity,
     session: AsyncSession = Depends(get_session),
 ):
     prompt_config = (await session.exec(select(PromptModelEntity))).first()
@@ -33,8 +29,9 @@ async def set_prompt_config(
             new_prompt_config,
         )
     else:
-        for prompt_key in prompt_config.prompts.keys():
-            prompt_config.prompts[prompt_key] = new_prompt_config.prompts[prompt_key] or prompt_config.prompts[prompt_key]
+        new_prompts = {**prompt_config.prompts,**new_prompt_config.prompts}
+
+        prompt_config.prompts = new_prompts
 
 
     session.add(prompt_config)
@@ -51,19 +48,17 @@ async def set_prompt_config(
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add prompt config: {e.orig}")
         await session.rollback()
-        return JSONResponse(
-            status_code=400,
-            content=error_response(code=400, message=f"IntegrityError occurred when add prompt config: {e.orig}"),
+        return error_response(
+            code=400, message=f"IntegrityError occurred when add prompt config: {e.orig}"
         )
     except Exception as e:
         await session.rollback()
-        return JSONResponse(
-            status_code=400,
-            content=error_response(code=400, message=f"Failed to add prompt config: {str(e)}"),
+        return error_response(
+            code=400, message=f"Failed to add prompt config: {str(e)}"
         )
 
 
-@prompt_router.get("", response_model=PromptModel)
+@prompt_router.get("", response_model=ResponseModel[PromptModelEntity])
 async def get_prompt_config(
     session: AsyncSession = Depends(get_session),
 ):
@@ -71,6 +66,6 @@ async def get_prompt_config(
     prompt_config = prompt_config_results.first()
     if not prompt_config:
         logger.warning("No prompt config found.")
-        return PromptModel()
+        return success_response(data=PromptModelEntity(), message="get prompt config successfully")
 
-    return prompt_config
+    return success_response(data=prompt_config, message="get prompt config successfully")
