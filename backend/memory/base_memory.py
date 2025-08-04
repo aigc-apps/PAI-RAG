@@ -16,6 +16,7 @@ from llama_index.core.bridge.pydantic import Field, BaseModel
 from collections import deque
 from loguru import logger
 import copy
+from llama_index.core.base.llms.types import ImageBlock
 
 
 class QueueMessageItem(BaseModel):
@@ -126,10 +127,10 @@ class BaseMemory:
                 self.queue_tokens_num -= new_first_tokens_num
                 break
 
-    def get_context(self) -> List[ChatMessage]:
-        return self.get_truncated_messages()
+    def get_context(self, image_urls : List[str] = None) -> List[ChatMessage]:
+        return self.get_truncated_messages(image_urls)
 
-    def get_truncated_messages(self) -> List[ChatMessage]:
+    def get_truncated_messages(self, image_urls : List[str] = None) -> List[ChatMessage]:
         messages = []
         messages.extend(self.history_messages)
         for item in self.queue:
@@ -137,6 +138,13 @@ class BaseMemory:
 
         if len([m for m in messages if m.role == MessageRole.SYSTEM]) != 1:
             raise Exception("The input messages must contain only one system message. ")
+        
+        if image_urls:
+            for message in reversed(messages):
+                if message.role == MessageRole.USER:
+                    for url in image_urls:
+                        message.blocks.append(ImageBlock(url=url))
+                    break
         return messages
 
     def get(self) -> List[ChatMessage]:
