@@ -26,7 +26,7 @@ def add_chat_router(app: FastAPI):
     from api.v1.chat import chat_agent_router
     from api.v1.thread import thread_router
 
-    app.include_router(chat_agent_router, prefix="/v1/agent/chat")
+    app.include_router(chat_agent_router, prefix="/v1/chat/completions")
     app.include_router(thread_router, prefix="/v1/agent/threads")
     from api.v1.chat import agent_answer_dump_router
 

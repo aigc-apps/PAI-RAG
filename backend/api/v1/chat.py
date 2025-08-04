@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response
-from fastapi.responses import StreamingResponse
+from sse_starlette import EventSourceResponse
 from chat.agent_loop import AgentLoop
 from common.chat.models import ChatAgentRequest
 from utils.openai_response_converter import OpenAIChatCompletionChunkConverter
@@ -19,7 +19,7 @@ async def chat(chat_request: ChatAgentRequest):
         agent_loop = AgentLoop()
         async_response_gen = await agent_loop.arun(chat_request=chat_request)
         openai_converter = OpenAIChatCompletionChunkConverter(chat_request)
-        return StreamingResponse(
+        return EventSourceResponse(
             openai_converter.aconvert_to_openai_chat_completion_chunk(
                 async_response_gen
             ),
@@ -27,7 +27,7 @@ async def chat(chat_request: ChatAgentRequest):
         )
 
     except Exception:
-        logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
+        logger.exception(f"Error in /v1/chat/completions: {traceback.format_exc()}")
         return Response(content="Internal Server Error", status_code=500)
 
 

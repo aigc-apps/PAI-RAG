@@ -1,4 +1,5 @@
 import json
+import uuid
 from llama_index.core.base.llms.types import (
     MessageRole,
     ChatResponseAsyncGen,
@@ -16,13 +17,13 @@ class OpenAIChatCompletionChunkConverter:
 
     def _make_json_chunk(self, content: any):
         """Helper function to format the content as a JSON chunk."""
-        return f"data:{json.dumps(content, ensure_ascii=False)}\n"
+        return json.dumps(content, ensure_ascii=False)
 
     async def aconvert_to_openai_chat_completion_chunk(
         self, async_response_gen: ChatResponseAsyncGen
     ):
         logger.info("Start generating chunks.")
-        chat_id = "chat_test_id_0"
+        chat_id = uuid.uuid4().hex
         model = self.chat_model
         async for response in async_response_gen:
             chunk_id = 0
