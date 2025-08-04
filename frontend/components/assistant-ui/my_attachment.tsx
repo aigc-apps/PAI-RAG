@@ -99,18 +99,13 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
         {children}
       </DialogTrigger>
       <AttachmentDialogContent>
-        <DialogTitle>
-          图片附件预览
-        </DialogTitle>
-        <DialogDescription>
-          图片附件预览
-        </DialogDescription>
+        <DialogTitle>图片附件预览</DialogTitle>
+        <DialogDescription>图片附件预览</DialogDescription>
         <AttachmentPreview src={src} />
       </AttachmentDialogContent>
     </Dialog>
   );
 };
-
 
 const AttachmentThumb: FC = () => {
   const isImage = useAttachment((a) => a.type === "image");

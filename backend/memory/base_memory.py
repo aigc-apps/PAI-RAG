@@ -138,7 +138,7 @@ class BaseMemory:
 
         if len([m for m in messages if m.role == MessageRole.SYSTEM]) != 1:
             raise Exception("The input messages must contain only one system message. ")
-        
+
         if image_urls:
             for message in reversed(messages):
                 if message.role == MessageRole.USER:
