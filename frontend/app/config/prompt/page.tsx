@@ -78,7 +78,7 @@ export default function PromptConfig() {
         if (!res.ok) throw new Error("加载 Prompt 配置失败");
 
         const data = await res.json();
-        const prompt = data || {};
+        const prompt = data.prompts || {};
 
         setSystemPrompt(prompt.system_prompt || "");
         setSearchWebToolPrompt(prompt.search_web_tool_prompt || "");
@@ -108,17 +108,19 @@ export default function PromptConfig() {
       setIsLoading(true);
       setError("");
 
+      const prompts = {
+        system_prompt: systemPrompt,
+        search_web_tool_prompt: searchWebToolPrompt,
+        thinking_tool_prompt: thinkingToolPrompt,
+        attachments_tool_prompt: attachmentsToolPrompt,
+        knowledgebase_tool_prompt: knowledgebaseToolPrompt,
+        without_tools_prompt: withoutToolsPrompt,
+      };
+
       const res = await fetch(`${API_BASE}/v1/config/prompts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_prompt: systemPrompt,
-          search_web_tool_prompt: searchWebToolPrompt,
-          thinking_tool_prompt: thinkingToolPrompt,
-          attachments_tool_prompt: attachmentsToolPrompt,
-          knowledgebase_tool_prompt: knowledgebaseToolPrompt,
-          without_tools_prompt: withoutToolsPrompt,
-        }),
+        body: JSON.stringify({ prompts }),
       });
 
       if (!res.ok) throw new Error("保存失败，请检查网络或配置");

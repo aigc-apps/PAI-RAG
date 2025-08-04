@@ -46,17 +46,17 @@ def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, ena
     tools_prompt = []
     prompt = prompt_provider.get_prompts()
     if enable_thinking:
-        tools_prompt.append(prompt.thinking_tool_prompt)
+        tools_prompt.append(prompt.prompts["thinking_tool_prompt"])
     if enable_search:
-        tools_prompt.append(prompt.search_web_tool_prompt.format(
+        tools_prompt.append(prompt.prompts["search_web_tool_prompt"].format(
         current_datetime=get_prompt_current_time_str()))
     if enable_attachments:
-        tools_prompt.append(prompt.attachments_tool_prompt)
+        tools_prompt.append(prompt.prompts["attachments_tool_prompt"])
     if kb_ids:
-        tools_prompt.append(prompt.knowledgebase_tool_prompt)
+        tools_prompt.append(prompt.prompts["knowledgebase_tool_prompt"])
     if not tools_prompt:
-        tools_prompt.append(prompt.without_tools_prompt)
-    system_prompt = prompt.system_prompt.format(
+        tools_prompt.append(prompt.prompts["without_tools_prompt"])
+    system_prompt = prompt.prompts["system_prompt"].format(
         tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
     return system_prompt

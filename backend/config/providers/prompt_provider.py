@@ -15,7 +15,6 @@ class PromptProvider(BaseConfigProvider):
 
     def update(self, entry):
         super().update(entry)
-        self.id = entry.id
 
     def get_prompts(self):
         prompt_entity = self.config_map.get(self.id)

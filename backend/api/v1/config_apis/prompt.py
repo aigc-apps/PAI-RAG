@@ -31,12 +31,8 @@ async def set_prompt_config(
             new_prompt_config,
         )
     else:
-        prompt_config.system_prompt = new_prompt_config.system_prompt or prompt_config.system_prompt
-        prompt_config.search_web_tool_prompt = new_prompt_config.search_web_tool_prompt or prompt_config.search_web_tool_prompt
-        prompt_config.thinking_tool_prompt = new_prompt_config.thinking_tool_prompt or prompt_config.thinking_tool_prompt
-        prompt_config.attachments_tool_prompt = new_prompt_config.attachments_tool_prompt or prompt_config.attachments_tool_prompt
-        prompt_config.knowledgebase_tool_prompt = new_prompt_config.knowledgebase_tool_prompt or prompt_config.knowledgebase_tool_prompt
-        prompt_config.without_tools_prompt = new_prompt_config.without_tools_prompt or prompt_config.without_tools_prompt
+        for prompt_key in prompt_config.prompts.keys():
+            prompt_config.prompts[prompt_key] = new_prompt_config.prompts[prompt_key] or prompt_config.prompts[prompt_key]
 
 
     session.add(prompt_config)
