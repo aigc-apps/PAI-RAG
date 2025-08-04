@@ -2,7 +2,7 @@
 
 ### Prompt configuration API ###
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.prompt import PromptModel, PromptModelEntity
@@ -11,6 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from config.providers.config_change_manager import config_change_manager
 from config.providers.prompt_provider import prompt_provider
+from api.response_model import success_response, error_response
+from fastapi.responses import JSONResponse
 
 from loguru import logger
 
@@ -45,15 +47,19 @@ async def set_prompt_config(
         source_id=prompt_config.id,
         event_type=ChangeEventType.UPDATE
     )
-        return prompt_config
+        return success_response(data=prompt_config, message="add prompt config successfully")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add prompt config: {e.orig}")
         await session.rollback()
-        raise
+        return JSONResponse(
+            status_code=400,
+            content=error_response(code=400, message=f"IntegrityError occurred when add prompt config: {e.orig}"),
+        )
     except Exception as e:
         await session.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add prompt config: {str(e)}"
+        return JSONResponse(
+            status_code=400,
+            content=error_response(code=400, message=f"Failed to add prompt config: {str(e)}"),
         )
 
 

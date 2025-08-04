@@ -302,6 +302,7 @@ class AgentLoop:
 
         )
 
+
         input_messages = [
             {"role": "system", "content": system_prompt}
         ] + chat_request.messages
