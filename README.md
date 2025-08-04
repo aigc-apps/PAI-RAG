@@ -1,221 +1,64 @@
-<p align="center">
-    <h1>PAI-RAG: An easy-to-use framework for modular RAG </h1>
-</p>
+# [PAI-RAG]：开源Agentic RAG框架, 让智能检索像呼吸一样简单
 
-[![PAI-RAG CI Build](https://github.com/aigc-apps/PAI-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/aigc-apps/PAI-RAG/actions/workflows/ci.yml)
+> ✨ **无需ML专家，5分钟构建企业级Agentic RAG应用**
 
-<p align="center">
-  <a href="./README.md">English</a> |
-  <a href="./README_zh.md">简体中文</a> |
-</p>
+![PAI-RAG Demo](https://example.com/demo.gif) <!-- 替换为实际GIF链接，展示多模态问答效果 -->
+_↑ 用[PAI-RAG]实现：上传财报PDF → 提问“Q3营收增长原因？” → 自动生成带图表的分析报告_
 
-<details open>
-<summary></b>📕 Contents</b></summary>
+## 🔥 为什么传统RAG让你头疼？
 
-- 💡 [What is PAI-RAG?](#-what-is-pai-rag)
-- 🌟 [Key Features](#-key-features)
-- 🔎 [Get Started](#-get-started)
-  - [Docker](#run-in-docker)
-  - [Local](#run-in-local-environment)
-- 📜 [Documents](#-documents)
-  - [API specification](#api-specification)
-  - [Agentic RAG](#agentic-rag)
-  - [Data Analysis](#data-analysis)
-  - [Supported File Types](#supported-file-types)
+- ❌ **知识库管理低效**：单文件上传、切片固定、无法按元数据过滤 → 检索准确率低
+- ❌ **纯文本局限**：遇到图片/PPT就失效 → 90%企业文档无法利用
+- ❌ **简单查询即崩溃**：复杂问题（如“对比竞品策略”）需人工拆解 → 代理能力缺失
+- ❌ **信息过时**：依赖静态知识库 → 无法获取实时数据（如股价/新闻）
 
-</details>
+**选择[PAI-RAG] 的原因**：我们融合知识库管理、多模态问答与MCP代理，打造**支持图片理解+联网搜索+工具调用+任务规划**的开源Agentic RAG框架。
 
-# 💡 What is PAI-RAG?
+---
 
-PAI-RAG is an easy-to-use opensource framework for modular RAG (Retrieval-Augmented Generation). It combines LLM (Large Language Model) to provide truthful question-answering capabilities, supports flexible configuration and custom development of each module of the RAG system. It offers a production-level RAG workflow for businesses of any scale based on Alibaba Cloud's Platform of Artificial Intelligence (PAI).
+## 🌟 核心特性：不止于RAG，更是智能任务规划引擎
 
-# 🎬 PAI-RAG with Web Search Demo (local client using Cherry Studio)
+1. **智能知识库管理** —— 企业级文档处理从未如此高效
+   - 文件并发上传（多线程/异步支持）
+   - 动态切片编辑（可视化调整chunk size）
+   - 元数据过滤（基于标签/时间/来源的精准检索）
+2. **多模态问答引擎** —— 让AI“看懂”你的文档
+   - 图片理解（支持OCR、物体识别）
+   - 图文混合回复生成（自动嵌入图像+文本）
+3. **Agentic RAG：自主任务规划** —— 复杂任务？交给AI代理！
+   - 探索式搜索（ReAct框架迭代优化查询，如“生成国庆去上海的旅游攻略”）
+   - 复杂任务分解（如“对比2023年财报与行业趋势”）
+4. **实时联网搜索** —— 信息永不落伍
+   - 集成夸克引擎（低延迟获取最新网页）
+   - 搜索结果自动RAG化（无需手动清洗）
+5. **MCP工具集成** —— 扩展你的AI工作流
+   - 预置MCP工具：思考规划、附件问答
+   - 自定义工具：轻松扩展新工具
 
-https://github.com/user-attachments/assets/6ea25d2b-dbd5-4013-b337-bd00bd00f41a
+## ⚡ 快速开始
 
-# 🌟 Key Features
+- [安装指南](docs/quick_start.md)
+- [使用示例：多模态附件问答](docs/mm_demo.md)
 
-- Modular design, flexible and configurable
-- Powerful RAG capability: [multi-modal rag](docs/multimodal_rag.md), [agentic-rag](docs/agentic_rag.md) and [nl2sql](docs/data_analysis_doc.md) support
-- Built on community open source components, low customization threshold
-- Multi-dimensional automatic evaluation system, easy to grasp the performance quality of each module
-- Integrated llm-based-application tracing and evaluation visualization tools
-- Interactive UI/API calls, convenient iterative tuning experience
-- Alibaba Cloud fast scenario deployment/image custom deployment/open source private deployment
+## 🛠 深入使用
 
-# 🔎 Get Started
+- [系统配置指南及API调用说明](docs/config.md)
+- [知识库管理（上传文档+元数据过滤）](docs/knowledgebase.md)
+- [多模态问答实战（支持知识库和附件上传）](docs/multimodal.md)
+- [Agentic RAG任务演示（复杂查询规划与执行，支持联网搜索和MCP工具调用）](docs/agentic_rag.md)
 
-You can run PAI-RAG locally using either a Docker environment or directly from the source code.
+## 🌐 为什么开发者选择 [PAI-RAG]？
 
-## Run with Docker
+| 能力         | 传统RAG框架 | [PAI-RAG]              |
+| ------------ | ----------- | ---------------------- |
+| 知识库管理   | 单文件上传  | ✅ 并发上传+元数据过滤 |
+| 多模态支持   | 仅文本      | ✅ 图片理解+图文回复   |
+| 复杂任务处理 | 简单查询    | ✅ Agentic任务规划     |
+| 实时信息获取 | 静态知识库  | ✅ 夸克联网搜索        |
+| 工具扩展性   | 有限插件    | ✅ MCP深度集成         |
+| 企业就绪度   | 高定制成本  | ✅开箱即用             |
 
-1. Set up the environmental variables.
+## 💬 联系我们
 
-   ```bash
-   git clone git@github.com:aigc-apps/PAI-RAG.git
-   cd PAI-RAG/docker
-   cp .env.example .env
-   ```
-
-   Edit `.env` file if you are using dashscope api or oss store. See [.env.example](./docker/.env.example) for more details.
-   Note you can also configure these settings from our console ui, but it's more safe to configure from environmental variables.
-
-2. Start the Docker containers with the following command
-   ```bash
-   docker compose up -d
-   ```
-3. Open your web browser and navigate to http://localhost:8680 to verify that the service is running. The service will need to download the model weights, which may take around 20 minutes.
-
-## Run in a Local Environment
-
-If you prefer to run or develop PAI-RAG locally, please refer to [local development guide](./docs/develop/local_develop.md)
-
-## Simple Query Using the Web UI
-
-1. Open http://localhost:8680 in your web browser. Adjust the index and LLM settings to your preferred models
-
-<img src="docs/figures/quick_start/setting.png" width="600px"/>
-
-2. Go to the "Upload" tab and upload the test data: ./example_data/paul_graham/paul_graham_essay.txt.
-
-<img src="docs/figures/quick_start/upload.png" width="600px"/>
-
-3. Once the upload is complete, switch to the "Chat" tab.
-
-<img src="docs/figures/quick_start/query.png" width="600px"/>
-
-## Simple Query Using the RAG API
-
-1. Open http://localhost:8680 in your web browser. Adjust the index and LLM settings to your preferred models
-
-2. Upload data via API:
-   Go to the PAI-RAG base directory
-
-   ```shell
-   cd PAI-RAG
-   ```
-
-   **Request**
-
-   ```shell
-   curl -X 'POST' http://localhost:8680/api/v1/knowledgebases/{knowledgebase_name}/files \
-      -H 'Content-Type: multipart/form-data' \
-      -F 'files=@example_data/paul_graham/paul_graham_essay.txt'
-   ```
-
-   **Response**
-
-   ```json
-   {
-     "message": "Files have been successfully uploaded."
-   }
-   ```
-
-   **Note**:
-   file is uploaded to RAG service and background job will pick up the file and index it to the vector store.
-
-3. Check the status of the upload job:
-
-   **Request**
-
-   ```shell
-   curl -X 'GET' http://localhost:8680/api/v1/knowledgebases/{knowledgebase_name}/history \
-   ```
-
-   **Response**
-
-   ```json
-   [
-     {
-       "task_id": "93d3782ccd4b33afdc1b6a1f0ce18e3a",
-       "operation": "ADD",
-       "file_name": "localdata/knowledgebase/default/docs/paul_graham_essay.txt",
-       "status": "done",
-       "last_modified_time": "2025-03-28 15:47:07"
-     }
-   ]
-   ```
-
-4. Perform a RAG query (OpenAI-compatible):
-
-   **Request**
-
-   ```shell
-   curl -X 'POST' http://localhost:8680/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -d '{
-      "model": "default",
-      "messages": [
-         {"role": "user", "content": "杭州在中国哪个省?"}
-      ],
-      "stream":false,
-   }'
-   ```
-
-   **Response**
-
-   ```json
-   {
-     "id": "7aac074feef14c31a322b15bb1c4c452",
-     "choices": [
-       {
-         "finish_reason": "stop",
-         "index": 0,
-         "logprobs": null,
-         "message": {
-           "content": "杭州位于中国的**浙江省**。它是浙江省的省会城市，也是中国著名的历史文化名城和旅游胜地，以西湖、龙井茶等闻名于世。",
-           "refusal": null,
-           "role": "assistant",
-           "audio": null,
-           "function_call": null,
-           "tool_calls": null
-         }
-       }
-     ],
-     "created": 1743148661,
-     "model": "DeepSeek-V3",
-     "object": "chat.completion",
-     "service_tier": null,
-     "system_fingerprint": null,
-     "usage": {
-       "completion_tokens": 46,
-       "prompt_tokens": 2114,
-       "total_tokens": 2160,
-       "completion_tokens_details": null,
-       "prompt_tokens_details": null
-     },
-     "citation_details": [],
-     "citations": []
-   }
-   ```
-
-# 📜 Documents
-
-## API specification
-
-You can access and integrate our RAG service according to our [API specification](./docs/api_v0.3.0.md).
-
-## MultiModal RAG
-
-You can use multimodal RAG to process documents with images, please refer to the documentation: [MultiModal RAG](./docs/multimodal_rag.md)
-
-## Agentic RAG
-
-You can use agent with function calling api-tools in PAI-RAG, please refer to the documentation:
-[Agentic RAG](./docs/agentic_rag.md)
-
-## Data Analysis
-
-You can use data analysis based on database or sheet file in PAI-RAG, please refer to the documentation: [Data Analysis](./docs/data_analysis_doc_zh.md)
-
-## Supported File Types
-
-| 文件类型     | 文件格式                               |
-| ------------ | -------------------------------------- |
-| Unstructured | .txt, .docx， .pdf， .html，.pptx，.md |
-| Images       | .gif， .jpg，.png，.jpeg， .webp       |
-| Structured   | .csv，.xls， .xlsx，.jsonl             |
-| Others       | .epub，.mbox，.ipynb                   |
-
-1. .doc files need to be converted to .docx files.
-2. .ppt and .pptm files need to be converted to .pptx files.
+- PAI-RAG官方钉钉群号：27370042974
+  ![ding_talk](docs/images/ding_talk.png)
