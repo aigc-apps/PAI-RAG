@@ -70,6 +70,18 @@ class FileParser:
                     return MarkdownNodeParser(file_store=self.file_store)
                 case ".txt":
                     return TextReader()
+                case ".jpg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".png":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".jpeg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
                 case _:
                     raise ValueError(f"不支持的附件文件类型: {file_extension}")
         else:
