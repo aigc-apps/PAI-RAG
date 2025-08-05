@@ -83,7 +83,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
         mcp_tools.extend(websearch_tools)
     if chat_request.enable_mcp:
         logger.info(f"[Model] selected mcp servers: {chat_request.mcp_servers}")
-        mcp_tools.extend(mcp_provider.get_mcp_tools(chat_request.mcp_servers))
+        mcp_tools.extend(await mcp_provider.get_mcp_tools_async(chat_request.mcp_servers))
         logger.info(f"[Model] mcp_tools: {mcp_tools}")
 
     mcp_tools.extend(await aget_kb_tools(chat_request))
