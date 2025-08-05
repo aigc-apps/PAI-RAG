@@ -146,6 +146,7 @@ async def astep_gen(
     memory: BaseMemory = None,
     attachments: List[dict] = None
 ):
+    image_urls = []
     if attachments and len(attachments) > 0:
         for attachment in attachments:
             file_reader = await aget_file_reader()
@@ -168,31 +169,33 @@ async def astep_gen(
             tool_result = await call_tool_with_retry(
                 file_reader, file_reader_fn_args
             )
+            if str(attachment.get("contentType")).startswith("image/"):
+                image_urls.append(json.loads(tool_result.content).get("data", ""))
+            else:
+                tool_call_message = ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content="",
+                    additional_kwargs={"tool_calls": [file_reader_tool_call]},
+                )
+                tool_result_message = ChatMessage(
+                    role=MessageRole.TOOL,
+                    content=tool_result.content,
+                    additional_kwargs={
+                        "tool_call_id": file_reader_tool_call.id,
+                    },
+                )
+                memory.add(tool_call_message)
+                memory.add(tool_result_message)
 
-            tool_call_message = ChatMessage(
-                role=MessageRole.ASSISTANT,
-                content="",
-                additional_kwargs={"tool_calls": [file_reader_tool_call]},
-            )
-            tool_result_message = ChatMessage(
-                role=MessageRole.TOOL,
-                content=tool_result.content,
-                additional_kwargs={
-                    "tool_call_id": file_reader_tool_call.id,
-                },
-            )
-            memory.add(tool_call_message)
-            memory.add(tool_result_message)
-
-            yield ChatResponse(
-                message=tool_call_message,
-                delta="",
-            )
-            yield ChatResponse(
-                message=tool_result_message,
-                delta=tool_result.content,
-            )
-    messages = memory.get_context()
+                yield ChatResponse(
+                    message=tool_call_message,
+                    delta="",
+                )
+                yield ChatResponse(
+                    message=tool_result_message,
+                    delta=tool_result.content,
+                )
+    messages = memory.get_context(image_urls)
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,

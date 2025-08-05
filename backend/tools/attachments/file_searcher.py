@@ -65,7 +65,7 @@ async def aget_file_searcher(attachments: List[dict]):
         ] = "",
     ):
         logger.info(
-            f"File_retrieve_tool with attachments: {attachments}"
+            "File_retrieve_tool with attachments"
         )
         return await get_file_retrieve_results_func(
             query_str=query_str
