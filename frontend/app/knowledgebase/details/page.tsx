@@ -88,7 +88,7 @@ interface KnowledgeBaseFile {
   file_size: string;
   status: string;
   created_at: string;
-  update_at: string;
+  updated_at: string;
   file_metadata: {
     [key: string]: any;
   };
@@ -205,7 +205,7 @@ export default function KnowledgeBaseDetailPage({
     const fetchModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const [embRes] = await Promise.all([
           fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
@@ -235,7 +235,7 @@ export default function KnowledgeBaseDetailPage({
     setSearching(true);
     console.log("handleSearchSubmit");
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const search_result = await fetch(
       `${API_BASE}/v1/config/knowledgebases/retrieval`,
       {
@@ -267,7 +267,7 @@ export default function KnowledgeBaseDetailPage({
 
   const fetchKbMetadata = async () => {
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
 
     const res = await fetch(
       `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
@@ -287,7 +287,7 @@ export default function KnowledgeBaseDetailPage({
 
   const fetchKbFiles = useCallback(async () => {
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
@@ -331,7 +331,7 @@ export default function KnowledgeBaseDetailPage({
     const fetchKbConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
           `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}`,
         );
@@ -369,7 +369,7 @@ export default function KnowledgeBaseDetailPage({
     setDeleting(true);
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         {
@@ -410,7 +410,7 @@ export default function KnowledgeBaseDetailPage({
     setIsEditingMetadata(false);
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const file_res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
       );
@@ -493,7 +493,7 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files`,
         {
@@ -536,7 +536,7 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const metadata_enties = Object.keys(editingMetadata)
         .filter((name) => !default_metadata_keys.includes(name))
         .map((name) => ({
@@ -761,7 +761,7 @@ export default function KnowledgeBaseDetailPage({
                               {formatBeijingTime(file.created_at)}
                             </TableCell>
                             <TableCell>
-                              {formatBeijingTime(file.update_at)}
+                              {formatBeijingTime(file.updated_at)}
                             </TableCell>
                             <TableCell>
                               {file.status === "pending" ? (

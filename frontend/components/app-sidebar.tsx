@@ -20,7 +20,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronUp, MessageCircle, ChevronDown, BookIcon } from "lucide-react";
+import {
+  ChevronUp,
+  MessageCircle,
+  ChevronDown,
+  BookIcon,
+  AppWindowIcon,
+} from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -38,7 +44,10 @@ export function AppSidebar({
       <SidebarHeader>
         <div className="flex items-center space-x-2">
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
+            <AvatarImage
+              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag.png"
+              alt="@shadcn"
+            />
           </Avatar>
           <span className="text-lg font-medium">PAI-RAG</span>
         </div>
@@ -50,6 +59,12 @@ export function AppSidebar({
               <SidebarMenuButton onClick={() => setActiveTab("/knowledgebase")}>
                 <BookIcon />
                 <span>知识库</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => setActiveTab("/chatbot")}>
+                <AppWindowIcon />
+                <span>工作空间</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

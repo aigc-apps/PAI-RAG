@@ -17,6 +17,8 @@ import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
 import TracingConfig from "./config/tracing/page";
 import KnowledgeBase from "./knowledgebase/page";
+import ChatbotPage from "./chatbot/page";
+import { ChatbotConfigCard } from "./chatbot/chatbot_config";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
@@ -30,13 +32,14 @@ export const Assistant = () => {
     source: "",
     model_id: "",
   });
+  const [optionsVisible, setoptionsVisible] = useState(true);
 
   // 页面加载时拉取 LLM 配置
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         console.log(
           "assistant NEXT_PUBLIC_API_BASE",
           process.env.NEXT_PUBLIC_API_BASE,
@@ -61,12 +64,15 @@ export const Assistant = () => {
     source: string,
     model_id: string,
   ) => {
-    setLlmConfig({
-      ...llmConfig,
-      id,
-      source,
-      model_id,
-    });
+    setLlmConfig((prev) => ({
+      ...prev,
+      id: id,
+      source: source,
+      model_id: model_id,
+    }));
+
+    setoptionsVisible(source !== "chatbot");
+    console.log(source);
   };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -83,15 +89,14 @@ export const Assistant = () => {
 
     return {
       model: llmConfig.model_id,
-      mcp_servers: mcp_servers,
+      mcp_ids: mcp_servers,
       enable_search: selectedOptions.includes("search"),
       enable_thinking: selectedOptions.includes("thinking"),
-      enable_mcp: mcp_servers.length > 0,
       kb_ids: kb_ids,
       streamn: true,
     };
   }, [llmConfig.model_id, selectedOptions]);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
   const runtime = usePaiChatThreadRuntime({
     api: `${API_BASE}/v1/agent/chat`,
     body: extra_body,
@@ -124,6 +129,7 @@ export const Assistant = () => {
                 </div>
               </header>
               <Thread
+                optionsVisible={optionsVisible}
                 onToggleChange={(options) => {
                   console.log("Received options from Thread:", options); // ✅ 添加日志
                   setSelectedOptions(options); // 更新状态
@@ -170,6 +176,49 @@ export const Assistant = () => {
               />
             </div>
           )}
+          {activeTab.startsWith("/knowledgebase/chunks") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <KnowledgeBaseFileChunksPage
+                knowledgebase_file_id={activeTab.split("/")[3]}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          )}
+
+          {activeTab.startsWith("/chatbot/edit") && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <ChatbotConfigCard
+                chatbotId={activeTab.split("/")[3]}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          )}
+          {activeTab === "/chatbot/create" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <ChatbotConfigCard
+                chatbotId={undefined}
+                setActiveTab={setActiveTab}
+              />
+            </div>
+          )}
+
+          {activeTab === "/chatbot" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <ChatbotPage setActiveTab={setActiveTab} />
+            </div>
+          )}
           {activeTab === "/config/model" && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
@@ -207,6 +256,3 @@ export const Assistant = () => {
     </AssistantRuntimeProvider>
   );
 };
-function useRef<T>(arg0: never[]) {
-  throw new Error("Function not implemented.");
-}

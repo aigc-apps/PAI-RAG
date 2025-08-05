@@ -34,9 +34,10 @@ import {
 import { UserMessageAttachments } from "@/components/assistant-ui/my_attachment";
 import { KbModal, KbSelection } from "@/app/knowledgebase/kbmodal";
 
-export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
-  onToggleChange,
-}) => {
+export const Thread: FC<{
+  onToggleChange?: (options: string[]) => void;
+  optionsVisible: boolean;
+}> = ({ onToggleChange, optionsVisible }) => {
   // 使用useState来保存工具的选中状态
   const [activeTools, setActiveTools] = useState<string[]>([]);
   const [mcpConfigs, setMcpConfigs] = useState<McpEntry[]>([]);
@@ -55,12 +56,12 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       try {
         setMcpLoading(true);
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
 
-        const configs = data.map(
+        const configs = data.data.items.map(
           (cfg: any) =>
             new McpEntry(
               cfg.id,
@@ -74,8 +75,8 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
         const enabledConfigs = configs.filter(
           (item: { enabled: boolean }) => item.enabled === true,
         );
-        console.log("all configs: ", configs);
-        console.log("enabled configs: ", enabledConfigs);
+        console.log("all MCP configs: ", configs);
+        console.log("enabled MCP configs: ", enabledConfigs);
         setMcpConfigs(enabledConfigs);
       } catch (err: any) {
         setMcpError(err.message || "加载失败");
@@ -86,7 +87,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       try {
         setKbLoading(true);
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/knowledgebases`);
         if (!res.ok) throw new Error("获取知识库配置失败");
         const json_res = await res.json();
@@ -222,11 +223,12 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
               onToggleChange={handleMcpAndToolUpdate}
               onKbToggleChange={handleKbUpdate}
               value={activeTools}
+              optionsVisible={optionsVisible}
               mcpConfigs={mcpConfigs}
               onOpenMcpModal={handleOpenMcpModal}
               kbConfigs={kbConfigs}
               onOpenKbModal={handleOpenKbModal}
-            />{" "}
+            />
             {/* 传递回调 */}
           </div>
         </ThreadPrimitive.Viewport>
@@ -320,6 +322,7 @@ interface ComposerProps {
     options: string[],
   ) => void;
   value?: string[];
+  optionsVisible: boolean;
   mcpConfigs?: McpEntry[]; // 新增
   onOpenMcpModal?: () => void; // 新增
   kbConfigs: KbSelection[];
@@ -330,6 +333,7 @@ const Composer: FC<ComposerProps> = ({
   onToggleChange,
   onKbToggleChange,
   value,
+  optionsVisible,
   mcpConfigs = [], // 默认值
   onOpenMcpModal,
   kbConfigs = [],
@@ -355,53 +359,55 @@ const Composer: FC<ComposerProps> = ({
 
       {/* 第二行：按钮组 + ComposerAction */}
       <div className="flex flex-row items-center justify-between px-2 pb-4">
-        <div>
-          <ToggleGroup
-            type="multiple"
-            variant="outline"
-            className="flex gap-x-4 overflow-visible"
-            onValueChange={(newValue) => {
-              onToggleChange?.(mcpConfigs, newValue);
-              setPrevMcpValue(newValue);
-            }}
-            value={value} // 同步 Thread 的 activeTools
-          >
-            <ToggleGroupItem
-              value="thinking"
-              aria-label="Toggle deep thinking"
-              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-            >
-              <Brain /> 深度思考
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="search"
-              aria-label="Toggle web search"
-              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-            >
-              <Search /> 搜索
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="mcp"
-              aria-label="Toggle mcp"
-              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              onClick={() => {
-                onOpenMcpModal?.();
+        {optionsVisible && (
+          <div>
+            <ToggleGroup
+              type="multiple"
+              variant="outline"
+              className="flex gap-x-4 overflow-visible"
+              onValueChange={(newValue) => {
+                onToggleChange?.(mcpConfigs, newValue);
+                setPrevMcpValue(newValue);
               }}
+              value={value} // 同步 Thread 的 activeTools
             >
-              <Wrench /> MCP
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="kb"
-              aria-label="Toggle kb"
-              className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              onClick={() => {
-                onOpenKbModal?.();
-              }}
-            >
-              <LibraryBig /> 知识库
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+              <ToggleGroupItem
+                value="thinking"
+                aria-label="Toggle deep thinking"
+                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              >
+                <Brain /> 深度思考
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="search"
+                aria-label="Toggle web search"
+                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              >
+                <Search /> 搜索
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="mcp"
+                aria-label="Toggle mcp"
+                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                onClick={() => {
+                  onOpenMcpModal?.();
+                }}
+              >
+                <Wrench /> MCP
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="kb"
+                aria-label="Toggle kb"
+                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                onClick={() => {
+                  onOpenKbModal?.();
+                }}
+              >
+                <LibraryBig /> 知识库
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        )}
 
         {/* 右侧按钮：ComposerAction */}
         <div className="ml-auto">

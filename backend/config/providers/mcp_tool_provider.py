@@ -1,6 +1,5 @@
-import traceback
 from typing import Dict, List, Type
-from sqlmodel import Field, SQLModel, select
+from sqlmodel import SQLModel, select
 from db.encrypt_utils import decrypt_key
 from db.models.mcp import McpServerCreate, McpServerEntity
 from db.db_context import with_async_db_session
@@ -61,43 +60,18 @@ async def create_mcp_tools(mcp_server_configs: List[McpServerEntity]):
 
 
 class McpToolProvider(BaseConfigProvider):
-    name_to_entry_id: Dict[str, str] = Field(default={})
     entity_class: Type[SQLModel] = McpServerEntity
 
-    def add(self, entry: McpServerEntity):
-        super().add(entry)
-        self.name_to_entry_id[entry.name] = entry.id
 
-    def update(self, entry: McpServerEntity):
-        super().update(entry)
-        self.name_to_entry_id[entry.name] = entry.id
-
-    def delete(self, entry_id: str):
-        super().delete(entry_id)
-        try:
-            for k, v in self.name_to_entry_id.items():
-                if v == entry_id:
-                    del self.name_to_entry_id[k]
-                    break
-        except Exception:
-            logger.warning(f"Failed to delete entry with entry_id {entry_id}. error: {traceback.format_exc()}.")
-
-
-    def _load_entries(self, entries):
-        super()._load_entries(entries)
-        for entry_id, entry in self.config_map.items():
-            self.name_to_entry_id[entry.name] = entry_id
-
-    async def get_mcp_tools_async(self, mcp_server_name_list: List[str]) -> List[FunctionTool]:
+    async def get_mcp_tools_async(self, mcp_ids: List[str]) -> List[FunctionTool]:
         all_tools = []
-        for mcp_server_name in mcp_server_name_list:
-            tools = self.instance_map.get(mcp_server_name)
+        for mcp_id in mcp_ids:
+            tools = self.instance_map.get(mcp_id)
             if tools is None:
-                mcp_id = self.name_to_entry_id[mcp_server_name]
                 tools = await self._create_instance_async(self.config_map[mcp_id])
-                self.instance_map.put(mcp_server_name, tools)
+                self.instance_map.put(mcp_id, tools)
             all_tools.extend(tools)
-            logger.info(f"Get {len(tools)} for mcp {mcp_server_name}.")
+            logger.info(f"Get {len(tools)} for mcp {mcp_id}.")
         return all_tools
 
     async def _create_instance_async(self, config: McpServerEntity):
