@@ -17,6 +17,7 @@ import SearchConfig from "./config/search/page";
 import { useMemo } from "react";
 import TracingConfig from "./config/tracing/page";
 import KnowledgeBase from "./knowledgebase/page";
+import PromptConfig from "./config/prompt/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
@@ -200,6 +201,14 @@ export const Assistant = () => {
                 <SidebarTrigger />
               </header>
               <TracingConfig />
+            </div>
+          )}
+          {activeTab === "/config/prompts" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <PromptConfig />
             </div>
           )}
         </SidebarInset>

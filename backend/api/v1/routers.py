@@ -9,6 +9,7 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.attachment import attachments_router
     from api.v1.config_apis.reranker import reranker_router
     from api.v1.config_apis.metadata import knowledgebase_router
+    from api.v1.config_apis.prompt import prompt_router
 
     app.include_router(llm_router, prefix="/v1/config/llms")
     app.include_router(mcp_router, prefix="/v1/config/mcps")
@@ -18,6 +19,7 @@ def add_config_router(app: FastAPI):
     app.include_router(reranker_router, prefix="/v1/config/rerankers")
     app.include_router(knowledgebase_router, prefix="/v1/config/knowledgebases")
     app.include_router(attachments_router, prefix="/v1/config/attachments")
+    app.include_router(prompt_router, prefix="/v1/config/prompts")
 
 
 def add_chat_router(app: FastAPI):

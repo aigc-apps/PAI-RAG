@@ -3,13 +3,6 @@ import traceback
 from typing import Dict, List, cast, AsyncGenerator
 from loguru import logger
 from common.chat.models import ChatAgentRequest
-from chat.prompts import (
-    WITHOUT_TOOLS_PROMPT,
-    SYSTEM_PROMPT,
-    SEARCH_WEB_TOOL_PROMPT,
-    THINKING_TOOL_PROMPT,
-    ATTACHMENTS_TOOL_PROMPT
-)
 from utils.message_utils import convert_to_chat_messages
 from utils.time_utils import get_prompt_current_time_str
 from tools.think.think_and_planning_tool import aget_simple_think_tool
@@ -18,6 +11,7 @@ from tools.attachments.file_searcher import aget_file_searcher
 from config.providers.mcp_tool_provider import mcp_provider
 from config.providers.llm_provider import llm_provider
 from config.providers.websearch_provider import websearch_provider
+from config.providers.prompt_provider import prompt_provider
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
     ChoiceDeltaToolCallFunction,
@@ -48,18 +42,21 @@ class AgentState(BaseModel):
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False, enable_attachments: bool = False):
+def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
     tools_prompt = []
+    prompt = prompt_provider.get_prompts()
     if enable_thinking:
-        tools_prompt.append(THINKING_TOOL_PROMPT)
+        tools_prompt.append(prompt.prompts["thinking_tool_prompt"])
     if enable_search:
-        tools_prompt.append(SEARCH_WEB_TOOL_PROMPT.format(
+        tools_prompt.append(prompt.prompts["search_web_tool_prompt"].format(
         current_datetime=get_prompt_current_time_str()))
-    if not tools_prompt:
-        tools_prompt.append(WITHOUT_TOOLS_PROMPT)
     if enable_attachments:
-        tools_prompt.append(ATTACHMENTS_TOOL_PROMPT)
-    system_prompt = SYSTEM_PROMPT.format(
+        tools_prompt.append(prompt.prompts["attachments_tool_prompt"])
+    if kb_ids:
+        tools_prompt.append(prompt.prompts["knowledgebase_tool_prompt"])
+    if not tools_prompt:
+        tools_prompt.append(prompt.prompts["without_tools_prompt"])
+    system_prompt = prompt.prompts["system_prompt"].format(
         tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
     return system_prompt
@@ -304,7 +301,10 @@ class AgentLoop:
             enable_mcp=chat_request.enable_mcp,
             enable_thinking=chat_request.enable_thinking,
             enable_attachments=chat_request.enable_attachments,
+            kb_ids=chat_request.kb_ids,
+
         )
+
 
         input_messages = [
             {"role": "system", "content": system_prompt}
