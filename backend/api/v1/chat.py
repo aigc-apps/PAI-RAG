@@ -27,6 +27,8 @@ def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
             stream=chat_request.stream,
             mcp_ids=chatbot.mcp_ids,
             enable_search=chatbot.enable_search,
+            enable_thinking=chatbot.enable_agent,
+            enable_attachments=chat_request.enable_attachments,
             kb_ids=chatbot.kb_ids,
             temperature=chat_request.temperature,
             max_tokens=chat_request.max_tokens,

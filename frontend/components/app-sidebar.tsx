@@ -64,7 +64,7 @@ export function AppSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton onClick={() => setActiveTab("/chatbot")}>
                 <AppWindowIcon />
-                <span>工作空间</span>
+                <span>应用</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

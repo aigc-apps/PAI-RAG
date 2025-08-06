@@ -102,6 +102,9 @@ export default function ChatbotPage({
           新建应用
         </Button>
       </div>
+      <div className="text-sm text-muted-foreground">
+        应用可以给基模型配置知识库、联网、MCP工具。
+      </div>
 
       {/* 卡片容器 */}
       <div className="h-4/5">

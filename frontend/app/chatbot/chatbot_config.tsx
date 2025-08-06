@@ -34,6 +34,7 @@ export interface Chatbot {
   app_id: string;
   description: string;
   enable_search: boolean;
+  enable_agent: boolean;
   mcp_ids: string[];
   kb_ids: string[];
   model_id: string;
@@ -289,6 +290,21 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             setBotConfig({
               ...botConfig,
               enable_search: checked,
+            });
+          }}
+        />
+      </div>
+      <div className="flex gap-6">
+        <Label htmlFor="enable_search" className="w-[90px]">
+          Agentic模式
+        </Label>
+        <Switch
+          id="enable_agent"
+          checked={botConfig.enable_agent}
+          onCheckedChange={(checked) => {
+            setBotConfig({
+              ...botConfig,
+              enable_agent: checked,
             });
           }}
         />

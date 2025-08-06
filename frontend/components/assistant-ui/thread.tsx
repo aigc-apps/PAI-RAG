@@ -350,66 +350,70 @@ const Composer: FC<ComposerProps> = ({
         <ComposerAttachments />
         <ComposerAddAttachment />
       </div>
-      <ComposerPrimitive.Input
-        rows={1}
-        autoFocus
-        placeholder="输入您的问题..."
-        className="placeholder:text-muted-foreground max-h-40 w-full resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-      />
+      <div className="flex items-center justify-between px-2 pb-4">
+        <div>
+          <ComposerPrimitive.Input
+            rows={1}
+            autoFocus
+            placeholder="输入您的问题..."
+            className="placeholder:text-muted-foreground max-h-40 w-full resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+          />
 
-      {/* 第二行：按钮组 + ComposerAction */}
-      <div className="flex flex-row items-center justify-between px-2 pb-4">
-        {optionsVisible && (
-          <div>
-            <ToggleGroup
-              type="multiple"
-              variant="outline"
-              className="flex gap-x-4 overflow-visible"
-              onValueChange={(newValue) => {
-                onToggleChange?.(mcpConfigs, newValue);
-                setPrevMcpValue(newValue);
-              }}
-              value={value} // 同步 Thread 的 activeTools
-            >
-              <ToggleGroupItem
-                value="thinking"
-                aria-label="Toggle deep thinking"
-                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              >
-                <Brain /> 深度思考
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="search"
-                aria-label="Toggle web search"
-                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              >
-                <Search /> 搜索
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="mcp"
-                aria-label="Toggle mcp"
-                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                onClick={() => {
-                  onOpenMcpModal?.();
-                }}
-              >
-                <Wrench /> MCP
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="kb"
-                aria-label="Toggle kb"
-                className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                onClick={() => {
-                  onOpenKbModal?.();
-                }}
-              >
-                <LibraryBig /> 知识库
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-        )}
+          {/* 第二行：按钮组 + ComposerAction */}
+          {optionsVisible && (
+            <div className="flex flex-row items-center justify-between px-2 pb-4">
+              <div>
+                <ToggleGroup
+                  type="multiple"
+                  variant="outline"
+                  className="flex gap-x-4 overflow-visible"
+                  onValueChange={(newValue) => {
+                    onToggleChange?.(mcpConfigs, newValue);
+                    setPrevMcpValue(newValue);
+                  }}
+                  value={value} // 同步 Thread 的 activeTools
+                >
+                  <ToggleGroupItem
+                    value="thinking"
+                    aria-label="Toggle deep thinking"
+                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                  >
+                    <Brain /> 深度思考
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="search"
+                    aria-label="Toggle web search"
+                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                  >
+                    <Search /> 搜索
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="mcp"
+                    aria-label="Toggle mcp"
+                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    onClick={() => {
+                      onOpenMcpModal?.();
+                    }}
+                  >
+                    <Wrench /> MCP
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="kb"
+                    aria-label="Toggle kb"
+                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    onClick={() => {
+                      onOpenKbModal?.();
+                    }}
+                  >
+                    <LibraryBig /> 知识库
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
 
-        {/* 右侧按钮：ComposerAction */}
+              {/* 右侧按钮：ComposerAction */}
+            </div>
+          )}
+        </div>
         <div className="ml-auto">
           <ComposerAction />
         </div>

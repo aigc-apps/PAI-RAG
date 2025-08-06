@@ -15,6 +15,7 @@ class ChatBotCreate(SQLModel):
     kb_ids: List[str] = Field(default=[])
     enable_search: bool = Field(default=True)
     enable_vision: bool = Field(default=True)
+    enable_agent: bool = Field(default=False)
 
     @field_validator("app_id")
     def validate_app_id(cls, v):
