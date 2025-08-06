@@ -140,7 +140,7 @@ export default function McpConfig() {
         const res = await fetch(`${API_BASE}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
-        setMcpConfigs(data || []); // 更新状态
+        setMcpConfigs(data.data.items || []); // 更新状态
       } catch (err: any) {
         setMcpError(err || "加载失败");
       } finally {

@@ -274,7 +274,7 @@ async def upload_files(
         else:
             file_entity.file_md5 = file_item.file_md5
             file_entity.file_size = file_item.file_size
-            file_entity.update_at = datetime.now(timezone.utc)
+            file_entity.updated_at = datetime.now(timezone.utc)
         session.add(file_entity)
         await session.commit()
         logger.info(f"Saved file {file_entity} successfully.")
@@ -302,7 +302,7 @@ async def list_files(
     file_results = await session.exec(
         select(KbFileEntity)
         .where(KbFileEntity.kb_id == kb_id)
-        .order_by(KbFileEntity.update_at.desc())
+        .order_by(KbFileEntity.updated_at.desc())
         .offset(pagination.offset)
         .limit(size)
     )
@@ -333,7 +333,7 @@ async def get_kb_file(
         select(KbFileEntity)
         .where(KbFileEntity.kb_id == kb_id)
         .where(KbFileEntity.id == file_id)
-        .order_by(KbFileEntity.update_at.desc())
+        .order_by(KbFileEntity.updated_at.desc())
         .offset(offset)
         .limit(limit)
     )

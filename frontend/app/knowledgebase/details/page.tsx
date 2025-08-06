@@ -98,7 +98,7 @@ interface KnowledgeBaseFile {
   file_size: string;
   status: string;
   created_at: string;
-  update_at: string;
+  updated_at: string;
   file_metadata: {
     [key: string]: any;
   };
@@ -864,7 +864,7 @@ export default function KnowledgeBaseDetailPage({
                               {formatBeijingTime(file.created_at)}
                             </TableCell>
                             <TableCell>
-                              {formatBeijingTime(file.update_at)}
+                              {formatBeijingTime(file.updated_at)}
                             </TableCell>
                             <TableCell>
                               {file.status === "pending" ? (

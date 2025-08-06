@@ -16,7 +16,7 @@ import { LLMModelDialog } from "@/app/config/model/llm/modelDialog";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface LlmConfig {
+export interface LlmConfig {
   id: string;
   model_id: string;
   source: string;

@@ -21,7 +21,7 @@ interface KnowledgeBaseFile {
   file_metadata: {
     file_url: string;
   };
-  update_at: string;
+  updated_at: string;
 }
 
 export function PreviewButton({

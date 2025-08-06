@@ -61,7 +61,7 @@ interface KnowledgeBaseFile {
   file_metadata: {
     file_url: string;
   };
-  update_at: string;
+  updated_at: string;
 }
 
 interface ImageInfo {
@@ -80,7 +80,7 @@ interface KbFileChunk {
   status: string;
   active: boolean;
   created_at: string;
-  update_at: string;
+  updated_at: string;
 }
 
 // 状态映射
