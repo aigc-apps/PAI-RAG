@@ -1,6 +1,7 @@
 import uuid
 from loguru import logger
 from typing import List
+import copy
 from llama_index.core.schema import Document, BaseNode, TextNode
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core.node_parser import SentenceSplitter
@@ -153,6 +154,7 @@ class FileParser:
         splitted_nodes: List[BaseNode] = []
 
         for doc_node in docs:
+            original_metadata = copy.deepcopy(doc_node.metadata)
             logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
 
             chunks = []
@@ -196,7 +198,8 @@ class FileParser:
                     chunks = parser.get_nodes_from_documents([doc_node])
 
             for chunk in chunks:
-                chunk.metadata = doc_node.metadata
+                chunk.metadata = copy.deepcopy(original_metadata)
+                logger.info(f"chunk.metadata {chunk.metadata}")
                 chunk.metadata["doc_id"] = doc_node.id_
                 chunk.relationships = {
                             NodeRelationship.SOURCE: RelatedNodeInfo(

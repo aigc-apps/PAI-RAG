@@ -25,7 +25,7 @@ def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
     # 获取配置文件目录
     download_model_to_directory("PDF-Extract-Kit-1.0", model_dir=model_dir)
 
-    current_dir_path = Path(__file__).parent.parent.parent.parent
+    current_dir_path = Path(__file__).parent.parent.parent
     source_path = os.path.join(current_dir_path, "magic-pdf.template.json")
 
     logger.info(f"Start to loading minerU config file from {source_path}.")
