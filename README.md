@@ -2,8 +2,7 @@
 
 > ✨ **无需ML专家，赋能LLM开发者5分钟构建企业级Agentic RAG应用**
 
-![PAI-RAG Demo](docs/images/mm_demo.gif)
-_↑ 用[PAI-RAG]实现：上传财报数据图片 → 提问“这张图片讲了什么？” → 理解图片对财报进行解读分析_
+![PAI-RAG Demo](docs/images/demo.gif)
 
 ## 🔥 什么是PAI-RAG？
 
