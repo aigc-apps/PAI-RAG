@@ -1,0 +1,8 @@
+PyYAML
+python-dotenv
+pydantic
+psutil
+fsspec
+llama-index-core>=0.12.0
+
+https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-1.2.10-py3-none-any.whl
