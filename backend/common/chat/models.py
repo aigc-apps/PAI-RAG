@@ -64,6 +64,7 @@ class RetrievalSetting(BaseModel):
 class RetrievalRequest(BaseModel):
     knowledgebase_id: Optional[str] = "default"  # 知识库名称（index_name）
     query: str  # 查询内容
+    user_id: Optional[str] = None
     retrieval_setting: Optional[RetrievalSetting] = None
     metadata_condition: Optional[MetadataFilteringCondition] = None
     # ["retrieval_mode", "similarity_top_k", "vector_weight", "keyword_weight", "reranker_type", "similarity_threshold", "reranker_similarity_threshold", "reranker_model", "reranker_similarity_top_k"]

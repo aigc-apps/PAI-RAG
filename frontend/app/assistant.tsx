@@ -24,6 +24,7 @@ import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
 import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
 import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
 import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
+import RoleConfigPage from "./config/role/page";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -37,7 +38,7 @@ export const Assistant = () => {
     const fetchLLMConfig = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         console.log(
           "assistant NEXT_PUBLIC_API_BASE",
           process.env.NEXT_PUBLIC_API_BASE,
@@ -92,7 +93,7 @@ export const Assistant = () => {
       streamn: true,
     };
   }, [llmConfig.model_id, selectedOptions]);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
   const runtime = usePaiChatThreadRuntime({
     api: `${API_BASE}/v1/chat/completions`,
     body: extra_body,
@@ -209,6 +210,14 @@ export const Assistant = () => {
                 <SidebarTrigger />
               </header>
               <PromptConfig />
+            </div>
+          )}
+          {activeTab === "/config/roles" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <RoleConfigPage />
             </div>
           )}
         </SidebarInset>

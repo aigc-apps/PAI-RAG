@@ -64,7 +64,7 @@ export default function EmbConfigPage() {
     const fetchModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
           `${API_BASE}/v1/config/embeddings?page=${page}&size=${modelSizePerPage}`,
         );
@@ -106,7 +106,7 @@ export default function EmbConfigPage() {
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
 
       const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
         method: "DELETE",

@@ -48,7 +48,7 @@ export default function ModelSelector({
       setError(null);
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/llms/groups`);
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();

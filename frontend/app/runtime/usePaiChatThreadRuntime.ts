@@ -256,7 +256,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/agent/threads`);
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
@@ -277,7 +277,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const url = `${API_BASE}/v1/agent/threads`;
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
@@ -322,7 +322,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async delete(remoteId) {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/agent/threads/${remoteId}`, {
         method: "DELETE",
         headers: {
@@ -378,7 +378,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
               // 模拟从后端获取数据
               try {
                 const API_BASE =
-                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
                 const res = await fetch(
                   `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
                 );
@@ -423,7 +423,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
               }
               try {
                 const API_BASE =
-                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
                 const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
 
                 console.log("append message", message);

@@ -34,7 +34,7 @@ export default function KnowledgeBase({
     const fetchConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
           `${API_BASE}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
@@ -60,7 +60,7 @@ export default function KnowledgeBase({
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/config/knowledgebases/${kb_id}`, {
         method: "DELETE",
         headers: {

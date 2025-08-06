@@ -57,7 +57,7 @@ export default function LlmConfigPage() {
     const fetchModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
           `${API_BASE}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
@@ -98,7 +98,7 @@ export default function LlmConfigPage() {
     setErrorMsg("");
     llm.enabled = !llm.enabled;
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const url = `${API_BASE}/v1/config/llms/${llm.id}`;
 
     const res = await fetch(url, {
@@ -121,7 +121,7 @@ export default function LlmConfigPage() {
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
         method: "DELETE",
         headers: {

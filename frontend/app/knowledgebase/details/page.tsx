@@ -47,6 +47,7 @@ import {
   Trash2Icon,
   AlertCircleIcon,
   SearchIcon,
+  ChevronDownIcon,
 } from "lucide-react";
 import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,6 +66,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -81,6 +90,7 @@ import "react-photo-view/dist/react-photo-view.css";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DatetimeInput } from "../datetime";
+import { Role } from "@/app/config/role/role";
 
 interface KnowledgeBaseFile {
   id: string;
@@ -174,6 +184,14 @@ export default function KnowledgeBaseDetailPage({
   const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
     [],
   );
+
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [openRole, setOpenRole] = useState(false);
+  const [editRoleFileId, setEditRoleFileId] = useState("");
+  const [activeRoleIds, setActiveRoleIds] = useState<string[]>([]);
+  const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
+  const [user, setUser] = useState("");
+
   const default_comparator = [
     "contains",
     "not contains",
@@ -205,7 +223,7 @@ export default function KnowledgeBaseDetailPage({
     const fetchModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const [embRes] = await Promise.all([
           fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
@@ -235,7 +253,7 @@ export default function KnowledgeBaseDetailPage({
     setSearching(true);
     console.log("handleSearchSubmit");
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const search_result = await fetch(
       `${API_BASE}/v1/config/knowledgebases/retrieval`,
       {
@@ -245,6 +263,7 @@ export default function KnowledgeBaseDetailPage({
         },
         body: JSON.stringify({
           query: kbquery,
+          user_id: user,
           knowledgebase_id: knowledgebase_id,
           metadata_condition: {
             conditions: metadataConditions,
@@ -267,7 +286,7 @@ export default function KnowledgeBaseDetailPage({
 
   const fetchKbMetadata = async () => {
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
 
     const res = await fetch(
       `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
@@ -287,7 +306,7 @@ export default function KnowledgeBaseDetailPage({
 
   const fetchKbFiles = useCallback(async () => {
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
@@ -331,7 +350,7 @@ export default function KnowledgeBaseDetailPage({
     const fetchKbConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
           `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}`,
         );
@@ -369,7 +388,7 @@ export default function KnowledgeBaseDetailPage({
     setDeleting(true);
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         {
@@ -410,7 +429,7 @@ export default function KnowledgeBaseDetailPage({
     setIsEditingMetadata(false);
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const file_res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
       );
@@ -463,6 +482,90 @@ export default function KnowledgeBaseDetailPage({
     }
   };
 
+  const handleRoleSelect = (
+    role_id: string,
+    role_name: string,
+    checked: boolean,
+  ) => {
+    if (checked) {
+      if (!activeRoleIds.includes(role_id)) {
+        setActiveRoleIds([...activeRoleIds, role_id]);
+        setActiveRoleNames([...activeRoleNames, role_name]);
+      }
+    } else {
+      if (activeRoleIds.includes(role_id)) {
+        setActiveRoleIds((prev) => prev.filter((id) => id !== role_id));
+        setActiveRoleNames((prev) => prev.filter((name) => name !== role_name));
+      }
+    }
+  };
+
+  const checkFileRole = async (file_id: string) => {
+    try {
+      setEditRoleFileId(file_id);
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
+      const roleRes = await fetch(`${API_BASE}/v1/config/roles?size=100`);
+      if (!roleRes.ok) {
+        alert("查询角色失败");
+        return;
+      }
+      const all_roles = (await roleRes.json()).data.items;
+      setRoles(all_roles);
+
+      const permission_name = file_id;
+      const res = await fetch(
+        `${API_BASE}/v1/config/roles/permissions?name=${permission_name}&size=100`,
+      );
+      if (!res.ok) {
+        alert("查询文件permission失败");
+        return;
+      }
+
+      const permission_res = await res.json();
+      const role_ids = permission_res.data.items.map(
+        (item: any) => item.role_id,
+      );
+      const role_names = all_roles
+        .filter((role: any) => role_ids.includes(role.id))
+        .map((role: any) => role.name);
+      console.log("role_ids:", role_ids);
+      console.log("role_names:", role_names);
+
+      setActiveRoleIds(role_ids);
+      setActiveRoleNames(role_names);
+    } catch (error) {
+      console.error("获取文件角色信息失败: ", error);
+    }
+  };
+
+  const saveFilePermission = async () => {
+    try {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
+      const roleRes = await fetch(
+        `${API_BASE}/v1/config/roles/permissions/files/${editRoleFileId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            role_ids: activeRoleIds,
+          }),
+        },
+      );
+      if (!roleRes.ok) {
+        alert("更新文件角色失败");
+        return;
+      }
+      console.log("更新文件角色成功：", await roleRes.json());
+      setOpenRole(false);
+    } catch (error) {
+      console.error("上传失败:", error);
+    }
+  };
+
   const handleFileUpload = async (files: FileList | null) => {
     console.log("##handleFileUpload", files);
     if (!files) {
@@ -493,7 +596,7 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files`,
         {
@@ -536,7 +639,7 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const metadata_enties = Object.keys(editingMetadata)
         .filter((name) => !default_metadata_keys.includes(name))
         .map((name) => ({
@@ -798,6 +901,134 @@ export default function KnowledgeBaseDetailPage({
                                 kbId={knowledgebase_id}
                                 fileId={file.id}
                               />
+
+                              <Button
+                                variant="link"
+                                className="text-sm text-blue-600"
+                                onClick={() =>
+                                  setActiveTab(
+                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  )
+                                }
+                              >
+                                查看切片
+                              </Button>
+
+                              <Sheet open={openRole} onOpenChange={setOpenRole}>
+                                <SheetTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    onClick={() => {
+                                      checkFileRole(file.id);
+                                    }}
+                                    className="text-sm text-blue-600"
+                                  >
+                                    权限
+                                  </Button>
+                                </SheetTrigger>
+                                <SheetContent>
+                                  <SheetHeader>
+                                    <SheetTitle>文档权限设置</SheetTitle>
+                                  </SheetHeader>
+                                  <div className="grid flex-1 auto-rows-min gap-6 px-4">
+                                    <div>
+                                      {activeRoleNames.length > 0 ? (
+                                        <div>
+                                          <div className="text-sm">
+                                            以下角色有查看/搜索该文档的权限
+                                          </div>
+
+                                          <div className="flex pt-3 gap-1.5 items-center">
+                                            {activeRoleNames.map((name) => (
+                                              <Badge
+                                                variant="secondary"
+                                                className="h-6"
+                                                key={name}
+                                              >
+                                                {name}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div>
+                                          所有角色都有查看/搜索该文档的权限。添加角色来限制文档访问。
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="grid gap-3">
+                                      <div className="flex">
+                                        <Label
+                                          htmlFor="kb_selection"
+                                          className="w-[90px]"
+                                        >
+                                          角色选择
+                                        </Label>
+                                        <div className="pl-6 pr-6">
+                                          {roles.length > 0 ? (
+                                            <DropdownMenu modal={true}>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  className="text-sm text-muted-foreground"
+                                                >
+                                                  已选{activeRoleIds.length}
+                                                  个，可多选 <ChevronDownIcon />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent className="w-56">
+                                                <DropdownMenuLabel>
+                                                  角色
+                                                </DropdownMenuLabel>
+                                                <DropdownMenuSeparator />
+                                                {roles.map((role) => (
+                                                  <DropdownMenuCheckboxItem
+                                                    key={role.id}
+                                                    checked={activeRoleIds.includes(
+                                                      role.id,
+                                                    )}
+                                                    onCheckedChange={(
+                                                      checked,
+                                                    ) =>
+                                                      handleRoleSelect(
+                                                        role.id,
+                                                        role.name,
+                                                        checked,
+                                                      )
+                                                    }
+                                                    onSelect={(e) =>
+                                                      e.preventDefault()
+                                                    }
+                                                  >
+                                                    {role.name}
+                                                  </DropdownMenuCheckboxItem>
+                                                ))}
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          ) : (
+                                            <div>
+                                              <p className="text-sm text-muted-foreground">
+                                                尚未配置角色信息，前往`权限控制`设置。
+                                              </p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-4 pb-6 px-6">
+                                    <Button onClick={saveFilePermission}>
+                                      保存
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => setOpenRole(false)}
+                                    >
+                                      取消
+                                    </Button>
+                                  </div>
+                                </SheetContent>
+                              </Sheet>
                               <Sheet>
                                 <SheetTrigger asChild>
                                   <Button
@@ -1022,18 +1253,6 @@ export default function KnowledgeBaseDetailPage({
                                   </SheetFooter>
                                 </SheetContent>
                               </Sheet>
-
-                              <Button
-                                variant="link"
-                                className="text-sm text-blue-600"
-                                onClick={() =>
-                                  setActiveTab(
-                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
-                                  )
-                                }
-                              >
-                                查看切片
-                              </Button>
                               <Button
                                 variant="link"
                                 className="text-sm text-blue-600"
@@ -1219,6 +1438,14 @@ export default function KnowledgeBaseDetailPage({
                     </div>
                   </PopoverContent>
                 </Popover>
+                <Input
+                  className="w-30 text-xs"
+                  placeholder="输入user_id"
+                  value={user}
+                  onChange={(e) => {
+                    setUser(e.target.value);
+                  }}
+                />
                 <Button
                   type="button"
                   onClick={handleSearchSubmit}

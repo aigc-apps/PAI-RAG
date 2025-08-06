@@ -94,14 +94,17 @@ export function AppSidebar({
                   <Search /> <span>搜索</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  onClick={() => setActiveTab("/config/prompts")}
+                >
+                  <UserCog /> <span>Prompt</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => setActiveTab("/config/tracing")}
                 >
                   <Wrench /> <span>链路追踪</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setActiveTab("/config/prompts")}
-                >
-                  <UserCog /> <span>Prompt</span>
+                <DropdownMenuItem onClick={() => setActiveTab("/config/roles")}>
+                  <UserCog /> <span>权限控制</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

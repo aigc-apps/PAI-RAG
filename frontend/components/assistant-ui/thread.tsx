@@ -55,7 +55,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       try {
         setMcpLoading(true);
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
@@ -86,7 +86,7 @@ export const Thread: FC<{ onToggleChange?: (options: string[]) => void }> = ({
       try {
         setKbLoading(true);
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/knowledgebases`);
         if (!res.ok) throw new Error("获取知识库配置失败");
         const json_res = await res.json();
