@@ -352,6 +352,99 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
 };
 
+const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
+  children,
+}) => {
+  // This runs in the context of each thread
+  const threadListItem = useThreadListItem();
+  const remoteId = threadListItem.remoteId;
+  // Create thread-specific history adapter
+  const history = useMemo<ThreadHistoryAdapter>(
+    () => ({
+      async load() {
+        if (!remoteId) return { headId: null, messages: [] };
+        // 模拟从后端获取数据
+        try {
+          const API_BASE =
+            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          const res = await fetch(
+            `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
+          );
+
+          if (!res.ok) throw new Error("获取配置失败");
+          const messages = await res.json();
+          if (messages.length === 0) {
+            return { headId: null, messages: [] };
+          }
+          const response = ExportedMessageRepository.fromArray(
+            messages.map((m: any) => ({
+              role: m.role as ThreadMessage["role"],
+              content: m.content,
+              attachments: m.attachments,
+              id: m.id,
+              createdAt: new Date(m.createdAt),
+            })),
+          );
+          return response;
+        } catch (error) {
+          console.error("Error fetching threads:", error);
+          return { headId: null, messages: [] };
+        }
+      },
+      async append(message) {
+        if (!remoteId) {
+          console.warn("Cannot save message - thread not initialized");
+          while (isInitializing) {
+            console.log(
+              "while isInitializing",
+              isInitializing,
+              initializedThreadId,
+            );
+            await delay(50);
+          }
+          console.log("initialized remoteId", initializedThreadId);
+        }
+        const remoteThreadId = remoteId ? remoteId : initializedThreadId;
+        if (!remoteThreadId) {
+          console.error("Thread initialized failed.");
+          return;
+        }
+        try {
+          const API_BASE =
+            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
+
+          console.log("append message", message);
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              thread_id: remoteThreadId,
+              role: message.message.role,
+              attachments: message.message.attachments,
+              content: message.message.content,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to create thread: ${response.statusText}`);
+          }
+        } catch (error) {
+          console.error("Error creating thread:", error);
+          throw error;
+        }
+      },
+    }),
+    [remoteId],
+  );
+  const adapters = useMemo(() => ({ history }), [history]);
+  return (
+    <RuntimeAdapterProvider adapters={adapters}>
+      {children}
+    </RuntimeAdapterProvider>
+  );
+};
+
 export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const { localRuntimeOptions, otherOptions } =
     splitLocalRuntimeOptions(options);
@@ -366,94 +459,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
     adapter: {
       ...myDatabaseAdapter,
       // The Provider component adds thread-specific adapters
-      unstable_Provider: ({ children }) => {
-        // This runs in the context of each thread
-        const threadListItem = useThreadListItem();
-        const remoteId = threadListItem.remoteId;
-        // Create thread-specific history adapter
-        const history = useMemo<ThreadHistoryAdapter>(
-          () => ({
-            async load() {
-              if (!remoteId) return { headId: null, messages: [] };
-              // 模拟从后端获取数据
-              try {
-                const API_BASE =
-                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
-                const res = await fetch(
-                  `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
-                );
-
-                if (!res.ok) throw new Error("获取配置失败");
-                const messages = await res.json();
-                if (messages.length === 0) {
-                  return { headId: null, messages: [] };
-                }
-                const response = ExportedMessageRepository.fromArray(
-                  messages.map((m: any) => ({
-                    role: m.role as ThreadMessage["role"],
-                    content: m.content,
-                    attachments: m.attachments,
-                    id: m.id,
-                    createdAt: new Date(m.createdAt),
-                  })),
-                );
-                return response;
-              } catch (error) {
-                console.error("Error fetching threads:", error);
-                return { headId: null, messages: [] };
-              }
-            },
-            async append(message) {
-              if (!remoteId) {
-                console.warn("Cannot save message - thread not initialized");
-                while (isInitializing) {
-                  console.log(
-                    "while isInitializing",
-                    isInitializing,
-                    initializedThreadId,
-                  );
-                  await delay(50);
-                }
-                console.log("initialized remoteId", initializedThreadId);
-              }
-              const remoteThreadId = remoteId ? remoteId : initializedThreadId;
-              if (!remoteThreadId) {
-                console.error("Thread initialized failed.");
-                return;
-              }
-              try {
-                const API_BASE =
-                  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
-                const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
-
-                console.log("append message", message);
-                const response = await fetch(url, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    thread_id: remoteThreadId,
-                    role: message.message.role,
-                    attachments: message.message.attachments,
-                    content: message.message.content,
-                  }),
-                });
-
-                if (!response.ok) {
-                  throw new Error(
-                    `Failed to create thread: ${response.statusText}`,
-                  );
-                }
-              } catch (error) {
-                console.error("Error creating thread:", error);
-                throw error;
-              }
-            },
-          }),
-          [remoteId],
-        );
-        const adapters = useMemo(() => ({ history }), [history]);
-        return RuntimeAdapterProvider({ adapters, children });
-      },
+      unstable_Provider: StableProvider,
     },
   });
   return runtime;
