@@ -1,0 +1,50 @@
+import re
+import uuid
+from sqlmodel import Field, SQLModel
+from pydantic import field_validator
+from datetime import datetime, timezone
+from sqlalchemy import Column, DateTime, JSON
+from typing import List, Optional
+
+
+class ChatBotCreate(SQLModel):
+    app_id: str = Field(default=None)
+    description: Optional[str] = Field(default=None)
+    model_id: str = Field(default=None)
+    mcp_ids: List[str] = Field(default=[])
+    kb_ids: List[str] = Field(default=[])
+    enable_search: bool = Field(default=True)
+    enable_vision: bool = Field(default=True)
+    enable_agent: bool = Field(default=False)
+
+    @field_validator("app_id")
+    def validate_app_id(cls, v):
+        if not v:
+            raise ValueError("app_id is required")
+        if not re.match("^[a-zA-Z][a-zA-Z0-9]{2,63}$", v):
+            raise ValueError("app_id must be a valid name with length between 3 and 64")
+        return v
+
+    @field_validator("model_id")
+    def validate_model_id(cls, v):
+        if not v:
+            raise ValueError("model_id is required")
+        return v
+
+
+class ChatBotEntity(ChatBotCreate, table=True):
+    __tablename__ = "pai_chatbot_model"
+
+    id: str = Field(primary_key=True, default_factory=lambda: str(uuid.uuid4().hex))
+    mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+
+
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime),
+    )

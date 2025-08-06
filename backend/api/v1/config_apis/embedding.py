@@ -1,7 +1,6 @@
 ### Embedding configuration API ###
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -53,23 +52,12 @@ async def create_embedding(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                status_code=400,
-                content=error_response(
-                    code=400, message=f"创建embedding模型失败: '{embedding.model_name}'已存在."
-                ),
-            )
+            return error_response(code=400, message=f"创建embedding模型失败: '{embedding.model_name}'已存在.")
         else:
-            return JSONResponse(
-                status_code=400,
-                content=error_response(code=400, message=f"创建embedding模型失败: '{e}'."),
-            )
+            return error_response(code=400, message=f"创建embedding模型失败: '{e}'.")
     except Exception as e:
         await session.rollback()
-        return JSONResponse(
-            status_code=400,
-            content=error_response(code=400, message=f"创建embedding模型失败: '{e}'."),
-        )
+        return error_response(code=400, message=f"创建embedding模型失败: '{e}'.")
 
 
 @embedding_router.get("")
@@ -108,12 +96,9 @@ async def get_embeddings(
         )
         embedding_model = (await session.exec(statement)).first()
         if not embedding_model:
-            return JSONResponse(
-                content=error_response(
+            return error_response(
                     code=404, message=f"查询embedding模型失败: 模型'{model_name}'不存在。"
-                ),
-                status_code=404,
-            )
+                )
 
         return success_response(data=embedding_model, message="查询embedding模型成功。")
 
@@ -160,6 +145,7 @@ async def change_default_embedding_model_and_update_threads(
         logger.info(f"Default attachment knowledgebase using old default embedding model {knowledgebase.id} has been deleted.")
     else:
         logger.info("Default attachment knowledgebase not found.")
+
 @embedding_router.patch("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
 async def update_embedding(
     emb_id: str,
@@ -171,12 +157,9 @@ async def update_embedding(
 
     embedding_model = await session.get(EmbeddingModelEntity, emb_id)
     if not embedding_model:
-        return JSONResponse(
-            content=error_response(
-                code=404, message=f"查询embedding失败: 模型'{emb_id}'不存在。"
-            ),
-            status_code=404,
-        )
+        return error_response(
+                code=404, message=f"删除embedding失败: 模型'{emb_id}'不存在。"
+            )
 
     logger.info(f"Updating Embedding {emb_id} to {new_embedding}.")
     embedding_model.model_name = new_embedding.model_name or embedding_model.model_name
@@ -216,12 +199,9 @@ async def delete_embedding(
 ):
     embedding_model = await session.get(EmbeddingModelEntity, emb_id)
     if not embedding_model:
-        return JSONResponse(
-            content=error_response(
+        return error_response(
                 code=404, message=f"删除embedding失败: 模型'{emb_id}'不存在。"
-            ),
-            status_code=404,
-        )
+            )
     embedding_provider.delete(emb_id)
 
     await session.delete(embedding_model)

@@ -42,7 +42,7 @@ class AgentState(BaseModel):
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-def get_system_prompt(enable_search: bool = False, enable_mcp: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
+def get_system_prompt(enable_search: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
     tools_prompt = []
     prompt = prompt_provider.get_prompts()
     if enable_thinking:
@@ -81,9 +81,9 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     if chat_request.enable_search:
         websearch_tools = websearch_provider.get_search_tools()
         mcp_tools.extend(websearch_tools)
-    if chat_request.enable_mcp:
-        logger.info(f"[Model] selected mcp servers: {chat_request.mcp_servers}")
-        mcp_tools.extend(await mcp_provider.get_mcp_tools_async(chat_request.mcp_servers))
+    if len(chat_request.mcp_ids) > 0:
+        logger.info(f"[Model] selected mcp servers: {chat_request.mcp_ids}")
+        mcp_tools.extend(await mcp_provider.get_mcp_tools_async(chat_request.mcp_ids))
         logger.info(f"[Model] mcp_tools: {mcp_tools}")
 
     mcp_tools.extend(await aget_kb_tools(chat_request))
@@ -298,7 +298,6 @@ class AgentLoop:
 
         system_prompt = get_system_prompt(
             enable_search=chat_request.enable_search,
-            enable_mcp=chat_request.enable_mcp,
             enable_thinking=chat_request.enable_thinking,
             enable_attachments=chat_request.enable_attachments,
             kb_ids=chat_request.kb_ids,

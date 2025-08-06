@@ -1,9 +1,12 @@
 ### MCP Configuration API ###
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
+import traceback
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from api.response_model import PagedResult, ResponseModel, success_response, error_response
+from api.v1.utils.paginate import get_pagination_meta
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.mcp import McpServerRead, McpServerCreate, McpServerEntity
 from db.db_context import get_session
@@ -13,7 +16,6 @@ from config.providers.config_change_manager import config_change_manager
 from config.providers.mcp_tool_provider import mcp_provider
 
 from loguru import logger
-
 
 mcp_router = APIRouter()
 
@@ -38,45 +40,72 @@ async def create_mcp(
             source_id=mcp.id,
             event_type=ChangeEventType.ADD,
         )
-        return mcp
+        return success_response(data=mcp, message="创建MCP配置成功.")
     except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add mcp: {e.orig}")
+        logger.error(f"IntegrityError occurred when add mcp: {traceback.format_exc()}")
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            raise HTTPException(
-                status_code=400, detail=f"Mcp name {mcp.name} already exists."
-            )
-        else:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to add mcp config: {str(e)}"
-            )
+            return error_response(code=400, message="创建MCP配置失败: mcp已存在.")
+
+        return error_response(code=400, message=f"创建MCP配置失败: '{e}'.")
     except Exception as e:
+        logger.error(f"Exception occurred when add mcp: {traceback.format_exc()}")
         await session.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add mcp config: {str(e)}"
-        )
+        return error_response(code=400, message=f"创建MCP配置失败: '{e}'.")
 
 
-@mcp_router.get("", response_model=List[McpServerRead])
+@mcp_router.get("", response_model=ResponseModel[PagedResult])
 async def list_mcps(
+    name: str = None,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
 ):
-    mcp_results = await session.exec(
-        select(McpServerEntity).offset(offset).limit(limit)
-    )
-    return mcp_results.all()
+    if not name:
+        total_results = await session.exec(
+            select(func.count()).select_from(
+                select(McpServerEntity)
+            )
+        )
+        total_num = total_results.one_or_none()
+        pagination = get_pagination_meta(page, size, total_num)
+        sql_results = await session.exec(select(McpServerEntity).offset(pagination.offset).limit(size))
+        mcp_entities = sql_results.all()
+        mcp_models = [
+            McpServerRead.model_validate(entity)
+            for entity in mcp_entities
+        ]
+
+        return success_response(
+            data=PagedResult(
+                items=mcp_models,
+                total=pagination.total,
+                pages=pagination.pages,
+                page=pagination.page,
+                size=pagination.size,
+            ),message="查询mcp配置列表成功")
+    else:
+        statement = select(McpServerEntity).where(
+            McpServerEntity.name == name
+        )
+        mcp_model = (await session.exec(statement)).first()
+        if not mcp_model:
+            return error_response(
+                    code=404, message=f"查询MCP配置失败: MCP '{name}'不存在。"
+                )
+
+        return success_response(data=mcp_model, message="查询MCP配置成功。")
+
 
 
 @mcp_router.get("/{mcp_id}", response_model=McpServerRead)
 async def read_mcp(mcp_id: str, session: AsyncSession = Depends(get_session)):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
-        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+        return error_response(code=404, message=f"MCP {mcp_id} not found.")
 
-    return mcp
+    return success_response(data=mcp, message="查询mcp成功。")
 
 
 @mcp_router.patch("/{mcp_id}", response_model=McpServerRead)
@@ -87,7 +116,7 @@ async def update_mcp(
 ):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
-        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+        return error_response(code=404, message=f"MCP {mcp_id} not found.")
 
     mcp.name = update_mcp.name or mcp.name
     mcp.enabled = update_mcp.enabled
@@ -112,7 +141,7 @@ async def update_mcp(
 
     logger.info(f"MCP {mcp_id} updated to {mcp}.")
 
-    return mcp
+    return success_response(data=mcp, message="更新mcp成功。")
 
 
 @mcp_router.delete("/{mcp_id}")
@@ -122,7 +151,7 @@ async def delete_mcp(
 ):
     mcp = await session.get(McpServerEntity, mcp_id)
     if not mcp:
-        raise HTTPException(status_code=404, detail=f"MCP {mcp_id} not found.")
+        return error_response(code=404, message=f"MCP {mcp_id} not found.")
 
     await session.delete(mcp)
     await session.commit()
@@ -136,4 +165,4 @@ async def delete_mcp(
 
     logger.info(f"MCP {mcp_id} has been deleted.")
 
-    return {"message": f"MCP {mcp_id} has been deleted."}
+    return success_response(data=mcp, message="删除mcp成功。")
