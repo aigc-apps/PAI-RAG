@@ -357,7 +357,9 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
 };
 
-const stableProvider: FC<Props> = ({ children }) => {
+const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
+  children,
+}) => {
   // This runs in the context of each thread
   const threadListItem = useThreadListItem();
   const remoteId = threadListItem.remoteId;
@@ -365,7 +367,6 @@ const stableProvider: FC<Props> = ({ children }) => {
   const history = useMemo<ThreadHistoryAdapter>(
     () => ({
       async load() {
-        console.log("load history", remoteId);
         if (!remoteId) return { headId: null, messages: [] };
         // 模拟从后端获取数据
         try {
@@ -375,7 +376,7 @@ const stableProvider: FC<Props> = ({ children }) => {
             `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
           );
 
-          if (!res.ok) throw new Error("获取配置失败。");
+          if (!res.ok) throw new Error("获取配置失败");
           const messages = await res.json();
           if (messages.length === 0) {
             return { headId: null, messages: [] };
@@ -442,7 +443,11 @@ const stableProvider: FC<Props> = ({ children }) => {
     [remoteId],
   );
   const adapters = useMemo(() => ({ history }), [history]);
-  return RuntimeAdapterProvider({ adapters, children });
+  return (
+    <RuntimeAdapterProvider adapters={adapters}>
+      {children}
+    </RuntimeAdapterProvider>
+  );
 };
 
 export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
@@ -459,7 +464,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
     adapter: {
       ...myDatabaseAdapter,
       // The Provider component adds thread-specific adapters
-      unstable_Provider: stableProvider,
+      unstable_Provider: StableProvider,
     },
   });
   return runtime;
