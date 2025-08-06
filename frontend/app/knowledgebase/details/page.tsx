@@ -500,6 +500,11 @@ export default function KnowledgeBaseDetailPage({
     }
   };
 
+  const clearAllRoles = async () => {
+    setActiveRoleIds([]);
+    setActiveRoleNames([]);
+  };
+
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
@@ -1020,6 +1025,10 @@ export default function KnowledgeBaseDetailPage({
                                     <Button onClick={saveFilePermission}>
                                       保存
                                     </Button>
+                                    <Button onClick={clearAllRoles}>
+                                      重置（设为所有角色可访问）
+                                    </Button>
+
                                     <Button
                                       variant="outline"
                                       onClick={() => setOpenRole(false)}
