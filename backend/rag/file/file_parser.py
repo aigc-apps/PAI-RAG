@@ -199,7 +199,6 @@ class FileParser:
 
             for chunk in chunks:
                 chunk.metadata = copy.deepcopy(original_metadata)
-                logger.info(f"chunk.metadata {chunk.metadata}")
                 chunk.metadata["doc_id"] = doc_node.id_
                 chunk.relationships = {
                             NodeRelationship.SOURCE: RelatedNodeInfo(
