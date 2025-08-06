@@ -1,12 +1,11 @@
 import uuid
 from loguru import logger
-from typing import Dict, List
+from typing import List
 from llama_index.core.schema import Document, BaseNode, TextNode
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core.node_parser import SentenceSplitter
 
 from db.models.knowledgebase.knowledgebase import ChunkConfig, KbEntity
-from rag.file.file_utils import ensure_file_type_is_supported
 from rag.file.models.file_item import FileItem
 from rag.file.readers.base import BaseReader
 from rag.file.readers.csv_reader import CsvReader
@@ -55,64 +54,97 @@ class FileParser:
         file_store: BaseFileStore,
         knowledgebase: KbEntity,
         image_caption_tool: ImageCaptionTool = None,
-        is_attachment: bool = False,
     ):
         self.file_store = file_store
-        if is_attachment:
-            self.file_readers = {
-                ".docx": DocxReader(
-                    file_store=file_store
-                ),
-                ".pdf": OnlinePdfReader(
-                    file_store=file_store
-                ),
-                ".md": MarkdownReader(
-                    file_store=file_store
-                ),
-                ".txt": TextReader(),
-            }
-        else:
-            self.file_readers: Dict[str, BaseReader] = {
-                ".md": MarkdownReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".pdf": MineruPdfReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".html": HtmlReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".htm": HtmlReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".docx": DocxReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".pptx": PptxReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".jsonl": JsonReader(),
-                ".csv": CsvReader(),
-                ".xlsx": ExcelReader(),
-                ".xls": ExcelReader(),
-                ".jpg": ImageReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".png": ImageReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".jpeg": ImageReader(
-                    file_store=file_store, image_caption_tool=image_caption_tool
-                ),
-                ".txt": TextReader(),
-            }
         self.knowledgebase = knowledgebase
+        self.image_caption_tool = image_caption_tool
+
+    def _get_reader(self, file_extension: str, is_attachment: bool=False) -> BaseReader:
+        if is_attachment:
+            match file_extension:
+                case ".docx":
+                    return DocxReader(file_store=self.file_store)
+                case ".pdf":
+                    return OnlinePdfReader(file_store=self.file_store)
+                case ".md":
+                    return MarkdownNodeParser(file_store=self.file_store)
+                case ".txt":
+                    return TextReader()
+                case ".jpg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".png":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".jpeg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case _:
+                    raise ValueError(f"不支持的附件文件类型: {file_extension}")
+        else:
+            match file_extension:
+                case ".md":
+                    return MarkdownReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".docx":
+                    return DocxReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".pptx":
+                    return PptxReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".pdf":
+                    return MineruPdfReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".htm":
+                    return HtmlReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".html":
+                    return HtmlReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".jpg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".png":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".jpeg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".xlsx":
+                    return ExcelReader()
+                case ".xls":
+                    return ExcelReader()
+                case ".csv":
+                    return CsvReader()
+                case ".jsonl":
+                    return JsonReader()
+                case _:
+                    raise ValueError(f"不支持的文件类型: {file_extension}")
 
     # 读取文件解析为Document列表
-    def read_file(self, file_item: FileItem) -> List[Document]:
-        ensure_file_type_is_supported(file_item.file_extension)
-
-        reader = self.file_readers.get(file_item.file_extension)
+    def read_file(self, file_item: FileItem, is_attachment: bool) -> List[Document]:
+        reader = self._get_reader(file_item.file_extension, is_attachment=is_attachment)
         return reader.read(file_item)
 
     def split_docs(
@@ -190,8 +222,8 @@ class FileParser:
 
         return splitted_nodes
 
-    def parse(self, file_item: FileItem):
-        docs = self.read_file(file_item)
+    def parse(self, file_item: FileItem, is_attachment: bool):
+        docs = self.read_file(file_item, is_attachment)
         chunk_config = ChunkConfig.model_validate(self.knowledgebase.chunk_config)
         nodes = self.split_docs(docs, chunk_config=chunk_config)
         return docs, nodes

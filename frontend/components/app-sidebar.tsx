@@ -1,5 +1,5 @@
 "use client";
-import { Search, Settings, Bot, Wrench } from "lucide-react";
+import { Search, Settings, Bot, Wrench, UserCog } from "lucide-react";
 import React from "react";
 import {
   Sidebar,
@@ -112,6 +112,11 @@ export function AppSidebar({
                   onClick={() => setActiveTab("/config/tracing")}
                 >
                   <Wrench /> <span>链路追踪</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setActiveTab("/config/prompts")}
+                >
+                  <UserCog /> <span>Prompt</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

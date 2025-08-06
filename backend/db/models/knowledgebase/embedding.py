@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from pydantic import model_validator
 from sqlmodel import Field, SQLModel, Column, Boolean
@@ -18,10 +19,10 @@ class EmbeddingModel(SQLModel):
     type: EmbeddingType = Field(default=EmbeddingType.LOCAL)
     embed_batch_size: int = Field(default=10)
     model_id: str = Field(default=None, unique=True)
-    is_ready: bool = Field(
+    is_ready: Optional[bool] = Field(
         sa_column=Column(Boolean, default=False),
     ) # 是否已经加载完成，用于本地模型下载
-    is_default: bool = Field(
+    is_default: Optional[bool] = Field(
         sa_column=Column(Boolean, default=False),
     )
 

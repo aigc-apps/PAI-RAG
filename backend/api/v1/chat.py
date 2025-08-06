@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Response
-from fastapi.responses import StreamingResponse
 from api.response_model import error_response
+from sse_starlette import EventSourceResponse
 from chat.agent_loop import AgentLoop
 from common.chat.models import ChatAgentRequest
 from utils.openai_response_converter import OpenAIChatCompletionChunkConverter
@@ -48,7 +48,7 @@ async def chat(chat_request: ChatAgentRequest):
         new_chat_request = parse_chat_request(chat_request) # 利用chatbot信息
         async_response_gen = await agent_loop.arun(chat_request=new_chat_request)
         openai_converter = OpenAIChatCompletionChunkConverter(chat_request)
-        return StreamingResponse(
+        return EventSourceResponse(
             openai_converter.aconvert_to_openai_chat_completion_chunk(
                 async_response_gen
             ),

@@ -19,6 +19,7 @@ class ChangeEventSource(str, Enum):
     TRACE = "trace"
     WEBSEARCH = "websearch"
     CHATBOT = "chatbot"
+    PROMPT = "prompt"
 
 
 

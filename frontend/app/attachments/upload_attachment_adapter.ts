@@ -107,16 +107,45 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     if (attachment.status.type === "incomplete") {
       throw new Error("Attachment upload failed");
     }
-    return {
-      id: attachment.id,
-      type: "document",
-      name: attachment.name,
-      contentType: attachment.contentType || "application/octet-stream",
-      content: [],
-      status: { type: "complete" },
-    };
+    if (attachment.type === "image") {
+      const base64 = await this.fileToBase64DataURL(attachment.file);
+      return {
+        id: attachment.id,
+        type: "image",
+        name: attachment.name,
+        contentType: attachment.contentType || "application/octet-stream",
+        status: { type: "complete" },
+        content: [
+          {
+            type: "image",
+            image: base64, // data:image/jpeg;base64,... format
+          },
+        ],
+      };
+    } else {
+      return {
+        id: attachment.id,
+        type: "document",
+        name: attachment.name,
+        contentType: attachment.contentType || "application/octet-stream",
+        content: [],
+        status: { type: "complete" },
+      };
+    }
   }
   public async remove(attachment: PendingAttachment): Promise<void> {
     // Cleanup if needed
+  }
+
+  private async fileToBase64DataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // FileReader result is already a data URL
+        resolve(reader.result as string);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 }

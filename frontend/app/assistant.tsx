@@ -19,6 +19,7 @@ import TracingConfig from "./config/tracing/page";
 import KnowledgeBase from "./knowledgebase/page";
 import ChatbotPage from "./chatbot/page";
 import { ChatbotConfigCard } from "./chatbot/chatbot_config";
+import PromptConfig from "./config/prompt/page";
 import { usePathname } from "next/navigation";
 import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
 import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
@@ -98,7 +99,7 @@ export const Assistant = () => {
   }, [llmConfig.model_id, selectedOptions]);
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
   const runtime = usePaiChatThreadRuntime({
-    api: `${API_BASE}/v1/agent/chat`,
+    api: `${API_BASE}/v1/chat/completions`,
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),
@@ -249,6 +250,14 @@ export const Assistant = () => {
                 <SidebarTrigger />
               </header>
               <TracingConfig />
+            </div>
+          )}
+          {activeTab === "/config/prompts" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <PromptConfig />
             </div>
           )}
         </SidebarInset>
