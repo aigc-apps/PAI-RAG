@@ -274,544 +274,432 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   }
 
   return (
-    <div>
+    <div className="h-200 overflow-y-auto">
       <div>
-        <Tabs defaultValue="basic_info">
-          <TabsList>
-            <TabsTrigger value="basic_info">基本信息</TabsTrigger>
-            <TabsTrigger value="chunk_info">切片设置</TabsTrigger>
-            <TabsTrigger value="retrieval_info">检索设置</TabsTrigger>
-            <TabsTrigger value="metadata_info">元数据</TabsTrigger>
-          </TabsList>
-          <TabsContent value="basic_info">
-            <Card>
-              <CardHeader>
-                <CardTitle>基本信息</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">
-                    知识库名称 <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="name"
-                    value={kb.name}
-                    onChange={(e) =>
-                      setKb((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    placeholder="请输入知识库名称"
-                    required
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    例如："XX产品用户手册"、"IT操作说明"
-                  </p>
-                </div>
+        <div className="flex space-y-2 gap-3 px-4 items-center">
+          <Label htmlFor="name" className="w-[100px]">
+            知识库名称 <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="name"
+            className="w-60"
+            value={kb.name}
+            onChange={(e) =>
+              setKb((prev) => ({ ...prev, name: e.target.value }))
+            }
+            placeholder="请输入知识库名称"
+            required
+          />
+          <p className="text-sm text-muted-foreground">
+            例如："XX产品用户手册"、"IT操作说明"
+          </p>
+        </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">描述</Label>
-                  <Textarea
-                    id="description"
-                    value={kb.description}
-                    onChange={(e) =>
-                      setKb((prev) => ({
-                        ...prev,
-                        description: e.target.value,
-                      }))
-                    }
-                    placeholder="描述知识库内容（可选）"
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="chunk_info">
-            <Card>
-              <CardHeader>
-                <CardTitle>切片设置</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                <div className="grid grid-cols-4 gap-8">
-                  <div className="space-y-2">
-                    <Label htmlFor="separator">
-                      切片标识符 (separator){" "}
-                      <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      type="text"
-                      id="separator"
-                      value={kb.chunk_config.separator}
-                      onChange={(e) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            separator: e.target.value,
-                          },
-                        }))
-                      }
-                      required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      推荐值：\n\n
-                    </p>
-                  </div>
+        <div className="flex gap-3 px-4 items-center pt-6">
+          <Label htmlFor="description" className="w-[100px]">
+            知识库描述
+          </Label>
+          <Textarea
+            id="description"
+            className="w-120"
+            value={kb.description}
+            onChange={(e) =>
+              setKb((prev) => ({
+                ...prev,
+                description: e.target.value,
+              }))
+            }
+            placeholder="描述知识库内容（可选）"
+            rows={3}
+          />
+        </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="chunkSize">
-                      切片大小 (chunk_size){" "}
-                      <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      id="chunkSize"
-                      value={kb.chunk_config.chunk_size}
-                      onChange={(e) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            chunk_size: e.target.value,
-                          },
-                        }))
-                      }
-                      min="100"
-                      max="2000"
-                      required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      推荐值: 1000
-                    </p>
-                  </div>
+        <div className="flex gap-3 px-4 items-center pt-6">
+          <Label htmlFor="chunkSize" className="w-[100px]">
+            切片大小
+            <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            type="number"
+            className="w-60"
+            id="chunkSize"
+            value={kb.chunk_config.chunk_size}
+            onChange={(e) =>
+              setKb((prev) => ({
+                ...prev,
+                chunk_config: {
+                  ...prev.chunk_config,
+                  chunk_size: e.target.value,
+                },
+              }))
+            }
+            min="100"
+            max="2000"
+            required
+          />
+          <p className="text-sm text-muted-foreground">推荐值: 1000</p>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="chunkOverlap">
-                      切片重叠大小 (chunk_overlap)
-                    </Label>
-                    <Input
-                      type="number"
-                      id="chunkOverlap"
-                      value={kb.chunk_config.chunk_overlap}
-                      onChange={(e) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            chunk_overlap: e.target.value,
-                          },
-                        }))
-                      }
-                      min="0"
-                      max="200"
-                    />
-                    <p className="text-sm text-muted-foreground">推荐值: 50</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="retrieval_info">
-            <Card>
-              <CardHeader>
-                <CardTitle>检索设置</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                <div className="grid grid-cols-6 space-y-2">
-                  <Label htmlFor="embeddingModel" className="col-span-1">
-                    向量模型 <span className="text-destructive">*</span>
-                  </Label>
-                  <div className="col-span-2">
-                    <Select
-                      defaultValue={kb.embedding_model}
-                      onValueChange={(value) => {
-                        setKb((prev) => ({ ...prev, embedding_model: value }));
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="请选择向量类型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {embeddingmodels.map((model) => (
-                            <SelectItem key={model.id} value={model.model_id}>
-                              {model.model_id}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+          <Label htmlFor="chunkOverlap" className="w-[100px] ml-20">
+            切片重叠
+            <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            type="number"
+            className="w-60"
+            id="chunkOverlap"
+            value={kb.chunk_config.chunk_overlap}
+            onChange={(e) =>
+              setKb((prev) => ({
+                ...prev,
+                chunk_config: {
+                  ...prev.chunk_config,
+                  chunk_overlap: e.target.value,
+                },
+              }))
+            }
+            min="0"
+            max="200"
+          />
+          <p className="text-sm text-muted-foreground">推荐值: 50</p>
+        </div>
 
-                <div className="grid grid-cols-6 space-y-2">
-                  <Label className="col-span-1">检索设置</Label>
-                  <div className="col-span-3 ">
-                    <div className="space-y-2 pt-4 pb-2">
-                      <ToggleGroup
-                        type="single"
-                        value={kb.retrieval_config.retrieval_mode}
-                        onValueChange={(value) => {
-                          // 同时更新 indexType 和 formData.retrieval_config.index_type
-                          setIndexType(value);
-                          setKb((prev) => ({
-                            ...prev,
-                            retrieval_config: {
-                              ...prev.retrieval_config,
-                              retrieval_mode: value,
-                            },
-                          }));
-                        }}
-                        variant="outline"
-                        className="flex gap-x-4 overflow-visible"
+        <div className="flex gap-3 px-4 items-center pt-6">
+          <Label htmlFor="embeddingModel" className="w-[100px]">
+            向量模型 <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            value={kb.embedding_model}
+            onValueChange={(value) => {
+              setKb((prev) => ({ ...prev, embedding_model: value }));
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="请选择向量类型" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {embeddingmodels.map((model) => (
+                  <SelectItem key={model.id} value={model.model_id}>
+                    {model.model_id}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Label htmlFor="topk" className="w-[50px] ml-20">
+            Top-K:
+          </Label>
+          <Slider
+            className="w-60"
+            defaultValue={[1]}
+            max={100}
+            min={1}
+            step={1}
+            value={[kb.retrieval_config.top_k]}
+            onValueChange={(value: number[]) => {
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  top_k: value[0],
+                },
+              }));
+            }}
+          />
+          <span className="font-medium"> {kb.retrieval_config.top_k} </span>
+
+          <Label htmlFor="topk" className="w-[80px] ml-20">
+            相似度阈值:
+          </Label>
+          <Slider
+            className="w-60"
+            defaultValue={[0]}
+            max={1}
+            step={0.01}
+            value={[kb.retrieval_config.similarity_threshold]}
+            onValueChange={(value: number[]) => {
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  similarity_threshold: value[0],
+                },
+              }));
+            }}
+          />
+          <span className="font-medium">
+            {" "}
+            {kb.retrieval_config.similarity_threshold}{" "}
+          </span>
+        </div>
+
+        <div className="flex gap-3 px-4 items-center pt-6">
+          <Label className="w-[100px]">检索策略</Label>
+          <ToggleGroup
+            type="single"
+            value={kb.retrieval_config.retrieval_mode}
+            onValueChange={(value) => {
+              // 同时更新 indexType 和 formData.retrieval_config.index_type
+              setIndexType(value);
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  retrieval_mode: value,
+                },
+              }));
+            }}
+            variant="outline"
+            className="flex gap-x-4 overflow-visible"
+          >
+            <ToggleGroupItem
+              value="vector"
+              aria-label="向量检索"
+              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
+              <ScanSearch />
+              向量检索
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="fulltext"
+              aria-label="全文检索"
+              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
+              <TextSearch />
+              全文检索
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="hybrid"
+              aria-label="混合检索"
+              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+            >
+              <SearchCode />
+              混合检索
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          {indexType === "hybrid" && (
+            <div className="ml-10 flex">
+              <Label htmlFor="embeddingWeight" className="w-[100px]">
+                向量检索权重
+              </Label>
+              <Slider
+                id="embeddingWeight"
+                className="w-60"
+                min={0}
+                max={1}
+                step={0.1}
+                value={[kb.retrieval_config.vector_weight || 0.7]}
+                onValueChange={(value) =>
+                  setKb((prev) => ({
+                    ...prev,
+                    retrieval_config: {
+                      ...prev.retrieval_config,
+                      vector_weight: value[0],
+                    },
+                  }))
+                }
+              />
+              <span className="w-12 text-right text-md font-medium">
+                {kb.retrieval_config.vector_weight}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-4 items-center pt-6 h-14">
+          <Label className="w-[100px]">开启重排序</Label>
+          <Checkbox
+            id="enable_reranker"
+            checked={kb.retrieval_config.enable_rerank ?? false}
+            onCheckedChange={(checked) => {
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  enable_rerank: Boolean(checked),
+                },
+              }));
+            }}
+          />
+          {kb.retrieval_config.enable_rerank && (
+            <div className="flex ml-20">
+              <Label htmlFor="rerank_model" className="w-[100px]">
+                重排序模型
+                <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                defaultValue={kb.retrieval_config.rerank_model}
+                onValueChange={(value) => {
+                  setKb((prev) => ({
+                    ...prev,
+                    retrieval_config: {
+                      ...prev.retrieval_config,
+                      rerank_model: value,
+                    },
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="请选择重排序模型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {rerankermodels.map((model) => (
+                      <SelectItem key={model.id} value={model.model_id}>
+                        {model.model_id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+        {!isCreate && (
+          <div className="pt-6 px-4 gap-4">
+            <div className="w-full">
+              <Label htmlFor="metadata" className="w-[100px]">
+                元数据配置
+              </Label>
+              <Table className="w-full">
+                {metadata_configs === null || metadata_configs.length == 0 ? (
+                  <TableCaption>尚未配置元数据信息</TableCaption>
+                ) : (
+                  <TableCaption>
+                    已添加{metadata_configs.length}条元数据信息。{" "}
+                  </TableCaption>
+                )}
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">元数据名称(Key)</TableHead>
+                    <TableHead className="w-[100px]">元数据类型</TableHead>
+                    <TableHead>元数据描述</TableHead>
+                    <TableHead className="w-[100px] text-right">
+                      <Dialog
+                        open={metadataOpen}
+                        onOpenChange={setMetadataOpen}
                       >
-                        <ToggleGroupItem
-                          value="vector"
-                          aria-label="向量检索"
-                          className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                        >
-                          <ScanSearch />
-                          向量检索
-                        </ToggleGroupItem>
-                        <ToggleGroupItem
-                          value="fulltext"
-                          aria-label="全文检索"
-                          className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                        >
-                          <TextSearch />
-                          全文检索
-                        </ToggleGroupItem>
-                        <ToggleGroupItem
-                          value="hybrid"
-                          aria-label="混合检索"
-                          className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-                        >
-                          <SearchCode />
-                          混合检索
-                        </ToggleGroupItem>
-                      </ToggleGroup>
-                    </div>
-                    {/* 动态参数配置区域 */}
-                    <div className="space-y-4 pt-2">
-                      <div>
-                        <div className="grid grid-cols-5 space-y-4 ">
-                          <Label htmlFor="topk" className="col-span-1">
-                            Top-K 值
-                          </Label>
-                          <Input
-                            type="number"
-                            id="topk"
-                            value={kb.retrieval_config.top_k}
-                            onChange={(e) =>
-                              setKb((prev) => ({
-                                ...prev,
-                                retrieval_config: {
-                                  ...prev.retrieval_config,
-                                  top_k: parseInt(e.target.value),
-                                },
-                              }))
-                            }
-                            min="1"
-                            max="100"
-                            required
-                            className="col-span-2 w-full"
-                          />
-                          <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                            推荐值：5-20，最大支持100条结果
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-5 space-y-4 ">
-                          <Label htmlFor="threshold" className="col-span-1">
-                            相似度分数阈值
-                          </Label>
-                          <Input
-                            type="number"
-                            id="threshold"
-                            value={kb.retrieval_config.similarity_threshold}
-                            onChange={(e) =>
-                              setKb((prev) => ({
-                                ...prev,
-                                retrieval_config: {
-                                  ...prev.retrieval_config,
-                                  similarity_threshold: parseFloat(
-                                    e.target.value,
-                                  ),
-                                },
-                              }))
-                            }
-                            step="0.05"
-                            min="0"
-                            max="1"
-                            required
-                            className="col-span-2 w-full"
-                          />
-                          <p className="col-span-2 text-sm text-muted-foreground pt-2 pl-6">
-                            推荐值：0.4
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-5 space-y-2">
-                          <label
-                            htmlFor="terms"
-                            className="col-span-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            开启重排序
-                          </label>
-                          <Checkbox
-                            id="terms"
-                            className="col-span-1"
-                            checked={kb.retrieval_config.enable_rerank ?? false}
-                            onCheckedChange={(checked) => {
-                              setKb((prev) => ({
-                                ...prev,
-                                retrieval_config: {
-                                  ...prev.retrieval_config,
-                                  enable_rerank: Boolean(checked),
-                                },
-                              }));
-                            }}
-                          />
-                        </div>
-                        {kb.retrieval_config.enable_rerank && (
-                          <div className="grid grid-cols-5 space-y-2 py-6">
-                            <Label
-                              htmlFor="embeddingModel"
-                              className="col-span-1"
-                            >
-                              重排序模型 (rerank_model){" "}
-                              <span className="text-destructive">*</span>
-                            </Label>
-                            <div className="col-span-2">
+                        <DialogTrigger asChild>
+                          <Button variant="outline">
+                            {" "}
+                            <CirclePlus /> 添加元数据
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                          <DialogHeader>
+                            <DialogTitle>添加元数据</DialogTitle>
+                            <DialogDescription>
+                              请设定一个元数据名称（英文和数字），如city,
+                              category，用于在知识库内检索。
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-3">
+                            <div className="grid gap-3">
+                              <Label htmlFor="metadata_key">元数据名称</Label>
+                              <Input
+                                id="metadata_key"
+                                onChange={(e) =>
+                                  setmetadataName(e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="grid gap-3">
+                              <Label htmlFor="metadata_value_type">
+                                值类型
+                              </Label>
                               <Select
-                                defaultValue={kb.retrieval_config.rerank_model}
-                                onValueChange={(value) => {
-                                  setKb((prev) => ({
-                                    ...prev,
-                                    retrieval_config: {
-                                      ...prev.retrieval_config,
-                                      rerank_model: value,
-                                    },
-                                  }));
-                                }}
+                                defaultValue="string"
+                                onValueChange={(value) =>
+                                  setMetadataValueType(value)
+                                }
                               >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="请选择重排序模型" />
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue
+                                    placeholder="选择值类型"
+                                    defaultValue="string"
+                                  />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectGroup>
-                                    {rerankermodels.map((model) => (
-                                      <SelectItem
-                                        key={model.id}
-                                        value={model.model_id}
-                                      >
-                                        {model.model_id}
-                                      </SelectItem>
-                                    ))}
+                                    <SelectLabel>值类型</SelectLabel>
+                                    <SelectItem value="string">
+                                      String
+                                    </SelectItem>
+                                    <SelectItem value="number">
+                                      Number
+                                    </SelectItem>
+                                    <SelectItem value="datetime">
+                                      DateTime
+                                    </SelectItem>
                                   </SelectGroup>
                                 </SelectContent>
                               </Select>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                      {indexType === "hybrid" && (
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-5 gap-4 pt-2">
-                            <Label
-                              htmlFor="embeddingWeight"
-                              className="col-span-1"
-                            >
-                              向量检索权重
-                            </Label>
-                            <Slider
-                              id="embeddingWeight"
-                              min={0}
-                              max={1}
-                              step={0.1}
-                              value={[kb.retrieval_config.vector_weight || 0.7]}
-                              onValueChange={(value) =>
-                                setKb((prev) => ({
-                                  ...prev,
-                                  retrieval_config: {
-                                    ...prev.retrieval_config,
-                                    vector_weight: value[0],
-                                  },
-                                }))
-                              }
-                              className="col-span-2"
-                            />
-                            <span className="w-12 text-right text-sm font-medium col-span-1">
-                              {kb.retrieval_config.vector_weight}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="metadata_info">
-            <Card>
-              <CardHeader>
-                <CardTitle>元数据</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                <div className="grid space-y-2">
-                  <div className="w-full">
-                    <Table className="w-full">
-                      {metadata_configs === null ||
-                      metadata_configs.length == 0 ? (
-                        <TableCaption>尚未配置元数据信息</TableCaption>
-                      ) : (
-                        <TableCaption>
-                          已添加{metadata_configs.length}条元数据信息。{" "}
-                        </TableCaption>
-                      )}
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[100px]">
-                            元数据名称(Key)
-                          </TableHead>
-                          <TableHead className="w-[100px]">
-                            元数据类型
-                          </TableHead>
-                          <TableHead>元数据描述</TableHead>
-                          <TableHead className="w-[100px] text-right">
-                            <Dialog
-                              open={metadataOpen}
-                              onOpenChange={setMetadataOpen}
-                            >
-                              <DialogTrigger asChild>
-                                <Button variant="outline">
-                                  {" "}
-                                  <CirclePlus /> 添加元数据
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-[425px]">
-                                <DialogHeader>
-                                  <DialogTitle>添加元数据</DialogTitle>
-                                  <DialogDescription>
-                                    请设定一个元数据名称（英文和数字），如city,
-                                    category，用于在知识库内检索。
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4">
-                                  <div className="grid gap-3">
-                                    <Label htmlFor="metadata_key">
-                                      元数据名称
-                                    </Label>
-                                    <Input
-                                      id="metadata_key"
-                                      onChange={(e) =>
-                                        setmetadataName(e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                  <div className="grid gap-3">
-                                    <Label htmlFor="metadata_value_type">
-                                      值类型
-                                    </Label>
-                                    <Select
-                                      defaultValue="string"
-                                      onValueChange={(value) =>
-                                        setMetadataValueType(value)
-                                      }
-                                    >
-                                      <SelectTrigger className="w-[180px]">
-                                        <SelectValue
-                                          placeholder="选择值类型"
-                                          defaultValue="string"
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectGroup>
-                                          <SelectLabel>值类型</SelectLabel>
-                                          <SelectItem value="string">
-                                            String
-                                          </SelectItem>
-                                          <SelectItem value="number">
-                                            Number
-                                          </SelectItem>
-                                          <SelectItem value="datetime">
-                                            DateTime
-                                          </SelectItem>
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="grid gap-3">
-                                    <Label htmlFor="metadata_desc">
-                                      元数据描述
-                                    </Label>
-                                    <Input
-                                      id="metadata_desc"
-                                      placeholder="输入元数据相关描述。"
-                                      onChange={(e) =>
-                                        setMetadataDesc(e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                                {metadataError ? (
-                                  <Alert variant="destructive">
-                                    <AlertCircleIcon />
-                                    <AlertTitle>无法保存metadata.</AlertTitle>
-                                    <AlertDescription>
-                                      <p>{metadataError}</p>
-                                    </AlertDescription>
-                                  </Alert>
-                                ) : null}
-                                <DialogFooter>
-                                  <DialogClose asChild>
-                                    <Button
-                                      variant="outline"
-                                      onClick={handleCancelMetadataConfig}
-                                    >
-                                      取消
-                                    </Button>
-                                  </DialogClose>
-                                  <Button
-                                    type="button"
-                                    onClick={handleAddMetadataConfig}
-                                  >
-                                    保存
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {metadata_configs?.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">
-                              {item.name}
-                            </TableCell>
-                            <TableCell>{item.value_type}</TableCell>
-                            <TableCell>{item.description}</TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="secondary"
-                                size="icon"
-                                className="size-8"
-                                onClick={() =>
-                                  handleRemoveMetadataEntry(item.id)
+                            <div className="grid gap-3">
+                              <Label htmlFor="metadata_desc">元数据描述</Label>
+                              <Input
+                                id="metadata_desc"
+                                placeholder="输入元数据相关描述。"
+                                onChange={(e) =>
+                                  setMetadataDesc(e.target.value)
                                 }
+                              />
+                            </div>
+                          </div>
+                          {metadataError ? (
+                            <Alert variant="destructive">
+                              <AlertCircleIcon />
+                              <AlertTitle>无法保存metadata.</AlertTitle>
+                              <AlertDescription>
+                                <p>{metadataError}</p>
+                              </AlertDescription>
+                            </Alert>
+                          ) : null}
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button
+                                variant="outline"
+                                onClick={handleCancelMetadataConfig}
                               >
-                                <Trash2Icon />
+                                取消
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                            </DialogClose>
+                            <Button
+                              type="button"
+                              onClick={handleAddMetadataConfig}
+                            >
+                              保存
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metadata_configs?.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{item.value_type}</TableCell>
+                      <TableCell>{item.description}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => handleRemoveMetadataEntry(item.id)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
         <div className="block w-full">
           {saveErrorMsg !== "" && (
             <Alert variant="destructive">
@@ -823,10 +711,11 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           )}
         </div>
       </div>
+
       <div className="fixed bottom-0 inset-x-0 h-20 bg-white border-t left-64 flex justify-around items-center z-50 ">
         <div>
           {isCreate && (
-            <div className="flex justify-center gap-4 pb-4">
+            <div className="flex justify-center gap-3 pb-4">
               <Button
                 type="button"
                 variant="outline"
@@ -844,7 +733,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             </div>
           )}
           {!isCreate && (
-            <div className="flex justify-center gap-4 pb-4">
+            <div className="flex justify-center gap-3 pb-4">
               <Button type="button" className="w-40" onClick={handleSubmit}>
                 {" "}
                 <Save />

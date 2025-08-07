@@ -1,8 +1,9 @@
 import asyncio
-from sqlalchemy import Float, and_, or_
+from sqlalchemy import Float, and_, exists, or_
 
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from db.models.knowledgebase.user_role import PermissionEntity, UserRoleEntity
 from common.chat.models import MetadataFilteringCondition, Condition
 from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
@@ -54,11 +55,13 @@ def _build_metadata_condition_(
 
     return condition_filter
 
+
 @with_async_db_session
 async def query_file_ids_with_metadata_filter(
     session: AsyncSession,
     kb_id: str,
     metadata_filter: MetadataFilteringCondition,
+    user_id: str = None,
 ) -> list[str]:
     if metadata_filter is None or metadata_filter.conditions is None:
         return []
@@ -67,26 +70,35 @@ async def query_file_ids_with_metadata_filter(
     # TODO: possible limitations: IN clause长度过长导致执行速度慢/超出限制？
     filters = []
 
+
     for condition in metadata_filter.conditions:
         condition_filter = _build_metadata_condition_(condition)
         if condition_filter is not None:
             filters.append(condition_filter)
 
-    if len(filters) == 0:
-        file_entities = (await session.exec(
-            select(KbFileEntity)
-            .where(KbFileEntity.active)
-            .where(KbFileEntity.kb_id == kb_id))).all()
-    else:
+    sub_clauses = [KbFileEntity.active, KbFileEntity.kb_id == kb_id]
+    if len(filters) > 0:
         if metadata_filter.logical_operator.lower() == "and":
-            where_clause = and_(*filters)
+            sub_clauses.append(and_(*filters))
         else:
-            where_clause = or_(*filters)
-        file_entities = (await session.exec(
-            select(KbFileEntity)
-            .where(KbFileEntity.active)
-            .where(KbFileEntity.kb_id == kb_id)
-            .where(where_clause))).all()
+            sub_clauses.append(where_clause = or_(*filters))
+
+    # 文档没有指定权限，可公开访问
+    has_role_binding = exists().where(PermissionEntity.name == KbFileEntity.id)
+    is_document_public = ~has_role_binding
+    # 判断用户角色可访问的文档
+    is_allowed = exists().where(
+        and_(
+            PermissionEntity.name == KbFileEntity.id,
+            PermissionEntity.role_id == UserRoleEntity.role_id,
+            UserRoleEntity.user_id == user_id,
+        )
+    )
+    sub_clauses.append(or_(is_document_public, is_allowed))
+    print(sub_clauses)
+
+    file_entities = (await session.exec(
+        select(KbFileEntity).where(and_(*sub_clauses)))).all()
 
     file_ids = [entity.id for entity in file_entities]
     return file_ids

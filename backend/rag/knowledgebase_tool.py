@@ -209,6 +209,7 @@ class PaiKnowledgebaseClient:
         self,
         query,
         knowledge_id: str,
+        user_id: str = None,
         retrieval_setting: Optional[RetrievalSetting] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
     ) -> List[NodeWithScore]:
@@ -227,10 +228,10 @@ class PaiKnowledgebaseClient:
         )
 
         query_embedding = await embed_model.aget_query_embedding(query)
-        document_ids = await query_file_ids_with_metadata_filter(kb_id=knowledge_id, metadata_filter=metadata_condition)
+        document_ids = await query_file_ids_with_metadata_filter(kb_id=knowledge_id, user_id=user_id, metadata_filter=metadata_condition)
         logger.info(f"Successfully filtered {len(document_ids)} files with metadata filter: {document_ids}.")
 
-        if metadata_condition and len(metadata_condition.conditions) > 0 and not document_ids:
+        if not document_ids:
             # fail fast as no docs filtered.
             return []
 
