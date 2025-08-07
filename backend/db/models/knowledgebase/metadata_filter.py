@@ -63,18 +63,16 @@ async def query_file_ids_with_metadata_filter(
     metadata_filter: MetadataFilteringCondition,
     user_id: str = None,
 ) -> list[str]:
-    if metadata_filter is None or metadata_filter.conditions is None:
-        return []
 
     # 为了简化实现复杂度，把metadata设定在file这一层
     # TODO: possible limitations: IN clause长度过长导致执行速度慢/超出限制？
     filters = []
 
-
-    for condition in metadata_filter.conditions:
-        condition_filter = _build_metadata_condition_(condition)
-        if condition_filter is not None:
-            filters.append(condition_filter)
+    if metadata_filter is not None and metadata_filter.conditions is not None:
+        for condition in metadata_filter.conditions:
+            condition_filter = _build_metadata_condition_(condition)
+            if condition_filter is not None:
+                filters.append(condition_filter)
 
     sub_clauses = [KbFileEntity.active, KbFileEntity.kb_id == kb_id]
     if len(filters) > 0:
