@@ -135,7 +135,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const [embRes] = await Promise.all([
           fetch(`${API_BASE}/v1/config/embeddings`),
         ]);
@@ -152,7 +152,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchRerankerModelConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const [rerankerRes] = await Promise.all([
           fetch(`${API_BASE}/v1/config/rerankers`),
         ]);
@@ -174,7 +174,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     e.preventDefault();
     console.log("保存知识库结果:", kb);
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isCreate
       ? `${API_BASE}/v1/config/knowledgebases`
       : `${API_BASE}/v1/config/knowledgebases/${kb.id}`;
@@ -199,7 +199,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const handleRemoveMetadataEntry = async (id: string) => {
     if (metadata_configs != null) {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
       try {
         const res = await fetch(metadata_url, {
@@ -234,7 +234,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     }
 
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata`;
     try {
       const res = await fetch(metadata_url, {

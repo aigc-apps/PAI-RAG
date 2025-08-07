@@ -21,7 +21,7 @@ interface KnowledgeBaseFile {
   file_metadata: {
     file_url: string;
   };
-  update_at: string;
+  updated_at: string;
 }
 
 export function PreviewButton({
@@ -40,7 +40,7 @@ export function PreviewButton({
     setLoading(true);
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
       );

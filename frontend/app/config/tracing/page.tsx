@@ -29,7 +29,7 @@ export default function TracingConfig() {
         setError("");
 
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/trace`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -68,7 +68,7 @@ export default function TracingConfig() {
       setError("");
 
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/config/trace`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

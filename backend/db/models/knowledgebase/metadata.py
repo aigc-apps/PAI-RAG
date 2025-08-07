@@ -28,7 +28,7 @@ class KbMetadataEntity(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),
     )
-    update_at: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime)
     )
@@ -55,7 +55,7 @@ class FileMetadataEntity(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),
     )
-    update_at: datetime = Field(
+    updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime)
     )

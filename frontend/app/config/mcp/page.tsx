@@ -136,11 +136,11 @@ export default function McpConfig() {
     const fetchConfigs = async () => {
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
-        setMcpConfigs(data || []); // 更新状态
+        setMcpConfigs(data.data.items || []); // 更新状态
       } catch (err: any) {
         setMcpError(err || "加载失败");
       } finally {
@@ -194,7 +194,7 @@ export default function McpConfig() {
       };
       mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/config/mcps`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -239,7 +239,7 @@ export default function McpConfig() {
       if (!editingConfig) return;
 
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
         `${API_BASE}/v1/config/mcps/${editingConfig.id}`,
         {
@@ -278,7 +278,7 @@ export default function McpConfig() {
   const removeMCP = async (id: string) => {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/config/mcps/${id}`, {
         method: "DELETE",
         headers: {

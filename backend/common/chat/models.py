@@ -74,11 +74,10 @@ class ChatAgentRequest(BaseModel):
     messages: Union[List[Any], List[ChatCompletionMessageParam]]  # 上下文聊天
     stream: Optional[bool] = False  # 流式输出
 
-    mcp_servers: Optional[List[str]] = []
+    mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
     enable_search: Optional[bool] = False
     enable_thinking: Optional[bool] = False
-    enable_mcp: Optional[bool] = False
     max_steps: Optional[int] = None
 
     enable_attachments: Optional[bool] = False  # 是否启用附件功能

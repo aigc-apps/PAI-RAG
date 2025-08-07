@@ -13,6 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
+from config.providers.prompt_provider import prompt_provider
 from db.models.knowledgebase.embedding import (
     EmbeddingModelCreate,
     EmbeddingModelEntity,
@@ -41,12 +42,14 @@ class ConfigChangeManager:
             from config.providers.mcp_tool_provider import mcp_provider
             from config.providers.websearch_provider import websearch_provider
             from config.providers.reranker_provider import reranker_provider
+            from config.providers.chatbot_provider import chatbot_provider
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
             await websearch_provider.full_load_from_db_async()
             logger.info("Initialized websearch configs.")
             await reranker_provider.full_load_from_db_async()
             logger.info("Initialized reranker configs.")
+            await chatbot_provider.full_load_from_db_async()
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -55,6 +58,8 @@ class ConfigChangeManager:
         logger.info("Initialized embedding models.")
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
+        await prompt_provider.full_load_from_db_async()
+        logger.info("Initialized prompt configs.")
 
         self.initialized = True
         self.last_change_dt = current_dt
@@ -170,6 +175,12 @@ class ConfigChangeManager:
             case ChangeEventSource.RERANK:
                 from config.providers.reranker_provider import reranker_provider
                 return reranker_provider
+            case ChangeEventSource.CHATBOT:
+                from config.providers.chatbot_provider import chatbot_provider
+                return chatbot_provider
+            case ChangeEventSource.PROMPT:
+                from config.providers.prompt_provider import prompt_provider
+                return prompt_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 
