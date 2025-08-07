@@ -13,7 +13,6 @@ from llama_index.core.schema import (
     NodeRelationship,
     MetadataMode,
 )
-from loguru import logger
 from rag.file.utils.markdown_utils import (
     build_markdown_tree,
     TreeNode,
@@ -224,7 +223,6 @@ class MarkdownNodeParser(NodeParser):
             base_parser=self.base_parser,
         )
 
-        all_chunks: List[BaseNode] = []
         nodes_with_progress = get_tqdm_iterable(nodes, show_progress, "Chunking nodes")
 
         for node in nodes_with_progress:
