@@ -121,7 +121,6 @@ async def get_llms(
 @llm_router.get("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     llm = await session.get(LlmModelEntity, llm_id)
-    print("### llm:", llm)
     if not llm:
         return error_response(code=404, message=f"没有找到ID为'{llm_id}'的大模型配置。")
 
@@ -148,6 +147,7 @@ async def update_llm(
         encrypt_key(update_llm.api_key) if update_llm.api_key else llm.encrypted_api_key
     )
     llm.enabled = update_llm.enabled
+    llm.vision_support = update_llm.vision_support
 
     logger.info(f"Updating LLM {llm_id} to {llm}.")
     session.add(llm)

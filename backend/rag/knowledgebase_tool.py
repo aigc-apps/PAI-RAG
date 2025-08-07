@@ -1,6 +1,6 @@
 from functools import partial
 import traceback
-from typing import List, Optional
+from typing import Any, List, Optional
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
@@ -13,7 +13,9 @@ from common.knowledgebase.types import (
     VectorIndexRetrievalType,
 )
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
-from config.providers.chunk_helper import (
+from rag.chunk_helper import (
+    get_embedding_from_db,
+    get_multimodal_llm_from_db,
     read_file_from_db,
     save_chunks_to_db_async,
     update_chunk_status_async,
@@ -27,11 +29,11 @@ from rag.vector_store.vector_connection import (
     create_vector_store,
     is_docid_filter_supported,
 )
+from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
-from config.providers.knowledgebase_provider import knowledgebase_provider
+from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id, knowledgebase_provider
 from config.providers.embedding_provider import embedding_provider
 from config.providers.reranker_provider import reranker_provider
-from config.providers.llm_provider import llm_provider
 from rag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
@@ -51,14 +53,17 @@ class PaiKnowledgebaseClient:
     def __init__(self):
         self.vector_connection = create_vector_db_connection_from_env()
         self.vector_store_cache = {}
-        self.embed_dimension_cache = {}
 
     def create_vector_store_from_knowledgebase(
         self,
         knowledgebase: KbEntity,
+        embed_model: BaseEmbedding = None,
     ) -> BasePydanticVectorStore:
         # TODO: 检查配置是否变化
-        dimension = self._get_embedding_dimension(knowledgebase.embedding_model)
+        if not embed_model:
+            embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
+
+        dimension = len(embed_model.get_text_embedding("0"))
         kb_key = f"{knowledgebase.id}_{dimension}"
         if kb_key not in self.vector_store_cache:
             vector_store = create_vector_store(
@@ -69,8 +74,7 @@ class PaiKnowledgebaseClient:
 
         return self.vector_store_cache[kb_key]
 
-    def create_file_parser(self, knowledgebase: KbEntity):
-        multimodal_llm = llm_provider.get_multimodal_llm()
+    def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
         image_caption_tool = None
         if multimodal_llm:
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
@@ -81,14 +85,8 @@ class PaiKnowledgebaseClient:
         )
         return file_parser
 
-    def _get_embedding_dimension(self, embed_model_name):
-        if embed_model_name not in self.embed_dimension_cache:
-            embed_model = embedding_provider.get_embedding_model(embed_model_name)
-            self.embed_dimension_cache[embed_model_name] = len(embed_model.get_text_embedding("0"))
-
-        return self.embed_dimension_cache[embed_model_name]
-
     # process file item, status -> processing
+    # 这里是离线链路，所有的数据直接从db读取，不需要用到provider信息
     async def process_file_async(
         self,
         file_id: str,
@@ -112,8 +110,8 @@ class PaiKnowledgebaseClient:
         )
 
         kb_id = file_item.kb_id
-        knowledgebase = await knowledgebase_provider.aget_knowledgebase(
-            knowledgebase_id=kb_id
+        knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
+            kb_id=kb_id
         )
         logger.info(
             f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
@@ -121,7 +119,8 @@ class PaiKnowledgebaseClient:
         await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
 
         try:
-            file_parser = self.create_file_parser(knowledgebase)
+            multimodal_llm = await get_multimodal_llm_from_db()
+            file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
 
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
@@ -134,11 +133,9 @@ class PaiKnowledgebaseClient:
 
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
 
-            embed_model = embedding_provider.get_embedding_model(
-                knowledgebase.embedding_model
-            )
+            embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
 
-            vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
+            vector_store = self.create_vector_store_from_knowledgebase(knowledgebase, embed_model=embed_model)
             if old_chunk_ids:
                 vector_store.delete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
@@ -223,7 +220,7 @@ class PaiKnowledgebaseClient:
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
         query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
-        embed_model = embedding_provider.get_embedding_model(
+        embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
 

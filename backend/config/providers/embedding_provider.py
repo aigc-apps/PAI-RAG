@@ -14,6 +14,36 @@ from utils.modelscope_utils import download_model_to_directory
 from loguru import logger
 
 
+
+def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
+    if config.type == EmbeddingType.OPENAI_LIKE:
+        logger.info(
+            f"Creating OpenAI like embedding model  {config.model_name} with {config}."
+        )
+        return OpenAILikeEmbedding(
+            api_key=decrypt_key(config.encrypted_api_key),
+            model_name=config.model_name,
+            dimensions=config.dimension,
+            embed_batch_size=config.embed_batch_size,
+            api_base=config.endpoint,
+        )
+    elif config.type == EmbeddingType.LOCAL:
+        pai_model_path = download_model_to_directory(config.model_name)
+        logger.info(
+            f"Creating local embedding model {config.model_name} with path {pai_model_path}."
+        )
+
+        return HuggingFaceEmbedding(
+            model_name=pai_model_path,
+            embed_batch_size=config.embed_batch_size,
+            device=infer_cuda_device(),
+        )
+    else:
+        logger.error(f"Unknown embedding type: {config.type}.")
+        raise ValueError(f"Unknown embedding type: {config.type}.")
+
+
+
 class EmbeddingProvider(BaseConfigProvider):
     config_map: Dict[str, EmbeddingModelEntity] = Field(default={})
     model_id_to_entry_id: Dict[str, str] = Field(default={})
@@ -43,31 +73,7 @@ class EmbeddingProvider(BaseConfigProvider):
             self.model_id_to_entry_id[entry.model_id] = entry_id
 
     def _create_instance(self, config: EmbeddingModelEntity) -> BaseEmbedding:
-        if config.type == EmbeddingType.OPENAI_LIKE:
-            logger.info(
-                f"Creating OpenAI like embedding model  {config.model_name} with {config}."
-            )
-            return OpenAILikeEmbedding(
-                api_key=decrypt_key(config.encrypted_api_key),
-                model_name=config.model_name,
-                dimensions=config.dimension,
-                embed_batch_size=config.embed_batch_size,
-                api_base=config.endpoint,
-            )
-        elif config.type == EmbeddingType.LOCAL:
-            pai_model_path = download_model_to_directory(config.model_name)
-            logger.info(
-                f"Creating local embedding model {config.model_name} with path {pai_model_path}."
-            )
-
-            return HuggingFaceEmbedding(
-                model_name=pai_model_path,
-                embed_batch_size=config.embed_batch_size,
-                device=infer_cuda_device(),
-            )
-        else:
-            logger.error(f"Unknown embedding type: {config.type}.")
-            raise ValueError(f"Unknown embedding type: {config.type}.")
+        return create_embedding_model(config=config)
 
     def get_embedding_model(self, model_id: str):
         assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found. {self.model_id_to_entry_id}"

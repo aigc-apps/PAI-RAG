@@ -309,7 +309,7 @@ class MineruPdfReader(BaseReader):
 
 
 if __name__ == "__main__":
-    pdf_file = "/Users/feiyue/Documents/test_files/舒福德产品说明书.pdf"
+    pdf_file = "/Users/feiyue/Documents/test_files/1.pdf"
     pdf_file_item = FileItem.from_path(pdf_file, knowledgebase_id="test")
     multimodal_llm = OpenAILike(
         api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
