@@ -224,7 +224,6 @@ class PaiKnowledgebaseClient:
             node.metadata.update(new_metadata)
             if node.embedding is None:
                 node.embedding = embed_model.aget_text_embedding(f"{node.text}\n\nfile_name: {node.metadata['file_name']}")
-        print(nodes[0].metadata)
         await vector_store.adelete_nodes(node_ids=chunk_ids)
         await vector_store.async_add(nodes)
         logger.info(f"Updated all chunks for file {file_id} with {new_metadata}.")
