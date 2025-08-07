@@ -1,11 +1,11 @@
-# [PAI-RAG]:多模态问答（支持知识库和附件上传）
+# [PAI-RAG] 多模态问答（支持知识库和附件上传）
 
 ## 前置条件
 
 - 已成功完成[安装指南](docs/quick_start.md)中的所有步骤，服务正常运行
 - 前端可通过 http://localhost:3001 访问
-- 准备好支持多模态的LLM模型（如Qwen-VL、LLaVA、GPT-4V等）的访问权限
-- 准备测试用图片文件（支持格式：JPG、PNG、JPEG，建议大小<10MB）
+- 准备好支持多模态的LLM模型、LLM模型以及Embedding模型的访问权限
+- 准备测试用的图文文件（支持格式：PDF, Markdown, Docx等，建议大小<100MB）
 
 ## 配置模型 (LLM 和 Embedding)
 
