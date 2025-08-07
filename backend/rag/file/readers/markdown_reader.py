@@ -109,7 +109,6 @@ class MarkdownReader(BaseReader):
         )
         docs = []
         metadata = file_item.metadata()
-        metadata["images"] = images
         doc = Document(id_=file_item.id, text=md_content, extra_info=metadata)
         docs.append(doc)
         logger.info(

@@ -38,7 +38,6 @@ class ImageReader(BaseReader):
             image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
 
             metadata = file_item.metadata()
-            metadata["images"] = [save_image_name]
 
             docs = [Document(id_=file_item.id, text=image_text, metadata=metadata)]
             logger.info(f"Successfully read {file_item.file_name}.")

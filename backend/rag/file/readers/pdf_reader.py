@@ -82,7 +82,6 @@ class MineruPdfReader(BaseReader):
             self.file_store.save(BytesIO(md_content.encode("utf-8")), save_md_file_name)
 
             metadata = file_item.metadata()
-            metadata["images"] = list(saved_image_map.values())
             return [
                 Document(
                     id_=file_item.id,
