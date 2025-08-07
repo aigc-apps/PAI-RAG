@@ -2,7 +2,7 @@
 
 > ✨ **无需ML专家，赋能LLM开发者5分钟构建企业级Agentic RAG应用**
 
-![PAI-RAG Demo](docs/images/demo.gif)
+![PAI-RAG Demo](docs/images/demo_compress.gif)
 
 ## 🔥 什么是PAI-RAG？
 
@@ -67,8 +67,8 @@ PAI-RAG不仅解决了传统RAG系统的固有局限，更通过Agentic能力将
 
 - [系统配置指南及API调用说明](docs/config.md)
 - [知识库管理（上传文档+元数据过滤）](docs/knowledgebase.md)
-- [多模态问答实战（支持知识库和附件上传）](docs/multimodal.md)
-- [Agentic RAG任务演示（复杂查询规划与执行，支持联网搜索和MCP工具调用）](docs/agentic_rag.md)
+- [多模态问答（支持知识库和附件上传）](docs/multimodal.md)
+- [Agentic RAG（复杂查询规划与执行，支持联网搜索和MCP工具调用）](docs/agentic_rag.md)
 
 ## 💬 联系我们
 
