@@ -23,7 +23,7 @@ class KbChunkModel(SQLModel):
 
 class KbChunkEntity(KbChunkModel, table=True):
     __tablename__ = "pai_knowledgebase_chunk"
-    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     # ref
     file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")

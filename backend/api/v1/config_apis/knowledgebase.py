@@ -4,6 +4,7 @@ import traceback
 from typing import List
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
@@ -237,53 +238,61 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     session: AsyncSession = Depends(get_session),
 ):
-    logger.info(f"Uploading files to {kb_id}")
+    logger.info(f"Uploading files to {kb_id}.")
     import app.worker as background_worker
 
     if not files:
-        raise ValueError("No files provided.")
+        return error_response(code=400, message="没有上传任何文件。")
 
-    knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
-    if knowledgebase is None:
-        raise ValueError(f"Knowledgebase {kb_id} not found.")
+    try:
+        try:
+            _ = await knowledgebase_provider.aget_knowledgebase(kb_id)
+        except ValueError:
+            logger.error(f"没找到知识库{kb_id}")
+            return error_response(code=400, message=f"没有找到知识库 {kb_id}。")
 
-    file_names = []
-    file_entities = []
-    for file in files:
-        file_name = file.filename
-        destination_file_path = f"{kb_id}/docs/{file_name}"
-        file_store.save(
-            file=file.file,
-            file_path=destination_file_path,
-        )
-        file_item = FileItem.from_file(
-            file=file.file,
-            file_path=destination_file_path,
-            kb_id=kb_id,
-        )
-        file_entity = (
-            await session.exec(
-                select(KbFileEntity).where(
-                    KbFileEntity.kb_id == kb_id,
-                    KbFileEntity.file_name == file_item.file_name,
-                )
+        file_names = []
+        file_entities = []
+        for file in files:
+            file_name = file.filename
+            destination_file_path = f"{kb_id}/docs/{file_name}"
+            file_store.save(
+                file=file.file,
+                file_path=destination_file_path,
             )
-        ).first()
-        if not file_entity:
-            file_entity = file_item.to_file_entity()
-        else:
-            file_entity.file_md5 = file_item.file_md5
-            file_entity.file_size = file_item.file_size
-            file_entity.updated_at = datetime.now(timezone.utc)
-        session.add(file_entity)
-        await session.commit()
-        logger.info(f"Saved file {file_entity} successfully.")
-        background_worker.process_file.delay(file_entity.id)
-        logger.info(f"Queued {file_entity.id} job successfully.")
-        file_names.append(file.filename)
-        file_entities.append(file_entity)
+            file_item = FileItem.from_file(
+                file=file.file,
+                file_path=destination_file_path,
+                kb_id=kb_id,
+                file_name=file.filename,
+            )
+            file_entity = (
+                await session.exec(
+                    select(KbFileEntity).where(
+                        KbFileEntity.kb_id == kb_id,
+                        KbFileEntity.file_name == file_item.file_name,
+                    )
+                )
+            ).first()
+            if not file_entity:
+                file_entity = file_item.to_file_entity()
+            else:
+                file_entity.file_md5 = file_item.file_md5
+                file_entity.file_size = file_item.file_size
+                file_entity.updated_at = datetime.now(timezone.utc)
+            session.add(file_entity)
+            await session.commit()
+            logger.info(f"Saved file {file_entity} successfully.")
+            background_worker.process_file.delay(file_entity.id)
+            logger.info(f"Queued {file_entity.id} job successfully.")
+            file_names.append(file.filename)
+            file_entities.append(file_entity)
 
-    return success_response(data=file_entities, message="文件上传成功")
+        return success_response(data=file_entities, message="文件上传成功")
+    except Exception as e:
+        logger.error(f"Failed to upload file: {traceback.format_exc()}")
+        await session.rollback()
+        return error_response(message=f"Failed to save file to database: {e}")
 
 
 @knowledgebase_router.get("/{kb_id}/files")
@@ -421,6 +430,44 @@ async def list_chunks(
             size=pagination.size,
         ),
         message="获取切片列表成功")
+
+
+
+class FileSourceParam(BaseModel):
+    file_source: str = Field(default=None)
+
+
+
+@knowledgebase_router.post("/{kb_id}/files/{file_id}/source", response_model=ResponseModel[KbFileEntity])
+async def set_file_source(
+    kb_id: str,
+    file_id: str,
+    body: FileSourceParam,
+    session: AsyncSession = Depends(get_session),
+):
+    file_entity = await session.get(KbFileEntity, file_id)
+    if not file_entity:
+        return error_response(code=404, message="文件不存在。")
+
+    if not body.file_source:
+        return error_response(code=400, message="文件来源不能为空。")
+
+    await kb_client.aupdate_file_chunks_metadata(
+        kb_id=kb_id,
+        file_id=file_id,
+        new_metadata={
+            "file_source": body.file_source,
+        },
+    )
+
+    file_entity.file_source = body.file_source
+    session.add(file_entity)
+    await session.commit()
+    await session.refresh(file_entity)
+
+    return success_response(data=file_entity, message="更新文件来源成功")
+
+
 
 @knowledgebase_router.patch("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
 async def update_chunk(

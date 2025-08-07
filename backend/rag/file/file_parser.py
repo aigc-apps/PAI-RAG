@@ -67,7 +67,7 @@ class FileParser:
                 case ".pdf":
                     return OnlinePdfReader(file_store=self.file_store)
                 case ".md":
-                    return MarkdownNodeParser(file_store=self.file_store)
+                    return MarkdownReader(file_store=self.file_store)
                 case ".txt":
                     return TextReader()
                 case ".jpg":
@@ -189,8 +189,8 @@ class FileParser:
                     # markdown格式(pdf, md, html, doc 等)
                     md_node_parser = MarkdownNodeParser(
                         chunk_size=chunk_config.chunk_size,
-                        chunk_overlap_size=chunk_config.chunk_overlap,
-                        base_parser=parser,
+                        chunk_overlap=chunk_config.chunk_overlap,
+                        id_func=node_id_func,
                     )
                     chunks = md_node_parser.get_nodes_from_documents([doc_node])
                 else:

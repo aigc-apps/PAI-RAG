@@ -15,6 +15,7 @@ from common.knowledgebase.types import (
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
 from rag.chunk_helper import (
     get_embedding_from_db,
+    get_kb_chunk_ids,
     get_multimodal_llm_from_db,
     read_file_from_db,
     save_chunks_to_db_async,
@@ -84,6 +85,7 @@ class PaiKnowledgebaseClient:
             knowledgebase=knowledgebase,
         )
         return file_parser
+
 
     # process file item, status -> processing
     # 这里是离线链路，所有的数据直接从db读取，不需要用到provider信息
@@ -174,6 +176,7 @@ class PaiKnowledgebaseClient:
         if kb_id in self.vector_store_cache:
             del self.vector_store_cache[kb_id]
 
+
     async def adelete_chunks_from_vectordb(
         self,
         kb_id: str,
@@ -200,6 +203,31 @@ class PaiKnowledgebaseClient:
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
         await vector_store.async_add(nodes)
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
+
+
+    async def aupdate_file_chunks_metadata(
+        self,
+        kb_id: str,
+        file_id: str,
+        new_metadata: dict,
+    ):
+        logger.info(f"Starting to update file chunks {file_id} with metadata: {new_metadata}.")
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
+        chunk_ids = await get_kb_chunk_ids(kb_id=kb_id, file_id=file_id)
+        vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
+        nodes = await vector_store.aget_nodes(node_ids=chunk_ids)
+        embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
+            knowledgebase.embedding_model
+        )
+
+        for node in nodes:
+            node.metadata.update(new_metadata)
+            if node.embedding is None:
+                node.embedding = embed_model.aget_text_embedding(f"{node.text}\n\nfile_name: {node.metadata['file_name']}")
+        print(nodes[0].metadata)
+        await vector_store.adelete_nodes(node_ids=chunk_ids)
+        await vector_store.async_add(nodes)
+        logger.info(f"Updated all chunks for file {file_id} with {new_metadata}.")
 
 
     async def aquery(

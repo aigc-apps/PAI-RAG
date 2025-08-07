@@ -123,16 +123,9 @@ async def update_file_status_async(
     await session.flush()
     logger.info(f"[FileHelper] Updated file {file_id} status to {status}.")
 
-async def save_chunks_to_db_async(
-    kb_id: str,
-    file_id: str,
-    chunk_nodes: List[TextNode],
-):
-    return await save_kb_chunks_to_db_async(
-        kb_id=kb_id, file_id=file_id, chunk_nodes=chunk_nodes
-    )
+
 @with_async_db_session
-async def save_kb_chunks_to_db_async(
+async def save_chunks_to_db_async(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
@@ -182,3 +175,19 @@ async def update_chunk_status_async(
     logger.info(
         f"[FileHelper] successfully updated chunk {chunk_ids} status to {status}."
     )
+
+
+@with_async_db_session
+async def get_kb_chunk_ids(
+    session: AsyncSession,
+    kb_id: str,
+    file_id: str,
+) -> List[str]:
+    chunk_ids = (await session.exec(
+        select(KbChunkEntity.id).where(
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+        )
+    )).all()
+
+    logger.info(f"[FileHelper] get {len(chunk_ids)} chunk ids for kb {kb_id} and file {file_id}")
+    return chunk_ids
