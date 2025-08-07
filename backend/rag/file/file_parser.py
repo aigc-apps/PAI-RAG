@@ -140,6 +140,8 @@ class FileParser:
                     return CsvReader()
                 case ".jsonl":
                     return JsonReader()
+                case ".txt":
+                    return TextReader()
                 case _:
                     raise ValueError(f"不支持的文件类型: {file_extension}")
 

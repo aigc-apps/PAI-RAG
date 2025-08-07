@@ -89,7 +89,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       return;
     }
     const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isAdd
       ? `${API_BASE}/v1/config/embeddings`
       : `${API_BASE}/v1/config/embeddings/${emb.id}`;

@@ -26,6 +26,7 @@ import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
 import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
 import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
 import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
+import RoleConfigPage from "./config/role/page";
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -258,6 +259,14 @@ export const Assistant = () => {
                 <SidebarTrigger />
               </header>
               <PromptConfig />
+            </div>
+          )}
+          {activeTab === "/config/roles" && (
+            <div className="flex flex-col h-full">
+              <header className="flex h-12 border-b">
+                <SidebarTrigger />
+              </header>
+              <RoleConfigPage />
             </div>
           )}
         </SidebarInset>
