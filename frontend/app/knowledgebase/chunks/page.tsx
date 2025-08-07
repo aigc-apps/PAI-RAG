@@ -248,8 +248,8 @@ export default function KnowledgeBaseFileChunksPage({
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex-none h-1/10">
+    <div className="flex flex-col h-screen w-full">
+      <div className="flex-none">
         <div className="p-2 space-y-2">
           <div className="mb-2 flex items-center gap-2">
             {/* 面包屑导航 */}
@@ -304,8 +304,8 @@ export default function KnowledgeBaseFileChunksPage({
         </div>
       </div>
       {/* 可滚动内容区域 */}
-      <div className="flex-1 overflow-y-auto h-4/5">
-        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+      <div className="overflow-y-auto h-4/5">
+        <div className="flex py-2 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           {kbfilechunksloading ? (
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
@@ -317,10 +317,13 @@ export default function KnowledgeBaseFileChunksPage({
           ) : kbfilechunks.length === 0 ? (
             <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
           ) : (
-            <div className="gap-6 p-4 w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="gap-4 p-4 w-full">
+              <div className="flex gap-4">
                 {kbfilechunks.map((chunk) => (
-                  <Card key={chunk.id} className="flex flex-col max-h-80">
+                  <Card
+                    key={chunk.id}
+                    className="flex max-h-80 w-68 py-3 gap-2"
+                  >
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <Badge className={activeMap[String(chunk.active)]}>
@@ -339,12 +342,10 @@ export default function KnowledgeBaseFileChunksPage({
                         </button>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="flex-grow overflow-y-auto">
-                      <ScrollArea className="h-full pr-4">
-                        <div className="text-gray-600 whitespace-pre-wrap">
-                          {chunk.text}
-                        </div>
-                      </ScrollArea>
+                    <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
+                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
+                        {chunk.text}
+                      </div>
                     </CardContent>
                     <CardFooter className="shrink-0 gap-2">
                       {chunk.chunk_metadata.images_info.map((meta, index) => (
@@ -372,7 +373,7 @@ export default function KnowledgeBaseFileChunksPage({
           )}
         </div>
       </div>
-      <div className="flex justify-center items-center h-1/10">
+      <div>
         <PaginationComponent
           currentPage={page}
           totalPages={totalPages}

@@ -201,7 +201,6 @@ async def set_file_metadata(
             if entity.id in ids_to_delete:
                 await session.delete(entity)
 
-        print(new_metadata, file_entity.file_metadata)
         file_entity.file_metadata = new_metadata
 
         session.add(file_entity)

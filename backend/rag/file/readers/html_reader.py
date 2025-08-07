@@ -128,7 +128,7 @@ class HtmlReader(BaseReader):
         table, total_cols = self._convert_table_to_pai_table(table)
         return convert_table_to_markdown(table, total_cols)
 
-    def _replace_image_paths(self, content: str, save_name_template: OssFileStore):
+    def _replace_image_paths(self, content: str, save_name_template: str):
         image_matches = MARKDOWN_IMAGE_PATTERN.finditer(content)
         saved_images = []
         for match in image_matches:

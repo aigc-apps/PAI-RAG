@@ -43,9 +43,13 @@ class OpenAIChatCompletionChunkConverter:
                                     "tool_calls", []
                                 ),
                             },
+                            "finish_reason": "stop" if response.message.additional_kwargs.get(
+                                    "STOP_FLAG") else None,
                         },
                     ],
                 )
+                if response.message.additional_kwargs.get( "STOP_FLAG"):
+                    chunk.usage = response.additional_kwargs
                 yield self._make_json_chunk(chunk.model_dump(mode="json"))
             elif response.message.role == MessageRole.TOOL:
                 chunk = ChatCompletionChunk(
@@ -63,9 +67,13 @@ class OpenAIChatCompletionChunkConverter:
                                     "tool_calls", []
                                 ),
                             },
+                            "finish_reason": "stop" if response.message.additional_kwargs.get(
+                                    "STOP_FLAG") else None,
                         },
                     ],
                 )
+                if response.message.additional_kwargs.get( "STOP_FLAG"):
+                    chunk.usage = response.additional_kwargs
                 yield self._make_json_chunk(chunk.model_dump(mode="json"))
             else:
                 raise ValueError(f"Unknown role: {response.message.role}")

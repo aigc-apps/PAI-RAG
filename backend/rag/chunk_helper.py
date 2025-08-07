@@ -2,6 +2,9 @@ from typing import List
 from loguru import logger
 from sqlalchemy import delete
 from sqlmodel import select, update
+from db.encrypt_utils import decrypt_key
+from config.providers.embedding_provider import create_embedding_model
+from db.models.llm import LlmModelEntity
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.knowledgebase.chunk import (
     KbChunkEntity,
@@ -14,8 +17,46 @@ from common.knowledgebase.types import FileStatus, ChunkStatus
 from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
 from llama_index.core.schema import Document
+from llama_index.llms.openai_like import OpenAILike
 from config.providers.config_change_manager import config_change_manager
 
+
+@with_async_db_session
+async def get_embedding_from_db(
+    session: AsyncSession, model_id: str
+) -> EmbeddingModelEntity:
+    embedding_entity = (await session.exec(
+        select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == model_id)
+    )).first()
+
+    if not embedding_entity:
+        raise ValueError(f"Embedding model {model_id} not found.")
+
+    if not embedding_entity.is_ready:
+        raise ValueError(f"Embedding model {model_id} is not downloaded, please check the download status.")
+
+    return create_embedding_model(config=embedding_entity)
+
+@with_async_db_session
+async def get_multimodal_llm_from_db(
+    session: AsyncSession,
+) -> OpenAILike:
+    config = (await session.exec(
+        select(LlmModelEntity).where(LlmModelEntity.vision_support)
+    )).first()
+
+    if not config:
+        logger.warning("No multimodal LLM model found.")
+        return None
+    return OpenAILike(
+        model=config.model,
+        api_base=config.base_url,
+        api_key=decrypt_key(config.encrypted_api_key),
+        temperature=config.temperature,
+        max_tokens=config.context_window,
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
 
 @with_async_db_session
 async def set_embedding_model_ready(
@@ -45,7 +86,7 @@ async def set_embedding_model_ready(
 async def read_file_from_db(
     session: AsyncSession,
     file_id: str,
-):
+) -> KbFileEntity:
     file_entity = await session.get(KbFileEntity, file_id)
     assert file_entity is not None, f"File {file_id} not found."
     return file_entity

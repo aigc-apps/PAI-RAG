@@ -35,20 +35,44 @@ def formatter(record):
             "<level>{process}</level> | "
             "<level>{extra[request_id]} |</level> "
             "<level>{level: <8}</level> | "
+            "<level>API</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
             "- <level>{message}</level>\n"
         )
     else:
         return (
+            "<level>API</level> | "
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{process}</level> | "
             "<level>{level: <8}</level> | "
+            "<level>API</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
             "- <level>{message}</level>\n"
         )
 
 
 def format_logging():
+    logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
+    logger.remove(0)
+    logger.add(
+        sys.stderr,
+        format=formatter,
+    )
+
+
+# 自定义日志格式，加入 request_id
+def worker_formatter(record):
+    return (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{process}</level> | "
+        "<level>{level: <8}</level> | "
+        "<level>WORKER</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
+        "- <level>{message}</level>\n"
+    )
+
+
+def format_worker_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
     logger.remove(0)
     logger.add(
