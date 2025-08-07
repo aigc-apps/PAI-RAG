@@ -121,7 +121,6 @@ async def get_llms(
 @llm_router.get("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     llm = await session.get(LlmModelEntity, llm_id)
-    print("### llm:", llm)
     if not llm:
         return error_response(code=404, message=f"没有找到ID为'{llm_id}'的大模型配置。")
 

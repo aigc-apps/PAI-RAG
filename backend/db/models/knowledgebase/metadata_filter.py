@@ -95,7 +95,6 @@ async def query_file_ids_with_metadata_filter(
         )
     )
     sub_clauses.append(or_(is_document_public, is_allowed))
-    print(sub_clauses)
 
     file_entities = (await session.exec(
         select(KbFileEntity).where(and_(*sub_clauses)))).all()
