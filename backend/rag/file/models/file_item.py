@@ -34,8 +34,10 @@ class FileItem:
         file_path,
         file: BinaryIO,
         kb_id: str,
+        file_name: str = None,
     ):
-        file_name = os.path.basename(file_path)
+        if not file_name:
+            file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_name)[1]
         ensure_file_type_is_supported(file_extension)
 
