@@ -44,6 +44,7 @@ async def retrieval(
 
     node_results = await kb_client.aquery(
         query=retrieval_request.query,
+        user_id=retrieval_request.user_id,
         knowledge_id=retrieval_request.knowledgebase_id,
         retrieval_setting=retrieval_request.retrieval_setting,
         metadata_condition=retrieval_request.metadata_condition,

@@ -67,14 +67,14 @@ class ConfigChangeManager:
 
     @with_async_db_session
     async def create_default_embedding_model(self, session: AsyncSession):
-        sql_results = await session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == "default_embedding_model"))
+        sql_results = await session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == "BAAI/bge-m3"))
         embedding_entities = sql_results.all()
         if len(embedding_entities) > 0:
             logger.info("Default embedding model already exists.")
             return
         logger.info("Creating default embedding model.")
         embedding_model = EmbeddingModelCreate(
-            model_id="default_embedding_model",
+            model_id="BAAI/bge-m3",
             type=EmbeddingType.LOCAL,
             dimension=1024,
             embed_batch_size=10,

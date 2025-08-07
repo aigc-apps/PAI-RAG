@@ -25,7 +25,7 @@ export default function PromptConfig() {
     variant: "default" as "default" | "destructive",
   });
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
 
   // 工具列表配置
   const toolSections = [
