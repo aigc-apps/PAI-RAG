@@ -1,7 +1,7 @@
 import traceback
 import dotenv
 
-from config.providers.chunk_helper import set_embedding_model_ready
+from rag.chunk_helper import set_embedding_model_ready
 from utils.modelscope_utils import download_model_to_directory
 dotenv.load_dotenv()
 # Fix for macOS fork issues (like with ChromaDB)
@@ -15,7 +15,6 @@ if os.name != "nt":
 from celery import Celery
 import os
 from rag.knowledgebase_tool import kb_client
-from config.providers.config_change_manager import config_change_manager
 import asyncio
 from loguru import logger
 
@@ -30,19 +29,10 @@ app = Celery(
     backend=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
 )
 
-async def init_worker():
-    if not config_change_manager.initialized:
-        config_change_manager.worker_mode = True
-        await config_change_manager.init_configuration()
-        asyncio.create_task(config_change_manager.monitor_changes_async())
-        logger.info("FileWorker initialized.")
-    else:
-        logger.info("FileWorker already initialized.")
 
 @app.task(name="process_file")
 def process_file(file_id: str, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(init_worker())
     logger.info(f"Processing file {file_id}.")
     loop.run_until_complete(kb_client.process_file_async(file_id, is_attachment))
     logger.info(f"Processed file {file_id} successfully.")
@@ -55,7 +45,6 @@ def download_model(
     logger.info(f"Downloading {model_type} model {model_id} {model_name}.")
     if model_type == "embedding":
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(init_worker())
         try:
             download_model_to_directory(model_name)
         except Exception:

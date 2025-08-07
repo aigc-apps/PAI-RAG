@@ -169,6 +169,7 @@ class DocxReader(BaseReader):
                                             if not image_file:
                                                 continue
                                             try:
+                                                print("### Image file name: ", save_image_name)
                                                 self.file_store.save(
                                                     image_file, save_image_name
                                                 )

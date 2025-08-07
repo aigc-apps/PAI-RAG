@@ -148,6 +148,7 @@ async def update_llm(
         encrypt_key(update_llm.api_key) if update_llm.api_key else llm.encrypted_api_key
     )
     llm.enabled = update_llm.enabled
+    llm.vision_support = update_llm.vision_support
 
     logger.info(f"Updating LLM {llm_id} to {llm}.")
     session.add(llm)
