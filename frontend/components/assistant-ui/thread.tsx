@@ -177,7 +177,7 @@ export const Thread: FC<{
     if (activeMcps.length > 0) {
       updatedOptions = [
         ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")), // 移除旧的 mcp:id
-        ...activeMcps.map((mcp) => `mcp:${mcp.name}`), // 添加所有激活的 mcp:id
+        ...activeMcps.map((mcp) => `mcp:${mcp.id}`), // 添加所有激活的 mcp:id
       ];
     }
 
