@@ -13,7 +13,6 @@ from llama_index.core.schema import (
     NodeRelationship,
     MetadataMode,
 )
-from loguru import logger
 from rag.file.utils.markdown_utils import (
     build_markdown_tree,
     TreeNode,
@@ -224,32 +223,12 @@ class MarkdownNodeParser(NodeParser):
             base_parser=self.base_parser,
         )
 
-        all_chunks: List[BaseNode] = []
         nodes_with_progress = get_tqdm_iterable(nodes, show_progress, "Chunking nodes")
 
         for node in nodes_with_progress:
-            node_images = node.metadata.get("images", [])
-            logger.info(f"Get {len(node_images)} images from document. Split into chunks.")
-
-            if "images" in node.metadata:
-                del node.metadata[
-                    "images"
-                ]  # remove images from metadata in case chunks get it
             text = node.get_content(metadata_mode=MetadataMode.NONE)
             ast_root = build_markdown_tree(text)
 
             chunks = parser.get_nodes_from_tree(ast_root, node)
 
-            for chunk in chunks:
-                # 把图片信息添加到chunk的metadata中
-                for image in node_images:
-                    image_pattern = f'<img src="{image}"'
-                    if image_pattern in chunk.get_content(
-                        metadata_mode=MetadataMode.NONE
-                    ):
-                        if "images" not in chunk.metadata:
-                            chunk.metadata["images"] = []
-                        chunk.metadata["images"].append(image)
-                all_chunks.append(chunk)
-
-        return all_chunks
+        return chunks

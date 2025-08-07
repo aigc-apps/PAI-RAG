@@ -58,7 +58,7 @@ async def retrieval(
         pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
         matches = re.findall(pattern, origin_text)
 
-        score_node.node.metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for src, alt in matches]
+        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for src, alt in matches]
         records.append(DocRecord(
             content=score_node.node.get_content(),
             score=score_node.score,

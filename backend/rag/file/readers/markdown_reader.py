@@ -94,22 +94,19 @@ class MarkdownReader(BaseReader):
 
         md_content += pre_line
 
-        images = []
         if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
-            md_content, md_images = self.replace_image_by_pattern(
+            md_content, _ = self.replace_image_by_pattern(
                 md_content, MARKDOWN_IMAGE_PATTERN, file_item.kb_id + "/images/{}"
             )
-            md_content, html_images = self.replace_image_by_pattern(
+            md_content, _ = self.replace_image_by_pattern(
                 md_content, HTML_IMAGE_PATTERN, file_item.kb_id + "/images/{}"
             )
-            images = md_images + html_images
 
         logger.info(
             f"[MarkdownReader] successfully processed markdown file {file_item.file_name}."
         )
         docs = []
         metadata = file_item.metadata()
-        metadata["images"] = images
         doc = Document(id_=file_item.id, text=md_content, extra_info=metadata)
         docs.append(doc)
         logger.info(

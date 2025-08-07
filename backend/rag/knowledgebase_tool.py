@@ -35,7 +35,7 @@ from config.providers.llm_provider import llm_provider
 from rag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
-
+import re
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -296,13 +296,13 @@ class PaiKnowledgebaseClient:
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
-                images = node.metadata.get("images", [])
-                if images:
-                    origin_text = node.text
-                    for image_file in images:
-                        image_url = file_store.get_url(image_file)
-                        origin_text = origin_text.replace(image_file, image_url)
-                    node.text = origin_text
+                origin_text = node.text
+                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                matches = re.findall(pattern, origin_text)
+                for src, _ in matches:
+                    image_url = file_store.get_url(src)
+                    origin_text = origin_text.replace(src, image_url)
+                node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Get {len(result_nodes)} nodes above given threshold {similarity_threshold}.")
         return result_nodes
@@ -366,13 +366,13 @@ class PaiKnowledgebaseClient:
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
-                images = node.metadata.get("images", [])
-                if images:
-                    origin_text = node.text
-                    for image_file in images:
-                        image_url = file_store.get_url(image_file)
-                        origin_text = origin_text.replace(image_file, image_url)
-                    node.text = origin_text
+                origin_text = node.text
+                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                matches = re.findall(pattern, origin_text)
+                for src, _ in matches:
+                    image_url = file_store.get_url(src)
+                    origin_text = origin_text.replace(src, image_url)
+                node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
         return result_nodes
