@@ -47,11 +47,17 @@ class BaseConfigProvider(BaseModel):
             self.delete(source_id)
         elif event_type == ChangeEventType.UPDATE:
             entity = await session.get(self.entity_class, source_id)
-            await session.refresh(entity)
-            self.update(entity)
+            if entity is None:
+                logger.warning(f"Unknown event type {event_type} for {source_id}.")
+            else:
+                await session.refresh(entity)
+                self.update(entity)
         elif event_type == ChangeEventType.ADD:
             entity = await session.get(self.entity_class, source_id)
-            self.add(entity)
+            if entity is None:
+                logger.warning(f"Unknown event type {event_type} for {source_id}.")
+            else:
+                self.add(entity)
         else:
             raise ValueError(f"Invalid event type: {event_type}")
 

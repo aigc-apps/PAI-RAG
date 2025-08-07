@@ -48,12 +48,26 @@ export default function ModelSelector({
       setError(null);
       try {
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/llms/groups`);
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();
         console.log("model data: ", data);
-        setModelGroups(data.groups);
+
+        const chatbotRes = await fetch(`${API_BASE}/v1/config/chatbots`);
+        if (!chatbotRes.ok) throw new Error("模型数据加载失败");
+        const chatbotData = (await chatbotRes.json()).data.items;
+        const chatbotGroup = {
+          id: "chatbot",
+          label: "对话应用",
+          models: chatbotData.map((item: any) => {
+            return {
+              id: item.id,
+              model_id: item.app_id,
+            };
+          }),
+        };
+        setModelGroups([...data.groups, chatbotGroup]);
       } catch (err) {
         setError("无法加载模型列表，请检查网络或服务状态");
         console.error(err);

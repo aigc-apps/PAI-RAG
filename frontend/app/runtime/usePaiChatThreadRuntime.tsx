@@ -4,7 +4,7 @@ import {
   ThreadMessage,
   ChatModelRunResult,
 } from "@assistant-ui/react";
-import { useMemo } from "react";
+import { FC, useMemo } from "react";
 import { INTERNAL, ExportedMessageRepository } from "@assistant-ui/react";
 
 import { EdgeRuntimeOptions } from "@assistant-ui/react-edge";
@@ -18,6 +18,11 @@ import {
   type ThreadHistoryAdapter,
 } from "@assistant-ui/react";
 import { RuntimeAdapterProvider } from "@assistant-ui/react";
+import { ReactNode } from "react"; // ✅ 添加这一行以导入 ReactNode
+interface Props {
+  children?: ReactNode;
+}
+
 type HeadersValue = Record<string, string> | Headers;
 
 export type EdgeModelAdapterOptions = {
@@ -256,7 +261,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/agent/threads`);
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
@@ -277,7 +282,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
 
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const url = `${API_BASE}/v1/agent/threads`;
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
@@ -322,7 +327,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async delete(remoteId) {
     try {
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(`${API_BASE}/v1/agent/threads/${remoteId}`, {
         method: "DELETE",
         headers: {
@@ -366,7 +371,7 @@ const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
         // 模拟从后端获取数据
         try {
           const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
           const res = await fetch(
             `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
           );
@@ -411,7 +416,7 @@ const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
         }
         try {
           const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
           const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
 
           console.log("append message", message);

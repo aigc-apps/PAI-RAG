@@ -30,7 +30,7 @@ export default function SearchConfig() {
         setError("");
 
         const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(`${API_BASE}/v1/config/websearch`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -68,7 +68,7 @@ export default function SearchConfig() {
       setError("");
 
       const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8680";
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       var update_ak = aliyunAK === "******" ? "" : aliyunAK;
       var update_sk = aliyunSK === "******" ? "" : aliyunSK;
 
