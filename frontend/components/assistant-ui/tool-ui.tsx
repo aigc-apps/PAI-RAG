@@ -13,6 +13,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { PhotoProvider, PhotoView } from "react-photo-view";
 
 const JsonCodeBlock = ({
   jsonString,
@@ -600,6 +608,124 @@ export const SearchFileToollUI = makeAssistantToolUI<
   },
 });
 
+/* Search Knowledgebase Tool UI */
+
+export type SearchKbArgs = {
+  query: string;
+};
+
+type SearchKbResult = {
+  result: {
+    text: string;
+    score: string;
+    metadata: {
+      file_url: string;
+      file_name: string;
+    };
+    images: {
+      url: string;
+      desc: string;
+    }[];
+  }[];
+};
+
+export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
+  toolName: "search-knowledgebase",
+  render: ({ args, status, result }) => {
+    console.log("SearchKbToolUI 参数:", args);
+    console.log("SearchKbToolUI 状态:", status);
+
+    if (status.type === "running") {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <Search className="size-4" /> 正在搜索知识库中: {args.query}{" "}
+          </Button>
+        </div>
+      );
+    } else if (status.type === "complete") {
+      if (!result) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>未能获取搜索结果</span>
+          </div>
+        );
+      }
+      const search_result = JSON.parse(result) as SearchKbResult;
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                {" "}
+                <Search className="size-4" /> 完成知识库搜索: {args.query}{" "}
+                (点击查看结果){" "}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>知识库搜索结果</SheetTitle>
+                <SheetDescription>{args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto max-h-[calc(100vh-120px)]">
+                <div className="pl-4 pr-2">
+                  <Accordion
+                    type="single"
+                    collapsible
+                    className="max-w-lg my-4 w-full space-y-2"
+                  >
+                    {search_result?.result.map((item, index) => (
+                      <AccordionItem
+                        key={index}
+                        value={`item-${index}`}
+                        className="border rounded-md px-4"
+                      >
+                        <AccordionTrigger>
+                          Chunk{index + 1}: {item.metadata["file_name"]}{" "}
+                          <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 shadow-none rounded-full">
+                            {parseFloat(item.score).toFixed(4)}
+                          </Badge>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div>{item.text}</div>
+                          {item?.images.map((meta, index) => (
+                            <PhotoProvider
+                              key={index}
+                              maskOpacity={0.8}
+                              overlayRender={({}) => {
+                                return (
+                                  <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                    <div>图片描述：{meta.desc}</div>
+                                  </div>
+                                );
+                              }}
+                            >
+                              <PhotoView key={index} src={meta.url}>
+                                <img src={meta.url} className="w-10 h-10" />
+                              </PhotoView>
+                            </PhotoProvider>
+                          ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
@@ -609,6 +735,7 @@ const ToolUIWrapper: FC = () => {
       <ThinkToolUI />
       <ReadFileToollUI />
       <SearchFileToollUI />
+      <SearchKbToolUI />
     </>
   );
 };
