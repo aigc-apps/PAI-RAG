@@ -18,7 +18,6 @@ from api.response_model import PagedResult, ResponseModel, success_response, err
 from config.providers.config_change_manager import config_change_manager
 from api.v1.utils.paginate import get_pagination_meta
 from config.providers.knowledgebase_provider import knowledgebase_provider
-from rag.chunk_helper import set_embedding_model_ready
 from loguru import logger
 
 embedding_router = APIRouter()
@@ -33,7 +32,7 @@ async def create_embedding(
     embedding = EmbeddingModelEntity.model_validate(
         embedding_create, update={"encrypted_api_key": encrypted_api_key}
     )
-
+    embedding.is_ready = True if embedding.type == EmbeddingType.OPENAI_LIKE else embedding.is_ready
     try:
         embedding_provider.add(embedding)
         session.add(embedding)
@@ -47,10 +46,6 @@ async def create_embedding(
         if embedding.type == EmbeddingType.LOCAL:
             import app.worker as background_worker
             background_worker.download_model.delay(model_id=embedding.id, model_name=embedding.model_name)
-        elif embedding.type == EmbeddingType.OPENAI_LIKE:
-            await set_embedding_model_ready(model_id=embedding.id)
-        else:
-            logger.error(f"Unknown embedding type {embedding.type}.")
         return success_response(data=embedding, message="创建embedding模型成功。")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
