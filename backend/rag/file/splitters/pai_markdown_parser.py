@@ -2,7 +2,7 @@
 import uuid
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from urllib.parse import urlparse
-from typing import Any, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Iterator, List, Optional, Sequence
 
 from llama_index.core.node_parser.interface import NodeParser
 from llama_index.core.node_parser import SentenceSplitter
@@ -28,16 +28,16 @@ class StructuredNodeParser(BaseModel):
 
     Args:
         chunk_size (int): chunk size
-        chunk_overlap_size (int): chunk overlap size
+        chunk_overlap (int): chunk overlap size
         include_metadata (bool): whether to include metadata in nodes
         include_prev_next_rel (bool): whether to include prev/next relationships
 
     """
 
     chunk_size: int = Field(default=800, description="chunk size.")
-    chunk_overlap_size: int = Field(default=50, description="Chunk overlap size.")
+    chunk_overlap: int = Field(default=50, description="Chunk overlap size.")
     base_parser: NodeParser = Field(
-        default=SentenceSplitter(chunk_size=800, chunk_overlap=50),
+        default=None,
         description="base parser",
     )
 
@@ -89,7 +89,7 @@ class StructuredNodeParser(BaseModel):
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         text_node = TextNode(
-            id=uuid.uuid4().hex,
+            id_=uuid.uuid4().hex,
             text=chunk_content,
             embedding=doc_node.embedding,
             excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
@@ -205,11 +205,25 @@ class StructuredNodeParser(BaseModel):
 
 class MarkdownNodeParser(NodeParser):
     chunk_size: int = Field(default=800, description="chunk size.")
-    chunk_overlap_size: int = Field(default=50, description="Chunk overlap size.")
-    base_parser: NodeParser = Field(
-        default=SentenceSplitter(chunk_size=800, chunk_overlap=50),
-        description="base parser",
-    )
+    chunk_overlap: int = Field(default=50, description="Chunk overlap size.")
+    base_parser: Any = None
+
+    def __init__(
+        self,
+        chunk_size: int = 800,
+        chunk_overlap: int = 50,
+        id_func: Callable[[int, BaseNode], str] = None,
+    ):
+        super().__init__(
+            id_func=id_func,
+        )
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.base_parser = SentenceSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            id_func=id_func,
+        )
 
     def _parse_nodes(
         self,
@@ -219,7 +233,7 @@ class MarkdownNodeParser(NodeParser):
     ) -> List[BaseNode]:
         parser = StructuredNodeParser(
             chunk_size=self.chunk_size,
-            chunk_overlap_size=self.chunk_overlap_size,
+            chunk_overlap=self.chunk_overlap,
             base_parser=self.base_parser,
         )
 

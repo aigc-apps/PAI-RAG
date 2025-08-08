@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
@@ -28,6 +28,7 @@ class KbFileEntity(SQLModel, table=True):
     file_content: str = Field(default=None)
     file_content_length: int = Field(default=0)
 
+    file_source: Optional[str] = Field(default=None)
     file_name: str = Field(default=None)
     file_path: str = Field(default=None)
     file_extension: str = Field(default=None)
