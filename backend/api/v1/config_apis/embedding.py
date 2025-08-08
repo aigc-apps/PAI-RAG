@@ -32,7 +32,7 @@ async def create_embedding(
     embedding = EmbeddingModelEntity.model_validate(
         embedding_create, update={"encrypted_api_key": encrypted_api_key}
     )
-
+    embedding.is_ready = True if embedding.type == EmbeddingType.OPENAI_LIKE else embedding.is_ready
     try:
         embedding_provider.add(embedding)
         session.add(embedding)
