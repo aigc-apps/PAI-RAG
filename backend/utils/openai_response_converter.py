@@ -34,6 +34,8 @@ class OpenAIChatCompletionChunkConverter:
                 tool_calls = response.message.additional_kwargs.get('tool_calls', [])
                 if tool_calls and tool_calls[0].function.name in ["search-web", "search-knowledgebase"]:
                     enable_citations = True
+                else:
+                    enable_citations = False
                 chunk = ChatCompletionChunk(
                     id=chat_id,
                     created=int(time.time()),
