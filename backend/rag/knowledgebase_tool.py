@@ -39,6 +39,7 @@ from rag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
+import json
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -418,11 +419,23 @@ def get_node_content(i: int, node: NodeWithScore):
 async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
     """Get aliyun search tool"""
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id)
-
-    retrieval_result = "\n---\n".join(
-        [get_node_content(i, node) for i, node in enumerate(result_nodes)]
-    )
-    return retrieval_result
+    records = []
+    for score_node in result_nodes:
+        images = []
+        origin_text = score_node.node.get_content()
+        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        matches = re.findall(pattern, origin_text)
+        images = [{"url": src, "desc": alt} for src, alt in matches]
+        records.append({
+            "text": score_node.node.get_content(),
+            "metadata": {
+                "file_name": score_node.node.metadata.get("file_name", ""),
+                "file_url": score_node.node.metadata.get("file_path", "")
+            },
+            "score": score_node.score,
+            "images": images
+        })
+    return json.dumps({"result": records}, ensure_ascii=False)
 
 
 async def aget_knowledgebase_tool(kb_id: str):
