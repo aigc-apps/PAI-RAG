@@ -9,7 +9,7 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
-import { ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 import { formatBeijingTime } from "../knowledgebase/utils/utils";
 
@@ -33,8 +33,6 @@ export default function ChatbotPage({
   setActiveTab: (tab: string) => void;
 }) {
   const [chatbots, setChatbots] = useState(Array<Chatbot>); // 知识库列表
-  const [chatbotsLoading, setChatbotsLoading] = useState(true); // 加载状态
-  const [chatbotsError, setChatbotsError] = useState(""); // 错误信息
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 6;
@@ -50,10 +48,8 @@ export default function ChatbotPage({
         const data = json_data.data.items;
         setChatbots(data || []); // 更新状态
         setTotalPages(json_data.data.pages);
-      } catch (err: any) {
-        setChatbotsError(err || "加载失败");
-      } finally {
-        setChatbotsLoading(false);
+      } catch (err: unknown) {
+        console.log(err || "加载失败");
       }
     };
 
@@ -64,7 +60,7 @@ export default function ChatbotPage({
     if (newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
   };
-  const deleteKnowledgebase = async (bot_id: string) => {
+  const deleteChatbot = async (bot_id: string) => {
     try {
       const res = await fetch(`/v1/config/chatbots/${bot_id}`, {
         method: "DELETE",
@@ -81,7 +77,9 @@ export default function ChatbotPage({
 
       // 删除成功后更新本地状态
       setChatbots((prev) => prev.filter((bot) => bot.id !== bot_id));
-    } catch (err: any) {}
+    } catch (err: unknown) {
+      console.log("删除Chatbot失败。", err);
+    }
     // 显示错误提示
   };
 
@@ -150,9 +148,7 @@ export default function ChatbotPage({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteKnowledgebase(bot.id)}
-                      >
+                      <AlertDialogAction onClick={() => deleteChatbot(bot.id)}>
                         删除
                       </AlertDialogAction>
                     </AlertDialogFooter>

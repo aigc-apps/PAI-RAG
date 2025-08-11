@@ -70,29 +70,26 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
   const [saveErrorMsg, setSaveErrorMsg] = useState("");
-  const [isCreate, setIsCreate] = useState<boolean>(
-    chatbotId === undefined || chatbotId === "",
-  );
-  const [isLoading, setIsLoading] = useState(false);
+  const isCreate: boolean = chatbotId === undefined || chatbotId === "";
+  // const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        setIsLoading(true);
-        const [llmRes] = await Promise.all([fetch(`/v1/config/llms`)]);
+        const [llmRes] = await Promise.all([fetch("/v1/config/llms")]);
 
         const llmData = (await llmRes.json())?.data.items || [];
         console.log("llmData", llmData);
         setLlms([...llmData]);
 
-        const [mcpRes] = await Promise.all([fetch(`/v1/config/mcps`)]);
+        const [mcpRes] = await Promise.all([fetch("/v1/config/mcps")]);
 
         const mcpData =
           ((await mcpRes.json())?.data.items as MCPConfig[]) || [];
         console.log("mcpData", mcpData);
         setMcps([...mcpData]);
 
-        const [kbRes] = await Promise.all([fetch(`/v1/config/knowledgebases`)]);
+        const [kbRes] = await Promise.all([fetch("/v1/config/knowledgebases")]);
 
         const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
         console.log("kbData", kbData);
@@ -116,19 +113,17 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           setSelectedMcpNames([...mcpnames]);
           console.log("selectedMcpNames", mcpnames);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.log(err || "加载失败");
-      } finally {
-        setIsLoading(false);
       }
     };
     fetchModelConfigs();
-  }, []);
+  }, [chatbotId, isCreate]);
 
   const handleSaveChatConfig = async () => {
     console.log("保存应用结果:", botConfig);
     const submit_url = isCreate
-      ? `/v1/config/chatbots`
+      ? "/v1/config/chatbots"
       : `/v1/config/chatbots/${botConfig.id}`;
     const updateMethod = isCreate ? "POST" : "PATCH";
     try {

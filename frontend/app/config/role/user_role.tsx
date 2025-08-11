@@ -114,7 +114,7 @@ export default function UserRolePage() {
 
   const handleAddRole = async () => {
     try {
-      const res = await fetch(`/v1/config/roles/user_roles`, {
+      const res = await fetch("/v1/config/roles/user_roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editRole), // 包装为数组

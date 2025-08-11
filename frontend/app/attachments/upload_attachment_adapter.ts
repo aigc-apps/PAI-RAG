@@ -51,7 +51,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       formData.append("file_id", fid);
       formData.append("file", file); // 将文件加入 FormData
 
-      const response = await fetch(`/v1/config/attachments/upload`, {
+      const response = await fetch("/v1/config/attachments/upload", {
         method: "POST",
         body: formData, // 自动设置 content-type 为 multipart/form-data
       });
@@ -131,8 +131,10 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       };
     }
   }
+
   public async remove(attachment: PendingAttachment): Promise<void> {
     // Cleanup if needed
+    console.log("removing attachment:", attachment);
   }
 
   private async fileToBase64DataURL(file: File): Promise<string> {

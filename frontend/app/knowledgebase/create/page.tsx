@@ -51,7 +51,7 @@ export default function KnowledgeBaseCreatePage({
   const handleCancel = () => {
     console.log("取消创建知识库。");
     setCreateErrorMsg("");
-    setActiveTab(`/knowledgebase`);
+    setActiveTab("/knowledgebase");
   };
 
   return (
@@ -67,7 +67,7 @@ export default function KnowledgeBaseCreatePage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab(`/knowledgebase`)}
+                      onClick={() => setActiveTab("/knowledgebase")}
                     >
                       知识库
                     </Button>

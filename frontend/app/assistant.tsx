@@ -40,7 +40,7 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const res = await fetch(`/v1/config/llms`);
+        const res = await fetch("/v1/config/llms");
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
         const llms = data.data.items;
@@ -92,7 +92,7 @@ export const Assistant = () => {
     };
   }, [llmConfig.model_id, selectedOptions]);
   const runtime = usePaiChatThreadRuntime({
-    api: `/v1/chat/completions`,
+    api: "/v1/chat/completions",
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),

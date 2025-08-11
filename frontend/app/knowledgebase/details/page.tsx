@@ -227,7 +227,7 @@ export default function KnowledgeBaseDetailPage({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes] = await Promise.all([fetch(`/v1/config/embeddings`)]);
+        const [embRes] = await Promise.all([fetch("/v1/config/embeddings")]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
@@ -253,7 +253,7 @@ export default function KnowledgeBaseDetailPage({
   const handleSearchSubmit = async () => {
     setSearching(true);
     console.log("handleSearchSubmit");
-    const search_result = await fetch(`/v1/retrieval`, {
+    const search_result = await fetch("/v1/retrieval", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -424,7 +424,7 @@ export default function KnowledgeBaseDetailPage({
     const emptyKeys = Object.keys(editingMetadata).filter(
       (key) => editingMetadata[key] === "",
     );
-    if (emptyKeys.length > 1) throw new Error(`有多于一个新建项。`);
+    if (emptyKeys.length > 1) throw new Error("有多于一个新建项。");
     else if (emptyKeys.length === 0) return;
     else {
       editingMetadata[metadata_key] = editingMetadata[""];
@@ -520,7 +520,7 @@ export default function KnowledgeBaseDetailPage({
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const roleRes = await fetch(`/v1/config/roles?size=100`);
+      const roleRes = await fetch("/v1/config/roles?size=100");
       if (!roleRes.ok) {
         alert("查询角色失败");
         return;
@@ -761,7 +761,7 @@ export default function KnowledgeBaseDetailPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab(`/knowledgebase`)}
+                      onClick={() => setActiveTab("/knowledgebase")}
                     >
                       知识库
                     </Button>

@@ -135,7 +135,7 @@ export default function McpConfig() {
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const res = await fetch(`/v1/config/mcps`);
+        const res = await fetch("/v1/config/mcps");
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
         setMcpConfigs(data.data.items || []); // 更新状态
@@ -191,7 +191,7 @@ export default function McpConfig() {
         ...addFormData,
       };
       mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
-      const res = await fetch(`/v1/config/mcps`, {
+      const res = await fetch("/v1/config/mcps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mcp_data), // 包装为数组
@@ -301,7 +301,7 @@ export default function McpConfig() {
 
   return (
     <div id="mcp">
-      <div className={`transition-colors rounded-lg overflow-hidden`}>
+      <div className={"transition-colors rounded-lg overflow-hidden"}>
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           {mcploading ? (
             <div className="py-12 text-center">

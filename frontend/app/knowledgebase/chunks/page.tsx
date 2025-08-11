@@ -250,7 +250,7 @@ export default function KnowledgeBaseFileChunksPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab(`/knowledgebase`)}
+                      onClick={() => setActiveTab("/knowledgebase")}
                     >
                       知识库
                     </Button>

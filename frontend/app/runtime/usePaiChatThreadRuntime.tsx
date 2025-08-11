@@ -260,7 +260,7 @@ function delay(ms: any) {
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
-      const res = await fetch(`/v1/agent/threads`);
+      const res = await fetch("/v1/agent/threads");
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
       return {
@@ -279,7 +279,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     isInitializing = true;
 
     try {
-      const url = `/v1/agent/threads`;
+      const url = "/v1/agent/threads";
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
         now.getMonth() + 1,

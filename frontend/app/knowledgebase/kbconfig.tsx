@@ -134,7 +134,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes] = await Promise.all([fetch(`/v1/config/embeddings`)]);
+        const [embRes] = await Promise.all([fetch("/v1/config/embeddings")]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
@@ -148,7 +148,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchRerankerModelConfigs = async () => {
       try {
         const [rerankerRes] = await Promise.all([
-          fetch(`/v1/config/rerankers`),
+          fetch("/v1/config/rerankers"),
         ]);
 
         const rerankerData = (await rerankerRes.json())?.data.items || [];
@@ -168,7 +168,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     e.preventDefault();
     console.log("保存知识库结果:", kb);
     const submit_url = isCreate
-      ? `/v1/config/knowledgebases`
+      ? "/v1/config/knowledgebases"
       : `/v1/config/knowledgebases/${kb.id}`;
     const updateMethod = isCreate ? "POST" : "PATCH";
     try {

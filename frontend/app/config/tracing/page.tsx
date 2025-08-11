@@ -28,7 +28,7 @@ export default function TracingConfig() {
         setIsLoading(true);
         setError("");
 
-        const res = await fetch(`/v1/config/trace`, {
+        const res = await fetch("/v1/config/trace", {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         });
@@ -65,7 +65,7 @@ export default function TracingConfig() {
       setIsLoading(true);
       setError("");
 
-      const res = await fetch(`/v1/config/trace`, {
+      const res = await fetch("/v1/config/trace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -100,7 +100,9 @@ export default function TracingConfig() {
   return (
     <div id="tracing">
       <div
-        className={`transition-colors rounded-lg p-4 overflow-hidden duration-200`}
+        className={
+          "transition-colors rounded-lg p-4 overflow-hidden duration-200"
+        }
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           <h2 className="text-2xl font-bold text-gray-800">

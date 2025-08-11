@@ -3,10 +3,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import McpConfig, { MCPConfig } from "@/app/config/mcp/page";
+import { MCPConfig } from "@/app/config/mcp/page";
 import type { FC } from "react";
 import { useState, useEffect } from "react";
 
