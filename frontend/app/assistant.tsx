@@ -1,38 +1,38 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
-import ModelSelector from "@/components/model-selector/index";
-import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
+import React, { useState, useEffect } from 'react';
+import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { Thread } from '@/components/assistant-ui/thread';
+import ModelSelector from '@/components/model-selector/index';
+import ToolUIWrapper from '@/components/assistant-ui/tool-ui';
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import ModelConfigPage from "./config/model/page";
-import McpConfig from "./config/mcp/page";
-import SearchConfig from "./config/search/page";
-import { useMemo } from "react";
-import TracingConfig from "./config/tracing/page";
-import KnowledgeBase from "./knowledgebase/page";
-import ChatbotPage from "./chatbot/page";
-import { ChatbotConfigCard } from "./chatbot/chatbot_config";
-import PromptConfig from "./config/prompt/page";
-import { usePathname } from "next/navigation";
-import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
-import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
-import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
-import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
-import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
-import RoleConfigPage from "./config/role/page";
+} from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
+import ModelConfigPage from './config/model/page';
+import McpConfig from './config/mcp/page';
+import SearchConfig from './config/search/page';
+import { useMemo } from 'react';
+import TracingConfig from './config/tracing/page';
+import KnowledgeBase from './knowledgebase/page';
+import ChatbotPage from './chatbot/page';
+import { ChatbotConfigCard } from './chatbot/chatbot_config';
+import PromptConfig from './config/prompt/page';
+import { usePathname } from 'next/navigation';
+import KnowledgeBaseDetailPage from './knowledgebase/details/page';
+import KnowledgeBaseCreatePage from './knowledgebase/create/page';
+import { UploadAttachmentAdapter } from './attachments/upload_attachment_adapter';
+import { usePaiChatThreadRuntime } from './runtime/usePaiChatThreadRuntime';
+import KnowledgeBaseFileChunksPage from './knowledgebase/chunks/page';
+import RoleConfigPage from './config/role/page';
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
-    id: "",
-    source: "",
-    model_id: "",
+    id: '',
+    source: '',
+    model_id: '',
   });
   const [optionsVisible, setoptionsVisible] = useState(true);
 
@@ -40,13 +40,13 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const res = await fetch("/v1/config/llms");
-        if (!res.ok) throw new Error("拉取 LLM 配置失败");
+        const res = await fetch('/v1/config/llms');
+        if (!res.ok) throw new Error('拉取 LLM 配置失败');
         const data = await res.json();
         const llms = data.data.items;
         if (llms.length > 0) setLlmConfig(llms[0]);
       } catch (error) {
-        console.error("拉取 LLM 配置失败:", error);
+        console.error('拉取 LLM 配置失败:', error);
       }
     };
 
@@ -66,57 +66,57 @@ export const Assistant = () => {
       model_id: model_id,
     }));
 
-    setoptionsVisible(source !== "chatbot");
+    setoptionsVisible(source !== 'chatbot');
     console.log(source);
   };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
 
   useEffect(() => {
-    console.log("selectedOptions updated:", selectedOptions);
+    console.log('selectedOptions updated:', selectedOptions);
   }, [selectedOptions]);
 
   const extra_body = useMemo(() => {
-    const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
-    const mcp_servers = mcpOptions.map((opt) => opt.split(":")[1]);
-    const kbOptions = selectedOptions.filter((opt) => opt.startsWith("kb:"));
-    const kb_ids = kbOptions.map((opt) => opt.split(":")[1]);
+    const mcpOptions = selectedOptions.filter((opt) => opt.startsWith('mcp:'));
+    const mcp_servers = mcpOptions.map((opt) => opt.split(':')[1]);
+    const kbOptions = selectedOptions.filter((opt) => opt.startsWith('kb:'));
+    const kb_ids = kbOptions.map((opt) => opt.split(':')[1]);
 
     return {
       model: llmConfig.model_id,
       mcp_ids: mcp_servers,
-      enable_search: selectedOptions.includes("search"),
-      enable_thinking: selectedOptions.includes("thinking"),
+      enable_search: selectedOptions.includes('search'),
+      enable_thinking: selectedOptions.includes('thinking'),
       kb_ids: kb_ids,
       streamn: true,
     };
   }, [llmConfig.model_id, selectedOptions]);
   const runtime = usePaiChatThreadRuntime({
-    api: "/v1/chat/completions",
+    api: '/v1/chat/completions',
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),
     },
   });
   const pathname = usePathname();
-  console.log("pathname:", pathname);
+  console.log('pathname:', pathname);
   const [activeTab, setActiveTab] = useState(pathname);
 
-  console.log("activeTab:", activeTab);
+  console.log('activeTab:', activeTab);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <SidebarProvider defaultOpen={true}>
         <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         <SidebarInset className="h-screen overflow-hidden">
-          {activeTab === "/" && (
+          {activeTab === '/' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
                 <div className="flex justify-start px-20 border-none">
                   <ModelSelector
                     selectedModel={{
-                      source: llmConfig.source || "",
-                      model_id: llmConfig.model_id || "",
+                      source: llmConfig.source || '',
+                      model_id: llmConfig.model_id || '',
                     }}
                     onModelChange={handleModelChange}
                   />
@@ -125,14 +125,14 @@ export const Assistant = () => {
               <Thread
                 optionsVisible={optionsVisible}
                 onToggleChange={(options) => {
-                  console.log("Received options from Thread:", options); // ✅ 添加日志
+                  console.log('Received options from Thread:', options); // ✅ 添加日志
                   setSelectedOptions(options); // 更新状态
                 }}
               />
               <ToolUIWrapper />
             </div>
           )}
-          {activeTab === "/knowledgebase" && (
+          {activeTab === '/knowledgebase' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -140,7 +140,7 @@ export const Assistant = () => {
               <KnowledgeBase setActiveTab={setActiveTab} />
             </div>
           )}
-          {activeTab.startsWith("/knowledgebase/create") && (
+          {activeTab.startsWith('/knowledgebase/create') && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -148,52 +148,52 @@ export const Assistant = () => {
               <KnowledgeBaseCreatePage setActiveTab={setActiveTab} />
             </div>
           )}
-          {activeTab.startsWith("/knowledgebase/details") && (
+          {activeTab.startsWith('/knowledgebase/details') && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
               <KnowledgeBaseDetailPage
-                knowledgebase_id={activeTab.split("/")[3]}
+                knowledgebase_id={activeTab.split('/')[3]}
                 setActiveTab={setActiveTab}
               />
             </div>
           )}
-          {activeTab.startsWith("/knowledgebase/chunks") && (
+          {activeTab.startsWith('/knowledgebase/chunks') && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
               <KnowledgeBaseFileChunksPage
-                knowledgebase_file_id={activeTab.split("/")[3]}
+                knowledgebase_file_id={activeTab.split('/')[3]}
                 setActiveTab={setActiveTab}
               />
             </div>
           )}
-          {activeTab.startsWith("/knowledgebase/chunks") && (
+          {activeTab.startsWith('/knowledgebase/chunks') && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
               <KnowledgeBaseFileChunksPage
-                knowledgebase_file_id={activeTab.split("/")[3]}
+                knowledgebase_file_id={activeTab.split('/')[3]}
                 setActiveTab={setActiveTab}
               />
             </div>
           )}
 
-          {activeTab.startsWith("/chatbot/edit") && (
+          {activeTab.startsWith('/chatbot/edit') && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
               <ChatbotConfigCard
-                chatbotId={activeTab.split("/")[3]}
+                chatbotId={activeTab.split('/')[3]}
                 setActiveTab={setActiveTab}
               />
             </div>
           )}
-          {activeTab === "/chatbot/create" && (
+          {activeTab === '/chatbot/create' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -205,7 +205,7 @@ export const Assistant = () => {
             </div>
           )}
 
-          {activeTab === "/chatbot" && (
+          {activeTab === '/chatbot' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -213,7 +213,7 @@ export const Assistant = () => {
               <ChatbotPage setActiveTab={setActiveTab} />
             </div>
           )}
-          {activeTab === "/config/model" && (
+          {activeTab === '/config/model' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -221,7 +221,7 @@ export const Assistant = () => {
               <ModelConfigPage />
             </div>
           )}
-          {activeTab === "/config/mcp" && (
+          {activeTab === '/config/mcp' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -229,7 +229,7 @@ export const Assistant = () => {
               <McpConfig />
             </div>
           )}
-          {activeTab === "/config/search" && (
+          {activeTab === '/config/search' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -237,7 +237,7 @@ export const Assistant = () => {
               <SearchConfig />
             </div>
           )}
-          {activeTab === "/config/tracing" && (
+          {activeTab === '/config/tracing' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -245,7 +245,7 @@ export const Assistant = () => {
               <TracingConfig />
             </div>
           )}
-          {activeTab === "/config/prompts" && (
+          {activeTab === '/config/prompts' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
@@ -253,7 +253,7 @@ export const Assistant = () => {
               <PromptConfig />
             </div>
           )}
-          {activeTab === "/config/roles" && (
+          {activeTab === '/config/roles' && (
             <div className="flex flex-col h-full">
               <header className="flex h-12 border-b">
                 <SidebarTrigger />

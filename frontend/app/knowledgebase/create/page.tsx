@@ -1,7 +1,7 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Save, AlertCircleIcon } from "lucide-react";
+'use client';
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, Save, AlertCircleIcon } from 'lucide-react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -9,10 +9,10 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+} from '@/components/ui/breadcrumb';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-import { KbConfig, MetadataConfig, KbConfigCard } from "../kbconfig";
+import { KbConfig, MetadataConfig, KbConfigCard } from '../kbconfig';
 
 export default function KnowledgeBaseCreatePage({
   setActiveTab,
@@ -20,38 +20,38 @@ export default function KnowledgeBaseCreatePage({
   setActiveTab: (tab: string) => void;
 }) {
   const kbConfig: KbConfig = {
-    id: "",
-    name: "",
-    description: "",
+    id: '',
+    name: '',
+    description: '',
     chunk_config: {
-      parser_type: "Sentence",
-      separator: "\n\n",
-      chunk_size: "1000",
-      chunk_overlap: "50",
+      parser_type: 'Sentence',
+      separator: '\n\n',
+      chunk_size: '1000',
+      chunk_overlap: '50',
     },
-    embedding_model: "BAAI/bge-m3",
+    embedding_model: 'BAAI/bge-m3',
     retrieval_config: {
-      retrieval_mode: "vector",
+      retrieval_mode: 'vector',
       top_k: 5,
       similarity_threshold: 0.2,
       enable_rerank: false,
-      rerank_model: "",
+      rerank_model: '',
       vector_weight: 0.7,
     },
   };
 
-  const [createErrorMsg, setCreateErrorMsg] = useState("");
+  const [createErrorMsg, setCreateErrorMsg] = useState('');
 
   const handleCreateSuccess = (kbConfig: KbConfig) => {
-    console.log("创建知识库成功", kbConfig);
-    setCreateErrorMsg("");
+    console.log('创建知识库成功', kbConfig);
+    setCreateErrorMsg('');
     setActiveTab(`/knowledgebase/details/${kbConfig.id}`);
   };
 
   const handleCancel = () => {
-    console.log("取消创建知识库。");
-    setCreateErrorMsg("");
-    setActiveTab("/knowledgebase");
+    console.log('取消创建知识库。');
+    setCreateErrorMsg('');
+    setActiveTab('/knowledgebase');
   };
 
   return (
@@ -67,7 +67,7 @@ export default function KnowledgeBaseCreatePage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab("/knowledgebase")}
+                      onClick={() => setActiveTab('/knowledgebase')}
                     >
                       知识库
                     </Button>
@@ -84,7 +84,7 @@ export default function KnowledgeBaseCreatePage({
             <Button
               variant="outline"
               className="h-8 w-8"
-              onClick={() => setActiveTab("/knowledgebase")}
+              onClick={() => setActiveTab('/knowledgebase')}
             >
               <ArrowLeft />
             </Button>

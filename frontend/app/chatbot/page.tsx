@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
+import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Plus, Trash2 } from "lucide-react";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { formatBeijingTime } from "../knowledgebase/utils/utils";
+} from '@/components/ui/card';
+import { Plus, Trash2 } from 'lucide-react';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { formatBeijingTime } from '../knowledgebase/utils/utils';
 
 import {
   AlertDialog,
@@ -23,9 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
-import { Chatbot } from "./chatbot_config";
+import { Chatbot } from './chatbot_config';
 
 export default function ChatbotPage({
   setActiveTab,
@@ -43,13 +43,13 @@ export default function ChatbotPage({
         const res = await fetch(
           `/v1/config/chatbots?page=${page}&size=${pageSize}`,
         );
-        if (!res.ok) throw new Error("获取应用列表失败");
+        if (!res.ok) throw new Error('获取应用列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setChatbots(data || []); // 更新状态
         setTotalPages(json_data.data.pages);
       } catch (err: unknown) {
-        console.log(err || "加载失败");
+        console.log(err || '加载失败');
       }
     };
 
@@ -63,14 +63,14 @@ export default function ChatbotPage({
   const deleteChatbot = async (bot_id: string) => {
     try {
       const res = await fetch(`/v1/config/chatbots/${bot_id}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
       if (!res.ok) {
-        throw new Error("删除失败，请检查网络或配置");
+        throw new Error('删除失败，请检查网络或配置');
       }
 
       // 显示成功提示（可选）
@@ -78,7 +78,7 @@ export default function ChatbotPage({
       // 删除成功后更新本地状态
       setChatbots((prev) => prev.filter((bot) => bot.id !== bot_id));
     } catch (err: unknown) {
-      console.log("删除Chatbot失败。", err);
+      console.log('删除Chatbot失败。', err);
     }
     // 显示错误提示
   };
@@ -90,7 +90,7 @@ export default function ChatbotPage({
         <h1 className="text-2xl font-bold">Chat应用</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
-          onClick={() => setActiveTab("/chatbot/create")}
+          onClick={() => setActiveTab('/chatbot/create')}
         >
           <Plus className="w-6 h-6" />
           新建应用
@@ -109,8 +109,8 @@ export default function ChatbotPage({
                 // 检查是否点击了交互元素
                 const target = e.target as HTMLElement;
 
-                if (target instanceof HTMLElement && target.closest("button")) {
-                  console.log("按钮被点击");
+                if (target instanceof HTMLElement && target.closest('button')) {
+                  console.log('按钮被点击');
                   return; // 是交互元素，不触发卡片跳转
                 }
 
@@ -129,7 +129,7 @@ export default function ChatbotPage({
                 <p className="text-xs text-muted-foreground line-clamp-1">
                   {bot.description
                     ? bot.description
-                    : "暂时还没有描述，可以去设置页面添加哦。"}
+                    : '暂时还没有描述，可以去设置页面添加哦。'}
                 </p>
               </CardContent>
               <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">

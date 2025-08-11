@@ -1,4 +1,4 @@
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from '@/components/ui/button';
 
 import {
   Pagination,
@@ -8,8 +8,8 @@ import {
   PaginationEllipsis,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/pagination';
+import { cn } from '@/lib/utils';
 
 interface PaginationProps {
   currentPage: number;
@@ -36,10 +36,10 @@ export function PaginationComponent({
                 onClick={() => onPageChange(i)}
                 isActive={i === currentPage}
                 className={cn(
-                  "!shadow-none hover:!text-primary-foreground",
+                  '!shadow-none hover:!text-primary-foreground',
                   buttonVariants({
-                    variant: "default",
-                    size: "icon",
+                    variant: 'default',
+                    size: 'icon',
                   }),
                 )}
               >
@@ -78,10 +78,10 @@ export function PaginationComponent({
                 onClick={() => onPageChange(i)}
                 isActive={i === currentPage}
                 className={cn(
-                  "!shadow-none hover:!text-primary-foreground",
+                  '!shadow-none hover:!text-primary-foreground',
                   buttonVariants({
-                    variant: "default",
-                    size: "icon",
+                    variant: 'default',
+                    size: 'icon',
                   }),
                 )}
               >

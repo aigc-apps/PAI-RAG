@@ -1,5 +1,5 @@
-"use client";
-import React, { useState, useEffect, FC } from "react";
+'use client';
+import React, { useState, useEffect, FC } from 'react';
 import {
   Card,
   CardContent,
@@ -7,10 +7,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   ArrowLeft,
   SearchCode,
@@ -21,8 +21,8 @@ import {
   AlertCircleIcon,
   CirclePlus,
   Trash2Icon,
-} from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+} from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import {
   Select,
@@ -32,9 +32,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Slider } from "@/components/ui/slider";
+} from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Slider } from '@/components/ui/slider';
 import {
   Table,
   TableBody,
@@ -43,7 +43,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -53,10 +53,10 @@ import {
   DialogTrigger,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface EmbeddingModel {
   id: string;
@@ -117,30 +117,30 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   onCancel,
 }) => {
   const [kb, setKb] = useState<KbConfig>(kbConfig);
-  const [indexType, setIndexType] = useState("vector");
+  const [indexType, setIndexType] = useState('vector');
   const [metadataOpen, setMetadataOpen] = useState(false);
-  const [metadataName, setmetadataName] = useState("");
-  const [metadataValueType, setMetadataValueType] = useState("string");
-  const [metadataDesc, setMetadataDesc] = useState("");
-  const [metadataError, setMetadataError] = useState("");
+  const [metadataName, setmetadataName] = useState('');
+  const [metadataValueType, setMetadataValueType] = useState('string');
+  const [metadataDesc, setMetadataDesc] = useState('');
+  const [metadataError, setMetadataError] = useState('');
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
-  const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存KB错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
   const [metadata_configs, setMetadataConfigs] =
     useState<MetadataConfig[]>(metadataConfigs);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes] = await Promise.all([fetch("/v1/config/embeddings")]);
+        const [embRes] = await Promise.all([fetch('/v1/config/embeddings')]);
 
         const embData = (await embRes.json())?.data.items || [];
-        console.log("embData", embData);
+        console.log('embData', embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -148,14 +148,14 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchRerankerModelConfigs = async () => {
       try {
         const [rerankerRes] = await Promise.all([
-          fetch("/v1/config/rerankers"),
+          fetch('/v1/config/rerankers'),
         ]);
 
         const rerankerData = (await rerankerRes.json())?.data.items || [];
-        console.log("rerankerData", rerankerData);
+        console.log('rerankerData', rerankerData);
         setRerankerModels([...rerankerData]);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -166,24 +166,24 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("保存知识库结果:", kb);
+    console.log('保存知识库结果:', kb);
     const submit_url = isCreate
-      ? "/v1/config/knowledgebases"
+      ? '/v1/config/knowledgebases'
       : `/v1/config/knowledgebases/${kb.id}`;
-    const updateMethod = isCreate ? "POST" : "PATCH";
+    const updateMethod = isCreate ? 'POST' : 'PATCH';
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kb), // 包装为数组
       });
 
       if (!res.ok) throw new Error(`保存知识库失败: ${await res.text()}`);
       const jsondata = await res.json();
-      setSaveErrorMsg("");
+      setSaveErrorMsg('');
       onSaveSuccess(jsondata.data as KbConfig);
     } catch (err: any) {
-      console.log("保存知识库失败", err.message);
+      console.log('保存知识库失败', err.message);
       setSaveErrorMsg(err.message);
     }
   };
@@ -193,7 +193,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       const metadata_url = `/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
       try {
         const res = await fetch(metadata_url, {
-          method: "DELETE",
+          method: 'DELETE',
         });
         if (!res.ok) throw new Error(`删除metadata失败: ${await res.text()}`);
 
@@ -202,16 +202,16 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         );
         setMetadataConfigs(updated_metadata_configs);
 
-        console.log("删除的元数据：", id);
+        console.log('删除的元数据：', id);
       } catch (err: any) {
-        console.log("删除元数据失败。", err.message);
+        console.log('删除元数据失败。', err.message);
       }
     }
   };
 
   const handleAddMetadataConfig = async () => {
     if (!metadataName) {
-      setMetadataError("必须填入元数据名称。");
+      setMetadataError('必须填入元数据名称。');
       return;
     }
     const updated_metadata_configs = metadata_configs || [];
@@ -226,8 +226,8 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const metadata_url = `/v1/config/knowledgebases/${kb.id}/metadata`;
     try {
       const res = await fetch(metadata_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kb_id: kb.id,
           name: metadataName,
@@ -240,25 +240,25 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       const new_metadata = new_metadata_json.data as MetadataConfig;
       updated_metadata_configs.push(new_metadata);
       setMetadataConfigs(updated_metadata_configs);
-      console.log("添加元数据成功.");
+      console.log('添加元数据成功.');
     } catch (err: any) {
-      console.log("保存知识库失败", err.message);
+      console.log('保存知识库失败', err.message);
       setSaveErrorMsg(err.message);
     } finally {
-      setmetadataName("");
-      setMetadataError("");
-      setMetadataValueType("string");
-      setMetadataDesc("");
+      setmetadataName('');
+      setMetadataError('');
+      setMetadataValueType('string');
+      setMetadataDesc('');
       setMetadataOpen(false);
     }
   };
 
   function handleCancelMetadataConfig() {
-    setmetadataName("");
-    setMetadataError("");
-    setMetadataValueType("string");
-    setMetadataDesc("");
-    console.log("清空metadata信息");
+    setmetadataName('');
+    setMetadataError('');
+    setMetadataValueType('string');
+    setMetadataDesc('');
+    console.log('清空metadata信息');
   }
 
   return (
@@ -416,8 +416,8 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             }}
           />
           <span className="font-medium">
-            {" "}
-            {kb.retrieval_config.similarity_threshold}{" "}
+            {' '}
+            {kb.retrieval_config.similarity_threshold}{' '}
           </span>
         </div>
 
@@ -466,7 +466,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             </ToggleGroupItem>
           </ToggleGroup>
 
-          {indexType === "hybrid" && (
+          {indexType === 'hybrid' && (
             <div className="ml-10 flex">
               <Label htmlFor="embeddingWeight" className="w-[100px]">
                 向量检索权重
@@ -555,7 +555,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   <TableCaption>尚未配置元数据信息</TableCaption>
                 ) : (
                   <TableCaption>
-                    已添加{metadata_configs.length}条元数据信息。{" "}
+                    已添加{metadata_configs.length}条元数据信息。{' '}
                   </TableCaption>
                 )}
                 <TableHeader>
@@ -570,7 +570,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       >
                         <DialogTrigger asChild>
                           <Button variant="outline">
-                            {" "}
+                            {' '}
                             <CirclePlus /> 添加元数据
                           </Button>
                         </DialogTrigger>
@@ -689,7 +689,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           </div>
         )}
         <div className="block w-full">
-          {saveErrorMsg !== "" && (
+          {saveErrorMsg !== '' && (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertDescription>
@@ -714,7 +714,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 取消
               </Button>
               <Button type="button" className="w-40" onClick={handleSubmit}>
-                {" "}
+                {' '}
                 <Save />
                 创建
               </Button>
@@ -723,7 +723,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           {!isCreate && (
             <div className="flex justify-center gap-3 pb-4">
               <Button type="button" className="w-40" onClick={handleSubmit}>
-                {" "}
+                {' '}
                 <Save />
                 保存设置
               </Button>

@@ -1,7 +1,7 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit } from "lucide-react";
+'use client';
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, Edit } from 'lucide-react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -9,20 +9,20 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+} from '@/components/ui/breadcrumb';
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { PhotoProvider, PhotoView } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { PhotoProvider, PhotoView } from 'react-photo-view';
+import 'react-photo-view/dist/react-photo-view.css';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 
 interface KnowledgeBase {
   id: string;
@@ -85,14 +85,14 @@ interface KbFileChunk {
 
 // 状态映射
 const statusMap: Record<string, string> = {
-  succeeded: "bg-blue-100 text-blue-800",
-  failed: "bg-green-100 text-green-800",
-  pending: "bg-yellow-100 text-yellow-800",
+  succeeded: 'bg-blue-100 text-blue-800',
+  failed: 'bg-green-100 text-green-800',
+  pending: 'bg-yellow-100 text-yellow-800',
 };
 
 const activeMap: Record<string, string> = {
-  false: "bg-red-100 text-red-800",
-  true: "bg-green-100 text-green-800",
+  false: 'bg-red-100 text-red-800',
+  true: 'bg-green-100 text-green-800',
 };
 export default function KnowledgeBaseFileChunksPage({
   knowledgebase_file_id,
@@ -101,25 +101,25 @@ export default function KnowledgeBaseFileChunksPage({
   knowledgebase_file_id: string;
   setActiveTab: (tab: string) => void;
 }) {
-  const [knowledgebase_id, file_id] = knowledgebase_file_id.split("__");
+  const [knowledgebase_id, file_id] = knowledgebase_file_id.split('__');
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库详情
   const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // 知识库加载状态
-  const [knowledgebaseerror, setKnowledgeBaseError] = useState(""); // 知识库错误信息
+  const [knowledgebaseerror, setKnowledgeBaseError] = useState(''); // 知识库错误信息
 
   const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // 文件详情
   const [kbfileloading, setKbFileLoading] = useState(true); // 文件加载状态
-  const [kbfileerror, setKbFileError] = useState(""); // 文件错误信息
+  const [kbfileerror, setKbFileError] = useState(''); // 文件错误信息
 
   const [kbfilechunks, setKbFileChunks] = useState(Array<KbFileChunk>); // 文件切片列表详情
   const [kbfilechunksloading, setKbFileChunksLoading] = useState(true); // 文件加载状态
-  const [kbfilechunkserror, setKbFilChunksError] = useState(""); // 文件错误信息
+  const [kbfilechunkserror, setKbFilChunksError] = useState(''); // 文件错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const chunksSizePerPage = 8;
 
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editText, setEditText] = useState("");
+  const [editText, setEditText] = useState('');
   const [selectedChunk, setSelectedChunk] = useState<KbFileChunk | null>(null);
 
   useEffect(() => {
@@ -128,14 +128,14 @@ export default function KnowledgeBaseFileChunksPage({
         const res = await fetch(
           `/v1/config/knowledgebases/${knowledgebase_id}`,
         );
-        if (!res.ok) throw new Error("获取知识库列表失败");
+        if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
         const kb_data = json_data.data;
 
         setKnowledgeBase(kb_data); // 更新状态
-        console.log("知识库详情数据:", kb_data);
+        console.log('知识库详情数据:', kb_data);
       } catch (err: any) {
-        setKnowledgeBaseError(err || "加载失败");
+        setKnowledgeBaseError(err || '加载失败');
       } finally {
         setKnowledgeBaseLoading(false);
       }
@@ -145,14 +145,14 @@ export default function KnowledgeBaseFileChunksPage({
         const res = await fetch(
           `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         );
-        if (!res.ok) throw new Error("获取知识库文件失败");
+        if (!res.ok) throw new Error('获取知识库文件失败');
         const json_data = await res.json();
         const kb_file_data = json_data.data;
 
         setKbFile(kb_file_data); // 更新状态
-        console.log("知识库文件详情数据:", kb_file_data);
+        console.log('知识库文件详情数据:', kb_file_data);
       } catch (err: any) {
-        setKbFileError(err || "加载失败");
+        setKbFileError(err || '加载失败');
       } finally {
         setKbFileLoading(false);
       }
@@ -163,14 +163,14 @@ export default function KnowledgeBaseFileChunksPage({
         const res = await fetch(
           `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取知识库文件切片列表失败");
+        if (!res.ok) throw new Error('获取知识库文件切片列表失败');
         const json_data = await res.json();
         const kb_file_chunks_data = json_data.data.items;
         setTotalPages(json_data.data.pages);
         setKbFileChunks(kb_file_chunks_data || []); // 更新状态
-        console.log("知识库文件切片列表详情数据:", kb_file_chunks_data);
+        console.log('知识库文件切片列表详情数据:', kb_file_chunks_data);
       } catch (err: any) {
-        setKbFilChunksError(err || "加载失败");
+        setKbFilChunksError(err || '加载失败');
       } finally {
         setKbFileChunksLoading(false);
       }
@@ -193,8 +193,8 @@ export default function KnowledgeBaseFileChunksPage({
     const url = `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
 
     const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chunk), // 包装为数组
     });
 
@@ -217,12 +217,12 @@ export default function KnowledgeBaseFileChunksPage({
 
     try {
       const response = await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(selectedChunk),
       });
 
-      if (!response.ok) throw new Error("更新失败");
+      if (!response.ok) throw new Error('更新失败');
 
       // 更新本地状态
       setKbFileChunks((prev) =>
@@ -232,7 +232,7 @@ export default function KnowledgeBaseFileChunksPage({
       );
       setIsEditOpen(false);
     } catch (err) {
-      console.error("编辑失败:", err);
+      console.error('编辑失败:', err);
       // 可添加错误提示（如 toast）
     }
   };
@@ -250,7 +250,7 @@ export default function KnowledgeBaseFileChunksPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab("/knowledgebase")}
+                      onClick={() => setActiveTab('/knowledgebase')}
                     >
                       知识库
                     </Button>
@@ -317,7 +317,7 @@ export default function KnowledgeBaseFileChunksPage({
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <Badge className={activeMap[String(chunk.active)]}>
-                          {chunk.active ? "已激活" : "未激活"}
+                          {chunk.active ? '已激活' : '未激活'}
                         </Badge>
                         <Switch
                           checked={chunk.active}

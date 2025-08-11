@@ -1,6 +1,6 @@
-"use client";
-import { Search, Settings, Bot, Wrench, UserCog } from "lucide-react";
-import React from "react";
+'use client';
+import { Search, Settings, Bot, Wrench, UserCog } from 'lucide-react';
+import React from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -11,27 +11,27 @@ import {
   SidebarRail,
   SidebarFooter,
   SidebarMenuSub,
-} from "@/components/ui/sidebar";
-import { Avatar, AvatarImage } from "@/components/ui/avatar";
-import { ThreadList } from "@/components/assistant-ui/thread-list";
+} from '@/components/ui/sidebar';
+import { Avatar, AvatarImage } from '@/components/ui/avatar';
+import { ThreadList } from '@/components/assistant-ui/thread-list';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   ChevronUp,
   MessageCircle,
   ChevronDown,
   BookIcon,
   AppWindowIcon,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from '@/components/ui/collapsible';
 export function AppSidebar({
   activeTab,
   setActiveTab,
@@ -56,27 +56,27 @@ export function AppSidebar({
         <SidebarMenu>
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => setActiveTab("/knowledgebase")}>
+              <SidebarMenuButton onClick={() => setActiveTab('/knowledgebase')}>
                 <BookIcon />
                 <span>知识库</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => setActiveTab("/chatbot")}>
+              <SidebarMenuButton onClick={() => setActiveTab('/chatbot')}>
                 <AppWindowIcon />
                 <span>应用</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton onClick={() => setActiveTab("/")}>
+                <SidebarMenuButton onClick={() => setActiveTab('/')}>
                   <MessageCircle />
                   <span>对话</span>
                   <ChevronDown className="ml-auto" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <SidebarMenuSub onClick={() => setActiveTab("/")}>
+                <SidebarMenuSub onClick={() => setActiveTab('/')}>
                   <ThreadList />
                 </SidebarMenuSub>
                 {/* <ThreadList /> */}
@@ -97,28 +97,28 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-50">
-                <DropdownMenuItem onClick={() => setActiveTab("/config/model")}>
+                <DropdownMenuItem onClick={() => setActiveTab('/config/model')}>
                   <Bot /> <span>Model</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab("/config/mcp")}>
+                <DropdownMenuItem onClick={() => setActiveTab('/config/mcp')}>
                   <Wrench /> <span>MCP</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setActiveTab("/config/search")}
+                  onClick={() => setActiveTab('/config/search')}
                 >
                   <Search /> <span>搜索</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setActiveTab("/config/prompts")}
+                  onClick={() => setActiveTab('/config/prompts')}
                 >
                   <UserCog /> <span>Prompt</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setActiveTab("/config/tracing")}
+                  onClick={() => setActiveTab('/config/tracing')}
                 >
                   <Wrench /> <span>链路追踪</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab("/config/roles")}>
+                <DropdownMenuItem onClick={() => setActiveTab('/config/roles')}>
                   <UserCog /> <span>权限控制</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>

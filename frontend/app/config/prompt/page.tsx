@@ -1,59 +1,59 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
-import { Label } from "@/components/ui/label";
-import * as Toast from "@radix-ui/react-toast";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
+import { Label } from '@/components/ui/label';
+import * as Toast from '@radix-ui/react-toast';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function PromptConfig() {
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [searchWebToolPrompt, setSearchWebToolPrompt] = useState("");
-  const [thinkingToolPrompt, setThinkingToolPrompt] = useState("");
-  const [attachmentsToolPrompt, setAttachmentsToolPrompt] = useState("");
-  const [knowledgebaseToolPrompt, setKnowledgebaseToolPrompt] = useState("");
-  const [withoutToolsPrompt, setWithoutToolsPrompt] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [searchWebToolPrompt, setSearchWebToolPrompt] = useState('');
+  const [thinkingToolPrompt, setThinkingToolPrompt] = useState('');
+  const [attachmentsToolPrompt, setAttachmentsToolPrompt] = useState('');
+  const [knowledgebaseToolPrompt, setKnowledgebaseToolPrompt] = useState('');
+  const [withoutToolsPrompt, setWithoutToolsPrompt] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [activeTool, setActiveTool] = useState("search_web"); // 默认选中第一个工具
+  const [error, setError] = useState('');
+  const [activeTool, setActiveTool] = useState('search_web'); // 默认选中第一个工具
   const [toastState, setToastState] = useState({
     open: false,
-    title: "",
-    description: "",
-    variant: "default" as "default" | "destructive",
+    title: '',
+    description: '',
+    variant: 'default' as 'default' | 'destructive',
   });
 
   // 工具列表配置
   const toolSections = [
     {
-      id: "search_web",
-      label: "Search Web Tool",
+      id: 'search_web',
+      label: 'Search Web Tool',
       state: searchWebToolPrompt,
       setter: setSearchWebToolPrompt,
     },
     {
-      id: "thinking",
-      label: "Thinking Tool",
+      id: 'thinking',
+      label: 'Thinking Tool',
       state: thinkingToolPrompt,
       setter: setThinkingToolPrompt,
     },
     {
-      id: "attachments",
-      label: "Attachments Tool",
+      id: 'attachments',
+      label: 'Attachments Tool',
       state: attachmentsToolPrompt,
       setter: setAttachmentsToolPrompt,
     },
     {
-      id: "knowledgebase",
-      label: "Knowledgebase Tool",
+      id: 'knowledgebase',
+      label: 'Knowledgebase Tool',
       state: knowledgebaseToolPrompt,
       setter: setKnowledgebaseToolPrompt,
     },
     {
-      id: "without_tools",
-      label: "Without Tools",
+      id: 'without_tools',
+      label: 'Without Tools',
       state: withoutToolsPrompt,
       setter: setWithoutToolsPrompt,
     },
@@ -68,29 +68,29 @@ export default function PromptConfig() {
     const fetchPrompts = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch("/v1/config/prompts", {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/v1/config/prompts', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error("加载 Prompt 配置失败");
+        if (!res.ok) throw new Error('加载 Prompt 配置失败');
 
         const data = await res.json();
         const prompt = data.data.prompts || {};
 
-        setSystemPrompt(prompt.system_prompt || "");
-        setSearchWebToolPrompt(prompt.search_web_tool_prompt || "");
-        setThinkingToolPrompt(prompt.thinking_tool_prompt || "");
-        setAttachmentsToolPrompt(prompt.attachments_tool_prompt || "");
-        setKnowledgebaseToolPrompt(prompt.knowledgebase_tool_prompt || "");
-        setWithoutToolsPrompt(prompt.without_tools_prompt || "");
+        setSystemPrompt(prompt.system_prompt || '');
+        setSearchWebToolPrompt(prompt.search_web_tool_prompt || '');
+        setThinkingToolPrompt(prompt.thinking_tool_prompt || '');
+        setAttachmentsToolPrompt(prompt.attachments_tool_prompt || '');
+        setKnowledgebaseToolPrompt(prompt.knowledgebase_tool_prompt || '');
+        setWithoutToolsPrompt(prompt.without_tools_prompt || '');
       } catch (err: any) {
-        setError(err.message || "加载失败");
+        setError(err.message || '加载失败');
         setToastState({
           open: true,
-          title: "Prompt 加载失败",
-          description: err.message || "请检查网络或重试",
-          variant: "destructive",
+          title: 'Prompt 加载失败',
+          description: err.message || '请检查网络或重试',
+          variant: 'destructive',
         });
       } finally {
         setIsLoading(false);
@@ -104,7 +104,7 @@ export default function PromptConfig() {
   const handleSave = async () => {
     try {
       setIsLoading(true);
-      setError("");
+      setError('');
 
       const data = {
         prompts: {
@@ -117,27 +117,27 @@ export default function PromptConfig() {
         },
       };
 
-      const res = await fetch("/v1/config/prompts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/v1/config/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
-      if (!res.ok) throw new Error("保存失败，请检查网络或配置");
+      if (!res.ok) throw new Error('保存失败，请检查网络或配置');
 
       setToastState({
         open: true,
-        title: "Prompt 配置保存成功",
-        description: "Prompt 配置已成功保存",
-        variant: "default",
+        title: 'Prompt 配置保存成功',
+        description: 'Prompt 配置已成功保存',
+        variant: 'default',
       });
     } catch (err: any) {
-      setError(err.message || "保存失败，请重试");
+      setError(err.message || '保存失败，请重试');
       setToastState({
         open: true,
-        title: "Prompt 配置保存失败",
-        description: err.message || "请检查网络或重试",
-        variant: "destructive",
+        title: 'Prompt 配置保存失败',
+        description: err.message || '请检查网络或重试',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -182,8 +182,8 @@ export default function PromptConfig() {
                     onClick={() => setActiveTool(tool.id)}
                     className={`rounded-full px-3 py-2 text-sm transition-colors border ${
                       activeTool === tool.id
-                        ? "bg-black text-white"
-                        : "bg-white text-black hover:bg-gray-100 border-gray-200"
+                        ? 'bg-black text-white'
+                        : 'bg-white text-black hover:bg-gray-100 border-gray-200'
                     }`}
                   >
                     {tool.label}
@@ -212,7 +212,7 @@ export default function PromptConfig() {
       {/* 底部操作按钮 */}
       <div className="flex justify-end gap-4 mt-6">
         <Button onClick={handleSave} disabled={isLoading}>
-          {isLoading ? "保存中..." : "保存所有 Prompt"}
+          {isLoading ? '保存中...' : '保存所有 Prompt'}
         </Button>
         {error && <p className="text-red-500 self-center">{error}</p>}
       </div>
@@ -223,9 +223,9 @@ export default function PromptConfig() {
           open={toastState.open}
           onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
           className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === "destructive"
-              ? "border-red-500 bg-red-50 text-red-900"
-              : "border-gray-200 bg-white text-gray-900"
+            toastState.variant === 'destructive'
+              ? 'border-red-500 bg-red-50 text-red-900'
+              : 'border-gray-200 bg-white text-gray-900'
           }`}
         >
           <Toast.Description className="pl-4 text-sm font-medium">

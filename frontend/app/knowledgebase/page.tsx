@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
+import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { ChevronRight, Plus, Trash2 } from "lucide-react";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { formatBeijingTime } from "./utils/utils";
+} from '@/components/ui/card';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { formatBeijingTime } from './utils/utils';
 
 export interface KnowledgeBase {
   id: string;
@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 export default function KnowledgeBase({
   setActiveTab,
@@ -39,7 +39,7 @@ export default function KnowledgeBase({
 }) {
   const [knowledgebases, setKnowledgeBases] = useState(Array<KnowledgeBase>); // 知识库列表
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
-  const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
+  const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const kbSizePerPage = 6;
@@ -50,13 +50,13 @@ export default function KnowledgeBase({
         const res = await fetch(
           `/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取知识库列表失败");
+        if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setKnowledgeBases(data || []); // 更新状态
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setKnowledgeBasesError(err || "加载失败");
+        setKnowledgeBasesError(err || '加载失败');
       } finally {
         setKnowledgeBasesLoading(false);
       }
@@ -72,14 +72,14 @@ export default function KnowledgeBase({
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
       const res = await fetch(`/v1/config/knowledgebases/${kb_id}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
       if (!res.ok) {
-        throw new Error("删除失败，请检查网络或配置");
+        throw new Error('删除失败，请检查网络或配置');
       }
 
       // 显示成功提示（可选）
@@ -97,7 +97,7 @@ export default function KnowledgeBase({
         <h1 className="text-2xl font-bold">知识库</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
-          onClick={() => setActiveTab("/knowledgebase/create")}
+          onClick={() => setActiveTab('/knowledgebase/create')}
         >
           <Plus className="w-6 h-6" />
           新建知识库
@@ -113,8 +113,8 @@ export default function KnowledgeBase({
                 // 检查是否点击了交互元素
                 const target = e.target as HTMLElement;
 
-                if (target instanceof HTMLElement && target.closest("button")) {
-                  console.log("按钮被点击");
+                if (target instanceof HTMLElement && target.closest('button')) {
+                  console.log('按钮被点击');
                   return; // 是交互元素，不触发卡片跳转
                 }
 
@@ -133,7 +133,7 @@ export default function KnowledgeBase({
                 <p className="text-xs text-muted-foreground line-clamp-1">
                   {base.description
                     ? base.description
-                    : "暂时还没有描述，可以去设置页面添加哦。"}
+                    : '暂时还没有描述，可以去设置页面添加哦。'}
                 </p>
               </CardContent>
               <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">

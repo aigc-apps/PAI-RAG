@@ -1,6 +1,6 @@
-import { ToolCallContentPartComponent } from "@assistant-ui/react";
-import React, { useState } from "react";
-import { Button } from "./button";
+import { ToolCallContentPartComponent } from '@assistant-ui/react';
+import React, { useState } from 'react';
+import { Button } from './button';
 import {
   Sheet,
   SheetContent,
@@ -8,9 +8,9 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
+} from '@/components/ui/sheet';
 
-import { Wrench } from "lucide-react";
+import { Wrench } from 'lucide-react';
 
 const JsonCodeBlock = ({
   jsonString,
@@ -25,7 +25,7 @@ const JsonCodeBlock = ({
     // </pre>
     <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
       <code className="language-json whitespace-pre-wrap break-words">
-        {jsonString ?? ""}
+        {jsonString ?? ''}
       </code>
     </pre>
   );
@@ -36,23 +36,23 @@ export const ToolFallback: ToolCallContentPartComponent = ({
   status,
   result,
 }) => {
-  if (status.type === "running") {
+  if (status.type === 'running') {
     return (
       <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
         <Button
           variant="link"
           className="flex items-center gap-2 px-4 text-blue-800"
         >
-          <Wrench className="size-4" /> 正在调用工具: {toolName}{" "}
+          <Wrench className="size-4" /> 正在调用工具: {toolName}{' '}
           (请稍候，结果将会显示在这里)
         </Button>
       </div>
     );
-  } else if (status.type === "complete") {
+  } else if (status.type === 'complete') {
     let parsedArgs: any = null;
-    if (!argsText || argsText.trim() === "") {
+    if (!argsText || argsText.trim() === '') {
       parsedArgs = argsText;
-    } else if (argsText.trim() === "{}") {
+    } else if (argsText.trim() === '{}') {
       parsedArgs = {};
     } else {
       try {
@@ -72,8 +72,8 @@ export const ToolFallback: ToolCallContentPartComponent = ({
 
           parsedArgs = JSON.parse(cleanedJson);
         } catch (formatError) {
-          console.error("JSON 解析失败:", formatError);
-          parsedArgs = { error: "无效的JSON格式", raw: argsText };
+          console.error('JSON 解析失败:', formatError);
+          parsedArgs = { error: '无效的JSON格式', raw: argsText };
         }
       }
     }
@@ -89,9 +89,9 @@ export const ToolFallback: ToolCallContentPartComponent = ({
               variant="link"
               className="flex items-center gap-2 px-4 text-blue-800"
             >
-              {" "}
-              <Wrench className="size-4" /> 完成工具调用: {toolName}{" "}
-              (点击查看结果){" "}
+              {' '}
+              <Wrench className="size-4" /> 完成工具调用: {toolName}{' '}
+              (点击查看结果){' '}
             </Button>
           </SheetTrigger>
           <SheetContent side="right">
@@ -104,7 +104,7 @@ export const ToolFallback: ToolCallContentPartComponent = ({
                 <p className="font-semibold">工具调用参数:</p>
                 <JsonCodeBlock
                   jsonString={
-                    typeof parsedArgs === "string"
+                    typeof parsedArgs === 'string'
                       ? parsedArgs
                       : JSON.stringify(parsedArgs, null, 2)
                   }
@@ -116,7 +116,7 @@ export const ToolFallback: ToolCallContentPartComponent = ({
                   <p className="font-semibold">工具调用结果:</p>
                   <JsonCodeBlock
                     jsonString={
-                      typeof parsedResult === "string"
+                      typeof parsedResult === 'string'
                         ? parsedResult
                         : JSON.stringify(parsedResult, null, 2)
                     }

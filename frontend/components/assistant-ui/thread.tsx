@@ -4,9 +4,9 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-} from "@assistant-ui/react";
-import type { FC } from "react";
-import { useState, useEffect } from "react";
+} from '@assistant-ui/react';
+import type { FC } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -16,23 +16,23 @@ import {
   PencilIcon,
   RefreshCwIcon,
   SendHorizontalIcon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-import { Button } from "@/components/ui/button";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
-import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { Button } from '@/components/ui/button';
+import { MarkdownText } from '@/components/assistant-ui/markdown-text';
+import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
 // import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
-import { ToolFallback } from "@/components/ui/custom-tool-fallback";
-import { Brain, Search, Wrench, LibraryBig } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { McpModal, McpEntry } from "@/app/config/mcp/mcpmodal";
+import { ToolFallback } from '@/components/ui/custom-tool-fallback';
+import { Brain, Search, Wrench, LibraryBig } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { McpModal, McpEntry } from '@/app/config/mcp/mcpmodal';
 import {
   ComposerAttachments,
   ComposerAddAttachment,
-} from "@/components/assistant-ui/my_attachment";
-import { UserMessageAttachments } from "@/components/assistant-ui/my_attachment";
-import { KbModal, KbSelection } from "@/app/knowledgebase/kbmodal";
+} from '@/components/assistant-ui/my_attachment';
+import { UserMessageAttachments } from '@/components/assistant-ui/my_attachment';
+import { KbModal, KbSelection } from '@/app/knowledgebase/kbmodal';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;
@@ -55,8 +55,8 @@ export const Thread: FC<{
     const fetchConfigs = async () => {
       try {
         setMcpLoading(true);
-        const res = await fetch("/v1/config/mcps");
-        if (!res.ok) throw new Error("获取配置失败");
+        const res = await fetch('/v1/config/mcps');
+        if (!res.ok) throw new Error('获取配置失败');
         const data = await res.json();
 
         const configs = data.data.items.map(
@@ -73,21 +73,21 @@ export const Thread: FC<{
         const enabledConfigs = configs.filter(
           (item: { enabled: boolean }) => item.enabled === true,
         );
-        console.log("all MCP configs: ", configs);
-        console.log("enabled MCP configs: ", enabledConfigs);
+        console.log('all MCP configs: ', configs);
+        console.log('enabled MCP configs: ', enabledConfigs);
         setMcpConfigs(enabledConfigs);
       } catch (err: any) {
-        setMcpError(err.message || "加载失败");
+        setMcpError(err.message || '加载失败');
       } finally {
         setMcpLoading(false);
       }
 
       try {
         setKbLoading(true);
-        const res = await fetch("/v1/config/knowledgebases");
-        if (!res.ok) throw new Error("获取知识库配置失败");
+        const res = await fetch('/v1/config/knowledgebases');
+        if (!res.ok) throw new Error('获取知识库配置失败');
         const json_res = await res.json();
-        console.log("Load kb.", json_res);
+        console.log('Load kb.', json_res);
 
         const configs = json_res.data.items.map(
           (cfg: any) =>
@@ -98,10 +98,10 @@ export const Thread: FC<{
               cfg.active ?? false,
             ),
         );
-        console.log("all kb configs: ", configs);
+        console.log('all kb configs: ', configs);
         setKbConfigs(configs);
       } catch (err: any) {
-        setKbError(err.message || "加载知识库失败");
+        setKbError(err.message || '加载知识库失败');
       } finally {
         setKbLoading(false);
       }
@@ -114,16 +114,16 @@ export const Thread: FC<{
     updatedConfigs: KbSelection[],
     newOptions: string[],
   ) => {
-    console.log("handleKbUpdate", updatedConfigs, newOptions);
+    console.log('handleKbUpdate', updatedConfigs, newOptions);
     const hasActiveKb = updatedConfigs.some((cfg) => cfg.active);
-    const hasKb = newOptions.includes("kb");
+    const hasKb = newOptions.includes('kb');
 
     let updatedOptions = [...newOptions];
     if (hasActiveKb && hasKb) {
       const activeKbs = updatedConfigs.filter((cfg) => cfg.active);
 
       updatedOptions = [
-        ...updatedOptions.filter((opt) => !opt.startsWith("kb:")), // 移除旧的 kb:id
+        ...updatedOptions.filter((opt) => !opt.startsWith('kb:')), // 移除旧的 kb:id
         ...activeKbs.map((kb) => `kb:${kb.id}`), // 添加所有激活的 kb:id
       ];
     }
@@ -142,37 +142,37 @@ export const Thread: FC<{
 
     // 2. 检查是否有激活的 MCP
     const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
-    const hasMcp = newOptions.includes("mcp");
-    const hasThinking = newOptions.includes("thinking");
+    const hasMcp = newOptions.includes('mcp');
+    const hasThinking = newOptions.includes('thinking');
 
     // 3. 根据 MCP 激活状态调整工具选项
     let updatedOptions = [...newOptions];
 
     if (hasActiveMcp && !hasMcp) {
-      updatedOptions.push("mcp"); // 自动启用 mcp
+      updatedOptions.push('mcp'); // 自动启用 mcp
     } else if (!hasActiveMcp && hasMcp) {
-      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp"); // 移除 mcp
+      updatedOptions = updatedOptions.filter((opt) => opt !== 'mcp'); // 移除 mcp
     }
 
     // 4. 自动添加 thinking（如果启用了 mcp 且未启用 thinking）
-    if (hasActiveMcp && !hasThinking && !activeTools.includes("thinking")) {
-      updatedOptions.push("thinking");
+    if (hasActiveMcp && !hasThinking && !activeTools.includes('thinking')) {
+      updatedOptions.push('thinking');
     }
 
     // 5. 如果 thinking 被移除且之前有 mcp，则自动移除 mcp
     if (
       !hasThinking &&
-      activeTools.includes("thinking") &&
-      activeTools.includes("mcp")
+      activeTools.includes('thinking') &&
+      activeTools.includes('mcp')
     ) {
-      updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
+      updatedOptions = updatedOptions.filter((opt) => opt !== 'mcp');
     }
 
     const activeMcps = updatedConfigs.filter((cfg) => cfg.active);
 
     if (activeMcps.length > 0) {
       updatedOptions = [
-        ...updatedOptions.filter((opt) => !opt.startsWith("mcp:")), // 移除旧的 mcp:id
+        ...updatedOptions.filter((opt) => !opt.startsWith('mcp:')), // 移除旧的 mcp:id
         ...activeMcps.map((mcp) => `mcp:${mcp.id}`), // 添加所有激活的 mcp:id
       ];
     }
@@ -195,7 +195,7 @@ export const Thread: FC<{
       <ThreadPrimitive.Root
         className="bg-background box-border flex h-full flex-col overflow-hidden"
         style={{
-          ["--thread-max-width" as string]: "60rem",
+          ['--thread-max-width' as string]: '60rem',
         }}
       >
         <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
@@ -546,7 +546,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
       className={cn(
-        "text-muted-foreground inline-flex items-center text-xs",
+        'text-muted-foreground inline-flex items-center text-xs',
         className,
       )}
       {...rest}

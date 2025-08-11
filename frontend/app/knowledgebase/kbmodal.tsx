@@ -4,11 +4,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { KnowledgeBase } from "@/app/knowledgebase/page";
-import type { FC } from "react";
-import { useState, useEffect } from "react";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { KnowledgeBase } from '@/app/knowledgebase/page';
+import type { FC } from 'react';
+import { useState, useEffect } from 'react';
 
 export class KbSelection implements KnowledgeBase {
   id: string;
@@ -80,10 +80,10 @@ export const KbModal: FC<KbModalProps> = ({
               <div key={cfg.id} className="flex justify-between items-center">
                 <span>{cfg.name}</span>
                 <Button
-                  variant={cfg.active ? "default" : "outline"}
+                  variant={cfg.active ? 'default' : 'outline'}
                   onClick={() => toggleActive(cfg.id)}
                 >
-                  {cfg.active ? "激活" : "激活"}
+                  {cfg.active ? '激活' : '激活'}
                 </Button>
               </div>
             ))

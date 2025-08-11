@@ -3,11 +3,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { MCPConfig } from "@/app/config/mcp/page";
-import type { FC } from "react";
-import { useState, useEffect } from "react";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { MCPConfig } from '@/app/config/mcp/page';
+import type { FC } from 'react';
+import { useState, useEffect } from 'react';
 
 interface McpModalProps {
   mcpConfigs: McpEntry[];
@@ -29,7 +29,7 @@ export class McpEntry extends MCPConfig {
     enabled: boolean,
     active: boolean,
   ) {
-    super(id, name, url, type, "", false, enabled);
+    super(id, name, url, type, '', false, enabled);
     this.active = active;
   }
 }
@@ -82,10 +82,10 @@ export const McpModal: FC<McpModalProps> = ({
               <div key={cfg.id} className="flex justify-between items-center">
                 <span>{cfg.name}</span>
                 <Button
-                  variant={cfg.active ? "default" : "outline"}
+                  variant={cfg.active ? 'default' : 'outline'}
                   onClick={() => toggleActive(cfg.id)}
                 >
-                  {cfg.active ? "激活" : "激活"}
+                  {cfg.active ? '激活' : '激活'}
                 </Button>
               </div>
             ))
