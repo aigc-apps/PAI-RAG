@@ -204,7 +204,6 @@ class PaiKnowledgebaseClient:
         await vector_store.async_add(nodes)
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
 
-
     async def aquery(
         self,
         query,

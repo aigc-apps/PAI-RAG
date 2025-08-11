@@ -30,8 +30,6 @@ class EmbeddingModel(SQLModel):
     def set_is_ready(self) -> 'EmbeddingModel':
         if self.embed_batch_size <= 0:
             self.embed_batch_size = 10
-        if self.is_ready is None:
-            self.is_ready = self.type == EmbeddingType.OPENAI_LIKE
         return self
 
 
