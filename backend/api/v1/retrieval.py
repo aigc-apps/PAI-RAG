@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
-from api.response_model import ResponseModel, error_response, success_response
+from fastapi.responses import JSONResponse
+from api.response_model import ResponseModel, error_response, to_dict
 from db.db_context import get_session
 from db.models.knowledgebase.knowledgebase import KbEntity
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
@@ -46,4 +47,4 @@ async def retrieval(
             title=score_node.node.metadata.get("file_name", "null"),
             metadata=score_node.node.metadata,
         ))
-    return success_response(data=NewRetrievalResponse(records=records), message="查询成功。")
+    return JSONResponse(status_code=200, content={"records": to_dict(records)})

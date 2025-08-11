@@ -278,7 +278,7 @@ export default function KnowledgeBaseDetailPage({
 
     const search_json = await search_result.json();
     console.log("搜索知识库结果:", search_json);
-    setSearchRecords(search_json.data.records);
+    setSearchRecords(search_json.records);
     setSearching(false);
   };
 
