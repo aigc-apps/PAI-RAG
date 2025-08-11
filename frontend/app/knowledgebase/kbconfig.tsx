@@ -279,7 +279,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             required
           />
           <p className="text-sm text-muted-foreground">
-            例如："XX产品用户手册"、"IT操作说明"
+            例如：&quot;XX产品用户手册&quot;、&quot;IT操作说明&quot;
           </p>
         </div>
 

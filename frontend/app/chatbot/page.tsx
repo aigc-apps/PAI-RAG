@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, FC } from 'react';
 import {
   Card,
   CardHeader,
@@ -27,11 +27,11 @@ import {
 
 import { Chatbot } from './chatbot_config';
 
-export default function ChatbotPage({
-  setActiveTab,
-}: {
-  setActiveTab: (tab: string) => void;
-}) {
+interface PageProps {
+  
+}
+
+const ChatbotPage = (setActiveTab: (tab: string) => void) => {
   const [chatbots, setChatbots] = useState(Array<Chatbot>); // 知识库列表
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -148,7 +148,9 @@ export default function ChatbotPage({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deleteChatbot(bot.id)}>
+                      <AlertDialogAction
+                        onClick={() => deleteChatbot(bot.id)}
+                      >
                         删除
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -174,3 +176,5 @@ export default function ChatbotPage({
     </div>
   );
 }
+
+export default ChatbotPage;

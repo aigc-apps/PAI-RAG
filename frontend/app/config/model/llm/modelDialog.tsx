@@ -87,7 +87,6 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 

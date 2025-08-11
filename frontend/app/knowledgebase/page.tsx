@@ -9,7 +9,7 @@ import {
   CardContent,
   CardFooter,
 } from '@/components/ui/card';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { formatBeijingTime } from './utils/utils';
 
@@ -32,7 +32,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-export default function KnowledgeBase({
+export default function KnowledgeBasePage({
   setActiveTab,
 }: {
   setActiveTab: (tab: string) => void;
@@ -86,7 +86,7 @@ export default function KnowledgeBase({
 
       // 删除成功后更新本地状态
       setKnowledgeBases((prev) => prev.filter((config) => config.id !== kb_id));
-    } catch (err: any) {}
+    } catch (err: any) {console.log('删除知识库出错: ', err);}
     // 显示错误提示
   };
 

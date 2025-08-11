@@ -16,7 +16,7 @@ import McpConfig from './config/mcp/page';
 import SearchConfig from './config/search/page';
 import { useMemo } from 'react';
 import TracingConfig from './config/tracing/page';
-import KnowledgeBase from './knowledgebase/page';
+import KnowledgeBasePage from './knowledgebase/page';
 import ChatbotPage from './chatbot/page';
 import { ChatbotConfigCard } from './chatbot/chatbot_config';
 import PromptConfig from './config/prompt/page';
@@ -27,6 +27,8 @@ import { UploadAttachmentAdapter } from './attachments/upload_attachment_adapter
 import { usePaiChatThreadRuntime } from './runtime/usePaiChatThreadRuntime';
 import KnowledgeBaseFileChunksPage from './knowledgebase/chunks/page';
 import RoleConfigPage from './config/role/page';
+import Link from "next/link";
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
@@ -137,7 +139,7 @@ export const Assistant = () => {
               <header className="flex h-12 border-b">
                 <SidebarTrigger />
               </header>
-              <KnowledgeBase setActiveTab={setActiveTab} />
+              <KnowledgeBasePage setActiveTab={setActiveTab} />
             </div>
           )}
           {activeTab.startsWith('/knowledgebase/create') && (

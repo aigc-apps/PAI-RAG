@@ -31,6 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 interface KnowledgeBase {
   id: string;
@@ -178,7 +179,7 @@ export default function KnowledgeBaseFileChunksPage({
     fetchKbConfigs();
     fetchKbFile();
     fetchKbFileChunks();
-  }, [page]);
+  }, [page, file_id, knowledgebase_id]);
   if (!knowledgebase || !kbfile) {
     return <div className="p-6">加载中...</div>;
   }
@@ -342,7 +343,7 @@ export default function KnowledgeBaseFileChunksPage({
                         <PhotoProvider
                           key={index}
                           maskOpacity={0.8}
-                          overlayRender={({}) => {
+                          overlayRender={() => {
                             return (
                               <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
                                 <div>图片描述：{meta.desc}</div>
@@ -377,7 +378,7 @@ export default function KnowledgeBaseFileChunksPage({
             <DialogDescription>修改文本并保存</DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <label className="block mb-2 text-sm font-medium">文本内容</label>
+            <Label className="block mb-2 text-sm font-medium">文本内容</Label>
             <textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}

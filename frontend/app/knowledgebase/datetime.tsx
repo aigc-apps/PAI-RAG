@@ -108,7 +108,6 @@ export const DatetimeInput: FC<DatetimeProps> = ({
           mode="single"
           selected={date}
           captionLayout="dropdown"
-          autoFocus
           onSelect={(newDate) => {
             if (newDate) {
               handleSaveDate(newDate);

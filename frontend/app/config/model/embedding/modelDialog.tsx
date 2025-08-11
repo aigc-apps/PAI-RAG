@@ -108,9 +108,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       const jsondata = await res.json();
       onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
       setIsOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 

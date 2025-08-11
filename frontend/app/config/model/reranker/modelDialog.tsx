@@ -84,7 +84,6 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 

@@ -1568,7 +1568,7 @@ export default function KnowledgeBaseDetailPage({
                                 <PhotoProvider
                                   key={index}
                                   maskOpacity={0.8}
-                                  overlayRender={({}) => {
+                                  overlayRender={() => {
                                     return (
                                       <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
                                         <div>图片描述：{meta.desc}</div>
