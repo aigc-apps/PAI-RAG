@@ -40,14 +40,7 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        console.log(
-          "assistant NEXT_PUBLIC_API_BASE",
-          process.env.NEXT_PUBLIC_API_BASE,
-          API_BASE,
-        );
-        const res = await fetch(`${API_BASE}/v1/config/llms`);
+        const res = await fetch(`/v1/config/llms`);
         if (!res.ok) throw new Error("拉取 LLM 配置失败");
         const data = await res.json();
         const llms = data.data.items;
@@ -98,9 +91,8 @@ export const Assistant = () => {
       streamn: true,
     };
   }, [llmConfig.model_id, selectedOptions]);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
   const runtime = usePaiChatThreadRuntime({
-    api: `${API_BASE}/v1/chat/completions`,
+    api: `/v1/chat/completions`,
     body: extra_body,
     adapters: {
       attachments: new UploadAttachmentAdapter(),

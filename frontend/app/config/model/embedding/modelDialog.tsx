@@ -88,11 +88,9 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
     }
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isAdd
-      ? `${API_BASE}/v1/config/embeddings`
-      : `${API_BASE}/v1/config/embeddings/${emb.id}`;
+      ? `/v1/config/embeddings`
+      : `/v1/config/embeddings/${emb.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
     if (emb.api_key === "******") emb.api_key = "";
     console.log("updateMethod", isAdd, updateMethod, submit_url, emb);

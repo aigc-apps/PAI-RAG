@@ -58,8 +58,8 @@ export function PaginationComponent({
       }
     } else {
       // 显示省略号逻辑（如 1 ... 3 4 5 ... 10）
-      let start = Math.max(1, currentPage - 2);
-      let end = Math.min(totalPages, currentPage + 2);
+      const start = Math.max(1, currentPage - 2);
+      const end = Math.min(totalPages, currentPage + 2);
 
       if (start > 1) {
         items.push(

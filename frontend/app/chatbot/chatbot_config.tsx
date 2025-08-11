@@ -53,6 +53,7 @@ const default_chat_config = {
   enable_search: false,
   mcp_ids: [],
   kb_ids: [],
+  enable_agent: false,
   model_id: "",
   updated_at: "",
 };
@@ -78,38 +79,27 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
     const fetchModelConfigs = async () => {
       try {
         setIsLoading(true);
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-
-        const [llmRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/llms`),
-        ]);
+        const [llmRes] = await Promise.all([fetch(`/v1/config/llms`)]);
 
         const llmData = (await llmRes.json())?.data.items || [];
         console.log("llmData", llmData);
         setLlms([...llmData]);
 
-        const [mcpRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/mcps`),
-        ]);
+        const [mcpRes] = await Promise.all([fetch(`/v1/config/mcps`)]);
 
         const mcpData =
           ((await mcpRes.json())?.data.items as MCPConfig[]) || [];
         console.log("mcpData", mcpData);
         setMcps([...mcpData]);
 
-        const [kbRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/knowledgebases`),
-        ]);
+        const [kbRes] = await Promise.all([fetch(`/v1/config/knowledgebases`)]);
 
         const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
         console.log("kbData", kbData);
         setKbs([...kbData]);
 
         if (!isCreate) {
-          const botRes = await fetch(
-            `${API_BASE}/v1/config/chatbots?app_id=${chatbotId}`,
-          );
+          const botRes = await fetch(`/v1/config/chatbots?app_id=${chatbotId}`);
           const botData = await botRes.json();
           setBotConfig(botData.data);
           console.log("chatbotData: ", botData.data);
@@ -137,11 +127,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
 
   const handleSaveChatConfig = async () => {
     console.log("保存应用结果:", botConfig);
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isCreate
-      ? `${API_BASE}/v1/config/chatbots`
-      : `${API_BASE}/v1/config/chatbots/${botConfig.id}`;
+      ? `/v1/config/chatbots`
+      : `/v1/config/chatbots/${botConfig.id}`;
     const updateMethod = isCreate ? "POST" : "PATCH";
     try {
       const res = await fetch(submit_url, {

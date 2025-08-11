@@ -47,14 +47,12 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const res = await fetch(`${API_BASE}/v1/config/llms/groups`);
+        const res = await fetch(`/v1/config/llms/groups`);
         if (!res.ok) throw new Error("模型数据加载失败");
         const data = await res.json();
         console.log("model data: ", data);
 
-        const chatbotRes = await fetch(`${API_BASE}/v1/config/chatbots`);
+        const chatbotRes = await fetch(`/v1/config/chatbots`);
         if (!chatbotRes.ok) throw new Error("模型数据加载失败");
         const chatbotData = (await chatbotRes.json()).data.items;
         const chatbotGroup = {

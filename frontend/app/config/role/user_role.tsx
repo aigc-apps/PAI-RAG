@@ -60,10 +60,8 @@ export default function UserRolePage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/roles/user_roles?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/roles/user_roles?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取角色列表失败");
         const json_data = await res.json();
@@ -81,11 +79,7 @@ export default function UserRolePage() {
 
     const fetchRoles = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const res = await fetch(
-          `${API_BASE}/v1/config/roles?page=${page}&size=1000`,
-        );
+        const res = await fetch(`/v1/config/roles?page=${page}&size=1000`);
         if (!res.ok) throw new Error("获取角色列表失败");
         const json_data = await res.json();
         const data = json_data.data.items;
@@ -102,14 +96,9 @@ export default function UserRolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(
-        `${API_BASE}/v1/config/roles/user_roles/${role_id}`,
-        {
-          method: "DELETE",
-        },
-      );
+      const res = await fetch(`/v1/config/roles/user_roles/${role_id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("获取角色列表失败");
       const json_data = await res.json();
       const data = json_data.data;
@@ -125,9 +114,7 @@ export default function UserRolePage() {
 
   const handleAddRole = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/roles/user_roles`, {
+      const res = await fetch(`/v1/config/roles/user_roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editRole), // 包装为数组

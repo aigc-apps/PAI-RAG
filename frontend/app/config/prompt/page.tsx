@@ -25,8 +25,6 @@ export default function PromptConfig() {
     variant: "default" as "default" | "destructive",
   });
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-
   // 工具列表配置
   const toolSections = [
     {
@@ -70,7 +68,7 @@ export default function PromptConfig() {
     const fetchPrompts = async () => {
       try {
         setIsLoading(true);
-        const res = await fetch(`${API_BASE}/v1/config/prompts`, {
+        const res = await fetch(`/v1/config/prompts`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         });
@@ -119,7 +117,7 @@ export default function PromptConfig() {
         },
       };
 
-      const res = await fetch(`${API_BASE}/v1/config/prompts`, {
+      const res = await fetch(`/v1/config/prompts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

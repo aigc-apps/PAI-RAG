@@ -67,11 +67,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       setSaveErrorMsg("请必须填写完整的模型信息");
       return;
     }
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const submit_url = isAdd
-      ? `${API_BASE}/v1/config/llms`
-      : `${API_BASE}/v1/config/llms/${llm.id}`;
+    const submit_url = isAdd ? `/v1/config/llms` : `/v1/config/llms/${llm.id}`;
     const updateMethod = isAdd ? "POST" : "PATCH";
     if (llm.api_key === "******") llm.api_key = "";
     console.log("updateMethod", isAdd, updateMethod, submit_url, llm);

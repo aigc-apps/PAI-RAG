@@ -134,11 +134,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const [embRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/embeddings`),
-        ]);
+        const [embRes] = await Promise.all([fetch(`/v1/config/embeddings`)]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
@@ -151,10 +147,8 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     };
     const fetchRerankerModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const [rerankerRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/rerankers`),
+          fetch(`/v1/config/rerankers`),
         ]);
 
         const rerankerData = (await rerankerRes.json())?.data.items || [];
@@ -173,11 +167,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("保存知识库结果:", kb);
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isCreate
-      ? `${API_BASE}/v1/config/knowledgebases`
-      : `${API_BASE}/v1/config/knowledgebases/${kb.id}`;
+      ? `/v1/config/knowledgebases`
+      : `/v1/config/knowledgebases/${kb.id}`;
     const updateMethod = isCreate ? "POST" : "PATCH";
     try {
       const res = await fetch(submit_url, {
@@ -198,9 +190,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
   const handleRemoveMetadataEntry = async (id: string) => {
     if (metadata_configs != null) {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
+      const metadata_url = `/v1/config/knowledgebases/${kb.id}/metadata/${id}`;
       try {
         const res = await fetch(metadata_url, {
           method: "DELETE",
@@ -224,7 +214,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       setMetadataError("必须填入元数据名称。");
       return;
     }
-    let updated_metadata_configs = metadata_configs || [];
+    const updated_metadata_configs = metadata_configs || [];
 
     if (
       updated_metadata_configs.some((config) => config.name === metadataName)
@@ -233,9 +223,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       return;
     }
 
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const metadata_url = `${API_BASE}/v1/config/knowledgebases/${kb.id}/metadata`;
+    const metadata_url = `/v1/config/knowledgebases/${kb.id}/metadata`;
     try {
       const res = await fetch(metadata_url, {
         method: "POST",

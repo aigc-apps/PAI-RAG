@@ -135,9 +135,7 @@ export default function McpConfig() {
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const res = await fetch(`${API_BASE}/v1/config/mcps`);
+        const res = await fetch(`/v1/config/mcps`);
         if (!res.ok) throw new Error("获取配置失败");
         const data = await res.json();
         setMcpConfigs(data.data.items || []); // 更新状态
@@ -193,9 +191,7 @@ export default function McpConfig() {
         ...addFormData,
       };
       mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/mcps`, {
+      const res = await fetch(`/v1/config/mcps`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mcp_data), // 包装为数组
@@ -237,17 +233,11 @@ export default function McpConfig() {
   const updatedMCP = async () => {
     try {
       if (!editingConfig) return;
-
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(
-        `${API_BASE}/v1/config/mcps/${editingConfig.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editingConfig), // 包装为数组
-        },
-      );
+      const res = await fetch(`/v1/config/mcps/${editingConfig.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingConfig), // 包装为数组
+      });
 
       if (!res.ok) throw new Error("修改 MCP 配置失败");
       setToastState({
@@ -277,9 +267,7 @@ export default function McpConfig() {
   };
   const removeMCP = async (id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/mcps/${id}`, {
+      const res = await fetch(`/v1/config/mcps/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

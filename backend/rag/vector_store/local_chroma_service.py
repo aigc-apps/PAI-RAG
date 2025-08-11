@@ -4,11 +4,11 @@ import requests
 from utils.constants import try_get_int_env
 
 
-DEFAULT_CHROMA_PORT = try_get_int_env("CHROMA_PORT", 8087)
+DEFAULT_CHROMA_PORT = try_get_int_env("CHROMA_PORT", 8684)
 
 
 class LocalChromaService:
-    def __init__(self, data_path: str = "localdata/chroma", port=8087):
+    def __init__(self, data_path: str = "localdata/chroma", port=8684):
         self.data_path = data_path
         self.port = port
         self.proc = None

@@ -56,10 +56,8 @@ export default function LlmConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取LLM模型列表失败");
         const json_data = await res.json();
@@ -97,9 +95,7 @@ export default function LlmConfigPage() {
   const handleActivateToggle = async (llm: LlmConfig) => {
     setErrorMsg("");
     llm.enabled = !llm.enabled;
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/llms/${llm.id}`;
+    const url = `/v1/config/llms/${llm.id}`;
 
     const res = await fetch(url, {
       method: "PATCH",
@@ -120,9 +116,7 @@ export default function LlmConfigPage() {
     setErrorMsg("");
     try {
       console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
+      const res = await fetch(`/v1/config/${model_type}/${id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

@@ -67,10 +67,8 @@ export default function RolePage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/roles?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/roles?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取角色列表失败");
         const json_data = await res.json();
@@ -88,9 +86,7 @@ export default function RolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/roles/${role_id}`, {
+      const res = await fetch(`/v1/config/roles/${role_id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("获取角色列表失败");
@@ -108,9 +104,7 @@ export default function RolePage() {
 
   const handleAddRole = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/roles`, {
+      const res = await fetch(`/v1/config/roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editRole), // 包装为数组

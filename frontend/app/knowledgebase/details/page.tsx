@@ -227,11 +227,7 @@ export default function KnowledgeBaseDetailPage({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const [embRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/embeddings`),
-        ]);
+        const [embRes] = await Promise.all([fetch(`/v1/config/embeddings`)]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log("embData", embData);
@@ -257,9 +253,7 @@ export default function KnowledgeBaseDetailPage({
   const handleSearchSubmit = async () => {
     setSearching(true);
     console.log("handleSearchSubmit");
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const search_result = await fetch(`${API_BASE}/v1/retrieval`, {
+    const search_result = await fetch(`/v1/retrieval`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -287,11 +281,8 @@ export default function KnowledgeBaseDetailPage({
   }, [page]);
 
   const fetchKbMetadata = async () => {
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-
     const res = await fetch(
-      `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+      `/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
     );
     if (!res.ok) throw new Error("获取知识库元数据失败");
     const metadata_json = await res.json();
@@ -307,9 +298,7 @@ export default function KnowledgeBaseDetailPage({
   };
 
   const fetchKbFiles = useCallback(async () => {
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
       const files_res = await fetch(url);
@@ -351,10 +340,8 @@ export default function KnowledgeBaseDetailPage({
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}`,
+          `/v1/config/knowledgebases/${knowledgebase_id}`,
         );
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
@@ -389,10 +376,8 @@ export default function KnowledgeBaseDetailPage({
   const handleDeleteFile = async (file_id: string) => {
     setDeleting(true);
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         {
           method: "DELETE",
         },
@@ -409,10 +394,8 @@ export default function KnowledgeBaseDetailPage({
 
   const handleSaveFileSource = async (file_id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/source`,
+        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/source`,
         {
           method: "POST",
           headers: {
@@ -459,10 +442,8 @@ export default function KnowledgeBaseDetailPage({
     setMetadataEditError("");
     setIsEditingMetadata(false);
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const file_res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
       const file_json = await file_res.json();
@@ -539,9 +520,7 @@ export default function KnowledgeBaseDetailPage({
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const roleRes = await fetch(`${API_BASE}/v1/config/roles?size=100`);
+      const roleRes = await fetch(`/v1/config/roles?size=100`);
       if (!roleRes.ok) {
         alert("查询角色失败");
         return;
@@ -551,7 +530,7 @@ export default function KnowledgeBaseDetailPage({
 
       const permission_name = file_id;
       const res = await fetch(
-        `${API_BASE}/v1/config/roles/permissions?name=${permission_name}&size=100`,
+        `/v1/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
         alert("查询文件permission失败");
@@ -577,10 +556,8 @@ export default function KnowledgeBaseDetailPage({
 
   const saveFilePermission = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const roleRes = await fetch(
-        `${API_BASE}/v1/config/roles/permissions/files/${editRoleFileId}`,
+        `/v1/config/roles/permissions/files/${editRoleFileId}`,
         {
           method: "POST",
           headers: {
@@ -631,10 +608,8 @@ export default function KnowledgeBaseDetailPage({
     });
 
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files`,
+        `/v1/config/knowledgebases/${knowledgebase_id}/files`,
         {
           method: "POST",
           body: formData,
@@ -674,8 +649,6 @@ export default function KnowledgeBaseDetailPage({
     }
 
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const metadata_enties = Object.keys(editingMetadata)
         .filter((name) => !default_metadata_keys.includes(name))
         .map((name) => ({
@@ -687,7 +660,7 @@ export default function KnowledgeBaseDetailPage({
         entries: metadata_enties,
       };
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
         {
           method: "POST",
           body: JSON.stringify(bodyData),
@@ -698,7 +671,7 @@ export default function KnowledgeBaseDetailPage({
       );
       if (!res.ok) throw Error("保存metadata失败");
       const file_result = (await res.json()).data as KnowledgeBaseFile;
-      let updated_kbfiles = kbfiles;
+      const updated_kbfiles = kbfiles;
       const target_file_index = updated_kbfiles.findIndex(
         (file) => file.id === file_id,
       );

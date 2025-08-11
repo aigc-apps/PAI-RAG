@@ -125,7 +125,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     // let toolCalls: { [key: string]: any } = {};
     let buffer = "";
 
-    let currentToolCallMap: {
+    const currentToolCallMap: {
       [key: string]: {
         id: string;
         type: string;
@@ -260,9 +260,7 @@ function delay(ms: any) {
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/agent/threads`);
+      const res = await fetch(`/v1/agent/threads`);
       if (!res.ok) throw new Error("获取配置失败");
       const response = await res.json();
       return {
@@ -281,9 +279,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     isInitializing = true;
 
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const url = `${API_BASE}/v1/agent/threads`;
+      const url = `/v1/agent/threads`;
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
         now.getMonth() + 1,
@@ -326,9 +322,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async unarchive(remoteId) {},
   async delete(remoteId) {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/agent/threads/${remoteId}`, {
+      const res = await fetch(`/v1/agent/threads/${remoteId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -370,11 +364,7 @@ const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
         if (!remoteId) return { headId: null, messages: [] };
         // 模拟从后端获取数据
         try {
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-          const res = await fetch(
-            `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
-          );
+          const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
 
           if (!res.ok) throw new Error("获取配置失败");
           const messages = await res.json();
@@ -415,9 +405,7 @@ const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
           return;
         }
         try {
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-          const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
+          const url = `/v1/agent/threads/${remoteThreadId}/messages`;
 
           console.log("append message", message);
           const response = await fetch(url, {

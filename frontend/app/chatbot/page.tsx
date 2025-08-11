@@ -42,10 +42,8 @@ export default function ChatbotPage({
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/chatbots?page=${page}&size=${pageSize}`,
+          `/v1/config/chatbots?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error("获取应用列表失败");
         const json_data = await res.json();
@@ -68,9 +66,7 @@ export default function ChatbotPage({
   };
   const deleteKnowledgebase = async (bot_id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/chatbots/${bot_id}`, {
+      const res = await fetch(`/v1/config/chatbots/${bot_id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

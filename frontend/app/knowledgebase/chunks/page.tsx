@@ -125,10 +125,8 @@ export default function KnowledgeBaseFileChunksPage({
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}`,
+          `/v1/config/knowledgebases/${knowledgebase_id}`,
         );
         if (!res.ok) throw new Error("获取知识库列表失败");
         const json_data = await res.json();
@@ -144,10 +142,8 @@ export default function KnowledgeBaseFileChunksPage({
     };
     const fetchKbFile = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+          `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
         );
         if (!res.ok) throw new Error("获取知识库文件失败");
         const json_data = await res.json();
@@ -164,10 +160,8 @@ export default function KnowledgeBaseFileChunksPage({
 
     const fetchKbFileChunks = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks?page=${page}&size=${chunksSizePerPage}`,
+          `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (!res.ok) throw new Error("获取知识库文件切片列表失败");
         const json_data = await res.json();
@@ -196,9 +190,7 @@ export default function KnowledgeBaseFileChunksPage({
 
   const handleActivateToggle = async (chunk: KbFileChunk) => {
     chunk.active = !chunk.active;
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
+    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
 
     const res = await fetch(url, {
       method: "PATCH",
@@ -221,9 +213,7 @@ export default function KnowledgeBaseFileChunksPage({
   const handleSaveEdit = async () => {
     if (!selectedChunk) return;
     selectedChunk.text = editText;
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunk.id}`;
+    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunk.id}`;
 
     try {
       const response = await fetch(url, {
