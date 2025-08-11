@@ -25,17 +25,13 @@ class OpenAIChatCompletionChunkConverter:
         logger.info("Start generating chunks.")
         chat_id = uuid.uuid4().hex
         model = self.chat_model
-        enable_citations = False
+        chunk_id = 0
+        previous_assistant_message = None
         citations = []
         citation_details = []
-        chunk_id = 0
         async for response in async_response_gen:
             if response.message.role == MessageRole.ASSISTANT:
-                tool_calls = response.message.additional_kwargs.get('tool_calls', [])
-                if tool_calls and tool_calls[0].function.name in ["search-web", "search-knowledgebase"]:
-                    enable_citations = True
-                else:
-                    enable_citations = False
+                previous_assistant_message = response.message
                 chunk = ChatCompletionChunk(
                     id=chat_id,
                     created=int(time.time()),
@@ -47,7 +43,7 @@ class OpenAIChatCompletionChunkConverter:
                             "delta": {
                                 "content": response.delta,
                                 "role": response.message.role,
-                                "tool_calls": tool_calls,
+                                "tool_calls": response.message.additional_kwargs.get('tool_calls', []),
                             },
                             "finish_reason": "stop" if response.message.additional_kwargs.get(
                                     "STOP_FLAG") else None,
@@ -58,18 +54,21 @@ class OpenAIChatCompletionChunkConverter:
                     chunk.usage = response.additional_kwargs
                 yield self._make_json_chunk(chunk.model_dump(mode="json"))
             elif response.message.role == MessageRole.TOOL:
-                if enable_citations:
-                    tool_call_results = json.loads(response.delta).get("result", [])
-                    citations = [r["metadata"]["file_url"] for r in tool_call_results]
-                    citation_details = [
-                        {
-                            "text": r["text"],
-                            "name": r["metadata"]["file_name"],
-                            "url": r["metadata"]["file_url"],
-                            "score": r["score"],
-                        }
-                        for r in tool_call_results
-                    ]
+                # If the response is from a tool, we check if it contains citations
+                if previous_assistant_message:
+                    previous_tool_calls = previous_assistant_message.additional_kwargs.get('tool_calls', [])
+                    if previous_tool_calls and previous_tool_calls[0].function.name in ["search-web", "search-knowledgebase"]:
+                        tool_call_results = json.loads(response.delta).get("result", [])
+                        citations = [r["metadata"]["file_url"] for r in tool_call_results]
+                        citation_details = [
+                            {
+                                "text": r["text"],
+                                "name": r["metadata"]["file_name"],
+                                "url": r["metadata"]["file_url"],
+                                "score": r["score"],
+                            }
+                            for r in tool_call_results
+                        ]
                 chunk = ChatCompletionChunk(
                     id=chat_id,
                     created=int(time.time()),
@@ -97,24 +96,26 @@ class OpenAIChatCompletionChunkConverter:
                 raise ValueError(f"Unknown role: {response.message.role}")
             chunk_id += 1
 
-        last_citation_chunk = ChatCompletionChunk(
-            id=chat_id,
-            created=int(time.time()),
-            model=model,
-            object="chat.completion.chunk",
-            citations=citations,
-            citation_details=citation_details,
-            choices=[
-                {
-                    "index": chunk_id,
-                    "delta": {
-                        "content": "",
-                        "role": MessageRole.ASSISTANT,
-                        "tool_calls": [],
+        if len(citations) > 0:
+            logger.info("Generating last citation chunk.")
+            last_citation_chunk = ChatCompletionChunk(
+                id=chat_id,
+                created=int(time.time()),
+                model=model,
+                object="chat.completion.chunk",
+                citations=citations,
+                citation_details=citation_details,
+                choices=[
+                    {
+                        "index": chunk_id,
+                        "delta": {
+                            "content": "",
+                            "role": MessageRole.ASSISTANT,
+                            "tool_calls": [],
+                        },
+                        "finish_reason": "stop",
                     },
-                    "finish_reason": "stop",
-                },
-            ],
-        )
-        yield self._make_json_chunk(last_citation_chunk.model_dump(mode="json"))
+                ],
+            )
+            yield self._make_json_chunk(last_citation_chunk.model_dump(mode="json"))
         logger.info("Finished generating chunks.")
