@@ -97,6 +97,7 @@ interface KnowledgeBaseFile {
   file_name: string;
   file_size: string;
   status: string;
+  file_source: string;
   created_at: string;
   updated_at: string;
   file_metadata: {
@@ -158,6 +159,10 @@ export default function KnowledgeBaseDetailPage({
   const [metadataConditions, setMetadataConditions] = useState<
     MetadataCondition[]
   >([]);
+  const [fileSource, setFileSource] = useState("");
+  const [fileSourceOpen, setFileSourceOpen] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
@@ -254,24 +259,21 @@ export default function KnowledgeBaseDetailPage({
     console.log("handleSearchSubmit");
     const API_BASE =
       process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const search_result = await fetch(
-      `${API_BASE}/v1/config/knowledgebases/retrieval`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: kbquery,
-          user_id: user,
-          knowledgebase_id: knowledgebase_id,
-          metadata_condition: {
-            conditions: metadataConditions,
-            logical_operator: logicalOperator,
-          },
-        }),
+    const search_result = await fetch(`${API_BASE}/v1/retrieval`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        query: kbquery,
+        user_id: user,
+        knowledge_id: knowledgebase_id,
+        metadata_condition: {
+          conditions: metadataConditions,
+          logical_operator: logicalOperator,
+        },
+      }),
+    });
     if (!search_result.ok) throw new Error("搜索知识库失败");
 
     const search_json = await search_result.json();
@@ -402,6 +404,35 @@ export default function KnowledgeBaseDetailPage({
     } finally {
       setDeleting(false);
       fetchKbFiles();
+    }
+  };
+
+  const handleSaveFileSource = async (file_id: string) => {
+    try {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
+      const res = await fetch(
+        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/source`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            file_source: fileSource,
+          }),
+        },
+      );
+      if (!res.ok) throw new Error("Failed to save file source");
+
+      const fileObj = kbfiles.filter((file) => file.id === file_id)[0];
+      if (fileObj) {
+        fileObj.file_source = fileSource;
+      }
+      setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
+    } catch (error) {
+      console.error("Error fetching file source:", error);
+      throw error;
     }
   };
 
@@ -906,6 +937,50 @@ export default function KnowledgeBaseDetailPage({
                                 kbId={knowledgebase_id}
                                 fileId={file.id}
                               />
+
+                              <Popover
+                                open={fileSourceOpen[file.id] ?? false}
+                                onOpenChange={(open) => {
+                                  if (open) {
+                                    setFileSource(file.file_source);
+                                  }
+                                  setFileSourceOpen((prev) => ({
+                                    ...prev,
+                                    [file.id]: open,
+                                  }));
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    className="text-sm text-blue-600"
+                                  >
+                                    源连接
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-160">
+                                  <div className="flex gap-3">
+                                    <Label>{file.file_name}</Label>
+                                    <Input
+                                      type="text"
+                                      className="w-130"
+                                      placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                                      value={fileSource || ""}
+                                      onChange={(e) => {
+                                        setFileSource(e.target.value);
+                                      }}
+                                    />
+                                    <Button
+                                      onClick={() =>
+                                        handleSaveFileSource(file.id)
+                                      }
+                                    >
+                                      {" "}
+                                      保存{" "}
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
 
                               <Button
                                 variant="link"
