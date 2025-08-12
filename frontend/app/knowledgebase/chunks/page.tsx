@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
@@ -31,6 +30,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { htmlRender } from "@/app/knowledgebase/chunks/htmlRender";
 
 interface KnowledgeBase {
   id: string;
@@ -318,12 +318,9 @@ export default function KnowledgeBaseFileChunksPage({
             <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
           ) : (
             <div className="gap-4 p-4 w-full">
-              <div className="flex gap-4">
+              <div className="grid grid-cols-4 items-center gap-6">
                 {kbfilechunks.map((chunk) => (
-                  <Card
-                    key={chunk.id}
-                    className="flex max-h-80 w-68 py-3 gap-2"
-                  >
+                  <Card key={chunk.id} className="h-80 p-4 gap-4">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <Badge className={activeMap[String(chunk.active)]}>
@@ -344,7 +341,7 @@ export default function KnowledgeBaseFileChunksPage({
                     </CardHeader>
                     <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
                       <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
-                        {chunk.text}
+                        {htmlRender(chunk.text)}
                       </div>
                     </CardContent>
                     <CardFooter className="shrink-0 gap-2">
