@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pairag-file"
-version = "1.2.11"
+version = "1.2.12"
 description = "PAI-RAG file processing library."
 authors = []
 readme = "README.md"
@@ -33,7 +33,7 @@ aspose-slides = "^24.10.0"
 datasketch = "^1.6.5"
 anyio = "^4.6.2.post1"
 mistletoe = "^1.4.0"
-html2text = "^2024.2.26"
+html2text = "^2025.4.15"
 rapidfuzz = "^3.13.0"
 python-docx = "^1.1.2"
 numpy = "1.26.4"
