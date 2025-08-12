@@ -35,6 +35,7 @@ interface LlmConfig {
   max_context: number;
   enabled: boolean;
   vision_support: boolean;
+  enable_thinking: boolean; // 是否支持思考模式
 }
 
 export const LLMModelDialog: FC<LLMModelDialogProps> = ({
@@ -213,6 +214,20 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
               checked={llm?.vision_support ?? false}
               onCheckedChange={(checked) =>
                 setLlm((prev) => ({ ...prev, vision_support: checked }))
+              }
+            />
+          </div>
+        </div>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="enable_thinking" className="text-right">
+              思考模型
+            </Label>
+            <Switch
+              id="enable_thinking"
+              checked={llm?.enable_thinking ?? true}
+              onCheckedChange={(checked) =>
+                setLlm((prev) => ({ ...prev, enable_thinking: checked }))
               }
             />
           </div>

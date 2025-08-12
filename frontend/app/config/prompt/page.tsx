@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function PromptConfig() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [searchWebToolPrompt, setSearchWebToolPrompt] = useState("");
-  const [thinkingToolPrompt, setThinkingToolPrompt] = useState("");
+  const [planningToolPrompt, setPlanningToolPrompt] = useState("");
   const [attachmentsToolPrompt, setAttachmentsToolPrompt] = useState("");
   const [knowledgebaseToolPrompt, setKnowledgebaseToolPrompt] = useState("");
   const [withoutToolsPrompt, setWithoutToolsPrompt] = useState("");
@@ -36,10 +36,10 @@ export default function PromptConfig() {
       setter: setSearchWebToolPrompt,
     },
     {
-      id: "thinking",
-      label: "Thinking Tool",
-      state: thinkingToolPrompt,
-      setter: setThinkingToolPrompt,
+      id: "planning",
+      label: "Planning Tool",
+      state: planningToolPrompt,
+      setter: setPlanningToolPrompt,
     },
     {
       id: "attachments",
@@ -82,7 +82,7 @@ export default function PromptConfig() {
 
         setSystemPrompt(prompt.system_prompt || "");
         setSearchWebToolPrompt(prompt.search_web_tool_prompt || "");
-        setThinkingToolPrompt(prompt.thinking_tool_prompt || "");
+        setPlanningToolPrompt(prompt.planning_tool_prompt || "");
         setAttachmentsToolPrompt(prompt.attachments_tool_prompt || "");
         setKnowledgebaseToolPrompt(prompt.knowledgebase_tool_prompt || "");
         setWithoutToolsPrompt(prompt.without_tools_prompt || "");
@@ -112,7 +112,7 @@ export default function PromptConfig() {
         prompts: {
           system_prompt: systemPrompt,
           search_web_tool_prompt: searchWebToolPrompt,
-          thinking_tool_prompt: thinkingToolPrompt,
+          planning_tool_prompt: planningToolPrompt,
           attachments_tool_prompt: attachmentsToolPrompt,
           knowledgebase_tool_prompt: knowledgebaseToolPrompt,
           without_tools_prompt: withoutToolsPrompt,

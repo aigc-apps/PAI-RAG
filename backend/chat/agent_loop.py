@@ -42,11 +42,11 @@ class AgentState(BaseModel):
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-def get_system_prompt(enable_search: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
+def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
     tools_prompt = []
     prompt = prompt_provider.get_prompts()
-    if enable_thinking:
-        tools_prompt.append(prompt.prompts["thinking_tool_prompt"])
+    if enable_agent:
+        tools_prompt.append(prompt.prompts["planning_tool_prompt"])
     if enable_search:
         tools_prompt.append(prompt.prompts["search_web_tool_prompt"].format(
         current_datetime=get_prompt_current_time_str()))
@@ -76,7 +76,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
-    if chat_request.enable_thinking:
+    if chat_request.enable_agent:
         mcp_tools.append(think_tool)
     if chat_request.enable_search:
         websearch_tools = websearch_provider.get_search_tools()
@@ -298,7 +298,7 @@ class AgentLoop:
 
         system_prompt = get_system_prompt(
             enable_search=chat_request.enable_search,
-            enable_thinking=chat_request.enable_thinking,
+            enable_agent=chat_request.enable_agent,
             enable_attachments=chat_request.enable_attachments,
             kb_ids=chat_request.kb_ids,
 
@@ -311,7 +311,7 @@ class AgentLoop:
         messages = convert_to_chat_messages(input_messages)
         memory = BaseMemory()
         memory.from_messages(messages)
-        if not chat_request.enable_thinking:
+        if not chat_request.enable_agent:
             chat_request.max_steps = 1
 
         max_steps = chat_request.max_steps or self.max_steps

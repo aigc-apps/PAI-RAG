@@ -147,7 +147,7 @@ export const Thread: FC<{
     // 2. 检查是否有激活的 MCP
     const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
     const hasMcp = newOptions.includes("mcp");
-    const hasThinking = newOptions.includes("thinking");
+    const hasPlanning = newOptions.includes("planning");
 
     // 3. 根据 MCP 激活状态调整工具选项
     let updatedOptions = [...newOptions];
@@ -158,15 +158,15 @@ export const Thread: FC<{
       updatedOptions = updatedOptions.filter((opt) => opt !== "mcp"); // 移除 mcp
     }
 
-    // 4. 自动添加 thinking（如果启用了 mcp 且未启用 thinking）
-    if (hasActiveMcp && !hasThinking && !activeTools.includes("thinking")) {
-      updatedOptions.push("thinking");
+    // 4. 自动添加 planning（如果启用了 mcp 且未启用 planning）
+    if (hasActiveMcp && !hasPlanning && !activeTools.includes("planning")) {
+      updatedOptions.push("planning");
     }
 
-    // 5. 如果 thinking 被移除且之前有 mcp，则自动移除 mcp
+    // 5. 如果 planning 被移除且之前有 mcp，则自动移除 mcp
     if (
-      !hasThinking &&
-      activeTools.includes("thinking") &&
+      !hasPlanning &&
+      activeTools.includes("planning") &&
       activeTools.includes("mcp")
     ) {
       updatedOptions = updatedOptions.filter((opt) => opt !== "mcp");
@@ -374,8 +374,8 @@ const Composer: FC<ComposerProps> = ({
                   value={value} // 同步 Thread 的 activeTools
                 >
                   <ToggleGroupItem
-                    value="thinking"
-                    aria-label="Toggle deep thinking"
+                    value="planning"
+                    aria-label="Toggle deep planning"
                     className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
                   >
                     <Brain /> 深度思考
