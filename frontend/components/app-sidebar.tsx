@@ -45,7 +45,7 @@ export function AppSidebar({
         <div className="flex items-center space-x-2">
           <Avatar>
             <AvatarImage
-              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag.png"
+              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag_logo.png"
               alt="@shadcn"
             />
           </Avatar>

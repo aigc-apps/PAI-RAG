@@ -140,7 +140,7 @@ class PaiKnowledgebaseClient:
 
             vector_store = self.create_vector_store_from_knowledgebase(knowledgebase, embed_model=embed_model)
             if old_chunk_ids:
-                vector_store.delete_nodes(node_ids=old_chunk_ids)
+                await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
             texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
@@ -188,7 +188,7 @@ class PaiKnowledgebaseClient:
 
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
-        vector_store.delete_nodes(node_ids=node_ids)
+        await vector_store.adelete_nodes(node_ids=node_ids)
         logger.info(
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )

@@ -158,15 +158,20 @@ class StructuredNodeParser(BaseModel):
 
         # 单个节点token数大于chunk_size，则需要将节点进行拆分。拆分元素里不会含有image。
         if not tree_node.children:
-            for chunk_text in self._cut(tree_node.content):
-                if title_stack:
-                    new_chunk_text = (
-                        f"{self._format_section_header(title_stack)} : {chunk_text}"
-                    )
-                else:
-                    new_chunk_text = chunk_text
-                node = self._create_text_node(new_chunk_text, doc_node, ref_doc)
+            if tree_node.category in ["html_table", "image_caption"]:
+                # 处理HTML表格和图片描述，不进行切割
+                node = self._create_text_node(tree_node.content, doc_node, ref_doc)
                 nodes_list.append(node)
+            else:
+                for chunk_text in self._cut(tree_node.content):
+                    if title_stack:
+                        new_chunk_text = (
+                            f"{self._format_section_header(title_stack)} : {chunk_text}"
+                        )
+                    else:
+                        new_chunk_text = chunk_text
+                    node = self._create_text_node(new_chunk_text, doc_node, ref_doc)
+                    nodes_list.append(node)
 
         nodes_groups = self._split_level_nodes(tree_node.children)
         for node_group in nodes_groups:

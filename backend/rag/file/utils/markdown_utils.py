@@ -202,9 +202,18 @@ class ASTTreeBuilder:
         if not content:
             return  # 忽略空段落
 
-        new_node = TreeNode(
-            level=self.stack[-1].level, category="paragraph", content=content
-        )
+        if content.startswith("<html><body><table>") and content.endswith("</table></body></html>"):
+            new_node = TreeNode(
+                level=self.stack[-1].level + 1, category="html_table", content=content
+            )
+        elif content.startswith("<img") and content.endswith("/>"):
+            new_node = TreeNode(
+                level=self.stack[-1].level + 1, category="image_caption", content=content
+            )
+        else:
+            new_node = TreeNode(
+                level=self.stack[-1].level, category="paragraph", content=content
+            )
         self.stack[-1].add_child(new_node)
 
     def handle_code_fence(self, node: CodeFence):
