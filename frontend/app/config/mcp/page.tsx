@@ -5,8 +5,6 @@ import {
   TrashIcon,
   SettingsIcon,
   Edit,
-  EyeIcon,
-  EyeOffIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,73 +29,13 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { v4 as uuidv4 } from 'uuid';
+import { McpConfig } from './mcp';
 
-export const MaskedApiKey = ({ apiKey }: { apiKey: string }) => {
-  const maskApiKey = (
-    apiKey: string,
-    prefixLength = 4,
-    suffixLength = 3,
-  ): string => {
-    if (apiKey.length <= prefixLength + suffixLength) return apiKey; // 如果长度不够，直接返回原值
-    return `${apiKey.slice(0, prefixLength)}*****${apiKey.slice(
-      -suffixLength,
-    )}`;
-  };
-  const [showFull, setShowFull] = useState(false);
 
-  const toggleShow = () => setShowFull((prev) => !prev);
-
-  return (
-    <div className="flex items-center space-x-2">
-      <span className="text-gray-700">
-        {showFull ? apiKey : maskApiKey(apiKey)}
-      </span>
-      <button
-        onClick={toggleShow}
-        className="text-sm text-blue-500 hover:text-blue-700"
-      >
-        {showFull ? (
-          <EyeOffIcon className="w-4 h-4" />
-        ) : (
-          <EyeIcon className="w-4 h-4" />
-        )}
-      </button>
-    </div>
-  );
-};
-
-export class MCPConfig {
-  id: string;
-  name: string;
-  url: string;
-  type: string;
-  auth_token: string;
-  need_token: boolean;
-  enabled: boolean;
-
-  constructor(
-    id: string,
-    name: string,
-    url: string,
-    type: string,
-    auth_token: string,
-    need_token: boolean,
-    enabled: boolean,
-  ) {
-    this.id = id;
-    this.name = name;
-    this.url = url;
-    this.type = type;
-    this.auth_token = auth_token;
-    this.need_token = need_token;
-    this.enabled = enabled;
-  }
-}
-
-export default function McpConfig() {
+export default function McpConfigPage() {
   const [isOpen, setIsOpen] = useState(false); // 控制 AddMcpDialog 显示
   const [isEditOpen, setIsEditOpen] = useState(false); // 控制 EditMcpDialog 显示
-  const [editingConfig, setEditingConfig] = useState<MCPConfig | null>(null);
+  const [editingConfig, setEditingConfig] = useState<McpConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false); // 加载 AddMcpDialog 状态
   const [isEditLoading, setIsEditLoading] = useState(false); // 加载 EditMcpDialog 状态
   const [error, setError] = useState(''); // 错误信息
@@ -149,7 +87,7 @@ export default function McpConfig() {
     fetchConfigs();
   }, []);
 
-  const handleEditClick = (config: MCPConfig) => {
+  const handleEditClick = (config: McpConfig) => {
     console.log('handleEditClick', config);
     setEditingConfig({ ...config }); // 深拷贝当前配置
     setIsEditOpen(true);
@@ -200,7 +138,7 @@ export default function McpConfig() {
       if (!res.ok) throw new Error('添加 MCP 配置失败');
 
       const mcpDto = await res.json();
-      const newMcp = new MCPConfig(
+      const newMcp = new McpConfig(
         mcpDto.id,
         mcpDto.name,
         mcpDto.url,

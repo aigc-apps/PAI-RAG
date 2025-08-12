@@ -6,7 +6,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { KnowledgeBase } from '@/app/knowledgebase/page';
+import { KnowledgeBase } from '@/app/knowledgebases/page';
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 
@@ -15,11 +15,14 @@ export class KbSelection implements KnowledgeBase {
   name: string;
   description: string;
   active: boolean;
-  constructor(id: string, name: string, description: string, active: boolean) {
+  updated_at: string;
+
+  constructor(id: string, name: string, description: string, active: boolean, updated_at: string) {
     this.id = id;
     this.name = name;
     this.description = description;
     this.active = active;
+    this.updated_at = updated_at;
   }
 }
 

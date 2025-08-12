@@ -23,11 +23,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { Button } from '@/components/ui/button';
-import { MCPConfig } from '@/app/config/mcp/page';
+import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
-import { KbConfig } from '@/app/knowledgebase/kbconfig';
+import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
 
 export interface Chatbot {
   id: string;
@@ -43,7 +44,6 @@ export interface Chatbot {
 
 interface ChatbotConfigProps {
   chatbotId: string | undefined;
-  setActiveTab: (tab: string) => void;
 }
 
 const default_chat_config = {
@@ -61,16 +61,16 @@ const default_chat_config = {
 // 知识库配置卡片
 export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   chatbotId,
-  setActiveTab,
 }) => {
   const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
   const [llms, setLlms] = useState<LlmConfig[]>([]);
-  const [mcps, setMcps] = useState<MCPConfig[]>([]);
+  const [mcps, setMcps] = useState<McpConfig[]>([]);
   const [kbs, setKbs] = useState<KbConfig[]>([]);
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const isCreate: boolean = chatbotId === undefined || chatbotId === '';
+  const router = useRouter();
   // const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         const [mcpRes] = await Promise.all([fetch('/v1/config/mcps')]);
 
         const mcpData =
-          ((await mcpRes.json())?.data.items as MCPConfig[]) || [];
+          ((await mcpRes.json())?.data.items as McpConfig[]) || [];
         console.log('mcpData', mcpData);
         setMcps([...mcpData]);
 
@@ -134,7 +134,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
       });
 
       if (!res.ok) throw new Error(`保存应用失败: ${await res.text()}`);
-      setActiveTab('/chatbot');
+      router.push('/apps');
       setSaveErrorMsg('');
       // onSaveSuccess(jsondata.data as KbConfig);
     } catch (err: any) {
@@ -253,7 +253,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setActiveTab('/config/model/llm');
+                  router.push('/config/model/llm');
                 }}
               >
                 前往添加
@@ -400,7 +400,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           variant="secondary"
           className="w-20"
           onClick={() => {
-            setActiveTab('/chatbot');
+            router.push('/apps');
           }}
         >
           取消

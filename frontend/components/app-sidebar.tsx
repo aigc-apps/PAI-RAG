@@ -32,54 +32,49 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-export function AppSidebar({
-  activeTab,
-  setActiveTab,
-}: {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-}) {
+import Link from 'next/link';
+
+export function AppSidebar() {
   return (
     <Sidebar side="left">
       <SidebarHeader>
-        <div className="flex items-center space-x-2">
-          <Avatar>
-            <AvatarImage
-              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag.png"
-              alt="@shadcn"
-            />
-          </Avatar>
-          <span className="text-lg font-medium">PAI-RAG</span>
-        </div>
+        <Link href='/'>
+          <div className="flex items-center space-x-2">
+            <Avatar>
+              <AvatarImage
+                src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag.png"
+                alt="@shadcn"
+              />
+            </Avatar>
+            <span className="text-lg font-medium">PAI-RAG</span>
+          </div>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => setActiveTab('/knowledgebase')}>
-                <BookIcon />
-                <span>知识库</span>
+              <SidebarMenuButton asChild>
+                <Link href="/knowledgebases"><BookIcon /> 知识库</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => setActiveTab('/chatbot')}>
-                <AppWindowIcon />
-                <span>应用</span>
+              <SidebarMenuButton asChild>
+                <Link href="/apps"><AppWindowIcon /> 应用</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton onClick={() => setActiveTab('/')}>
-                  <MessageCircle />
-                  <span>对话</span>
-                  <ChevronDown className="ml-auto" />
+                <SidebarMenuButton>
+                    <MessageCircle />
+                    <span>对话</span>
+                    <ChevronDown className="ml-auto" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <SidebarMenuSub onClick={() => setActiveTab('/')}>
-                  <ThreadList />
-                </SidebarMenuSub>
-                {/* <ThreadList /> */}
+                  <SidebarMenuSub>
+                    <ThreadList />
+                  </SidebarMenuSub>
               </CollapsibleContent>
             </SidebarMenuItem>
           </Collapsible>
@@ -97,29 +92,23 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-50">
-                <DropdownMenuItem onClick={() => setActiveTab('/config/model')}>
-                  <Bot /> <span>Model</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/model"><Bot /> 模型</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('/config/mcp')}>
-                  <Wrench /> <span>MCP</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/mcp"><Wrench /> MCP</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setActiveTab('/config/search')}
-                >
-                  <Search /> <span>搜索</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/search"><Search /> 搜索</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setActiveTab('/config/prompts')}
-                >
-                  <UserCog /> <span>Prompt</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/prompt"><UserCog /> Prompt</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setActiveTab('/config/tracing')}
-                >
-                  <Wrench /> <span>链路追踪</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/tracing"><Wrench /> 链路追踪</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('/config/roles')}>
-                  <UserCog /> <span>权限控制</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/role"><Wrench /> 权限控制</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

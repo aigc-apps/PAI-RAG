@@ -32,7 +32,7 @@ import {
   ComposerAddAttachment,
 } from '@/components/assistant-ui/my_attachment';
 import { UserMessageAttachments } from '@/components/assistant-ui/my_attachment';
-import { KbModal, KbSelection } from '@/app/knowledgebase/kbmodal';
+import { KbModal, KbSelection } from '@/app/knowledgebases/kbmodal';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;

@@ -6,6 +6,10 @@ import * as Toast from '@radix-ui/react-toast';
 import React from 'react';
 
 import './globals.css';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
+import { MyChatRuntimeProvider } from './runtime/usePaiChatThreadRuntime';
+import { ChatProvider } from './providers/chat';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({
@@ -29,7 +33,21 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Toast.Provider>{children}</Toast.Provider>
+        <ChatProvider>
+          <MyChatRuntimeProvider>
+            <SidebarProvider>
+              <AppSidebar />
+              <SidebarInset>
+                  <div className="flex h-screen w-full overflow-hidden">
+                    <SidebarTrigger className="w-10"/>
+                    <div className="w-full">
+                      <Toast.Provider>{children}</Toast.Provider>
+                    </div>
+                  </div>
+              </SidebarInset>
+            </SidebarProvider>
+          </MyChatRuntimeProvider>
+        </ChatProvider>
       </body>
     </html>
   );

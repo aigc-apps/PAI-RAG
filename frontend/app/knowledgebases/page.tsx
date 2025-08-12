@@ -31,18 +31,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useRouter } from 'next/navigation';
 
-export default function KnowledgeBasePage({
-  setActiveTab,
-}: {
-  setActiveTab: (tab: string) => void;
-}) {
+export default function KnowledgeBasePage() {
   const [knowledgebases, setKnowledgeBases] = useState(Array<KnowledgeBase>); // 知识库列表
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const kbSizePerPage = 6;
+  const router = useRouter();
 
   useEffect(() => {
     const fetchConfigs = async () => {
@@ -97,7 +95,7 @@ export default function KnowledgeBasePage({
         <h1 className="text-2xl font-bold">知识库</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
-          onClick={() => setActiveTab('/knowledgebase/create')}
+          onClick={() => router.push('/knowledgebases/create')}
         >
           <Plus className="w-6 h-6" />
           新建知识库
@@ -118,7 +116,7 @@ export default function KnowledgeBasePage({
                   return; // 是交互元素，不触发卡片跳转
                 }
 
-                setActiveTab(`/knowledgebase/details/${base.id}`);
+                router.push(`/knowledgebases/view/${base.id}`);
               }}
               key={base.id}
               className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"

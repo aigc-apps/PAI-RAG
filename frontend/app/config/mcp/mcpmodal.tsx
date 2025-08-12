@@ -5,7 +5,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { MCPConfig } from '@/app/config/mcp/page';
+import { McpConfig } from '@/app/config/mcp/mcp';
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 
@@ -18,7 +18,7 @@ interface McpModalProps {
   error: string | null;
 }
 
-export class McpEntry extends MCPConfig {
+export class McpEntry extends McpConfig {
   active: boolean = false;
 
   constructor(

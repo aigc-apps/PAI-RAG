@@ -1,12 +1,13 @@
-import React from 'react';
+"use client";
+
 import {
   ChatModelAdapter,
   ChatModelRunOptions,
   ThreadMessage,
   ChatModelRunResult,
+  AssistantRuntimeProvider,
 } from '@assistant-ui/react';
-import { FC, useMemo } from 'react';
-import { INTERNAL, ExportedMessageRepository } from '@assistant-ui/react';
+import { INTERNAL } from '@assistant-ui/react';
 
 import { EdgeRuntimeOptions } from '@assistant-ui/react-edge';
 const { splitLocalRuntimeOptions } = INTERNAL;
@@ -14,12 +15,13 @@ import { jsonrepair } from 'jsonrepair';
 import {
   useLocalThreadRuntime,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
-  useThreadListItem,
   type unstable_RemoteThreadListAdapter,
-  type ThreadHistoryAdapter,
 } from '@assistant-ui/react';
-import { RuntimeAdapterProvider } from '@assistant-ui/react';
 import { ReactNode } from 'react'; // ✅ 添加这一行以导入 ReactNode
+import { useChatOptions } from '../providers/chat';
+import { StableProvider } from './stableProvider';
+import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
+
 interface Props {
   children?: ReactNode;
 }
@@ -94,6 +96,9 @@ export class MyModelAdapter implements ChatModelAdapter {
       (m) => (m.attachments ?? []).length > 0,
     );
 
+    // load chat options
+    const { enable_thinking, enable_search, mcp_ids, kb_ids } = useChatOptions();
+
     const result = await fetch(this.options.api, {
       method: 'POST',
       headers,
@@ -106,7 +111,10 @@ export class MyModelAdapter implements ChatModelAdapter {
         ...context.callSettings,
         ...context.config,
 
-        ...this.options.body,
+        enable_thinking: enable_thinking,
+        enable_search: enable_search,
+        mcp_ids: mcp_ids,
+        kb_ids: kb_ids,
         enable_attachments: enableAttachments,
       }),
       signal: abortSignal,
@@ -352,93 +360,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
 };
 
-const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
-  children,
-}) => {
-  // This runs in the context of each thread
-  const threadListItem = useThreadListItem();
-  const remoteId = threadListItem.remoteId;
-  // Create thread-specific history adapter
-  const history = useMemo<ThreadHistoryAdapter>(
-    () => ({
-      async load() {
-        if (!remoteId) return { headId: null, messages: [] };
-        // 模拟从后端获取数据
-        try {
-          const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
-
-          if (!res.ok) throw new Error('获取配置失败');
-          const messages = await res.json();
-          if (messages.length === 0) {
-            return { headId: null, messages: [] };
-          }
-          const response = ExportedMessageRepository.fromArray(
-            messages.map((m: any) => ({
-              role: m.role as ThreadMessage['role'],
-              content: m.content,
-              attachments: m.attachments,
-              id: m.id,
-              createdAt: new Date(m.createdAt),
-            })),
-          );
-          return response;
-        } catch (error) {
-          console.error('Error fetching threads:', error);
-          return { headId: null, messages: [] };
-        }
-      },
-      async append(message) {
-        if (!remoteId) {
-          console.warn('Cannot save message - thread not initialized');
-          while (isInitializing) {
-            console.log(
-              'while isInitializing',
-              isInitializing,
-              initializedThreadId,
-            );
-            await delay(50);
-          }
-          console.log('initialized remoteId', initializedThreadId);
-        }
-        const remoteThreadId = remoteId ? remoteId : initializedThreadId;
-        if (!remoteThreadId) {
-          console.error('Thread initialized failed.');
-          return;
-        }
-        try {
-          const url = `/v1/agent/threads/${remoteThreadId}/messages`;
-
-          console.log('append message', message);
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              thread_id: remoteThreadId,
-              role: message.message.role,
-              attachments: message.message.attachments,
-              content: message.message.content,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to create thread: ${response.statusText}`);
-          }
-        } catch (error) {
-          console.error('Error creating thread:', error);
-          throw error;
-        }
-      },
-    }),
-    [remoteId],
-  );
-  const adapters = useMemo(() => ({ history }), [history]);
-  return (
-    <RuntimeAdapterProvider adapters={adapters}>
-      {children}
-    </RuntimeAdapterProvider>
-  );
-};
-
 export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const { localRuntimeOptions, otherOptions } =
     splitLocalRuntimeOptions(options);
@@ -458,3 +379,19 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   });
   return runtime;
 };
+
+
+export function MyChatRuntimeProvider({ children }: { children: ReactNode }) {
+  const runtime = usePaiChatThreadRuntime({
+    api: '/v1/chat/completions',
+    adapters: {
+      attachments: new UploadAttachmentAdapter(),
+    },
+  });
+  
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      {children}
+    </AssistantRuntimeProvider>
+  )
+}

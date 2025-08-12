@@ -8,6 +8,8 @@ import { ArchiveIcon, PlusIcon, TrashIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
+import { useRouter } from 'next/navigation'; // 注意是 next/navigation
+import { routeros } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 export const ThreadList: FC = () => {
   return (
@@ -19,12 +21,13 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
+  const router = useRouter();
   return (
     <ThreadListPrimitive.New asChild>
       <Button
         className="data-[active]:bg-muted hover:bg-muted flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start"
         variant="ghost"
-        // onClick={addThread}
+        onClick={() => {router.push('/')}}
       >
         <PlusIcon />
         新建对话
@@ -38,9 +41,10 @@ const ThreadListItems: FC = () => {
 };
 
 const ThreadListItem: FC = () => {
+  const router = useRouter();
   return (
     <ThreadListItemPrimitive.Root className="data-[active]:bg-muted hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring flex items-center gap-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2">
-      <ThreadListItemPrimitive.Trigger className="flex-grow px-3 py-2 text-start">
+      <ThreadListItemPrimitive.Trigger className="flex-grow px-3 py-2 text-start" onClick={() => {router.push('/')}}>
         <ThreadListItemTitle />
       </ThreadListItemPrimitive.Trigger>
       {/* <ThreadListItemArchive /> */}

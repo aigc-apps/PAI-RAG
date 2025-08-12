@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -8,7 +8,6 @@ import {
   CardTitle,
   CardFooter,
 } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table,
   TableBody,
@@ -49,7 +48,7 @@ import {
   SearchIcon,
   ChevronDownIcon,
 } from 'lucide-react';
-import { PreviewButton } from '@/app/knowledgebase/details/preview-button';
+import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { PlusIcon, FilterIcon } from 'lucide-react';
@@ -78,12 +77,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { PhotoProvider, PhotoView } from 'react-photo-view';
 import 'react-photo-view/dist/react-photo-view.css';
@@ -91,6 +84,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatetimeInput } from '../datetime';
 import { Role } from '@/app/config/role/role';
+import { useRouter } from 'next/navigation';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -138,13 +132,9 @@ interface MetadataCondition {
   value: string | number;
 }
 
-export default function KnowledgeBaseDetailPage({
-  knowledgebase_id,
-  setActiveTab,
-}: {
-  knowledgebase_id: string;
-  setActiveTab: (tab: string) => void;
-}) {
+export default function KnowledgeBaseDetailPage(
+  { params } : { params: Promise<{ kbId: string }> }
+) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [knowledgebase, setKnowledgeBase] = useState<KbConfig>(); // 知识库列表
   const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
@@ -163,6 +153,7 @@ export default function KnowledgeBaseDetailPage({
   const [fileSourceOpen, setFileSourceOpen] = useState<Record<string, boolean>>(
     {},
   );
+  const { kbId } = use(params);
 
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
   const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
@@ -196,6 +187,8 @@ export default function KnowledgeBaseDetailPage({
   const [activeRoleIds, setActiveRoleIds] = useState<string[]>([]);
   const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
   const [user, setUser] = useState('');
+  
+  const router = useRouter();
 
   const default_comparator = [
     'contains',
@@ -261,7 +254,7 @@ export default function KnowledgeBaseDetailPage({
       body: JSON.stringify({
         query: kbquery,
         user_id: user,
-        knowledge_id: knowledgebase_id,
+        knowledge_id: kbId,
         metadata_condition: {
           conditions: metadataConditions,
           logical_operator: logicalOperator,
@@ -282,7 +275,7 @@ export default function KnowledgeBaseDetailPage({
 
   const fetchKbMetadata = async () => {
     const res = await fetch(
-      `/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+      `/v1/config/knowledgebases/${kbId}/metadata`,
     );
     if (!res.ok) throw new Error('获取知识库元数据失败');
     const metadata_json = await res.json();
@@ -298,7 +291,7 @@ export default function KnowledgeBaseDetailPage({
   };
 
   const fetchKbFiles = useCallback(async () => {
-    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+    const url = `/v1/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
       const files_res = await fetch(url);
@@ -326,7 +319,7 @@ export default function KnowledgeBaseDetailPage({
     } catch (err) {
       console.error('获取知识库文件失败:', err);
     }
-  }, [knowledgebase_id]);
+  }, [kbId]);
 
   useEffect(() => {
     fetchKbFiles();
@@ -341,7 +334,7 @@ export default function KnowledgeBaseDetailPage({
     const fetchKbConfigs = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${knowledgebase_id}`,
+          `/v1/config/knowledgebases/${kbId}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -366,18 +359,18 @@ export default function KnowledgeBaseDetailPage({
   const handleSaveSuccess = (kb: KbConfig) => {
     setToastState({
       open: true,
-      title: `知识库${knowledgebase_id} 配置已修改`,
+      title: `知识库${kbId} 配置已修改`,
       description: '修改的模型配置已成功保存',
       variant: 'default',
     });
-    console.log(`update ${knowledgebase_id}`);
+    console.log(`update ${kbId}`);
   };
 
   const handleDeleteFile = async (file_id: string) => {
     setDeleting(true);
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
         {
           method: 'DELETE',
         },
@@ -395,7 +388,7 @@ export default function KnowledgeBaseDetailPage({
   const handleSaveFileSource = async (file_id: string) => {
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/source`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}/source`,
         {
           method: 'POST',
           headers: {
@@ -443,7 +436,7 @@ export default function KnowledgeBaseDetailPage({
     setIsEditingMetadata(false);
     try {
       const file_res = await fetch(
-        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
       const file_json = await file_res.json();
@@ -609,7 +602,7 @@ export default function KnowledgeBaseDetailPage({
 
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${knowledgebase_id}/files`,
+        `/v1/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
@@ -660,7 +653,7 @@ export default function KnowledgeBaseDetailPage({
         entries: metadata_enties,
       };
       const res = await fetch(
-        `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
         {
           method: 'POST',
           body: JSON.stringify(bodyData),
@@ -761,7 +754,7 @@ export default function KnowledgeBaseDetailPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab('/knowledgebase')}
+                      onClick={() => router.push('/knowledgebases')}
                     >
                       知识库
                     </Button>
@@ -858,8 +851,8 @@ export default function KnowledgeBaseDetailPage({
                                 variant="link"
                                 className="font-medium text-blue-600"
                                 onClick={() =>
-                                  setActiveTab(
-                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  router.push(
+                                    `/knowledgebases/chunks/${kbId}__${file.id}`,
                                   )
                                 }
                               >
@@ -907,7 +900,7 @@ export default function KnowledgeBaseDetailPage({
                             </TableCell>
                             <TableCell>
                               <PreviewButton
-                                kbId={knowledgebase_id}
+                                kbId={kbId}
                                 fileId={file.id}
                               />
 
@@ -959,8 +952,8 @@ export default function KnowledgeBaseDetailPage({
                                 variant="link"
                                 className="text-sm text-blue-600"
                                 onClick={() =>
-                                  setActiveTab(
-                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  router.push(
+                                    `/knowledgebases/chunks/${kbId}__${file.id}`,
                                   )
                                 }
                               >

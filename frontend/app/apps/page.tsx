@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Plus, Trash2 } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
-import { formatBeijingTime } from '../knowledgebase/utils/utils';
+import { formatBeijingTime } from '../knowledgebases/utils/utils';
 
 import {
   AlertDialog,
@@ -26,16 +26,15 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import { Chatbot } from './chatbot_config';
+import { useRouter } from 'next/navigation';
 
-interface PageProps {
-  
-}
 
-const ChatbotPage = (setActiveTab: (tab: string) => void) => {
+const ChatbotPage = () => {
   const [chatbots, setChatbots] = useState(Array<Chatbot>); // 知识库列表
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 6;
+  const router = useRouter();
 
   useEffect(() => {
     const fetchConfigs = async () => {
@@ -90,7 +89,7 @@ const ChatbotPage = (setActiveTab: (tab: string) => void) => {
         <h1 className="text-2xl font-bold">Chat应用</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
-          onClick={() => setActiveTab('/chatbot/create')}
+          onClick={()=>{router.push('/apps/create')}}
         >
           <Plus className="w-6 h-6" />
           新建应用
@@ -113,8 +112,7 @@ const ChatbotPage = (setActiveTab: (tab: string) => void) => {
                   console.log('按钮被点击');
                   return; // 是交互元素，不触发卡片跳转
                 }
-
-                setActiveTab(`/chatbot/edit/${bot.app_id}`);
+                router.push(`/apps/${bot.app_id}`);
               }}
               key={bot.id}
               className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"

@@ -32,6 +32,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { useRouter } from 'next/navigation';
 
 interface KnowledgeBase {
   id: string;
@@ -95,13 +96,7 @@ const activeMap: Record<string, string> = {
   false: 'bg-red-100 text-red-800',
   true: 'bg-green-100 text-green-800',
 };
-export default function KnowledgeBaseFileChunksPage({
-  knowledgebase_file_id,
-  setActiveTab,
-}: {
-  knowledgebase_file_id: string;
-  setActiveTab: (tab: string) => void;
-}) {
+export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: string) {
   const [knowledgebase_id, file_id] = knowledgebase_file_id.split('__');
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库详情
   const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // 知识库加载状态
@@ -122,6 +117,8 @@ export default function KnowledgeBaseFileChunksPage({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editText, setEditText] = useState('');
   const [selectedChunk, setSelectedChunk] = useState<KbFileChunk | null>(null);
+
+  const router = useRouter();
 
   useEffect(() => {
     const fetchKbConfigs = async () => {
@@ -251,7 +248,7 @@ export default function KnowledgeBaseFileChunksPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab('/knowledgebase')}
+                      onClick={() => router.push('/knowledgebases')}
                     >
                       知识库
                     </Button>
@@ -264,8 +261,8 @@ export default function KnowledgeBaseFileChunksPage({
                       variant="link"
                       className="px-0"
                       onClick={() =>
-                        setActiveTab(
-                          `/knowledgebase/details/${knowledgebase.id}`,
+                        router.push(
+                          `/knowledgebases/view/${knowledgebase.id}`,
                         )
                       }
                     >
@@ -285,7 +282,7 @@ export default function KnowledgeBaseFileChunksPage({
               variant="outline"
               className="h-8 w-8"
               onClick={() =>
-                setActiveTab(`/knowledgebase/details/${knowledgebase.id}`)
+                router.push(`/knowledgebases/view/${knowledgebase.id}`)
               }
             >
               <ArrowLeft />

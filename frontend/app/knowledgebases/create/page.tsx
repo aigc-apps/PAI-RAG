@@ -13,12 +13,9 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { KbConfig, MetadataConfig, KbConfigCard } from '../kbconfig';
+import { useRouter } from 'next/navigation';
 
-export default function KnowledgeBaseCreatePage({
-  setActiveTab,
-}: {
-  setActiveTab: (tab: string) => void;
-}) {
+export default function KnowledgeBaseCreatePage() {
   const kbConfig: KbConfig = {
     id: '',
     name: '',
@@ -41,17 +38,18 @@ export default function KnowledgeBaseCreatePage({
   };
 
   const [createErrorMsg, setCreateErrorMsg] = useState('');
+  const router = useRouter();
 
   const handleCreateSuccess = (kbConfig: KbConfig) => {
     console.log('创建知识库成功', kbConfig);
     setCreateErrorMsg('');
-    setActiveTab(`/knowledgebase/details/${kbConfig.id}`);
+    router.push(`/knowledgebases/view/${kbConfig.id}`);
   };
 
   const handleCancel = () => {
     console.log('取消创建知识库。');
     setCreateErrorMsg('');
-    setActiveTab('/knowledgebase');
+    router.push('/knowledgebases');
   };
 
   return (
@@ -67,7 +65,7 @@ export default function KnowledgeBaseCreatePage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab('/knowledgebase')}
+                      onClick={() => router.push('/knowledgebases')}
                     >
                       知识库
                     </Button>
@@ -84,7 +82,7 @@ export default function KnowledgeBaseCreatePage({
             <Button
               variant="outline"
               className="h-8 w-8"
-              onClick={() => setActiveTab('/knowledgebase')}
+              onClick={() => router.push('/knowledgebases')}
             >
               <ArrowLeft />
             </Button>

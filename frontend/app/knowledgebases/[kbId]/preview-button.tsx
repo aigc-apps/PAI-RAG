@@ -9,9 +9,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useState, useEffect } from 'react';
-import { MarkdownViewer } from '@/app/knowledgebase/details/viewer/markdown-viewer';
-import { JsonlViewer } from '@/app/knowledgebase/details/viewer/jsonl-viewer';
-import { HtmlViewer } from '@/app/knowledgebase/details/viewer/html-viewer';
+import { MarkdownViewer } from '@/app/knowledgebases/[kbId]/viewer/markdown-viewer';
+import { JsonlViewer } from '@/app/knowledgebases/[kbId]/viewer/jsonl-viewer';
+import { HtmlViewer } from '@/app/knowledgebases/[kbId]/viewer/html-viewer';
 
 interface KnowledgeBaseFile {
   id: string;
